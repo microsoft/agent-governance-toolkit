@@ -6,7 +6,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
-[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-9/10_Covered-brightgreen)](docs/OWASP-COMPLIANCE.md)
+[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10/10_Covered-brightgreen)](docs/OWASP-COMPLIANCE.md)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085/badge)](https://www.bestpractices.dev/projects/12085)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 
 </div>
 
@@ -23,7 +25,7 @@ Autonomous AI agents (LangChain, AutoGen, CrewAI, etc.) can call tools, spawn su
 - **Execution isolation** with privilege rings and kill switches
 - **Reliability engineering** with SLOs, error budgets, and chaos testing
 
-Covers **9 of 10 [OWASP Agentic Top 10](https://owasp.org/www-project-agentic-ai-top-10/)** risks out of the box.
+Covers **10 of 10 [OWASP Agentic Top 10](https://owasp.org/www-project-agentic-ai-top-10/)** risks out of the box.
 
 ## Architecture
 
