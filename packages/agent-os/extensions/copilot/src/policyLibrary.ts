@@ -483,7 +483,7 @@ ${policy.controls.map(c => `    - id: ${c.id}
         }
 
         // Check for consent handling
-        if (/user.*data/i.test(code) && !/consent/i.test(code)) {
+        if (/user[\s\S]{0,50}data/i.test(code) && !/consent/i.test(code)) {
             warnings.push({
                 controlId: 'gdpr-consent',
                 message: 'User data processing without apparent consent check',
@@ -496,7 +496,7 @@ ${policy.controls.map(c => `    - id: ${c.id}
         // Check for PHI patterns
         const phiPatterns = [
             /patient/i, /diagnosis/i, /treatment/i, /medical/i,
-            /health.*record/i, /insurance/i, /prescription/i
+            /health[\s\S]{0,30}record/i, /insurance/i, /prescription/i
         ];
         
         for (const pattern of phiPatterns) {
@@ -515,7 +515,7 @@ ${policy.controls.map(c => `    - id: ${c.id}
 
     private runPCIDSSChecks(code: string, violations: PolicyViolation[], warnings: PolicyWarning[]): void {
         // Check for card data
-        if (/card.*number|cvv|expir/i.test(code)) {
+        if (/card[\s\S]{0,30}number|cvv|expir/i.test(code)) {
             if (!/mask|redact|encrypt/i.test(code)) {
                 violations.push({
                     controlId: 'pci-card-data',
@@ -528,7 +528,7 @@ ${policy.controls.map(c => `    - id: ${c.id}
         }
 
         // Check for logging card data
-        if (/log.*card|print.*card/i.test(code)) {
+        if (/log[\s\S]{0,30}card|print[\s\S]{0,30}card/i.test(code)) {
             violations.push({
                 controlId: 'pci-logging',
                 controlName: 'Card Data Logging',

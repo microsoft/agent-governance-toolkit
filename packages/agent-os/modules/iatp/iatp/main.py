@@ -361,7 +361,7 @@ async def proxy_task(
         return JSONResponse(
             status_code=502,
             content={
-                "error": f"Upstream agent error: {str(e)}",
+                "error": "Upstream agent error",
                 "trace_id": trace_id,
                 "recovery": recovery_result
             }

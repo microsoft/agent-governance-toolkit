@@ -77,7 +77,7 @@ class TestRateLimitingTemplate:
         assert "openai_api_limits" in policies
         policy = policies["openai_api_limits"]
         
-        assert "api.openai.com" in policy["domains"]
+        assert "api.openai.com" in policy["domains"]  # noqa: list membership check
         assert "limits" in policy
         assert "max_requests_per_minute" in policy["limits"]
         assert "max_tokens_per_minute" in policy["limits"]
@@ -89,7 +89,7 @@ class TestRateLimitingTemplate:
         assert "anthropic_api_limits" in policies
         policy = policies["anthropic_api_limits"]
         
-        assert "api.anthropic.com" in policy["domains"]
+        assert "api.anthropic.com" in policy["domains"]  # noqa: list membership check
 
     def test_google_policy_exists(self, template):
         """Test Google API rate limit policy exists."""
@@ -99,7 +99,7 @@ class TestRateLimitingTemplate:
         policy = policies["google_api_limits"]
         
         # Check for Google AI domains
-        assert any("googleapis.com" in d for d in policy["domains"])
+        assert any(d.endswith("googleapis.com") for d in policy["domains"])
 
     def test_azure_policy_exists(self, template):
         """Test Azure OpenAI rate limit policy exists."""
@@ -108,7 +108,7 @@ class TestRateLimitingTemplate:
         assert "azure_openai_limits" in policies
         policy = policies["azure_openai_limits"]
         
-        assert any("azure.com" in d for d in policy["domains"])
+        assert any(d.endswith("azure.com") for d in policy["domains"])
 
     def test_default_external_api_policy(self, template):
         """Test catch-all external API policy exists."""
