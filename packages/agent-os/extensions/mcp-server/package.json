@@ -41,7 +41,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "zod": "^3.23.0",
-    "uuid": "^9.0.0",
+    "uuid": "^13.0.0",
     "yaml": "^2.4.0",
     "winston": "^3.11.0"
   },
