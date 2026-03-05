@@ -6,7 +6,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/imran-siddique/mute-agent.git
+git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd mute-agent
 
 # Install in development mode

@@ -6,21 +6,21 @@
 
 *Just as VMware isolates virtual machines, Agent Hypervisor isolates AI agent sessions<br/>and enforces governance boundaries with a kill switch, blast radius containment, and accountability.*
 
-[![GitHub Stars](https://img.shields.io/github/stars/imran-siddique/agent-hypervisor?style=social)](https://github.com/imran-siddique/agent-hypervisor/stargazers)
-[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4%EF%B8%8F-ff69b4)](https://github.com/sponsors/imran-siddique)
+[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4%EF%B8%8F-ff69b4)](https://github.com/microsoft/agent-governance-toolkit)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
-[![CI](https://github.com/imran-siddique/agent-hypervisor/actions/workflows/ci.yml/badge.svg)](https://github.com/imran-siddique/agent-hypervisor/actions/workflows/ci.yml)
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/agent-hypervisor)](https://pypi.org/project/agent-hypervisor/)
 [![Downloads](https://img.shields.io/pypi/dm/agent-hypervisor)](https://pypi.org/project/agent-hypervisor/)
-[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-ASI--05,_10-brightgreen)](https://github.com/imran-siddique/agent-governance/blob/master/docs/OWASP-COMPLIANCE.md)
-[![Tests](https://img.shields.io/badge/tests-457%20passing-brightgreen)](https://github.com/imran-siddique/agent-hypervisor)
+[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-ASI--05,_10-brightgreen)](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
+[![Tests](https://img.shields.io/badge/tests-457%20passing-brightgreen)](https://github.com/microsoft/agent-governance-toolkit)
 [![Benchmark](https://img.shields.io/badge/latency-268%CE%BCs%20pipeline-orange)](benchmarks/)
-[![Discussions](https://img.shields.io/github/discussions/imran-siddique/agent-hypervisor)](https://github.com/imran-siddique/agent-hypervisor/discussions)
+[![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent Hypervisor.
 
-> 📦 **Install the full stack:** `pip install ai-agent-governance[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/imran-siddique/agent-governance)
+> 📦 **Install the full stack:** `pip install ai-agent-governance[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
 
 [Quick Start](#quick-start) • [Configuration](#configuration) • [Why a Hypervisor?](#-why-agent-hypervisor) • [Features](#key-features) • [Architecture](#architecture-diagrams) • [Performance](#performance) • [Ecosystem](#ecosystem)
 
@@ -717,9 +717,9 @@ graph TB
 
 | Repo | Role | Stars |
 |------|------|-------|
-| [Agent OS](https://github.com/imran-siddique/agent-os) | Policy enforcement kernel | 1,500+ tests |
-| [Agent Mesh](https://github.com/imran-siddique/agent-mesh) | Cryptographic trust network | 1,400+ tests |
-| [Agent SRE](https://github.com/imran-siddique/agent-sre) | SLO, chaos, cost guardrails | 1,070+ tests |
+| [Agent OS](https://github.com/microsoft/agent-governance-toolkit) | Policy enforcement kernel | 1,500+ tests |
+| [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit) | Cryptographic trust network | 1,400+ tests |
+| [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) | SLO, chaos, cost guardrails | 1,070+ tests |
 | **Agent Hypervisor** | Session isolation & governance runtime | 457+ tests |
 
 ## 🗺️ Roadmap
@@ -751,10 +751,10 @@ When a saga fails, the hypervisor identifies the agent responsible for the failu
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
-- :bug: [Report a Bug](https://github.com/imran-siddique/agent-hypervisor/issues/new?labels=bug)
-- :bulb: [Request a Feature](https://github.com/imran-siddique/agent-hypervisor/issues/new?labels=enhancement)
-- :speech_balloon: [Join Discussions](https://github.com/imran-siddique/agent-hypervisor/discussions)
-- Look for issues labeled [`good first issue`](https://github.com/imran-siddique/agent-hypervisor/labels/good%20first%20issue) to get started
+- :bug: [Report a Bug](https://github.com/microsoft/agent-governance-toolkit/issues/new?labels=bug)
+- :bulb: [Request a Feature](https://github.com/microsoft/agent-governance-toolkit/issues/new?labels=enhancement)
+- :speech_balloon: [Join Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)
+- Look for issues labeled [`good first issue`](https://github.com/microsoft/agent-governance-toolkit/labels/good%20first%20issue) to get started
 
 ## License
 
@@ -764,7 +764,7 @@ MIT -- see [LICENSE](LICENSE).
 
 <div align="center">
 
-**[Agent OS](https://github.com/imran-siddique/agent-os)** | **[AgentMesh](https://github.com/imran-siddique/agent-mesh)** | **[Agent SRE](https://github.com/imran-siddique/agent-sre)** | **[Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor)**
+**[Agent OS](https://github.com/microsoft/agent-governance-toolkit)** | **[AgentMesh](https://github.com/microsoft/agent-governance-toolkit)** | **[Agent SRE](https://github.com/microsoft/agent-governance-toolkit)** | **[Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit)**
 
 *Built with :heart: for the AI agent governance community*
 

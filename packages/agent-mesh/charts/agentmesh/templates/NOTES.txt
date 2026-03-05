@@ -33,4 +33,4 @@
    • View audit logs:                kubectl logs -l app.kubernetes.io/component=audit-collector -n {{ .Release.Namespace }}
    • Check trust scores:             curl https://${GATEWAY_IP}/v1/trust/scores
 
-📖 Docs: https://github.com/imran-siddique/agent-mesh
+📖 Docs: https://github.com/microsoft/agent-governance-toolkit

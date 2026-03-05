@@ -380,7 +380,7 @@ async def main() -> None:
     print(f"    - hash-committed audit trails")
     print(f"    - Pluggable integrations (Nexus, Verification, IATP)")
     print(f"\n  {BOLD}184 tests passing | 268us full pipeline | Zero dependencies{RESET}")
-    print(f"\n  Learn more: https://github.com/imran-siddique/agent-hypervisor")
+    print(f"\n  Learn more: https://github.com/microsoft/agent-governance-toolkit")
     print()
 
 

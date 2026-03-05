@@ -14,12 +14,12 @@ setup(
     long_description_content_type="text/markdown",
     author="Self-Correcting Agent Team",
     author_email="research@scak.ai",
-    url="https://github.com/imran-siddique/self-correcting-agent-kernel",
+    url="https://github.com/microsoft/agent-governance-toolkit",
     project_urls={
-        "Bug Tracker": "https://github.com/imran-siddique/self-correcting-agent-kernel/issues",
-        "Documentation": "https://github.com/imran-siddique/self-correcting-agent-kernel/wiki",
-        "Source Code": "https://github.com/imran-siddique/self-correcting-agent-kernel",
-        "Changelog": "https://github.com/imran-siddique/self-correcting-agent-kernel/blob/main/CHANGELOG.md",
+        "Bug Tracker": "https://github.com/microsoft/agent-governance-toolkit/issues",
+        "Documentation": "https://github.com/microsoft/agent-governance-toolkit/wiki",
+        "Source Code": "https://github.com/microsoft/agent-governance-toolkit",
+        "Changelog": "https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md",
     },
     packages=find_packages(exclude=["tests*", "experiments*", "examples*", "notebooks*"]),
     classifiers=[

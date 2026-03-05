@@ -150,6 +150,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 **Links:**
-- [GitHub Repository](https://github.com/imran-siddique/agent-os)
+- [GitHub Repository](https://github.com/microsoft/agent-governance-toolkit)
 - [npm Package](https://www.npmjs.com/package/@agentos/mcp-server)
 - [MCP Specification](https://modelcontextprotocol.io)

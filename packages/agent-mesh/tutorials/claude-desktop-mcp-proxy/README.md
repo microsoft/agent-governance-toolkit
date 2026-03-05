@@ -275,5 +275,5 @@ enforcement. All decisions are logged but never block tool calls.
 
 ---
 
-*Part of the [AgentMesh](https://github.com/imran-siddique/agent-mesh) project —
+*Part of the [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) project —
 SSL for AI Agents.*

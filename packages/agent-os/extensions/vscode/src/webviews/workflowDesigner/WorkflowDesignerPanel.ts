@@ -400,7 +400,7 @@ import (
 	"context"
 	"fmt"
 	
-	agentos "github.com/imran-siddique/agent-os/sdk/go"
+	agentos "github.com/microsoft/agent-governance-toolkit/sdk/go"
 )
 
 func main() {
@@ -453,7 +453,7 @@ import (
 	"context"
 	"fmt"
 	
-	agentos "github.com/imran-siddique/agent-os/sdk/go"
+	agentos "github.com/microsoft/agent-governance-toolkit/sdk/go"
 )
 
 func main() {

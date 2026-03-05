@@ -47,9 +47,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/imran-siddique/agent-primitives"
-Repository = "https://github.com/imran-siddique/agent-primitives.git"
-Issues = "https://github.com/imran-siddique/agent-primitives/issues"
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit.git"
+Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
 
 [tool.setuptools]
 packages = ["agent_primitives"]

@@ -320,5 +320,5 @@ If your AI agent processes PHI on behalf of a covered entity, you need a BAA:
 - 📋 [HIPAA Compliance Checklist](hipaa-checklist.md) — Full checklist of safeguards
 - 🏥 [Healthcare HIPAA Example](../../examples/healthcare-hipaa/) — Production-grade medical chart review agent
 - 📖 [Policy Templates](../../templates/policies/) — All pre-built compliance templates
-- 🔧 [Full Documentation](https://github.com/imran-siddique/agent-os)
+- 🔧 [Full Documentation](https://github.com/microsoft/agent-governance-toolkit)
 - 🏗️ [Architecture Overview](../../ARCHITECTURE.md)

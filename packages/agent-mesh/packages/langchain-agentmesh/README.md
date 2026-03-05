@@ -204,8 +204,8 @@ class TrustCallbackHandler(BaseCallbackHandler):
 
 ## Related Projects
 
-- [AgentMesh](https://github.com/imran-siddique/agent-mesh) - Full trust mesh platform
-- [Agent-OS](https://github.com/imran-siddique/agent-os) - Governance kernel for AI agents
+- [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) - Full trust mesh platform
+- [Agent-OS](https://github.com/microsoft/agent-governance-toolkit) - Governance kernel for AI agents
 
 ## License
 

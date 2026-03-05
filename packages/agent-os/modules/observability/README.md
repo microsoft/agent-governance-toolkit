@@ -1,6 +1,6 @@
 # Agent OS Observability
 
-> **Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+> **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 Production-ready observability stack for Agent OS kernel.
 

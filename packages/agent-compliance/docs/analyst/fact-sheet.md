@@ -10,11 +10,11 @@
 
 | Component | Purpose | Tests | Key Metric |
 |-----------|---------|-------|------------|
-| **[Agent OS](https://github.com/imran-siddique/agent-os)** | Governance kernel — policy enforcement, capability security, audit trails | 2,000+ | 0% policy violations in governed agents |
-| **[AgentMesh](https://github.com/imran-siddique/agent-mesh)** | Trust & identity — zero-trust communication, encrypted channels | 500+ | DID-based cryptographic auth |
-| **[Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor)** | Runtime isolation — execution rings, resource limits, kill switches | 200+ | Process-level isolation |
-| **[Agent SRE](https://github.com/imran-siddique/agent-sre)** | Reliability engineering — SLOs, chaos engineering, incident response | 329+ | 11 observability platforms |
-| **[Agent Governance](https://github.com/imran-siddique/agent-governance)** | Unified installer — single package for the complete stack | — | `pip install ai-agent-governance[full]` |
+| **[Agent OS](https://github.com/microsoft/agent-governance-toolkit)** | Governance kernel — policy enforcement, capability security, audit trails | 2,000+ | 0% policy violations in governed agents |
+| **[AgentMesh](https://github.com/microsoft/agent-governance-toolkit)** | Trust & identity — zero-trust communication, encrypted channels | 500+ | DID-based cryptographic auth |
+| **[Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit)** | Runtime isolation — execution rings, resource limits, kill switches | 200+ | Process-level isolation |
+| **[Agent SRE](https://github.com/microsoft/agent-governance-toolkit)** | Reliability engineering — SLOs, chaos engineering, incident response | 329+ | 11 observability platforms |
+| **[Agent Governance](https://github.com/microsoft/agent-governance-toolkit)** | Unified installer — single package for the complete stack | — | `pip install ai-agent-governance[full]` |
 
 ---
 
@@ -116,14 +116,14 @@ result = kernel.execute(ctx, action="call_tool", tool="search", args={"q": "quer
 
 | Resource | URL |
 |----------|-----|
-| GitHub | [github.com/imran-siddique/agent-governance](https://github.com/imran-siddique/agent-governance) |
-| Documentation | [imransiddique.com/agent-os-docs](https://imransiddique.com/agent-os-docs/) |
+| GitHub | [github.com/microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit) |
+| Documentation | [github.com/microsoft/agent-governance-toolkit/agent-os-docs](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs) |
 | PyPI | [pypi.org/project/ai-agent-governance](https://pypi.org/project/ai-agent-governance/) |
 | OWASP Mapping | [OWASP Implementation Guide](owasp-agentic-mapping.md) |
 | Architecture Guide | [Enterprise Reference Architecture](../enterprise/reference-architecture.md) |
 | CNCF Proposal | [CNCF Sandbox Proposal](cncf-sandbox-proposal.md) |
-| Author | [imransiddique.com](https://imransiddique.com) |
+| Author | [github.com/microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit) |
 
 ---
 
-*Part of the [Agent Governance](https://github.com/imran-siddique/agent-governance) ecosystem — Building the governance layer for the agentic era*
+*Part of the [Agent Governance](https://github.com/microsoft/agent-governance-toolkit) ecosystem — Building the governance layer for the agentic era*

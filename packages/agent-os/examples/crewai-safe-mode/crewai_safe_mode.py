@@ -428,7 +428,7 @@ def run_demo():
   ╚═══════════════════════════════════════════════════════════╝
 {Colors.RESET}""")
     
-    print(f"\n{Colors.CYAN}  🔗 Learn more: https://github.com/imran-siddique/agent-os{Colors.RESET}\n")
+    print(f"\n{Colors.CYAN}  🔗 Learn more: https://github.com/microsoft/agent-governance-toolkit{Colors.RESET}\n")
 
 
 if __name__ == "__main__":

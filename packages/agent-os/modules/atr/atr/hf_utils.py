@@ -11,7 +11,7 @@ Example:
         from atr.hf_utils import upload_experiment_logs
 
         upload_experiment_logs(
-            repo_id="imran-siddique/atr-experiments",
+            repo_id="microsoft/atr-experiments",
             results_path="experiments/results/results.json"
         )
 
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Default repository namespace
-DEFAULT_NAMESPACE = "imran-siddique"
+DEFAULT_NAMESPACE = "microsoft"
 
 
 def _check_hf_hub_installed() -> None:
@@ -70,7 +70,7 @@ def upload_experiment_logs(
     Creates or updates a dataset repository with experiment logs.
 
     Args:
-        repo_id: The Hugging Face repo ID (e.g., "imran-siddique/atr-experiments").
+        repo_id: The Hugging Face repo ID (e.g., "microsoft/atr-experiments").
         results_path: Path to the results JSON file.
         commit_message: Custom commit message. Auto-generated if None.
         private: Whether the repository should be private.
@@ -86,7 +86,7 @@ def upload_experiment_logs(
 
     Example:
         >>> url = upload_experiment_logs(
-        ...     repo_id="imran-siddique/atr-experiments",
+        ...     repo_id="microsoft/atr-experiments",
         ...     results_path="experiments/results/results.json"
         ... )
         >>> print(f"Uploaded to: {url}")
@@ -166,7 +166,7 @@ def download_experiment_logs(
 
     Example:
         >>> path = download_experiment_logs(
-        ...     repo_id="imran-siddique/atr-experiments",
+        ...     repo_id="microsoft/atr-experiments",
         ...     output_dir="./downloaded"
         ... )
     """
@@ -224,7 +224,7 @@ def upload_tool_registry(
     Example:
         >>> import atr
         >>> url = upload_tool_registry(
-        ...     repo_id="imran-siddique/atr-tools",
+        ...     repo_id="microsoft/atr-tools",
         ...     registry=atr._global_registry
         ... )
     """
@@ -378,14 +378,14 @@ from atr.hf_utils import download_experiment_logs
   author = {{Siddique, Imran}},
   title = {{ATR: Agent Tool Registry}},
   year = {{2026}},
-  url = {{https://github.com/imran-siddique/atr}}
+  url = {{https://github.com/microsoft/agent-governance-toolkit}}
 }}
 ```
 
 ## Contact
 
 For questions or issues, please open an issue on the
-[GitHub repository](https://github.com/imran-siddique/atr).
+[GitHub repository](https://github.com/microsoft/agent-governance-toolkit).
 """
 
 

@@ -78,7 +78,7 @@ EXAMPLES:
   # Run HTTP server for development
   agentos-mcp --http --port 3000
 
-For more information: https://github.com/imran-siddique/agent-os
+For more information: https://github.com/microsoft/agent-governance-toolkit
 `);
 }
 

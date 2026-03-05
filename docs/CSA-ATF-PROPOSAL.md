@@ -1,7 +1,7 @@
 # Proposal: CSA Agentic Trust Framework (ATF) Integration
 
 **Status:** Draft  
-**Author:** Imran Siddique (@imran-siddique)  
+**Author:** Imran Siddique (Microsoft)  
 **Created:** 2026-03-04  
 **Target:** Cloud Security Alliance (CSA) Agentic Trust Framework Working Group
 

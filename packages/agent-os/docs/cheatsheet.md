@@ -214,4 +214,4 @@ await bus.subscribe("tasks", handler)
 
 - [Documentation](docs/)
 - [Examples](examples/)
-- [GitHub](https://github.com/imran-siddique/agent-os)
+- [GitHub](https://github.com/microsoft/agent-governance-toolkit)

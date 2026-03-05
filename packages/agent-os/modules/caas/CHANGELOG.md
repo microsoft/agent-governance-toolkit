@@ -31,8 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **🎉 First Public Release!**
 
 - **PyPI**: https://pypi.org/project/context-as-a-service/
-- **Hugging Face Dataset**: https://huggingface.co/datasets/imran-siddique/context-as-a-service
-- **GitHub**: https://github.com/imran-siddique/context-as-a-service
+- **Hugging Face Dataset**: https://huggingface.co/datasets/microsoft/context-as-a-service
+- **GitHub**: https://github.com/microsoft/agent-governance-toolkit
 
 ### Added
 - Initial release of Context-as-a-Service
@@ -54,5 +54,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Example scripts and demo agents
 - Documentation for all major features
 
-[Unreleased]: https://github.com/imran-siddique/context-as-a-service/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/imran-siddique/context-as-a-service/releases/tag/v0.1.0
+[Unreleased]: https://github.com/microsoft/agent-governance-toolkit/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/microsoft/agent-governance-toolkit/releases/tag/v0.1.0

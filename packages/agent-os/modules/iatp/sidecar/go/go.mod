@@ -1,4 +1,4 @@
-module github.com/imran-siddique/inter-agent-trust-protocol/sidecar
+module github.com/microsoft/agent-governance-toolkit/sidecar
 
 go 1.21
 

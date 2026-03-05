@@ -573,8 +573,8 @@ If the extension feels slow:
 
 ### Getting Help
 
-- **Documentation**: [github.com/imran-siddique/agent-os/docs](https://github.com/imran-siddique/agent-os/docs)
-- **Issues**: [github.com/imran-siddique/agent-os/issues](https://github.com/imran-siddique/agent-os/issues)
+- **Documentation**: [github.com/microsoft/agent-governance-toolkit/docs](https://github.com/microsoft/agent-governance-toolkit/docs)
+- **Issues**: [github.com/microsoft/agent-governance-toolkit/issues](https://github.com/microsoft/agent-governance-toolkit/issues)
 - **Discord**: Join our community for real-time help
 
 ---

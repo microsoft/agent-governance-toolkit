@@ -22,7 +22,7 @@ Usage:
     # Upload experiment results
     upload_experiment_logs(
         results_path="experiments/results.json",
-        repo_id="imran-siddique/acp-experiment-logs",
+        repo_id="microsoft/acp-experiment-logs",
     )
 
 Configuration:
@@ -58,9 +58,9 @@ class HFConfig:
         token: HF API token (if not set, uses HF_TOKEN env var).
     """
     
-    default_org: str = "imran-siddique"
-    red_team_dataset: str = "imran-siddique/agent-control-redteam-60"
-    experiment_logs_repo: str = "imran-siddique/acp-experiment-logs"
+    default_org: str = "microsoft"
+    red_team_dataset: str = "microsoft/agent-control-redteam-60"
+    experiment_logs_repo: str = "microsoft/acp-experiment-logs"
     token: Optional[str] = None
     
     def get_token(self) -> Optional[str]:

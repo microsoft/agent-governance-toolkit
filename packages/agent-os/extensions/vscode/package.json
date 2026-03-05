@@ -6,11 +6,11 @@
   "publisher": "agent-os",
   "repository": {
     "type": "git",
-    "url": "https://github.com/imran-siddique/agent-os"
+    "url": "https://github.com/microsoft/agent-governance-toolkit"
   },
-  "homepage": "https://github.com/imran-siddique/agent-os#readme",
+  "homepage": "https://github.com/microsoft/agent-governance-toolkit#readme",
   "bugs": {
-    "url": "https://github.com/imran-siddique/agent-os/issues"
+    "url": "https://github.com/microsoft/agent-governance-toolkit/issues"
   },
   "icon": "images/icon.png",
   "engines": {
@@ -326,7 +326,7 @@
           {
             "id": "understand",
             "title": "Understand Agent OS",
-            "description": "Agent OS provides kernel-level safety for AI agents. Unlike prompt-based safety, violations are blocked at execution time.\n[Learn More](https://github.com/imran-siddique/agent-os)",
+            "description": "Agent OS provides kernel-level safety for AI agents. Unlike prompt-based safety, violations are blocked at execution time.\n[Learn More](https://github.com/microsoft/agent-governance-toolkit)",
             "media": {
               "markdown": "Agent OS intercepts AI actions before execution and checks them against your policies."
             }

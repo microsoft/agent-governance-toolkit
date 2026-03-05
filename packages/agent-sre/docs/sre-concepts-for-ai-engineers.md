@@ -55,7 +55,7 @@ Traditional SLOs measure uptime and latency. But an agent that responds in 200ms
 
 ### Cascading failures in multi-agent systems
 
-When Agent A calls Agent B, which calls Agent C, a failure in C can cascade backward. Without circuit breakers, one flaky tool or one overloaded model can take down your entire agent workflow. This is [OWASP ASI08 — Cascading Failures](https://github.com/imran-siddique/agent-os/blob/master/docs/owasp-agentic-top10-mapping.md).
+When Agent A calls Agent B, which calls Agent C, a failure in C can cascade backward. Without circuit breakers, one flaky tool or one overloaded model can take down your entire agent workflow. This is [OWASP ASI08 — Cascading Failures](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/owasp-agentic-top10-mapping.md).
 
 ### Cost runaway without guardrails
 
@@ -487,10 +487,10 @@ python examples/quickstart.py
 
 ### Ecosystem
 
-- [Agent OS](https://github.com/imran-siddique/agent-os) — Governance kernel for AI agents
-- [AgentMesh](https://github.com/imran-siddique/agent-mesh) — Identity and trust for multi-agent systems
-- [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor) — Runtime session management
-- [OWASP Agentic Security Mapping](https://github.com/imran-siddique/agent-os/blob/master/docs/owasp-agentic-top10-mapping.md) — How Agent SRE addresses OWASP ASI08
+- [Agent OS](https://github.com/microsoft/agent-governance-toolkit) — Governance kernel for AI agents
+- [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — Identity and trust for multi-agent systems
+- [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) — Runtime session management
+- [OWASP Agentic Security Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/owasp-agentic-top10-mapping.md) — How Agent SRE addresses OWASP ASI08
 
 ### Examples
 

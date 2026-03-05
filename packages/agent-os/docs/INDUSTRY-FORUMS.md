@@ -142,7 +142,7 @@ SLIDE 4: Standards Compliance
 
 SLIDE 5: Get Started
 - pip install agent-os-kernel
-- github.com/imran-siddique/agent-os
+- github.com/microsoft/agent-governance-toolkit
 - Questions?
 ```
 
@@ -174,7 +174,7 @@ SLIDE 5: Get Started
 
 ## 🔗 Quick Links
 
-- Agent OS: https://github.com/imran-siddique/agent-os
-- AgentMesh: https://github.com/imran-siddique/agent-mesh
-- Docs: https://imran-siddique.github.io/agent-os-docs/
+- Agent OS: https://github.com/microsoft/agent-governance-toolkit
+- AgentMesh: https://github.com/microsoft/agent-governance-toolkit
+- Docs: https://github.com/microsoft/agent-governance-toolkit/tree/main/docs
 - PyPI: https://pypi.org/project/agent-os-kernel/

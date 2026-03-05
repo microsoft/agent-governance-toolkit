@@ -42,7 +42,7 @@ from typing import Any
 
 __version__ = "0.3.0"
 __author__ = "Imran Siddique"
-__email__ = "imran.siddique@example.com"
+__email__ = "agt@microsoft.com"
 __license__ = "MIT"
 
 # Audit trail

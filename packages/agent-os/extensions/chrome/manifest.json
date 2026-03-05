@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Build and run safe AI agents across GitHub, Jira, AWS Console and more",
   "author": "Agent OS Team",
-  "homepage_url": "https://github.com/imran-siddique/agent-os",
+  "homepage_url": "https://github.com/microsoft/agent-governance-toolkit",
   "permissions": [
     "activeTab",
     "storage",

@@ -1,10 +1,10 @@
 # ATR - Agent Tool Registry
 
-> **Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+> **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 [![PyPI version](https://badge.fury.io/py/agent-tool-registry.svg)](https://badge.fury.io/py/agent-tool-registry)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/imran-siddique/atr/test.yml?branch=main)](https://github.com/imran-siddique/atr/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/microsoft/agent-governance-toolkit/test.yml?branch=main)](https://github.com/microsoft/agent-governance-toolkit/actions)
 
 **A type-safe, decentralized tool registry for autonomous agents. Part of the Agent OS ecosystem.**
 
@@ -138,18 +138,18 @@ The registry stores specifications, not callables. Execution happens in the cont
 ATR is one component in a modular Agent OS. Each layer solves a specific problem:
 
 ### Primitives (Layer 1)
-- **[caas](https://github.com/imran-siddique/caas)** - Context-as-a-Service: Manages agent memory and state.
-- **[cmvk](https://github.com/imran-siddique/cmvk)** - Context Verification Kit: Cryptographic verification of context integrity.
-- **[emk](https://github.com/imran-siddique/emk)** - Episodic Memory Kit: Long-term memory storage and retrieval.
+- **[caas](https://github.com/microsoft/agent-governance-toolkit)** - Context-as-a-Service: Manages agent memory and state.
+- **[cmvk](https://github.com/microsoft/agent-governance-toolkit)** - Context Verification Kit: Cryptographic verification of context integrity.
+- **[emk](https://github.com/microsoft/agent-governance-toolkit)** - Episodic Memory Kit: Long-term memory storage and retrieval.
 
 ### Infrastructure (Layer 2)
-- **[iatp](https://github.com/imran-siddique/iatp)** - Inter-Agent Trust Protocol: Secure message authentication.
-- **[amb](https://github.com/imran-siddique/amb)** - Agent Message Bus: Decoupled event transport.
-- **[atr](https://github.com/imran-siddique/atr)** - Agent Tool Registry: Tool discovery and schema generation *(you are here)*.
+- **[iatp](https://github.com/microsoft/agent-governance-toolkit)** - Inter-Agent Trust Protocol: Secure message authentication.
+- **[amb](https://github.com/microsoft/agent-governance-toolkit)** - Agent Message Bus: Decoupled event transport.
+- **[atr](https://github.com/microsoft/agent-governance-toolkit)** - Agent Tool Registry: Tool discovery and schema generation *(you are here)*.
 
 ### Framework (Layer 3)
-- **[agent-control-plane](https://github.com/imran-siddique/agent-control-plane)** - The Core: Agent orchestration and lifecycle management.
-- **[scak](https://github.com/imran-siddique/scak)** - Self-Correction Agent Kit: Automated error recovery and learning.
+- **[agent-control-plane](https://github.com/microsoft/agent-governance-toolkit)** - The Core: Agent orchestration and lifecycle management.
+- **[scak](https://github.com/microsoft/agent-governance-toolkit)** - Self-Correction Agent Kit: Automated error recovery and learning.
 
 ---
 
@@ -162,7 +162,7 @@ If you use ATR in research, please cite:
   title={ATR: Agent Tool Registry},
   author={Siddique, Imran},
   year={2024},
-  url={https://github.com/imran-siddique/atr},
+  url={https://github.com/microsoft/agent-governance-toolkit},
   note={Part of the Agent OS ecosystem}
 }
 ```
@@ -175,6 +175,6 @@ MIT License - See [LICENSE](LICENSE) for details.
 
 ---
 
-**Repository:** https://github.com/imran-siddique/atr  
-**Documentation:** https://github.com/imran-siddique/atr#readme  
-**Issues:** https://github.com/imran-siddique/atr/issues
+**Repository:** https://github.com/microsoft/agent-governance-toolkit  
+**Documentation:** https://github.com/microsoft/agent-governance-toolkit#readme  
+**Issues:** https://github.com/microsoft/agent-governance-toolkit/issues

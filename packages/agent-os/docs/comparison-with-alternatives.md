@@ -661,4 +661,4 @@ The strongest production setup combines tools from multiple layers. Here's a rec
 
 ---
 
-*Have a correction or addition? [Open an issue](https://github.com/imran-siddique/agent-os/issues) or [submit a PR](https://github.com/imran-siddique/agent-os/pulls).*
+*Have a correction or addition? [Open an issue](https://github.com/microsoft/agent-governance-toolkit/issues) or [submit a PR](https://github.com/microsoft/agent-governance-toolkit/pulls).*

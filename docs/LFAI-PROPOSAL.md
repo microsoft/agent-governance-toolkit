@@ -26,7 +26,7 @@ The ecosystem consists of 5 interoperating packages:
 - **82+ GitHub stars**, **30+ forks** across 5 repos
 - **9,400+ clones** in 14 days
 - **5 PyPI packages** published
-- **MCP server** on npm + [Glama listing](https://glama.ai/mcp/servers/@imran-siddique/agentos-mcp-server)
+- **MCP server** on npm + [Glama listing](https://glama.ai/mcp/servers/@microsoft/agentos-mcp-server)
 - **9/10 OWASP Agentic Top 10** risks covered
 - **4 external contributors**
 - All repos: MIT license, CI/CD, branch protection, code of conduct
@@ -101,7 +101,7 @@ As AI agents become increasingly autonomous, governance infrastructure is critic
 
 ## Links
 
-- [Agent OS](https://github.com/imran-siddique/agent-os) | [Agent Mesh](https://github.com/imran-siddique/agent-mesh) | [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor) | [Agent SRE](https://github.com/imran-siddique/agent-sre) | [Agent Governance](https://github.com/imran-siddique/agent-governance)
+- [Agent OS](https://github.com/microsoft/agent-governance-toolkit) | [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit) | [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) | [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) | [Agent Governance](https://github.com/microsoft/agent-governance-toolkit)
 - [Microsoft mono-repo](https://github.com/microsoft/agent-governance-toolkit) (pending public release)
-- [OWASP Compliance Mapping](https://github.com/imran-siddique/agent-governance/blob/master/docs/OWASP-COMPLIANCE.md)
+- [OWASP Compliance Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
 - [PyPI: agent-os](https://pypi.org/project/agent-os/)

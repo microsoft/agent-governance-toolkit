@@ -1,6 +1,6 @@
 # Agent OS Browser Extension
 
-> **Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+> **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 **Safe AI agents for GitHub, Jira, AWS Console, and more - directly in your browser.**
 
@@ -55,7 +55,7 @@ Floating action button on every supported page:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/imran-siddique/agent-os.git
+   git clone https://github.com/microsoft/agent-governance-toolkit.git
    cd agent-os/extensions/chrome
    ```
 
@@ -178,8 +178,8 @@ MIT License - see [LICENSE](../../LICENSE).
 
 **Made with 🛡️ by the Agent OS team**
 
-[GitHub](https://github.com/imran-siddique/agent-os) | [Documentation](https://agent-os.dev/docs) | [Report Issue](https://github.com/imran-siddique/agent-os/issues)
+[GitHub](https://github.com/microsoft/agent-governance-toolkit) | [Documentation](https://agent-os.dev/docs) | [Report Issue](https://github.com/microsoft/agent-governance-toolkit/issues)
 
 ---
 
-**Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+**Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents

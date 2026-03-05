@@ -3,14 +3,14 @@
   "name": "agentos-mcp-server",
   "display_name": "Agent OS MCP Server",
   "description": "AI agent governance with policy enforcement, code safety verification, multi-model hallucination detection (CMVK), trust attestation (IATP), and immutable audit trails. Covers 9/10 OWASP Agentic Top 10 risks.",
-  "repository": "https://github.com/imran-siddique/agent-os",
-  "homepage": "https://imransiddique.com",
+  "repository": "https://github.com/microsoft/agent-governance-toolkit",
+  "homepage": "https://github.com/microsoft/agent-governance-toolkit",
   "maintainers": [
-    "imran-siddique"
+    "microsoft"
   ],
   "author": {
     "name": "Imran Siddique",
-    "url": "https://github.com/imran-siddique"
+    "url": "https://github.com/microsoft/agent-governance-toolkit"
   },
   "license": "MIT",
   "categories": ["security", "governance", "safety", "code-review", "audit"],
@@ -60,8 +60,8 @@
     "safe_execution - Safe action execution template"
   ],
   "related_servers": [
-    "imran-siddique/agentmesh-mcp-server",
-    "imran-siddique/agent-hypervisor",
-    "imran-siddique/agent-sre"
+    "microsoft/agentmesh-mcp-server",
+    "microsoft/agent-hypervisor",
+    "microsoft/agent-sre"
   ]
 }

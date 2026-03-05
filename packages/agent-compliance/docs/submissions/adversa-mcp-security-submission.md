@@ -158,10 +158,10 @@ print(f"Safe: {result.safe}")
 
 ## Links
 
-- **GitHub**: https://github.com/imran-siddique/agent-os
+- **GitHub**: https://github.com/microsoft/agent-governance-toolkit
 - **MCP Security Module**: `src/agent_os/mcp_security.py`
 - **CLI Tool**: `src/agent_os/cli/mcp_scan.py`
-- **Full Governance Stack**: https://github.com/imran-siddique/agent-governance
+- **Full Governance Stack**: https://github.com/microsoft/agent-governance-toolkit
 
 ## License
 

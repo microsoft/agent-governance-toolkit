@@ -8,7 +8,7 @@ $2B+ voluntary carbon market plagued by fake credits. Projects claim forest pres
 
 ## 🎬 Demo Video
 
-[![Carbon Auditor Demo](https://img.shields.io/badge/Watch-Demo%20Video-red?style=for-the-badge&logo=youtube)](https://github.com/imran-siddique/agent-os)
+[![Carbon Auditor Demo](https://img.shields.io/badge/Watch-Demo%20Video-red?style=for-the-badge&logo=youtube)](https://github.com/microsoft/agent-governance-toolkit)
 
 **Script (60 seconds):**
 ```

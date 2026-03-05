@@ -41,4 +41,4 @@ Whether you're a single team getting started with AI agent governance or a large
 
 ---
 
-*Part of the [Agent Governance](https://github.com/imran-siddique/agent-governance) ecosystem*
+*Part of the [Agent Governance](https://github.com/microsoft/agent-governance-toolkit) ecosystem*

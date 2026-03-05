@@ -10,7 +10,7 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
-    {name = "Imran Siddique", email = "imran@imransiddique.com"}
+    {name = "Imran Siddique", email = "imran@github.com/microsoft/agent-governance-toolkit"}
 ]
 keywords = [
     "ai-agents", "governance", "multi-agent", "trust", "security",
@@ -44,8 +44,8 @@ full = [
 ]
 
 [project.urls]
-Homepage = "https://imransiddique.com"
-Documentation = "https://imransiddique.com/agent-os-docs/"
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/docs"
 Repository = "https://github.com/microsoft/agent-governance-toolkit"
 "Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
 "Agent OS" = "https://github.com/microsoft/agent-governance-toolkit"

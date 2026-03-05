@@ -55,7 +55,7 @@ result = await kernel.execute(
 # result.success = False, result.error = "Policy violation: read_only"
 ```
 
-**Component:** [Agent OS](https://github.com/imran-siddique/agent-os) — `src/agent_os/policy/`, `extensions/mcp-server/src/services/policy-engine.ts`
+**Component:** [Agent OS](https://github.com/microsoft/agent-governance-toolkit) — `src/agent_os/policy/`, `extensions/mcp-server/src/services/policy-engine.ts`
 
 ---
 
@@ -70,7 +70,7 @@ result = await kernel.execute(
 - **Input Sanitization** — command injection detection, shell metacharacter blocking
 - **`verify_code_safety`** MCP tool — checks generated code before execution
 
-**Component:** [Agent OS](https://github.com/imran-siddique/agent-os) — capability model, MCP proxy policy rules
+**Component:** [Agent OS](https://github.com/microsoft/agent-governance-toolkit) — capability model, MCP proxy policy rules
 
 ---
 
@@ -96,7 +96,7 @@ identity = AgentIdentity.create(
 )
 ```
 
-**Component:** [AgentMesh](https://github.com/imran-siddique/agent-mesh) — `sdks/typescript/src/identity.ts`, `sdks/typescript/src/trust.ts`
+**Component:** [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — `sdks/typescript/src/identity.ts`, `sdks/typescript/src/trust.ts`
 
 ---
 
@@ -128,7 +128,7 @@ ai_bom = {
 }
 ```
 
-**Component:** [AgentMesh](https://github.com/imran-siddique/agent-mesh) — `docs/RFC_AGENT_SBOM.md` (AI-BOM v2.0 specification)
+**Component:** [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — `docs/RFC_AGENT_SBOM.md` (AI-BOM v2.0 specification)
 
 ---
 
@@ -144,7 +144,7 @@ ai_bom = {
 - **Saga Compensation** — automatic rollback when execution fails
 - **Sandboxed Execution** — code runs in isolated contexts
 
-**Component:** [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor) — execution rings, resource management, saga orchestration
+**Component:** [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) — execution rings, resource management, saga orchestration
 
 ---
 
@@ -160,7 +160,7 @@ ai_bom = {
 - **Prompt Injection Detection** — sanitizer blocks `ignore previous instructions`, `disregard prior` patterns
 - **PII Protection** — detects and redacts sensitive data in agent context
 
-**Component:** [Agent OS](https://github.com/imran-siddique/agent-os) — VFS, CMVK verification, MCP proxy sanitizer
+**Component:** [Agent OS](https://github.com/microsoft/agent-governance-toolkit) — VFS, CMVK verification, MCP proxy sanitizer
 
 ---
 
@@ -184,7 +184,7 @@ attestation = iatp_sign(agent_id="sender", claim="data_verified", evidence={...}
 is_valid = iatp_verify(attestation, expected_signer="sender")
 ```
 
-**Component:** [AgentMesh](https://github.com/imran-siddique/agent-mesh) — IATP protocol, trust scoring, handshake service
+**Component:** [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — IATP protocol, trust scoring, handshake service
 
 ---
 
@@ -201,7 +201,7 @@ is_valid = iatp_verify(attestation, expected_signer="sender")
 - **Canary Deploys** — gradual rollout of agent changes to detect issues early
 - **OpenTelemetry Integration** — distributed tracing across multi-agent workflows
 
-**Component:** [Agent SRE](https://github.com/imran-siddique/agent-sre) — circuit breakers, SLO engine, cascading failure detection, chaos testing
+**Component:** [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) — circuit breakers, SLO engine, cascading failure detection, chaos testing
 
 ---
 
@@ -217,7 +217,7 @@ is_valid = iatp_verify(attestation, expected_signer="sender")
 - **Expiration Tracking** — approval requests time out to prevent stale authorizations
 - **`require_approval` Policy Action** — built-in policy rule for human review gates
 
-**Component:** [Agent OS](https://github.com/imran-siddique/agent-os) — `extensions/mcp-server/src/services/approval-workflow.ts`
+**Component:** [Agent OS](https://github.com/microsoft/agent-governance-toolkit) — `extensions/mcp-server/src/services/approval-workflow.ts`
 
 ---
 
@@ -234,7 +234,7 @@ is_valid = iatp_verify(attestation, expected_signer="sender")
 - **Shapley-Value Fault Attribution** — identify which agent in a multi-agent system is responsible for failures
 - **Merkle Audit Trails** — cryptographic proof of agent action history
 
-**Component:** [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor) + [AgentMesh](https://github.com/imran-siddique/agent-mesh) trust decay
+**Component:** [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) + [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) trust decay
 
 ---
 

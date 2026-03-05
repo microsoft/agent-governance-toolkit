@@ -31,7 +31,7 @@ python -m twine upload dist/*
 
    | Field | Value |
    |-------|-------|
-   | **Owner** | `imran-siddique` |
+   | **Owner** | `microsoft` |
    | **Repository name** | `atr` |
    | **Workflow name** | `publish.yml` |
    | **Environment name** | `pypi` |
@@ -44,14 +44,14 @@ Repeat the same steps on [test.pypi.org](https://test.pypi.org):
 
 | Field | Value |
 |-------|-------|
-| **Owner** | `imran-siddique` |
+| **Owner** | `microsoft` |
 | **Repository name** | `atr` |
 | **Workflow name** | `publish.yml` |
 | **Environment name** | `testpypi` |
 
 ## Step 4: Create GitHub Environments
 
-1. Go to your GitHub repository: `github.com/imran-siddique/atr`
+1. Go to your GitHub repository: `github.com/microsoft/agent-governance-toolkit`
 2. Navigate to **Settings** → **Environments**
 3. Create two environments:
 

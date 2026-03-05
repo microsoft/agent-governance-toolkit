@@ -78,5 +78,5 @@ swarm/contrib/agentmesh/
 ## Links
 
 - [OpenAI Swarm](https://github.com/openai/swarm)
-- [Agent Mesh](https://github.com/imran-siddique/agent-mesh)
-- [CMVK Model](https://github.com/imran-siddique/agent-mesh/blob/main/docs/cmvk.md)
+- [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit)
+- [CMVK Model](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/cmvk.md)

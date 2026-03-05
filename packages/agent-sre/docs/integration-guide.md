@@ -2,7 +2,7 @@
 
 ## Agent-OS Integration
 
-Agent-SRE monitors agent behavior. [Agent-OS](https://github.com/imran-siddique/agent-os) enforces governance. Together: measure reliability + enforce policies.
+Agent-SRE monitors agent behavior. [Agent-OS](https://github.com/microsoft/agent-governance-toolkit) enforces governance. Together: measure reliability + enforce policies.
 
 ```python
 from agent_sre import SLO, ErrorBudget
@@ -37,7 +37,7 @@ The trace captures every decision point: policy checks, tool calls, LLM inferenc
 
 ## AgentMesh Integration
 
-[AgentMesh](https://github.com/imran-siddique/agent-mesh) provides cross-agent trust. Agent-SRE monitors trust health.
+[AgentMesh](https://github.com/microsoft/agent-governance-toolkit) provides cross-agent trust. Agent-SRE monitors trust health.
 
 ```python
 from agent_sre.slo.indicators import TaskSuccessRate

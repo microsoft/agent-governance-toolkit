@@ -1077,4 +1077,4 @@ for detailed code examples.
 
 ---
 
-*Part of the [Agent Governance](https://github.com/imran-siddique/agent-governance) ecosystem — Building the governance layer for the agentic era*
+*Part of the [Agent Governance](https://github.com/microsoft/agent-governance-toolkit) ecosystem — Building the governance layer for the agentic era*

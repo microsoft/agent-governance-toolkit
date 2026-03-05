@@ -78,7 +78,7 @@ Add a "security" or "governance" category to the MCP Registry for:
 
 The toolkit already includes a working MCP server:
 - Published on npm: `@agentos/mcp-server`
-- Listed on [Glama](https://glama.ai/mcp/servers/@imran-siddique/agentos-mcp-server)
+- Listed on [Glama](https://glama.ai/mcp/servers/@microsoft/agentos-mcp-server)
 - Supports both stdio and HTTP transports
 
 ## Links
@@ -86,4 +86,4 @@ The toolkit already includes a working MCP server:
 - [MCP Servers Repository](https://github.com/modelcontextprotocol/servers)
 - [MCP Registry](https://github.com/modelcontextprotocol/registry)
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
-- [Glama Listing](https://glama.ai/mcp/servers/@imran-siddique/agentos-mcp-server)
+- [Glama Listing](https://glama.ai/mcp/servers/@microsoft/agentos-mcp-server)

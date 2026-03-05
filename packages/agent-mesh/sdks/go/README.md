@@ -5,7 +5,7 @@ Go SDK for the AgentMesh governance framework — identity, trust scoring, polic
 ## Install
 
 ```bash
-go get github.com/imran-siddique/agent-mesh/sdks/go
+go get github.com/microsoft/agent-governance-toolkit/sdks/go
 ```
 
 ## Quick Start
@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"log"
 
-	agentmesh "github.com/imran-siddique/agent-mesh/sdks/go"
+	agentmesh "github.com/microsoft/agent-governance-toolkit/sdks/go"
 )
 
 func main() {

@@ -3,7 +3,7 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/imran-siddique/agent-sre
+  repository: ghcr.io/microsoft/agent-sre
   tag: ""  # Defaults to appVersion
   pullPolicy: IfNotPresent
 

@@ -6,7 +6,7 @@
 Script to upload the red team dataset to Hugging Face Datasets Hub.
 
 This script creates a dataset from the red_team_dataset.py file and uploads it
-to the Hugging Face Hub at: imran-siddique/agent-control-redteam-60
+to the Hugging Face Hub at: microsoft/agent-control-redteam-60
 
 Usage:
     # Set your HF token first:
@@ -71,7 +71,7 @@ def create_dataset_from_prompts():
     return dataset_dict
 
 
-def upload_to_hub(repo_id: str = "imran-siddique/agent-control-redteam-60", dry_run: bool = False):
+def upload_to_hub(repo_id: str = "microsoft/agent-control-redteam-60", dry_run: bool = False):
     """
     Upload the dataset to Hugging Face Hub.
     
@@ -139,7 +139,7 @@ size_categories:
 # Agent Control Plane Red Team Dataset
 
 This dataset contains 60 adversarial prompts designed to test AI agent safety mechanisms.
-It is part of the [Agent Control Plane](https://github.com/imran-siddique/agent-control-plane) project.
+It is part of the [Agent Control Plane](https://github.com/microsoft/agent-governance-toolkit) project.
 
 ## Dataset Description
 
@@ -208,7 +208,7 @@ It tests whether agents can resist various types of attacks while maintaining fu
 ```python
 from datasets import load_dataset
 
-dataset = load_dataset("imran-siddique/agent-control-redteam-60")
+dataset = load_dataset("microsoft/agent-control-redteam-60")
 train_data = dataset["train"]
 
 # Iterate through prompts
@@ -223,7 +223,7 @@ for item in train_data:
 from datasets import load_dataset
 
 # Load dataset
-dataset = load_dataset("imran-siddique/agent-control-redteam-60")
+dataset = load_dataset("microsoft/agent-control-redteam-60")
 
 # Your agent system
 def test_agent(prompt):
@@ -249,7 +249,7 @@ The Agent Control Plane achieves:
 - **False Positive Rate**: 0.00% (allowed all 15 valid requests)
 - **Token Efficiency**: 98.1% fewer tokens than prompt-based safety
 
-See the [comparative study](https://github.com/imran-siddique/agent-control-plane#benchmark-comparative-safety-study) for full details.
+See the [comparative study](https://github.com/microsoft/agent-governance-toolkit#benchmark-comparative-safety-study) for full details.
 
 ## Citation
 
@@ -261,19 +261,19 @@ If you use this dataset in your research, please cite:
   author={{Agent Control Plane Contributors}},
   year={{2026}},
   publisher={{Hugging Face}},
-  howpublished={{\\url{{https://huggingface.co/datasets/imran-siddique/agent-control-redteam-60}}}}
+  howpublished={{\\url{{https://huggingface.co/datasets/microsoft/agent-control-redteam-60}}}}
 }}
 ```
 
 ## License
 
-MIT License - See [LICENSE](https://github.com/imran-siddique/agent-control-plane/blob/main/LICENSE)
+MIT License - See [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 
 ## Related Resources
 
-- [Agent Control Plane Repository](https://github.com/imran-siddique/agent-control-plane)
-- [Benchmark Documentation](https://github.com/imran-siddique/agent-control-plane/blob/main/benchmark/README.md)
-- [Paper](https://github.com/imran-siddique/agent-control-plane/blob/main/paper/)
+- [Agent Control Plane Repository](https://github.com/microsoft/agent-governance-toolkit)
+- [Benchmark Documentation](https://github.com/microsoft/agent-governance-toolkit/blob/main/benchmark/README.md)
+- [Paper](https://github.com/microsoft/agent-governance-toolkit/blob/main/paper/)
 """
         
         # Upload README
@@ -301,8 +301,8 @@ def main():
     )
     parser.add_argument(
         "--repo-id",
-        default="imran-siddique/agent-control-redteam-60",
-        help="Hugging Face repository ID (default: imran-siddique/agent-control-redteam-60)"
+        default="microsoft/agent-control-redteam-60",
+        help="Hugging Face repository ID (default: microsoft/agent-control-redteam-60)"
     )
     parser.add_argument(
         "--dry-run",

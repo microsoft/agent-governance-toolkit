@@ -47,7 +47,7 @@ if ($InRepo) {
         Write-Host "[ERROR] Agent OS is not yet published to PyPI." -ForegroundColor Red
         Write-Host ""
         Write-Host "To install from source:" -ForegroundColor Yellow
-        Write-Host "  git clone https://github.com/imran-siddique/agent-os.git"
+        Write-Host "  git clone https://github.com/microsoft/agent-governance-toolkit.git"
         Write-Host "  cd agent-os"
         Write-Host "  pip install -e ."
         Write-Host ""
@@ -126,4 +126,4 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host ""
 Write-Host "[SUCCESS] Quickstart Complete!" -ForegroundColor Green
 Write-Host "   Project: $(Get-Location)"
-Write-Host "   Docs: https://github.com/imran-siddique/agent-os/tree/main/docs"
+Write-Host "   Docs: https://github.com/microsoft/agent-governance-toolkit/tree/main/docs"

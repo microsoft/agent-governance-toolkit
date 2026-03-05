@@ -146,7 +146,7 @@ Colors = Colors()  # type: ignore[misc]
 # CLI Error Formatting
 # ============================================================================
 
-DOCS_URL = "https://github.com/imran-siddique/agent-os/blob/main/docs"
+DOCS_URL = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs"
 
 AVAILABLE_POLICIES = ("strict", "permissive", "audit")
 
@@ -497,7 +497,7 @@ You must:
 ## Context
 
 This agent is part of the Agent OS ecosystem.
-For more information: https://github.com/imran-siddique/agent-os
+For more information: https://github.com/microsoft/agent-governance-toolkit
 """)
 
     # Create security.md (Agent OS extension)
@@ -563,7 +563,7 @@ observability:
   flight_recorder: true
 
 # For more options, see:
-# https://github.com/imran-siddique/agent-os/blob/main/docs/security-spec.md
+# https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/security-spec.md
 """
 
     security_md.write_text(security_content)
@@ -1497,7 +1497,7 @@ Environment variables:
   AGENTOS_BACKEND     State backend type: memory, redis
   AGENTOS_REDIS_URL   Redis connection URL
 
-Documentation: https://github.com/imran-siddique/agent-os
+Documentation: https://github.com/microsoft/agent-governance-toolkit
 """
     )
     parser.add_argument(

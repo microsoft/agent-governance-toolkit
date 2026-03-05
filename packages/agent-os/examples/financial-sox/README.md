@@ -144,4 +144,4 @@ MIT
 
 - [SOX Act Overview (SEC)](https://www.sec.gov/about/laws/soa2002.pdf)
 - [PCAOB Auditing Standards](https://pcaobus.org/oversight/standards/auditing-standards)
-- [Agent OS Documentation](https://imran-siddique.github.io/agent-os-docs/)
+- [Agent OS Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs)

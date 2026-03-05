@@ -469,7 +469,7 @@ export class CopilotExtension {
 \`\`\`
 
 ---
-**Learn More:** [github.com/imran-siddique/agent-os](https://github.com/imran-siddique/agent-os)
+**Learn More:** [github.com/microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit)
 `;
 
         return {

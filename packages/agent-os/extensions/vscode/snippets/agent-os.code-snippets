@@ -285,7 +285,7 @@
             "    runs-on: ubuntu-latest",
             "    steps:",
             "      - uses: actions/checkout@v4",
-            "      - uses: imran-siddique/agent-os/.github/actions/agent-os-audit@main",
+            "      - uses: microsoft/agent-os/.github/actions/agent-os-audit@main",
             "        with:",
             "          fail-on-violation: ${1|true,false|}",
             "          policy-file: ${2:.agents/policy.yaml}"

@@ -1,4 +1,4 @@
-module github.com/imran-siddique/agent-mesh/sdks/go
+module github.com/microsoft/agent-governance-toolkit/sdks/go
 
 go 1.21
 

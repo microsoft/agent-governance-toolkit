@@ -11,7 +11,7 @@ Example:
 
         from caas.hf_utils import CaaSHubClient
 
-        client = CaaSHubClient(repo_id="imran-siddique/caas-benchmark")
+        client = CaaSHubClient(repo_id="microsoft/caas-benchmark")
         client.upload_experiment_logs(
             results_path="experiments/results.json",
             commit_message="Add benchmark results v0.2.0"
@@ -19,7 +19,7 @@ Example:
 
     Download the benchmark corpus::
 
-        client = CaaSHubClient(repo_id="imran-siddique/caas-benchmark")
+        client = CaaSHubClient(repo_id="microsoft/caas-benchmark")
         corpus_path = client.download_benchmark_corpus()
         print(f"Corpus downloaded to: {corpus_path}")
 
@@ -66,8 +66,8 @@ __all__ = [
 
 
 # Default repository IDs
-DEFAULT_BENCHMARK_REPO = "imran-siddique/caas-benchmark"
-DEFAULT_DATASET_REPO = "imran-siddique/caas-enterprise-docs"
+DEFAULT_BENCHMARK_REPO = "microsoft/caas-benchmark"
+DEFAULT_DATASET_REPO = "microsoft/caas-enterprise-docs"
 
 
 @dataclass
@@ -123,12 +123,12 @@ class CaaSHubClient:
     Example:
         Initialize and download benchmark corpus::
 
-            client = CaaSHubClient(repo_id="imran-siddique/caas-benchmark")
+            client = CaaSHubClient(repo_id="microsoft/caas-benchmark")
             corpus_path = client.download_benchmark_corpus()
 
         Upload experiment results::
 
-            client = CaaSHubClient(repo_id="imran-siddique/caas-results")
+            client = CaaSHubClient(repo_id="microsoft/caas-results")
             client.upload_experiment_logs("results/experiment_001.json")
     """
 

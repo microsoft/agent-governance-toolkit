@@ -2,15 +2,15 @@
 
 > **Build safe AI agents with natural language and 0% policy violations**
 
-<a href="https://glama.ai/mcp/servers/@imran-siddique/agentos-mcp-server">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@imran-siddique/agentos-mcp-server/badge" />
+<a href="https://glama.ai/mcp/servers/@microsoft/agentos-mcp-server">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@microsoft/agentos-mcp-server/badge" />
 </a>
 
 [![npm version](https://badge.fury.io/js/agentos-mcp-server.svg)](https://www.npmjs.com/package/agentos-mcp-server)
 [![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.imran--siddique%2Fagentos-blue)](https://registry.modelcontextprotocol.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+**Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 ## 🚀 Quick Install
 
@@ -19,7 +19,7 @@ npx agentos-mcp-server
 ```
 
 **npm:** [`agentos-mcp-server`](https://www.npmjs.com/package/agentos-mcp-server)  
-**MCP Registry:** `io.github.imran-siddique/agentos`
+**MCP Registry:** `io.github.microsoft/agentos`
 
 ## Overview
 
@@ -473,7 +473,7 @@ All data is stored locally in the `AGENTOS_DATA_DIR`:
 
 ```bash
 # Clone the repository
-git clone https://github.com/imran-siddique/agent-os
+git clone https://github.com/microsoft/agent-governance-toolkit
 cd agent-os/packages/mcp-server
 
 # Install dependencies
@@ -547,7 +547,7 @@ MIT License - see [LICENSE](../../LICENSE).
 
 **Build safe AI agents with AgentOS**
 
-[GitHub](https://github.com/imran-siddique/agent-os) · [Documentation](../../docs/) · [Report Issue](https://github.com/imran-siddique/agent-os/issues)
+[GitHub](https://github.com/microsoft/agent-governance-toolkit) · [Documentation](../../docs/) · [Report Issue](https://github.com/microsoft/agent-governance-toolkit/issues)
 
 **Made with 🛡️ by the Agent OS team**
 

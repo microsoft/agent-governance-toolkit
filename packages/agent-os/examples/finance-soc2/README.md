@@ -161,4 +161,4 @@ MIT
 ## References
 
 - [SOC2 Trust Service Criteria](https://www.aicpa.org/interestareas/frc/assuranceadvisoryservices/sorhome)
-- [Agent OS Documentation](https://imran-siddique.github.io/agent-os-docs/)
+- [Agent OS Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs)

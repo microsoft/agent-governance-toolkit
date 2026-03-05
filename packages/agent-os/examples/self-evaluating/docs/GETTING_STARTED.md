@@ -8,7 +8,7 @@ Welcome! This guide will help you get up and running with the Self-Evolving Agen
 
 ```bash
 # Clone the repository
-git clone https://github.com/imran-siddique/self-evaluating-agent-sample.git
+git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd self-evaluating-agent-sample
 
 # Install dependencies

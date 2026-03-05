@@ -81,11 +81,11 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/imran-siddique/inter-agent-trust-protocol"
-Documentation = "https://github.com/imran-siddique/inter-agent-trust-protocol#readme"
-Repository = "https://github.com/imran-siddique/inter-agent-trust-protocol.git"
-Issues = "https://github.com/imran-siddique/inter-agent-trust-protocol/issues"
-Changelog = "https://github.com/imran-siddique/inter-agent-trust-protocol/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit#readme"
+Repository = "https://github.com/microsoft/agent-governance-toolkit.git"
+Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
+Changelog = "https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md"
 
 [project.scripts]
 iatp = "iatp.cli:cli"

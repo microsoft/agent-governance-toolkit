@@ -1,6 +1,6 @@
 # MCP Kernel Server
 
-> **Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+> **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 **Native Safety for Claude Desktop - Agent OS kernel primitives via Model Context Protocol (MCP)**
 
@@ -249,7 +249,7 @@ async with ClientSession() as session:
 
 ## Part of Agent OS
 
-This MCP server is part of the [Agent OS](https://github.com/imran-siddique/agent-os) ecosystem:
+This MCP server is part of the [Agent OS](https://github.com/microsoft/agent-governance-toolkit) ecosystem:
 
 - **Kernel-level safety** - Not just prompts, real enforcement
 - **POSIX-style signals** - SIGKILL, SIGSTOP, SIGCONT for agents

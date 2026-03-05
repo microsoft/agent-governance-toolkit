@@ -1,7 +1,7 @@
 # RFC: AI-BOM — AI Bill of Materials for Agentic Systems
 
 **Status:** Draft v2.0  
-**Author:** Imran Siddique (@imran-siddique)  
+**Author:** Imran Siddique (Microsoft)  
 **Created:** 2026-02-03  
 **Updated:** 2026-03-04  
 **Target:** LF AI & Data Foundation, OWASP AI SBOM Initiative  
@@ -573,7 +573,7 @@ We invite feedback on:
 5. **Adoption:** What tooling would make AI-BOM useful for your organization?
 
 Submit feedback:
-- GitHub: https://github.com/imran-siddique/agent-mesh/discussions
+- GitHub: https://github.com/microsoft/agent-governance-toolkit/discussions
 - Microsoft: https://github.com/microsoft/agent-governance-toolkit/issues
 
 ---

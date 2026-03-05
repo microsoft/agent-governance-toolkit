@@ -204,6 +204,6 @@ Agent OS wraps all LangChain execution methods:
 
 ## Next Steps
 
-- 📖 [Full documentation](https://github.com/imran-siddique/agent-os)
+- 📖 [Full documentation](https://github.com/microsoft/agent-governance-toolkit)
 - 🔧 [More examples](../../examples/)
 - 🏗️ [Architecture overview](../../ARCHITECTURE.md)

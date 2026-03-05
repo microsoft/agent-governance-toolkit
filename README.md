@@ -1,24 +1,27 @@
 <div align="center">
 
-# Agent Governance Toolkit
+# 🛡️ Agent Governance Toolkit
 
-**Runtime security and governance framework for autonomous AI agents**
+**The missing security layer for autonomous AI agents**
 
+*Policy enforcement · Zero-trust identity · Execution sandboxing · Reliability engineering*
+
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
-[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10/10_Covered-brightgreen)](docs/OWASP-COMPLIANCE.md)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
+[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-brightgreen)](docs/OWASP-COMPLIANCE.md)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085/badge)](https://www.bestpractices.dev/projects/12085)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 
-</div>
+[Quick Start](#quick-start) · [Packages](#packages) · [Integrations](#framework-integrations) · [OWASP Coverage](#owasp-agentic-top-10-coverage) · [Contributing](CONTRIBUTING.md)
 
-> **The missing security layer for AI agents.** Policy enforcement, identity mesh, execution sandboxing, and reliability engineering — in one toolkit.
+</div>
 
 ---
 
 ## Why Agent Governance?
 
-Autonomous AI agents (LangChain, AutoGen, CrewAI, etc.) can call tools, spawn sub-agents, and take real-world actions — but have **no runtime security model**. The Agent Governance Toolkit provides:
+AI agent frameworks (LangChain, AutoGen, CrewAI, Google ADK, OpenAI Agents SDK) enable agents to call tools, spawn sub-agents, and take real-world actions — but provide **no runtime security model**. The Agent Governance Toolkit provides:
 
 - **Deterministic policy enforcement** before every agent action
 - **Zero-trust identity** with cryptographic agent credentials
@@ -62,7 +65,7 @@ Covers **10 of 10 [OWASP Agentic Top 10](https://owasp.org/www-project-agentic-a
 | Package | PyPI | Description |
 |---------|------|-------------|
 | **Agent OS** | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | Kernel architecture — policy engine, capability model, audit logging, syscall interception, MCP gateway |
-| **AgentMesh** | [`agentmesh`](https://pypi.org/project/agentmesh/) | Inter-agent trust — Ed25519 identity, SPIFFE/SVID credentials, trust scoring, A2A/MCP/IATP protocol bridges |
+| **AgentMesh** | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | Inter-agent trust — Ed25519 identity, SPIFFE/SVID credentials, trust scoring, A2A/MCP/IATP protocol bridges |
 | **Agent Hypervisor** | [`agent-hypervisor`](https://pypi.org/project/agent-hypervisor/) | Execution isolation — 4-tier privilege rings, saga orchestration, kill switch, joint liability, hash-chain audit |
 | **Agent SRE** | [`agent-sre`](https://pypi.org/project/agent-sre/) | Reliability engineering — SLOs, error budgets, replay debugging, chaos engineering, progressive delivery |
 | **Agent Compliance** | [`ai-agent-compliance`](https://pypi.org/project/ai-agent-compliance/) | Unified installer and compliance documentation |
@@ -136,6 +139,8 @@ Works with **12+ agent frameworks** including:
 ## Documentation
 
 - [OWASP Compliance Mapping](docs/OWASP-COMPLIANCE.md)
+- [CSA Agentic Trust Framework Mapping](docs/CSA-ATF-PROPOSAL.md)
+- [Changelog](CHANGELOG.md)
 - [Contributing Guide](CONTRIBUTING.md)
 - [Security Policy](SECURITY.md)
 - [Support](SUPPORT.md)
@@ -145,6 +150,10 @@ Works with **12+ agent frameworks** including:
 This project welcomes contributions and suggestions. Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 Most contributions require you to agree to a Contributor License Agreement (CLA). For details, visit https://cla.opensource.microsoft.com.
+
+When you submit a pull request, a CLA bot will automatically determine whether you need to provide a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions provided by the bot.
+
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any questions.
 
 ## License
 

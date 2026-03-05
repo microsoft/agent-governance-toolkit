@@ -13,7 +13,7 @@ Example:
     >>> from emk.hf_utils import upload_episodes_to_hub
     >>> upload_episodes_to_hub(
     ...     episodes=my_episodes,
-    ...     repo_id="imran-siddique/emk-experiments",
+    ...     repo_id="microsoft/emk-experiments",
     ...     filename="episodes.jsonl"
     ... )
 
@@ -94,7 +94,7 @@ def upload_episodes_to_hub(
         >>> episodes = [Episode(goal="Test", action="Run", result="Pass", reflection="Good")]
         >>> url = upload_episodes_to_hub(
         ...     episodes=episodes,
-        ...     repo_id="imran-siddique/emk-test-data"
+        ...     repo_id="microsoft/emk-test-data"
         ... )
         >>> print(f"Uploaded to: {url}")
     """
@@ -167,7 +167,7 @@ def download_episodes_from_hub(
     Example:
         >>> from emk.hf_utils import download_episodes_from_hub
         >>> episodes = download_episodes_from_hub(
-        ...     repo_id="imran-siddique/emk-test-data"
+        ...     repo_id="microsoft/emk-test-data"
         ... )
         >>> print(f"Downloaded {len(episodes)} episodes")
     """
@@ -234,7 +234,7 @@ def push_experiment_results(
         ... }
         >>> url = push_experiment_results(
         ...     results=results,
-        ...     repo_id="imran-siddique/emk-experiments"
+        ...     repo_id="microsoft/emk-experiments"
         ... )
     """
     _check_hf_hub()
@@ -312,7 +312,7 @@ def create_dataset_card(
     Example:
         >>> from emk.hf_utils import create_dataset_card
         >>> url = create_dataset_card(
-        ...     repo_id="imran-siddique/emk-agent-logs",
+        ...     repo_id="microsoft/emk-agent-logs",
         ...     description="Agent experience logs from production system",
         ...     num_episodes=10000,
         ...     tags=["agents", "episodic-memory", "nlp"]
@@ -345,7 +345,7 @@ library_name: emk
 
 - **Format**: JSONL (newline-delimited JSON)
 - **Schema**: EMK Episode (Goal → Action → Result → Reflection)
-- **Library**: [emk](https://github.com/imran-siddique/emk)
+- **Library**: [emk](https://github.com/microsoft/agent-governance-toolkit)
 """
 
     if num_episodes:

@@ -69,11 +69,11 @@ manager.add_channel(ChannelConfig(
 
 ### Agent OS Integration
 
-When used with [Agent OS](https://github.com/imran-siddique/agent-os), policy violations are reported as SLI signals. Agent OS provides the enforcement; Agent-SRE provides the monitoring.
+When used with [Agent OS](https://github.com/microsoft/agent-governance-toolkit), policy violations are reported as SLI signals. Agent OS provides the enforcement; Agent-SRE provides the monitoring.
 
 ### AgentMesh Integration
 
-When used with [AgentMesh](https://github.com/imran-siddique/agent-mesh), trust scores flow into SLIs. AgentMesh handles identity and authentication; Agent-SRE monitors reliability of the trust infrastructure.
+When used with [AgentMesh](https://github.com/microsoft/agent-governance-toolkit), trust scores flow into SLIs. AgentMesh handles identity and authentication; Agent-SRE monitors reliability of the trust infrastructure.
 
 ### MCP Drift Detection
 

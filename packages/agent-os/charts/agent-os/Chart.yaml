@@ -12,6 +12,6 @@ keywords:
   - policy
 maintainers:
   - name: agent-os
-home: https://github.com/imran-siddique/agent-os
+home: https://github.com/microsoft/agent-governance-toolkit
 sources:
-  - https://github.com/imran-siddique/agent-os
+  - https://github.com/microsoft/agent-governance-toolkit

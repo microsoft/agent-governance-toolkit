@@ -14,11 +14,11 @@ setup(
     description="Inter-Agent Trust Protocol - Envoy for Agents with Typed IPC Pipes",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/imran-siddique/inter-agent-trust-protocol",
+    url="https://github.com/microsoft/agent-governance-toolkit",
     project_urls={
-        "Bug Tracker": "https://github.com/imran-siddique/inter-agent-trust-protocol/issues",
-        "Documentation": "https://github.com/imran-siddique/inter-agent-trust-protocol",
-        "Source Code": "https://github.com/imran-siddique/inter-agent-trust-protocol",
+        "Bug Tracker": "https://github.com/microsoft/agent-governance-toolkit/issues",
+        "Documentation": "https://github.com/microsoft/agent-governance-toolkit",
+        "Source Code": "https://github.com/microsoft/agent-governance-toolkit",
     },
     packages=find_packages(exclude=["tests", "tests.*", "examples", "examples.*", "experiments", "experiments.*"]),
     classifiers=[

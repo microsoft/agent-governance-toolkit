@@ -10,8 +10,8 @@ authors:
   - family-names: "Siddique"
     given-names: "Imran"
     orcid: "https://orcid.org/0000-0000-0000-0000"  # Update with your ORCID
-repository-code: "https://github.com/imran-siddique/cmvk"
-url: "https://github.com/imran-siddique/cmvk"
+repository-code: "https://github.com/microsoft/agent-governance-toolkit"
+url: "https://github.com/microsoft/agent-governance-toolkit"
 license: MIT
 version: "0.1.0"
 date-released: "2026-01-01"

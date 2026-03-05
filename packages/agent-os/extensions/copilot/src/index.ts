@@ -72,7 +72,7 @@ app.get('/', (req: Request, res: Response) => {
         name: 'AgentOS Copilot Extension',
         version: '1.0.0',
         description: 'Build safe AI agents with natural language',
-        documentation: 'https://imran-siddique.github.io/agent-os-docs/tutorials/copilot-extension/',
+        documentation: 'https://github.com/microsoft/agent-governance-toolkit/tree/main/docstutorials/copilot-extension/',
         endpoints: {
             health: '/health',
             copilot: '/api/copilot',
@@ -265,7 +265,7 @@ app.get('/setup', (req: Request, res: Response) => {
                 <code>@agentos templates</code>
             </div>
             
-            <p><a href="https://imran-siddique.github.io/agent-os-docs/tutorials/copilot-extension/">📚 Full Documentation</a></p>
+            <p><a href="https://github.com/microsoft/agent-governance-toolkit/tree/main/docstutorials/copilot-extension/">📚 Full Documentation</a></p>
         </body>
         </html>
     `);

@@ -1,6 +1,6 @@
 # emk - Episodic Memory Kernel — Community Edition
 
-> **Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+> **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 [![PyPI](https://img.shields.io/pypi/v/emk)](https://pypi.org/project/emk/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

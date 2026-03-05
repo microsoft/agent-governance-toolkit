@@ -6,7 +6,7 @@
   "publisher": "agent-os",
   "repository": {
     "type": "git",
-    "url": "https://github.com/imran-siddique/agent-os"
+    "url": "https://github.com/microsoft/agent-governance-toolkit"
   },
   "engines": {
     "vscode": "^1.85.0"

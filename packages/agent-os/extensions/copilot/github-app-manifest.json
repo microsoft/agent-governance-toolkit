@@ -1,6 +1,6 @@
 {
   "name": "AgentOS",
-  "url": "https://imran-siddique.github.io/agent-os-docs/",
+  "url": "https://github.com/microsoft/agent-governance-toolkit/tree/main/docs",
   "hook_attributes": {
     "url": "https://YOUR_DEPLOYED_URL/api/webhook",
     "active": true

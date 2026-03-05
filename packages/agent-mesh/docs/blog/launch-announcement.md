@@ -134,7 +134,7 @@ The `agentmesh-platform` package (v1.0.0-alpha) includes:
 pip install agentmesh-platform
 ```
 
-- **GitHub:** [github.com/imran-siddique/agent-mesh](https://github.com/imran-siddique/agent-mesh)
+- **GitHub:** [github.com/microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit)
 - **PyPI:** [pypi.org/project/agentmesh-platform](https://pypi.org/project/agentmesh-platform)
 
 The agents are shipping. The governance layer wasn't. Now it is.

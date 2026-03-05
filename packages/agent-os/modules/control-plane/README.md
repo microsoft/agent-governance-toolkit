@@ -1,6 +1,6 @@
 # Agent Control Plane — Community Edition
 
-> **Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+> **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 [![PyPI version](https://img.shields.io/pypi/v/agent-control-plane.svg)](https://pypi.org/project/agent-control-plane/)
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)

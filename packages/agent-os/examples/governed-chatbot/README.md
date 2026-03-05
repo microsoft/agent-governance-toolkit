@@ -63,5 +63,5 @@ All policy violations are logged to the audit trail but never expose raw user in
 
 ## Related Issues
 
-- [#64](https://github.com/imran-siddique/agent-os/issues/64) — Original issue
-- [#66](https://github.com/imran-siddique/agent-os/issues/66) — Rate limiting policy template
+- [#64](https://github.com/microsoft/agent-governance-toolkit/issues/64) — Original issue
+- [#66](https://github.com/microsoft/agent-governance-toolkit/issues/66) — Rate limiting policy template

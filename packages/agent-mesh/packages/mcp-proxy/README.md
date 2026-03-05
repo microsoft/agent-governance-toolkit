@@ -306,7 +306,7 @@ Apache 2.0 - See [LICENSE](../../LICENSE)
 
 ## 🔗 Links
 
-- **AgentMesh**: https://github.com/imran-siddique/agent-mesh
+- **AgentMesh**: https://github.com/microsoft/agent-governance-toolkit
 - **MCP Specification**: https://modelcontextprotocol.io
 - **MCP Security Discussion**: https://github.com/anthropics/anthropic-cookbook/discussions
 

@@ -11,7 +11,7 @@ pip install iatp
 Or from source:
 
 ```bash
-git clone https://github.com/imran-siddique/inter-agent-trust-protocol.git
+git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd inter-agent-trust-protocol
 pip install -e .
 ```

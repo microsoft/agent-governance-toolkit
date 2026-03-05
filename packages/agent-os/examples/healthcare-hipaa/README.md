@@ -219,4 +219,4 @@ MIT - Compatible with HL7 contribution requirements.
 - [SMART App Launch Framework](https://docs.smarthealthit.org/)
 - [HIPAA Security Rule](https://www.hhs.gov/hipaa/for-professionals/security/)
 - [US Core Implementation Guide](https://hl7.org/fhir/us/core/)
-- [Agent OS Documentation](https://imran-siddique.github.io/agent-os-docs/)
+- [Agent OS Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs)

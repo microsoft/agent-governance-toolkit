@@ -146,5 +146,5 @@ if __name__ == "__main__":
 
     print("\n" + "=" * 60)
     print("All 7 frameworks governed with a single GovernancePolicy!")
-    print("Docs: https://github.com/imran-siddique/agent-os/blob/master/docs/integrations.md")
+    print("Docs: https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/integrations.md")
     print("=" * 60)

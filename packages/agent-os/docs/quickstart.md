@@ -266,6 +266,6 @@ result = await kernel.syscall(
 
 ## Get Help
 
-- [GitHub Issues](https://github.com/imran-siddique/agent-os/issues)
-- [Documentation](https://github.com/imran-siddique/agent-os/tree/main/docs)
+- [GitHub Issues](https://github.com/microsoft/agent-governance-toolkit/issues)
+- [Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs)
 - [Policy Schema Reference](policy-schema.md)

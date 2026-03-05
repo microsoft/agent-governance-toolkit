@@ -268,7 +268,7 @@ pip install agentmesh-platform
 
 - **Examples:** [All examples](./README.md)
 - **Main Docs:** [README](../README.md)
-- **Issues:** [GitHub Issues](https://github.com/imran-siddique/agent-mesh/issues)
+- **Issues:** [GitHub Issues](https://github.com/microsoft/agent-governance-toolkit/issues)
 - **LangChain Guide:** [Integration guide](./integrations/langchain.md)
 - **CrewAI Guide:** [Integration guide](./integrations/crewai.md)
 

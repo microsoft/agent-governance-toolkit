@@ -81,5 +81,5 @@ End-to-end example in `crewAI-examples` demonstrating:
 ## Links
 
 - [CrewAI](https://github.com/crewAIInc/crewAI)
-- [Agent OS](https://github.com/imran-siddique/agent-os)
+- [Agent OS](https://github.com/microsoft/agent-governance-toolkit)
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)

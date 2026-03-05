@@ -21,7 +21,7 @@ setup(
     description="A comprehensive framework for building self-improving AI agents",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/imran-siddique/self-evaluating-agent-sample",
+    url="https://github.com/microsoft/agent-governance-toolkit",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",

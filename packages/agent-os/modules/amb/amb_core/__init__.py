@@ -56,7 +56,7 @@ Advanced Usage:
     ...             ttl_seconds=300
     ...         )
 
-For more information, see: https://github.com/imran-siddique/amb
+For more information, see: https://github.com/microsoft/agent-governance-toolkit
 """
 
 from __future__ import annotations

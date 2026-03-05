@@ -19,7 +19,7 @@ We appreciate your efforts to responsibly disclose security vulnerabilities. Ple
 For serious security vulnerabilities, please use one of these private channels:
 
 1. **GitHub Security Advisories** (preferred)
-   - Go to [Security Advisories](https://github.com/imran-siddique/agent-control-plane/security/advisories/new)
+   - Go to [Security Advisories](https://github.com/microsoft/agent-governance-toolkit/security/advisories/new)
    - Click "Report a vulnerability"
    - Provide detailed information about the vulnerability
 
@@ -30,7 +30,7 @@ For serious security vulnerabilities, please use one of these private channels:
 ### 📢 Public Disclosure
 
 For low-severity issues or security improvements, you may:
-- Create a public issue using the [Security Vulnerability template](https://github.com/imran-siddique/agent-control-plane/issues/new?template=security_vulnerability.yml)
+- Create a public issue using the [Security Vulnerability template](https://github.com/microsoft/agent-governance-toolkit/issues/new?template=security_vulnerability.yml)
 - Be aware that this will be publicly visible immediately
 
 ## What to Include in Your Report
@@ -201,7 +201,7 @@ For vulnerabilities assigned CVEs:
 ## Questions?
 
 For general security questions (non-vulnerability):
-- Open a [discussion](https://github.com/imran-siddique/agent-control-plane/discussions)
+- Open a [discussion](https://github.com/microsoft/agent-governance-toolkit/discussions)
 - Create a question issue
 - Review the [security documentation](docs/)
 

@@ -544,7 +544,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/imran-siddique/agent-os/go/kernel"
+	"github.com/microsoft/agent-governance-toolkit/go/kernel"
 )
 
 type AgentResult struct {

@@ -166,5 +166,5 @@ The lesson? Trust isn't a feature you build. It's a behavior you practice. Every
 ---
 
 **Related:**
-- [AgentMesh GitHub](https://github.com/imran-siddique/agent-mesh)
-- [The Recovery Mode Code](https://github.com/imran-siddique/agentmesh-api/blob/master/agent/autonomous.js)
+- [AgentMesh GitHub](https://github.com/microsoft/agent-governance-toolkit)
+- [The Recovery Mode Code](https://github.com/microsoft/agent-governance-toolkit/blob/master/agent/autonomous.js)

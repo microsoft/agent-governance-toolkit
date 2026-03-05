@@ -17,7 +17,7 @@ Visual demos showing Agent OS blocking dangerous AI agent operations in real-tim
 
 ```bash
 # Clone and run (no dependencies needed!)
-git clone https://github.com/imran-siddique/agent-os
+git clone https://github.com/microsoft/agent-governance-toolkit
 cd agent-os/examples/crewai-safe-mode
 
 # CrewAI demo
@@ -59,7 +59,7 @@ called Agent OS. It intercepts dangerous operations (file deletion,
 privilege escalation, etc.) BEFORE they execute.
 
 Just made a demo specifically for CrewAI:
-🔗 https://github.com/imran-siddique/agent-os/tree/main/examples/crewai-safe-mode
+🔗 https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/crewai-safe-mode
 
 What it does:
 - Wraps your CrewAI agents in a safety kernel
@@ -68,7 +68,7 @@ What it does:
 - Zero code changes to your existing crews
 
 Run it yourself:
-git clone https://github.com/imran-siddique/agent-os
+git clone https://github.com/microsoft/agent-governance-toolkit
 cd agent-os/examples/crewai-safe-mode
 python crewai_safe_mode.py
 
@@ -83,7 +83,7 @@ Hey @joaomdmoura, love CrewAI! 🚀
 I built a kernel-level safety layer to stop agents from hallucinating
 dangerous file ops (POSIX-style permissions).
 
-Demo for CrewAI: https://github.com/imran-siddique/agent-os/tree/main/examples/crewai-safe-mode
+Demo for CrewAI: https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/crewai-safe-mode
 
 Would love to contribute this as a 'Safety Adapter' for enterprise crews! 🛡️
 
@@ -121,7 +121,7 @@ Agent OS wraps tool execution with safety policies:
 - Full audit logging
 - Zero code changes
 
-Demo: https://github.com/imran-siddique/agent-os/tree/main/examples/crewai-safe-mode
+Demo: https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/crewai-safe-mode
 
 python langchain_safe_mode.py
 

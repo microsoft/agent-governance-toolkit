@@ -78,5 +78,5 @@ metagpt/ext/agentmesh/
 ## Links
 
 - [MetaGPT](https://github.com/FoundationAgents/MetaGPT)
-- [Agent Mesh](https://github.com/imran-siddique/agent-mesh)
+- [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit)
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)

@@ -6,7 +6,7 @@
 
 ## 🎬 Demo Video
 
-[![Pharma Compliance Demo](https://img.shields.io/badge/Watch-Demo%20Video-red?style=for-the-badge&logo=youtube)](https://github.com/imran-siddique/agent-os)
+[![Pharma Compliance Demo](https://img.shields.io/badge/Watch-Demo%20Video-red?style=for-the-badge&logo=youtube)](https://github.com/microsoft/agent-governance-toolkit)
 
 **Script (60 seconds):**
 ```

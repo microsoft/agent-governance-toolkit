@@ -12,12 +12,12 @@ Usage:
     # Upload experiment results
     upload_experiment_logs(
         results_path="experiments/results.json",
-        repo_id="imran-siddique/cmvk-benchmark-data"
+        repo_id="microsoft/cmvk-benchmark-data"
     )
 
     # Download shared datasets
     download_dataset(
-        repo_id="imran-siddique/cmvk-benchmark-data",
+        repo_id="microsoft/cmvk-benchmark-data",
         filename="datasets/humaneval_50.json",
         local_path="experiments/datasets/"
     )
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Default repository configuration
-DEFAULT_REPO_ID = "imran-siddique/cmvk-benchmark-data"
+DEFAULT_REPO_ID = "microsoft/cmvk-benchmark-data"
 DEFAULT_REPO_TYPE = "dataset"
 
 
@@ -108,7 +108,7 @@ def upload_experiment_logs(
     Example:
         >>> url = upload_experiment_logs(
         ...     "experiments/results.json",
-        ...     repo_id="imran-siddique/cmvk-benchmark-data"
+        ...     repo_id="microsoft/cmvk-benchmark-data"
         ... )
         >>> print(f"Uploaded to: {url}")
     """

@@ -36,7 +36,7 @@ datasets/
   title={SCAK Red-Team Security Benchmark},
   author={Self-Correcting Agent Team},
   year={2026},
-  url={https://github.com/imran-siddique/self-correcting-agent-kernel/datasets/red_team}
+  url={https://github.com/microsoft/agent-governance-toolkit/datasets/red_team}
 }
 ```
 
@@ -79,7 +79,7 @@ datasets/
   title={SCAK Chaos Engineering Benchmark},
   author={Self-Correcting Agent Team},
   year={2026},
-  url={https://github.com/imran-siddique/self-correcting-agent-kernel/datasets/chaos_scenarios}
+  url={https://github.com/microsoft/agent-governance-toolkit/datasets/chaos_scenarios}
 }
 ```
 
