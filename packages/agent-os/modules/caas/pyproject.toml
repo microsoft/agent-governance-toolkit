@@ -44,7 +44,7 @@ dependencies = [
     "pypdf>=4.0.0",
     "beautifulsoup4>=4.12.2",
     "lxml>=4.9.3",
-    "python-multipart>=0.0.20",
+    "python-multipart>=0.0.22",
     "tiktoken>=0.5.1",
     "numpy>=1.26.2",
     "scikit-learn>=1.6.1",
@@ -56,7 +56,7 @@ dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
     "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
+    "black>=24.3.0",
     "ruff>=0.1.0",
     "mypy>=1.5.0",
 ]

@@ -24,6 +24,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: pypi
     strategy:
       matrix:
         package: [agent-os, agent-mesh, agent-hypervisor, agent-sre, agent-compliance]
@@ -35,15 +36,14 @@ jobs:
           python-version: "3.11"
 
       - name: Install build tools
-        run: pip install build twine
+        run: pip install --no-cache-dir build
 
       - name: Build ${{ matrix.package }}
         working-directory: packages/${{ matrix.package }}
         run: python -m build
 
       - name: Publish ${{ matrix.package }} to PyPI
-        working-directory: packages/${{ matrix.package }}
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/* --skip-existing
+        uses: pypa/gh-action-pypi-publish@7f25271a4aa483500f742f9492b2ab5648d61011 # v1.12.4
+        with:
+          packages-dir: packages/${{ matrix.package }}/dist/
+          skip-existing: true

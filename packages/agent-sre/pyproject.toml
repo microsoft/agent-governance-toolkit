@@ -47,7 +47,7 @@ otel = [
 ]
 langfuse = ["langfuse>=2.0"]
 arize = ["arize-phoenix>=4.0"]
-langchain = ["langchain-core>=0.2"]
+langchain = ["langchain-core>=1.2.11"]
 llamaindex = ["llama-index-core>=0.10"]
 braintrust = ["braintrust>=0.0.100"]
 helicone = ["helicone>=4.0"]
@@ -56,7 +56,7 @@ langsmith = ["langsmith>=0.1"]
 wandb = ["wandb>=0.16"]
 mlflow = ["mlflow>=2.10"]
 agentops = ["agentops>=0.3"]
-all = ["opentelemetry-exporter-otlp>=1.20", "langfuse>=2.0", "arize-phoenix>=4.0", "langchain-core>=0.2", "llama-index-core>=0.10", "braintrust>=0.0.100", "helicone>=4.0", "ddtrace>=2.0", "langsmith>=0.1", "wandb>=0.16", "mlflow>=2.10", "agentops>=0.3"]
+all = ["opentelemetry-exporter-otlp>=1.20", "langfuse>=2.0", "arize-phoenix>=4.0", "langchain-core>=1.2.11", "llama-index-core>=0.10", "braintrust>=0.0.100", "helicone>=4.0", "ddtrace>=2.0", "langsmith>=0.1", "wandb>=0.16", "mlflow>=2.10", "agentops>=0.3"]
 
 [project.scripts]
 agent-sre = "agent_sre.cli.main:cli"

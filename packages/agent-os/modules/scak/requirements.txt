@@ -35,7 +35,7 @@ pytest-asyncio>=0.21.0
 # =============================================================================
 
 # Visualization and Developer Tools
-streamlit>=1.28.0  # For telemetry dashboard
+streamlit>=1.37.0  # For telemetry dashboard
 jupyter>=1.0.0  # For interactive notebooks
 
 # LangChain Integration
