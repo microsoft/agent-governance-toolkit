@@ -273,8 +273,7 @@ class TestSPIFFEIdentity:
             agent_did="did:mesh:1", agent_name="a", trust_domain="custom.io"
         )
         assert si.trust_domain == "custom.io"
-        assert "custom.io" in si.spiffe_id
-
+        assert si.spiffe_id.startswith("spiffe://custom.io/")
     def test_issue_svid(self):
         si = SPIFFEIdentity.create(agent_did="did:mesh:1", agent_name="a")
         svid = si.issue_svid(ttl_hours=2)
@@ -399,7 +398,7 @@ class TestSPIFFERegistry:
     def test_custom_trust_domain(self):
         reg = SPIFFERegistry(trust_domain="custom.io")
         identity = reg.register("did:mesh:1", "a")
-        assert "custom.io" in identity.spiffe_id
+        assert identity.spiffe_id.startswith("spiffe://custom.io/")
 
 
 # ---------------------------------------------------------------------------

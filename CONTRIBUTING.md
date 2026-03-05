@@ -66,6 +66,32 @@ This is a mono-repo with five packages:
 - Write docstrings for all public functions and classes
 - Keep commits focused and use [conventional commit](https://www.conventionalcommits.org/) messages
 
+### Testing Policy
+
+All contributions that add or change functionality **must** include corresponding tests:
+
+- **New features** — Add unit tests covering the primary use case and at least one edge case.
+- **Bug fixes** — Add a regression test that reproduces the bug before the fix.
+- **Security patches** — Add tests verifying the vulnerability is mitigated.
+
+Tests are run automatically via CI on every pull request. The test matrix covers
+Python 3.10–3.12 across all four core packages. PRs will not be merged until
+all required CI checks pass.
+
+Run tests locally with:
+
+```bash
+cd packages/<package-name>
+pytest tests/ -x -q
+```
+
+### Security
+
+- Review the [SECURITY.md](SECURITY.md) file for vulnerability reporting procedures.
+- Never commit secrets, credentials, or tokens.
+- Use `--no-cache-dir` for pip installs in Dockerfiles.
+- Pin dependencies to specific versions in `pyproject.toml`.
+
 ## Licensing
 
 By contributing to this project, you agree that your contributions will be licensed under the [MIT License](LICENSE).

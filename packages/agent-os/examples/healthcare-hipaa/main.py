@@ -562,7 +562,7 @@ class MedicalChartReviewAgent:
         """
         print(f"\n{'='*60}")
         print(f"📋 Chart Review Request")
-        print(f"   Patient: {patient_id}")
+        print(f"   Patient: {patient_id[:3]}***")
         print(f"   User: {user.name} ({user.role})")
         print(f"   Reason: {reason}")
         
@@ -657,7 +657,7 @@ class MedicalChartReviewAgent:
         Bypasses normal access controls but triggers alerts.
         """
         print(f"\n🚨 EMERGENCY ACCESS REQUEST")
-        print(f"   Patient: {patient_id}")
+        print(f"   Patient: {patient_id[:3]}***")
         print(f"   User: {user.name}")
         print(f"   Reason: {emergency_reason}")
         
@@ -784,7 +784,7 @@ async def demo():
     print(f"Findings: {result['findings_count']}")
     for f in result.get("findings", []):
         icon = "🚨" if f["severity"] == "critical" else "⚠️"
-        print(f"  {icon} [{f['severity']}] {f['description']}")
+        print(f"  {icon} [{f['severity']}] finding detected")
     
     print("\n" + "=" * 60)
     print("Test 2: Receptionist Reviews Chart (De-identified)")
@@ -792,7 +792,7 @@ async def demo():
     result = await agent.review_chart("P12345", receptionist, "billing_inquiry")
     print(f"Status: {result['status']}")
     if result['status'] == 'denied':
-        print(f"Reason: {result['reason']}")
+        print(f"Reason: access denied")
     else:
         print(f"De-identified: {result.get('deidentified', False)}")
     

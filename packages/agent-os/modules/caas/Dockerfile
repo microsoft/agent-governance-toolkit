@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Install the package in development mode
-RUN pip install -e .
+RUN pip install --no-cache-dir -e .
 
 # Create directory for document storage
 RUN mkdir -p /app/data/documents /app/data/storage

@@ -57,9 +57,9 @@ class PDFProcessor(BaseProcessor):
     def process(self, content: bytes, metadata: Dict[str, Any]) -> Document:
         """Process PDF content."""
         try:
-            from PyPDF2 import PdfReader
+            from pypdf import PdfReader
         except ImportError:
-            raise ImportError("PyPDF2 is required for PDF processing")
+            raise ImportError("pypdf is required for PDF processing")
         
         pdf_file = BytesIO(content)
         reader = PdfReader(pdf_file)

@@ -81,7 +81,7 @@ class HealthcareAgent:
     
     async def access_patient_data(self, patient_id: str, purpose: str) -> Dict[str, Any]:
         """Access patient data with HIPAA controls."""
-        print(f"📂 Accessing patient data: {patient_id}")
+        print(f"📂 Accessing patient data: {patient_id[:3]}***")
         print(f"   Purpose: {purpose}")
         
         # Check policy

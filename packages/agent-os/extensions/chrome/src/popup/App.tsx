@@ -32,11 +32,16 @@ export function App() {
   }, []);
 
   const detectPlatform = (url: string): string | null => {
-    if (url.includes('github.com')) return 'github';
-    if (url.includes('atlassian.net') || url.includes('jira.')) return 'jira';
-    if (url.includes('console.aws.amazon.com')) return 'aws';
-    if (url.includes('gitlab.com')) return 'gitlab';
-    if (url.includes('linear.app')) return 'linear';
+    try {
+      const hostname = new URL(url).hostname;
+      if (hostname === 'github.com' || hostname.endsWith('.github.com')) return 'github';
+      if (hostname.endsWith('.atlassian.net') || hostname.startsWith('jira.')) return 'jira';
+      if (hostname === 'console.aws.amazon.com') return 'aws';
+      if (hostname === 'gitlab.com' || hostname.endsWith('.gitlab.com')) return 'gitlab';
+      if (hostname === 'linear.app' || hostname.endsWith('.linear.app')) return 'linear';
+    } catch {
+      // Invalid URL
+    }
     return null;
   };
 

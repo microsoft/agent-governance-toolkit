@@ -6,7 +6,7 @@ fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
 
 # Async HTTP
-aiohttp>=3.9.0
+aiohttp>=3.13.3
 httpx>=0.26.0
 
 # Data Validation
@@ -38,6 +38,6 @@ pytest-cov>=4.1.0
 httpx>=0.26.0
 
 # Development
-black>=24.1.0
+black>=24.3.0
 ruff>=0.1.0
 mypy>=1.8.0

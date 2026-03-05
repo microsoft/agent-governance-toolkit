@@ -35,8 +35,8 @@ classifiers = [
     "Topic :: Security :: Cryptography",
 ]
 dependencies = [
-    "langchain-core>=0.1.0",
-    "cryptography>=44.0.0",
+    "langchain-core>=1.2.11",
+    "cryptography>=46.0.5",
 ]
 
 [project.optional-dependencies]

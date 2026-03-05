@@ -129,7 +129,7 @@ class SidecarProxy:
                 return JSONResponse(
                     status_code=400,
                     content={
-                        "error": f"Invalid JSON payload: {e!s}",
+                        "error": "Invalid JSON payload",
                         "trace_id": trace_id,
                     },
                 )
@@ -348,7 +348,7 @@ class SidecarProxy:
                 return JSONResponse(
                     status_code=502,
                     content={
-                        "error": f"Backend agent error: {str(e)}",
+                        "error": "Backend agent error",
                         "trace_id": trace_id,
                         "recovery": recovery_result
                     }

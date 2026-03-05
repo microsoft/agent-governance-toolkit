@@ -419,7 +419,7 @@ class TestSPIFFE:
             agent_name="test-agent",
         )
         
-        assert "agentmesh.io" in spiffe.spiffe_id
+        assert spiffe.spiffe_id.startswith("spiffe://agentmesh.io/")
         assert spiffe.trust_domain == "agentmesh.io"
     
     def test_spiffe_id_format(self):

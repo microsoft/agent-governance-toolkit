@@ -355,7 +355,9 @@ def run_demo() -> None:
     # -- Scenario 6: Blocked PII (SSN) ------------------------------------
     print_section("Scenario 6: Blocked PII (SSN detected)")
     ssn_message = "Pay vendor 123-45-6789 for invoice #42"
-    print(f'  Input: "{ssn_message}"')
+    import re
+    redacted_msg = re.sub(r'\d{3}-\d{2}-\d{4}', 'XXX-XX-XXXX', ssn_message)
+    print(f'  Input: "{redacted_msg}"')
     governed_call(
         integration, ctx, interceptor,
         "process_transaction",
