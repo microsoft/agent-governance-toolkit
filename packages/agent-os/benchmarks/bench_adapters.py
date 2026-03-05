@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Benchmarks for integration adapters — GovernancePolicy overhead."""
 
 from __future__ import annotations

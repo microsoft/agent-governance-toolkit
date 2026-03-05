@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Agent Brokerage Layer - The API Economy for Specialized Agents
 

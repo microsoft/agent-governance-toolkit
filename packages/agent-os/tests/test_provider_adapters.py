@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for Anthropic, Gemini, and Mistral governance adapters.
 
 All tests use mocks — no real API calls are made.

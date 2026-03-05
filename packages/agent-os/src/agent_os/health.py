@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Convenience re-export of health check components.
 
 Canonical implementation lives in ``agent_os.integrations.health``.

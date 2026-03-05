@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Community Edition — basic implementation
 """Blue-green deployment strategy for AI agents.
 

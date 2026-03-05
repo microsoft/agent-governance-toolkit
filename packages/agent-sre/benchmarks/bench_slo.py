@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Performance benchmarks for the SLO Engine.
 
 Measures throughput and latency of:

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Test Stateless Kernel (MCP June 2026 compliant).
 """

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """OpenTelemetry semantic conventions for AI agents.
 
 Defines custom attribute names and span kind constants following

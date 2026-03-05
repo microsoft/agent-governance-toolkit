@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Mute Agent - Graph-Constrained Agent with State Awareness
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for saga orchestrator and state machine."""
 
 import pytest

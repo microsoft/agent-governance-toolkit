@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """CMVK Identity - Cryptographic identity for LangChain agents."""
 
 from __future__ import annotations

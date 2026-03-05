@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Community Edition — basic implementation
 """
 Liability Ledger — simple append-only fault log.

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 HTTP Trust Middleware for AgentMesh
 ====================================

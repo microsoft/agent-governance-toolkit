@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """MLflow exporter — log SRE metrics as MLflow experiments.
 
 Maps agent tasks to experiment runs. Operates in offline mode

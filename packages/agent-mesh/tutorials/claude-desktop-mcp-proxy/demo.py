@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """AgentMesh MCP Proxy Demo — Claude Desktop Security.
 
 Simulates the MCP governance proxy flow without requiring Claude Desktop.

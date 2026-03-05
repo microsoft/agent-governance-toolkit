@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 /**
  * AgentOS AWS Console Content Script
  * Integrates with AWS Console for cost monitoring and security alerts

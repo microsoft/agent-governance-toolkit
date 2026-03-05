@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """MCP Security — defense against tool poisoning, rug pulls, and protocol attacks.
 
 Screens MCP tool definitions for adversarial manipulation where attackers

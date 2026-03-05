@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Core message models for AMB."""
 
 from enum import Enum, IntEnum

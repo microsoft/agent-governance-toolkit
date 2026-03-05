@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for deterministic trust root and supervisor hierarchy."""
 
 from __future__ import annotations

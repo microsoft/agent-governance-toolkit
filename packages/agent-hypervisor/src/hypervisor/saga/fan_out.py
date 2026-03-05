@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Community Edition — basic implementation
 """
 Parallel Saga Fan-Out — stub implementation.

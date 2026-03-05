@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Adversarial Evaluation — automated policy stress-testing.
 
 Runs a battery of adversarial attack vectors against agent policies to

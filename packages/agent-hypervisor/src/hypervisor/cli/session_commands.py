@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Session inspection CLI commands."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 /**
  * Policy Engine for Agent OS VS Code Extension
  * 

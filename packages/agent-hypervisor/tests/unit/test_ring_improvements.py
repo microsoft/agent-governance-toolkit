@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for dynamic ring elevation, breach detection, and ring inheritance."""
 
 

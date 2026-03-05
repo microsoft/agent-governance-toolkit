@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 export interface AgentRecord {
   did: string;
   name: string;

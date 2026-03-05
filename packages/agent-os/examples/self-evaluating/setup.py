@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Setup script for the Self-Evolving Agent Framework."""
 
 from setuptools import setup, find_packages

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Test script to demonstrate the untrusted agent scenario with warnings and override.
 """

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 LlamaIndex SRE Callbacks — auto-record Agent-SRE SLIs from LlamaIndex execution.
 

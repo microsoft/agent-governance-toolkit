@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Integration tests for executor with ATR registry."""
 
 import pytest

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Verification Integration Stub — Behavioral Verification adapter.
 

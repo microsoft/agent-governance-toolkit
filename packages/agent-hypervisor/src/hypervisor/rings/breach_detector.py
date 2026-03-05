@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Community Edition — basic implementation
 """
 Ring Breach Detector — stub implementation.

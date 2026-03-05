@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Agent OS + LangChain -- Governance in 5 Minutes (Runnable Demo)
 

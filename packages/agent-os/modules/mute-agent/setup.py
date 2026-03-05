@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Setup configuration for the Mute Agent package."""
 
 from setuptools import setup, find_packages

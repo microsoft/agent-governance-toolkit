@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Community Edition — basic implementation
 """Golden trace models and YAML persistence for regression testing."""
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Universal Signal Bus - Omni-Channel Ingestion
 

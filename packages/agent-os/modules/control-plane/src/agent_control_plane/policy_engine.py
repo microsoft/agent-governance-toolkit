@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Community Edition — basic YAML policy enforcement
 """
 Policy Engine - Basic allow/deny policy enforcement.

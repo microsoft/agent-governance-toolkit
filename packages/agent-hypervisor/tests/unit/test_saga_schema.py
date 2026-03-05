@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for JSON schema validation of saga DSL definitions."""
 
 import pytest

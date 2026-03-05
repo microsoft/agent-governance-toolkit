@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Behavioral Anomaly Detection for Agent Observability.
 
 Baselines normal agent behavior and automatically flags deviations

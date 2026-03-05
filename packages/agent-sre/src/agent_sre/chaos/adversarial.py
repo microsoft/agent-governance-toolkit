@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Adversarial Testing — red-team experiments for agent governance.
 
 Extends the chaos engineering framework with adversarial attack playbooks

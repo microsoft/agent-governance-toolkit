@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Canary Rollout Demo — Safely upgrade an AI model (GPT-3.5 → GPT-4).
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Context Budget Scheduler — token budget as a kernel primitive.
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Role-Based Access Control (RBAC) for Agent OS.
 

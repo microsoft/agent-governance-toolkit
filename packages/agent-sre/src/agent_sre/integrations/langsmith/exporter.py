@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """LangSmith exporter — run-based tracing and evaluation feedback.
 
 Exports Agent-SRE data as LangSmith runs with parent-child relationships

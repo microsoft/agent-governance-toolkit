@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Hugging Face Hub utilities for ATR.
 
 This module provides utilities for integrating ATR with the Hugging Face ecosystem,

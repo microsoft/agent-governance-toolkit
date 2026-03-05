@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Observability module — structured event bus and causal tracing."""
 
 from hypervisor.observability.causal_trace import CausalTraceId

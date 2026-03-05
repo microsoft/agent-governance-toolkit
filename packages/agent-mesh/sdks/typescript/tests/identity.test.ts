@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import { AgentIdentity } from '../src/identity';
 
 describe('AgentIdentity', () => {

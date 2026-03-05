@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for core agent management functions in Hypervisor (core.py).
 
 Covers: create_session, join_session, activate_session, terminate_session,

@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 /**
  * Vercel Serverless Function Entry Point
  *

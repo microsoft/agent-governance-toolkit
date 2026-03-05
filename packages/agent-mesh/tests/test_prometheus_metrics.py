@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for MeshMetrics Prometheus integration."""
 
 import importlib

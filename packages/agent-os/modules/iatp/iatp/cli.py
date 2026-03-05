@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 IATP CLI - Command Line Interface for Inter-Agent Trust Protocol
 

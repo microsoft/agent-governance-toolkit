@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Azure Service Bus broker adapter for AMB.
 
 Azure Service Bus provides enterprise-grade messaging for cloud applications

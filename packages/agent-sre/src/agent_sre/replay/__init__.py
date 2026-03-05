@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Replay Engine — Deterministic capture and replay of agent executions."""
 
 from .capture import Span, SpanKind, SpanStatus, Trace, TraceCapture, TraceStore

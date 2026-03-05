@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Community Edition — basic single-model verification
 """
 CMVK — Verification Kernel (Community Edition)

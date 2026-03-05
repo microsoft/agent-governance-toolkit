@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Constraint Graph — DAG-based resource access control.
 
 The constraint graph is the **only** path through which agents may access

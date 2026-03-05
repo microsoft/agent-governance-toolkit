@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Performance benchmarks for Progressive Delivery.
 
 Measures throughput and latency of:

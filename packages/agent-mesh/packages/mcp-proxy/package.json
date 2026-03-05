@@ -12,7 +12,7 @@
     "firewall",
     "policy-engine"
   ],
-  "author": "Imran Siddique <imran.siddique@microsoft.com>",
+  "author": "Imran Siddique <agt@microsoft.com>",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

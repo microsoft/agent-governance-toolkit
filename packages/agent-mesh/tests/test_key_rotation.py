@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for KeyRotationManager — automatic key rotation for long-lived agents."""
 
 import time

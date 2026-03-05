@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Kernel Interface - Abstract Base for Agent Kernels
 

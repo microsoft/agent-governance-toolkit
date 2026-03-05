@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Demo: Agent Control Plane v1.0 - The "Kernel" Release
 

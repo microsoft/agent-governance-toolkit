@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for Microsoft Entra Agent ID adapter."""
 
 import pytest

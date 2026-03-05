@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 GovernedRunner - Agent-Lightning Runner with Policy Enforcement
 ================================================================

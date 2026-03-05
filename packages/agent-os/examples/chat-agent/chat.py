@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Chat Agent - Interactive Conversational Agent with Memory
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Graph Debugger - Visual Trace Generator for Mute Agent
 

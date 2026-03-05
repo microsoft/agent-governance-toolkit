@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Protocol Interfaces - Integration Points for iatp, cmvk, and caas
 

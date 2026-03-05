@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Demo: Agent Kernel Tool Interceptor Pattern
 

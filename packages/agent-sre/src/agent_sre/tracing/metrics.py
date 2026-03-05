@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """OpenTelemetry metric instruments for AI agent observability.
 
 Provides counters, histograms, and an up-down counter following

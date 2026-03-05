@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Example: Polymorphic Output + Universal Signal Bus Integration
 

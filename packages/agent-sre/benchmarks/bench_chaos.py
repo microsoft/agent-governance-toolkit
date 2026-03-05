@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Performance benchmarks for the Chaos Engine.
 
 Measures throughput and latency of:

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Property-based tests for trust scoring invariants.
 
 Uses Hypothesis to verify that key trust-scoring properties hold

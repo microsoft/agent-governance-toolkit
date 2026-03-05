@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Benchmarks for policy evaluation."""
 
 from __future__ import annotations

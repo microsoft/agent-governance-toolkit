@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 /**
  * AgentOS Jira Content Script
  * Integrates with Jira issues, boards, and sprints

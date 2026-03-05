@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Arize/Phoenix Integration for Agent-SRE
 =========================================

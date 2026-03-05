@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """End-to-end integration tests for Agent OS observability module."""
 
 import sys

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Shared Session Object — lifecycle manager for multi-agent sessions."""
 
 from __future__ import annotations

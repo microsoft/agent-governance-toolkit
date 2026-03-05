@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Behavioral anomaly detection engine.
 
 Learns normal agent behavior from metrics and traces, then flags

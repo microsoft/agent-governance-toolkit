@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Tests for Universal Signal Bus (Omni-Channel Ingestion)
 """

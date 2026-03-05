@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for ring breach detector."""
 
 from datetime import UTC, datetime

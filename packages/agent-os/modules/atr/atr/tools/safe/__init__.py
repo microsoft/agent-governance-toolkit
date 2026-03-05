@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Safe Tool Plugins for Agent Tool Registry (ATR).
 

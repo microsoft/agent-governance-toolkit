@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Integration test for Wisdom Curator with Observer Agent.
 Tests the complete workflow of policy review blocking wisdom updates.

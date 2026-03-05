@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for Ed25519 cryptographic attestation in IATP."""
 
 import pytest

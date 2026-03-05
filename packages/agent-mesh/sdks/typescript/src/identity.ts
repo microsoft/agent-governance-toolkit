@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import { AgentIdentityJSON } from './types';
 import { createHash, randomBytes, sign, verify, generateKeyPairSync } from 'crypto';
 

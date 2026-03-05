@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Comprehensive tests for MockInfrastructureAPI, User permissions, Service, and SessionContext."""
 
 import sys

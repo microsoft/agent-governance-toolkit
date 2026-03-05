@@ -5,7 +5,7 @@
 **Proposed by:** Microsoft (microsoft/agent-governance-toolkit)
 **Requested Level:** Sandbox → Incubation
 **License:** MIT
-**Primary Contact:** Imran Siddique (imran.siddique@microsoft.com)
+**Primary Contact:** Imran Siddique (agt@microsoft.com)
 
 ---
 

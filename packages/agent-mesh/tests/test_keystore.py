@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for KeyStore implementations (SoftwareKeyStore and PKCS11KeyStore)."""
 
 import pytest

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """End-to-end integration test for the full handshake lifecycle.
 
 Covers: identity creation → mutual handshake → trust establishment →

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 OpenAI Agents SDK Integration for Agent-OS
 ============================================

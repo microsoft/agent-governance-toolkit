@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for the prompt injection benchmark."""
 
 from __future__ import annotations

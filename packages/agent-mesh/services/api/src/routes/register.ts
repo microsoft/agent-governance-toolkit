@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import { Router, Request, Response } from "express";
 import { registerAgent } from "../services/registry";
 import { RegisterRequest, RegisterResponse } from "../types";

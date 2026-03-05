@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Helicone integration — add Helicone tracking headers to LLM requests.
 

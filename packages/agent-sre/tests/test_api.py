@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for Agent-SRE REST API."""
 
 from __future__ import annotations

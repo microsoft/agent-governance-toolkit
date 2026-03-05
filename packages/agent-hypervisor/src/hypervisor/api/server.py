@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 FastAPI REST API server for the Agent Hypervisor.
 

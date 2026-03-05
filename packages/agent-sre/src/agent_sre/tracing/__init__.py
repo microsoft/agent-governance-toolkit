@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 A2A/MCP Protocol-Aware Distributed Tracing for Agent-SRE.
 

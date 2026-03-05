@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Tests for Agent Lifecycle Management (v0.2.0)
 

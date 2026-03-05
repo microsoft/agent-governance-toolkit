@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for HealthChecker.
 
 Run with: python -m pytest tests/test_health.py -v --tb=short

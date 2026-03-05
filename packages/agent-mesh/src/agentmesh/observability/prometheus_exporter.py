@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Prometheus Metrics Exporter for AgentMesh.
 
 Provides ``MeshMetricsExporter`` — a high-level facade that exposes

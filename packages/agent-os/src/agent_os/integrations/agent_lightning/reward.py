@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 PolicyReward - Convert Policy Violations to RL Penalties
 =========================================================

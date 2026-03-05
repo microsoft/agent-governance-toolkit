@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Braintrust exporter — evaluation scoring and experiment tracking.
 
 Exports Agent-SRE SLO evaluations as Braintrust scores and experiments.

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """OpenTelemetry semantic conventions for AI agent reliability.
 
 Defines attribute keys and metric names following OTEL naming conventions.

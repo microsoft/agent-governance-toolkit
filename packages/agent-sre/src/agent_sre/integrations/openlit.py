@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """OpenLit convenience exporter for Agent SRE.
 
 Pre-configures OpenTelemetry exporters to send SLI/SLO metrics,

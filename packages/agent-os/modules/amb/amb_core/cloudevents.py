@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """CloudEvents specification support for AMB.
 
 This module provides CloudEvents v1.0 compatibility, enabling interoperability

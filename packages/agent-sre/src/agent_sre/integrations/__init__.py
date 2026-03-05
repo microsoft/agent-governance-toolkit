@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Integrations with Agent OS, Agent Mesh, OpenTelemetry, and OpenLit."""
 
 __all__ = [

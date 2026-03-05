@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Cost Guardrails Example — Prevent LLM API cost overruns.
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """OpenTelemetry event logger for Agent SRE.
 
 Exports structured events (incidents, cost alerts, signals, chaos faults)

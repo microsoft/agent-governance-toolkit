@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Run Agent OS Governance API server."""
 
 import uvicorn

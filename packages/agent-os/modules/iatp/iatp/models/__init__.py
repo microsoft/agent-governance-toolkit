@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Core data models for the Inter-Agent Trust Protocol (IATP).
 

@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import { createHash } from 'crypto';
 import { AuditConfig, AuditEntry } from './types';
 import { PolicyDecision } from './policy';

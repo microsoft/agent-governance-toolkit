@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for MetricsServer and HTTP endpoints (server.py)."""
 
 import sys

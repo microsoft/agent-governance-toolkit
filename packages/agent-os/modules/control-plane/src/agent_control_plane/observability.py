@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Observability and Metrics - Real-time Monitoring and Prometheus Integration
 

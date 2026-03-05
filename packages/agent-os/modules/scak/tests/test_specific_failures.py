@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Unit tests for the three specific failure types from the problem statement:
 1. Tool Misuse - Agent called delete_user(id) with a name instead of UUID

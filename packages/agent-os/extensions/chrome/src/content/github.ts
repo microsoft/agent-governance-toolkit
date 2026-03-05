@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 /**
  * AgentOS GitHub Content Script
  * Integrates with GitHub PRs, Issues, and Actions

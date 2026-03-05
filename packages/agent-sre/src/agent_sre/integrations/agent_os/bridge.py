@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Agent OS integration — policy signals and preview mode hooks.
 
 Connects to Agent OS's governance layer:

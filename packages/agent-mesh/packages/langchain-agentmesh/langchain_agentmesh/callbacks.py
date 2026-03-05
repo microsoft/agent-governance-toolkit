@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Trust callback handler for LangChain."""
 
 from __future__ import annotations

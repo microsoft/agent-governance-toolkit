@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Test script for Wisdom Curator functionality.
 Tests design checks, strategic sampling, and policy reviews.

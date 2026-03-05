@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Deterministic Trust Root — Final authority for the supervisor hierarchy.
 

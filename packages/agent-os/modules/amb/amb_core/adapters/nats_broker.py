@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """NATS broker adapter for AMB.
 
 NATS is a lightweight, cloud-native messaging system ideal for

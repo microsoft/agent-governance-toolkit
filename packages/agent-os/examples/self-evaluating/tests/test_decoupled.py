@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Test script for decoupled architecture components.
 Tests telemetry, DoerAgent, and ObserverAgent.

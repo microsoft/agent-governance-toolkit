@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 /**
  * Policy Editor Panel - WebView-based policy management studio
  * 

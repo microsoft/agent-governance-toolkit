@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for the sponsorship & bonding engine and liability matrix."""
 
 import pytest

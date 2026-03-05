@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Community Edition — basic context/memory management
 """
 CaaS Core: Layer 1 Primitive for Context Management.
@@ -9,7 +11,7 @@ from typing import TYPE_CHECKING
 
 __version__ = "0.3.0"
 __author__ = "Imran Siddique"
-__email__ = "imran.siddique@microsoft.com"
+__email__ = "agt@microsoft.com"
 __license__ = "MIT"
 
 # Core data models - always available

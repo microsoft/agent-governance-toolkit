@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Helper functions to create properly attributed OpenTelemetry spans.
 
 Each helper sets the appropriate semantic attributes from

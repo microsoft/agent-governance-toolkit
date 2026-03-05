@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for negative memory (failure tracking) functionality."""
 
 from emk.schema import Episode

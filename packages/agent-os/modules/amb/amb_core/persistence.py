@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Message persistence for AMB.
 
 This module provides message persistence capabilities for durability

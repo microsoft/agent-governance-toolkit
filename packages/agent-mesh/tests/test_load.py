@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Load test for concurrent handshakes (#120).
 
 Simulates 100+ simultaneous trust handshakes and reports throughput,

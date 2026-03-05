@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Guardrails AI Bridge for Agent-OS
 ===================================

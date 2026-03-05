@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Evaluator - Runs scenarios and compares Baseline vs Mute Agent
 

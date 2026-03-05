@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for SLO-as-code: spec, validation, diff, and inheritance."""
 
 from __future__ import annotations

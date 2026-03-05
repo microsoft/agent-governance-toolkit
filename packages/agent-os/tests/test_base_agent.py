@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for configurable audit log size and metadata memory leak fixes."""
 
 from __future__ import annotations

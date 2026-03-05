@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Chaos Engine — Fault injection and resilience testing for agents."""
 
 from .adversarial import (

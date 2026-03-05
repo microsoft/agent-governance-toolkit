@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 export { AgentIdentity } from './identity';
 export { TrustManager } from './trust';
 export { PolicyEngine } from './policy';

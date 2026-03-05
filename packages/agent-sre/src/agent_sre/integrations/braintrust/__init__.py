@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Braintrust Exporter — export Agent-SRE evaluations and experiments.
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Broker adapter interface for AMB."""
 
 from abc import ABC, abstractmethod

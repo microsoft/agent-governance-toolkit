@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import { readFileSync } from 'fs';
 import { PolicyRule } from './types';
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Comprehensive tests to boost code coverage for agent-mesh modules.
 

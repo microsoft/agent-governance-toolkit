@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Kafka broker adapter for AMB."""
 
 import asyncio

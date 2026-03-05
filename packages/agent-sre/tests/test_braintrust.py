@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for Braintrust integration — evaluation scoring and experiments.
 
 Uses offline mode (no Braintrust connection required) to verify that

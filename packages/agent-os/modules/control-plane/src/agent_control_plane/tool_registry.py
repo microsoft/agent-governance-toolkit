@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Tool Registry - Dynamic Tool Management and Discovery
 

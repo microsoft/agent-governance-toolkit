@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 LangChain Client Adapter - Drop-In Middleware for Agent Control Plane
 

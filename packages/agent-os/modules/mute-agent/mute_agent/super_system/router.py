@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Super System Router - Routes context to specific dimensional subgraphs.
 """

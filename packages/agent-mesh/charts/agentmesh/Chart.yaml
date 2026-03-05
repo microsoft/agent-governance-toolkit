@@ -10,9 +10,9 @@ keywords:
   - governance
   - security
   - zero-trust
-home: https://github.com/imran-siddique/agent-mesh
+home: https://github.com/microsoft/agent-governance-toolkit
 maintainers:
   - name: Imran Siddique
-    email: imran.siddique@microsoft.com
+    email: agt@microsoft.com
 sources:
-  - https://github.com/imran-siddique/agent-mesh
+  - https://github.com/microsoft/agent-governance-toolkit

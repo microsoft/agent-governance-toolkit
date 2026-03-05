@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Staged Rollout Example — Safely deploy a new agent version.
 

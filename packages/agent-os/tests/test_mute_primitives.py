@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for the Mute Agent (Face/Hands) kernel primitives."""
 
 import asyncio

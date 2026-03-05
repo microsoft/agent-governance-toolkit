@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for ReversibilityRegistry."""
 
 from hypervisor.models import ActionDescriptor, ReversibilityLevel

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Agent-SRE Quickstart — Monitor an AI agent in 30 lines.
 

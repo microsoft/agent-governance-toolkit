@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """OpenTelemetry integration — native OTLP export with agent semantic conventions.
 
 Provides three exporters:

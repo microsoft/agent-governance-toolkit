@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Per-agent circuit breakers with cascade detection.
 
 Implements the circuit breaker pattern to prevent cascading failures

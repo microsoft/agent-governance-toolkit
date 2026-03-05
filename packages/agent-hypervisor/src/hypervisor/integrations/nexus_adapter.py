@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Nexus Integration Stub — Trust Scoring for Ring Assignment.
 

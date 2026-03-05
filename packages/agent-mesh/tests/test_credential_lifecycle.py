@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Comprehensive credential lifecycle tests for agent-mesh.
 
 Covers creation, TTL expiry, rotation, revocation, renewal, concurrent

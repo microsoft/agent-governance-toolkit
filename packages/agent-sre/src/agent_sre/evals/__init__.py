@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 LLM-as-Judge Evaluation Engine for Agent-SRE.
 

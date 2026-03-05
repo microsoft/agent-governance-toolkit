@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Pydantic request/response models for the Hypervisor REST API."""
 
 from __future__ import annotations

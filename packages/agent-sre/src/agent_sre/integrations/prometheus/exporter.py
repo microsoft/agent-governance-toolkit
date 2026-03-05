@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Prometheus text format exporter for Agent-SRE metrics."""
 
 from __future__ import annotations

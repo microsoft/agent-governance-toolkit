@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Model Upgrade Manager - Lifecycle Management for Wisdom Database
 

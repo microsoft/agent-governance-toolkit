@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for progressive delivery — preview mode and staged rollout."""
 
 import pytest

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for delta audit engine and commitment."""
 
 from datetime import UTC

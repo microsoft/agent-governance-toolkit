@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 OpenAI Adapter Demo - Drop-In Middleware for Agent Control Plane
 

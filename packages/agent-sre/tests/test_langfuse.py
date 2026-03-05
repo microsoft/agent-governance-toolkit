@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for Langfuse integration — SLO scoring and cost observations.
 
 Uses offline mode (no Langfuse connection required) to verify that

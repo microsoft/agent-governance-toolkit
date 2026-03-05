@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for OpenTelemetry agent semantic conventions, spans, metrics, and exporters."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 FlightRecorderEmitter - Export Audit Logs to LightningStore
 ============================================================

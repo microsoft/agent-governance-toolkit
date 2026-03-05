@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for ring enforcer and action classifier."""
 
 from hypervisor.models import ActionDescriptor, ExecutionRing, ReversibilityLevel

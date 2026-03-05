@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Plugin Registry - Runtime Registration and Dependency Injection
 

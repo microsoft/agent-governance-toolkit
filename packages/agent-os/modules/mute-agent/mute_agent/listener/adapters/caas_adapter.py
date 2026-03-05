@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 CAAS Adapter - Context-as-a-Service Layer Integration
 

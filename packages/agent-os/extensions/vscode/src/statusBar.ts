@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 /**
  * Status Bar Manager for Agent OS VS Code Extension
  * 

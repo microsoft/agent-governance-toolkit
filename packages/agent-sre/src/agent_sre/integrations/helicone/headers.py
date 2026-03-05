@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Helicone integration — HTTP headers and event logging.
 
 Helicone is a proxy-based LLM observability platform. This module provides:

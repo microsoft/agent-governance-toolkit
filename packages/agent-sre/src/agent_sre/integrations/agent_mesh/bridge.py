@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Agent Mesh integration — pull telemetry and trust signals into Agent SRE.
 
 Connects to Agent Mesh's observability stack:

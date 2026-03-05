@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """AgentOps exporter — export Agent-SRE sessions and events.
 
 AgentOps is session-based (like a recording of an agent's execution).

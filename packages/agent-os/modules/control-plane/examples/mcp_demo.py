@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 MCP (Model Context Protocol) Integration Demo - Agent Control Plane
 

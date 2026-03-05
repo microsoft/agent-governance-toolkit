@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Trust-gated tools for LangChain."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Schema validation for AMB messages.
 
 This module provides schema registry and validation capabilities

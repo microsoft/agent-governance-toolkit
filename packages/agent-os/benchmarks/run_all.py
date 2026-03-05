@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Run all Agent-OS benchmarks and output JSON + markdown results."""
 
 from __future__ import annotations

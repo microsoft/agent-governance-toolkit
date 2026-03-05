@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Sample multi-agent workflow — registers agents and runs a saga.
 

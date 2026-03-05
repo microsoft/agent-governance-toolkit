@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for hallucination rate SLI."""
 
 from agent_sre.slo.indicators import HallucinationRate, SLIRegistry

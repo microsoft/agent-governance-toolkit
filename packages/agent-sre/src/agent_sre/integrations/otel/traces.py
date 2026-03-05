@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """OpenTelemetry trace exporter for Agent SRE.
 
 Converts Agent SRE replay traces (TraceCapture spans) into native

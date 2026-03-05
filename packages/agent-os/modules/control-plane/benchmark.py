@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Comparative Study: Prompt-Based Safety vs Control Plane Governance
 

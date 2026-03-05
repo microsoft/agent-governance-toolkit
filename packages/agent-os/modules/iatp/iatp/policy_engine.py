@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 IATP Policy Engine - Protocol Layer Policy Validation.
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 HuggingFace smolagents Integration for Agent-OS
 ================================================

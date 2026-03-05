@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 SLO Template Loader — load pre-built SLO configs from YAML files.
 

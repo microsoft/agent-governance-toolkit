@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 LangSmith integration — export Agent-SRE traces and evaluations.
 

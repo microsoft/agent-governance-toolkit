@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Agent-SRE + LangChain — Monitor a LangChain agent with SLOs.
 

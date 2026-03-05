@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Advanced example demonstrating complex scenarios in the Mute Agent system.
 """

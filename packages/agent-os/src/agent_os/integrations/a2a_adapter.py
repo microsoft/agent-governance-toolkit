@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 A2A Protocol Adapter for Agent-OS
 ==================================

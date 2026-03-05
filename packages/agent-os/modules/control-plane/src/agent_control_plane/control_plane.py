@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Community Edition — basic YAML policy enforcement
 """
 Agent Control Plane - Basic sequential policy check pipeline.

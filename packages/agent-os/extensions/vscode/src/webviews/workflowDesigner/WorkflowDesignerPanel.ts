@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 /**
  * Workflow Designer Panel - Visual agent workflow builder
  * 

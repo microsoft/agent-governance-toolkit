@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for incident detection and response."""
 
 from agent_sre.incidents.detector import (

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Unit tests for the Self-Correcting Agent Kernel.
 """

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Minimal web dashboard — polls the hypervisor API and renders agent status.
 

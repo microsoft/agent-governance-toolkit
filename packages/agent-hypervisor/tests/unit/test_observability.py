@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for the observability event bus and causal trace IDs."""
 
 from datetime import UTC, datetime, timedelta

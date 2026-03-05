@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Integration tests for MCP Kernel Server."""
 
 import sys

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 AMB Core - A lightweight, broker-agnostic message bus for AI Agents.
 

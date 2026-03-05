@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Dead Letter Queue (DLQ) for AMB.
 
 This module provides DLQ functionality for handling failed messages.

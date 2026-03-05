@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Distributed tracing for AMB.
 
 This module provides distributed tracing capabilities for tracking

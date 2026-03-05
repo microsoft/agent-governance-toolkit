@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Unit tests for Write-Through Architecture and Safe Purge Protocol.
 

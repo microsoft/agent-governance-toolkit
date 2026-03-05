@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests that require_human_approval is enforced across ALL adapters.
 
 Ensures the security fix for issue #282 — human approval was only enforced

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Entry point: mcp-scan = agent_os.cli.mcp_scan:main
 """MCP Security Scanner CLI — audit MCP configuration files for vulnerabilities.
 

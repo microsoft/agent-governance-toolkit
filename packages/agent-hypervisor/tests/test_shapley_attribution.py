@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for Shapley-value fault attribution.
 
 Validates the mathematical properties of Shapley-value-inspired fault

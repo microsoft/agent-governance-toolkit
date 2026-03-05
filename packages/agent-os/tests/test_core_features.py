@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for execution tracking, serialization, audit query, and health CLI.
 
 Covers issues #177, #213, #225, #226.

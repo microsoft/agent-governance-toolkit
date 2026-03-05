@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for Shapley-value fault attribution, quarantine, and liability ledger."""
 
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Base Agent Module - Reusable base classes for Agent OS agents.
 

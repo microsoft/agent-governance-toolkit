@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Hypervisor REST API package."""
 
 from hypervisor.api.server import create_app

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Control Plane Adapter - Base Orchestration Layer Integration
 

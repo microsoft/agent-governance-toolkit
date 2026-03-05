@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """AgentMesh Transport Layer.
 
 Provides pluggable transport backends for agent-to-agent communication:

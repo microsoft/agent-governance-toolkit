@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for JWK (JSON Web Key) export/import of AgentIdentity."""
 
 import base64

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for the memory poisoning detection guard (OWASP ASI06)."""
 
 from __future__ import annotations

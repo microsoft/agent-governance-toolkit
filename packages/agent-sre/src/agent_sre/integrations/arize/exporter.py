@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Phoenix Exporter — export Agent-SRE data as Phoenix-compatible spans.
 

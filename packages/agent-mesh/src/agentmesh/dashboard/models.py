@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Dashboard data models for the AgentMesh dashboard API."""
 
 from __future__ import annotations

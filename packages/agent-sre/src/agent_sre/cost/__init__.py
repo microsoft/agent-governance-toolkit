@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Cost Guard — Budget management, anomaly detection, and cost optimization."""
 
 from .anomaly import (

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Community Edition — basic self-correction with retry
 """
 Memory Manager — simple list-based lesson store.

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Benchmark suite for crypto operations (#117).
 
 Measures Ed25519 key generation, signing, verification, DID derivation,

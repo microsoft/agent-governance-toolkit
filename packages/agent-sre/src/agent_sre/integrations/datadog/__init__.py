@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Datadog LLM Monitoring integration — export Agent-SRE metrics and events.
 

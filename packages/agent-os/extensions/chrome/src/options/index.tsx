@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Settings } from './Settings';

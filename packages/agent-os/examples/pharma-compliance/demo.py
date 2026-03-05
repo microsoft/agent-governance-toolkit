@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Pharma Compliance Demo - Find Contradictions Humans Miss
 

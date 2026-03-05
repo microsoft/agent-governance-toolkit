@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Example demonstrating the Mute Agent system with a simple task execution scenario.
 """

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Mute Agent Primitives — Face/Hands Architecture as Kernel-Level Primitives.
 

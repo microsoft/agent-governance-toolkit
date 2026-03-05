@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for per-agent rate limiter."""
 
 from datetime import UTC, datetime, timedelta

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """LlamaFirewall integration adapter — chain Meta's LlamaFirewall with Agent OS for defense-in-depth."""
 
 from __future__ import annotations

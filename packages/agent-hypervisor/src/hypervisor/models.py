@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Core data models for the Agent Hypervisor."""
 
 from __future__ import annotations

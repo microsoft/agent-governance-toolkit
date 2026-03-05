@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Cross-Project Example: Agent-OS + Agent-Mesh Working Together
 =============================================================

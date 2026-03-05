@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for cost guard — budget management and anomaly detection."""
 
 from agent_sre.cost.guard import (

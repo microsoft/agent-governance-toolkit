@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Health Check Endpoints for K8s Readiness/Liveness Probes
 

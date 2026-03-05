@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for Helicone integration — headers and event logging.
 
 Uses offline mode (no Helicone connection required) to verify that

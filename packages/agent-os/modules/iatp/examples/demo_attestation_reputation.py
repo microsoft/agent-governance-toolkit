@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Integration example demonstrating Agent Attestation and Reputation Slashing.
 

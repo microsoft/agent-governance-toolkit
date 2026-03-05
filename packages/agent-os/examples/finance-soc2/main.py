@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Finance Agent with SOC2 Compliance — Agent OS Demo
 ====================================================

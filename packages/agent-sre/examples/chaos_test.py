@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Chaos Testing Example — Verify agent resilience to failures.
 

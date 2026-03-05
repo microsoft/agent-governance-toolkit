@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Detection strategies for behavioral anomaly detection."""
 
 from __future__ import annotations

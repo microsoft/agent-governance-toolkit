@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Unit tests for Agent Control Plane v1.0 new features:
 - Async support

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Performance benchmarks for Agent OS kernel, policies, and adapters.
 
 Run with: pytest tests/test_benchmarks.py -v -m benchmark

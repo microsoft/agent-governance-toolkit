@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Comprehensive tests for VFS state substrate per session (issue #234).
 
 Acceptance Criteria:

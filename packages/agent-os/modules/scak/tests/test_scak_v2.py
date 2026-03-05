@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Tests for SCAK v2 - Evolutionary Swarm Kernel.
 

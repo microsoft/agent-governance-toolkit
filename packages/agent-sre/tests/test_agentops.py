@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for AgentOps exporter."""
 
 from agent_sre.integrations.agentops.exporter import (

@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import { AgentRecord, RegisterRequest } from "../types";
 import { generateKeyPair, generateDid, generateApiKey } from "./identity";
 import { createInitialTrustScore } from "./trust";

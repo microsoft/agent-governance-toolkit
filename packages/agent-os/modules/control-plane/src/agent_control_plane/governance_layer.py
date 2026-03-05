@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Community Edition — basic YAML policy enforcement
 """
 Governance Layer - Pass-through with logging.

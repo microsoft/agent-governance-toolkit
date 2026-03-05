@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 GovernedEnvironment - Training Environment with Governance
 ==========================================================

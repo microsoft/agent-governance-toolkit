@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 langchain-agentmesh: Trust layer integration for LangChain.
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Agent OS - A Safety-First Kernel for Autonomous AI Agents
 

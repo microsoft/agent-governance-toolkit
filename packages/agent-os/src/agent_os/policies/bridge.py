@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Bridge between legacy GovernancePolicy and declarative PolicyDocument.
 

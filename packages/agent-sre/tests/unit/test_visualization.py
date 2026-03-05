@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for trace visualization."""
 
 from agent_sre.replay.capture import Span, SpanKind, Trace

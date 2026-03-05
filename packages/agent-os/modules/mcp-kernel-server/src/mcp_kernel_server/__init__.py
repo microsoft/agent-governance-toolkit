@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 MCP Kernel Server - Expose Agent OS primitives through Model Context Protocol.
 

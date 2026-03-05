@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for MCP Security Scanner CLI (mcp_scan.py)."""
 
 from __future__ import annotations

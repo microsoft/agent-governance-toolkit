@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Test script for OpenAgent Definition (OAD) metadata system.
 Tests the core components and functionality of agent metadata manifests.

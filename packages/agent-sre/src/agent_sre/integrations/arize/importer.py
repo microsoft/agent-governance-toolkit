@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Evaluation Importer — import Arize/Phoenix evaluations as SLI data points.
 

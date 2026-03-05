@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for Agent Mesh and Agent OS integrations."""
 
 from agent_sre.incidents.detector import SignalType

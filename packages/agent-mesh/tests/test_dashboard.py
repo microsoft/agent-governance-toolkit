@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for the dashboard API backend and data models."""
 
 from __future__ import annotations

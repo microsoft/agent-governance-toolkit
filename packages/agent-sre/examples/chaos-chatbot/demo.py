@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Chaos Engineering Demo for a Chatbot Agent
 ===========================================

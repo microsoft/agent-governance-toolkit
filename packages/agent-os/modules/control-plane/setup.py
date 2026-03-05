@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Setup script for Agent Control Plane
 
@@ -17,7 +19,7 @@ setup(
     name="agent-control-plane",
     version="1.2.0",
     author="Imran Siddique",
-    author_email="imran.siddique@microsoft.com",
+    author_email="agt@microsoft.com",
     description="A deterministic kernel for zero-violation governance in agentic AI systems",
     long_description=long_description,
     long_description_content_type="text/markdown",

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Agent Virtual File System (VFS) - POSIX-style memory abstraction for agents.
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Plugin Interfaces - Abstract Base Classes for Pluggable Components
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """RabbitMQ broker adapter for AMB."""
 
 import asyncio

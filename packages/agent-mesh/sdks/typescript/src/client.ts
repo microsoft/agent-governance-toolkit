@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import { AgentIdentity } from './identity';
 import { TrustManager } from './trust';
 import { PolicyEngine } from './policy';

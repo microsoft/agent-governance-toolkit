@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for the cross-project shared policy language."""
 
 from __future__ import annotations

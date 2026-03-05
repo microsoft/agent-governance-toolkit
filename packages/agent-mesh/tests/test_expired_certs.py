@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for expired certificate handling in scope chains (#119).
 
 Validates that credentials and delegation links with expired timestamps are

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Langfuse exporter — SLO scores and cost observations.
 
 This module provides Langfuse-specific features that go beyond standard

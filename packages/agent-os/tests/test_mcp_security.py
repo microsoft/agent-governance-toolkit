@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for MCP Security — tool poisoning defense module."""
 
 from __future__ import annotations

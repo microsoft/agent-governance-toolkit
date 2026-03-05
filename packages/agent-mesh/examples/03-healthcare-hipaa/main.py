@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Healthcare Data Analysis Agent with HIPAA Compliance
 

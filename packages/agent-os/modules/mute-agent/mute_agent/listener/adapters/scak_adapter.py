@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 SCAK Adapter - Intelligence/Knowledge Layer Integration
 

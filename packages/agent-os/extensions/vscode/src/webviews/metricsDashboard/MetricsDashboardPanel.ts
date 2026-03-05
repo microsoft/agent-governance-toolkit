@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 /**
  * Metrics Dashboard Panel - Real-time monitoring dashboard
  * 

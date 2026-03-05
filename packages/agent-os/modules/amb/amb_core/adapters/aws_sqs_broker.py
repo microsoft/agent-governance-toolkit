@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """AWS SQS broker adapter for AMB.
 
 Amazon SQS provides fully managed message queues for microservices,

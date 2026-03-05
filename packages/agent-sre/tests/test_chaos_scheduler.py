@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for chaos scheduler — scheduling, blackouts, progressive severity, YAML loading."""
 
 from __future__ import annotations

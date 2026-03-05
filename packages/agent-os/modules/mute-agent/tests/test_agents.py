@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for agent dataclasses and importable components.
 
 The external `mute_agent` library is NOT installed, so tests that require it

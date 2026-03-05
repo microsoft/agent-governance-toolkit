@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Prompt Injection Detection — OWASP LLM01 / ASI01.
 
 Screens agent inputs for prompt injection attacks where adversaries attempt

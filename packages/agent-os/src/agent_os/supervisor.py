@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Supervisor Hierarchy — Enforces layered supervision with a deterministic trust root.
 

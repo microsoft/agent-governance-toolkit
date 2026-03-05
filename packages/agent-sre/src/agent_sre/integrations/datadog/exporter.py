@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Datadog exporter — metrics and events for LLM monitoring.
 
 Exports Agent-SRE SLO data as Datadog metrics and events.

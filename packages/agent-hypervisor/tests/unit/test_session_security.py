@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for version counters, resource locks, isolation levels, rate limiter, and kill switch."""
 
 

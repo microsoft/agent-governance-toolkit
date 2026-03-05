@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 JWK (JSON Web Key) export/import for AgentIdentity.
 

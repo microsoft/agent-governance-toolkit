@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Streamlit Dashboard for Self-Correcting Agent Kernel.
 

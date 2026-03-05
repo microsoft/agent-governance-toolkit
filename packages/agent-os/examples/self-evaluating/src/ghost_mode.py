@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Ghost Mode (Passive Observation) - The Observer Daemon Pattern
 

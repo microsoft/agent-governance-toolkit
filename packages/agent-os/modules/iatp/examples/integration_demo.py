@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Example demonstrating the IATP Policy Engine and Recovery Engine integration.
 

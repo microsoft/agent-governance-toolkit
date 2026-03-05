@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for TokenBudgetTracker.
 
 Run with: python -m pytest tests/test_token_budget.py -v --tb=short

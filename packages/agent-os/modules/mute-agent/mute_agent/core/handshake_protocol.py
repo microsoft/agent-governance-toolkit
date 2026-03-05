@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Dynamic Semantic Handshake Protocol - The negotiation mechanism between
 The Face (Reasoning) and The Hands (Execution).

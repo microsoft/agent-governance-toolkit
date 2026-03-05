@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Hypervisor — Top-level orchestrator for multi-agent Shared Sessions.
 

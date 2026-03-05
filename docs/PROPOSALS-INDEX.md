@@ -19,6 +19,7 @@ Last updated: March 4, 2026
 
 | Target | Submission | Type | Status | Document |
 |--------|-----------|------|--------|----------|
+| **Azure AI Foundry** | Internal proposal | 8-point Integration & Collaboration | Pending meeting | [AI-FOUNDRY-INTEGRATION-PROPOSAL.md](./AI-FOUNDRY-INTEGRATION-PROPOSAL.md) |
 | **Agent Framework (MAF)** | [microsoft/agent-framework#4440](https://github.com/microsoft/agent-framework/issues/4440) | Governance Middleware | Open | [MAF-INTEGRATION-PROPOSAL.md](./MAF-INTEGRATION-PROPOSAL.md) |
 | **AutoGen** | [microsoft/autogen#7212](https://github.com/microsoft/autogen/pull/7212) | Governance Extension | Open | [AUTOGEN-INTEGRATION-PROPOSAL.md](./AUTOGEN-INTEGRATION-PROPOSAL.md) |
 | **GitHub Copilot** | [github/awesome-copilot#755,756,757](https://github.com/github/awesome-copilot/pull/755) | Skill + Hook + Agent | ✅ Merged (3/3) | [GITHUB-COPILOT-PROPOSAL.md](./GITHUB-COPILOT-PROPOSAL.md) |
@@ -103,7 +104,7 @@ Last updated: March 4, 2026
 | Category | Total | Merged | Open | Closed |
 |----------|-------|--------|------|--------|
 | Standards Bodies | 4 | 0 | 3 | 1 |
-| Microsoft Ecosystem | 3 | 3 | 2 | 0 |
+| Microsoft Ecosystem | 4 | 3 | 3 | 0 |
 | Google Ecosystem | 2 | 0 | 2 | 0 |
 | OpenAI Ecosystem | 2 | 0 | 1 | 1 |
 | Anthropic Ecosystem | 3 | 0 | 3 | 0 |
@@ -111,4 +112,4 @@ Last updated: March 4, 2026
 | MCP Ecosystem | 2 | 0 | 2 | 0 |
 | Awesome Lists | 18 | 0 | 18 | 0 |
 | Other Integrations | 6 | 0 | 6 | 0 |
-| **Total** | **45** | **4** | **41** | **2** |
+| **Total** | **46** | **4** | **42** | **2** |

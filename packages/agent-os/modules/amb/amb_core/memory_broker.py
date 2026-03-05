@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """In-memory broker adapter for testing and simple use cases."""
 
 import asyncio

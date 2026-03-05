@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """OTLP exporter setup helpers for agent-sre tracing.
 
 Provides convenience functions to configure :class:`TracerProvider`

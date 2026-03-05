@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for SLO compliance dashboard."""
 
 from agent_sre.slo.dashboard import (

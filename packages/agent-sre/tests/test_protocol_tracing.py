@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for A2A/MCP protocol-aware distributed tracing."""
 
 from __future__ import annotations

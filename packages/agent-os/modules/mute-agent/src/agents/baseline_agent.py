@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Baseline Agent - The "Steel Man" Reflective Tool-User
 

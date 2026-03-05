@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 HTTP Metrics Server for Agent OS Kernel.
 

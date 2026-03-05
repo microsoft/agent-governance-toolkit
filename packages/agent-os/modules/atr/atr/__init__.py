@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """ATR - Agent Tool Registry.
 
 A decentralized marketplace for agent capabilities. ATR provides a standardized

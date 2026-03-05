@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import React, { useState, useEffect } from 'react';
 import { getSettings, saveSettings, clearAllData } from '../shared/storage';
 import type { AgentOSSettings } from '../shared/types';

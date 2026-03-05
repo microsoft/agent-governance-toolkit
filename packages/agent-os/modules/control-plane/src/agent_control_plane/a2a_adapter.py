@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 A2A (Agent-to-Agent) Protocol Adapter - Agent Control Plane Integration
 

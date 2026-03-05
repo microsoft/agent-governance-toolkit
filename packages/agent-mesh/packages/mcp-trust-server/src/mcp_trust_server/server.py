@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 MCP Trust Server — AgentMesh trust management via Model Context Protocol.
 

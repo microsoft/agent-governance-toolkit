@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """W&B exporter — log SRE metrics as W&B runs.
 
 Maps agent tasks to experiment runs. Operates in offline mode

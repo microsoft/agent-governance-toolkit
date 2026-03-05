@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 SLO Alerting Example — Set up SLOs for an AI agent with error budgets.
 

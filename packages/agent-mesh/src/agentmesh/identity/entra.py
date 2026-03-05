@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Microsoft Entra Agent ID adapter for AgentMesh.
 

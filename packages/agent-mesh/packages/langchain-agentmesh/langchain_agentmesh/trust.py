@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Trust verification for LangChain agents."""
 
 from __future__ import annotations

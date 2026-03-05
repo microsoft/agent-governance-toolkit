@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for core message models."""
 
 from amb_core.models import Message, MessagePriority

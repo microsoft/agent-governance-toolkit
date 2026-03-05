@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Snapshot tests for protocol wire format.
 
 Captures and verifies the wire format of identity, handshake, delegation,

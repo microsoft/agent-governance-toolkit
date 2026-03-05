@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Dashboard API and data models for AgentMesh."""
 
 from .api import DashboardAPI

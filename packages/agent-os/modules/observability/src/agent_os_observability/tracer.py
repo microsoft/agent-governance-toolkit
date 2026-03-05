@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 OpenTelemetry Tracing for Agent OS Kernel.
 

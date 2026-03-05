@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Saga subpackage — orchestration, fan-out, checkpoints, DSL."""
 
 from hypervisor.saga.checkpoint import CheckpointManager, SemanticCheckpoint

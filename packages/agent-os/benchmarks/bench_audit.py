@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Benchmarks for audit system."""
 
 from __future__ import annotations

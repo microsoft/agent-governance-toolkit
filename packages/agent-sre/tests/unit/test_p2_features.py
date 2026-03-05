@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for P2 features: trace replay, gitops, chaos library, cost anomaly, postmortems."""
 
 import pytest

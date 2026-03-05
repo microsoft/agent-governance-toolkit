@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for the prompt injection detection module (OWASP LLM01 / ASI01)."""
 
 from __future__ import annotations

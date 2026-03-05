@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Example: OpenAgent Definition (OAD) - The "USB Port" for AI Agents
 

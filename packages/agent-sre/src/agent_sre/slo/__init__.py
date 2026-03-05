@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """SLO Engine — Define what 'reliable' means for agents."""
 
 from agent_sre.slo.indicators import SLI, SLIRegistry, SLIValue

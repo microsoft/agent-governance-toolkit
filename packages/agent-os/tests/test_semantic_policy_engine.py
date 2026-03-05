@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Comprehensive tests for the Semantic Policy Engine.
 
 Covers policy loading/parsing, evaluation against varied inputs,

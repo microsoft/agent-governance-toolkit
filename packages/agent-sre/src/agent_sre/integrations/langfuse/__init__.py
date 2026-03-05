@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Langfuse integration for Agent SRE.
 
 Bridges Agent SRE reliability data to Langfuse for unified observability.

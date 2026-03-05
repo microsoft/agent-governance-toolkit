@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for the adversarial evaluation module."""
 
 from __future__ import annotations

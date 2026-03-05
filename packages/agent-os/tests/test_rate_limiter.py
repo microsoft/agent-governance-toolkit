@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for RateLimiter.
 
 Run with: python -m pytest tests/test_rate_limiter.py -v --tb=short

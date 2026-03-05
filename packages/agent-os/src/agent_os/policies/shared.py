@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Cross-project shared policy language for Agent-OS and Agent-Mesh.
 

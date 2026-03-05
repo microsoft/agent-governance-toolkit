@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for OpenTelemetry integration — metrics, traces, and events.
 
 Uses in-memory OTEL exporters to verify that Agent SRE data is correctly

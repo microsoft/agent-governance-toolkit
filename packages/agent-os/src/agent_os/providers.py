@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Provider Discovery System
 
@@ -12,7 +14,7 @@ Usage:
     engine = get_verification_engine()   # Advanced if available, else CE
     kernel = get_self_correction_kernel() # Advanced if available, else CE
 
-Internal teams: pip install agent-governance-providers (from internal feed)
+Advanced: pip install agent-governance-providers (from PyPI)
 Community: pip install agent-os-kernel (from PyPI) — works out of the box
 """
 

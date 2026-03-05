@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for new AMB features: schema validation, DLQ, persistence, and tracing."""
 
 import pytest

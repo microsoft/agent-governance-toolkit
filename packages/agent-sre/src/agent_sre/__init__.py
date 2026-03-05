@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Agent SRE — Reliability Engineering for AI Agent Systems.
 
 agent-sre brings Site Reliability Engineering practices to AI agents.

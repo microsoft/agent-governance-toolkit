@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 // Smoke tests for AgentOS Copilot Extension
 
 const { AgentGenerator } = require('./dist/agentGenerator.js');

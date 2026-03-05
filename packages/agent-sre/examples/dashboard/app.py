@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Agent SRE — Observability Dashboard.
 
 Standalone Streamlit dashboard with simulated data.

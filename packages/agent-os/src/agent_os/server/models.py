@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Pydantic v2 request/response models for Agent OS Governance API."""
 
 from __future__ import annotations

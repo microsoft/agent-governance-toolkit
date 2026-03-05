@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Recovery Engine Integration with SCAK (Self-Correcting Agent Kernel).
 

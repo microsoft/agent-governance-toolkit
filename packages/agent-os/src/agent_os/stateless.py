@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Stateless Kernel — June 2026 MCP-compliant design.
 
 This module implements a fully stateless execution kernel that complies with

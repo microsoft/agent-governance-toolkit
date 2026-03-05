@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Test script to validate basic functionality without API calls.
 Tests the core components and structure of the agent.

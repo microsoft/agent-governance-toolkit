@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 agent-sre CLI — command-line interface for Agent SRE.
 

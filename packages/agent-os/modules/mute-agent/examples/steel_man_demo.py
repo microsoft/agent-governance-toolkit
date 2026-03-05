@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Quick Start: Steel Man Evaluation Demo
 

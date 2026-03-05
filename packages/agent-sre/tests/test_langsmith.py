@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for LangSmith integration — run-based tracing and feedback.
 
 Uses offline mode (no LangSmith connection required) to verify that

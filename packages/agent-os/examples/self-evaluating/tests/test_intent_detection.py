@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Test script for intent detection and intent-based evaluation.
 Tests the core components without API calls where possible.

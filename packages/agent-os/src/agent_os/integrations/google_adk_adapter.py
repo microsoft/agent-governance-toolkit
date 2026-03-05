@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Google ADK (Agent Development Kit) Integration for Agent-OS
 ============================================================

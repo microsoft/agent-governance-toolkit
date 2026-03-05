@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import { TrustScore, TrustDimensions, TrustEvent } from "../types";
 
 const TIER_THRESHOLDS: [number, TrustScore["tier"]][] = [

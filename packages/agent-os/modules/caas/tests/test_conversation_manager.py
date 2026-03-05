@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Test suite for the Conversation Manager (Sliding Window / FIFO) implementation.
 

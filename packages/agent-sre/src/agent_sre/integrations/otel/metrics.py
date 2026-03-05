@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """OpenTelemetry metrics exporter for Agent SRE.
 
 Exports SLO/SLI metrics, error budget gauges, cost metrics, and incident

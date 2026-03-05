@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Agent Hypervisor — Streamlit Visualization Dashboard.
 
 A production-quality, interactive dashboard for monitoring multi-agent

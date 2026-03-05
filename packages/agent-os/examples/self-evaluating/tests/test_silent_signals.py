@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Test script for Silent Signals feature.
 Tests telemetry events, signal emission, and signal analysis.

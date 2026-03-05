@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Community Edition — basic context/memory management
 """
 Store — Abstract interfaces and mutable file-based implementation for episodic memory.

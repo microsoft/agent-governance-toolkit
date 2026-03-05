@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 GitHub Code Review Agent with Agent OS Governance
 ==================================================

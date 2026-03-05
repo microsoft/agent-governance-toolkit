@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Allow running agent-sre as: python -m agent_sre"""
 import sys
 

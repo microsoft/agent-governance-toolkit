@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 AgentMesh - The Secure Nervous System for Cloud-Native Agent Ecosystems
 

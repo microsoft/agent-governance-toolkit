@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 InteractiveAgent - The "Steel Man" / SOTA Baseline
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for Datadog integration — metrics and events export.
 
 Uses offline mode (no Datadog connection required) to verify that

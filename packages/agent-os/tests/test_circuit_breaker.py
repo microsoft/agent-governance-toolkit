@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for CircuitBreaker state transitions and call protection."""
 
 import pytest

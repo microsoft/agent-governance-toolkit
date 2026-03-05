@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import { Router, Request, Response } from "express";
 import { getAgent, updateLastSeen } from "../services/registry";
 import { VerifyResponse } from "../types";

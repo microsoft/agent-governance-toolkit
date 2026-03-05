@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Unit tests for the new AgentKernel and PolicyEngine features
 (Tool Interception and Graph-based Constraint Enforcement)

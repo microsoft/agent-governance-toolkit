@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 pytest configuration and fixtures for Context-as-a-Service tests.
 """

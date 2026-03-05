@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Semantic Policy Engine — Intent-based policy enforcement.
 

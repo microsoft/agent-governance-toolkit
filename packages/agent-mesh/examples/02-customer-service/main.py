@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Multi-Agent Customer Service System with AgentMesh Governance
 

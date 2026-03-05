@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 SQL Agent with Financial Controls and Agent OS Governance
 ==========================================================

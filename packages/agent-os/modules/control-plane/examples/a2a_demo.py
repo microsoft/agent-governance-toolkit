@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 A2A (Agent-to-Agent) Protocol Integration Demo - Agent Control Plane
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for runbook reference — models, executor, registry, and YAML loading."""
 
 from __future__ import annotations

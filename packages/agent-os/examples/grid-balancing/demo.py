@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Grid Balancing Demo - Autonomous Energy Trading
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for OpenTelemetry tracing integration in StatelessKernel."""
 
 import pytest

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for chaos engine — fault injection and resilience testing."""
 
 import pytest

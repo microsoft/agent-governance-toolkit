@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for cascading failure circuit breakers (OWASP ASI08)."""
 
 from __future__ import annotations

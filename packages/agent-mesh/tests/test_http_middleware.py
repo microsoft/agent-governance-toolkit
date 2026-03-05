@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for HTTP trust middleware (#118).
 
 Covers TrustMiddleware core verification, header extraction, trust score

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """FastAPI application for Agent OS governance API."""
 
 from __future__ import annotations

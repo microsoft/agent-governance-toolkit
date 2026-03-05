@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import express from "express";
 import { rateLimit } from "./middleware/rateLimit";
 import { requireApiKey } from "./middleware/apiKey";

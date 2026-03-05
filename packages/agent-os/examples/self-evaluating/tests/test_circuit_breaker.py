@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Test script for automated circuit breaker system.
 Tests metrics tracking, watchdog decisions, and rollout phases.

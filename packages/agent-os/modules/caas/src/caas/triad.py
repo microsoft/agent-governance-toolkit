@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Community Edition — basic context/memory management
 """
 Tiered Context Manager — single-tier context storage.

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Prompt Injection Detection Benchmark — Agent OS vs LlamaFirewall.
 
 Compares the Agent OS PromptInjectionDetector against Meta's published

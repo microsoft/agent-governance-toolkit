@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for multi-model cost optimizer."""
 
 from __future__ import annotations

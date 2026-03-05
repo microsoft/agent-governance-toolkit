@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 DeFi Risk Sentinel Demo - Proactive Hack Prevention
 

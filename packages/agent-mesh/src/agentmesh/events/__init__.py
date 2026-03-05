@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Event bus and analytics plane for AgentMesh."""
 
 from .analytics import AnalyticsPlane, AnalyticsSnapshot

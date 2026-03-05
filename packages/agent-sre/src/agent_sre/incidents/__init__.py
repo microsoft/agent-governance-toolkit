@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Incident Manager — Detection, response, and postmortem generation."""
 
 from agent_sre.incidents.circuit_breaker import (

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Agent OS Governance API Server.
 
 Provides a REST API for governance operations, enabling language-agnostic

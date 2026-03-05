@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Agent OS Demo - Your First Governed Agent"""
 import asyncio
 from agent_os import StatelessKernel, ExecutionContext

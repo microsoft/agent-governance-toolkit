@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 MCP (Model Context Protocol) Adapter - Agent Control Plane Integration
 

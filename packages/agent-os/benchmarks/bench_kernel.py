@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Benchmarks for StatelessKernel enforcement."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 View decorators for AgentMesh trust verification in Django.
 ============================================================

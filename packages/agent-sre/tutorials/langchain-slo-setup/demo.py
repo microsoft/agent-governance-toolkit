@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Tutorial: Set up SLOs for a LangChain Agent
 ============================================

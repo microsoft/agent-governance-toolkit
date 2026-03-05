@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Mute Agent — post-execution gate for output filtering.
 
 The mute agent sits between the execution engine and the caller, inspecting

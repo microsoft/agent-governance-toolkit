@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for the event bus abstraction and analytics plane."""
 
 from __future__ import annotations

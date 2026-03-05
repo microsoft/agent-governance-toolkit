@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Wisdom Curator - Human-in-the-Loop Review System
 

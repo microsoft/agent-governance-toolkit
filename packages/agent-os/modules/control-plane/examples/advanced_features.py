@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Advanced Examples - Demonstrating new Agent Control Plane features
 

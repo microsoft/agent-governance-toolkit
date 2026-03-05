@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Manual verification script - tests the decoupled architecture flow.
 This can be run without an OpenAI API key to verify the structure.

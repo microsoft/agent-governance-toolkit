@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for behavioral anomaly detection module."""
 
 from agent_sre.anomaly.detector import (

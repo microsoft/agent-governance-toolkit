@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Test suite for the telemetry module.
 Tests event stream functionality, event logging, and checkpoint management.

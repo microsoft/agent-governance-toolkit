@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Named constants for AgentMesh configuration values."""
 
 # Trust Score Thresholds (0-1000 scale)

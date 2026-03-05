@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Agent OS Governance Quickstart — All 7 Framework Integrations
 

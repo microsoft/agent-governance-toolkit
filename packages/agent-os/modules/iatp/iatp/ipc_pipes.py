@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Typed IPC Pipes - Inter-Agent Communication with Policy Enforcement.
 
