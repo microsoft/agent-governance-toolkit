@@ -127,7 +127,7 @@ sli = PolicyCompliance(target=1.0, window="24h")
 sli.record_check(compliant=True)
 ```
 
-**When to use:** Regulated industries, agents with safety-critical outputs, or when using [Agent OS](https://github.com/imran-siddique/agent-os) governance policies.
+**When to use:** Regulated industries, agents with safety-critical outputs, or when using [Agent OS](https://github.com/microsoft/agent-governance-toolkit) governance policies.
 
 ### ToolCallSuccess
 

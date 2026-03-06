@@ -16,12 +16,12 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/imran-siddique/agent-mesh.git",
+    "url": "https://github.com/microsoft/agent-governance-toolkit.git",
     "directory": "packages/mcp-proxy"
   },
-  "homepage": "https://github.com/imran-siddique/agent-mesh/tree/main/packages/mcp-proxy",
+  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/mcp-proxy",
   "bugs": {
-    "url": "https://github.com/imran-siddique/agent-mesh/issues"
+    "url": "https://github.com/microsoft/agent-governance-toolkit/issues"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

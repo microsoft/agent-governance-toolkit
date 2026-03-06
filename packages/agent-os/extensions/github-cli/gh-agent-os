@@ -2,7 +2,7 @@
 # gh-agent-os - GitHub CLI extension for Agent OS
 # 
 # Installation:
-#   gh extension install imran-siddique/gh-agent-os
+#   gh extension install microsoft/gh-agent-os
 #
 # Usage:
 #   gh agent-os run "task description"
@@ -192,7 +192,7 @@ EXAMPLES:
   gh agent-os init
 
 LEARN MORE:
-  https://github.com/imran-siddique/agent-os
+  https://github.com/microsoft/agent-governance-toolkit
 EOF
     ;;
     

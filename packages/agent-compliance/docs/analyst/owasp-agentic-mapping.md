@@ -336,10 +336,10 @@ def call_agent(task):
 ## Contributing
 
 This guide is a living document. To contribute:
-1. Open an issue or PR on the [agent-governance repository](https://github.com/imran-siddique/agent-governance)
+1. Open an issue or PR on the [agent-governance repository](https://github.com/microsoft/agent-governance-toolkit)
 2. Add or improve implementation examples
 3. Report false negatives or gaps in coverage
 
 ---
 
-*Part of the [Agent Governance](https://github.com/imran-siddique/agent-governance) ecosystem*
+*Part of the [Agent Governance](https://github.com/microsoft/agent-governance-toolkit) ecosystem*

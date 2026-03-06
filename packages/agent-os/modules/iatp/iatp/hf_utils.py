@@ -54,8 +54,8 @@ __all__ = [
 # Constants
 # =============================================================================
 
-DEFAULT_REPO_ID = "imran-siddique/iatp-experiments"
-DEFAULT_DATASET_REPO = "imran-siddique/iatp-benchmark"
+DEFAULT_REPO_ID = "microsoft/iatp-experiments"
+DEFAULT_DATASET_REPO = "microsoft/iatp-benchmark"
 IATP_VERSION = "0.3.1"
 
 
@@ -77,7 +77,7 @@ class IATPHubClient:
         token: HF API token (uses cached token if not provided)
 
     Example:
-        >>> client = IATPHubClient(repo_id="imran-siddique/iatp-experiments")
+        >>> client = IATPHubClient(repo_id="microsoft/iatp-experiments")
         >>> client.upload_experiment_logs("experiments/results.json")
         >>> dataset = client.download_benchmark_dataset()
     """
@@ -454,14 +454,14 @@ MIT License
   title = {Inter-Agent Trust Protocol},
   author = {Siddique, Imran},
   year = {2024},
-  url = {https://github.com/imran-siddique/inter-agent-trust-protocol}
+  url = {https://github.com/microsoft/agent-governance-toolkit}
 }
 ```
 
 ### Contributions
 
 Contributions are welcome! Please see the
-[GitHub repository](https://github.com/imran-siddique/inter-agent-trust-protocol)
+[GitHub repository](https://github.com/microsoft/agent-governance-toolkit)
 for contribution guidelines.
 '''
 

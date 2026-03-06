@@ -55,7 +55,7 @@ vsce login agent-os
 ### Step 4: Publish the Extension
 
 ```powershell
-cd C:\Users\mosiddi\source\repos\imran-siddique\agent-os\extensions\vscode
+cd C:\Users\mosiddi\source\repos\\microsoft\\agent-governance-toolkit\\extensions\vscode
 
 # Publish directly (recommended)
 vsce publish
@@ -169,7 +169,7 @@ Set `VSCE_PAT` in repository secrets.
 - [VSCE Documentation](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
 - [Marketplace Publisher Portal](https://marketplace.visualstudio.com/manage)
 - [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-- [AgentOS GitHub Issues](https://github.com/imran-siddique/agent-os/issues)
+- [AgentOS GitHub Issues](https://github.com/microsoft/agent-governance-toolkit/issues)
 
 ---
 

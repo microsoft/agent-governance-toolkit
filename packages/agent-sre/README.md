@@ -6,28 +6,28 @@
 
 *SLOs · Error Budgets · Chaos Testing · Progressive Delivery · Cost Guardrails*
 
-[![GitHub Stars](https://img.shields.io/github/stars/imran-siddique/agent-sre?style=social)](https://github.com/imran-siddique/agent-sre/stargazers)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤️-ff69b4)](https://github.com/sponsors/imran-siddique)
+[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
+[![Sponsor](https://img.shields.io/badge/sponsor-❤️-ff69b4)](https://github.com/microsoft/agent-governance-toolkit)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![CI](https://github.com/imran-siddique/agent-sre/actions/workflows/ci.yml/badge.svg)](https://github.com/imran-siddique/agent-sre/actions/workflows/ci.yml)
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/agent-sre)](https://pypi.org/project/agent-sre/)
 [![Downloads](https://img.shields.io/pypi/dm/agent-sre)](https://pypi.org/project/agent-sre/)
 [![Downloads](https://static.pepy.tech/badge/agent-sre)](https://pepy.tech/project/agent-sre)
-[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-ASI--08-brightgreen)](https://github.com/imran-siddique/agent-governance/blob/master/docs/OWASP-COMPLIANCE.md)
-[![Agent-OS Compatible](https://img.shields.io/badge/agent--os-compatible-green.svg)](https://github.com/imran-siddique/agent-os)
-[![AgentMesh Compatible](https://img.shields.io/badge/agentmesh-compatible-green.svg)](https://github.com/imran-siddique/agent-mesh)
-[![Part of Agent Governance Ecosystem](https://img.shields.io/badge/ecosystem-Agent_Governance-blueviolet)](https://github.com/imran-siddique/agent-governance)
-[![Discussions](https://img.shields.io/github/discussions/imran-siddique/agent-sre)](https://github.com/imran-siddique/agent-sre/discussions)
+[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-ASI--08-brightgreen)](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
+[![Agent-OS Compatible](https://img.shields.io/badge/agent--os-compatible-green.svg)](https://github.com/microsoft/agent-governance-toolkit)
+[![AgentMesh Compatible](https://img.shields.io/badge/agentmesh-compatible-green.svg)](https://github.com/microsoft/agent-governance-toolkit)
+[![Part of Agent Governance Ecosystem](https://img.shields.io/badge/ecosystem-Agent_Governance-blueviolet)](https://github.com/microsoft/agent-governance-toolkit)
+[![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 [![awesome-opentelemetry](https://img.shields.io/badge/awesome--opentelemetry-listed-orange)](https://github.com/magsther/awesome-opentelemetry/pull/24)
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent SRE.
 
-> 🔗 **Part of the [Agent Governance Ecosystem](https://github.com/imran-siddique/agent-governance)** — Works with [Agent OS](https://github.com/imran-siddique/agent-os) (governance), [AgentMesh](https://github.com/imran-siddique/agent-mesh) (identity & trust), and [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor) (runtime sessions)
+> 🔗 **Part of the [Agent Governance Ecosystem](https://github.com/microsoft/agent-governance-toolkit)** — Works with [Agent OS](https://github.com/microsoft/agent-governance-toolkit) (governance), [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) (identity & trust), and [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) (runtime sessions)
 
-> 📦 **Install the full stack:** `pip install ai-agent-governance[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/imran-siddique/agent-governance)
+> 📦 **Install the full stack:** `pip install ai-agent-governance[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
 
-[Quick Start](#-quick-start-in-30-seconds) • [Architecture](#-architecture-diagram) • [Examples](examples/) • [Benchmarks](benchmarks/results/BENCHMARKS.md) • [Docs](docs/) • [Agent OS](https://github.com/imran-siddique/agent-os) • [AgentMesh](https://github.com/imran-siddique/agent-mesh) • [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor)
+[Quick Start](#-quick-start-in-30-seconds) • [Architecture](#-architecture-diagram) • [Examples](examples/) • [Benchmarks](benchmarks/results/BENCHMARKS.md) • [Docs](docs/) • [Agent OS](https://github.com/microsoft/agent-governance-toolkit) • [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) • [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit)
 
 </div>
 
@@ -39,10 +39,10 @@
   <a href="https://github.com/microsoft/agent-lightning/pull/478"><img src="https://img.shields.io/badge/Agent--Lightning-15K_⭐_Merged-success?style=flat-square" alt="Agent-Lightning"></a>
   <a href="https://pypi.org/project/langgraph-trust/"><img src="https://img.shields.io/badge/LangGraph-PyPI-blue?style=flat-square" alt="LangGraph"></a>
   <a href="https://pypi.org/project/openai-agents-trust/"><img src="https://img.shields.io/badge/OpenAI_Agents-PyPI-blue?style=flat-square" alt="OpenAI Agents"></a>
-  <a href="https://clawhub.ai/imran-siddique/agentmesh-governance"><img src="https://img.shields.io/badge/OpenClaw-ClawHub-purple?style=flat-square" alt="OpenClaw"></a>
+  <a href="https://clawhub.ai/microsoft/agentmesh-governance"><img src="https://img.shields.io/badge/OpenClaw-ClawHub-purple?style=flat-square" alt="OpenClaw"></a>
 </p>
 
-Reliability layer across **170K+ combined GitHub stars** of integrated projects — [Dify](https://github.com/langgenius/dify-plugins/pull/2060) (65K ⭐), [LlamaIndex](https://github.com/run-llama/llama_index/pull/20644) (47K ⭐), [Agent-Lightning](https://github.com/microsoft/agent-lightning/pull/478) (15K ⭐), [LangGraph](https://pypi.org/project/langgraph-trust/), [OpenAI Agents](https://pypi.org/project/openai-agents-trust/), and [OpenClaw](https://clawhub.ai/imran-siddique/agentmesh-governance).
+Reliability layer across **170K+ combined GitHub stars** of integrated projects — [Dify](https://github.com/langgenius/dify-plugins/pull/2060) (65K ⭐), [LlamaIndex](https://github.com/run-llama/llama_index/pull/20644) (47K ⭐), [Agent-Lightning](https://github.com/microsoft/agent-lightning/pull/478) (15K ⭐), [LangGraph](https://pypi.org/project/langgraph-trust/), [OpenAI Agents](https://pypi.org/project/openai-agents-trust/), and [OpenClaw](https://clawhub.ai/microsoft/agentmesh-governance).
 
 ---
 
@@ -73,7 +73,7 @@ Reliability layer across **170K+ combined GitHub stars** of integrated projects 
 
 ### 🛡️ OWASP Agentic Security Coverage
 
-Agent SRE directly addresses **[OWASP Agentic Security Initiative](https://github.com/imran-siddique/agent-os/blob/master/docs/owasp-agentic-top10-mapping.md)** risk **ASI08 — Cascading Failures**:
+Agent SRE directly addresses **[OWASP Agentic Security Initiative](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/owasp-agentic-top10-mapping.md)** risk **ASI08 — Cascading Failures**:
 
 | OWASP Risk | Agent SRE Coverage |
 |---|---|
@@ -82,7 +82,7 @@ Agent SRE directly addresses **[OWASP Agentic Security Initiative](https://githu
 | **ASI09: Lack of Observability** | 7 SLI types, OpenTelemetry export, 11 observability platform integrations |
 | **ASI10: Inadequate Testing** | Chaos engineering with 9 fault templates, progressive delivery with shadow & canary |
 
-> See full [OWASP Agentic Top 10 mapping →](https://github.com/imran-siddique/agent-os/blob/master/docs/owasp-agentic-top10-mapping.md)
+> See full [OWASP Agentic Top 10 mapping →](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/owasp-agentic-top10-mapping.md)
 
 ---
 
@@ -409,9 +409,9 @@ Agent SRE completes the governance-to-reliability stack:
 | Layer | Project | What It Does |
 |---|---|---|
 | **Reliability** | **Agent SRE** (this) | SLOs, chaos testing, canary deploys, cost guard, replay |
-| **Runtime** | [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor) | Session isolation, execution rings, saga orchestration |
-| **Networking** | [AgentMesh](https://github.com/imran-siddique/agent-mesh) | Identity, trust, routing, delegation |
-| **Kernel** | [Agent OS](https://github.com/imran-siddique/agent-os) | Policy enforcement, audit, compliance |
+| **Runtime** | [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) | Session isolation, execution rings, saga orchestration |
+| **Networking** | [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) | Identity, trust, routing, delegation |
+| **Kernel** | [Agent OS](https://github.com/microsoft/agent-governance-toolkit) | Policy enforcement, audit, compliance |
 
 ### With Agent OS
 - Policy violations → SLO breaches (every violation counts against error budget)
@@ -630,14 +630,14 @@ Agent SRE injects failures like increased latency, dropped responses, corrupted 
 Agent SRE supports SLOs for response time, accuracy, cost per inference, safety compliance, and custom metrics. Each SLO has an error budget that burns down when violated. Burn rate alerts notify you before the budget is exhausted, enabling proactive intervention.
 
 **How does Agent SRE integrate with existing monitoring?**
-Agent SRE exports metrics via OpenTelemetry and Prometheus. It integrates with 11 observability platforms (Langfuse, LangSmith, Arize, Datadog, AgentOps, W&B, MLflow, and more). It's part of the [Agent Governance Ecosystem](https://github.com/imran-siddique/agent-governance) with 4,310+ tests across 4 repos.
+Agent SRE exports metrics via OpenTelemetry and Prometheus. It integrates with 11 observability platforms (Langfuse, LangSmith, Arize, Datadog, AgentOps, W&B, MLflow, and more). It's part of the [Agent Governance Ecosystem](https://github.com/microsoft/agent-governance-toolkit) with 4,310+ tests across 4 repos.
 
 ---
 
 ## Contributing
 
 ```bash
-git clone https://github.com/imran-siddique/agent-sre.git
+git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agent-sre
 pip install -e ".[dev]"
 pytest
@@ -670,12 +670,12 @@ MIT — See [LICENSE](LICENSE) for details.
 
 | Repository | Purpose | Stars |
 |---|---|---|
-| [**Agent OS**](https://github.com/imran-siddique/agent-os) | Governance kernel — policy enforcement, audit, compliance | [![Stars](https://img.shields.io/github/stars/imran-siddique/agent-os?style=social)](https://github.com/imran-siddique/agent-os) |
-| [**Agent SRE**](https://github.com/imran-siddique/agent-sre) | Reliability — SLOs, chaos testing, cost guard (this repo) | [![Stars](https://img.shields.io/github/stars/imran-siddique/agent-sre?style=social)](https://github.com/imran-siddique/agent-sre) |
-| [**AgentMesh**](https://github.com/imran-siddique/agent-mesh) | Networking — identity, trust, routing, delegation | [![Stars](https://img.shields.io/github/stars/imran-siddique/agent-mesh?style=social)](https://github.com/imran-siddique/agent-mesh) |
-| [**Agent Hypervisor**](https://github.com/imran-siddique/agent-hypervisor) | Runtime — session isolation, execution rings, sagas | [![Stars](https://img.shields.io/github/stars/imran-siddique/agent-hypervisor?style=social)](https://github.com/imran-siddique/agent-hypervisor) |
-| [**Agent Governance**](https://github.com/imran-siddique/agent-governance) | Unified installer — `pip install ai-agent-governance[full]` | [![Stars](https://img.shields.io/github/stars/imran-siddique/agent-governance?style=social)](https://github.com/imran-siddique/agent-governance) |
+| [**Agent OS**](https://github.com/microsoft/agent-governance-toolkit) | Governance kernel — policy enforcement, audit, compliance | [![Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit) |
+| [**Agent SRE**](https://github.com/microsoft/agent-governance-toolkit) | Reliability — SLOs, chaos testing, cost guard (this repo) | [![Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit) |
+| [**AgentMesh**](https://github.com/microsoft/agent-governance-toolkit) | Networking — identity, trust, routing, delegation | [![Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit) |
+| [**Agent Hypervisor**](https://github.com/microsoft/agent-governance-toolkit) | Runtime — session isolation, execution rings, sagas | [![Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit) |
+| [**Agent Governance**](https://github.com/microsoft/agent-governance-toolkit) | Unified installer — `pip install ai-agent-governance[full]` | [![Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit) |
 
-[GitHub](https://github.com/imran-siddique/agent-sre) · [Docs](docs/) · [PyPI](https://pypi.org/project/agent-sre/) · [Discussions](https://github.com/imran-siddique/agent-sre/discussions) · [Sponsor](https://github.com/sponsors/imran-siddique)
+[GitHub](https://github.com/microsoft/agent-governance-toolkit) · [Docs](docs/) · [PyPI](https://pypi.org/project/agent-sre/) · [Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions) · [Sponsor](https://github.com/microsoft/agent-governance-toolkit)
 
 </div>

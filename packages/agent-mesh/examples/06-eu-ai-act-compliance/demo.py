@@ -163,7 +163,7 @@ def main() -> None:
     print("  • Article 17 — Quality management system")
     print("  • Article 50 — User-facing transparency disclosure")
     print()
-    print("🔗 Learn more: https://github.com/imran-siddique/agent-mesh")
+    print("🔗 Learn more: https://github.com/microsoft/agent-governance-toolkit")
     print()
 
 

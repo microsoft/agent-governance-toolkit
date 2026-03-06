@@ -1,13 +1,13 @@
 # Agent OS GitHub CLI Extension
 
-> **Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+> **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 **GitHub CLI extension for Agent OS - The Linux Kernel for AI Agents**
 
 ## Installation
 
 ```bash
-gh extension install imran-siddique/gh-agent-os
+gh extension install microsoft/gh-agent-os
 ```
 
 ## Commands
@@ -70,5 +70,5 @@ allowed_tools:
 
 ## Learn More
 
-- [Agent OS Documentation](https://github.com/imran-siddique/agent-os)
-- [Integration Guide](https://github.com/imran-siddique/agent-os/blob/master/docs/integrations.md)
+- [Agent OS Documentation](https://github.com/microsoft/agent-governance-toolkit)
+- [Integration Guide](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/integrations.md)

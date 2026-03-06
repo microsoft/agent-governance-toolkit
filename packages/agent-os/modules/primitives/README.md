@@ -1,6 +1,6 @@
 # Agent Primitives
 
-> **Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+> **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 **Layer 1 Primitive** - Shared data models for the Agent OS stack.
 

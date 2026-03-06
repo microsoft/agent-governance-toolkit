@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.agentos.plugin</id>
     <name>Agent OS - AI Safety for Code</name>
-    <vendor email="support@agent-os.dev" url="https://github.com/imran-siddique/agent-os">Agent OS</vendor>
+    <vendor email="support@agent-os.dev" url="https://github.com/microsoft/agent-governance-toolkit">Agent OS</vendor>
 
     <description><![CDATA[
         <h1>Kernel-level safety for AI coding assistants</h1>

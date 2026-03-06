@@ -462,4 +462,4 @@ graph TB
 
 ---
 
-*Related: [agent-os](https://github.com/imran-siddique/agent-os) · [agent-sre](https://github.com/imran-siddique/agent-sre) · GitHub Issue: agent-os#263*
+*Related: [agent-os](https://github.com/microsoft/agent-governance-toolkit) · [agent-sre](https://github.com/microsoft/agent-governance-toolkit) · GitHub Issue: agent-os#263*

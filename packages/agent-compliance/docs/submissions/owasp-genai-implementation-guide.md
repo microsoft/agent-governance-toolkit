@@ -1048,4 +1048,4 @@ pip install agent-os agentmesh agent-sre agent-hypervisor
 ```
 
 All source code is available under the MIT license. PRs and issues welcome at
-https://github.com/imran-siddique/agent-governance.
+https://github.com/microsoft/agent-governance-toolkit.

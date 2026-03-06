@@ -345,7 +345,7 @@ def run_demo():
   ║                                                          ║
   ╚══════════════════════════════════════════════════════════╝
 {C.RS}""")
-    print(f"  {C.CY}🔗 https://github.com/imran-siddique/agent-os{C.RS}\n")
+    print(f"  {C.CY}🔗 https://github.com/microsoft/agent-governance-toolkit{C.RS}\n")
 
 
 if __name__ == "__main__":

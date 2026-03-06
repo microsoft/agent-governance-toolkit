@@ -170,7 +170,7 @@ def main():
     print("3. Verify the release on GitHub and PyPI")
     print("4. Announce in GitHub Discussions")
     print("\nRelease URLs:")
-    print(f"- GitHub: https://github.com/imran-siddique/agent-control-plane/releases/tag/v{version}")
+    print(f"- GitHub: https://github.com/microsoft/agent-governance-toolkit/releases/tag/v{version}")
     print(f"- PyPI: https://pypi.org/project/agent-control-plane/{version}/")
 
 

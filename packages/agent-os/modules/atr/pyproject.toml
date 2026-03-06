@@ -20,10 +20,10 @@ keywords = [
     "anthropic",
 ]
 authors = [
-    {name = "Imran Siddique", email = "imransiddique@live.com"}
+    {name = "Imran Siddique", email = "agt@microsoft.com"}
 ]
 maintainers = [
-    {name = "Imran Siddique", email = "imransiddique@live.com"}
+    {name = "Imran Siddique", email = "agt@microsoft.com"}
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -70,11 +70,11 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/imran-siddique/atr"
-Repository = "https://github.com/imran-siddique/atr"
-Documentation = "https://github.com/imran-siddique/atr#readme"
-Issues = "https://github.com/imran-siddique/atr/issues"
-Changelog = "https://github.com/imran-siddique/atr/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit#readme"
+Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
+Changelog = "https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md"
 
 [project.scripts]
 atr = "atr.cli:main"

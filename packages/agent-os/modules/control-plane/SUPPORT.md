@@ -13,13 +13,13 @@ First, check our comprehensive documentation:
 
 ### GitHub Discussions
 For questions, ideas, and community discussions:
-- **[Discussions](https://github.com/imran-siddique/agent-control-plane/discussions)** - Ask questions, share ideas, showcase projects
+- **[Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)** - Ask questions, share ideas, showcase projects
 
 ### Issue Tracking
 For bugs and feature requests:
-- **[Bug Report](https://github.com/imran-siddique/agent-control-plane/issues/new?template=bug_report.yml)** - Report issues
-- **[Feature Request](https://github.com/imran-siddique/agent-control-plane/issues/new?template=feature_request.yml)** - Suggest new features
-- **[Security Vulnerability](https://github.com/imran-siddique/agent-control-plane/issues/new?template=security_vulnerability.yml)** - Report security issues
+- **[Bug Report](https://github.com/microsoft/agent-governance-toolkit/issues/new?template=bug_report.yml)** - Report issues
+- **[Feature Request](https://github.com/microsoft/agent-governance-toolkit/issues/new?template=feature_request.yml)** - Suggest new features
+- **[Security Vulnerability](https://github.com/microsoft/agent-governance-toolkit/issues/new?template=security_vulnerability.yml)** - Report security issues
 
 ## Response Times
 
@@ -36,8 +36,8 @@ We aim to respond to:
 To help us help you faster:
 
 1. **Search First**
-   - Check existing [Issues](https://github.com/imran-siddique/agent-control-plane/issues)
-   - Search [Discussions](https://github.com/imran-siddique/agent-control-plane/discussions)
+   - Check existing [Issues](https://github.com/microsoft/agent-governance-toolkit/issues)
+   - Search [Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)
    - Review the documentation
 
 2. **Provide Context**
@@ -81,7 +81,7 @@ For enterprise deployments, custom integrations, or priority support:
 ## Security Issues
 
 **Do not** report security vulnerabilities in public issues. Instead:
-1. Use our [Security Vulnerability template](https://github.com/imran-siddique/agent-control-plane/issues/new?template=security_vulnerability.yml)
+1. Use our [Security Vulnerability template](https://github.com/microsoft/agent-governance-toolkit/issues/new?template=security_vulnerability.yml)
 2. Or email details privately (see [SECURITY.md](SECURITY.md))
 
 We take security seriously and will respond promptly.

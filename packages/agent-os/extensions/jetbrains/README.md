@@ -1,6 +1,6 @@
 # Agent OS for JetBrains IDEs
 
-> **Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+> **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 **Enterprise-grade AI agent safety for IntelliJ, PyCharm, WebStorm, and all JetBrains IDEs.**
 
@@ -40,7 +40,7 @@ Agent OS wraps your AI assistant with a kernel that provides:
 
 ### Manual Installation
 
-1. Download the latest `.zip` from [Releases](https://github.com/imran-siddique/agent-os/releases)
+1. Download the latest `.zip` from [Releases](https://github.com/microsoft/agent-governance-toolkit/releases)
 2. Open Settings/Preferences → Plugins → ⚙️ → Install Plugin from Disk
 3. Select the downloaded file
 
@@ -208,4 +208,4 @@ MIT License - see [LICENSE](../../LICENSE).
 
 **Made with 🛡️ by the Agent OS team**
 
-[GitHub](https://github.com/imran-siddique/agent-os) | [Documentation](https://agent-os.dev/docs) | [Report Issue](https://github.com/imran-siddique/agent-os/issues)
+[GitHub](https://github.com/microsoft/agent-governance-toolkit) | [Documentation](https://agent-os.dev/docs) | [Report Issue](https://github.com/microsoft/agent-governance-toolkit/issues)

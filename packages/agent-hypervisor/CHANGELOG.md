@@ -55,4 +55,4 @@ All notable changes to Agent Hypervisor will be documented in this file.
 - **184 tests** (unit, integration, and scenario tests)
 - **Performance benchmarks** (268μs full pipeline)
 - **Interactive demo** (`examples/demo.py`) showcasing all 5 subsystems
-- Extracted from [Agent OS](https://github.com/imran-siddique/agent-os) as standalone package
+- Extracted from [Agent OS](https://github.com/microsoft/agent-governance-toolkit) as standalone package

@@ -10,7 +10,7 @@ readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 authors = [
-    { name = "Imran Siddique", email = "imran.siddique@example.com" }
+    { name = "Imran Siddique", email = "agt@microsoft.com" }
 ]
 keywords = [
     "verification",
@@ -59,11 +59,11 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/imran-siddique/cmvk"
-Documentation = "https://github.com/imran-siddique/cmvk#readme"
-Repository = "https://github.com/imran-siddique/cmvk.git"
-Issues = "https://github.com/imran-siddique/cmvk/issues"
-Changelog = "https://github.com/imran-siddique/cmvk/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit#readme"
+Repository = "https://github.com/microsoft/agent-governance-toolkit.git"
+Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
+Changelog = "https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md"
 
 [project.scripts]
 # CLI entry point for reproduction (research users)

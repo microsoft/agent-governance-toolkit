@@ -1,6 +1,6 @@
 # Agent OS for VS Code
 
-> **Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+> **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 **Kernel-level safety for AI coding assistants.**
 
@@ -204,4 +204,4 @@ MIT License - see [LICENSE](LICENSE).
 
 **Made with 🛡️ by the Agent OS team**
 
-[GitHub](https://github.com/imran-siddique/agent-os) | [Documentation](https://agent-os.dev/docs) | [Report Issue](https://github.com/imran-siddique/agent-os/issues)
+[GitHub](https://github.com/microsoft/agent-governance-toolkit) | [Documentation](https://agent-os.dev/docs) | [Report Issue](https://github.com/microsoft/agent-governance-toolkit/issues)

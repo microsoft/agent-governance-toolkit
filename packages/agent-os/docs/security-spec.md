@@ -339,7 +339,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: imran-siddique/agent-os/.github/actions/agent-os-audit@main
+      - uses: microsoft/agent-os/.github/actions/agent-os-audit@main
         with:
           fail-on-violation: true
 ```
@@ -367,7 +367,7 @@ jobs:
 
 ## References
 
-- [Agent OS GitHub](https://github.com/imran-siddique/agent-os)
+- [Agent OS GitHub](https://github.com/microsoft/agent-governance-toolkit)
 - [AGENTS.md Specification](https://github.com/anthropics/agents)
 - [MCP Protocol](https://modelcontextprotocol.io)
 - [POSIX Signals](https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/signal.h.html)

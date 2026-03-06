@@ -165,7 +165,7 @@ Next steps:
   3. Try asking Claude to manipulate files
   4. Watch AgentMesh protect your system!
 
-Learn more: https://github.com/imran-siddique/agent-mesh
+Learn more: https://github.com/microsoft/agent-governance-toolkit
 """)
 
 if __name__ == "__main__":

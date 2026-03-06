@@ -21,7 +21,7 @@ helm install agent-sre ./deployments/helm/agent-sre \
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `replicaCount` | Number of replicas | `1` |
-| `image.repository` | Container image | `ghcr.io/imran-siddique/agent-sre` |
+| `image.repository` | Container image | `ghcr.io/microsoft/agent-sre` |
 | `image.tag` | Image tag | `appVersion` |
 | `service.type` | Service type | `ClusterIP` |
 | `service.port` | Service port | `8080` |

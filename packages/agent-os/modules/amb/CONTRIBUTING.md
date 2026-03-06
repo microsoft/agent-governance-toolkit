@@ -13,7 +13,7 @@ Thank you for your interest in contributing to AMB (Agent Message Bus)! This doc
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/imran-siddique/amb.git
+   git clone https://github.com/microsoft/agent-governance-toolkit.git
    cd amb
    ```
 

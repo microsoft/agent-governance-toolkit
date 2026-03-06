@@ -10,7 +10,7 @@
 [![npm version](https://badge.fury.io/js/@agent-os%2Fcopilot-extension.svg)](https://www.npmjs.com/package/@agent-os/copilot-extension)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+**Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 ## Overview
 
@@ -135,7 +135,7 @@ AgentOS: 🤖 Agent Created: ApiUptimeMonitoringAgent
 ### Self-Hosted
 
 ```bash
-git clone https://github.com/imran-siddique/agent-os
+git clone https://github.com/microsoft/agent-governance-toolkit
 cd agent-os/extensions/copilot
 
 npm install
@@ -244,6 +244,6 @@ MIT License - see [LICENSE](../../LICENSE).
 
 **Build safe AI agents with AgentOS**
 
-[GitHub](https://github.com/imran-siddique/agent-os) · [Documentation](../../docs/) · [Templates](../../templates/)
+[GitHub](https://github.com/microsoft/agent-governance-toolkit) · [Documentation](../../docs/) · [Templates](../../templates/)
 
 </div>

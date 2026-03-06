@@ -223,7 +223,7 @@ Latency:         81% improvement
 
 ### Installation
 ```bash
-git clone https://github.com/imran-siddique/mute-agent
+git clone https://github.com/microsoft/agent-governance-toolkit
 cd mute-agent
 pip install -e .
 ```

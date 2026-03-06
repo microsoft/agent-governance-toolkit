@@ -49,7 +49,7 @@ registry.register_agent(
 
 ## Part of Agent-OS
 
-This module is part of the [Agent-OS](https://github.com/imran-siddique/agent-os) ecosystem. Install the full stack:
+This module is part of the [Agent-OS](https://github.com/microsoft/agent-governance-toolkit) ecosystem. Install the full stack:
 
 ```bash
 pip install agent-os-kernel

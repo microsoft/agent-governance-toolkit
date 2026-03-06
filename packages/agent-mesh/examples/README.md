@@ -98,7 +98,7 @@ Quick-start guides for integrating AgentMesh with popular agent frameworks:
 pip install agentmesh-platform
 
 # Or install from source
-git clone https://github.com/imran-siddique/agent-mesh.git
+git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agent-mesh
 pip install -e .
 ```
@@ -137,8 +137,8 @@ Have a great use case? We'd love to see it!
 ## Getting Help
 
 - **Documentation:** [README](../README.md)
-- **Issues:** [GitHub Issues](https://github.com/imran-siddique/agent-mesh/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/imran-siddique/agent-mesh/discussions)
+- **Issues:** [GitHub Issues](https://github.com/microsoft/agent-governance-toolkit/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)
 
 ---
 

@@ -1,10 +1,10 @@
 # Inter-Agent Trust Protocol (IATP)
 
-> **Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+> **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 [![PyPI version](https://badge.fury.io/py/inter-agent-trust-protocol.svg)](https://pypi.org/project/inter-agent-trust-protocol/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/imran-siddique/inter-agent-trust-protocol/test.yml?branch=main)](https://github.com/imran-siddique/inter-agent-trust-protocol/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/microsoft/agent-governance-toolkit/test.yml?branch=main)](https://github.com/microsoft/agent-governance-toolkit/actions)
 
 **Sidecar-based trust protocol for agent-to-agent communication.** Part of the Agent OS ecosystem.
 
@@ -150,9 +150,9 @@ IATP is part of a modular Agent OS built on the "Scale by Subtraction" philosoph
 | | `scak` | Self-Correction Autonomy Kit – Automated error recovery |
 
 **Explore the ecosystem:**
-- [Context as a Service (caas)](https://github.com/imran-siddique/caas)
-- [Agent Message Bus (amb)](https://github.com/imran-siddique/amb)
-- [Agent Control Plane](https://github.com/imran-siddique/agent-control-plane)
+- [Context as a Service (caas)](https://github.com/microsoft/agent-governance-toolkit)
+- [Agent Message Bus (amb)](https://github.com/microsoft/agent-governance-toolkit)
+- [Agent Control Plane](https://github.com/microsoft/agent-governance-toolkit)
 
 ---
 
@@ -167,7 +167,7 @@ If you use IATP in your research or production systems, please cite:
   year = {2024},
   publisher = {GitHub},
   journal = {GitHub repository},
-  howpublished = {\url{https://github.com/imran-siddique/inter-agent-trust-protocol}},
+  howpublished = {\url{https://github.com/microsoft/agent-governance-toolkit}},
   version = {0.3.1}
 }
 ```

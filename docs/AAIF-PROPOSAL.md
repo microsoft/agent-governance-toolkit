@@ -162,5 +162,5 @@ The toolkit is unique in providing **external, runtime, mandatory** governance:
 - **Repository:** [microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit)
 - **PyPI:** [ai-agent-governance](https://pypi.org/project/ai-agent-governance/)
 - **npm:** [agentos-mcp-server](https://www.npmjs.com/package/agentos-mcp-server)
-- **OWASP Compliance:** [OWASP-COMPLIANCE.md](https://github.com/imran-siddique/agent-governance/blob/master/docs/OWASP-COMPLIANCE.md)
+- **OWASP Compliance:** [OWASP-COMPLIANCE.md](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
 - **MAF Integration:** [microsoft/agent-framework #4440](https://github.com/microsoft/agent-framework/issues/4440)

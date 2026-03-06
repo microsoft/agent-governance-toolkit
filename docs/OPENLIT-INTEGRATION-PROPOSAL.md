@@ -10,7 +10,7 @@
 
 ## Summary
 
-Auto-instrumentation for [Agent SRE](https://github.com/imran-siddique/agent-sre), an AI-native SRE framework (1,071+ tests), that captures SLI/SLO tracking, chaos testing, and error budget operations as OpenTelemetry spans and metrics in OpenLit.
+Auto-instrumentation for [Agent SRE](https://github.com/microsoft/agent-governance-toolkit), an AI-native SRE framework (1,071+ tests), that captures SLI/SLO tracking, chaos testing, and error budget operations as OpenTelemetry spans and metrics in OpenLit.
 
 ## Integration Rationale
 
@@ -77,7 +77,7 @@ exporter.record_chaos_experiment("failover-test", experiment)
 
 ## Links
 
-- [Agent SRE](https://github.com/imran-siddique/agent-sre) — 1,071+ tests
+- [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) — 1,071+ tests
 - [OpenLit](https://github.com/openlit/openlit) — OpenTelemetry-native observability
 - [OpenLit Issue #1003](https://github.com/openlit/openlit/issues/1003) — Original integration proposal
 - [OpenLit PR #1037](https://github.com/openlit/openlit/pull/1037) — Implementation

@@ -285,10 +285,10 @@ Scan all governance container images for known vulnerabilities before deployment
 
 ```bash
 # Scan with Trivy
-trivy image ghcr.io/imran-siddique/agent-os:latest --severity HIGH,CRITICAL
+trivy image ghcr.io/microsoft/agent-os:latest --severity HIGH,CRITICAL
 
 # In CI/CD: fail the pipeline on critical vulnerabilities
-trivy image --exit-code 1 --severity CRITICAL ghcr.io/imran-siddique/agent-os:latest
+trivy image --exit-code 1 --severity CRITICAL ghcr.io/microsoft/agent-os:latest
 ```
 
 ### - [ ] SBOM Generation for Governance Components
@@ -297,7 +297,7 @@ Generate a Software Bill of Materials (SBOM) for every governance component. Thi
 
 ```bash
 # Generate SBOM with Syft
-syft ghcr.io/imran-siddique/agent-os:latest -o spdx-json > agent-os-sbom.json
+syft ghcr.io/microsoft/agent-os:latest -o spdx-json > agent-os-sbom.json
 
 # Scan SBOM for known vulnerabilities
 grype sbom:agent-os-sbom.json

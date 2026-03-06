@@ -546,7 +546,7 @@ spec:
 
 ### ServiceMonitor (Prometheus Operator)
 
-If you are running the [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator), create a ServiceMonitor to scrape AgentMesh metrics. This integrates with the Prometheus metrics added in [#123](https://github.com/imran-siddique/agent-mesh/issues/123).
+If you are running the [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator), create a ServiceMonitor to scrape AgentMesh metrics. This integrates with the Prometheus metrics added in [#123](https://github.com/microsoft/agent-governance-toolkit/issues/123).
 
 ```yaml
 # servicemonitor.yaml

@@ -253,7 +253,7 @@ Closes #123
 ## Questions?
 
 If you have questions or need help, please:
-- Check [GitHub Discussions](https://github.com/imran-siddique/agent-control-plane/discussions)
+- Check [GitHub Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)
 - Open an issue on GitHub
 - Check existing documentation in the `docs/` directory
 - Review [SUPPORT.md](SUPPORT.md) for detailed support options
@@ -300,7 +300,7 @@ The release process is mostly automated through GitHub Actions. Here's how to cr
    - Package is automatically published to PyPI
 
 6. **Post-Release Tasks**
-   - Verify release appears on GitHub: https://github.com/imran-siddique/agent-control-plane/releases
+   - Verify release appears on GitHub: https://github.com/microsoft/agent-governance-toolkit/releases
    - Verify package on PyPI: https://pypi.org/project/agent-control-plane/
    - Test installation: `pip install agent-control-plane==X.Y.Z`
    - Announce in GitHub Discussions

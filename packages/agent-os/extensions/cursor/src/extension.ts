@@ -446,7 +446,7 @@ function showWelcomeMessage(): void {
         } else if (selection === 'Enterprise Features') {
             showEnterpriseInfo();
         } else if (selection === 'Learn More') {
-            vscode.env.openExternal(vscode.Uri.parse('https://github.com/imran-siddique/agent-os'));
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/microsoft/agent-governance-toolkit'));
         }
     });
 }

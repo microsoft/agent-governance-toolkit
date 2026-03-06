@@ -54,10 +54,10 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/imran-siddique/agent-control-plane"
-Documentation = "https://github.com/imran-siddique/agent-control-plane/tree/main/docs"
-Repository = "https://github.com/imran-siddique/agent-control-plane"
-"Bug Tracker" = "https://github.com/imran-siddique/agent-control-plane/issues"
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/docs"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+"Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
 
 [project.optional-dependencies]
 # Development dependencies

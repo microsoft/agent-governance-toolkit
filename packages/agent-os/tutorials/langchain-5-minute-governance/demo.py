@@ -194,7 +194,7 @@ def main():
     print(f"  {BOLD}Next steps:{RESET}")
     print(f"  * Edit policies.yaml to customize rules")
     print(f"  * Replace MockLangChainAgent with your real agent")
-    print(f"  * See docs: https://github.com/imran-siddique/agent-os")
+    print(f"  * See docs: https://github.com/microsoft/agent-governance-toolkit")
     print()
 
 

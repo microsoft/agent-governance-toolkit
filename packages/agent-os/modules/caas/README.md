@@ -1,6 +1,6 @@
 # Context-as-a-Service (CaaS) — Community Edition
 
-> **Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+> **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 [![PyPI](https://img.shields.io/pypi/v/caas-core.svg)](https://pypi.org/project/caas-core/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

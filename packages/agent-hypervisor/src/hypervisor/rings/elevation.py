@@ -53,7 +53,7 @@ _RING_LABELS: dict[ExecutionRing, str] = {
     ExecutionRing.RING_3_SANDBOX: "Ring 3 (Sandbox)",
 }
 
-_DOCS_URL = "https://github.com/imran-siddique/agent-hypervisor/blob/main/docs/rings.md"
+_DOCS_URL = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/rings.md"
 
 
 @dataclass

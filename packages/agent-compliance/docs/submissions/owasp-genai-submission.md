@@ -118,16 +118,16 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 
 ## Links
 
-- **GitHub (Agent OS)**: https://github.com/imran-siddique/agent-os
-- **GitHub (AgentMesh)**: https://github.com/imran-siddique/agent-mesh
-- **GitHub (Agent SRE)**: https://github.com/imran-siddique/agent-sre
-- **GitHub (Agent Hypervisor)**: https://github.com/imran-siddique/agent-hypervisor
-- **Governance Docs**: https://github.com/imran-siddique/agent-governance
-- **OWASP Mapping**: https://github.com/imran-siddique/agent-os/blob/main/docs/owasp-agentic-top10-mapping.md
+- **GitHub (Agent OS)**: https://github.com/microsoft/agent-governance-toolkit
+- **GitHub (AgentMesh)**: https://github.com/microsoft/agent-governance-toolkit
+- **GitHub (Agent SRE)**: https://github.com/microsoft/agent-governance-toolkit
+- **GitHub (Agent Hypervisor)**: https://github.com/microsoft/agent-governance-toolkit
+- **Governance Docs**: https://github.com/microsoft/agent-governance-toolkit
+- **OWASP Mapping**: https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/owasp-agentic-top10-mapping.md
 
 ## Maintainers
 
-- Imran Siddique (@imran-siddique)
+- Imran Siddique (Microsoft)
 
 ## License
 

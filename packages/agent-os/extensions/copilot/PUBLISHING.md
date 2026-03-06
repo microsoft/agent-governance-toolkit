@@ -45,7 +45,7 @@ Follow their respective deployment guides for Node.js apps.
 |-------|-------|
 | **GitHub App name** | `AgentOS` |
 | **Description** | Build safe AI agents with natural language. 50+ templates, compliance frameworks, and 0% policy violations. |
-| **Homepage URL** | `https://imran-siddique.github.io/agent-os-docs/` |
+| **Homepage URL** | `https://github.com/microsoft/agent-governance-toolkit/tree/main/docs` |
 
 ### Identifying and authorizing users
 | Field | Value |
@@ -167,7 +167,7 @@ Type `@agentos help` in GitHub Copilot Chat to get started!
 
 ### Documentation
 
-Visit our [documentation](https://imran-siddique.github.io/agent-os-docs/tutorials/copilot-extension/) for tutorials and guides.
+Visit our [documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docstutorials/copilot-extension/) for tutorials and guides.
 ```
 
 ### Pricing and plans
@@ -180,10 +180,10 @@ Visit our [documentation](https://imran-siddique.github.io/agent-os-docs/tutoria
 ### Links
 | Field | Value |
 |-------|-------|
-| **Privacy policy URL** | `https://imran-siddique.github.io/agent-os-docs/privacy/` |
-| **Terms of service URL** | `https://imran-siddique.github.io/agent-os-docs/terms/` |
-| **Support URL** | `https://github.com/imran-siddique/agent-os/issues` |
-| **Documentation URL** | `https://imran-siddique.github.io/agent-os-docs/tutorials/copilot-extension/` |
+| **Privacy policy URL** | `https://github.com/microsoft/agent-governance-toolkit/tree/main/docsprivacy/` |
+| **Terms of service URL** | `https://github.com/microsoft/agent-governance-toolkit/tree/main/docsterms/` |
+| **Support URL** | `https://github.com/microsoft/agent-governance-toolkit/issues` |
+| **Documentation URL** | `https://github.com/microsoft/agent-governance-toolkit/tree/main/docstutorials/copilot-extension/` |
 
 ### Visual assets
 
@@ -258,12 +258,12 @@ Before submitting, you need these additional files:
 
 ### 1. Privacy Policy (`privacy.html`)
 ```html
-<!-- Create at: imran-siddique.github.io/agent-os-docs/privacy/index.html -->
+<!-- Create at: github.com/microsoft/agent-governance-toolkit/tree/main/docsprivacy/index.html -->
 ```
 
 ### 2. Terms of Service (`terms.html`)
 ```html
-<!-- Create at: imran-siddique.github.io/agent-os-docs/terms/index.html -->
+<!-- Create at: github.com/microsoft/agent-governance-toolkit/tree/main/docsterms/index.html -->
 ```
 
 ### 3. Logo and Screenshots

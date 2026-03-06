@@ -139,7 +139,7 @@ def main():
     print("2. Login: huggingface-cli login")
     print("3. Create repo: huggingface-cli repo create scak-gaia-laziness --type dataset")
     print("4. Upload files:")
-    print(f"   huggingface-cli upload imran-siddique/scak-gaia-laziness {output_dir}/")
+    print(f"   huggingface-cli upload microsoft/scak-gaia-laziness {output_dir}/")
     print("\nOr use the web interface at: https://huggingface.co/new-dataset")
 
 

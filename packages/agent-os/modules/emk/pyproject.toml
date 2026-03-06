@@ -7,7 +7,7 @@ name = "emk"
 version = "1.0.0"
 description = "Community Edition — Episodic Memory Kernel for AI agent experience storage"
 authors = [
-    {name = "Imran Siddique", email = "imran-siddique@users.noreply.github.com"}
+    {name = "Imran Siddique", email = "agt@microsoft.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.8"
@@ -65,11 +65,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/imran-siddique/emk"
-Repository = "https://github.com/imran-siddique/emk"
-Documentation = "https://github.com/imran-siddique/emk#readme"
-Issues = "https://github.com/imran-siddique/emk/issues"
-Changelog = "https://github.com/imran-siddique/emk/releases"
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit#readme"
+Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
+Changelog = "https://github.com/microsoft/agent-governance-toolkit/releases"
 
 [tool.setuptools.packages.find]
 where = ["."]

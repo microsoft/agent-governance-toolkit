@@ -53,7 +53,7 @@ Edit `claude_desktop_config.json`:
   "mcpServers": {
     "agentos-dev": {
       "command": "node",
-      "args": ["C:/Users/mosiddi/source/repos/imran-siddique/agent-os/packages/mcp-server/dist/cli.js", "--stdio"],
+      "args": ["C:/Users/mosiddi/source/repos/microsoft/agent-governance-toolkit/packages/mcp-server/dist/cli.js", "--stdio"],
       "env": {
         "AGENTOS_POLICY_MODE": "strict",
         "AGENTOS_LOG_LEVEL": "debug"
@@ -127,7 +127,7 @@ Ensure these fields are set:
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/imran-siddique/agent-os"
+    "url": "https://github.com/microsoft/agent-governance-toolkit"
   },
   "keywords": [
     "mcp",
@@ -359,7 +359,7 @@ When Anthropic launches their official MCP server directory:
 - [npm Documentation](https://docs.npmjs.com/packages-and-modules/contributing-packages-to-the-registry)
 - [MCP Specification](https://modelcontextprotocol.io)
 - [Claude Desktop MCP Guide](https://www.anthropic.com/news/model-context-protocol)
-- [AgentOS GitHub Issues](https://github.com/imran-siddique/agent-os/issues)
+- [AgentOS GitHub Issues](https://github.com/microsoft/agent-governance-toolkit/issues)
 
 ---
 

@@ -15,7 +15,7 @@ setup(
     description="Layer 5 Reference Implementation - Listener Agent with Dynamic Semantic Handshake Protocol",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/imran-siddique/mute-agent",
+    url="https://github.com/microsoft/agent-governance-toolkit",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",

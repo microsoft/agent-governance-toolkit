@@ -8,9 +8,9 @@
 
 *Identity · Trust · Reward · Governance*
 
-[![GitHub Stars](https://img.shields.io/github/stars/imran-siddique/agent-mesh?style=social)](https://github.com/imran-siddique/agent-mesh/stargazers)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤️-ff69b4)](https://github.com/sponsors/imran-siddique)
-[![CI](https://github.com/imran-siddique/agent-mesh/actions/workflows/ci.yml/badge.svg)](https://github.com/imran-siddique/agent-mesh/actions/workflows/ci.yml)
+[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
+[![Sponsor](https://img.shields.io/badge/sponsor-❤️-ff69b4)](https://github.com/microsoft/agent-governance-toolkit)
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-SDK-3178C6?logo=typescript&logoColor=white)](sdks/typescript/)
@@ -18,10 +18,10 @@
 [![PyPI](https://img.shields.io/pypi/v/agentmesh-platform)](https://pypi.org/project/agentmesh-platform/)
 [![Downloads](https://img.shields.io/pypi/dm/agentmesh-platform)](https://pypi.org/project/agentmesh-platform/)
 [![Downloads](https://static.pepy.tech/badge/agentmesh-platform)](https://pepy.tech/project/agentmesh-platform)
-[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-ASI--03,_07,_10-brightgreen)](https://github.com/imran-siddique/agent-governance/blob/master/docs/OWASP-COMPLIANCE.md)
-[![Agent-OS Compatible](https://img.shields.io/badge/agent--os-compatible-green.svg)](https://github.com/imran-siddique/agent-os)
+[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-ASI--03,_07,_10-brightgreen)](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
+[![Agent-OS Compatible](https://img.shields.io/badge/agent--os-compatible-green.svg)](https://github.com/microsoft/agent-governance-toolkit)
 [![Featured in awesome-llm-apps](https://img.shields.io/badge/Featured%20in-awesome--llm--apps-orange)](https://github.com/Shubhamsaboo/awesome-llm-apps)
-[![Discussions](https://img.shields.io/github/discussions/imran-siddique/agent-mesh)](https://github.com/imran-siddique/agent-mesh/discussions)
+[![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 [![Integrated in LlamaIndex](https://img.shields.io/badge/LlamaIndex-integrated-purple?logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiPjx0ZXh0IHg9IjQiIHk9IjE4IiBmb250LXNpemU9IjE2Ij7wn6aZPC90ZXh0Pjwvc3ZnPg==)](https://github.com/run-llama/llama_index/pull/20644)
 [![awesome-AI-Agents](https://img.shields.io/badge/Awesome--AI--Agents-listed-orange)](https://github.com/Jenqyang/Awesome-AI-Agents/pull/45)
 [![awesome-copilot](https://img.shields.io/badge/awesome--copilot-listed-orange)](https://github.com/github/awesome-copilot/pull/755)
@@ -29,11 +29,11 @@
 
 > ⭐ **If this project helps you, please star it!** It helps others discover AgentMesh.
 
-> 🔗 **Part of the Agent Governance Ecosystem** — Works with [Agent OS](https://github.com/imran-siddique/agent-os) (kernel), [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor) (runtime), and [Agent SRE](https://github.com/imran-siddique/agent-sre) (reliability)
+> 🔗 **Part of the Agent Governance Ecosystem** — Works with [Agent OS](https://github.com/microsoft/agent-governance-toolkit) (kernel), [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) (runtime), and [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) (reliability)
 
-> 📦 **Install the full stack:** `pip install ai-agent-governance[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/imran-siddique/agent-governance)
+> 📦 **Install the full stack:** `pip install ai-agent-governance[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
 
-[Quick Start](#quick-start) • [MCP Proxy](#the-agentmesh-proxy-ssl-for-ai-agents) • [Examples](#examples--integrations) • [Agent OS](https://github.com/imran-siddique/agent-os) • [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor)
+[Quick Start](#quick-start) • [MCP Proxy](#the-agentmesh-proxy-ssl-for-ai-agents) • [Examples](#examples--integrations) • [Agent OS](https://github.com/microsoft/agent-governance-toolkit) • [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit)
 
 </div>
 
@@ -45,7 +45,7 @@
   <a href="https://github.com/microsoft/agent-lightning/pull/478"><img src="https://img.shields.io/badge/Agent--Lightning-15K_⭐_Merged-success?style=flat-square" alt="Agent-Lightning"></a>
   <a href="https://pypi.org/project/langgraph-trust/"><img src="https://img.shields.io/badge/LangGraph-PyPI-blue?style=flat-square" alt="LangGraph"></a>
   <a href="https://pypi.org/project/openai-agents-trust/"><img src="https://img.shields.io/badge/OpenAI_Agents-PyPI-blue?style=flat-square" alt="OpenAI Agents"></a>
-  <a href="https://clawhub.ai/imran-siddique/agentmesh-governance"><img src="https://img.shields.io/badge/OpenClaw-ClawHub-purple?style=flat-square" alt="OpenClaw"></a>
+  <a href="https://clawhub.ai/microsoft/agentmesh-governance"><img src="https://img.shields.io/badge/OpenClaw-ClawHub-purple?style=flat-square" alt="OpenClaw"></a>
 </p>
 
 ### Featured In
@@ -303,7 +303,7 @@ pip install agentmesh-platform[dev]     # Development tools
 Or from source:
 
 ```bash
-git clone https://github.com/imran-siddique/agent-mesh.git
+git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agent-mesh
 pip install -e .
 ```
@@ -327,7 +327,7 @@ pip install -e .
 - [CrewAI Integration](./examples/integrations/crewai.md) - Multi-agent crew governance
 - [LangGraph](./src/agentmesh/integrations/langgraph/) - Trust checkpoints for graph workflows (built-in)
 - [OpenAI Swarm](./src/agentmesh/integrations/swarm/) - Trust-verified handoffs (built-in)
-- [Dify](https://github.com/imran-siddique/agentmesh-integrations/tree/master/dify) - Trust middleware for Dify workflows
+- [Dify](https://github.com/microsoft/agent-governance-toolkit/tree/master/dify) - Trust middleware for Dify workflows
 
 📚 **[Browse all examples →](./examples/)**
 
@@ -486,7 +486,7 @@ rules:
 | AI Card | ✅ Alpha | Cross-protocol identity standard (`src/agentmesh/integrations/ai_card/`) |
 | A2A | ✅ Alpha | Agent-to-agent coordination (full adapter in `src/agentmesh/integrations/a2a/`) |
 | MCP | ✅ Alpha | Tool and resource binding (trust-gated server/client in `src/agentmesh/integrations/mcp/`) |
-| IATP | ✅ Alpha | Trust handshakes (via [agent-os](https://github.com/imran-siddique/agent-os), graceful fallback if unavailable) |
+| IATP | ✅ Alpha | Trust handshakes (via [agent-os](https://github.com/microsoft/agent-governance-toolkit), graceful fallback if unavailable) |
 | ACP | 🔜 Planned | Lightweight messaging (protocol bridge supports routing, adapter not yet implemented) |
 | SPIFFE | ✅ Alpha | Workload identity |
 
@@ -607,7 +607,7 @@ See our [full roadmap](docs/roadmap.md) for details.
 
 ### Integration Caveats (Dify)
 
-The [Dify integration](https://github.com/imran-siddique/agentmesh-integrations/tree/master/dify) has these documented limitations:
+The [Dify integration](https://github.com/microsoft/agent-governance-toolkit/tree/master/dify) has these documented limitations:
 - Request body signature verification (`X-Agent-Signature` header) is not yet verified by middleware
 - Trust score time decay is not yet implemented (scores don't decay over time)
 - Audit logs are in-memory only (not persistent across multi-worker deployments)
@@ -629,9 +629,9 @@ The [Dify integration](https://github.com/imran-siddique/agentmesh-integrations/
 
 AgentMesh builds on:
 
-- **[Agent OS](https://github.com/imran-siddique/agent-os)** — IATP protocol, Nexus trust exchange
-- **[Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor)** — Runtime session governance
-- **[Agent SRE](https://github.com/imran-siddique/agent-sre)** — SLO monitoring, chaos testing
+- **[Agent OS](https://github.com/microsoft/agent-governance-toolkit)** — IATP protocol, Nexus trust exchange
+- **[Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit)** — Runtime session governance
+- **[Agent SRE](https://github.com/microsoft/agent-governance-toolkit)** — SLO monitoring, chaos testing
 - **SPIFFE/SPIRE** — Workload identity
 - **OpenTelemetry** — Observability
 
@@ -647,7 +647,7 @@ Every agent gets a trust score from 0 to 1000 based on behavioral history, vouch
 AgentMesh unifies three major protocols: Google's A2A (Agent-to-Agent) for inter-agent communication, Anthropic's MCP (Model Context Protocol) for tool integration, and IATP (Inter-Agent Trust Protocol) for cryptographic trust establishment. This means agents built on different frameworks can communicate through a single trust-verified channel.
 
 **Does AgentMesh help with regulatory compliance?**
-Yes. AgentMesh provides automated compliance mapping for EU AI Act, SOC 2, HIPAA, and GDPR. Combined with audit trails and deterministic policy enforcement from [Agent OS](https://github.com/imran-siddique/agent-os), it provides the documentation and safety guarantees needed for regulatory compliance.
+Yes. AgentMesh provides automated compliance mapping for EU AI Act, SOC 2, HIPAA, and GDPR. Combined with audit trails and deterministic policy enforcement from [Agent OS](https://github.com/microsoft/agent-governance-toolkit), it provides the documentation and safety guarantees needed for regulatory compliance.
 
 ## Contributing
 

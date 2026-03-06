@@ -4,17 +4,17 @@
 
 **A kernel architecture for governing autonomous AI agents**
 
-[![GitHub Stars](https://img.shields.io/github/stars/imran-siddique/agent-os?style=social)](https://github.com/imran-siddique/agent-os/stargazers)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤️-ff69b4)](https://github.com/sponsors/imran-siddique)
+[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
+[![Sponsor](https://img.shields.io/badge/sponsor-❤️-ff69b4)](https://github.com/microsoft/agent-governance-toolkit)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
-[![CI](https://github.com/imran-siddique/agent-os/actions/workflows/ci.yml/badge.svg)](https://github.com/imran-siddique/agent-os/actions/workflows/ci.yml)
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/agent-os-kernel)](https://pypi.org/project/agent-os-kernel/)
 [![Downloads](https://img.shields.io/pypi/dm/agent-os-kernel)](https://pypi.org/project/agent-os-kernel/)
-[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-9/10_Covered-brightgreen)](https://github.com/imran-siddique/agent-governance/blob/master/docs/OWASP-COMPLIANCE.md)
-[![Glama](https://glama.ai/mcp/servers/@imran-siddique/agentos-mcp-server/badge?features=false&install=false)](https://glama.ai/mcp/servers/@imran-siddique/agentos-mcp-server)
+[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-9/10_Covered-brightgreen)](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
+[![Glama](https://glama.ai/mcp/servers/@microsoft/agentos-mcp-server/badge?features=false&install=false)](https://glama.ai/mcp/servers/@microsoft/agentos-mcp-server)
 [![VS Code Extension](https://img.shields.io/badge/VS%20Code-Extension-007ACC?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=agent-os.agent-os-vscode)
-[![Documentation](https://img.shields.io/badge/docs-imran--siddique.github.io-blue)](https://imran-siddique.github.io/agent-os-docs/)
+[![Documentation](https://img.shields.io/badge/docs-microsoft.github.io-blue)](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs)
 [![Featured in awesome-llm-apps](https://img.shields.io/badge/Featured%20in-awesome--llm--apps-orange)](https://github.com/Shubhamsaboo/awesome-llm-apps)
 [![awesome-mcp-servers](https://img.shields.io/badge/awesome--mcp--servers-listed-blue)](https://github.com/punkpeye/awesome-mcp-servers)
 [![Integrated in agent-lightning](https://img.shields.io/badge/Microsoft-agent--lightning-purple?logo=microsoft)](https://github.com/microsoft/agent-lightning/tree/main/contrib/recipes/agentos)
@@ -23,17 +23,17 @@
 [![awesome-agent-skills](https://img.shields.io/badge/awesome--agent--skills-listed-orange)](https://github.com/heilcheng/awesome-agent-skills/pull/34)
 [![awesome-devops-mcp](https://img.shields.io/badge/awesome--devops--mcp-listed-orange)](https://github.com/rohitg00/awesome-devops-mcp-servers/pull/27)
 [![Downloads](https://static.pepy.tech/badge/agent-os-kernel)](https://pepy.tech/project/agent-os-kernel)
-[![Discussions](https://img.shields.io/github/discussions/imran-siddique/agent-os)](https://github.com/imran-siddique/agent-os/discussions)
+[![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent OS.
 
-> 📦 **Install the full stack:** `pip install ai-agent-governance[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/imran-siddique/agent-governance)
+> 📦 **Install the full stack:** `pip install ai-agent-governance[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
 
-[Quick Start](#quick-example) • [Documentation](https://imran-siddique.github.io/agent-os-docs/) • [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=agent-os.agent-os-vscode) • [Examples](examples/) • [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor) • [AgentMesh](https://github.com/imran-siddique/agent-mesh) • [Agent SRE](https://github.com/imran-siddique/agent-sre)
+[Quick Start](#quick-example) • [Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs) • [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=agent-os.agent-os-vscode) • [Examples](examples/) • [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) • [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) • [Agent SRE](https://github.com/microsoft/agent-governance-toolkit)
 
 <br/>
 
-[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/imran-siddique/agent-os)
+[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/microsoft/agent-governance-toolkit)
 
 *Try Agent OS instantly in your browser - no installation required*
 
@@ -47,7 +47,7 @@
   <a href="https://github.com/microsoft/agent-lightning/pull/478"><img src="https://img.shields.io/badge/Agent--Lightning-Merged-success?style=flat-square" alt="Agent-Lightning"></a>
   <a href="https://pypi.org/project/langgraph-trust/"><img src="https://img.shields.io/badge/LangGraph-PyPI-blue?style=flat-square" alt="LangGraph"></a>
   <a href="https://pypi.org/project/openai-agents-trust/"><img src="https://img.shields.io/badge/OpenAI_Agents-PyPI-blue?style=flat-square" alt="OpenAI Agents"></a>
-  <a href="https://clawhub.ai/imran-siddique/agentmesh-governance"><img src="https://img.shields.io/badge/OpenClaw-ClawHub-purple?style=flat-square" alt="OpenClaw"></a>
+  <a href="https://clawhub.ai/microsoft/agentmesh-governance"><img src="https://img.shields.io/badge/OpenClaw-ClawHub-purple?style=flat-square" alt="OpenClaw"></a>
 </p>
 
 ### Featured In
@@ -59,7 +59,7 @@
   <a href="https://github.com/heilcheng/awesome-agent-skills/pull/34"><img src="https://img.shields.io/badge/awesome--agent--skills-listed-orange?style=flat-square" alt="awesome-agent-skills"></a>
   <a href="https://github.com/TensorBlock/awesome-mcp-servers/pull/66"><img src="https://img.shields.io/badge/awesome--mcp--servers-listed-orange?style=flat-square" alt="awesome-mcp-servers"></a>
   <a href="https://github.com/rohitg00/awesome-devops-mcp-servers/pull/27"><img src="https://img.shields.io/badge/awesome--devops--mcp-listed-orange?style=flat-square" alt="awesome-devops-mcp"></a>
-</p>across 170K+ GitHub stars. Governance for [Dify](https://github.com/langgenius/dify-plugins/pull/2060) (65K ⭐), [LlamaIndex](https://github.com/run-llama/llama_index/pull/20644) (47K ⭐), [LangGraph](https://pypi.org/project/langgraph-trust/), [OpenAI Agents](https://pypi.org/project/openai-agents-trust/), [Agent-Lightning](https://github.com/microsoft/agent-lightning/pull/478), and [OpenClaw](https://clawhub.ai/imran-siddique/agentmesh-governance).
+</p>across 170K+ GitHub stars. Governance for [Dify](https://github.com/langgenius/dify-plugins/pull/2060) (65K ⭐), [LlamaIndex](https://github.com/run-llama/llama_index/pull/20644) (47K ⭐), [LangGraph](https://pypi.org/project/langgraph-trust/), [OpenAI Agents](https://pypi.org/project/openai-agents-trust/), [Agent-Lightning](https://github.com/microsoft/agent-lightning/pull/478), and [OpenClaw](https://clawhub.ai/microsoft/agentmesh-governance).
 
 ## 📊 By The Numbers
 
@@ -82,7 +82,7 @@
 | **Microsoft Agent-Lightning** | 15K ⭐ | ✅ Merged | [agent-lightning#478](https://github.com/microsoft/agent-lightning/pull/478) |
 | **LangGraph** | 24K ⭐ | 📦 Published on PyPI | [langgraph-trust](https://pypi.org/project/langgraph-trust/) |
 | **OpenAI Agents SDK** | — | 📦 Published on PyPI | [openai-agents-trust](https://pypi.org/project/openai-agents-trust/) |
-| **OpenClaw** | — | 📦 Published on ClawHub | [agentmesh-governance](https://clawhub.ai/imran-siddique/agentmesh-governance) |
+| **OpenClaw** | — | 📦 Published on ClawHub | [agentmesh-governance](https://clawhub.ai/microsoft/agentmesh-governance) |
 
 <details>
 <summary><b>📋 Proposals under review at 10+ frameworks (click to expand)</b></summary>
@@ -146,10 +146,10 @@ Agent OS + ecosystem covers **8 out of 10** [OWASP Agentic Application Security 
 
 | Layer | Package | Purpose | Install |
 |-------|---------|---------|---------|
-| **Kernel** | [Agent OS](https://github.com/imran-siddique/agent-os) | Policy enforcement, action interception | `pip install agent-os-kernel` |
-| **Network** | [AgentMesh](https://github.com/imran-siddique/agent-mesh) | Identity, trust, delegation | `pip install agentmesh-platform` |
-| **Reliability** | [Agent SRE](https://github.com/imran-siddique/agent-sre) | SLOs, chaos testing, circuit breakers | `pip install agent-sre` |
-| **Runtime** | [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor) | Execution rings, resource limits, saga | `pip install agent-hypervisor` |
+| **Kernel** | [Agent OS](https://github.com/microsoft/agent-governance-toolkit) | Policy enforcement, action interception | `pip install agent-os-kernel` |
+| **Network** | [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) | Identity, trust, delegation | `pip install agentmesh-platform` |
+| **Reliability** | [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) | SLOs, chaos testing, circuit breakers | `pip install agent-sre` |
+| **Runtime** | [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) | Execution rings, resource limits, saga | `pip install agent-hypervisor` |
 | **Full Stack** | [ai-agent-governance](https://pypi.org/project/ai-agent-governance/) | All of the above | `pip install ai-agent-governance[full]` |
 
 ---
@@ -184,7 +184,7 @@ That's it! Your agent now has deterministic policy enforcement. [Learn more →]
 
 **🎬 See all features in action:**
 ```bash
-git clone https://github.com/imran-siddique/agent-os && python agent-os/demo.py
+git clone https://github.com/microsoft/agent-governance-toolkit && python agent-os/demo.py
 ```
 
 <details>
@@ -428,7 +428,7 @@ agent-os/
 | [`mute-agent`](modules/mute-agent/) | 4 | `mute-agent` | Decoupled reasoning/execution architecture | ⚠️ No tests |
 | [`nexus`](modules/nexus/) | — | *Not published* | Trust exchange network | 🔬 Prototype |
 | [`mcp-kernel-server`](modules/mcp-kernel-server/) | Int | `mcp-kernel-server` | MCP server for Claude Desktop | ⚠️ No tests |
-| [**`hypervisor`**](https://github.com/imran-siddique/agent-hypervisor) | **⭐** | `agent-hypervisor` | **Runtime supervisor — Execution Rings, Joint Liability, Saga Orchestrator** ([own repo](https://github.com/imran-siddique/agent-hypervisor)) | **✅ 184 tests** |
+| [**`hypervisor`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agent-hypervisor` | **Runtime supervisor — Execution Rings, Joint Liability, Saga Orchestrator** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
 
 ---
 
@@ -436,7 +436,7 @@ agent-os/
 
 > **Runtime supervisor for multi-agent collaboration** — think "VMware for AI agents."
 > 
-> **Now its own repo: [`agent-hypervisor`](https://github.com/imran-siddique/agent-hypervisor)** — 184 tests, 268μs full pipeline, zero dependencies beyond pydantic.
+> **Now its own repo: [`agent-hypervisor`](https://github.com/microsoft/agent-governance-toolkit)** — 184 tests, 268μs full pipeline, zero dependencies beyond pydantic.
 
 Just as OS hypervisors isolate virtual machines and enforce resource boundaries, the Agent Hypervisor isolates AI agent sessions and enforces **governance boundaries** at sub-millisecond latency.
 
@@ -500,7 +500,7 @@ step = session.saga.add_step(
 summary_hash = await hv.terminate_session(session.sso.session_id)
 ```
 
-📖 **[Full Hypervisor documentation →](https://github.com/imran-siddique/agent-hypervisor)**
+📖 **[Full Hypervisor documentation →](https://github.com/microsoft/agent-governance-toolkit)**
 
 ---
 
@@ -538,12 +538,12 @@ pip install agent-os-kernel[full]           # Everything
 
 **macOS/Linux:**
 ```bash
-curl -sSL https://raw.githubusercontent.com/imran-siddique/agent-os/main/scripts/quickstart.sh | bash
+curl -sSL https://raw.githubusercontent.com/microsoft/agent-governance-toolkit/main/scripts/quickstart.sh | bash
 ```
 
 **Windows (PowerShell):**
 ```powershell
-iwr -useb https://raw.githubusercontent.com/imran-siddique/agent-os/main/scripts/quickstart.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/microsoft/agent-governance-toolkit/main/scripts/quickstart.ps1 | iex
 ```
 
 ---
@@ -896,7 +896,7 @@ npx agentos-mcp-server
 ```
 
 **npm:** [`agentos-mcp-server`](https://www.npmjs.com/package/agentos-mcp-server)  
-**MCP Registry:** `io.github.imran-siddique/agentos`
+**MCP Registry:** `io.github.microsoft/agentos`
 
 Add to your config file:
 
@@ -1002,7 +1002,7 @@ These components are fully implemented and tested:
 | **No tamper-proof audit** | Flight Recorder SQLite can be modified by compromised agent | Write to external sink for critical audits |
 | **Provider-coupled adapters** | Each SDK needs separate adapter | Abstract interface planned (#47) |
 
-See [GitHub Issues](https://github.com/imran-siddique/agent-os/issues) for the full roadmap.
+See [GitHub Issues](https://github.com/microsoft/agent-governance-toolkit/issues) for the full roadmap.
 
 ---
 
@@ -1039,7 +1039,7 @@ Policy checks are lightweight and typically introduce only minimal latency per a
 **ModuleNotFoundError: No module named 'agent_os'**
 ```bash
 # Install from source
-git clone https://github.com/imran-siddique/agent-os.git
+git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agent-os
 pip install -e .
 ```
@@ -1087,7 +1087,7 @@ Prompt-based guardrails ask the LLM to self-police, which is probabilistic. Agen
 Agent OS integrates with 14+ frameworks via adapters. Install the governance layer alongside your existing framework: use `langgraph-trust` for LangGraph, `openai-agents-trust` for OpenAI Agents, or the MCP server for any MCP-compatible client. Agent OS acts as a kernel layer underneath your agent framework.
 
 **What is the Agent Governance Ecosystem?**
-Agent OS is part of a suite of four projects: Agent OS (policy kernel), [AgentMesh](https://github.com/imran-siddique/agent-mesh) (trust network), [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor) (runtime supervisor), and [Agent SRE](https://github.com/imran-siddique/agent-sre) (reliability platform). Together they provide 4,310+ tests across 17 modules.
+Agent OS is part of a suite of four projects: Agent OS (policy kernel), [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) (trust network), [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) (runtime supervisor), and [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) (reliability platform). Together they provide 4,310+ tests across 17 modules.
 
 **Can I use Agent OS in production?**
 Yes. Agent OS has 1,500+ tests, a VS Code extension, PyPI package (`pip install agent-os-kernel`), and is integrated into production frameworks like Dify (65K stars) and LlamaIndex (47K stars). It supports Python 3.9+ and runs on any platform.
@@ -1097,7 +1097,7 @@ Yes. Agent OS has 1,500+ tests, a VS Code extension, PyPI package (`pip install 
 ## Contributing
 
 ```bash
-git clone https://github.com/imran-siddique/agent-os.git
+git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agent-os
 pip install -e ".[dev]"
 pytest
@@ -1115,6 +1115,6 @@ MIT — See [LICENSE](LICENSE)
 
 **Exploring kernel concepts for AI agent safety.**
 
-[GitHub](https://github.com/imran-siddique/agent-os) · [Docs](docs/)
+[GitHub](https://github.com/microsoft/agent-governance-toolkit) · [Docs](docs/)
 
 </div>

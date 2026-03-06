@@ -21,11 +21,11 @@ Usage:
     # Upload benchmark results
     upload_experiment_logs(
         file_path="experiments/results.json",
-        repo_id="imran-siddique/amb-benchmarks"
+        repo_id="microsoft/amb-benchmarks"
     )
 
     # Download existing dataset
-    df = download_dataset("imran-siddique/amb-message-logs")
+    df = download_dataset("microsoft/amb-message-logs")
 """
 
 from __future__ import annotations
@@ -87,7 +87,7 @@ def upload_experiment_logs(
 
     Args:
         file_path: Local path to the file to upload.
-        repo_id: Repository ID on HF Hub (e.g., "imran-siddique/amb-benchmarks").
+        repo_id: Repository ID on HF Hub (e.g., "microsoft/amb-benchmarks").
         path_in_repo: Destination path in the repository. Defaults to filename
             with timestamp prefix.
         commit_message: Git commit message. Auto-generated if not provided.
@@ -104,7 +104,7 @@ def upload_experiment_logs(
     Example:
         >>> url = upload_experiment_logs(
         ...     "experiments/results.json",
-        ...     "imran-siddique/amb-benchmarks"
+        ...     "microsoft/amb-benchmarks"
         ... )
         >>> print(f"Uploaded to: {url}")
     """
@@ -161,7 +161,7 @@ def download_dataset(
     Download a dataset file from Hugging Face Hub.
 
     Args:
-        repo_id: Repository ID on HF Hub (e.g., "imran-siddique/amb-benchmarks").
+        repo_id: Repository ID on HF Hub (e.g., "microsoft/amb-benchmarks").
         filename: Specific file to download, or "latest" to get most recent.
         local_dir: Local directory to save the file. Defaults to HF cache.
         token: HF API token. Uses HF_TOKEN env var or cached token if not provided.
@@ -174,7 +174,7 @@ def download_dataset(
 
     Example:
         >>> path = download_dataset(
-        ...     "imran-siddique/amb-benchmarks",
+        ...     "microsoft/amb-benchmarks",
         ...     filename="latest"
         ... )
         >>> with open(path) as f:
@@ -233,7 +233,7 @@ def push_message_logs(
         ...     {"topic": "agent.thoughts", "payload": {"thought": "analyzing..."}, "timestamp": "2024-01-01T00:00:00Z"},
         ...     {"topic": "agent.actions", "payload": {"action": "search"}, "timestamp": "2024-01-01T00:00:01Z"},
         ... ]
-        >>> url = push_message_logs(messages, "imran-siddique/amb-message-logs")
+        >>> url = push_message_logs(messages, "microsoft/amb-message-logs")
     """
     _check_hf_available()
 
@@ -296,7 +296,7 @@ def create_dataset_card(
 
     Example:
         >>> create_dataset_card(
-        ...     "imran-siddique/amb-benchmarks",
+        ...     "microsoft/amb-benchmarks",
         ...     description="AMB performance benchmarks across different configurations.",
         ...     tags=["message-bus", "agents", "benchmarks"]
         ... )
@@ -323,7 +323,7 @@ def create_dataset_card(
 ## Dataset Description
 
 This dataset contains experiment results and message logs from the 
-[AMB (Agent Message Bus)](https://github.com/imran-siddique/amb) project.
+[AMB (Agent Message Bus)](https://github.com/microsoft/agent-governance-toolkit) project.
 
 ### Supported Tasks
 
@@ -371,7 +371,7 @@ with open(path) as f:
   author = {{Siddique, Imran}},
   title = {{AMB: Agent Message Bus}},
   year = {{2024}},
-  url = {{https://github.com/imran-siddique/amb}}
+  url = {{https://github.com/microsoft/agent-governance-toolkit}}
 }}
 ```
 
@@ -412,7 +412,7 @@ class HFDatasetManager:
         token: HF API token.
 
     Example:
-        >>> manager = HFDatasetManager("imran-siddique/amb-benchmarks")
+        >>> manager = HFDatasetManager("microsoft/amb-benchmarks")
         >>> manager.upload_results("experiments/results.json")
         >>> latest = manager.get_latest_results()
     """

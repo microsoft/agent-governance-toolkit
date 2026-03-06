@@ -32,7 +32,7 @@ Quick start::
               error_budget=ErrorBudget(total=0.05))
     slo.record_event(good=True)
 
-See https://github.com/imran-siddique/agent-sre for full documentation.
+See https://github.com/microsoft/agent-governance-toolkit for full documentation.
 """
 
 from agent_sre.slo.indicators import SLI, SLIRegistry, SLIValue

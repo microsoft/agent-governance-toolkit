@@ -39,7 +39,7 @@ Docker:
         docker run -p 8081:8081 -e IATP_AGENT_URL=http://my-agent:8000 iatp-sidecar
 
 For more information, see:
-    - Documentation: https://github.com/imran-siddique/inter-agent-trust-protocol
+    - Documentation: https://github.com/microsoft/agent-governance-toolkit
     - Paper: paper/whitepaper.md
 
 Example:

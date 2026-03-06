@@ -193,7 +193,7 @@ All existing functionality maintained:
 
 1. **Clone and Install:**
    ```bash
-   git clone https://github.com/imran-siddique/self-evaluating-agent-sample.git
+   git clone https://github.com/microsoft/agent-governance-toolkit.git
    cd self-evaluating-agent-sample
    pip install -e .
    ```

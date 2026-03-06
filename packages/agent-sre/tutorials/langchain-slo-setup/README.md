@@ -1,6 +1,6 @@
 # Tutorial: Set up SLOs for a LangChain Agent
 
-Monitor a LangChain agent with **Service Level Objectives**, **error budgets**, and **alerts** using [Agent SRE](https://github.com/imran-siddique/agent-sre).
+Monitor a LangChain agent with **Service Level Objectives**, **error budgets**, and **alerts** using [Agent SRE](https://github.com/microsoft/agent-governance-toolkit).
 
 > **Time:** ~15 minutes  
 > **Prerequisites:** Python 3.10+  

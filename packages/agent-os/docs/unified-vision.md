@@ -369,8 +369,8 @@ agentmesh.register(identity)
 ### Step 3: Production deployment
 
 See deployment guides:
-- [Agent OS Production Guide](https://github.com/imran-siddique/agent-os/blob/main/docs/production.md)
-- [AgentMesh Deployment Guide](https://github.com/imran-siddique/agent-mesh/blob/main/DEPLOYMENT.md)
+- [Agent OS Production Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/production.md)
+- [AgentMesh Deployment Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/DEPLOYMENT.md)
 
 ## Summary
 
@@ -393,5 +393,5 @@ Start with Agent OS for immediate safety benefits, add AgentMesh when you need m
 ---
 
 **Questions?** 
-- Agent OS: [github.com/imran-siddique/agent-os/discussions](https://github.com/imran-siddique/agent-os/discussions)
-- AgentMesh: [github.com/imran-siddique/agent-mesh/discussions](https://github.com/imran-siddique/agent-mesh/discussions)
+- Agent OS: [github.com/microsoft/agent-governance-toolkit/discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)
+- AgentMesh: [github.com/microsoft/agent-governance-toolkit/discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)

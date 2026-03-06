@@ -7,9 +7,9 @@
 *One install for the complete governance stack — kernel · trust mesh · runtime supervisor · reliability engineering*
 
 [![PyPI](https://img.shields.io/badge/pypi-ai--agent--compliance-blue.svg)](https://pypi.org/project/ai-agent-compliance/)
-[![CI](https://github.com/imran-siddique/agent-governance/actions/workflows/ci.yml/badge.svg)](https://github.com/imran-siddique/agent-governance/actions/workflows/ci.yml)
-[![GitHub Stars](https://img.shields.io/github/stars/imran-siddique/agent-governance?style=social)](https://github.com/imran-siddique/agent-governance/stargazers)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤️-ff69b4)](https://github.com/sponsors/imran-siddique)
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
+[![Sponsor](https://img.shields.io/badge/sponsor-❤️-ff69b4)](https://github.com/microsoft/agent-governance-toolkit)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -23,7 +23,7 @@ pip install ai-agent-compliance[full]
 
 > ⭐ **If this project helps you, please star it!** It helps others discover the agent governance stack.
 
-> 🔗 **Part of the Agent Governance Ecosystem** — Installs [Agent OS](https://github.com/imran-siddique/agent-os) · [AgentMesh](https://github.com/imran-siddique/agent-mesh) · [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor) · [Agent SRE](https://github.com/imran-siddique/agent-sre)
+> 🔗 **Part of the Agent Governance Ecosystem** — Installs [Agent OS](https://github.com/microsoft/agent-governance-toolkit) · [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) · [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) · [Agent SRE](https://github.com/microsoft/agent-governance-toolkit)
 
 ---
 
@@ -109,19 +109,19 @@ pip install ai-agent-compliance[sre]
 
 | Component | Package | What It Does |
 |-----------|---------|--------------|
-| **[Agent OS](https://github.com/imran-siddique/agent-os)** | `agent-os-kernel` | Governance kernel — policy enforcement, capability-based security, audit trails, and the syscall abstraction layer for AI agents |
-| **[AgentMesh](https://github.com/imran-siddique/agent-mesh)** | `agentmesh-platform` | Zero-trust communication — mutual TLS for agents, encrypted channels, trust scoring, and secure multi-agent orchestration ("SSL for AI Agents") |
-| **[Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor)** | `agent-hypervisor` | Runtime supervisor — execution rings, resource limits, sandboxed execution, kill switches, and real-time intervention for autonomous agents |
-| **[Agent SRE](https://github.com/imran-siddique/agent-sre)** | `agent-sre` | Reliability engineering — health monitoring, SLO enforcement, incident response automation, and chaos engineering for agent fleets |
+| **[Agent OS](https://github.com/microsoft/agent-governance-toolkit)** | `agent-os-kernel` | Governance kernel — policy enforcement, capability-based security, audit trails, and the syscall abstraction layer for AI agents |
+| **[AgentMesh](https://github.com/microsoft/agent-governance-toolkit)** | `agentmesh-platform` | Zero-trust communication — mutual TLS for agents, encrypted channels, trust scoring, and secure multi-agent orchestration ("SSL for AI Agents") |
+| **[Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit)** | `agent-hypervisor` | Runtime supervisor — execution rings, resource limits, sandboxed execution, kill switches, and real-time intervention for autonomous agents |
+| **[Agent SRE](https://github.com/microsoft/agent-governance-toolkit)** | `agent-sre` | Reliability engineering — health monitoring, SLO enforcement, incident response automation, and chaos engineering for agent fleets |
 
 ### Star the ecosystem
 
 <p align="center">
 
-[![Agent OS Stars](https://img.shields.io/github/stars/imran-siddique/agent-os?label=Agent%20OS&style=social)](https://github.com/imran-siddique/agent-os)&nbsp;&nbsp;
-[![AgentMesh Stars](https://img.shields.io/github/stars/imran-siddique/agent-mesh?label=AgentMesh&style=social)](https://github.com/imran-siddique/agent-mesh)&nbsp;&nbsp;
-[![Agent Hypervisor Stars](https://img.shields.io/github/stars/imran-siddique/agent-hypervisor?label=Agent%20Hypervisor&style=social)](https://github.com/imran-siddique/agent-hypervisor)&nbsp;&nbsp;
-[![Agent SRE Stars](https://img.shields.io/github/stars/imran-siddique/agent-sre?label=Agent%20SRE&style=social)](https://github.com/imran-siddique/agent-sre)
+[![Agent OS Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=Agent%20OS&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
+[![AgentMesh Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=AgentMesh&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
+[![Agent Hypervisor Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=Agent%20Hypervisor&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
+[![Agent SRE Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=Agent%20SRE&style=social)](https://github.com/microsoft/agent-governance-toolkit)
 
 </p>
 
@@ -233,10 +233,10 @@ The ecosystem is growing — **3,000+ views, 9,400+ clones, and 1,278 unique dev
 We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for details.
 
 For component-specific contributions, see:
-- [Agent OS](https://github.com/imran-siddique/agent-os/blob/master/CONTRIBUTING.md)
-- [AgentMesh](https://github.com/imran-siddique/agent-mesh/blob/master/CONTRIBUTING.md)
-- [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor/blob/master/CONTRIBUTING.md)
-- [Agent SRE](https://github.com/imran-siddique/agent-sre/blob/master/CONTRIBUTING.md)
+- [Agent OS](https://github.com/microsoft/agent-governance-toolkit/blob/master/CONTRIBUTING.md)
+- [AgentMesh](https://github.com/microsoft/agent-governance-toolkit/blob/master/CONTRIBUTING.md)
+- [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit/blob/master/CONTRIBUTING.md)
+- [Agent SRE](https://github.com/microsoft/agent-governance-toolkit/blob/master/CONTRIBUTING.md)
 
 ## License
 
@@ -246,7 +246,7 @@ MIT — see [LICENSE](LICENSE) for details.
 
 <div align="center">
 
-**[imransiddique.com](https://imransiddique.com)** · **[Documentation](https://imransiddique.com/agent-os-docs/)** · **[GitHub](https://github.com/imran-siddique)**
+**[github.com/microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit)** · **[Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs)** · **[GitHub](https://github.com/microsoft/agent-governance-toolkit)**
 
 *Building the governance layer for the agentic era*
 

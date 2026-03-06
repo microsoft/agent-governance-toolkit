@@ -11,8 +11,8 @@ keywords:
   - reliability
   - observability
   - slo
-home: https://github.com/imran-siddique/agent-sre
+home: https://github.com/microsoft/agent-governance-toolkit
 sources:
-  - https://github.com/imran-siddique/agent-sre
+  - https://github.com/microsoft/agent-governance-toolkit
 maintainers:
   - name: Imran Siddique

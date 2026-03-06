@@ -471,7 +471,7 @@ print(f"Chain verification ({chain.depth} links): {duration:.3f}s")
 
 If your issue is not covered here:
 
-1. **Search existing issues:** [github.com/imran-siddique/agent-mesh/issues](https://github.com/imran-siddique/agent-mesh/issues)
+1. **Search existing issues:** [github.com/microsoft/agent-governance-toolkit/issues](https://github.com/microsoft/agent-governance-toolkit/issues)
 2. **Enable debug logging:** Set `AGENTMESH_LOG_LEVEL=DEBUG` or configure `observability.logs.level: DEBUG` in your deployment
 3. **Collect diagnostics:**
    ```bash

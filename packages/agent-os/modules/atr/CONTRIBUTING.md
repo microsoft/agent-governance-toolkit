@@ -6,7 +6,7 @@ Thank you for your interest in contributing to the Agent Tool Registry!
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/imran-siddique/atr.git
+   git clone https://github.com/microsoft/agent-governance-toolkit.git
    cd atr
    ```
 

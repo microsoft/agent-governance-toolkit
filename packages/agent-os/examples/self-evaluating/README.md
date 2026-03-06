@@ -163,7 +163,7 @@ python examples/example.py
 ### Option 1: Install as Package (Recommended)
 ```bash
 # Clone the repository
-git clone https://github.com/imran-siddique/self-evaluating-agent-sample.git
+git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd self-evaluating-agent-sample
 
 # Install in editable mode

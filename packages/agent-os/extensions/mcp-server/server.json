@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.imran-siddique/agentos",
+  "name": "io.github.microsoft/agentos",
   "description": "Build and manage policy-compliant AI agents with safety enforcement and compliance checking",
   "repository": {
-    "url": "https://github.com/imran-siddique/agent-os",
+    "url": "https://github.com/microsoft/agent-governance-toolkit",
     "source": "github",
     "subfolder": "extensions/mcp-server"
   },

@@ -35,5 +35,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Separation of tool discovery from execution
 - Compatible with OpenAI, Anthropic, and other LLM function calling formats
 
-[Unreleased]: https://github.com/imran-siddique/atr/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/imran-siddique/atr/releases/tag/v0.1.0
+[Unreleased]: https://github.com/microsoft/agent-governance-toolkit/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/microsoft/agent-governance-toolkit/releases/tag/v0.1.0

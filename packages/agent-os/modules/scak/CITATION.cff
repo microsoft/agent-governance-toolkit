@@ -6,8 +6,8 @@ date-released: 2026-01-18
 authors:
   - family-names: "Self-Correcting Agent Team"
     name: "Self-Correcting Agent Team"
-repository-code: "https://github.com/imran-siddique/self-correcting-agent-kernel"
-url: "https://github.com/imran-siddique/self-correcting-agent-kernel"
+repository-code: "https://github.com/microsoft/agent-governance-toolkit"
+url: "https://github.com/microsoft/agent-governance-toolkit"
 abstract: "A production-ready self-correcting agent kernel implementing self-correction architecture (runtime safety + alignment engine) with differential auditing, context cleanup, and three-tier memory hierarchy. Novel contributions include Type A/B patch decay taxonomy, 5-10% audit overhead via give-up signal detection, and 40-60% context reduction on model upgrades."
 keywords:
   - "AI agents"
@@ -26,7 +26,7 @@ preferred-citation:
     - family-names: "Self-Correcting Agent Team"
       name: "Self-Correcting Agent Team"
   year: 2026
-  url: "https://github.com/imran-siddique/self-correcting-agent-kernel"
+  url: "https://github.com/microsoft/agent-governance-toolkit"
   notes: "Research foundations: Reflexion (NeurIPS 2023), Constitutional AI (Anthropic 2022), Voyager (arXiv:2305.16291)"
 references:
   - type: article

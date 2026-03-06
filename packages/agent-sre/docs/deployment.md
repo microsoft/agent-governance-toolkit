@@ -11,7 +11,7 @@ pip install agent-sre
 ### From Source
 
 ```bash
-git clone https://github.com/imran-siddique/agent-sre.git
+git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agent-sre
 pip install -e .
 ```

@@ -22,7 +22,7 @@
 
 **Repositories:**
 
-- [agent-os](https://github.com/imran-siddique/agent-os) — core governance, sandbox, circuit breaker, trust root
+- [agent-os](https://github.com/microsoft/agent-governance-toolkit) — core governance, sandbox, circuit breaker, trust root
 
 ---
 
@@ -578,7 +578,7 @@ if snapshot["violations"] > 5:
 ## References
 
 - [OWASP Top 10 for Agentic Applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
-- [agent-os README](https://github.com/imran-siddique/agent-os/blob/main/README.md)
-- [agent-os Security Spec](https://github.com/imran-siddique/agent-os/blob/main/docs/security-spec.md)
-- [agent-os Policy Schema](https://github.com/imran-siddique/agent-os/blob/main/docs/policy-schema.md)
-- [agent-os Architecture](https://github.com/imran-siddique/agent-os/blob/main/ARCHITECTURE.md)
+- [agent-os README](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md)
+- [agent-os Security Spec](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/security-spec.md)
+- [agent-os Policy Schema](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/policy-schema.md)
+- [agent-os Architecture](https://github.com/microsoft/agent-governance-toolkit/blob/main/ARCHITECTURE.md)

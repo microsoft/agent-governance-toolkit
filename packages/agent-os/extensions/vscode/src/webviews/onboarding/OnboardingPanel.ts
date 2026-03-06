@@ -439,9 +439,9 @@ export class OnboardingPanel {
 
         <div class="footer">
             <div class="footer-links">
-                <a href="https://github.com/imran-siddique/agent-os" target="_blank">📚 Documentation</a>
-                <a href="https://github.com/imran-siddique/agent-os/issues" target="_blank">💬 Get Help</a>
-                <a href="https://github.com/imran-siddique/agent-os" target="_blank">⭐ Star on GitHub</a>
+                <a href="https://github.com/microsoft/agent-governance-toolkit" target="_blank">📚 Documentation</a>
+                <a href="https://github.com/microsoft/agent-governance-toolkit/issues" target="_blank">💬 Get Help</a>
+                <a href="https://github.com/microsoft/agent-governance-toolkit" target="_blank">⭐ Star on GitHub</a>
             </div>
             <div class="footer-actions">
                 <button class="secondary" onclick="resetProgress()">Reset Progress</button>

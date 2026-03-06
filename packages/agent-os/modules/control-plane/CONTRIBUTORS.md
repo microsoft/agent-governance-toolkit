@@ -6,7 +6,7 @@ This project exists thanks to all the people who contribute.
 
 ## Core Team
 
-- **[imran-siddique](https://github.com/imran-siddique)** - Creator and Lead Maintainer
+- **[imran-siddique](https://github.com/microsoft/agent-governance-toolkit)** - Creator and Lead Maintainer
 
 ## Contributors
 
@@ -79,7 +79,7 @@ Special thanks to:
 
 ## Join Us!
 
-Want to see your name here? Check out our [Contributing Guide](CONTRIBUTING.md) and [good first issues](https://github.com/imran-siddique/agent-control-plane/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) to get started.
+Want to see your name here? Check out our [Contributing Guide](CONTRIBUTING.md) and [good first issues](https://github.com/microsoft/agent-governance-toolkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) to get started.
 
 ---
 

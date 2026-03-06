@@ -74,10 +74,10 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/imran-siddique/context-as-a-service"
-Repository = "https://github.com/imran-siddique/context-as-a-service"
-Documentation = "https://github.com/imran-siddique/context-as-a-service/tree/main/docs"
-Issues = "https://github.com/imran-siddique/context-as-a-service/issues"
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/docs"
+Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
 
 [project.scripts]
 caas = "caas.cli:main"

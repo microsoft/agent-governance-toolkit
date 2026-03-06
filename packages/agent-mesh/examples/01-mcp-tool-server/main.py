@@ -355,7 +355,7 @@ async def main():
     print("   • Write to persistent audit logs")
     print("   • Integrate with SPIFFE for mTLS")
     print("   • Report compliance metrics to dashboards")
-    print("\n🔗 Learn more: https://github.com/imran-siddique/agent-mesh")
+    print("\n🔗 Learn more: https://github.com/microsoft/agent-governance-toolkit")
 
 
 if __name__ == "__main__":

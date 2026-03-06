@@ -30,11 +30,11 @@ In the last 14 days alone, the agent governance ecosystem saw:
 
 | Repository | ⭐ Stars | 🍴 Forks | 👀 Views (unique) | 📦 Clones (unique) |
 |------------|---------|--------|-------------------|---------------------|
-| [Agent OS](https://github.com/imran-siddique/agent-os) | 61 | 19 | 1,336 (352) | 4,866 (457) |
-| [AgentMesh](https://github.com/imran-siddique/agent-mesh) | 15 | 5 | 1,253 (137) | 1,990 (253) |
-| [Agent SRE](https://github.com/imran-siddique/agent-sre) | 6 | 2 | 216 (89) | 1,887 (307) |
-| [Agent Hypervisor](https://github.com/imran-siddique/agent-hypervisor) | 0 | 0 | 119 (82) | 525 (181) |
-| [Agent Governance](https://github.com/imran-siddique/agent-governance) | 0 | 4 | 89 (29) | 163 (80) |
+| [Agent OS](https://github.com/microsoft/agent-governance-toolkit) | 61 | 19 | 1,336 (352) | 4,866 (457) |
+| [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) | 15 | 5 | 1,253 (137) | 1,990 (253) |
+| [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) | 6 | 2 | 216 (89) | 1,887 (307) |
+| [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) | 0 | 0 | 119 (82) | 525 (181) |
+| [Agent Governance](https://github.com/microsoft/agent-governance-toolkit) | 0 | 4 | 89 (29) | 163 (80) |
 
 **Agent OS** leads in visibility — 61 stars, 19 forks, and the highest view-to-clone conversion in the ecosystem. **Agent SRE** punches above its weight with 307 unique cloners despite lower views — developers who find it actually use it.
 
@@ -54,7 +54,7 @@ Traffic comes from organic, high-signal channels — not paid promotion:
 | **Brave Search** | Privacy-focused developer audience |
 | **goodfirstissues.com** | Listed as a contributor-friendly project |
 | **PyPI** | Developers finding us through the Python package index |
-| **imransiddique.com** | Personal site driving direct traffic |
+| **github.com/microsoft/agent-governance-toolkit** | Personal site driving direct traffic |
 
 > 💡 **ChatGPT is recommending Agent OS.** When AI tools start pointing developers to your project, that's a signal the category is real and the project has credibility.
 
@@ -75,7 +75,7 @@ This isn't just a prototype. The ecosystem runs production-grade CI/CD:
 
 | ✅ | Milestone |
 |----|-----------|
-| ✅ | All 5 packages published on [PyPI](https://pypi.org/user/imran-siddique/) |
+| ✅ | All 5 packages published on [PyPI](https://pypi.org/user/microsoft/) |
 | ✅ | CI pipelines passing on all repos (lint, test, security) |
 | ✅ | Branch protection — no code merges without passing CI |
 | ✅ | Multi-Python testing (3.9 – 3.13 across repos) |

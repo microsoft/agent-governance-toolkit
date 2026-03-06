@@ -281,7 +281,7 @@ safe_query = "SELECT * FROM users WHERE id = ?"
 
     // Open Documentation
     const openDocsCmd = vscode.commands.registerCommand('agent-os.openDocs', () => {
-        vscode.env.openExternal(vscode.Uri.parse('https://github.com/imran-siddique/agent-os'));
+        vscode.env.openExternal(vscode.Uri.parse('https://github.com/microsoft/agent-governance-toolkit'));
     });
 
     // ========================================
@@ -631,7 +631,7 @@ function showWelcomeMessage(): void {
         if (selection === 'Configure Policies') {
             openPolicyConfiguration();
         } else if (selection === 'Learn More') {
-            vscode.env.openExternal(vscode.Uri.parse('https://github.com/imran-siddique/agent-os'));
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/microsoft/agent-governance-toolkit'));
         }
     });
 }

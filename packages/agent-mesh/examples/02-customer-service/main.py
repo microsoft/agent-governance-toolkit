@@ -298,7 +298,7 @@ async def main():
     """Main entry point."""
     await demo_multi_agent_system()
     
-    print("\n🔗 Learn more: https://github.com/imran-siddique/agent-mesh")
+    print("\n🔗 Learn more: https://github.com/microsoft/agent-governance-toolkit")
 
 
 if __name__ == "__main__":

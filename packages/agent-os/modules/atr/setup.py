@@ -13,7 +13,7 @@ setup(
     description="A decentralized marketplace for agent capabilities",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/imran-siddique/atr",
+    url="https://github.com/microsoft/agent-governance-toolkit",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",

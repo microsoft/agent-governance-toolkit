@@ -148,4 +148,4 @@ graph TB
 
 ---
 
-*Submitted by the [Agent Governance](https://github.com/imran-siddique/agent-governance) project*
+*Submitted by the [Agent Governance](https://github.com/microsoft/agent-governance-toolkit) project*

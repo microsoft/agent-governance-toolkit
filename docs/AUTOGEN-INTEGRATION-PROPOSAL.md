@@ -92,5 +92,5 @@ python/packages/autogen-ext/src/autogen_ext/governance/
 ## Links
 
 - [AutoGen](https://github.com/microsoft/autogen)
-- [Agent OS](https://github.com/imran-siddique/agent-os)
+- [Agent OS](https://github.com/microsoft/agent-governance-toolkit)
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)

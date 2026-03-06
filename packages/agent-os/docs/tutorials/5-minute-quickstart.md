@@ -194,5 +194,5 @@ governed = kernel.wrap(my_crew)
 ## Get Help
 
 - 📚 [Full Documentation](../index.md)
-- 🐛 [GitHub Issues](https://github.com/imran-siddique/agent-os/issues)
+- 🐛 [GitHub Issues](https://github.com/microsoft/agent-governance-toolkit/issues)
 - 💡 [Examples](../../examples/)

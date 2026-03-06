@@ -26,7 +26,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/imran-siddique/agent-mesh.git",
+    "url": "https://github.com/microsoft/agent-governance-toolkit.git",
     "directory": "sdks/typescript"
   },
   "devDependencies": {

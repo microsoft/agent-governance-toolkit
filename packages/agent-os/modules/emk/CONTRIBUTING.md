@@ -35,7 +35,7 @@ By participating in this project, you agree to maintain a respectful and inclusi
    ```
 3. Add the upstream remote:
    ```bash
-   git remote add upstream https://github.com/imran-siddique/emk.git
+   git remote add upstream https://github.com/microsoft/agent-governance-toolkit.git
    ```
 
 ## Development Setup
@@ -283,8 +283,8 @@ When contributing, keep these principles in mind:
 
 ## Questions?
 
-- Open a [GitHub Issue](https://github.com/imran-siddique/emk/issues) for bugs or feature requests
-- Start a [Discussion](https://github.com/imran-siddique/emk/discussions) for questions
+- Open a [GitHub Issue](https://github.com/microsoft/agent-governance-toolkit/issues) for bugs or feature requests
+- Start a [Discussion](https://github.com/microsoft/agent-governance-toolkit/discussions) for questions
 
 ## License
 

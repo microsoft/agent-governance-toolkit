@@ -6,8 +6,8 @@ The **SCAK GAIA Laziness Benchmark** is a collection of 50 vague queries designe
 
 ### Dataset Summary
 
-- **Homepage:** https://github.com/imran-siddique/self-correcting-agent-kernel
-- **Repository:** https://github.com/imran-siddique/self-correcting-agent-kernel
+- **Homepage:** https://github.com/microsoft/agent-governance-toolkit
+- **Repository:** https://github.com/microsoft/agent-governance-toolkit
 - **Paper:** [To be published on arXiv]
 - **Leaderboard:** N/A
 - **Point of Contact:** research@scak.ai
@@ -146,7 +146,7 @@ MIT License
   title={SCAK GAIA Laziness Benchmark},
   author={Self-Correcting Agent Team},
   year={2026},
-  url={https://github.com/imran-siddique/self-correcting-agent-kernel/datasets/gaia_vague_queries},
+  url={https://github.com/microsoft/agent-governance-toolkit/datasets/gaia_vague_queries},
   note={Extension of GAIA benchmark (Mialon et al., 2023) for agent laziness detection}
 }
 ```
@@ -170,7 +170,7 @@ Based on GAIA Benchmark:
 ```python
 from datasets import load_dataset
 
-dataset = load_dataset("imran-siddique/scak-gaia-laziness")
+dataset = load_dataset("microsoft/scak-gaia-laziness")
 ```
 
 ### Example Usage

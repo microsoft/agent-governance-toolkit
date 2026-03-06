@@ -230,7 +230,7 @@ def main():
    - Add your own agent and protect it with a sidecar
    - Explore the flight recorder logs
 
-🔗 Documentation: https://github.com/imran-siddique/inter-agent-trust-protocol
+🔗 Documentation: https://github.com/microsoft/agent-governance-toolkit
         """)
         
     except KeyboardInterrupt:

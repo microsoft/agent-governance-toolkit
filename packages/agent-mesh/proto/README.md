@@ -169,6 +169,6 @@ See the [examples directory](../examples/00-registration-hello-world/) for a com
 
 - [SPIFFE Specification](https://github.com/spiffe/spiffe)
 - [W3C DID Specification](https://www.w3.org/TR/did-core/)
-- [IATP Protocol](https://github.com/imran-siddique/agent-os)
+- [IATP Protocol](https://github.com/microsoft/agent-governance-toolkit)
 - [Google A2A Protocol](https://github.com/google/a2a)
 - [Anthropic MCP Protocol](https://github.com/anthropics/mcp)

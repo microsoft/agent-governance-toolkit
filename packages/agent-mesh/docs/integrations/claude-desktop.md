@@ -178,8 +178,8 @@ If you prefer cleaner output:
 
 ## Support
 
-- **Documentation:** https://github.com/imran-siddique/agent-mesh
-- **Issues:** https://github.com/imran-siddique/agent-mesh/issues
+- **Documentation:** https://github.com/microsoft/agent-governance-toolkit
+- **Issues:** https://github.com/microsoft/agent-governance-toolkit/issues
 
 ---
 

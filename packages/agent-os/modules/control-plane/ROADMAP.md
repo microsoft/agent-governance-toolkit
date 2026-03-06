@@ -209,8 +209,8 @@ We welcome contributions across all roadmap areas! See [CONTRIBUTING.md](CONTRIB
 
 ### Proposing New Features
 - Check this roadmap to see if your idea aligns with our direction
-- Open a [Feature Request](https://github.com/imran-siddique/agent-control-plane/issues/new?template=feature_request.yml)
-- Join [Discussions](https://github.com/imran-siddique/agent-control-plane/discussions) to discuss major changes
+- Open a [Feature Request](https://github.com/microsoft/agent-governance-toolkit/issues/new?template=feature_request.yml)
+- Join [Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions) to discuss major changes
 
 ---
 

@@ -1,6 +1,6 @@
 # AMB - Agent Message Bus
 
-> **Part of [Agent OS](https://github.com/imran-siddique/agent-os)** - Kernel-level governance for AI agents
+> **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 
 [![PyPI version](https://badge.fury.io/py/amb-core.svg)](https://badge.fury.io/py/amb-core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -156,18 +156,18 @@ See `examples/tracing_demo.py` for a complete multi-agent tracing example.
 `amb` is one component of a modular Agent Operating System. Each layer solves a specific problem.
 
 ### Layer 1: Primitives (State & Identity)
-- **[caas](https://github.com/imran-siddique/caas)** - Context as a Service: Manages agent context and state
-- **[cmvk](https://github.com/imran-siddique/cmvk)** - Context Verification Kit: Cryptographic verification of context
-- **[emk](https://github.com/imran-siddique/emk)** - Episodic Memory Kit: Persistent memory for agents
+- **[caas](https://github.com/microsoft/agent-governance-toolkit)** - Context as a Service: Manages agent context and state
+- **[cmvk](https://github.com/microsoft/agent-governance-toolkit)** - Context Verification Kit: Cryptographic verification of context
+- **[emk](https://github.com/microsoft/agent-governance-toolkit)** - Episodic Memory Kit: Persistent memory for agents
 
 ### Layer 2: Infrastructure (Transport & Discovery)
-- **[iatp](https://github.com/imran-siddique/iatp)** - Inter-Agent Trust Protocol: Trust verification for agent messages
-- **[amb](https://github.com/imran-siddique/amb)** - Agent Message Bus: Broker-agnostic transport *(you are here)*
-- **[atr](https://github.com/imran-siddique/atr)** - Agent Tool Registry: Decentralized tool discovery
+- **[iatp](https://github.com/microsoft/agent-governance-toolkit)** - Inter-Agent Trust Protocol: Trust verification for agent messages
+- **[amb](https://github.com/microsoft/agent-governance-toolkit)** - Agent Message Bus: Broker-agnostic transport *(you are here)*
+- **[atr](https://github.com/microsoft/agent-governance-toolkit)** - Agent Tool Registry: Decentralized tool discovery
 
 ### Layer 3: Framework (Orchestration & Self-Correction)
-- **[agent-control-plane](https://github.com/imran-siddique/agent-control-plane)** - The orchestration core
-- **[scak](https://github.com/imran-siddique/scak)** - Self-Correction & Alignment Kit: Runtime safety and alignment
+- **[agent-control-plane](https://github.com/microsoft/agent-governance-toolkit)** - The orchestration core
+- **[scak](https://github.com/microsoft/agent-governance-toolkit)** - Self-Correction & Alignment Kit: Runtime safety and alignment
 
 ## Citation
 
@@ -178,7 +178,7 @@ If you use AMB in research, please cite:
   author = {Siddique, Imran},
   title = {AMB: Agent Message Bus for Decoupled Multi-Agent Systems},
   year = {2026},
-  url = {https://github.com/imran-siddique/amb},
+  url = {https://github.com/microsoft/agent-governance-toolkit},
   version = {0.1.0}
 }
 ```

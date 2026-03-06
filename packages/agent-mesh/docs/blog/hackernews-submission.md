@@ -4,7 +4,7 @@
 Show HN: AgentMesh – Open-source governance platform for AI agent ecosystems
 
 ## URL
-https://github.com/imran-siddique/agent-mesh
+https://github.com/microsoft/agent-governance-toolkit
 
 ## Text (if self-post)
 

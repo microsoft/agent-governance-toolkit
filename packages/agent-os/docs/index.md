@@ -155,8 +155,8 @@ agentos init my-project --template secure-coding
 
 ## Support
 
-- [GitHub Issues](https://github.com/imran-siddique/agent-os/issues)
-- [Discussions](https://github.com/imran-siddique/agent-os/discussions)
+- [GitHub Issues](https://github.com/microsoft/agent-governance-toolkit/issues)
+- [Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)
 - [Contributing Guide](../CONTRIBUTING.md)
 
 ---
@@ -165,6 +165,6 @@ agentos init my-project --template secure-coding
 
 **Kernel-level safety for AI agents.**
 
-[GitHub](https://github.com/imran-siddique/agent-os) · [Examples](../examples/)
+[GitHub](https://github.com/microsoft/agent-governance-toolkit) · [Examples](../examples/)
 
 </div>

@@ -41,7 +41,7 @@ print(stats)
 from datasets import load_dataset
 
 # Load from Hugging Face
-dataset = load_dataset("imran-siddique/agent-control-redteam-60")
+dataset = load_dataset("microsoft/agent-control-redteam-60")
 train_data = dataset["train"]
 
 # Use for benchmarking
@@ -51,7 +51,7 @@ for item in train_data:
     # Test your agent...
 ```
 
-**Hub URL**: https://huggingface.co/datasets/imran-siddique/agent-control-redteam-60
+**Hub URL**: https://huggingface.co/datasets/microsoft/agent-control-redteam-60
 
 ### Upload Dataset
 
@@ -61,7 +61,7 @@ To upload the dataset to Hugging Face Hub:
 huggingface-cli login
 
 # Upload dataset
-python scripts/upload_dataset_to_hf.py --repo-id imran-siddique/agent-control-redteam-60
+python scripts/upload_dataset_to_hf.py --repo-id microsoft/agent-control-redteam-60
 
 # Or dry-run to test
 python scripts/upload_dataset_to_hf.py --dry-run

@@ -248,7 +248,7 @@ def version():
     """Show IATP version information."""
     click.echo(f"IATP CLI v{__version__}")
     click.echo("Inter-Agent Trust Protocol")
-    click.echo("https://github.com/imran-siddique/inter-agent-trust-protocol")
+    click.echo("https://github.com/microsoft/agent-governance-toolkit")
 
 
 if __name__ == '__main__':

@@ -296,7 +296,7 @@ kernel = KernelSpace(policy="strict", debug=True)
 If your issue isn't covered here:
 
 1. **Search existing issues:**
-   https://github.com/imran-siddique/agent-os/issues
+   https://github.com/microsoft/agent-governance-toolkit/issues
 
 2. **Create a new issue with:**
    - Agent OS version: `pip show agent-os`
@@ -306,4 +306,4 @@ If your issue isn't covered here:
    - Full error message/stack trace
 
 3. **Join discussions:**
-   https://github.com/imran-siddique/agent-os/discussions
+   https://github.com/microsoft/agent-governance-toolkit/discussions

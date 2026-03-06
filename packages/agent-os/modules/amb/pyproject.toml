@@ -57,11 +57,11 @@ keywords = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/imran-siddique/amb"
-Repository = "https://github.com/imran-siddique/amb"
-Documentation = "https://github.com/imran-siddique/amb#readme"
-"Bug Tracker" = "https://github.com/imran-siddique/amb/issues"
-Changelog = "https://github.com/imran-siddique/amb/releases"
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit#readme"
+"Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
+Changelog = "https://github.com/microsoft/agent-governance-toolkit/releases"
 
 [tool.setuptools.packages.find]
 where = ["."]

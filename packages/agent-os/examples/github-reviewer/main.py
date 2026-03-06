@@ -437,7 +437,7 @@ rules:
         
         # Footer
         lines.append(f"\n---\n📊 Reviewed {result.files_reviewed} files, {result.lines_reviewed} lines in {result.review_time_ms}ms")
-        lines.append("🤖 *Powered by [Agent OS](https://github.com/imran-siddique/agent-os)*")
+        lines.append("🤖 *Powered by [Agent OS](https://github.com/microsoft/agent-governance-toolkit)*")
         
         return "\n".join(lines)
 

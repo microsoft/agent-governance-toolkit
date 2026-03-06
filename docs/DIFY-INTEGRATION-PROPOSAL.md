@@ -39,5 +39,5 @@ In multi-agent workflows, agents need to verify "who" they're communicating with
 ## Links
 
 - [Dify Plugins](https://github.com/langgenius/dify-plugins)
-- [Agent Mesh](https://github.com/imran-siddique/agent-mesh)
-- [Plugin Source](https://github.com/imran-siddique/agent-mesh/tree/master/integrations/dify-plugin)
+- [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit)
+- [Plugin Source](https://github.com/microsoft/agent-governance-toolkit/tree/master/integrations/dify-plugin)

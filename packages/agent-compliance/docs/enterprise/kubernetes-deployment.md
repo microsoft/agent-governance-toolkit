@@ -58,7 +58,7 @@ Create a `values.yaml` for your deployment:
 # values.yaml — Agent Governance Helm Chart
 global:
   namespace: agent-governance
-  imageRegistry: ghcr.io/imran-siddique
+  imageRegistry: ghcr.io/microsoft
   imagePullPolicy: IfNotPresent
 
 agentOS:
@@ -166,7 +166,7 @@ networkPolicy:
 ### 1. Add the Helm Repository
 
 ```bash
-helm repo add agent-governance https://imran-siddique.github.io/agent-governance-charts
+helm repo add agent-governance https://microsoft.github.io/agent-governance-toolkit
 helm repo update
 ```
 
@@ -462,7 +462,7 @@ spec:
 
 - Apply the [Security Hardening Checklist](security-hardening.md) before production
 - Review the [Scaling Guide](scaling-guide.md) for right-sizing
-- Set up monitoring with the [Agent SRE](https://github.com/imran-siddique/agent-sre) component
+- Set up monitoring with the [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) component
 
 ---
 

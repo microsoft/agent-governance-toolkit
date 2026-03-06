@@ -27,4 +27,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | Agent Hypervisor | `agent-hypervisor` | ≥2.0.0 (optional) |
 | Agent SRE | `agent-sre` | ≥1.0.0 (optional) |
 
-[1.0.0]: https://github.com/imran-siddique/agent-governance/releases/tag/v1.0.0
+[1.0.0]: https://github.com/microsoft/agent-governance-toolkit/releases/tag/v1.0.0

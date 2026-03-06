@@ -61,7 +61,7 @@ We welcome:
 
 ```bash
 # Clone the repository
-git clone https://github.com/imran-siddique/self-correcting-agent-kernel.git
+git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd self-correcting-agent-kernel
 
 # Create virtual environment
