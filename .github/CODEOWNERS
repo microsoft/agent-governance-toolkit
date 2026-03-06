@@ -1,0 +1,19 @@
+# CODEOWNERS — Default reviewers for microsoft/agent-governance-toolkit
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @imran-siddique
+
+# Package-specific ownership
+/packages/agent-os/          @imran-siddique
+/packages/agent-mesh/        @imran-siddique
+/packages/agent-hypervisor/  @imran-siddique
+/packages/agent-sre/         @imran-siddique
+/packages/agent-compliance/  @imran-siddique
+
+# CI/CD and GitHub configuration
+/.github/                    @imran-siddique
+
+# Documentation
+/docs/                       @imran-siddique
+*.md                         @imran-siddique

@@ -1,0 +1,54 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+name: SBOM Generation
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@e11c554f704a0b820cbf8c51673f6945e0731532 # v0.18.0
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom.spdx.json
+          artifact-name: sbom-spdx
+
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@e11c554f704a0b820cbf8c51673f6945e0731532 # v0.18.0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          artifact-name: sbom-cyclonedx
+
+      - name: Attest SBOM
+        if: github.event_name == 'release'
+        uses: actions/attest-sbom@115c3be05ff3974bcbd0b9f9ef62b1aaad0cae2b # v2.2.0
+        with:
+          subject-path: sbom.spdx.json
+          sbom-format: spdx+json
+
+      - name: Upload SBOMs to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            sbom.spdx.json \
+            sbom.cdx.json \
+            --clobber
