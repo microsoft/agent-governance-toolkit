@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-agent-compliance"
-version = "1.0.1"
+version = "1.0.2"
 description = "Unified installer and compliance documentation for the Agent Governance Toolkit"
 readme = "README.md"
 license = {text = "MIT"}

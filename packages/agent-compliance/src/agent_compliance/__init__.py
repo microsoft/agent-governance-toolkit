@@ -13,7 +13,7 @@ Components:
     - agent-sre: Site reliability engineering for AI agents
 """
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 # Re-export core components for convenience
 try:

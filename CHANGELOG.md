@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.0.1] - 2026-03-06
+
+### Changed
+- **Microsoft org release** — First publish from `microsoft/agent-governance-toolkit`
+- Added MIT license headers to 1,159 source files
+- Migrated all 215 documentation URLs from personal repos to Microsoft org
+- Replaced personal email references with team alias (`agt@microsoft.com`)
+- Enhanced README with CI badge, navigation links, CLA/Code of Conduct sections
+
+### Fixed
+- Fixed `agentmesh` PyPI link → `agentmesh-platform` (correct package name)
+- Removed internal feed reference from providers.py
+
+### Security
+- Passed full pre-launch security audit (secret scan, pip-audit, Azure ID check)
+- All 43 OSV vulnerabilities from v1.0.0 confirmed resolved
+
+### Repository
+- Archived 5 personal repos with deprecation banners and migration notices
+- Closed 83 open issues and annotated 596 closed items with migration links
+- Posted migration announcements to 89 stargazers
+- Enabled GitHub Discussions, 12 topic tags, OpenSSF Scorecard
+
 ## [1.0.0] - 2026-03-04
 
 ### Added

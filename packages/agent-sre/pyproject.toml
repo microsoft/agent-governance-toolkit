@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-sre"
-version = "1.1.1"
+version = "1.1.2"
 description = "Reliability Engineering for AI Agent Systems"
 readme = "README.md"
 license = "MIT"
