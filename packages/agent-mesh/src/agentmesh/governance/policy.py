@@ -154,6 +154,12 @@ class Policy(BaseModel):
     agent: Optional[str] = Field(None, description="Agent this policy applies to")
     agents: list[str] = Field(default_factory=list, description="Multiple agents")
     
+    # Scope for conflict resolution
+    scope: str = Field(
+        default="global",
+        description="Policy scope: global, tenant, or agent",
+    )
+    
     # Rules
     rules: list[PolicyRule] = Field(default_factory=list)
     
@@ -298,14 +304,31 @@ class PolicyEngine:
     - 100% deterministic across runs
     - Rate limiting support
     - Approval workflows
+    - Configurable conflict resolution strategy
     """
     
     MAX_EVAL_MS = 5  # Target: <5ms evaluation
     
-    def __init__(self):
+    def __init__(self, conflict_strategy: str = "priority_first_match"):
+        """Initialize the policy engine.
+
+        Args:
+            conflict_strategy: How to resolve conflicts when multiple
+                rules match. One of ``"deny_overrides"``,
+                ``"allow_overrides"``, ``"priority_first_match"``
+                (default, preserves v1.0 behavior), or
+                ``"most_specific_wins"``.
+        """
+        from agentmesh.governance.conflict_resolution import (
+            ConflictResolutionStrategy,
+            PolicyConflictResolver,
+        )
+
         self._policies: dict[str, Policy] = {}
         self._rate_limits: dict[str, dict] = {}  # rule_name -> {count, reset_at}
         self._rego_evaluators: list[tuple[str, Any]] = []  # [(package, OPAEvaluator)]
+        self._conflict_strategy = ConflictResolutionStrategy(conflict_strategy)
+        self._resolver = PolicyConflictResolver(self._conflict_strategy)
     
     def load_policy(self, policy: Policy) -> None:
         """Load a policy into the engine.
@@ -526,10 +549,15 @@ class PolicyEngine:
     ) -> PolicyDecision:
         """Evaluate all applicable policies for an agent action.
 
-        YAML/JSON rules are checked first (sorted by priority,
-        highest first). If no YAML rule matches, registered Rego
-        policies are consulted. If nothing matches, the default
-        action of the first applicable policy is used.
+        Collects ALL matching rules across all applicable policies,
+        then resolves conflicts using the configured strategy:
+
+        - ``priority_first_match``: Highest-priority matching rule wins
+          (v1.0 behavior).
+        - ``deny_overrides``: Any deny wins, regardless of priority.
+        - ``allow_overrides``: Any allow wins, regardless of priority.
+        - ``most_specific_wins``: Agent-scoped > tenant > global;
+          priority breaks ties within the same scope.
 
         Args:
             agent_did: Decentralized identifier of the acting agent.
@@ -539,25 +567,74 @@ class PolicyEngine:
             A ``PolicyDecision`` indicating whether the action is allowed
             and which rule (if any) matched.
         """
+        from agentmesh.governance.conflict_resolution import (
+            CandidateDecision,
+            PolicyScope,
+        )
+
         start = datetime.utcnow()
 
         # 1. Check YAML/JSON policies first
         applicable = [p for p in self._policies.values() if p.applies_to(agent_did)]
 
         if applicable:
-            all_rules = []
+            candidates: list[CandidateDecision] = []
             for policy in applicable:
+                # Map policy scope string to enum
+                try:
+                    scope = PolicyScope(policy.scope)
+                except ValueError:
+                    scope = PolicyScope.GLOBAL
+
                 for rule in policy.rules:
-                    all_rules.append((policy, rule))
+                    if rule.enabled and rule.evaluate(context):
+                        candidates.append(CandidateDecision(
+                            action=rule.action,
+                            priority=rule.priority,
+                            scope=scope,
+                            policy_name=policy.name,
+                            rule_name=rule.name,
+                            reason=rule.description or f"Rule {rule.name} matched",
+                            approvers=rule.approvers,
+                        ))
 
-            all_rules.sort(key=lambda x: x[1].priority, reverse=True)
+            if candidates:
+                result = self._resolver.resolve(candidates)
+                winner = result.winning_decision
+                elapsed = (datetime.utcnow() - start).total_seconds() * 1000
 
-            for policy, rule in all_rules:
-                if rule.evaluate(context):
-                    decision = self._apply_rule(rule, policy, context)
-                    elapsed = (datetime.utcnow() - start).total_seconds() * 1000
-                    decision.evaluation_ms = elapsed
-                    return decision
+                # Apply rate limiting for the winning rule
+                matched_rule = None
+                for policy in applicable:
+                    for rule in policy.rules:
+                        if rule.name == winner.rule_name:
+                            matched_rule = rule
+                            break
+                    if matched_rule:
+                        break
+
+                if matched_rule and matched_rule.limit:
+                    if self._is_rate_limited(matched_rule):
+                        return PolicyDecision(
+                            allowed=False,
+                            action="deny",
+                            matched_rule=matched_rule.name,
+                            policy_name=winner.policy_name,
+                            reason=f"Rate limited: {matched_rule.limit}",
+                            evaluated_at=start,
+                            evaluation_ms=elapsed,
+                        )
+
+                return PolicyDecision(
+                    allowed=(winner.action == "allow"),
+                    action=winner.action,
+                    matched_rule=winner.rule_name,
+                    policy_name=winner.policy_name,
+                    reason=winner.reason,
+                    approvers=winner.approvers,
+                    evaluated_at=start,
+                    evaluation_ms=elapsed,
+                )
 
         # 2. Check Rego policies
         for package, evaluator in self._rego_evaluators:

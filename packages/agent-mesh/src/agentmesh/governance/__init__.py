@@ -8,6 +8,13 @@ Append-only audit logs with optional external sinks.
 """
 
 from .policy import PolicyEngine, Policy, PolicyRule, PolicyDecision
+from .conflict_resolution import (
+    ConflictResolutionStrategy,
+    PolicyScope,
+    PolicyConflictResolver,
+    CandidateDecision,
+    ResolutionResult,
+)
 from .compliance import ComplianceEngine, ComplianceFramework, ComplianceReport
 from .audit import AuditLog, AuditEntry, AuditChain
 from .audit_backends import (
@@ -37,6 +44,11 @@ __all__ = [
     "Policy",
     "PolicyRule",
     "PolicyDecision",
+    "ConflictResolutionStrategy",
+    "PolicyScope",
+    "PolicyConflictResolver",
+    "CandidateDecision",
+    "ResolutionResult",
     "ComplianceEngine",
     "ComplianceFramework",
     "ComplianceReport",
