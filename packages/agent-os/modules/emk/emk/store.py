@@ -163,3 +163,119 @@ class FileAdapter(VectorStoreAdapter):
             return False
         self._write_all(new_episodes)
         return True
+
+
+try:
+    import chromadb
+    from chromadb.config import Settings
+
+    class ChromaDBAdapter(VectorStoreAdapter):
+        """
+        ChromaDB-based vector storage adapter.
+
+        Uses ChromaDB for vector similarity search and efficient retrieval
+        of episodes based on embeddings.
+        """
+
+        def __init__(
+            self,
+            collection_name: str = "episodes",
+            persist_directory: str = "./chroma_data",
+        ):
+            self.client = chromadb.Client(Settings(
+                persist_directory=persist_directory,
+                anonymized_telemetry=False,
+            ))
+            self.collection = self.client.get_or_create_collection(
+                name=collection_name,
+                metadata={"description": "Episodic memory storage"},
+            )
+
+        def store(self, episode: Episode, embedding: Optional[np.ndarray] = None) -> str:
+            if embedding is None:
+                text = f"{episode.goal} {episode.action} {episode.result} {episode.reflection}"
+            else:
+                text = None
+
+            self.collection.add(
+                ids=[episode.episode_id],
+                documents=[text] if text else None,
+                embeddings=[embedding.tolist()] if embedding is not None else None,
+                metadatas=[{
+                    "goal": episode.goal,
+                    "action": episode.action,
+                    "result": episode.result,
+                    "reflection": episode.reflection,
+                    "timestamp": episode.timestamp.isoformat(),
+                    **episode.metadata,
+                }],
+            )
+            return episode.episode_id
+
+        def retrieve(
+            self,
+            query_embedding: Optional[np.ndarray] = None,
+            filters: Optional[Dict[str, Any]] = None,
+            limit: int = 10,
+        ) -> List[Episode]:
+            if query_embedding is not None:
+                results = self.collection.query(
+                    query_embeddings=[query_embedding.tolist()],
+                    n_results=limit,
+                    where=filters,
+                )
+            else:
+                results = self.collection.get(limit=limit, where=filters)
+
+            episodes = []
+            if 'metadatas' in results and results['metadatas']:
+                if isinstance(results['metadatas'][0], list) if results['metadatas'] else False:
+                    metadatas = results['metadatas'][0]
+                else:
+                    metadatas = results['metadatas']
+            else:
+                metadatas = []
+
+            for metadata in metadatas:
+                episode_metadata = {
+                    k: v for k, v in metadata.items()
+                    if k not in ('goal', 'action', 'result', 'reflection', 'timestamp')
+                }
+                try:
+                    episode = Episode(
+                        goal=metadata.get("goal", ""),
+                        action=metadata.get("action", ""),
+                        result=metadata.get("result", ""),
+                        reflection=metadata.get("reflection", ""),
+                        timestamp=metadata.get("timestamp", None),
+                        metadata=episode_metadata,
+                    )
+                    episodes.append(episode)
+                except Exception:
+                    continue
+            return episodes
+
+        def get_by_id(self, episode_id: str) -> Optional[Episode]:
+            try:
+                results = self.collection.get(ids=[episode_id])
+                if not results['ids']:
+                    return None
+                metadata = results['metadatas'][0]
+                episode_metadata = {
+                    k: v for k, v in metadata.items()
+                    if k not in ('goal', 'action', 'result', 'reflection', 'timestamp')
+                }
+                return Episode(
+                    goal=metadata.get("goal", ""),
+                    action=metadata.get("action", ""),
+                    result=metadata.get("result", ""),
+                    reflection=metadata.get("reflection", ""),
+                    timestamp=metadata.get("timestamp", None),
+                    metadata=episode_metadata,
+                )
+            except Exception:
+                return None
+
+except ImportError:
+    # ChromaDB not installed — adapter will not be available
+    pass

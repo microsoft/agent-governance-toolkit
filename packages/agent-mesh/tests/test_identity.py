@@ -4,6 +4,7 @@
 
 import pytest
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 from agentmesh.identity import (
     AgentIdentity,
@@ -421,7 +422,10 @@ class TestSPIFFE:
             agent_name="test-agent",
         )
         
-        assert spiffe.spiffe_id.startswith("spiffe://agentmesh.io/")
+        parsed = urlparse(spiffe.spiffe_id)
+        assert parsed.scheme == "spiffe"
+        assert parsed.hostname == "agentmesh.io"
+        assert parsed.path.startswith("/")
         assert spiffe.trust_domain == "agentmesh.io"
     
     def test_spiffe_id_format(self):
@@ -433,4 +437,7 @@ class TestSPIFFE:
         )
         
         # SPIFFE ID should be: spiffe://<trust-domain>/<path>
-        assert spiffe.spiffe_id.startswith("spiffe://example.com/")
+        parsed = urlparse(spiffe.spiffe_id)
+        assert parsed.scheme == "spiffe"
+        assert parsed.hostname == "example.com"
+        assert parsed.path.startswith("/")

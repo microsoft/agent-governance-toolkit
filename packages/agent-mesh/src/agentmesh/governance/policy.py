@@ -5,17 +5,29 @@ Policy Engine
 
 Declarative policy engine with YAML/JSON policies.
 Policy evaluation latency <5ms with 100% deterministic results.
+
+Supports schema versioning via ``apiVersion`` (e.g.,
+``governance.toolkit/v1``). Older versions emit deprecation
+warnings; unknown versions raise ``ValueError``.
 """
 
 from datetime import datetime
 from typing import Optional, Literal, Any, Callable
 from pydantic import BaseModel, Field
 import logging
+import warnings
 import yaml
 import json
 import re
 
 logger = logging.getLogger(__name__)
+
+# Supported schema versions (newest first)
+CURRENT_API_VERSION = "governance.toolkit/v1"
+SUPPORTED_API_VERSIONS = {
+    "governance.toolkit/v1": {"status": "current"},
+    "1.0": {"status": "deprecated", "migrate_to": "governance.toolkit/v1"},
+}
 
 
 class PolicyRule(BaseModel):
@@ -126,8 +138,14 @@ class Policy(BaseModel):
     Complete policy document.
     
     Policies are defined in YAML/JSON and loaded at runtime.
+    Use ``apiVersion: governance.toolkit/v1`` in YAML files for
+    schema-versioned policies.
     """
     
+    apiVersion: str = Field(
+        default=CURRENT_API_VERSION,
+        description="Schema version (e.g., governance.toolkit/v1)",
+    )
     version: str = Field(default="1.0")
     name: str = Field(...)
     description: Optional[str] = Field(None)
@@ -150,13 +168,20 @@ class Policy(BaseModel):
     def from_yaml(cls, yaml_content: str) -> "Policy":
         """Load a policy from a YAML string.
 
+        Validates the ``apiVersion`` field against supported versions
+        and emits deprecation warnings for older schemas.
+
         Args:
             yaml_content: Raw YAML string containing the policy definition.
 
         Returns:
             A fully-constructed ``Policy`` instance.
+
+        Raises:
+            ValueError: If the ``apiVersion`` is not recognized.
         """
         data = yaml.safe_load(yaml_content)
+        _validate_api_version(data)
         
         # Parse rules
         rules = []
@@ -170,13 +195,20 @@ class Policy(BaseModel):
     def from_json(cls, json_content: str) -> "Policy":
         """Load a policy from a JSON string.
 
+        Validates the ``apiVersion`` field against supported versions
+        and emits deprecation warnings for older schemas.
+
         Args:
             json_content: Raw JSON string containing the policy definition.
 
         Returns:
             A fully-constructed ``Policy`` instance.
+
+        Raises:
+            ValueError: If the ``apiVersion`` is not recognized.
         """
         data = json.loads(json_content)
+        _validate_api_version(data)
         
         rules = []
         for rule_data in data.get("rules", []):
@@ -555,3 +587,146 @@ class PolicyEngine:
             evaluated_at=start,
             evaluation_ms=elapsed,
         )
+
+
+# ── Schema versioning helpers ──────────────────────────────
+
+
+def _validate_api_version(data: dict) -> None:
+    """Validate and warn about the apiVersion field in a policy document.
+
+    Args:
+        data: Parsed policy dict (from YAML/JSON).
+
+    Raises:
+        ValueError: If the ``apiVersion`` is present but not recognized.
+    """
+    api_version = data.get("apiVersion")
+
+    if api_version is None:
+        # Legacy policy without apiVersion — treat as v1.0, inject current
+        legacy_version = data.get("version", "1.0")
+        if legacy_version in SUPPORTED_API_VERSIONS:
+            info = SUPPORTED_API_VERSIONS[legacy_version]
+            if info["status"] == "deprecated":
+                warnings.warn(
+                    f"Policy schema version '{legacy_version}' is deprecated. "
+                    f"Add 'apiVersion: {info['migrate_to']}' to your policy file. "
+                    f"See https://github.com/microsoft/agent-governance-toolkit/docs/policy-migration.md",
+                    DeprecationWarning,
+                    stacklevel=3,
+                )
+        data["apiVersion"] = CURRENT_API_VERSION
+        return
+
+    if api_version not in SUPPORTED_API_VERSIONS:
+        raise ValueError(
+            f"Unsupported policy apiVersion: '{api_version}'. "
+            f"Supported versions: {list(SUPPORTED_API_VERSIONS.keys())}"
+        )
+
+    info = SUPPORTED_API_VERSIONS[api_version]
+    if info["status"] == "deprecated":
+        warnings.warn(
+            f"Policy apiVersion '{api_version}' is deprecated. "
+            f"Migrate to '{info['migrate_to']}'. "
+            f"See https://github.com/microsoft/agent-governance-toolkit/docs/policy-migration.md",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+
+
+def migrate_policy(yaml_content: str, target_version: str = CURRENT_API_VERSION) -> str:
+    """Migrate a policy YAML document to the target schema version.
+
+    Currently supports:
+    - ``1.0`` → ``governance.toolkit/v1``: Adds ``apiVersion`` field.
+
+    Args:
+        yaml_content: Raw YAML policy string.
+        target_version: Target apiVersion to migrate to.
+
+    Returns:
+        Updated YAML string with the new apiVersion.
+
+    Raises:
+        ValueError: If the target version is not supported.
+    """
+    if target_version not in SUPPORTED_API_VERSIONS:
+        raise ValueError(f"Unknown target version: {target_version}")
+
+    data = yaml.safe_load(yaml_content)
+    current = data.get("apiVersion", data.get("version", "1.0"))
+
+    if current == target_version:
+        return yaml_content  # Already at target
+
+    # Migration: 1.0 → governance.toolkit/v1
+    if current == "1.0" and target_version == CURRENT_API_VERSION:
+        data["apiVersion"] = CURRENT_API_VERSION
+        if "version" in data:
+            del data["version"]
+        return yaml.dump(data, default_flow_style=False, sort_keys=False)
+
+    logger.warning(
+        "No migration path from '%s' to '%s'", current, target_version
+    )
+    return yaml_content
+
+
+def validate_policy_schema(yaml_content: str) -> list[str]:
+    """Validate a policy YAML document against its declared schema.
+
+    Checks for required fields, valid values, and structural correctness.
+
+    Args:
+        yaml_content: Raw YAML policy string.
+
+    Returns:
+        List of validation error strings. Empty list means valid.
+    """
+    errors: list[str] = []
+    try:
+        data = yaml.safe_load(yaml_content)
+    except yaml.YAMLError as e:
+        return [f"YAML parse error: {e}"]
+
+    if not isinstance(data, dict):
+        return ["Policy must be a YAML mapping"]
+
+    # Check apiVersion
+    api_version = data.get("apiVersion", data.get("version", "1.0"))
+    if api_version not in SUPPORTED_API_VERSIONS:
+        errors.append(f"Unknown apiVersion: '{api_version}'")
+
+    # Check required fields
+    if "name" not in data:
+        errors.append("Missing required field: 'name'")
+
+    # Validate rules
+    rules = data.get("rules", [])
+    if not isinstance(rules, list):
+        errors.append("'rules' must be a list")
+    else:
+        valid_actions = {"allow", "deny", "warn", "require_approval", "log"}
+        for i, rule in enumerate(rules):
+            if not isinstance(rule, dict):
+                errors.append(f"Rule {i}: must be a mapping")
+                continue
+            if "name" not in rule:
+                errors.append(f"Rule {i}: missing required field 'name'")
+            if "condition" not in rule:
+                errors.append(f"Rule {i}: missing required field 'condition'")
+            action = rule.get("action", "deny")
+            if action not in valid_actions:
+                errors.append(
+                    f"Rule {i} ('{rule.get('name', '?')}'): "
+                    f"invalid action '{action}', must be one of {valid_actions}"
+                )
+
+    # Validate default_action
+    default_action = data.get("default_action", "deny")
+    if default_action not in ("allow", "deny"):
+        errors.append(f"Invalid default_action: '{default_action}', must be 'allow' or 'deny'")
+
+    return errors

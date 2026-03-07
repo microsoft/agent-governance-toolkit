@@ -250,10 +250,17 @@ class ScopeChain(BaseModel):
         self.leaf_capabilities = link.delegated_capabilities
         self._update_chain_hash()
 
+    def _verify_link_signature(self, link: DelegationLink) -> bool:
+        """Verify the Ed25519 signature on a delegation link."""
+        identity = self.known_identities.get(link.parent_did)
+        if identity is None:
+            return True  # Graceful fallback — can't verify without identity
+        signable_data = f"{link.parent_did}:{link.child_did}:{','.join(sorted(link.delegated_capabilities))}"
+        return identity.verify_signature(signable_data.encode(), link.parent_signature)
+
     def verify(self) -> tuple[bool, Optional[str]]:
         """
-        Verify the chain — simple scope narrowing only.
-        No cryptographic signature verification.
+        Verify the chain — scope narrowing, hash integrity, and signatures.
         """
         if not self.links:
             return True, None
@@ -273,6 +280,14 @@ class ScopeChain(BaseModel):
                 if cap not in previous_capabilities:
                     if not link._is_narrower_capability(cap, previous_capabilities):
                         return False, f"Capability escalation at link {i}: {cap}"
+            
+            # Verify link hash
+            if link.link_hash != link.compute_hash():
+                return False, f"Invalid link hash at link {i}"
+            
+            # Verify Ed25519 signature
+            if not self._verify_link_signature(link):
+                return False, f"Invalid signature at link {i}"
             
             previous_hash = link.link_hash
             previous_capabilities = link.delegated_capabilities

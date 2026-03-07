@@ -11,6 +11,7 @@ from caas.ingestion.processors import (
     CodeProcessor,
     ProcessorFactory,
 )
+from caas.ingestion.structure_parser import StructureParser
 
 __all__ = [
     "BaseProcessor",
@@ -18,4 +19,5 @@ __all__ = [
     "HTMLProcessor",
     "CodeProcessor",
     "ProcessorFactory",
+    "StructureParser",
 ]

@@ -96,6 +96,18 @@ from .base import (
 )
 from .config import AgentOSConfig, get_config, reset_config
 from .dry_run import DryRunCollector, DryRunDecision, DryRunPolicy, DryRunResult
+from .escalation import (
+    ApprovalBackend,
+    DefaultTimeoutAction,
+    EscalationDecision,
+    EscalationHandler,
+    EscalationPolicy,
+    EscalationRequest,
+    EscalationResult,
+    InMemoryApprovalQueue,
+    WebhookApprovalBackend,
+)
+from .compat import CompatReport, check_compatibility, doctor, warn_on_import
 from .health import ComponentHealth, HealthChecker, HealthReport, HealthStatus
 from .logging import GovernanceLogger, JSONFormatter, get_logger
 from .policy_compose import PolicyHierarchy, compose_policies, override_policy
@@ -167,6 +179,21 @@ __all__ = [
     "DryRunResult",
     "DryRunDecision",
     "DryRunCollector",
+    # Escalation (Human-in-the-Loop)
+    "EscalationPolicy",
+    "EscalationHandler",
+    "EscalationRequest",
+    "EscalationResult",
+    "EscalationDecision",
+    "DefaultTimeoutAction",
+    "ApprovalBackend",
+    "InMemoryApprovalQueue",
+    "WebhookApprovalBackend",
+    # Version Compatibility
+    "doctor",
+    "check_compatibility",
+    "CompatReport",
+    "warn_on_import",
     # Rate Limiting
     "RateLimiter",
     "RateLimitStatus",

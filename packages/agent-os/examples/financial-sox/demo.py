@@ -46,6 +46,16 @@ from agent_os.integrations.base import (
     ToolCallResult,
 )
 
+
+def _redact(value, visible_chars: int = 0) -> str:
+    """Redact a sensitive value for safe logging."""
+    s = str(value)
+    if not s:
+        return "***"
+    if visible_chars > 0:
+        return s[:visible_chars] + "***"
+    return "***"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # 1. GOVERNANCE POLICY
 #    SOX-oriented policy using only community-edition features:
@@ -359,7 +369,7 @@ def run_demo() -> None:
     ssn_message = "Pay vendor 123-45-6789 for invoice #42"
     import re
     redacted_msg = re.sub(r'\d{3}-\d{2}-\d{4}', 'XXX-XX-XXXX', ssn_message)
-    print(f'  Input: "{redacted_msg}"')
+    print(f'  Input: "{_redact(ssn_message, 11)}"')
     governed_call(
         integration, ctx, interceptor,
         "process_transaction",

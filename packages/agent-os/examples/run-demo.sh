@@ -67,7 +67,7 @@ case $MODE in
         ;;
     local)
         echo "🐍 Running locally..."
-        pip install -e . -q
+        pip install --no-cache-dir -e . -q
         python demo.py "$@"
         ;;
     k8s)

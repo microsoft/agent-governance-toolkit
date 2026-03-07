@@ -10,12 +10,13 @@ on:
 
 permissions:
   contents: read
-  security-events: write
-  actions: read
 
 jobs:
   analyze:
     name: Analyze
+    permissions:
+      security-events: write
+      actions: read
     runs-on: ubuntu-latest
     continue-on-error: true
     strategy:

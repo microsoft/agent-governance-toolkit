@@ -186,18 +186,28 @@ class CardRegistry:
     Registry for trusted agent cards.
     
     Provides discovery and caching of verified cards.
+    Optionally integrates with a ``RevocationList`` to reject cards
+    whose agent DID has been revoked.
     """
     
-    def __init__(self, cache_ttl_seconds: int = 900):
+    def __init__(
+        self,
+        cache_ttl_seconds: int = 900,
+        revocation_list: Optional["RevocationList"] = None,
+    ):
         """Initialise the card registry.
 
         Args:
             cache_ttl_seconds: Time-to-live in seconds for the
                 verification cache. Defaults to 900 (15 minutes).
+            revocation_list: Optional revocation list to check during
+                verification. When set, revoked agent DIDs fail
+                ``is_verified()`` even if their signatures are valid.
         """
         self._cards: Dict[str, TrustedAgentCard] = {}
         self._verified_cache: Dict[str, tuple[bool, datetime]] = {}
         self._cache_ttl = timedelta(seconds=cache_ttl_seconds)
+        self._revocation_list = revocation_list
     
     def register(self, card: TrustedAgentCard) -> bool:
         """
@@ -229,12 +239,29 @@ class CardRegistry:
         """
         return self._cards.get(agent_did)
     
+    @property
+    def revocation_list(self) -> Optional["RevocationList"]:
+        """The attached revocation list, if any."""
+        return self._revocation_list
+
+    @revocation_list.setter
+    def revocation_list(self, value: Optional["RevocationList"]) -> None:
+        self._revocation_list = value
+        self.clear_cache()
+
     def is_verified(self, agent_did: str) -> bool:
         """
         Check if a card is verified (with caching).
         
         Uses TTL-based caching to avoid repeated verification.
+        Returns False if the agent DID is on the revocation list,
+        even if the cryptographic signature is valid.
         """
+        # Revocation check always runs (not cached — revocations are instant)
+        if self._revocation_list and self._revocation_list.is_revoked(agent_did):
+            self._verified_cache.pop(agent_did, None)
+            return False
+
         if agent_did in self._verified_cache:
             verified, timestamp = self._verified_cache[agent_did]
             if datetime.now(timezone.utc) - timestamp < self._cache_ttl:

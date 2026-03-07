@@ -113,7 +113,7 @@ class TestAuditService:
         summary = self.svc.summary()
         assert summary["total_entries"] == 2
         assert summary["chain_valid"] is True
-        assert summary["root_hash"] is None  # No chain root
+        assert summary["root_hash"] is not None  # Merkle root is computed
 
     def test_summary_empty(self):
         summary = self.svc.summary()
@@ -125,7 +125,7 @@ class TestAuditService:
         self.svc.log_action("did:mesh:alice", "read")
         chain = self.svc.chain
         assert chain is not None
-        assert chain.get_root_hash() is None  # No chain root
+        assert chain.get_root_hash() is not None  # Merkle root is computed
 
 
 # ── RewardService Tests ─────────────────────────────────────────────

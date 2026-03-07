@@ -50,15 +50,15 @@ FROM base as development
 # Switch back to root for dev tools installation
 USER root
 
-# Install development dependencies
+# Install development dependencies (pinned for reproducibility)
 RUN pip install --no-cache-dir \
-    pytest>=7.0.0 \
-    pytest-cov>=4.0.0 \
-    black>=23.0.0 \
-    flake8>=6.0.0 \
-    mypy>=1.0.0 \
-    ipython \
-    jupyter
+    pytest==8.3.4 \
+    pytest-cov==6.0.0 \
+    black==24.10.0 \
+    flake8==7.1.1 \
+    mypy==1.13.0 \
+    ipython==8.30.0 \
+    jupyter==1.1.1
 
 # Switch back to acp user
 USER acp

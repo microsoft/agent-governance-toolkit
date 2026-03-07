@@ -10,6 +10,7 @@ Targets: trust/cards.py, identity/spiffe.py, identity/sponsor.py,
 import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch, PropertyMock
+from urllib.parse import urlparse
 import json
 
 
@@ -275,7 +276,10 @@ class TestSPIFFEIdentity:
             agent_did="did:mesh:1", agent_name="a", trust_domain="custom.io"
         )
         assert si.trust_domain == "custom.io"
-        assert si.spiffe_id.startswith("spiffe://custom.io/")
+        parsed = urlparse(si.spiffe_id)
+        assert parsed.scheme == "spiffe"
+        assert parsed.hostname == "custom.io"
+        assert parsed.path.startswith("/")
     def test_issue_svid(self):
         si = SPIFFEIdentity.create(agent_did="did:mesh:1", agent_name="a")
         svid = si.issue_svid(ttl_hours=2)
@@ -400,7 +404,10 @@ class TestSPIFFERegistry:
     def test_custom_trust_domain(self):
         reg = SPIFFERegistry(trust_domain="custom.io")
         identity = reg.register("did:mesh:1", "a")
-        assert identity.spiffe_id.startswith("spiffe://custom.io/")
+        parsed = urlparse(identity.spiffe_id)
+        assert parsed.scheme == "spiffe"
+        assert parsed.hostname == "custom.io"
+        assert parsed.path.startswith("/")
 
 
 # ---------------------------------------------------------------------------
@@ -1841,21 +1848,28 @@ class TestProtocolBridge:
 
     @pytest.mark.asyncio
     async def test_translate_a2a_to_mcp(self):
-        """Bridge is passthrough only."""
+        """Bridge translates A2A to MCP format."""
         pb = ProtocolBridge(agent_did="did:mesh:me")
-        assert not hasattr(pb, '_translate')
+        msg = {"task_type": "run", "parameters": {"x": 1}}
+        result = await pb._translate(msg, "a2a", "mcp")
+        assert result["method"] == "tools/call"
+        assert result["params"]["name"] == "run"
 
     @pytest.mark.asyncio
     async def test_translate_mcp_to_a2a(self):
-        """Bridge is passthrough only."""
+        """Bridge translates MCP to A2A format."""
         pb = ProtocolBridge(agent_did="did:mesh:me")
-        assert not hasattr(pb, '_translate')
+        msg = {"params": {"name": "run", "arguments": {"x": 1}}}
+        result = await pb._translate(msg, "mcp", "a2a")
+        assert result["task_type"] == "run"
 
     @pytest.mark.asyncio
     async def test_translate_iatp_passthrough(self):
-        """Bridge is passthrough only."""
+        """IATP messages pass through without translation."""
         pb = ProtocolBridge(agent_did="did:mesh:me")
-        assert not hasattr(pb, '_translate')
+        msg = {"data": "test"}
+        result = await pb._translate(msg, "iatp", "a2a")
+        assert result == msg
 
     def test_add_verification_footer(self):
         pb = ProtocolBridge(agent_did="did:mesh:me")

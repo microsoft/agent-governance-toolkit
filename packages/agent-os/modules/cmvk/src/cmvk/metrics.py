@@ -1,26 +1,35 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic single-model verification
 """
-CMVK Distance Metrics Module — Community Edition
+CMVK Distance Metrics Module
 
-Basic distance metrics using Python stdlib only (no numpy/scipy).
+Provides configurable distance metrics for embedding verification.
+All functions are pure (no side effects) and use only numpy/scipy.
 
 Supported Metrics:
-    - cosine: Cosine distance (default)
-    - euclidean: Euclidean distance
+    - cosine: Cosine distance (default, normalizes vectors)
+    - euclidean: Euclidean distance (preserves magnitude)
     - manhattan: Manhattan/L1 distance
-    - chebyshev: Chebyshev/L∞ distance
-    - mahalanobis: Mahalanobis distance (identity covariance only)
+    - chebyshev: Chebyshev/L∞ distance (max absolute difference)
+    - mahalanobis: Mahalanobis distance (accounts for correlation)
 """
 
 from __future__ import annotations
 
-import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+
+import numpy as np
+from numpy.typing import ArrayLike
+
+try:
+    from scipy import spatial
+
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
 
 
 class DistanceMetric(Enum):
@@ -51,193 +60,283 @@ class MetricResult:
     details: dict
 
 
-def _dot(a: list[float], b: list[float]) -> float:
-    return sum(ai * bi for ai, bi in zip(a, b))
+def cosine_distance(vec_a: np.ndarray, vec_b: np.ndarray) -> MetricResult:
+    """
+    Calculate cosine distance between two vectors.
 
+    Cosine distance = 1 - cosine_similarity
+    Range: [0, 2] where 0 = identical direction, 1 = orthogonal, 2 = opposite
 
-def _norm(v: list[float]) -> float:
-    return math.sqrt(sum(x * x for x in v))
+    Note: Cosine distance normalizes vectors, losing magnitude information.
+    Use Euclidean distance when magnitude matters.
 
+    Args:
+        vec_a: First vector
+        vec_b: Second vector
 
-def _to_floats(v: Any) -> list[float]:
-    """Convert any array-like to list[float]."""
-    if isinstance(v, list):
-        return [float(x) for x in v]
-    # handle numpy arrays or other iterables
-    return [float(x) for x in v]
-
-
-def cosine_distance(vec_a: list[float], vec_b: list[float]) -> MetricResult:
-    """Calculate cosine distance between two vectors."""
-    dot_val = _dot(vec_a, vec_b)
-    norm_a = _norm(vec_a)
-    norm_b = _norm(vec_b)
-
-    if norm_a == 0 or norm_b == 0:
-        dist = 1.0
+    Returns:
+        MetricResult with cosine distance
+    """
+    if HAS_SCIPY:
+        dist = spatial.distance.cosine(vec_a, vec_b)
     else:
-        dist = 1.0 - dot_val / (norm_a * norm_b)
+        dot = np.dot(vec_a, vec_b)
+        norm_a = np.linalg.norm(vec_a)
+        norm_b = np.linalg.norm(vec_b)
+        dist = 1.0 if norm_a == 0 or norm_b == 0 else 1.0 - dot / (norm_a * norm_b)
 
-    dist = max(0.0, min(2.0, dist))
+    # Handle numerical precision issues
+    dist = float(np.clip(dist, 0.0, 2.0))
 
     return MetricResult(
         distance=dist,
-        normalized=dist / 2.0,
+        normalized=dist / 2.0,  # Normalize to [0, 1]
         metric=DistanceMetric.COSINE,
         details={
             "cosine_similarity": 1.0 - dist,
-            "norm_a": norm_a,
-            "norm_b": norm_b,
+            "norm_a": float(np.linalg.norm(vec_a)),
+            "norm_b": float(np.linalg.norm(vec_b)),
         },
     )
 
 
 def euclidean_distance(
-    vec_a: list[float],
-    vec_b: list[float],
-    expected_range: tuple[float, float] | None = None,
+    vec_a: np.ndarray, vec_b: np.ndarray, expected_range: tuple[float, float] | None = None
 ) -> MetricResult:
-    """Calculate Euclidean (L2) distance between two vectors."""
-    dim_diffs = [abs(a - b) for a, b in zip(vec_a, vec_b)]
-    dist = math.sqrt(sum(d * d for d in dim_diffs))
+    """
+    Calculate Euclidean (L2) distance between two vectors.
 
-    max_diff_dim = max(range(len(dim_diffs)), key=lambda i: dim_diffs[i]) if dim_diffs else 0
-    max_diff_value = dim_diffs[max_diff_dim] if dim_diffs else 0.0
+    Unlike cosine distance, Euclidean distance preserves magnitude information.
+    This is critical for detecting drift in absolute values (e.g., NDVI scores).
 
+    Args:
+        vec_a: First vector
+        vec_b: Second vector
+        expected_range: Optional (min, max) expected range for normalization.
+                       If None, uses vector dimension for normalization.
+
+    Returns:
+        MetricResult with Euclidean distance
+    """
+    if HAS_SCIPY:
+        dist = spatial.distance.euclidean(vec_a, vec_b)
+    else:
+        dist = float(np.linalg.norm(vec_a - vec_b))
+
+    # Calculate per-dimension differences
+    dim_diffs = np.abs(vec_a - vec_b)
+    max_diff_dim = int(np.argmax(dim_diffs))
+    max_diff_value = float(dim_diffs[max_diff_dim])
+
+    # Normalization
     if expected_range is not None:
         min_val, max_val = expected_range
-        max_possible_dist = math.sqrt(len(vec_a)) * (max_val - min_val)
+        max_possible_dist = np.sqrt(len(vec_a)) * (max_val - min_val)
     else:
-        max_possible_dist = math.sqrt(len(vec_a) * 4)
+        # Assume normalized embeddings in [-1, 1]
+        max_possible_dist = np.sqrt(len(vec_a) * 4)
 
     normalized = min(dist / max_possible_dist, 1.0) if max_possible_dist > 0 else 0.0
 
-    mean_diff = sum(dim_diffs) / len(dim_diffs) if dim_diffs else 0.0
-
     return MetricResult(
         distance=dist,
-        normalized=normalized,
+        normalized=float(normalized),
         metric=DistanceMetric.EUCLIDEAN,
         details={
             "max_diff_dimension": max_diff_dim,
             "max_diff_value": max_diff_value,
-            "mean_diff": mean_diff,
+            "per_dimension_diff": dim_diffs.tolist() if len(dim_diffs) <= 20 else None,
+            "mean_diff": float(np.mean(dim_diffs)),
+            "std_diff": float(np.std(dim_diffs)),
         },
     )
 
 
 def manhattan_distance(
-    vec_a: list[float],
-    vec_b: list[float],
-    expected_range: tuple[float, float] | None = None,
+    vec_a: np.ndarray, vec_b: np.ndarray, expected_range: tuple[float, float] | None = None
 ) -> MetricResult:
-    """Calculate Manhattan (L1/city-block) distance between two vectors."""
-    dim_diffs = [abs(a - b) for a, b in zip(vec_a, vec_b)]
-    dist = sum(dim_diffs)
+    """
+    Calculate Manhattan (L1/city-block) distance between two vectors.
 
+    Sum of absolute differences across all dimensions.
+    More robust to outliers than Euclidean distance.
+
+    Args:
+        vec_a: First vector
+        vec_b: Second vector
+        expected_range: Optional (min, max) expected range for normalization.
+
+    Returns:
+        MetricResult with Manhattan distance
+    """
+    if HAS_SCIPY:
+        dist = spatial.distance.cityblock(vec_a, vec_b)
+    else:
+        dist = float(np.sum(np.abs(vec_a - vec_b)))
+
+    # Per-dimension contributions
+    dim_diffs = np.abs(vec_a - vec_b)
+    contributions = dim_diffs / dist if dist > 0 else np.zeros_like(dim_diffs)
+
+    # Normalization
     if expected_range is not None:
         min_val, max_val = expected_range
         max_possible_dist = len(vec_a) * (max_val - min_val)
     else:
-        max_possible_dist = len(vec_a) * 2
+        max_possible_dist = len(vec_a) * 2  # Assuming [-1, 1] range
 
     normalized = min(dist / max_possible_dist, 1.0) if max_possible_dist > 0 else 0.0
 
     return MetricResult(
-        distance=dist,
-        normalized=normalized,
+        distance=float(dist),
+        normalized=float(normalized),
         metric=DistanceMetric.MANHATTAN,
         details={
-            "mean_contribution": sum(dim_diffs) / len(dim_diffs) if dim_diffs else 0.0,
+            "per_dimension_contributions": (
+                contributions.tolist() if len(contributions) <= 20 else None
+            ),
+            "mean_contribution": float(np.mean(dim_diffs)),
             "total_dimensions": len(vec_a),
         },
     )
 
 
 def chebyshev_distance(
-    vec_a: list[float],
-    vec_b: list[float],
-    expected_range: tuple[float, float] | None = None,
+    vec_a: np.ndarray, vec_b: np.ndarray, expected_range: tuple[float, float] | None = None
 ) -> MetricResult:
-    """Calculate Chebyshev (L∞) distance between two vectors."""
-    dim_diffs = [abs(a - b) for a, b in zip(vec_a, vec_b)]
-    dist = max(dim_diffs) if dim_diffs else 0.0
-    max_diff_dim = max(range(len(dim_diffs)), key=lambda i: dim_diffs[i]) if dim_diffs else 0
+    """
+    Calculate Chebyshev (L∞) distance between two vectors.
 
+    Maximum absolute difference across any single dimension.
+    Useful for detecting if ANY dimension has significant drift.
+
+    Args:
+        vec_a: First vector
+        vec_b: Second vector
+        expected_range: Optional (min, max) expected range for normalization.
+
+    Returns:
+        MetricResult with Chebyshev distance
+    """
+    if HAS_SCIPY:
+        dist = spatial.distance.chebyshev(vec_a, vec_b)
+    else:
+        dist = float(np.max(np.abs(vec_a - vec_b)))
+
+    dim_diffs = np.abs(vec_a - vec_b)
+    max_diff_dim = int(np.argmax(dim_diffs))
+
+    # Normalization
     if expected_range is not None:
         min_val, max_val = expected_range
         max_possible_dist = max_val - min_val
     else:
-        max_possible_dist = 2.0
+        max_possible_dist = 2.0  # Assuming [-1, 1] range
 
     normalized = min(dist / max_possible_dist, 1.0) if max_possible_dist > 0 else 0.0
 
     return MetricResult(
-        distance=dist,
-        normalized=normalized,
+        distance=float(dist),
+        normalized=float(normalized),
         metric=DistanceMetric.CHEBYSHEV,
         details={
             "max_diff_dimension": max_diff_dim,
-            "max_diff_value": dim_diffs[max_diff_dim] if dim_diffs else 0.0,
+            "max_diff_value": float(dim_diffs[max_diff_dim]),
+            "second_max_diff": (
+                float(np.partition(dim_diffs, -2)[-2]) if len(dim_diffs) > 1 else 0.0
+            ),
         },
     )
 
 
 def mahalanobis_distance(
-    vec_a: list[float],
-    vec_b: list[float],
-    cov_inv: Any | None = None,
+    vec_a: np.ndarray, vec_b: np.ndarray, cov_inv: np.ndarray | None = None
 ) -> MetricResult:
     """
-    Calculate Mahalanobis distance (identity covariance only in community edition).
+    Calculate Mahalanobis distance between two vectors.
 
-    Falls back to Euclidean distance since we only support identity covariance.
+    Accounts for correlation between dimensions using covariance matrix.
+    Useful when dimensions are correlated (e.g., related environmental factors).
+
+    Args:
+        vec_a: First vector
+        vec_b: Second vector
+        cov_inv: Inverse of covariance matrix. If None, uses identity (= Euclidean).
+
+    Returns:
+        MetricResult with Mahalanobis distance
     """
-    diff = [a - b for a, b in zip(vec_a, vec_b)]
-    dist = math.sqrt(sum(d * d for d in diff))
+    diff = vec_a - vec_b
 
+    if cov_inv is None:
+        # Without covariance info, use identity matrix (equivalent to Euclidean)
+        cov_inv = np.eye(len(vec_a))
+        using_identity = True
+    else:
+        using_identity = False
+
+    if HAS_SCIPY:
+        try:
+            dist = spatial.distance.mahalanobis(vec_a, vec_b, cov_inv)
+        except Exception:
+            # Fallback if scipy fails
+            dist = float(np.sqrt(diff @ cov_inv @ diff))
+    else:
+        dist = float(np.sqrt(diff @ cov_inv @ diff))
+
+    # For Mahalanobis, normalization depends on the covariance structure
+    # Chi-squared with n degrees of freedom has expected value n
     n_dims = len(vec_a)
-    normalized = min(dist / math.sqrt(n_dims), 1.0) if n_dims > 0 else 0.0
+    # Normalize using expected value under null hypothesis
+    normalized = min(dist / np.sqrt(n_dims), 1.0)
 
     return MetricResult(
-        distance=dist,
-        normalized=normalized,
+        distance=float(dist),
+        normalized=float(normalized),
         metric=DistanceMetric.MAHALANOBIS,
         details={
-            "using_identity_covariance": True,
+            "using_identity_covariance": using_identity,
             "dimensions": n_dims,
-            "squared_distance": dist ** 2,
+            "squared_distance": float(dist**2),
         },
     )
 
 
 def calculate_distance(
-    vec_a: Any,
-    vec_b: Any,
+    vec_a: ArrayLike,
+    vec_b: ArrayLike,
     metric: str | DistanceMetric = "cosine",
     **kwargs: Any,
 ) -> MetricResult:
     """
     Calculate distance between two vectors using specified metric.
 
+    This is the primary entry point for distance calculations.
+
     Args:
         vec_a: First vector
         vec_b: Second vector
-        metric: Distance metric to use
+        metric: Distance metric to use. One of:
+            - "cosine": Cosine distance (default)
+            - "euclidean": Euclidean/L2 distance
+            - "manhattan": Manhattan/L1 distance
+            - "chebyshev": Chebyshev/L∞ distance
+            - "mahalanobis": Mahalanobis distance
         **kwargs: Additional arguments passed to the specific metric function
 
     Returns:
         MetricResult with distance and normalized score
 
     Raises:
-        ValueError: If metric is not supported or vectors have different lengths
+        ValueError: If metric is not supported or vectors have different shapes
     """
-    a = _to_floats(vec_a)
-    b = _to_floats(vec_b)
+    vec_a = np.asarray(vec_a, dtype=np.float64)
+    vec_b = np.asarray(vec_b, dtype=np.float64)
 
-    if len(a) != len(b):
-        raise ValueError(f"Shape mismatch: {len(a)} vs {len(b)}")
+    if vec_a.shape != vec_b.shape:
+        raise ValueError(f"Shape mismatch: {vec_a.shape} vs {vec_b.shape}")
 
+    # Convert string to enum
     if isinstance(metric, str):
         try:
             metric = DistanceMetric(metric.lower())
@@ -245,6 +344,7 @@ def calculate_distance(
             valid_metrics = [m.value for m in DistanceMetric]
             raise ValueError(f"Unknown metric '{metric}'. Valid metrics: {valid_metrics}")
 
+    # Dispatch to appropriate function
     metric_functions: dict[DistanceMetric, Callable[..., MetricResult]] = {
         DistanceMetric.COSINE: cosine_distance,
         DistanceMetric.EUCLIDEAN: euclidean_distance,
@@ -254,7 +354,7 @@ def calculate_distance(
     }
 
     func = metric_functions[metric]
-    return func(a, b, **kwargs)
+    return func(vec_a, vec_b, **kwargs)
 
 
 def get_available_metrics() -> list[str]:
@@ -268,57 +368,83 @@ def get_available_metrics() -> list[str]:
 
 
 def weighted_euclidean_distance(
-    vec_a: list[float],
-    vec_b: list[float],
-    weights: list[float] | None = None,
+    vec_a: np.ndarray,
+    vec_b: np.ndarray,
+    weights: np.ndarray | list[float] | None = None,
     expected_range: tuple[float, float] | None = None,
 ) -> MetricResult:
-    """Calculate weighted Euclidean distance between two vectors."""
+    """
+    Calculate weighted Euclidean distance between two vectors.
+
+    Allows certain dimensions to contribute more to the overall distance.
+
+    Args:
+        vec_a: First vector
+        vec_b: Second vector
+        weights: Weight for each dimension. If None, uses uniform weights.
+        expected_range: Optional (min, max) expected range for normalization.
+
+    Returns:
+        MetricResult with weighted Euclidean distance
+    """
+    weights_arr: np.ndarray
     if weights is None:
-        w = [1.0] * len(vec_a)
+        weights_arr = np.ones(len(vec_a))
     else:
-        w = _to_floats(weights)
-        if len(w) != len(vec_a):
-            raise ValueError(f"Weight length {len(w)} != vector length {len(vec_a)}")
+        weights_arr = np.asarray(weights, dtype=np.float64)
+        if len(weights_arr) != len(vec_a):
+            raise ValueError(f"Weight length {len(weights_arr)} != vector length {len(vec_a)}")
 
-    # Normalize weights to sum to number of dimensions
-    weight_sum = sum(w)
-    n = len(w)
-    w = [wi * n / weight_sum for wi in w]
+    # Normalize weights to sum to number of dimensions (preserve scale)
+    weight_sum = float(np.sum(weights_arr))
+    weights_arr = weights_arr * len(weights_arr) / weight_sum
 
-    diff_sq = [wi * (a - b) ** 2 for a, b, wi in zip(vec_a, vec_b, w)]
-    dist = math.sqrt(sum(diff_sq))
+    diff = vec_a - vec_b
+    weighted_diff_sq = weights_arr * (diff**2)
+    dist = float(np.sqrt(np.sum(weighted_diff_sq)))
 
+    # Per-dimension weighted contributions
+    weighted_contributions = weighted_diff_sq / (dist**2) if dist > 0 else np.zeros_like(diff)
+
+    # Normalization
     if expected_range is not None:
         min_val, max_val = expected_range
-        max_possible_dist = math.sqrt(sum(wi * ((max_val - min_val) ** 2) for wi in w))
+        max_possible_dist = np.sqrt(np.sum(weights_arr * ((max_val - min_val) ** 2)))
     else:
-        max_possible_dist = math.sqrt(sum(wi * 4 for wi in w))
+        max_possible_dist = np.sqrt(np.sum(weights_arr * 4))  # Assuming [-1, 1] range
 
     normalized = min(dist / max_possible_dist, 1.0) if max_possible_dist > 0 else 0.0
 
     return MetricResult(
         distance=dist,
-        normalized=normalized,
+        normalized=float(normalized),
         metric=DistanceMetric.EUCLIDEAN,
         details={
             "weighted": True,
+            "weights": weights_arr.tolist() if len(weights_arr) <= 20 else None,
+            "weighted_contributions": (
+                weighted_contributions.tolist() if len(weighted_contributions) <= 20 else None
+            ),
+            "top_contributing_dimension": int(np.argmax(weighted_contributions)),
+            "top_contribution_value": float(np.max(weighted_contributions)),
         },
     )
 
 
 def calculate_weighted_distance(
-    vec_a: Any,
-    vec_b: Any,
-    weights: Any | None = None,
+    vec_a: ArrayLike,
+    vec_b: ArrayLike,
+    weights: ArrayLike | None = None,
     metric: str | DistanceMetric = "euclidean",
     **kwargs: Any,
 ) -> MetricResult:
     """
     Calculate weighted distance between two vectors.
 
-    Currently supports weighted versions of euclidean.
-    For other metrics, falls back to unweighted.
+    Currently supports weighted versions of:
+    - euclidean: Weighted Euclidean distance
+
+    For other metrics, weights are not applied (falls back to unweighted).
 
     Args:
         vec_a: First vector
@@ -330,8 +456,8 @@ def calculate_weighted_distance(
     Returns:
         MetricResult with distance score
     """
-    a = _to_floats(vec_a)
-    b = _to_floats(vec_b)
+    vec_a = np.asarray(vec_a, dtype=np.float64)
+    vec_b = np.asarray(vec_b, dtype=np.float64)
 
     if isinstance(metric, str):
         try:
@@ -341,7 +467,7 @@ def calculate_weighted_distance(
             raise ValueError(f"Unknown metric '{metric}'. Valid metrics: {valid_metrics}")
 
     if weights is not None and metric == DistanceMetric.EUCLIDEAN:
-        w = _to_floats(weights)
-        return weighted_euclidean_distance(a, b, weights=w, **kwargs)
+        return weighted_euclidean_distance(vec_a, vec_b, weights=weights, **kwargs)
     else:
-        return calculate_distance(a, b, metric=metric, **kwargs)
+        # Fall back to unweighted calculation
+        return calculate_distance(vec_a, vec_b, metric=metric, **kwargs)

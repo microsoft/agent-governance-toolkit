@@ -15,6 +15,17 @@ import asyncio
 from .handshake import TrustHandshake, HandshakeResult
 from .capability import CapabilityScope
 
+# Import IATP from agent-os (the source of truth for trust protocol)
+try:
+    from modules.iatp import IATPClient, IATPMessage, TrustLevel
+    from modules.nexus import NexusClient, ReputationEngine
+    AGENT_OS_AVAILABLE = True
+except ImportError:
+    # Fallback if agent-os not installed yet (for development)
+    AGENT_OS_AVAILABLE = False
+    IATPClient = None
+    NexusClient = None
+
 
 class PeerInfo(BaseModel):
     """Information about a peer agent in the trust mesh.
@@ -163,14 +174,61 @@ class ProtocolBridge(BaseModel):
         source_protocol: str,
         target_protocol: Optional[str] = None,
     ) -> Any:
-        """Send a message — passthrough, no protocol translation."""
+        """Send a message to a peer, translating protocols if needed."""
         # Verify trust first
         if not await self.trust_bridge.is_peer_trusted(peer_did):
             result = await self.trust_bridge.verify_peer(peer_did, source_protocol)
             if not result.verified:
                 raise PermissionError(f"Peer not trusted: {peer_did}")
         
-        return await self._send(peer_did, message, target_protocol or source_protocol)
+        peer = self.trust_bridge.get_peer(peer_did)
+        dest_protocol = target_protocol or peer.protocol
+        
+        # Translate if needed
+        if source_protocol != dest_protocol:
+            message = await self._translate(message, source_protocol, dest_protocol)
+        
+        # Send via appropriate handler
+        return await self._send(peer_did, message, dest_protocol)
+    
+    async def _translate(
+        self,
+        message: Any,
+        from_protocol: str,
+        to_protocol: str,
+    ) -> Any:
+        """Translate message between protocols."""
+        # Protocol translation mappings
+        if from_protocol == "a2a" and to_protocol == "mcp":
+            return self._a2a_to_mcp(message)
+        elif from_protocol == "mcp" and to_protocol == "a2a":
+            return self._mcp_to_a2a(message)
+        elif from_protocol == "iatp":
+            # IATP can wrap any protocol
+            return message
+        else:
+            # Default: pass through
+            return message
+    
+    def _a2a_to_mcp(self, message: dict) -> dict:
+        """Convert A2A message to MCP format."""
+        # A2A task -> MCP tool call
+        return {
+            "method": "tools/call",
+            "params": {
+                "name": message.get("task_type", "execute"),
+                "arguments": message.get("parameters", {}),
+            },
+        }
+    
+    def _mcp_to_a2a(self, message: dict) -> dict:
+        """Convert MCP message to A2A format."""
+        # MCP tool call -> A2A task
+        params = message.get("params", {})
+        return {
+            "task_type": params.get("name", "execute"),
+            "parameters": params.get("arguments", {}),
+        }
     
     def add_verification_footer(
         self,

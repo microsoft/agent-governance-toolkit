@@ -51,7 +51,8 @@ class TestInteractionGraph:
     def test_record_interaction_noop(self, engine):
         engine.record_interaction("a", "b")
         neighbors = engine.get_neighbors("a")
-        assert neighbors == []
+        assert len(neighbors) == 1
+        assert neighbors[0][0] == "b"
 
     def test_get_neighbors_empty(self, engine):
         assert engine.get_neighbors("a") == []
@@ -78,7 +79,7 @@ class TestTrustEvents:
         assert engine.get_score("a") == 400.0
 
     def test_propagation_to_neighbor(self, engine):
-        """No propagation — only direct impact."""
+        """Trust events propagate to neighbors via interaction graph."""
         engine.set_score("a", 800.0)
         engine.set_score("b", 800.0)
         engine.record_interaction("a", "b")
@@ -86,9 +87,9 @@ class TestTrustEvents:
         event = TrustEvent(agent_did="a", event_type="failure", severity_weight=1.0)
         deltas = engine.process_trust_event(event)
 
-        # B should NOT be affected (no propagation)
-        assert "b" not in deltas
-        assert engine.get_score("b") == 800.0
+        # B should be affected (propagation through interaction graph)
+        assert "b" in deltas
+        assert engine.get_score("b") < 800.0
 
     def test_propagation_depth_limit(self):
         """No propagation."""
@@ -190,7 +191,7 @@ class TestQueries:
         engine.record_interaction("a", "b")
         report = engine.get_health_report()
         assert report["agent_count"] >= 1
-        assert report["edge_count"] == 0  # No interaction graph
+        assert report["edge_count"] == 1  # Interaction graph tracks edges
 
     def test_alerts_list(self, engine):
         assert engine.alerts == []
