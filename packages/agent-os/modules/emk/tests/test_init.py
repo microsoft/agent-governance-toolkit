@@ -9,7 +9,7 @@ def test_import_main_package():
     """Test that the main package can be imported."""
     import emk
     assert hasattr(emk, '__version__')
-    assert emk.__version__ == "0.1.0"
+    assert emk.__version__ == "0.2.0"
 
 
 def test_import_episode():

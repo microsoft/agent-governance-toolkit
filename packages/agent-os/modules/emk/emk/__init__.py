@@ -4,7 +4,8 @@
 """
 emk - Episodic Memory Kernel.
 
-A mutable ledger of agent experiences for AI systems.
+A mutable ledger of agent experiences for AI systems with causal reasoning
+and sleep-cycle memory compression.
 
 Example:
     >>> from emk import Episode, FileAdapter
@@ -28,6 +29,7 @@ __license__ = "MIT"
 from emk.schema import Episode, SemanticRule
 from emk.store import VectorStoreAdapter, FileAdapter
 from emk.indexer import Indexer
+from emk.sleep_cycle import MemoryCompressor
 
 # Define explicit public API
 __all__: List[str] = [
@@ -41,6 +43,7 @@ __all__: List[str] = [
     "VectorStoreAdapter",
     "FileAdapter",
     "Indexer",
+    "MemoryCompressor",
 ]
 
 # Optional ChromaDB adapter - only import if chromadb is installed
@@ -50,6 +53,10 @@ try:
 except ImportError:
     if TYPE_CHECKING:
         from emk.store import ChromaDBAdapter  # noqa: F401
+
+# Causal memory (requires sqlite3, always available in stdlib)
+from emk.causal import CausalEpisode, CausalMemoryStore
+__all__.extend(["CausalEpisode", "CausalMemoryStore"])
 
 # Optional Hugging Face utilities - only import if huggingface_hub is installed
 try:
@@ -72,6 +79,7 @@ def get_version_info() -> dict:
     features = {
         "chromadb": "ChromaDBAdapter" in __all__,
         "huggingface": "upload_episodes_to_hub" in __all__,
+        "causal": True,
     }
     return {
         "version": __version__,
