@@ -8,11 +8,16 @@ AuditEntry class retains all fields for compatibility, but
 previous_hash and entry_hash are not computed.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Optional, Any
+from typing import TYPE_CHECKING, Optional, Any
 from pydantic import BaseModel, Field
 import json
 import uuid
+
+if TYPE_CHECKING:
+    from .audit_backends import AuditSink
 
 
 class AuditEntry(BaseModel):
@@ -154,12 +159,16 @@ class AuditLog:
     Append-only audit logging system.
     
     Entries are stored in a simple list with indexes for querying.
+    An optional external :class:`~audit_backends.AuditSink` can be
+    provided to persist entries to an external store with cryptographic
+    integrity.
     """
     
-    def __init__(self):
+    def __init__(self, *, sink: AuditSink | None = None):
         self._chain = AuditChain()
         self._by_agent: dict[str, list[str]] = {}
         self._by_type: dict[str, list[str]] = {}
+        self._sink = sink
     
     def log(
         self,
@@ -185,6 +194,10 @@ class AuditLog:
         )
         
         self._chain.add_entry(entry)
+        
+        # Write to external sink if configured
+        if self._sink is not None:
+            self._sink.write(entry)
         
         # Index
         if agent_did not in self._by_agent:

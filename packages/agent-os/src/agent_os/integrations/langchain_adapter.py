@@ -16,13 +16,23 @@ Usage:
 """
 
 import asyncio
+import functools
 import logging
+import re
 import time
+from datetime import datetime
 from typing import Any, Optional
 
-from .base import BaseIntegration, GovernancePolicy
+from .base import BaseIntegration, GovernancePolicy, GovernanceEventType
 
 logger = logging.getLogger("agent_os.langchain")
+
+# Patterns used to detect potential PII / secrets in memory writes
+_PII_PATTERNS = [
+    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),           # SSN
+    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),  # email
+    re.compile(r"\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+", re.IGNORECASE),
+]
 
 
 class LangChainKernel(BaseIntegration):
@@ -33,12 +43,15 @@ class LangChainKernel(BaseIntegration):
     - Chains (invoke, ainvoke)
     - Agents (run, arun)
     - Runnables (invoke, batch, stream)
+    - Deep hooks: tool registry interception, memory write validation,
+      and sub-agent spawn detection (when ``deep_hooks_enabled`` is True).
     """
 
     def __init__(
         self,
         policy: Optional[GovernancePolicy] = None,
         timeout_seconds: float = 300.0,
+        deep_hooks_enabled: bool = True,
     ):
         """Initialise the LangChain governance kernel.
 
@@ -47,12 +60,263 @@ class LangChainKernel(BaseIntegration):
                 ``GovernancePolicy`` is used.
             timeout_seconds: Default timeout in seconds for async operations
                 (default 300).
+            deep_hooks_enabled: When ``True`` (default), the kernel will
+                apply deep integration hooks — tool registry interception,
+                memory write validation, and sub-agent spawn detection —
+                during :meth:`wrap`.
         """
         super().__init__(policy)
         self.timeout_seconds = timeout_seconds
+        self.deep_hooks_enabled = deep_hooks_enabled
         self._wrapped_agents: dict[int, Any] = {}  # id(wrapped) -> original
         self._start_time = time.monotonic()
         self._last_error: Optional[str] = None
+        self._tool_invocations: list[dict[str, Any]] = []
+        self._memory_audit_log: list[dict[str, Any]] = []
+        self._delegation_chains: list[dict[str, Any]] = []
+
+    # ── Deep Integration Hooks ────────────────────────────────────
+
+    def _intercept_tool_registry(self, agent: Any, ctx: Any) -> None:
+        """Intercept the agent's tool registry to apply per-tool governance.
+
+        After the agent is wrapped this method inspects its ``tools``
+        attribute.  Each tool's ``_run`` and ``_arun`` methods are replaced
+        with governed wrappers that:
+
+        * Check the tool name against ``blocked_patterns`` in the active
+          policy before every invocation.
+        * Track each invocation (tool name, arguments, timestamp) in
+          :attr:`_tool_invocations`.
+        * Respect the ``allowed_tools`` allowlist when configured.
+
+        Args:
+            agent: The underlying LangChain agent / runnable.
+            ctx: The :class:`ExecutionContext` for governance checks.
+        """
+        tools = getattr(agent, "tools", None)
+        if not tools:
+            return
+
+        for tool in tools:
+            if getattr(tool, "_deep_governed", False):
+                continue
+            tool_name = getattr(tool, "name", type(tool).__name__)
+            self._wrap_tool_method(tool, tool_name, "_run", ctx)
+            self._wrap_tool_method(tool, tool_name, "_arun", ctx, is_async=True)
+            tool._deep_governed = True
+            logger.debug("Deep-governed tool registered: %s", tool_name)
+
+    def _wrap_tool_method(
+        self,
+        tool: Any,
+        tool_name: str,
+        method_name: str,
+        ctx: Any,
+        is_async: bool = False,
+    ) -> None:
+        """Replace a single tool method with a governed wrapper.
+
+        Args:
+            tool: The LangChain tool object.
+            tool_name: Human-readable tool name for logging/audit.
+            method_name: The attribute to patch (``"_run"`` or ``"_arun"``).
+            ctx: Execution context.
+            is_async: Whether the target method is a coroutine.
+        """
+        original_method = getattr(tool, method_name, None)
+        if original_method is None:
+            return
+
+        kernel = self
+
+        if is_async:
+            @functools.wraps(original_method)
+            async def governed_async(*args: Any, **kwargs: Any) -> Any:
+                kernel._check_tool_policy(tool_name, args, kwargs, ctx)
+                kernel._record_tool_invocation(tool_name, args, kwargs)
+                return await original_method(*args, **kwargs)
+
+            setattr(tool, method_name, governed_async)
+        else:
+            @functools.wraps(original_method)
+            def governed_sync(*args: Any, **kwargs: Any) -> Any:
+                kernel._check_tool_policy(tool_name, args, kwargs, ctx)
+                kernel._record_tool_invocation(tool_name, args, kwargs)
+                return original_method(*args, **kwargs)
+
+            setattr(tool, method_name, governed_sync)
+
+    def _check_tool_policy(
+        self, tool_name: str, args: Any, kwargs: Any, ctx: Any
+    ) -> None:
+        """Validate a tool call against the active governance policy.
+
+        Raises :class:`PolicyViolationError` if the tool is not allowed or
+        if its arguments match a blocked pattern.
+        """
+        # Allowed-tools check
+        if self.policy.allowed_tools and tool_name not in self.policy.allowed_tools:
+            raise PolicyViolationError(
+                f"Tool '{tool_name}' not in allowed list: {self.policy.allowed_tools}"
+            )
+
+        # Blocked-patterns check on arguments
+        args_str = str(args) + str(kwargs)
+        matched = self.policy.matches_pattern(args_str)
+        if matched:
+            raise PolicyViolationError(
+                f"Blocked pattern '{matched[0]}' detected in tool '{tool_name}' arguments"
+            )
+
+        # Blocked-patterns check on tool name itself
+        name_matched = self.policy.matches_pattern(tool_name)
+        if name_matched:
+            raise PolicyViolationError(
+                f"Tool '{tool_name}' matches blocked pattern '{name_matched[0]}'"
+            )
+
+    def _record_tool_invocation(
+        self, tool_name: str, args: Any, kwargs: Any
+    ) -> None:
+        """Append a tool invocation record to the audit log."""
+        record = {
+            "tool_name": tool_name,
+            "args": str(args),
+            "kwargs": str(kwargs),
+            "timestamp": datetime.now().isoformat(),
+        }
+        self._tool_invocations.append(record)
+        if self.policy.log_all_calls:
+            logger.info("Tool invocation: %s", record)
+
+    # ── Memory Write Interception ─────────────────────────────────
+
+    def _intercept_memory(self, agent: Any, ctx: Any) -> None:
+        """Intercept memory writes on the wrapped agent.
+
+        If the underlying object exposes a ``memory`` attribute with a
+        ``save_context`` method, that method is replaced with a governed
+        wrapper that:
+
+        * Validates the data being written against PII / secret patterns.
+        * Checks data against ``blocked_patterns`` in the active policy.
+        * Logs every memory write to :attr:`_memory_audit_log`.
+
+        Args:
+            agent: The underlying LangChain agent / chain.
+            ctx: The :class:`ExecutionContext` for governance checks.
+        """
+        memory = getattr(agent, "memory", None)
+        if memory is None:
+            return
+
+        save_context = getattr(memory, "save_context", None)
+        if save_context is None or getattr(memory, "_deep_governed", False):
+            return
+
+        kernel = self
+
+        @functools.wraps(save_context)
+        def governed_save_context(inputs: Any, outputs: Any) -> Any:
+            """Governed wrapper around ``memory.save_context``."""
+            kernel._validate_memory_write(inputs, outputs, ctx)
+            result = save_context(inputs, outputs)
+            kernel._memory_audit_log.append({
+                "action": "save_context",
+                "inputs_summary": str(inputs)[:200],
+                "outputs_summary": str(outputs)[:200],
+                "timestamp": datetime.now().isoformat(),
+                "agent_id": ctx.agent_id,
+            })
+            logger.debug(
+                "Memory write recorded for agent=%s", ctx.agent_id
+            )
+            return result
+
+        memory.save_context = governed_save_context
+        memory._deep_governed = True
+
+    def _validate_memory_write(
+        self, inputs: Any, outputs: Any, ctx: Any
+    ) -> None:
+        """Check memory content for PII, secrets, and blocked patterns.
+
+        Raises :class:`PolicyViolationError` if the content being written
+        to memory matches any PII pattern or blocked policy pattern.
+
+        Args:
+            inputs: The input dict being stored.
+            outputs: The output dict being stored.
+            ctx: Execution context.
+        """
+        combined = str(inputs) + str(outputs)
+
+        # PII / secrets detection
+        for pattern in _PII_PATTERNS:
+            if pattern.search(combined):
+                raise PolicyViolationError(
+                    f"Memory write blocked: sensitive data detected "
+                    f"(pattern: {pattern.pattern})"
+                )
+
+        # Policy blocked-patterns check
+        matched = self.policy.matches_pattern(combined)
+        if matched:
+            raise PolicyViolationError(
+                f"Memory write blocked: blocked pattern '{matched[0]}' detected"
+            )
+
+    # ── Sub-agent Spawn Detection ─────────────────────────────────
+
+    def _detect_agent_spawning(self, agent: Any, ctx: Any) -> None:
+        """Wrap ``invoke`` calls to detect and govern sub-agent delegation.
+
+        Monitors the agent's ``invoke`` method (if present on the original
+        object) for delegation patterns.  Each invocation increments a
+        depth counter and is checked against the policy's
+        ``max_tool_calls`` as a proxy for maximum delegation depth.
+
+        Delegation chains are recorded in :attr:`_delegation_chains`.
+
+        Args:
+            agent: The underlying LangChain agent / runnable.
+            ctx: The :class:`ExecutionContext` for governance checks.
+        """
+        original_invoke = getattr(agent, "invoke", None)
+        if original_invoke is None or getattr(agent, "_spawn_governed", False):
+            return
+
+        kernel = self
+        max_depth = self.policy.max_tool_calls  # reuse as delegation depth cap
+
+        @functools.wraps(original_invoke)
+        def governed_invoke(input_data: Any, **kwargs: Any) -> Any:
+            # Track delegation depth via ctx metadata
+            depth = len(kernel._delegation_chains) + 1
+            if depth > max_depth:
+                raise PolicyViolationError(
+                    f"Max delegation depth ({max_depth}) exceeded at depth {depth}"
+                )
+
+            chain_record = {
+                "parent_agent": ctx.agent_id,
+                "depth": depth,
+                "input_summary": str(input_data)[:200],
+                "timestamp": datetime.now().isoformat(),
+            }
+            kernel._delegation_chains.append(chain_record)
+            logger.info(
+                "Sub-agent delegation detected: agent=%s depth=%d",
+                ctx.agent_id, depth,
+            )
+
+            return original_invoke(input_data, **kwargs)
+
+        agent.invoke = governed_invoke
+        agent._spawn_governed = True
+
+    # ── wrap / unwrap ─────────────────────────────────────────────
 
     def wrap(self, agent: Any) -> Any:
         """Wrap a LangChain chain, agent, or runnable with governance.
@@ -60,6 +324,16 @@ class LangChainKernel(BaseIntegration):
         Creates a proxy object that intercepts all execution methods
         (``invoke``, ``ainvoke``, ``run``, ``batch``, ``stream``) and
         applies pre-/post-execution policy checks.
+
+        When :attr:`deep_hooks_enabled` is ``True`` (the default) the
+        following additional hooks are applied:
+
+        * **Tool registry interception** — each tool's ``_run`` / ``_arun``
+          is wrapped with governance checks.
+        * **Memory write interception** — ``memory.save_context`` is
+          validated for PII and blocked patterns.
+        * **Sub-agent spawn detection** — ``invoke`` calls are monitored
+          for delegation depth.
 
         The wrapping strategy uses a dynamically created inner class so that
         attribute access for non-execution methods (e.g. ``name``,
@@ -90,6 +364,21 @@ class LangChainKernel(BaseIntegration):
 
         # Store original
         self._wrapped_agents[id(agent)] = agent
+
+        # Apply deep hooks before creating the wrapper class
+        if self.deep_hooks_enabled:
+            try:
+                self._intercept_tool_registry(agent, ctx)
+            except Exception as exc:
+                logger.warning("Tool registry interception failed: %s", exc)
+            try:
+                self._intercept_memory(agent, ctx)
+            except Exception as exc:
+                logger.warning("Memory interception failed: %s", exc)
+            try:
+                self._detect_agent_spawning(agent, ctx)
+            except Exception as exc:
+                logger.warning("Agent spawn detection setup failed: %s", exc)
 
         # Create wrapper class
         original = agent

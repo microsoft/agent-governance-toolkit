@@ -15,7 +15,10 @@ Usage:
     result = governed_crew.kickoff()
 """
 
+import functools
 import logging
+import re
+from datetime import datetime
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -30,6 +33,13 @@ from .base import (
 
 logger = logging.getLogger(__name__)
 
+# Patterns used to detect potential PII / secrets in memory writes
+_PII_PATTERNS = [
+    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),           # SSN
+    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),  # email
+    re.compile(r"\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+", re.IGNORECASE),
+]
+
 
 class CrewAIKernel(BaseIntegration):
     """
@@ -40,12 +50,18 @@ class CrewAIKernel(BaseIntegration):
     - Individual agents within crews
     - Task execution monitoring
     - Individual tool call interception (allowed_tools, blocked_patterns)
+    - Deep hooks: step-by-step task execution, memory interception,
+      and sub-agent delegation detection (when ``deep_hooks_enabled`` is True).
     """
 
-    def __init__(self, policy: Optional[GovernancePolicy] = None):
+    def __init__(self, policy: Optional[GovernancePolicy] = None, deep_hooks_enabled: bool = True):
         super().__init__(policy)
+        self.deep_hooks_enabled = deep_hooks_enabled
         self._wrapped_crews: dict[int, Any] = {}
-        logger.debug("CrewAIKernel initialized with policy=%s", policy)
+        self._step_log: list[dict[str, Any]] = []
+        self._memory_audit_log: list[dict[str, Any]] = []
+        self._delegation_log: list[dict[str, Any]] = []
+        logger.debug("CrewAIKernel initialized with policy=%s deep_hooks_enabled=%s", policy, deep_hooks_enabled)
 
     def wrap(self, crew: Any) -> Any:
         """
@@ -159,7 +175,12 @@ class CrewAIKernel(BaseIntegration):
                 tool._governed = True
 
             def _wrap_agent(self, agent):
-                """Add governance hooks to individual agent and its tools"""
+                """Add governance hooks to individual agent and its tools.
+
+                When ``deep_hooks_enabled`` is ``True`` on the kernel, this
+                also applies step-level execution interception, memory write
+                validation, and delegation detection.
+                """
                 agent_name = getattr(agent, 'name', str(id(agent)))
                 logger.debug("Wrapping individual agent: crew_name=%s, agent=%s", self._crew_name, agent_name)
 
@@ -171,6 +192,7 @@ class CrewAIKernel(BaseIntegration):
                 original_execute = getattr(agent, 'execute_task', None)
                 if original_execute:
                     crew_name = self._crew_name
+
                     def governed_execute(task, *args, **kwargs):
                         task_id = getattr(task, 'id', None) or str(id(task))
                         logger.info("Agent task execution started: crew_name=%s, task_id=%s", crew_name, task_id)
@@ -181,6 +203,7 @@ class CrewAIKernel(BaseIntegration):
                         allowed, reason = self._kernel.pre_execute(self._ctx, task)
                         if not allowed:
                             raise PolicyViolationError(f"Task blocked: {reason}")
+
                         result = original_execute(task, *args, **kwargs)
                         valid, drift_reason = self._kernel.post_execute(self._ctx, result)
                         if not valid:
@@ -188,6 +211,12 @@ class CrewAIKernel(BaseIntegration):
                         logger.info("Agent task execution completed: crew_name=%s, task_id=%s", crew_name, task_id)
                         return result
                     agent.execute_task = governed_execute
+
+                # Deep hooks at agent level
+                if self._kernel.deep_hooks_enabled:
+                    self._kernel._intercept_task_steps(agent, agent_name, self._crew_name)
+                    self._kernel._intercept_crew_memory(agent, self._ctx, agent_name)
+                    self._kernel._detect_crew_delegation(agent, self._ctx, agent_name)
 
             def __getattr__(self, name):
                 return getattr(self._original, name)
@@ -198,6 +227,157 @@ class CrewAIKernel(BaseIntegration):
         """Get original crew from wrapped version"""
         logger.debug("Unwrapping governed crew")
         return governed_crew._original
+
+    # ── Deep Integration Hooks ────────────────────────────────────
+
+    def _intercept_task_steps(
+        self, agent: Any, agent_name: str, crew_name: str
+    ) -> None:
+        """Hook into individual step execution within a task.
+
+        If the agent exposes a ``step`` or ``_execute_step`` method, it is
+        wrapped so that each intermediate step is logged and validated
+        against governance policy.
+
+        Args:
+            agent: The CrewAI agent being governed.
+            agent_name: Human-readable agent name for logging.
+            crew_name: Human-readable crew name for logging.
+        """
+        for step_attr in ("step", "_execute_step"):
+            original_step = getattr(agent, step_attr, None)
+            if original_step is None or getattr(original_step, "_step_governed", False) is True:
+                continue
+
+            kernel = self
+
+            @functools.wraps(original_step)
+            def governed_step(*args: Any, _orig=original_step, _attr=step_attr, **kwargs: Any) -> Any:
+                step_record = {
+                    "crew": crew_name,
+                    "agent": agent_name,
+                    "timestamp": datetime.now().isoformat(),
+                    "step_attr": _attr,
+                }
+                kernel._step_log.append(step_record)
+                logger.debug(
+                    "Step intercepted: crew=%s agent=%s step=%s",
+                    crew_name, agent_name, _attr,
+                )
+
+                # Validate step input against policy
+                step_input = args[0] if args else kwargs
+                matched = kernel.policy.matches_pattern(str(step_input))
+                if matched:
+                    raise PolicyViolationError(
+                        f"Step blocked: pattern '{matched[0]}' detected in step input"
+                    )
+
+                return _orig(*args, **kwargs)
+
+            governed_step._step_governed = True
+            setattr(agent, step_attr, governed_step)
+
+    def _intercept_crew_memory(
+        self, agent: Any, ctx: Any, agent_name: str
+    ) -> None:
+        """Intercept memory writes for a CrewAI agent's shared memory.
+
+        CrewAI agents may have a ``memory`` or ``shared_memory`` attribute.
+        This method wraps the memory's write / save methods with governance
+        validation that checks for PII, secrets, and blocked patterns.
+
+        Args:
+            agent: The CrewAI agent being governed.
+            ctx: Execution context for audit logging.
+            agent_name: Human-readable agent name for logging.
+        """
+        for mem_attr in ("memory", "shared_memory", "long_term_memory"):
+            memory = getattr(agent, mem_attr, None)
+            if memory is None:
+                continue
+
+            for save_method_name in ("save", "save_context", "add"):
+                save_fn = getattr(memory, save_method_name, None)
+                if save_fn is None or getattr(save_fn, "_mem_governed", False) is True:
+                    continue
+
+                kernel = self
+
+                @functools.wraps(save_fn)
+                def governed_save(*args: Any, _orig=save_fn, _mname=save_method_name, **kwargs: Any) -> Any:
+                    combined = str(args) + str(kwargs)
+
+                    # PII / secrets check
+                    for pattern in _PII_PATTERNS:
+                        if pattern.search(combined):
+                            raise PolicyViolationError(
+                                f"Memory write blocked: sensitive data detected "
+                                f"(pattern: {pattern.pattern})"
+                            )
+
+                    # Blocked patterns check
+                    matched = kernel.policy.matches_pattern(combined)
+                    if matched:
+                        raise PolicyViolationError(
+                            f"Memory write blocked: pattern '{matched[0]}' detected"
+                        )
+
+                    result = _orig(*args, **kwargs)
+                    kernel._memory_audit_log.append({
+                        "agent": agent_name,
+                        "method": _mname,
+                        "content_summary": combined[:200],
+                        "timestamp": datetime.now().isoformat(),
+                    })
+                    return result
+
+                governed_save._mem_governed = True
+                setattr(memory, save_method_name, governed_save)
+
+    def _detect_crew_delegation(
+        self, agent: Any, ctx: Any, agent_name: str
+    ) -> None:
+        """Detect when a CrewAI agent delegates work to another agent.
+
+        Wraps the ``delegate_work`` or ``execute_task`` related delegation
+        methods to track and govern delegation chains.
+
+        Args:
+            agent: The CrewAI agent being governed.
+            ctx: Execution context for audit logging.
+            agent_name: Human-readable agent name for logging.
+        """
+        delegate_fn = getattr(agent, "delegate_work", None)
+        if delegate_fn is None or getattr(delegate_fn, "_delegation_governed", False) is True:
+            return
+
+        kernel = self
+        max_depth = self.policy.max_tool_calls
+
+        @functools.wraps(delegate_fn)
+        def governed_delegate(*args: Any, **kwargs: Any) -> Any:
+            depth = len(kernel._delegation_log) + 1
+            if depth > max_depth:
+                raise PolicyViolationError(
+                    f"Max delegation depth ({max_depth}) exceeded at depth {depth}"
+                )
+
+            record = {
+                "delegator": agent_name,
+                "depth": depth,
+                "args_summary": str(args)[:200],
+                "timestamp": datetime.now().isoformat(),
+            }
+            kernel._delegation_log.append(record)
+            logger.info(
+                "Crew delegation detected: agent=%s depth=%d",
+                agent_name, depth,
+            )
+            return delegate_fn(*args, **kwargs)
+
+        governed_delegate._delegation_governed = True
+        agent.delegate_work = governed_delegate
 
 
 # Convenience function

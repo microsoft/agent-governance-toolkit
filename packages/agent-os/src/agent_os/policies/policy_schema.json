@@ -1,0 +1,127 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/microsoft/agent-governance-toolkit/policy-schema/v1.0",
+  "title": "Agent-OS Policy Document",
+  "description": "JSON Schema for Agent-OS declarative governance policy documents.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version identifier.",
+      "default": "1.0"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable policy name.",
+      "default": "unnamed"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the policy purpose.",
+      "default": ""
+    },
+    "rules": {
+      "type": "array",
+      "description": "Ordered list of governance rules.",
+      "items": {
+        "$ref": "#/definitions/PolicyRule"
+      },
+      "default": []
+    },
+    "defaults": {
+      "$ref": "#/definitions/PolicyDefaults",
+      "description": "Default settings applied when no rule matches."
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "PolicyOperator": {
+      "type": "string",
+      "description": "Comparison operator for policy conditions.",
+      "enum": ["eq", "ne", "gt", "lt", "gte", "lte", "in", "matches", "contains"]
+    },
+    "PolicyAction": {
+      "type": "string",
+      "description": "Action a policy rule prescribes.",
+      "enum": ["allow", "deny", "audit", "block"]
+    },
+    "PolicyCondition": {
+      "type": "object",
+      "description": "A single condition evaluated against execution context.",
+      "properties": {
+        "field": {
+          "type": "string",
+          "description": "Context field name, e.g. 'tool_name', 'token_count'."
+        },
+        "operator": {
+          "$ref": "#/definitions/PolicyOperator",
+          "description": "Comparison operator."
+        },
+        "value": {
+          "description": "Value to compare against. Type depends on the operator."
+        }
+      },
+      "required": ["field", "operator", "value"],
+      "additionalProperties": false
+    },
+    "PolicyRule": {
+      "type": "object",
+      "description": "A single governance rule within a policy document.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique rule identifier."
+        },
+        "condition": {
+          "$ref": "#/definitions/PolicyCondition",
+          "description": "Condition that triggers this rule."
+        },
+        "action": {
+          "$ref": "#/definitions/PolicyAction",
+          "description": "Action to take when the condition matches."
+        },
+        "priority": {
+          "type": "integer",
+          "description": "Higher priority rules are evaluated first.",
+          "default": 0
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable explanation of the rule.",
+          "default": ""
+        }
+      },
+      "required": ["name", "condition", "action"],
+      "additionalProperties": false
+    },
+    "PolicyDefaults": {
+      "type": "object",
+      "description": "Default settings applied when no rule matches.",
+      "properties": {
+        "action": {
+          "$ref": "#/definitions/PolicyAction",
+          "description": "Default action when no rule matches.",
+          "default": "allow"
+        },
+        "max_tokens": {
+          "type": "integer",
+          "description": "Maximum token budget.",
+          "default": 4096
+        },
+        "max_tool_calls": {
+          "type": "integer",
+          "description": "Maximum number of tool calls allowed.",
+          "default": 10
+        },
+        "confidence_threshold": {
+          "type": "number",
+          "description": "Minimum confidence score required.",
+          "default": 0.8,
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

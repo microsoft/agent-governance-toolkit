@@ -7,6 +7,7 @@ Separates policy rules (YAML/JSON data) from evaluation logic,
 enabling policies to be authored, versioned, and shared as plain files.
 """
 
+from .async_evaluator import AsyncPolicyEvaluator, ConcurrencyStats
 from .bridge import document_to_governance, governance_to_document
 from .evaluator import PolicyDecision, PolicyEvaluator
 from .schema import (
@@ -28,6 +29,8 @@ from .shared import (
 )
 
 __all__ = [
+    "AsyncPolicyEvaluator",
+    "ConcurrencyStats",
     "Condition",
     "PolicyAction",
     "PolicyCondition",

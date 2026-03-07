@@ -18,6 +18,8 @@ from .tracing import (
 from .metrics import setup_metrics, MetricsCollector, MeshMetrics, start_metrics_server
 from .prometheus_exporter import MeshMetricsExporter
 from .prometheus_exporter import start_http_server as start_exporter_server
+from .otel_governance import GovernanceTracer
+from .prometheus_governance import GovernanceMetrics
 
 __all__ = [
     "setup_tracing",
@@ -33,4 +35,6 @@ __all__ = [
     "MeshMetricsExporter",
     "start_metrics_server",
     "start_exporter_server",
+    "GovernanceTracer",
+    "GovernanceMetrics",
 ]

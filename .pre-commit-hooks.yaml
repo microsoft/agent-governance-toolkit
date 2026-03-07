@@ -1,0 +1,18 @@
+# Pre-commit hooks for Agent-OS policy validation.
+# Add this repo as a pre-commit hook source:
+#
+#   repos:
+#     - repo: https://github.com/microsoft/agent-governance-toolkit
+#       rev: main
+#       hooks:
+#         - id: validate-policy
+#
+- id: validate-policy
+  name: Validate Agent-OS policy files
+  language: python
+  entry: python -m agent_os.policies.cli validate
+  files: '.*polic.*\.(yaml|yml|json)$'
+  types_or: [yaml, json]
+  additional_dependencies:
+    - pydantic>=2.0.0
+    - pyyaml>=6.0.0

@@ -4,6 +4,8 @@
 
 Baselines normal agent behavior and automatically flags deviations
 using statistical, sequential, and resource-based detection strategies.
+Includes rogue-agent detection (OWASP ASI-10) via frequency, entropy,
+and capability-profile analysis.
 """
 
 from agent_sre.anomaly.detector import (
@@ -14,6 +16,15 @@ from agent_sre.anomaly.detector import (
     BehaviorBaseline,
     DetectorConfig,
 )
+from agent_sre.anomaly.rogue_detector import (
+    ActionEntropyScorer,
+    CapabilityProfileDeviation,
+    RiskLevel,
+    RogueAgentDetector,
+    RogueAssessment,
+    RogueDetectorConfig,
+    ToolCallFrequencyAnalyzer,
+)
 from agent_sre.anomaly.strategies import (
     ResourceStrategy,
     SequentialStrategy,
@@ -21,13 +32,20 @@ from agent_sre.anomaly.strategies import (
 )
 
 __all__ = [
+    "ActionEntropyScorer",
     "AnomalyAlert",
     "AnomalyDetector",
     "AnomalySeverity",
     "AnomalyType",
     "BehaviorBaseline",
+    "CapabilityProfileDeviation",
     "DetectorConfig",
     "ResourceStrategy",
+    "RiskLevel",
+    "RogueAgentDetector",
+    "RogueAssessment",
+    "RogueDetectorConfig",
     "SequentialStrategy",
     "StatisticalStrategy",
+    "ToolCallFrequencyAnalyzer",
 ]

@@ -236,6 +236,17 @@ from .kernel_space import (
     create_kernel,
 )
 
+# Process-Level Isolation (v0.5.0 - Real SIGKILL enforcement)
+from .process_isolation import (
+    ProcessIsolationManager,
+    AgentProcessHandle,
+    AgentProcessResult,
+    AgentProcessState,
+    IsolationLevel,
+    IsolatedSignalDispatcher,
+    create_isolated_signal_dispatcher,
+)
+
 # Hugging Face Hub utilities (optional - requires huggingface_hub)
 try:
     from .hf_utils import (
@@ -451,6 +462,15 @@ __all__ = [
     "user_space_execution",
     "create_kernel",
     
+    # Process-Level Isolation
+    "ProcessIsolationManager",
+    "AgentProcessHandle",
+    "AgentProcessResult",
+    "AgentProcessState",
+    "IsolationLevel",
+    "IsolatedSignalDispatcher",
+    "create_isolated_signal_dispatcher",
+
     # Hugging Face Hub utilities (optional)
     "HFConfig",
     "download_red_team_dataset",
