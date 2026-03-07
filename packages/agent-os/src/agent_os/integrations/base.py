@@ -9,6 +9,7 @@ All framework adapters inherit from this base class.
 from __future__ import annotations
 
 import asyncio
+import copy
 import difflib
 import fnmatch
 import hashlib
@@ -822,12 +823,17 @@ class BaseIntegration(ABC):
         pass
 
     def create_context(self, agent_id: str) -> ExecutionContext:
-        """Create execution context for an agent."""
+        """Create execution context for an agent.
+
+        The policy is **deep-copied** so that the session is pinned to
+        the policy that was active when the context was created. This
+        prevents mid-session mutations from leaking into running sessions.
+        """
         from uuid import uuid4
         ctx = ExecutionContext(
             agent_id=agent_id,
             session_id=str(uuid4())[:8],
-            policy=self.policy
+            policy=copy.deepcopy(self.policy),
         )
         self.contexts[agent_id] = ctx
         return ctx

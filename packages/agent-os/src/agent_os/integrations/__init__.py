@@ -114,6 +114,7 @@ from .policy_compose import PolicyHierarchy, compose_policies, override_policy
 from .rate_limiter import RateLimiter, RateLimitStatus
 from .templates import PolicyTemplates
 from .token_budget import TokenBudgetStatus, TokenBudgetTracker
+from .tool_aliases import ToolAliasRegistry
 from .webhooks import DeliveryRecord, WebhookConfig, WebhookEvent, WebhookNotifier
 
 __all__ = [
@@ -194,6 +195,8 @@ __all__ = [
     "check_compatibility",
     "CompatReport",
     "warn_on_import",
+    # Tool Aliases
+    "ToolAliasRegistry",
     # Rate Limiting
     "RateLimiter",
     "RateLimitStatus",
