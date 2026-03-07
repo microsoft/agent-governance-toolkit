@@ -1,13 +1,22 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic self-correction with retry
-"""
-Self-Correcting Agent Kernel — Community Edition.
 
-Basic self-correction with simple retry logic.
+"""
+Self-Correcting Agent Kernel
+
+A Dual-Loop Architecture for Enterprise Agents:
+- Loop 1 (Runtime): Constraint Engine (Safety)
+- Loop 2 (Offline): Alignment Engine (Quality & Efficiency)
+  - Completeness Auditor (detects laziness)
+  - Semantic Purge (scales by subtraction)
+
+Reference Implementations:
+- auditor.py: Simplified soft failure detection
+- teacher.py: Shadow Teacher diagnosis
+- memory_manager.py: Lesson lifecycle management
 """
 
-__version__ = "3.0.0-community"
+__version__ = "2.1.0"
 
 from .kernel import SelfCorrectingAgentKernel
 from .models import (
@@ -15,16 +24,22 @@ from .models import (
     AgentOutcome, CompletenessAudit, ClassifiedPatch,
     OutcomeType, GiveUpSignal, PatchDecayType,
     ToolExecutionTelemetry, ToolExecutionStatus,
-    SemanticAnalysis, NudgeResult,
+    SemanticAnalysis, NudgeResult
 )
 from .outcome_analyzer import OutcomeAnalyzer
+from .completeness_auditor import CompletenessAuditor
+from .semantic_purge import SemanticPurge, PatchClassifier
 from .triage import FailureTriage, FixStrategy
-from .auditor import CompletenessAuditor
+from .semantic_analyzer import SemanticAnalyzer
+from .nudge_mechanism import NudgeMechanism
+
+# Reference implementations (simplified examples)
+from .auditor import CompletenessAuditor as SimpleCompletenessAuditor
+from .teacher import diagnose_failure
 from .memory_manager import MemoryManager, LessonType
 
 __all__ = [
     "SelfCorrectingAgentKernel",
-    # models
     "AgentFailure",
     "FailureAnalysis",
     "CorrectionPatch",
@@ -38,11 +53,17 @@ __all__ = [
     "ToolExecutionStatus",
     "SemanticAnalysis",
     "NudgeResult",
-    # components
     "OutcomeAnalyzer",
+    "CompletenessAuditor",
+    "SemanticPurge",
+    "PatchClassifier",
     "FailureTriage",
     "FixStrategy",
-    "CompletenessAuditor",
+    "SemanticAnalyzer",
+    "NudgeMechanism",
+    # Reference implementations
+    "SimpleCompletenessAuditor",
+    "diagnose_failure",
     "MemoryManager",
     "LessonType",
 ]
