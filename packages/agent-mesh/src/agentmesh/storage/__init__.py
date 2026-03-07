@@ -11,6 +11,7 @@ from .memory_provider import MemoryStorageProvider
 from .redis_provider import RedisStorageProvider
 from .postgres_provider import PostgresStorageProvider
 from .redis_backend import RedisTrustStore
+from .file_trust_store import FileTrustStore
 
 __all__ = [
     "AbstractStorageProvider",
@@ -19,4 +20,5 @@ __all__ = [
     "RedisStorageProvider",
     "PostgresStorageProvider",
     "RedisTrustStore",
+    "FileTrustStore",
 ]
