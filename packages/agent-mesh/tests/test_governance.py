@@ -196,7 +196,7 @@ class TestAudit:
         assert entry is not None
         assert entry.event_type == "agent_action"
         assert entry.agent_did == "did:agentmesh:test-agent"
-        assert entry.entry_hash == ""  # No hash computation
+        assert entry.entry_hash != ""  # Hash is computed by MerkleAuditChain
     
     def test_audit_retrieval(self):
         """Test retrieving audit entries by agent and type."""
@@ -225,12 +225,12 @@ class TestAudit:
         )
         chain.add_entry(entry)
         
-        # Root hash is None
-        assert chain.get_root_hash() is None
+        # Root hash is computed
+        assert chain.get_root_hash() is not None
         
-        # No proofs
+        # Proof is available
         proof = chain.get_proof(entry.entry_id)
-        assert proof is None
+        assert proof is not None
     
     def test_chain_tamper_detection(self):
         """Test that chain tampering is detected."""
@@ -253,7 +253,7 @@ class TestAudit:
         
         export = audit_log.export()
         assert export["entry_count"] == 1
-        assert export["chain_root"] is None  # No chain root
+        assert export["chain_root"] is not None  # Merkle root is computed
 
 
 class TestShadowMode:

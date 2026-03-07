@@ -11,6 +11,7 @@ previous_hash and entry_hash are not computed.
 from datetime import datetime
 from typing import Optional, Any
 from pydantic import BaseModel, Field
+import hashlib
 import json
 import uuid
 
@@ -54,12 +55,32 @@ class AuditEntry(BaseModel):
     session_id: Optional[str] = None
     
     def compute_hash(self) -> str:
-        """Return empty string."""
-        return ""
+        """Compute the SHA-256 hash of this entry's canonical fields.
+
+        Returns:
+            Hex-encoded SHA-256 digest.
+        """
+        data = {
+            "entry_id": self.entry_id,
+            "timestamp": self.timestamp.isoformat(),
+            "event_type": self.event_type,
+            "agent_did": self.agent_did,
+            "action": self.action,
+            "resource": self.resource,
+            "data": self.data,
+            "outcome": self.outcome,
+            "previous_hash": self.previous_hash,
+        }
+        canonical = json.dumps(data, sort_keys=True)
+        return hashlib.sha256(canonical.encode()).hexdigest()
     
     def verify_hash(self) -> bool:
-        """Always returns True."""
-        return True
+        """Verify that this entry's stored hash matches a fresh computation.
+
+        Returns:
+            ``True`` if ``entry_hash`` equals ``compute_hash()``.
+        """
+        return self.entry_hash == self.compute_hash()
 
     # ── CloudEvents v1.0 ──────────────────────────────────
 
@@ -102,8 +123,16 @@ class AuditEntry(BaseModel):
         }
 
 
-class ChainNode(BaseModel):
-    """Retained for API compatibility."""
+class MerkleNode(BaseModel):
+    """Node in a Merkle tree used for audit verification.
+
+    Attributes:
+        hash: SHA-256 hash of this node.
+        left_child: Hash of the left child node (``None`` for leaves).
+        right_child: Hash of the right child node (``None`` for leaves).
+        is_leaf: Whether this node is a leaf in the tree.
+        entry_id: Audit entry ID (populated only for leaf nodes).
+    """
     
     hash: str
     left_child: Optional[str] = None
@@ -112,28 +141,166 @@ class ChainNode(BaseModel):
     entry_id: Optional[str] = None
 
 
-class AuditChain:
+# Backward-compatible alias
+ChainNode = MerkleNode
+
+
+class MerkleAuditChain:
     """
-    Append-only audit log.
+    Merkle tree for efficient audit verification.
     
-    Retains the same API surface for compatibility with AuditService
-    and other consumers.
+    Allows:
+    - Efficient verification of single entries
+    - Proof that an entry exists in the log
+    - Detection of any tampering
     """
     
     def __init__(self):
         self._entries: list[AuditEntry] = []
+        self._tree: list[list[MerkleNode]] = []
+        self._root_hash: Optional[str] = None
     
     def add_entry(self, entry: AuditEntry) -> None:
-        """Append an entry to the log."""
+        """Add an entry and update the Merkle tree incrementally."""
+        # Set previous hash
+        if self._entries:
+            entry.previous_hash = self._entries[-1].entry_hash
+        
+        # Compute and set hash
+        entry.entry_hash = entry.compute_hash()
+        
         self._entries.append(entry)
+        
+        new_leaf = MerkleNode(
+            hash=entry.entry_hash,
+            is_leaf=True,
+            entry_id=entry.entry_id,
+        )
+        
+        n = len(self._entries)
+        
+        if n == 1:
+            # First entry — initialize tree
+            self._tree = [[new_leaf]]
+            self._root_hash = new_leaf.hash
+            return
+        
+        # Check if we need to expand the tree capacity
+        capacity = len(self._tree[0])
+        if n > capacity:
+            # Double capacity: pad leaves with empty nodes, add new tree level
+            for level_idx in range(len(self._tree)):
+                self._tree[level_idx].extend(
+                    [MerkleNode(hash="0" * 64) for _ in range(len(self._tree[level_idx]))]
+                )
+            # Add new root level
+            old_root = self._tree[-1][0]
+            empty_node = MerkleNode(hash="0" * 64)
+            combined = old_root.hash + empty_node.hash
+            new_root = MerkleNode(
+                hash=hashlib.sha256(combined.encode()).hexdigest(),
+                left_child=old_root.hash,
+                right_child=empty_node.hash,
+            )
+            self._tree.append([new_root, MerkleNode(hash="0" * 64)])
+
+        # Place new leaf
+        leaf_idx = n - 1
+        self._tree[0][leaf_idx] = new_leaf
+        
+        # Update path from leaf to root
+        idx = leaf_idx
+        for level_idx in range(len(self._tree) - 1):
+            parent_idx = idx // 2
+            left_idx = parent_idx * 2
+            right_idx = left_idx + 1
+            
+            left = self._tree[level_idx][left_idx]
+            right = self._tree[level_idx][right_idx] if right_idx < len(self._tree[level_idx]) else left
+            
+            combined = left.hash + right.hash
+            parent_hash = hashlib.sha256(combined.encode()).hexdigest()
+            
+            self._tree[level_idx + 1][parent_idx] = MerkleNode(
+                hash=parent_hash,
+                left_child=left.hash,
+                right_child=right.hash,
+            )
+            idx = parent_idx
+        
+        self._root_hash = self._tree[-1][0].hash if self._tree else None
+    
+    def _rebuild_tree(self) -> None:
+        """Rebuild Merkle tree from entries (full rebuild, used for verification)."""
+        if not self._entries:
+            self._tree = []
+            self._root_hash = None
+            return
+        
+        # Create leaf nodes
+        leaves = []
+        for entry in self._entries:
+            leaves.append(MerkleNode(
+                hash=entry.entry_hash,
+                is_leaf=True,
+                entry_id=entry.entry_id,
+            ))
+        
+        # Pad to power of 2
+        while len(leaves) & (len(leaves) - 1) != 0:
+            leaves.append(MerkleNode(hash="0" * 64, is_leaf=True))
+        
+        self._tree = [leaves]
+        
+        # Build tree bottom-up
+        current_level = leaves
+        while len(current_level) > 1:
+            next_level = []
+            for i in range(0, len(current_level), 2):
+                left = current_level[i]
+                right = current_level[i + 1] if i + 1 < len(current_level) else left
+                
+                combined = left.hash + right.hash
+                parent_hash = hashlib.sha256(combined.encode()).hexdigest()
+                
+                next_level.append(MerkleNode(
+                    hash=parent_hash,
+                    left_child=left.hash,
+                    right_child=right.hash,
+                ))
+            
+            self._tree.append(next_level)
+            current_level = next_level
+        
+        self._root_hash = self._tree[-1][0].hash if self._tree else None
     
     def get_root_hash(self) -> Optional[str]:
-        """Return None."""
-        return None
+        """Get the current Merkle root hash."""
+        return self._root_hash
     
     def get_proof(self, entry_id: str) -> Optional[list[tuple[str, str]]]:
-        """Return None."""
-        return None
+        """Get a Merkle inclusion proof for an entry."""
+        # Find entry index
+        entry_idx = None
+        for i, entry in enumerate(self._entries):
+            if entry.entry_id == entry_id:
+                entry_idx = i
+                break
+        
+        if entry_idx is None:
+            return None
+        
+        proof = []
+        idx = entry_idx
+        
+        for level in self._tree[:-1]:  # Exclude root
+            sibling_idx = idx ^ 1  # XOR to get sibling
+            if sibling_idx < len(level):
+                position = "right" if idx % 2 == 0 else "left"
+                proof.append((level[sibling_idx].hash, position))
+            idx //= 2
+        
+        return proof
     
     def verify_proof(
         self,
@@ -141,12 +308,38 @@ class AuditChain:
         proof: list[tuple[str, str]],
         root_hash: str,
     ) -> bool:
-        """Always returns True."""
-        return True
+        """Verify a Merkle inclusion proof."""
+        current = entry_hash
+        
+        for sibling_hash, position in proof:
+            if position == "right":
+                combined = current + sibling_hash
+            else:
+                combined = sibling_hash + current
+            current = hashlib.sha256(combined.encode()).hexdigest()
+        
+        return current == root_hash
     
     def verify_chain(self) -> tuple[bool, Optional[str]]:
-        """Always returns valid."""
+        """Verify the entire chain integrity."""
+        previous_hash = ""
+        
+        for i, entry in enumerate(self._entries):
+            # Verify entry's own hash
+            if not entry.verify_hash():
+                return False, f"Entry {i} hash mismatch"
+            
+            # Verify chain
+            if entry.previous_hash != previous_hash:
+                return False, f"Entry {i} chain broken"
+            
+            previous_hash = entry.entry_hash
+        
         return True, None
+
+
+# Backward-compatible alias
+AuditChain = MerkleAuditChain
 
 
 class AuditLog:
@@ -157,7 +350,7 @@ class AuditLog:
     """
     
     def __init__(self):
-        self._chain = AuditChain()
+        self._chain = MerkleAuditChain()
         self._by_agent: dict[str, list[str]] = {}
         self._by_type: dict[str, list[str]] = {}
     
@@ -262,8 +455,23 @@ class AuditLog:
         return self._chain.verify_chain()
     
     def get_proof(self, entry_id: str) -> Optional[dict[str, Any]]:
-        """Return None."""
-        return None
+        """Get tamper-proof evidence for a specific entry."""
+        entry = self.get_entry(entry_id)
+        if not entry:
+            return None
+        
+        proof = self._chain.get_proof(entry_id)
+        if not proof:
+            return None
+        
+        return {
+            "entry": entry.model_dump(),
+            "merkle_proof": proof,
+            "merkle_root": self._chain.get_root_hash(),
+            "verified": self._chain.verify_proof(
+                entry.entry_hash, proof, self._chain.get_root_hash()
+            ),
+        }
     
     def export(
         self,
@@ -275,6 +483,7 @@ class AuditLog:
         
         return {
             "exported_at": datetime.utcnow().isoformat(),
+            "merkle_root": self._chain.get_root_hash(),
             "chain_root": self._chain.get_root_hash(),
             "entry_count": len(entries),
             "entries": [e.model_dump() for e in entries],

@@ -1841,21 +1841,28 @@ class TestProtocolBridge:
 
     @pytest.mark.asyncio
     async def test_translate_a2a_to_mcp(self):
-        """Bridge is passthrough only."""
+        """Bridge translates A2A to MCP format."""
         pb = ProtocolBridge(agent_did="did:mesh:me")
-        assert not hasattr(pb, '_translate')
+        msg = {"task_type": "run", "parameters": {"x": 1}}
+        result = await pb._translate(msg, "a2a", "mcp")
+        assert result["method"] == "tools/call"
+        assert result["params"]["name"] == "run"
 
     @pytest.mark.asyncio
     async def test_translate_mcp_to_a2a(self):
-        """Bridge is passthrough only."""
+        """Bridge translates MCP to A2A format."""
         pb = ProtocolBridge(agent_did="did:mesh:me")
-        assert not hasattr(pb, '_translate')
+        msg = {"params": {"name": "run", "arguments": {"x": 1}}}
+        result = await pb._translate(msg, "mcp", "a2a")
+        assert result["task_type"] == "run"
 
     @pytest.mark.asyncio
     async def test_translate_iatp_passthrough(self):
-        """Bridge is passthrough only."""
+        """IATP messages pass through without translation."""
         pb = ProtocolBridge(agent_did="did:mesh:me")
-        assert not hasattr(pb, '_translate')
+        msg = {"data": "test"}
+        result = await pb._translate(msg, "iatp", "a2a")
+        assert result == msg
 
     def test_add_verification_footer(self):
         pb = ProtocolBridge(agent_did="did:mesh:me")
