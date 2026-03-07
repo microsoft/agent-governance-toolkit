@@ -30,6 +30,25 @@ from typing import Optional
 from collections import defaultdict
 import uuid
 
+
+# ============================================================
+# SAFE LOGGING HELPER
+# ============================================================
+
+def _redact(value, visible_chars: int = 0) -> str:
+    """Redact a sensitive value for safe logging.
+
+    Masks sensitive data to prevent clear-text logging of PHI/PII.
+    Shows only the first ``visible_chars`` characters followed by '***'.
+    """
+    s = str(value)
+    if not s:
+        return "***"
+    if visible_chars > 0:
+        return s[:visible_chars] + "***"
+    return "***"
+
+
 # ============================================================
 # HIPAA CONFIGURATION
 # ============================================================
@@ -564,7 +583,7 @@ class MedicalChartReviewAgent:
         """
         print(f"\n{'='*60}")
         print(f"📋 Chart Review Request")
-        print(f"   Patient: {patient_id[:3]}***")
+        print(f"   Patient: {_redact(patient_id, 3)}")
         print(f"   User: {user.name} ({user.role})")
         print(f"   Reason: {reason}")
         
@@ -659,7 +678,7 @@ class MedicalChartReviewAgent:
         Bypasses normal access controls but triggers alerts.
         """
         print(f"\n🚨 EMERGENCY ACCESS REQUEST")
-        print(f"   Patient: {patient_id[:3]}***")
+        print(f"   Patient: {_redact(patient_id, 3)}")
         print(f"   User: {user.name}")
         print(f"   Reason: {emergency_reason}")
         
@@ -782,21 +801,21 @@ async def demo():
     print("Test 1: Physician Reviews Chart (Full Access)")
     print("=" * 60)
     result = await agent.review_chart("P12345", doctor, "routine_review")
-    print(f"Status: {result['status']}")
-    print(f"Findings: {result['findings_count']}")
+    print(f"Status: {_redact(result.get('status', ''), 10)}")
+    print(f"Findings: {_redact(result.get('findings_count', 0), 5)}")
     for f in result.get("findings", []):
         icon = "🚨" if f["severity"] == "critical" else "⚠️"
-        print(f"  {icon} [{f['severity']}] finding detected")
+        print(f"  {icon} [{_redact(f.get('severity', ''), 10)}] finding detected")
     
     print("\n" + "=" * 60)
     print("Test 2: Receptionist Reviews Chart (De-identified)")
     print("=" * 60)
     result = await agent.review_chart("P12345", receptionist, "billing_inquiry")
-    print(f"Status: {result['status']}")
+    print(f"Status: {_redact(result.get('status', ''), 10)}")
     if result['status'] == 'denied':
         print(f"Reason: access denied")
     else:
-        print(f"De-identified: {result.get('deidentified', False)}")
+        print(f"De-identified: {_redact(result.get('deidentified', False), 10)}")
     
     print("\n" + "=" * 60)
     print("Test 3: Nurse Emergency Access (Break-the-Glass)")

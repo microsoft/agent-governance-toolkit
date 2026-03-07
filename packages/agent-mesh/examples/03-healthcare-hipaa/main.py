@@ -23,6 +23,16 @@ from agentmesh import (
 )
 
 
+def _redact(value, visible_chars: int = 0) -> str:
+    """Redact a sensitive value for safe logging."""
+    s = str(value)
+    if not s:
+        return "***"
+    if visible_chars > 0:
+        return s[:visible_chars] + "***"
+    return "***"
+
+
 class HealthcareAgent:
     """HIPAA-compliant healthcare data analysis agent."""
     
@@ -83,7 +93,7 @@ class HealthcareAgent:
     
     async def access_patient_data(self, patient_id: str, purpose: str) -> Dict[str, Any]:
         """Access patient data with HIPAA controls."""
-        print(f"📂 Accessing patient data: {patient_id[:3]}***")
+        print(f"📂 Accessing patient data: {_redact(patient_id, 3)}")
         print(f"   Purpose: {purpose}")
         
         # Check policy

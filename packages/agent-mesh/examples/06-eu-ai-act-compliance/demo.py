@@ -20,6 +20,16 @@ from compliance_checker import (
 )
 
 
+def _redact(value, visible_chars: int = 0) -> str:
+    """Redact a sensitive value for safe logging."""
+    s = str(value)
+    if not s:
+        return "***"
+    if visible_chars > 0:
+        return s[:visible_chars] + "***"
+    return "***"
+
+
 def banner(title: str) -> None:
     print(f"\n{'=' * 70}")
     print(f"  {title}")
@@ -125,7 +135,7 @@ def main() -> None:
         deployable = checker.can_deploy(agent)
         icon = "✅" if deployable else "🚫"
         status = "APPROVED" if deployable else "BLOCKED"
-        print(f"  {icon}  {label:40s} → {status}")  # lgtm[py/clear-text-logging-sensitive-data]
+        print(f"  {icon}  {_redact(label, 20):40s} → {status}")
 
     # ------------------------------------------------------------------
     # Demo 5 — Prohibited (unacceptable-risk) system

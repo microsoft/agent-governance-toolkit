@@ -25,8 +25,8 @@ RUN pip install --no-cache-dir -e .
 # Development stage
 FROM base as development
 
-# Install development dependencies
-RUN pip install --no-cache-dir pytest pytest-asyncio jupyter streamlit
+# Install development dependencies (pinned for reproducibility)
+RUN pip install --no-cache-dir pytest==8.3.4 pytest-asyncio==0.24.0 jupyter==1.1.1 streamlit==1.40.0
 
 # Copy source code
 COPY . .

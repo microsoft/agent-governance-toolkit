@@ -10,9 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy requirements
 COPY pyproject.toml .
 
-# Install Python dependencies
+# Install Python dependencies (pinned for reproducibility)
 RUN pip install --no-cache-dir \
-    pydantic>=2.0.0 \
+    pydantic==2.10.3 \
     && pip install --no-cache-dir -e .
 
 # Copy application code

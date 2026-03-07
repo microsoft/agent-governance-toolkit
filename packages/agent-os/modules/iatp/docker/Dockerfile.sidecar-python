@@ -11,7 +11,7 @@ COPY iatp/ /app/iatp/
 COPY setup.py /app/
 
 # Install IATP as package
-RUN pip install -e .
+RUN pip install --no-cache-dir -e .
 
 # Set Python path
 ENV PYTHONPATH=/app

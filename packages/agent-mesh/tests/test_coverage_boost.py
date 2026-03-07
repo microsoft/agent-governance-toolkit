@@ -10,6 +10,7 @@ Targets: trust/cards.py, identity/spiffe.py, identity/sponsor.py,
 import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch, PropertyMock
+from urllib.parse import urlparse
 import json
 
 
@@ -275,7 +276,10 @@ class TestSPIFFEIdentity:
             agent_did="did:mesh:1", agent_name="a", trust_domain="custom.io"
         )
         assert si.trust_domain == "custom.io"
-        assert si.spiffe_id.startswith("spiffe://custom.io/")
+        parsed = urlparse(si.spiffe_id)
+        assert parsed.scheme == "spiffe"
+        assert parsed.hostname == "custom.io"
+        assert parsed.path.startswith("/")
     def test_issue_svid(self):
         si = SPIFFEIdentity.create(agent_did="did:mesh:1", agent_name="a")
         svid = si.issue_svid(ttl_hours=2)
@@ -400,7 +404,10 @@ class TestSPIFFERegistry:
     def test_custom_trust_domain(self):
         reg = SPIFFERegistry(trust_domain="custom.io")
         identity = reg.register("did:mesh:1", "a")
-        assert identity.spiffe_id.startswith("spiffe://custom.io/")
+        parsed = urlparse(identity.spiffe_id)
+        assert parsed.scheme == "spiffe"
+        assert parsed.hostname == "custom.io"
+        assert parsed.path.startswith("/")
 
 
 # ---------------------------------------------------------------------------

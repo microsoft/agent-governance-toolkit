@@ -219,11 +219,17 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
 // Detect platform from URL
 function detectPlatform(url: string): string | null {
-  if (url.includes('github.com')) return 'github';
-  if (url.includes('atlassian.net') || url.includes('jira.')) return 'jira';
-  if (url.includes('console.aws.amazon.com')) return 'aws';
-  if (url.includes('gitlab.com')) return 'gitlab';
-  if (url.includes('linear.app')) return 'linear';
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname;
+    if (host === 'github.com' || host.endsWith('.github.com')) return 'github';
+    if (host === 'atlassian.net' || host.endsWith('.atlassian.net') || host.startsWith('jira.')) return 'jira';
+    if (host === 'console.aws.amazon.com') return 'aws';
+    if (host === 'gitlab.com' || host.endsWith('.gitlab.com')) return 'gitlab';
+    if (host === 'linear.app' || host.endsWith('.linear.app')) return 'linear';
+  } catch {
+    // Invalid URL
+  }
   return null;
 }
 
