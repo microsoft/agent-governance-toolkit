@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>AgentGovernance</RootNamespace>
+    <AssemblyName>AgentGovernance</AssemblyName>
+    <Version>1.0.0</Version>
+    <Authors>Microsoft</Authors>
+    <Company>Microsoft</Company>
+    <Description>Agent Governance Toolkit — .NET SDK for policy enforcement, zero-trust identity, and audit logging for autonomous AI agents. Compatible with Microsoft Agent Framework.</Description>
+    <PackageId>Microsoft.AgentGovernance</PackageId>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>ai;agents;governance;security;policy;owasp</PackageTags>
+    <RepositoryUrl>https://github.com/microsoft/agent-governance-toolkit</RepositoryUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+  </ItemGroup>
+
+</Project>
