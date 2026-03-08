@@ -12,7 +12,7 @@ jobs:
   welcome:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/first-interaction@34f15f4562c5e4085ea721c63dadab8138be06db # v1.3.0
+      - uses: actions/first-interaction@a1db7729b356323c7988c20ed6f0d33fe31297be # v1.3.0
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
           issue-message: |

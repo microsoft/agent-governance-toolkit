@@ -4,6 +4,21 @@ Get from zero to governed AI agents in under 10 minutes.
 
 > **Prerequisites:** Python 3.10+ and pip installed.
 
+## Architecture Overview
+
+The governance layer intercepts every agent action before execution:
+
+```mermaid
+graph LR
+    A[AI Agent] -->|Tool Call| B{Governance Layer}
+    B -->|Policy Check| C{PolicyEngine}
+    C -->|Allowed| D[Execute Tool]
+    C -->|Blocked| E[Security Block]
+    D --> F[Audit Log]
+    E --> F
+    F --> G[OTEL / Structured Logs]
+```
+
 ## 1. Installation
 
 Install the governance toolkit:
@@ -136,13 +151,4 @@ agent-compliance integrity --manifest integrity.json
 
 ---
 
-*Based on the initial quickstart contribution by [@davidequarracino](https://github.com/davidequarracino) ([#106](https://github.com/microsoft/agent-governance-toolkit/pull/106)).*
-## 3. Architecture Overview
-The following diagram shows how the toolkit intercepts calls to ensure safety:
-
-```mermaid
-graph LR
-    A[AI Agent] --> B{Governance Layer}
-    B -->|Compliant| C[Success / LLM Call]
-    B -->|Violation| D[Security Block]
-    C --> E[Audit Log]
+*Based on the initial quickstart contribution by [@davidequarracino](https://github.com/davidequarracino) ([#106](https://github.com/microsoft/agent-governance-toolkit/pull/106), [#108](https://github.com/microsoft/agent-governance-toolkit/pull/108)).*
