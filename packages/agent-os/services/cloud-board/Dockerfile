@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements first for caching
 COPY requirements.txt .
+# pinned: versions declared in requirements.txt with upper bounds
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the nexus module

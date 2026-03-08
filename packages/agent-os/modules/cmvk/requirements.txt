@@ -4,10 +4,10 @@
 # Last updated: 2026-01-23
 
 # Core dependencies (allowed only)
-numpy>=1.24.0
+numpy>=1.24.0,<2.0.0  # pinned
 
 # Optional: Enhanced statistical functions
-scipy>=1.11.0
+scipy>=1.11.0,<2.0.0  # pinned
 docker==7.1.0
 
 # For Hugging Face dataset upload (optional)

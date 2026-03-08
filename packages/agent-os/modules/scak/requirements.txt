@@ -3,9 +3,9 @@
 # =============================================================================
 
 # Core Dependencies (required)
-pydantic>=2.0.0
-pyyaml>=6.0
-agent-primitives>=0.1.0  # Layer 1: Shared failure models
+pydantic>=2.0.0,<3.0.0  # pinned
+pyyaml>=6.0,<7.0.0  # pinned
+agent-primitives>=0.1.0,<1.0.0  # pinned: Layer 1: Shared failure models
 
 # =============================================================================
 # Layer 4 Integration Dependencies (optional)
@@ -21,26 +21,26 @@ agent-primitives>=0.1.0  # Layer 1: Shared failure models
 # LLM Client Dependencies (optional)
 # =============================================================================
 # For Shadow Teacher and production LLM calls
-openai>=1.0.0  # For OpenAI API integration
-anthropic>=0.7.0  # For Claude API integration
+openai>=1.0.0,<2.0.0  # pinned: For OpenAI API integration
+anthropic>=0.7.0,<1.0.0  # pinned: For Claude API integration
 
 # =============================================================================
 # Testing and Development
 # =============================================================================
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
+pytest>=7.4.0,<9.0.0  # pinned
+pytest-asyncio>=0.21.0,<1.0.0  # pinned
 
 # =============================================================================
 # Optional Dependencies
 # =============================================================================
 
 # Visualization and Developer Tools
-streamlit>=1.37.0  # For telemetry dashboard
-jupyter>=1.0.0  # For interactive notebooks
+streamlit>=1.37.0,<2.0.0  # pinned: For telemetry dashboard
+jupyter>=1.0.0,<2.0.0  # pinned: For interactive notebooks
 
 # LangChain Integration
-langchain>=0.1.0  # For LangChain integration
-langchain-core>=0.1.0  # Core LangChain abstractions
+langchain>=0.1.0,<1.0.0  # pinned: For LangChain integration
+langchain-core>=0.1.0,<1.0.0  # pinned: Core LangChain abstractions
 
 # Distributed Computing (uncomment as needed)
 # ray>=2.8.0  # For distributed execution

@@ -21,12 +21,14 @@ FROM base as builder
 
 # Install Python dependencies
 COPY requirements.txt .
+# pinned: versions declared in requirements.txt with upper bounds
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
 COPY . .
 
 # Install the package in editable mode
+# pinned: local package, dependencies declared in pyproject.toml
 RUN pip install --no-cache-dir -e .
 
 # ============================================
@@ -42,6 +44,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY . .
 
 # Install the package
+# pinned: local package, dependencies declared in pyproject.toml
 RUN pip install --no-cache-dir -e .
 
 # Create non-root user for security

@@ -24,7 +24,7 @@ echo ""
 
 # Install build dependencies
 echo "2. Installing build dependencies..."
-pip install --no-cache-dir --upgrade "build>=1.2.2" "twine>=6.0.1"
+pip install --no-cache-dir --upgrade "build==1.2.2" "twine==6.0.1"
 echo "   ✓ Dependencies installed"
 echo ""
 

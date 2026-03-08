@@ -33,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 
 # Install Python dependencies
+# pinned: versions declared in requirements.txt with upper bounds
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy IATP library
@@ -41,6 +42,7 @@ COPY setup.py /app/
 COPY README.md /app/
 
 # Install IATP as a package
+# pinned: local package, dependencies declared in setup.py
 RUN pip install --no-cache-dir -e .
 
 # Set Python path

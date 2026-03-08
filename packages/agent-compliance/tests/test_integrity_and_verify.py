@@ -5,6 +5,7 @@
 import json
 import os
 import tempfile
+from urllib.parse import urlparse
 
 import pytest
 
@@ -193,7 +194,10 @@ class TestGovernanceVerifier:
         )
         md = attestation.badge_markdown()
         assert md.startswith("[![")
-        assert "shields.io" in md
+        # Validate badge URL domain using proper URL parsing
+        import re
+        urls = re.findall(r'https?://[^\s\)]+', md)
+        assert any(urlparse(u).hostname == "img.shields.io" for u in urls)
         assert "microsoft/agent-governance-toolkit" in md
 
     def test_summary_format(self):
@@ -265,7 +269,10 @@ class TestCLI:
         args = argparse.Namespace(json=False, badge=True)
         cmd_verify(args)
         captured = capsys.readouterr()
-        assert "shields.io" in captured.out
+        # Validate badge URL domain using proper URL parsing
+        import re
+        urls = re.findall(r'https?://[^\s\)]+', captured.out)
+        assert any(urlparse(u).hostname == "img.shields.io" for u in urls)
 
     def test_integrity_generate(self, tmp_path):
         from agent_compliance.cli.main import cmd_integrity

@@ -19,6 +19,7 @@ COPY src/ ./src/
 COPY README.md LICENSE ./
 
 # Install the package
+# pinned: local package, dependencies declared in pyproject.toml
 RUN pip install --no-cache-dir -e .
 
 # Create non-root user

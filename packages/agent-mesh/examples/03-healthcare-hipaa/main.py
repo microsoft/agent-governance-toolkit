@@ -25,12 +25,12 @@ from agentmesh import (
 
 def _redact(value, visible_chars: int = 0) -> str:
     """Redact a sensitive value for safe logging."""
-    s = str(value)
-    if not s:
-        return "***"
-    if visible_chars > 0:
-        return s[:visible_chars] + "***"
-    return "***"
+    import hashlib
+    raw = str(value)
+    if not raw:
+        return "[REDACTED]"
+    digest = hashlib.sha256(raw.encode()).hexdigest()[:8]
+    return f"***{digest}"
 
 
 class HealthcareAgent:

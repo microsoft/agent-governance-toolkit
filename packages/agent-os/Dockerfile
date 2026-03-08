@@ -23,6 +23,7 @@ COPY src/ ./src/
 COPY modules/ ./modules/
 
 # Install Agent OS with all optional dependencies
+# pinned: local package, dependencies declared in pyproject.toml
 RUN pip install --no-cache-dir -e ".[full,dev]"
 
 # Copy the rest of the project

@@ -21,7 +21,7 @@ echo "✅ Found Python $PYTHON_VERSION"
 # Install Agent OS
 echo ""
 echo "📦 Installing Agent OS..."
-pip3 install --no-cache-dir --quiet "agent-os>=0.1.0"
+pip3 install --no-cache-dir --quiet "agent-os>=0.1.0,<2"
 
 echo "✅ Agent OS installed"
 

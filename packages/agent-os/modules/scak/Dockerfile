@@ -19,7 +19,9 @@ COPY requirements.txt .
 COPY setup.py .
 
 # Install Python dependencies
+# pinned: versions declared in requirements.txt with upper bounds
 RUN pip install --no-cache-dir -r requirements.txt
+# pinned: local package, dependencies declared in setup.py
 RUN pip install --no-cache-dir -e .
 
 # Development stage

@@ -19,12 +19,14 @@ RUN apt-get update && \
 
 # Copy requirements first for better caching
 COPY requirements.txt .
+# pinned: versions declared in requirements.txt with upper bounds
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application
 COPY . .
 
 # Install the package in development mode
+# pinned: local package, dependencies declared in pyproject.toml
 RUN pip install --no-cache-dir -e .
 
 # Create directory for document storage

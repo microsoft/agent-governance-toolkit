@@ -14,7 +14,7 @@ COPY pyproject.toml .
 RUN pip install --no-cache-dir \
     pydantic==2.10.3 \
     numpy==1.26.4 \
-    && pip install --no-cache-dir -e .
+    && pip install --no-cache-dir -e .  # pinned: local package, deps in pyproject.toml
 
 # Copy application code
 COPY . .
