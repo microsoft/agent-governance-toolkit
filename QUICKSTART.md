@@ -137,3 +137,12 @@ agent-compliance integrity --manifest integrity.json
 ---
 
 *Based on the initial quickstart contribution by [@davidequarracino](https://github.com/davidequarracino) ([#106](https://github.com/microsoft/agent-governance-toolkit/pull/106)).*
+## 3. Architecture Overview
+The following diagram shows how the toolkit intercepts calls to ensure safety:
+
+```mermaid
+graph LR
+    A[AI Agent] --> B{Governance Layer}
+    B -->|Compliant| C[Success / LLM Call]
+    B -->|Violation| D[Security Block]
+    C --> E[Audit Log]
