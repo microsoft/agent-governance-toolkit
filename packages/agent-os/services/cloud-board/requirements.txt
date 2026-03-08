@@ -23,7 +23,7 @@ pydantic==2.10.3
 
 # Cryptography
 cryptography==46.0.5  # CVE fix: subgroup attack on SECT curves
-pynacl==1.5.0
+pynacl==1.6.2
 
 # Observability
 opentelemetry-api==1.29.0
