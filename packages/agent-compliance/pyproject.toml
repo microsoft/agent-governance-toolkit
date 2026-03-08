@@ -52,3 +52,6 @@ Repository = "https://github.com/microsoft/agent-governance-toolkit"
 "AgentMesh" = "https://github.com/microsoft/agent-governance-toolkit"
 "Agent Hypervisor" = "https://github.com/microsoft/agent-governance-toolkit"
 "Agent SRE" = "https://github.com/microsoft/agent-governance-toolkit"
+
+[project.scripts]
+agent-compliance = "agent_compliance.cli.main:main"
