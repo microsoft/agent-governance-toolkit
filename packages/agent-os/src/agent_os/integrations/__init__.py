@@ -66,7 +66,16 @@ from agent_os.integrations.gemini_adapter import GeminiKernel, GovernedGeminiMod
 from agent_os.integrations.google_adk_adapter import GoogleADKKernel
 from agent_os.integrations.guardrails_adapter import GuardrailsKernel
 from agent_os.integrations.langchain_adapter import LangChainKernel
-from agent_os.integrations.maf_adapter import MAFKernel, govern as maf_govern
+try:
+    from agent_os.integrations.maf_adapter import (
+        AuditTrailMiddleware as MAFAuditTrailMiddleware,
+        CapabilityGuardMiddleware as MAFCapabilityGuardMiddleware,
+        GovernancePolicyMiddleware as MAFGovernancePolicyMiddleware,
+        RogueDetectionMiddleware as MAFRogueDetectionMiddleware,
+        create_governance_middleware as maf_create_governance_middleware,
+    )
+except ImportError:  # agent_framework is an optional dependency
+    pass
 from agent_os.integrations.llamafirewall import (
     FirewallMode,
     FirewallResult,
@@ -164,8 +173,11 @@ __all__ = [
     # PydanticAI
     "PydanticAIKernel",
     # Microsoft Agent Framework (MAF)
-    "MAFKernel",
-    "maf_govern",
+    "MAFGovernancePolicyMiddleware",
+    "MAFCapabilityGuardMiddleware",
+    "MAFAuditTrailMiddleware",
+    "MAFRogueDetectionMiddleware",
+    "maf_create_governance_middleware",
     # LlamaFirewall
     "LlamaFirewallAdapter",
     "FirewallMode",

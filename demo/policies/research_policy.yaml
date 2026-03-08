@@ -1,0 +1,49 @@
+version: "1.0"
+name: "research-agent-governance"
+description: >
+  Governance policy for the Research Agent in the governed research pipeline.
+  Allows web search, blocks access to internal/secrets resources, and enforces
+  token limits. All actions are audit-logged.
+
+rules:
+  - name: "block-internal-resources"
+    condition:
+      field: "message"
+      operator: "contains"
+      value: "internal"
+    action: "deny"
+    priority: 100
+    message: "Access to internal resources is restricted by governance policy"
+
+  - name: "block-secrets-access"
+    condition:
+      field: "message"
+      operator: "contains"
+      value: "secrets"
+    action: "deny"
+    priority: 100
+    message: "Access to secret resources is restricted by governance policy"
+
+  - name: "allow-web-search"
+    condition:
+      field: "message"
+      operator: "contains"
+      value: "search"
+    action: "allow"
+    priority: 50
+    message: "Web search is permitted for research agents"
+
+  - name: "audit-all-actions"
+    condition:
+      field: "message_count"
+      operator: "gte"
+      value: 0
+    action: "audit"
+    priority: 10
+    message: "All agent actions are audit-logged"
+
+defaults:
+  action: "allow"
+  max_tokens: 4096
+  max_tool_calls: 10
+  confidence_threshold: 0.8
