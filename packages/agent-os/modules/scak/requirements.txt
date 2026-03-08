@@ -39,8 +39,8 @@ streamlit>=1.37.0,<2.0.0  # pinned: For telemetry dashboard
 jupyter>=1.0.0,<2.0.0  # pinned: For interactive notebooks
 
 # LangChain Integration
-langchain>=0.1.0,<1.0.0  # pinned: For LangChain integration
-langchain-core>=0.1.0,<1.0.0  # pinned: Core LangChain abstractions
+langchain>=0.3.0,<1.0.0  # pinned: For LangChain integration
+langchain-core>=1.2.11,<2.0.0  # pinned — CVE fix: SSRF via image_url token counting
 
 # Distributed Computing (uncomment as needed)
 # ray>=2.8.0  # For distributed execution

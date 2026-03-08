@@ -1,7 +1,7 @@
 fastapi>=0.115.0,<1.0.0  # pinned
 uvicorn[standard]>=0.27.0,<1.0.0  # pinned
 pydantic>=2.5.0,<3.0.0  # pinned
-pypdf>=4.0.0,<5.0.0  # pinned
+pypdf>=6.0.0,<7.0.0  # pinned — CVE fix: multiple DoS/infinite-loop vulnerabilities
 beautifulsoup4>=4.12.2,<5.0.0  # pinned
 lxml>=4.9.3,<6.0.0  # pinned
 python-multipart>=0.0.22,<1.0.0  # pinned
