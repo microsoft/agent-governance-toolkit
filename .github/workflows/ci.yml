@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install ruff
-        run: pip install --no-cache-dir 'ruff>=0.12,<1'
+        run: pip install --no-cache-dir ruff==0.12.4
       - name: Lint ${{ matrix.package }}
         run: ruff check packages/${{ matrix.package }}/src/ --select E,F,W --ignore E501
         continue-on-error: true
@@ -47,7 +47,7 @@ jobs:
         working-directory: packages/${{ matrix.package }}
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .
-          pip install --no-cache-dir 'pytest>=8,<9' 'pytest-asyncio>=1,<2' 2>/dev/null || true
+          pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==1.1.0 2>/dev/null || true
       - name: Test ${{ matrix.package }}
         working-directory: packages/${{ matrix.package }}
         run: pytest tests/ -x -q --tb=short 2>/dev/null || echo "No tests found"
@@ -60,7 +60,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install safety
-        run: pip install --no-cache-dir 'safety>=3,<4'
+        run: pip install --no-cache-dir safety==3.2.1
       - name: Check dependencies
         run: |
           for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance; do

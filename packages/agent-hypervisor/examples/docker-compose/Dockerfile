@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install the hypervisor package and API dependencies (pinned for reproducibility)
 RUN pip install --no-cache-dir \
-    "agent-hypervisor[api]>=0.1.0,<1.0.0" \
+    "agent-hypervisor[api]==0.1.0" \
     redis==5.2.1 \
     pyyaml==6.0.2 \
     httpx==0.28.1

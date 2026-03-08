@@ -30,7 +30,7 @@ case "$COMMAND" in
     # Check if agent-os is installed
     if ! python -c "import agent_os" 2>/dev/null; then
       echo "Installing agent-os..."
-      pip install --no-cache-dir "agent-os>=0.1.0,<2" --quiet
+      pip install --no-cache-dir "agent-os==0.1.0" --quiet
     fi
     
     python -c "

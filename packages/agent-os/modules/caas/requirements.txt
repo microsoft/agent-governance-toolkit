@@ -1,11 +1,11 @@
-fastapi>=0.115.0,<1.0.0  # pinned
-uvicorn[standard]>=0.27.0,<1.0.0  # pinned
-pydantic>=2.5.0,<3.0.0  # pinned
-pypdf>=6.0.0,<7.0.0  # pinned — CVE fix: multiple DoS/infinite-loop vulnerabilities
-beautifulsoup4>=4.12.2,<5.0.0  # pinned
-lxml>=4.9.3,<6.0.0  # pinned
-python-multipart>=0.0.22,<1.0.0  # pinned
-tiktoken>=0.5.1,<1.0.0  # pinned
-numpy>=1.26.2,<2.0.0  # pinned
-scikit-learn>=1.6.1,<2.0.0  # pinned
-aiofiles>=23.2.1,<24.0.0  # pinned
+fastapi==0.115.0
+uvicorn[standard]==0.27.0
+pydantic==2.10.3
+pypdf==6.0.0  # CVE fix: multiple DoS/infinite-loop vulnerabilities
+beautifulsoup4==4.12.2
+lxml==5.3.0
+python-multipart==0.0.22
+tiktoken==0.8.0
+numpy==1.26.4
+scikit-learn==1.6.1
+aiofiles==23.2.1

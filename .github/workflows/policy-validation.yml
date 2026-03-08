@@ -31,7 +31,7 @@ jobs:
         working-directory: packages/agent-os
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .
-          pip install --no-cache-dir 'pyyaml>=6,<7'
+          pip install --no-cache-dir pyyaml==6.0.2
 
       - name: Find and validate policy files
         run: |
@@ -58,7 +58,7 @@ jobs:
         working-directory: packages/agent-os
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .
-          pip install --no-cache-dir 'pyyaml>=6,<7' 'pytest>=8,<9'
+          pip install --no-cache-dir pyyaml==6.0.2 pytest==8.4.1
 
       - name: Run policy CLI tests
         working-directory: packages/agent-os

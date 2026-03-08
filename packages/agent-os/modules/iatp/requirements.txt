@@ -1,6 +1,6 @@
-fastapi>=0.109.1,<1.0.0  # pinned
+fastapi==0.115.0
 uvicorn==0.27.0
 pydantic==2.5.3
 httpx==0.26.0
 python-dateutil==2.8.2
-agent-primitives>=0.1.0,<1.0.0  # pinned
+agent-primitives==0.1.0
