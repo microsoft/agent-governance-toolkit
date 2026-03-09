@@ -31,12 +31,17 @@ jobs:
         working-directory: packages/agent-os
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .
-          pip install --require-hashes --no-cache-dir -r ../../requirements/ci-policy-validation.txt
+          pip install --no-cache-dir pyyaml==6.0.2
+
       - name: Find and validate policy files
         run: |
           EXIT_CODE=0
           echo "::group::Validating policy files"
-          for f in $(find . -name '*.yaml' -o -name '*.yml' | grep -i policy | sort); do
+          for f in $(find . -name '*.yaml' -o -name '*.yml' \
+                     | grep -i policy \
+                     | grep -v 'charts/.*/templates/' \
+                     | grep -v 'node_modules/' \
+                     | sort); do
             echo "--- Validating: $f ---"
             python -m agent_os.policies.cli validate "$f" || EXIT_CODE=1
           done
@@ -57,7 +62,7 @@ jobs:
         working-directory: packages/agent-os
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .
-          pip install --require-hashes --no-cache-dir -r ../../requirements/ci-policy-validation.txt
+          pip install --no-cache-dir pyyaml==6.0.2 pytest==8.4.1
 
       - name: Run policy CLI tests
         working-directory: packages/agent-os

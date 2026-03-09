@@ -1,4 +1,0 @@
-# Auto-generated with hashes for Scorecard Pinned-Dependencies compliance
-safety==3.2.1 \
-    --hash=sha256:9f53646717ba052e1bf631bd54fb3da0fafa58e85d578b20a8b9affdcf81889e \
-    --hash=sha256:770aed6ff46536e5363a409e8cca411d8636d07dc33be53a8ac69bf750ab8df3

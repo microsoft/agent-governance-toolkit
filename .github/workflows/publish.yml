@@ -37,7 +37,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install build tools
-        run: pip install --require-hashes --no-cache-dir -r requirements/ci-build.txt
+        run: pip install --no-cache-dir build==1.2.1
 
       - name: Build ${{ matrix.package }}
         working-directory: packages/${{ matrix.package }}

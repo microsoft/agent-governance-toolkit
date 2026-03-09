@@ -47,7 +47,7 @@ jobs:
         working-directory: packages/${{ matrix.package }}
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .
-          pip install --require-hashes --no-cache-dir -r ../../requirements/ci-test.txt 2>/dev/null || true
+          pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==1.1.0 2>/dev/null || true
       - name: Test ${{ matrix.package }}
         working-directory: packages/${{ matrix.package }}
         run: pytest tests/ -x -q --tb=short 2>/dev/null || echo "No tests found"
@@ -60,7 +60,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install safety
-        run: pip install --require-hashes --no-cache-dir -r requirements/ci-security.txt
+        run: pip install --no-cache-dir safety==3.2.1
       - name: Check dependencies
         run: |
           for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance; do
