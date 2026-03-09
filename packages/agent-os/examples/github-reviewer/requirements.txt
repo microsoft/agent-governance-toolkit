@@ -1,6 +1,6 @@
 # GitHub Code Review Agent Dependencies
 # Core
-pydantic>=2.0.0
+pydantic>=2.4.0
 
 # GitHub API
 httpx>=0.24.0

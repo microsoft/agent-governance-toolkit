@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "DeFi Risk Sentinel demo using Agent OS"
 requires-python = ">=3.10"
 dependencies = [
-    "pydantic>=2.0.0",
+    "pydantic>=2.4.0",
 ]
 
 [project.optional-dependencies]

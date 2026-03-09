@@ -33,7 +33,7 @@ classifiers = [
 # Core: only pydantic required. Integration adapters use Protocol-based
 # interfaces (duck typing), so external backends are optional.
 dependencies = [
-    "pydantic>=2.0.0",
+    "pydantic>=2.4.0",
 ]
 
 [project.optional-dependencies]

@@ -31,8 +31,7 @@ jobs:
         working-directory: packages/agent-os
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .
-          pip install --no-cache-dir pyyaml==6.0.2
-
+          pip install --require-hashes --no-cache-dir -r ../../requirements/ci-policy-validation.txt
       - name: Find and validate policy files
         run: |
           EXIT_CODE=0
@@ -58,7 +57,7 @@ jobs:
         working-directory: packages/agent-os
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .
-          pip install --no-cache-dir pyyaml==6.0.2 pytest==8.4.1
+          pip install --require-hashes --no-cache-dir -r ../../requirements/ci-policy-validation.txt
 
       - name: Run policy CLI tests
         working-directory: packages/agent-os

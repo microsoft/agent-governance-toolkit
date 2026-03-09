@@ -42,7 +42,7 @@ classifiers = [
 
 # Core dependencies (minimal - just what's needed for kernel)
 dependencies = [
-    "pydantic>=2.0.0",
+    "pydantic>=2.4.0",
 ]
 
 [project.urls]
