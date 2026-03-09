@@ -82,13 +82,13 @@ except ImportError:  # pragma: no cover
             self.messages = messages or []
 
     class Message:  # type: ignore[no-redef]
-        def __init__(self, role: str, content: list[str] | None = None) -> None:
+        def __init__(self, role: str, contents: list[str] | None = None) -> None:
             self.role = role
-            self.content = content or []
+            self.contents = contents or []
 
         @property
         def text(self) -> str:
-            return self.content[0] if self.content else ""
+            return str(self.contents[0]) if self.contents else ""
 
     class MiddlewareTermination(Exception):  # type: ignore[no-redef]
         """Local fallback when agent_framework is not installed."""

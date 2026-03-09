@@ -99,11 +99,11 @@ class MockMessage:
     """Mock MAF Message."""
     def __init__(self, role: str = "user", content: str = ""):
         self.role = role
-        self.content = [content] if content else []
+        self.contents = [content] if content else []
 
     @property
     def text(self):
-        return self.content[0] if self.content else ""
+        return str(self.contents[0]) if self.contents else ""
 
 
 # ============================================================================
@@ -180,7 +180,7 @@ defaults:
 
         assert call_next_called is False
         assert ctx.result is not None
-        assert "Policy violation" in ctx.result.messages[0].content[0]
+        assert "Policy violation" in str(ctx.result.messages[0].contents[0])
 
         # Audit log should record the denial
         entries = audit_log.get_entries_for_agent("researcher")
