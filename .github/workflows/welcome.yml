@@ -14,12 +14,12 @@ jobs:
     steps:
       - uses: actions/first-interaction@a1db7729b356323c7988c20ed6f0d33fe31297be # v1.3.0
         with:
-          repo-token: "${{ secrets.GITHUB_TOKEN }}"
-          issue-message: |
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          issue_message: |
             Welcome to the Agent Governance Toolkit! Thanks for opening your first issue.
             A maintainer will review this shortly. Check our [Contributing Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md).
             For security issues, use [private vulnerability reporting](https://github.com/microsoft/agent-governance-toolkit/security/advisories/new).
-          pr-message: |
+          pr_message: |
             Welcome to the Agent Governance Toolkit! Thanks for your first pull request.
             Please ensure tests pass, code follows style (ruff check), and you have signed the [CLA](https://cla.opensource.microsoft.com/).
             See our [Contributing Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md).

@@ -1,7 +1,7 @@
 name: Copilot Auto-Review
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, ready_for_review]
 
 permissions:
@@ -21,4 +21,4 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             /repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/requested_reviewers \
-            -f "reviewers[]=copilot"
+            -f "reviewers[]=copilot" || echo "::warning::Could not request Copilot review (expected for fork PRs)"
