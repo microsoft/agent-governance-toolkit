@@ -2,7 +2,7 @@
   "$schema": "https://glama.ai/mcp/schemas/server.json",
   "name": "agentos-mcp-server",
   "display_name": "Agent OS MCP Server",
-  "description": "AI agent governance with policy enforcement, code safety verification, multi-model hallucination detection (CMVK), trust attestation (IATP), and immutable audit trails. Covers 9/10 OWASP Agentic Top 10 risks.",
+  "description": "AI agent governance with policy enforcement, code safety verification, multi-model hallucination detection (CMVK), trust attestation (IATP), and immutable audit trails. Covers 10/10 OWASP Agentic Top 10 risks.",
   "repository": "https://github.com/microsoft/agent-governance-toolkit",
   "homepage": "https://github.com/microsoft/agent-governance-toolkit",
   "maintainers": [

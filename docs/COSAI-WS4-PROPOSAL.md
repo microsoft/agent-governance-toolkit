@@ -55,7 +55,7 @@ This pattern directly addresses the workstream's focus on secure design patterns
 
 ## Reference Implementation
 
-[Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit) — 5 packages, 3,900+ tests, covering 9/10 OWASP Agentic Top 10 risks.
+[Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit) — 5 packages, 3,900+ tests, covering 10/10 OWASP Agentic Top 10 risks.
 
 ### Code Example: Policy Enforcement
 

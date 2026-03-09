@@ -11,7 +11,7 @@
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/agent-os-kernel)](https://pypi.org/project/agent-os-kernel/)
 [![Downloads](https://img.shields.io/pypi/dm/agent-os-kernel)](https://pypi.org/project/agent-os-kernel/)
-[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-9/10_Covered-brightgreen)](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
+[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-10/10_Covered-brightgreen)](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
 [![Glama](https://glama.ai/mcp/servers/@microsoft/agentos-mcp-server/badge?features=false&install=false)](https://glama.ai/mcp/servers/@microsoft/agentos-mcp-server)
 [![VS Code Extension](https://img.shields.io/badge/VS%20Code-Extension-007ACC?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=agent-os.agent-os-vscode)
 [![Documentation](https://img.shields.io/badge/docs-microsoft.github.io-blue)](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs)
@@ -125,20 +125,20 @@
 
 ### 🛡️ OWASP Agentic Top 10 Coverage
 
-Agent OS + ecosystem covers **8 out of 10** [OWASP Agentic Application Security risks](docs/owasp-agentic-top10-mapping.md):
+Agent OS + ecosystem covers **10 out of 10** [OWASP Agentic Application Security risks](docs/owasp-agentic-top10-mapping.md):
 
 | Risk | Coverage | Module |
 |------|----------|--------|
 | ASI01 Agent Goal Hijack | ✅ Full | `GovernancePolicy.blocked_patterns` |
 | ASI02 Tool Misuse | ✅ Full | `MCPGateway` — tool filtering, rate limiting, audit |
 | ASI03 Identity & Privilege | ✅ Full | `require_human_approval`, RBAC policies |
-| ASI04 Supply Chain | ⚠️ Partial | Tool allowlisting (no deep scanning yet) |
+| ASI04 Supply Chain | ✅ Full | AI-BOM v2.0 — model + data + weights provenance |
 | ASI05 Code Execution | ✅ Full | `blocked_patterns`, sandbox integration |
 | ASI06 Memory Poisoning | ✅ Full | `MemoryGuard` — hash integrity, injection detection |
 | ASI07 Inter-Agent Comms | ✅ Full | AgentMesh trust handshake, HMAC auth |
 | ASI08 Cascading Failures | ✅ Full | Agent SRE circuit breakers, cascade detection |
 | ASI09 Human-Agent Trust | ✅ Full | Human approval workflows, audit logging |
-| ASI10 Rogue Agents | ⚠️ Partial | Agent Hypervisor execution rings, kill switch |
+| ASI10 Rogue Agents | ✅ Full | Agent Hypervisor kill switch + ring isolation |
 
 > 📄 [Full OWASP mapping →](docs/owasp-agentic-top10-mapping.md)
 

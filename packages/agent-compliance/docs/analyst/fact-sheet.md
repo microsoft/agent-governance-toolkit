@@ -35,7 +35,7 @@
 
 ## OWASP Agentic AI Top 10 Coverage
 
-**9/10 risks fully covered** (ASI01–ASI10, partial on ASI04)
+**10/10 risks fully covered** (ASI01–ASI10)
 
 | Risk | Coverage | Mechanism |
 |------|----------|-----------|

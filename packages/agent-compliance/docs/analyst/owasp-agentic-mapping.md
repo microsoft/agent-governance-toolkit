@@ -329,7 +329,7 @@ def call_agent(task):
 | Resource Exhaustion | ASI09 | Resource governor, rate limiting | ✅ Full |
 | Lack of Error Handling | ASI10 | Circuit breakers, SLOs, error budgets | ✅ Full |
 
-**Overall: 9/10 full coverage, 1/10 partial (ASI04 — DID is one approach; SPIFFE/mTLS may be preferred)**
+**Overall: 10/10 full coverage** (ASI01–ASI10, including ASI04 via AI-BOM v2.0 and ASI10 via kill switch + ring isolation)
 
 ---
 

@@ -11,7 +11,7 @@ AI Agent Security & Governance Framework
 ## Description
 
 Open-source framework providing runtime governance for autonomous AI agents.
-Covers 9/10 OWASP Agentic Security Top 10 categories with full technical implementations.
+Covers 10/10 OWASP Agentic Security Top 10 categories with full technical implementations.
 Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 12+ LLM frameworks (LangChain, CrewAI, OpenAI, Anthropic, AutoGen, SemanticKernel, etc.).
 

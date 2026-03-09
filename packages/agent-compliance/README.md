@@ -201,14 +201,14 @@ pip install pyautogen ai-agent-compliance
 
 ## 🛡️ OWASP Agentic Top 10 Coverage
 
-The agent governance stack covers **9 of 10** risks from the [OWASP Top 10 for Agentic Applications (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/):
+The agent governance stack covers **10 of 10** risks from the [OWASP Top 10 for Agentic Applications (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/):
 
 | OWASP Risk | Coverage | Component |
 |-----------|----------|-----------|
 | Agent Goal Hijack | ✅ | Agent OS — Policy Engine |
 | Tool Misuse | ✅ | Agent OS — Capability Sandboxing |
 | Identity & Privilege Abuse | ✅ | AgentMesh — DID Identity |
-| Supply Chain Vulnerabilities | 🔄 Roadmap | Agent-SBOM (planned) |
+| Supply Chain Vulnerabilities | ✅ | AgentMesh — AI-BOM v2.0 |
 | Unexpected Code Execution | ✅ | Agent Hypervisor — Execution Rings |
 | Memory & Context Poisoning | ✅ | Agent OS — VFS + CMVK |
 | Insecure Inter-Agent Communication | ✅ | AgentMesh — IATP Protocol |

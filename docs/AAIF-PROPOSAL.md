@@ -24,7 +24,7 @@ AI agent frameworks (Microsoft Agent Framework, LangChain, CrewAI, Google ADK, O
 - **No execution isolation** — A compromised agent can access everything
 - **No reliability engineering** — No SLOs, error budgets, or chaos testing for agents
 
-The OWASP Agentic Top 10 codifies these risks. The Agent Governance Toolkit addresses 9 of 10.
+The OWASP Agentic Top 10 codifies these risks. The Agent Governance Toolkit addresses 10 of 10.
 
 ## 3. Architecture
 

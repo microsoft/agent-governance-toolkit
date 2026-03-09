@@ -78,7 +78,7 @@ result = await kernel.invoke(task)
 ## Why This Matters
 
 1. **Enterprise readiness** — Customers need governance before deploying agents in production. This makes MAF enterprise-ready out of the box.
-2. **OWASP coverage** — The middleware covers 9/10 OWASP Agentic Top 10 risks at the framework level.
+2. **OWASP coverage** — The middleware covers 10/10 OWASP Agentic Top 10 risks at the framework level.
 3. **VP-approved OSS** — This project has been approved for open-source release under microsoft/ org by VP Developer Relations.
 4. **Standards alignment** — Active proposals at AAIF, LF AI, CoSAI WS4, and OWASP for governance standards.
 

@@ -9,7 +9,7 @@
 
 ## Summary
 
-Contribution of insecure/secure code pairs to the OWASP Agent Security Initiative (ASI), demonstrating how the Agent Governance Toolkit mitigates OWASP Agentic Top 10 risks. Initial submission covers 3 risks with plans to expand to all 9 covered risks.
+Contribution of insecure/secure code pairs to the OWASP Agent Security Initiative (ASI), demonstrating how the Agent Governance Toolkit mitigates OWASP Agentic Top 10 risks. Initial submission covers 3 risks with plans to expand to all 10 covered risks.
 
 ## Samples Contributed
 
@@ -56,9 +56,9 @@ frameworks/agent-os/
     ├── README.md / insecure.py / secure.py
 ```
 
-## Full OWASP Coverage (9/10)
+## Full OWASP Coverage (10/10)
 
-The Agent Governance Toolkit covers 9 of 10 OWASP Agentic Top 10 risks. Future PRs will add samples for the remaining 6 covered risks:
+The Agent Governance Toolkit covers 10 of 10 OWASP Agentic Top 10 risks. Future PRs will add samples for the remaining covered risks:
 
 | Risk | Description | Package | Status |
 |------|-------------|---------|--------|
