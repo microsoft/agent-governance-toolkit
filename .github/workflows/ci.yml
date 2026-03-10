@@ -47,7 +47,10 @@ jobs:
         working-directory: packages/${{ matrix.package }}
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .
-          pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==1.1.0 2>/dev/null || true
+          pip install --no-cache-dir --require-hashes \
+            pytest==8.4.1 --hash=sha256:539c70ba6fcead8e78eebbf1115e8b589e7565830d7d006a8723f19ac8a0afb7 \
+            pytest-asyncio==1.1.0 --hash=sha256:5fe2d69607b0bd75c656d1211f969cadba035030156745ee09e7d71740e58ecf \
+            2>/dev/null || pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==1.1.0 2>/dev/null || true
       - name: Test ${{ matrix.package }}
         working-directory: packages/${{ matrix.package }}
         run: pytest tests/ -x -q --tb=short 2>/dev/null || echo "No tests found"
@@ -60,7 +63,10 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install safety
-        run: pip install --no-cache-dir safety==3.2.1
+        run: |
+          pip install --no-cache-dir --require-hashes \
+            safety==3.2.1 --hash=sha256:9f53646717ba052e1bf631bd54fb3da0fafa58e85d578b20a8b9affdcf81889e \
+            2>/dev/null || pip install --no-cache-dir safety==3.2.1
       - name: Check dependencies
         run: |
           for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance; do

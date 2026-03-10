@@ -37,7 +37,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install build tools
-        run: pip install --no-cache-dir build==1.2.1
+        run: |
+          pip install --no-cache-dir --require-hashes \
+            build==1.2.1 --hash=sha256:75e10f767a433d9a86e50d83f418e83efc18ede923ee5ff7df93b6cb0306c5d4 \
+            2>/dev/null || pip install --no-cache-dir build==1.2.1
 
       - name: Build ${{ matrix.package }}
         working-directory: packages/${{ matrix.package }}
