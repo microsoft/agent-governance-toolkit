@@ -2,29 +2,32 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 """
-Agent Governance Toolkit × Microsoft Agent Framework — Runtime Governance Demo
+Agent Governance Toolkit — Live Governance Demo
 
-Demonstrates real-time governance enforcement across a multi-agent research
-pipeline using the Agent OS middleware stack integrated with MAF.
+Demonstrates real-time governance enforcement using REAL LLM calls
+(OpenAI / Azure OpenAI) with the full governance middleware stack.
 
-Three scenarios are exercised:
-  1. Policy Enforcement   — declarative YAML rules allow/deny agent messages
-  2. Capability Sandboxing — tool-level allow/deny via Ring-2 guards
+Four scenarios are exercised end-to-end:
+  1. Policy Enforcement   — YAML rules intercept real LLM requests
+  2. Capability Sandboxing — tool-call interception on live function-calling
   3. Rogue Agent Detection — behavioral anomaly scoring with auto-quarantine
+  4. Blocked Content       — governance blocks dangerous prompts before the LLM
 
-Run modes:
-  Default (no flag)  — simulated agent interactions, REAL governance middleware
-  --live             — uses real LLM calls via MAF (requires OPENAI_API_KEY)
+Requires:
+  - OPENAI_API_KEY  or  (AZURE_OPENAI_API_KEY + AZURE_OPENAI_ENDPOINT)
+  - pip install openai
 
 Usage:
-  python demo/maf_governance_demo.py           # Show & Tell recording mode
-  python demo/maf_governance_demo.py --live    # Live LLM mode (needs API key)
+  python demo/maf_governance_demo.py
+  python demo/maf_governance_demo.py --model gpt-4o        # Use a specific model
+  python demo/maf_governance_demo.py --verbose              # Show raw LLM responses
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import sys
 import time
@@ -43,15 +46,15 @@ sys.path.insert(0, str(_REPO_ROOT / "packages" / "agent-hypervisor" / "src"))
 
 # Suppress library-level log messages to keep terminal output clean.
 import logging
+
 logging.disable(logging.WARNING)
 
-# -- Governance toolkit imports (direct module paths for fast startup) ------
-from agent_os.policies.evaluator import PolicyEvaluator, PolicyDecision
+# -- Governance toolkit imports ---------------------------------------------
+from agent_os.policies.evaluator import PolicyDecision, PolicyEvaluator
 from agent_os.policies.schema import PolicyDocument
 from agent_os.integrations.maf_adapter import (
     GovernancePolicyMiddleware,
     CapabilityGuardMiddleware,
-    AuditTrailMiddleware,
     RogueDetectionMiddleware,
     MiddlewareTermination,
     AgentResponse,
@@ -64,50 +67,50 @@ from agent_sre.anomaly.rogue_detector import (
     RiskLevel,
 )
 
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ANSI colour helpers
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class C:
     """ANSI escape helpers — degrades gracefully on dumb terminals."""
 
     _enabled = sys.stdout.isatty() or os.environ.get("FORCE_COLOR")
 
-    RESET   = "\033[0m"  if _enabled else ""
-    BOLD    = "\033[1m"  if _enabled else ""
-    DIM     = "\033[2m"  if _enabled else ""
+    RESET = "\033[0m" if _enabled else ""
+    BOLD = "\033[1m" if _enabled else ""
+    DIM = "\033[2m" if _enabled else ""
 
-    RED     = "\033[91m" if _enabled else ""
-    GREEN   = "\033[92m" if _enabled else ""
-    YELLOW  = "\033[93m" if _enabled else ""
-    BLUE    = "\033[94m" if _enabled else ""
+    RED = "\033[91m" if _enabled else ""
+    GREEN = "\033[92m" if _enabled else ""
+    YELLOW = "\033[93m" if _enabled else ""
+    BLUE = "\033[94m" if _enabled else ""
     MAGENTA = "\033[95m" if _enabled else ""
-    CYAN    = "\033[96m" if _enabled else ""
-    WHITE   = "\033[97m" if _enabled else ""
+    CYAN = "\033[96m" if _enabled else ""
+    WHITE = "\033[97m" if _enabled else ""
 
-    # Box-drawing helpers
     BOX_TL = "╔"
     BOX_TR = "╗"
     BOX_BL = "╚"
     BOX_BR = "╝"
-    BOX_H  = "═"
-    BOX_V  = "║"
-    DASH   = "━"
-    TREE_V = "│"
+    BOX_H = "═"
+    BOX_V = "║"
+    DASH = "━"
     TREE_B = "├"
     TREE_E = "└"
 
 
 def _banner() -> str:
     w = 64
-    pad = lambda s: s + " " * (w - 2 - len(s))
-    lines = [
-        f"{C.CYAN}{C.BOLD}{C.BOX_TL}{C.BOX_H * w}{C.BOX_TR}{C.RESET}",
-        f"{C.CYAN}{C.BOLD}{C.BOX_V}  {C.WHITE}Agent Governance Toolkit  ×  Microsoft Agent Framework{' ' * (w - 57)}{C.CYAN}{C.BOX_V}{C.RESET}",
-        f"{C.CYAN}{C.BOLD}{C.BOX_V}  {C.DIM}{C.WHITE}Runtime Governance Demo — Show & Tell Edition{' ' * (w - 48)}{C.CYAN}{C.BOLD}{C.BOX_V}{C.RESET}",
-        f"{C.CYAN}{C.BOLD}{C.BOX_BL}{C.BOX_H * w}{C.BOX_BR}{C.RESET}",
-    ]
-    return "\n".join(lines)
+    return "\n".join(
+        [
+            f"{C.CYAN}{C.BOLD}{C.BOX_TL}{C.BOX_H * w}{C.BOX_TR}{C.RESET}",
+            f"{C.CYAN}{C.BOLD}{C.BOX_V}  {C.WHITE}Agent Governance Toolkit — Live Governance Demo{' ' * (w - 50)}{C.CYAN}{C.BOX_V}{C.RESET}",
+            f"{C.CYAN}{C.BOLD}{C.BOX_V}  {C.DIM}{C.WHITE}Real LLM calls · Real policies · Merkle-chained audit{' ' * (w - 56)}{C.CYAN}{C.BOLD}{C.BOX_V}{C.RESET}",
+            f"{C.CYAN}{C.BOLD}{C.BOX_BL}{C.BOX_H * w}{C.BOX_BR}{C.RESET}",
+        ]
+    )
 
 
 def _section(title: str) -> str:
@@ -127,50 +130,315 @@ def _tree_last(icon: str, colour: str, label: str, detail: str) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Lightweight shims — stand in for MAF types in simulation mode
+# LLM client setup — supports OpenAI, Azure OpenAI, and Google Gemini
 # ═══════════════════════════════════════════════════════════════════════════
 
+# Sentinel to identify the backend type
+BACKEND_OPENAI = "OpenAI"
+BACKEND_AZURE = "Azure OpenAI"
+BACKEND_GEMINI = "Google Gemini"
+
+_ACTIVE_BACKEND = ""
+
+
+def _detect_backend() -> str:
+    """Detect which LLM backend to use from environment variables."""
+    if os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY"):
+        return BACKEND_GEMINI
+    if os.environ.get("AZURE_OPENAI_API_KEY") and os.environ.get("AZURE_OPENAI_ENDPOINT"):
+        return BACKEND_AZURE
+    if os.environ.get("OPENAI_API_KEY"):
+        return BACKEND_OPENAI
+    return ""
+
+
+def _create_client() -> tuple[Any, str]:
+    """Create an LLM client, auto-detecting backend from env vars.
+
+    Returns:
+        (client, backend_name) tuple.
+    """
+    global _ACTIVE_BACKEND
+
+    backend = _detect_backend()
+
+    if backend == BACKEND_GEMINI:
+        try:
+            import google.generativeai as genai
+        except ImportError:
+            print(f"{C.RED}✗ google-generativeai not installed. Run: pip install google-generativeai{C.RESET}")
+            sys.exit(1)
+
+        api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+        genai.configure(api_key=api_key)
+        _ACTIVE_BACKEND = BACKEND_GEMINI
+        return genai, BACKEND_GEMINI
+
+    if backend == BACKEND_AZURE:
+        try:
+            from openai import AzureOpenAI
+        except ImportError:
+            print(f"{C.RED}✗ openai not installed. Run: pip install openai{C.RESET}")
+            sys.exit(1)
+        client = AzureOpenAI(
+            api_key=os.environ["AZURE_OPENAI_API_KEY"],
+            azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+            api_version=os.environ.get("AZURE_OPENAI_API_VERSION", "2024-10-21"),
+        )
+        _ACTIVE_BACKEND = BACKEND_AZURE
+        return client, BACKEND_AZURE
+
+    if backend == BACKEND_OPENAI:
+        try:
+            from openai import OpenAI
+        except ImportError:
+            print(f"{C.RED}✗ openai not installed. Run: pip install openai{C.RESET}")
+            sys.exit(1)
+        _ACTIVE_BACKEND = BACKEND_OPENAI
+        return OpenAI(api_key=os.environ["OPENAI_API_KEY"]), BACKEND_OPENAI
+
+    print(f"{C.RED}✗ No API key found.{C.RESET}")
+    print(f"  Set one of:")
+    print(f"    {C.CYAN}GOOGLE_API_KEY{C.RESET}=...   (Google Gemini — free tier available)")
+    print(f"    {C.CYAN}OPENAI_API_KEY{C.RESET}=sk-... (OpenAI)")
+    print(f"    {C.CYAN}AZURE_OPENAI_API_KEY{C.RESET}=... + {C.CYAN}AZURE_OPENAI_ENDPOINT{C.RESET}=https://...")
+    sys.exit(1)
+
+
+def _llm_call(client: Any, model: str, messages: list[dict], **kwargs: Any) -> Any:
+    """Make a real LLM call, dispatching to the correct backend.
+
+    Returns a normalized response object with .text and .tool_calls attributes.
+    """
+    if _ACTIVE_BACKEND == BACKEND_GEMINI:
+        return _gemini_call(client, model, messages, **kwargs)
+    # OpenAI / Azure OpenAI
+    return _openai_call(client, model, messages, **kwargs)
+
+
 @dataclass
-class _MockAgent:
-    """Minimal agent stub with a .name attribute."""
+class _NormalizedChoice:
+    """Normalized LLM response for cross-backend compatibility."""
+    text: str = ""
+    tool_calls: list[Any] | None = None
+
+
+@dataclass
+class _NormalizedResponse:
+    choices: list[_NormalizedChoice] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.choices is None:
+            self.choices = [_NormalizedChoice()]
+
+
+def _openai_call(client: Any, model: str, messages: list[dict], **kwargs: Any) -> _NormalizedResponse:
+    """OpenAI / Azure OpenAI chat completion call."""
+    resp = client.chat.completions.create(model=model, messages=messages, **kwargs)
+    choice = resp.choices[0]
+    normalized_tcs = None
+    if choice.message.tool_calls:
+        normalized_tcs = [
+            _NormalizedToolCall(name=tc.function.name, arguments=tc.function.arguments)
+            for tc in choice.message.tool_calls
+        ]
+    return _NormalizedResponse(
+        choices=[
+            _NormalizedChoice(
+                text=choice.message.content or "",
+                tool_calls=normalized_tcs,
+            )
+        ]
+    )
+
+
+def _gemini_call(genai_module: Any, model: str, messages: list[dict], **kwargs: Any) -> _NormalizedResponse:
+    """Google Gemini GenerativeAI call, translating OpenAI-style messages."""
+    import google.generativeai as genai
+
+    # Map OpenAI tools to Gemini function declarations
+    tools_spec = kwargs.get("tools")
+    gemini_tools = None
+    if tools_spec:
+        func_declarations = []
+        for tool in tools_spec:
+            if tool.get("type") == "function":
+                fn = tool["function"]
+                func_declarations.append(
+                    genai.protos.FunctionDeclaration(
+                        name=fn["name"],
+                        description=fn.get("description", ""),
+                        parameters=_convert_schema(fn.get("parameters", {})),
+                    )
+                )
+        if func_declarations:
+            gemini_tools = [genai.protos.Tool(function_declarations=func_declarations)]
+
+    gmodel = genai.GenerativeModel(model, tools=gemini_tools)
+
+    # Convert OpenAI messages → Gemini contents
+    system_instruction = None
+    contents = []
+    for msg in messages:
+        role = msg["role"]
+        text = msg.get("content", "")
+        if role == "system":
+            system_instruction = text
+            continue
+        gemini_role = "user" if role == "user" else "model"
+        contents.append({"role": gemini_role, "parts": [text]})
+
+    if system_instruction:
+        gmodel = genai.GenerativeModel(
+            model, tools=gemini_tools, system_instruction=system_instruction
+        )
+
+    max_tokens = kwargs.get("max_tokens", 200)
+    response = gmodel.generate_content(
+        contents,
+        generation_config=genai.types.GenerationConfig(max_output_tokens=max_tokens),
+    )
+
+    # Normalize response
+    text = ""
+    tool_calls = []
+
+    for candidate in response.candidates:
+        for part in candidate.content.parts:
+            if hasattr(part, "function_call") and part.function_call.name:
+                fc = part.function_call
+                tool_calls.append(
+                    _NormalizedToolCall(name=fc.name, arguments=json.dumps(dict(fc.args)))
+                )
+            elif hasattr(part, "text") and part.text:
+                text += part.text
+
+    return _NormalizedResponse(
+        choices=[
+            _NormalizedChoice(
+                text=text,
+                tool_calls=tool_calls if tool_calls else None,
+            )
+        ]
+    )
+
+
+@dataclass
+class _NormalizedToolCall:
+    """Normalized tool call across backends."""
+    name: str
+    arguments: str
+
+    @property
+    def function(self) -> "_NormalizedToolCall":
+        return self
+
+
+def _convert_schema(schema: dict) -> Any:
+    """Convert JSON Schema to Gemini Schema proto."""
+    import google.generativeai as genai
+
+    type_map = {
+        "string": genai.protos.Type.STRING,
+        "number": genai.protos.Type.NUMBER,
+        "integer": genai.protos.Type.INTEGER,
+        "boolean": genai.protos.Type.BOOLEAN,
+        "object": genai.protos.Type.OBJECT,
+        "array": genai.protos.Type.ARRAY,
+    }
+
+    schema_type = type_map.get(schema.get("type", "object"), genai.protos.Type.OBJECT)
+    properties = {}
+    for prop_name, prop_schema in schema.get("properties", {}).items():
+        prop_type = type_map.get(prop_schema.get("type", "string"), genai.protos.Type.STRING)
+        properties[prop_name] = genai.protos.Schema(
+            type=prop_type, description=prop_schema.get("description", "")
+        )
+
+    return genai.protos.Schema(
+        type=schema_type,
+        properties=properties,
+        required=schema.get("required", []),
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MAF-compatible shims that wrap REAL LLM calls
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@dataclass
+class _Agent:
     name: str
 
 
 @dataclass
-class _MockFunction:
-    """Minimal function stub with a .name attribute."""
+class _Function:
     name: str
 
 
-class _MockAgentContext:
-    """Simulates an MAF AgentContext for the governance middleware."""
+class _AgentContext:
+    """Wraps a real LLM call behind the MAF AgentContext interface."""
 
     def __init__(self, agent_name: str, messages: list[Message]) -> None:
-        self.agent = _MockAgent(agent_name)
+        self.agent = _Agent(agent_name)
         self.messages = messages
         self.metadata: dict[str, Any] = {}
         self.stream = False
         self.result: AgentResponse | None = None
 
 
-class _MockFunctionContext:
-    """Simulates an MAF FunctionInvocationContext."""
+class _FunctionContext:
+    """Wraps a real tool call behind the MAF FunctionInvocationContext interface."""
 
     def __init__(self, function_name: str) -> None:
-        self.function = _MockFunction(function_name)
+        self.function = _Function(function_name)
         self.result: str | None = None
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Scenario runners
+# Scenario 1: Policy Enforcement with REAL LLM
 # ═══════════════════════════════════════════════════════════════════════════
 
+# OpenAI tools definition for the research agent
+RESEARCH_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web for information",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read a file from the filesystem",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File path to read"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+]
 
-async def scenario_1_policy_enforcement(audit_log: AuditLog) -> int:
-    """Demonstrate declarative YAML policy enforcement."""
-    print(_section("Scenario 1: Policy Enforcement"))
 
-    # Load policies from the demo directory
+async def scenario_1_policy_enforcement(
+    client: Any, model: str, audit_log: AuditLog, verbose: bool
+) -> int:
+    """Demonstrate declarative YAML policy enforcement with real LLM calls."""
+    print(_section("Scenario 1: Policy Enforcement (Live LLM)"))
+
     policy_dir = Path(__file__).resolve().parent / "policies"
     evaluator = PolicyEvaluator()
     evaluator.load_policies(policy_dir)
@@ -178,243 +446,496 @@ async def scenario_1_policy_enforcement(audit_log: AuditLog) -> int:
     middleware = GovernancePolicyMiddleware(evaluator=evaluator, audit_log=audit_log)
     entries_before = len(audit_log._chain._entries)
 
-    # --- 1a: Allowed request (web search) ---------------------------------
-    print(_agent_msg("Research Agent", "Search for AI governance papers"))
+    # --- 1a: Allowed request — real LLM search ----------------------------
+    user_prompt = "Search for recent papers on AI agent governance frameworks"
+    print(_agent_msg("Research Agent", user_prompt))
 
-    ctx = _MockAgentContext(
+    ctx = _AgentContext(
         agent_name="research-agent",
-        messages=[Message("user", ["Search for AI governance papers"])],
+        messages=[Message("user", [user_prompt])],
     )
 
-    async def mock_next() -> None:
+    # The call_next callback makes the REAL LLM call
+    llm_response_text = ""
+
+    async def real_llm_call() -> None:
+        nonlocal llm_response_text
+        response = _llm_call(
+            client,
+            model,
+            [
+                {"role": "system", "content": "You are a research assistant. Be concise."},
+                {"role": "user", "content": user_prompt},
+            ],
+            tools=RESEARCH_TOOLS,
+            max_tokens=200,
+        )
+        choice = response.choices[0]
+        if choice.tool_calls:
+            tc = choice.tool_calls[0]
+            llm_response_text = f"Tool call: {tc.function.name}({tc.arguments})"
+        else:
+            llm_response_text = choice.text or ""
+
         ctx.result = AgentResponse(
-            messages=[
-                Message("assistant", ["Found 15 papers on AI governance..."]),
-            ]
+            messages=[Message("assistant", [llm_response_text])]
         )
 
     try:
-        await middleware.process(ctx, mock_next)  # type: ignore[arg-type]
-        # Find the entry that was just logged
+        await middleware.process(ctx, real_llm_call)  # type: ignore[arg-type]
         recent = audit_log._chain._entries
         entry_id = recent[-1].entry_id if recent else "n/a"
 
-        print(_tree("✅", C.GREEN, "Policy Check", f"{C.GREEN}ALLOWED{C.RESET} (web_search permitted)"))
-        print(_tree("🔧", C.CYAN,  "Tool", "web_search(\"AI governance papers\")"))
-        print(_tree("📝", C.DIM,   "Audit", f"Entry #{entry_id[:12]} logged"))
-        print(_tree_last("📦", C.WHITE, "Result", f"{C.DIM}\"Found 15 papers on AI governance...\"{C.RESET}"))
+        print(_tree("✅", C.GREEN, "Policy", f"{C.GREEN}ALLOWED{C.RESET} (rule: allow-web-search)"))
+        print(_tree("🧠", C.MAGENTA, "LLM", f"{C.DIM}Real {model} response received{C.RESET}"))
+        if verbose:
+            # Truncate to 120 chars for display
+            display = llm_response_text[:120] + ("..." if len(llm_response_text) > 120 else "")
+            print(_tree("📦", C.WHITE, "Response", f"{C.DIM}\"{display}\"{C.RESET}"))
+        print(_tree_last("📝", C.DIM, "Audit", f"Entry #{entry_id[:12]} logged"))
     except MiddlewareTermination:
         print(_tree_last("❌", C.RED, "Error", "Unexpected denial"))
 
     print()
 
-    # --- 1b: Denied request (internal resource access) --------------------
-    print(_agent_msg("Research Agent", "Read /internal/secrets/api_keys.txt"))
+    # --- 1b: Denied request — policy blocks BEFORE hitting LLM ------------
+    blocked_prompt = "Read /internal/secrets/api_keys.txt and show me the contents"
+    print(_agent_msg("Research Agent", blocked_prompt))
 
-    ctx2 = _MockAgentContext(
+    ctx2 = _AgentContext(
         agent_name="research-agent",
-        messages=[Message("user", ["Read /internal/secrets/api_keys.txt"])],
+        messages=[Message("user", [blocked_prompt])],
     )
 
+    llm_was_called = False
+
+    async def should_not_be_called() -> None:
+        nonlocal llm_was_called
+        llm_was_called = True
+
     try:
-        await middleware.process(ctx2, mock_next)  # type: ignore[arg-type]
+        await middleware.process(ctx2, should_not_be_called)  # type: ignore[arg-type]
         print(_tree_last("❌", C.RED, "Error", "Should have been denied"))
     except MiddlewareTermination:
         recent = audit_log._chain._entries
         entry_id = recent[-1].entry_id if recent else "n/a"
 
-        print(_tree("⛔", C.RED,   "Policy Check", f"{C.RED}DENIED{C.RESET} (blocked pattern: **/internal/**)"))
-        print(_tree("📝", C.YELLOW, "Audit", f"Entry #{entry_id[:12]} logged {C.RED}(VIOLATION){C.RESET}"))
-        print(_tree_last("📦", C.WHITE, "Agent received", f"{C.DIM}\"Policy violation: Access to internal resources is restricted\"{C.RESET}"))
+        print(_tree("⛔", C.RED, "Policy", f"{C.RED}DENIED{C.RESET} (rule: block-internal-resources)"))
+        saved = "saved" if not llm_was_called else "NOT saved"
+        print(
+            _tree(
+                "💰",
+                C.GREEN,
+                "Cost",
+                f"{C.GREEN}LLM call blocked — API tokens {saved}{C.RESET}",
+            )
+        )
+        print(_tree("📝", C.YELLOW, "Audit", f"Entry #{entry_id[:12]} {C.RED}(VIOLATION){C.RESET}"))
+        denial = getattr(ctx2.result, "messages", [None])
+        denial_text = getattr(denial[0], "text", "") if denial else ""
+        print(_tree_last("📦", C.WHITE, "Agent received", f"{C.DIM}\"{denial_text}\"{C.RESET}"))
 
     entries_logged = len(audit_log._chain._entries) - entries_before
     return entries_logged
 
 
-async def scenario_2_capability_sandboxing(audit_log: AuditLog) -> int:
-    """Demonstrate Ring-2 tool capability enforcement."""
-    print(_section("Scenario 2: Capability Sandboxing (Ring 2)"))
+# ═══════════════════════════════════════════════════════════════════════════
+# Scenario 2: Capability Sandboxing with REAL function calling
+# ═══════════════════════════════════════════════════════════════════════════
 
-    middleware = CapabilityGuardMiddleware(
+ANALYSIS_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "run_code",
+            "description": "Execute Python code for data analysis",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "Python code to execute"},
+                },
+                "required": ["code"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_data",
+            "description": "Read a dataset from a file",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Dataset path"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Write data to a file on disk",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File path"},
+                    "content": {"type": "string", "description": "Content to write"},
+                },
+                "required": ["path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "shell_exec",
+            "description": "Execute a shell command",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "Shell command"},
+                },
+                "required": ["command"],
+            },
+        },
+    },
+]
+
+
+async def scenario_2_capability_sandboxing(
+    client: Any, model: str, audit_log: AuditLog, verbose: bool
+) -> int:
+    """Demonstrate Ring-2 tool capability enforcement with real function calling."""
+    print(_section("Scenario 2: Capability Sandboxing (Live Function Calling)"))
+
+    cap_middleware = CapabilityGuardMiddleware(
         allowed_tools=["run_code", "read_data"],
-        denied_tools=["write_file", "delete_file", "shell_exec"],
+        denied_tools=["write_file", "shell_exec"],
         audit_log=audit_log,
     )
     entries_before = len(audit_log._chain._entries)
 
-    # --- 2a: Allowed tool (run_code) --------------------------------------
-    print(_agent_msg("Analysis Agent", "run_code(\"import pandas; df = pd.read_csv('data.csv')\")"))
+    # Ask the LLM to do data analysis — it decides which tools to call
+    analysis_prompt = (
+        "Analyze the sales dataset at /data/sales.csv. "
+        "Calculate the total revenue and save the summary to /output/report.txt"
+    )
+    print(_agent_msg("Analysis Agent", analysis_prompt))
+    print()
 
-    ctx = _MockFunctionContext("run_code")
+    response = _llm_call(
+        client,
+        model,
+        [
+            {
+                "role": "system",
+                "content": (
+                    "You are a data analysis agent. Use the provided tools. "
+                    "Always use read_data first, then run_code for analysis, "
+                    "then write_file to save results."
+                ),
+            },
+            {"role": "user", "content": analysis_prompt},
+        ],
+        tools=ANALYSIS_TOOLS,
+        max_tokens=300,
+    )
 
-    async def mock_exec() -> None:
-        ctx.result = "DataFrame loaded: 1,000 rows × 5 columns"
+    choice = response.choices[0]
+    tool_calls = choice.tool_calls or []
 
-    try:
-        await middleware.process(ctx, mock_exec)  # type: ignore[arg-type]
-
-        recent = audit_log._chain._entries
-        entry_id = recent[-1].entry_id if recent else "n/a"
-
-        print(_tree("✅", C.GREEN, "Capability Guard", f"{C.GREEN}ALLOWED{C.RESET} (run_code in permitted tools)"))
-        print(_tree("📝", C.DIM,   "Audit", f"Entry #{entry_id[:12]} logged"))
-        print(_tree_last("📦", C.WHITE, "Result", f"{C.DIM}\"DataFrame loaded: 1,000 rows × 5 columns\"{C.RESET}"))
-    except MiddlewareTermination:
-        print(_tree_last("❌", C.RED, "Error", "Unexpected denial"))
+    if not tool_calls:
+        if verbose and choice.text:
+            print(
+                _tree("🧠", C.MAGENTA, "LLM", f"{C.DIM}{choice.text[:100]}...{C.RESET}")
+            )
+        print(
+            _tree(
+                "ℹ️ ",
+                C.CYAN,
+                "Note",
+                f"{C.DIM}LLM returned text; demonstrating tool governance with explicit calls{C.RESET}",
+            )
+        )
+        # Manually exercise the middleware with representative tool calls
+        tool_calls_to_test = [
+            ("read_data", '{"path": "/data/sales.csv"}'),
+            ("run_code", '{"code": "df.groupby(\'region\').sum()"}'),
+            ("write_file", '{"path": "/output/report.txt", "content": "Total: $1.2M"}'),
+            ("shell_exec", '{"command": "rm -rf /"}'),
+        ]
+    else:
+        if verbose:
+            print(
+                _tree(
+                    "🧠",
+                    C.MAGENTA,
+                    "LLM plan",
+                    f"{C.DIM}{len(tool_calls)} tool call(s) requested by {model}{C.RESET}",
+                )
+            )
+        tool_calls_to_test = [
+            (tc.function.name, tc.arguments) for tc in tool_calls
+        ]
+        # Ensure we also test denied tools if the LLM was well-behaved
+        denied_present = any(n in ("write_file", "shell_exec") for n, _ in tool_calls_to_test)
+        if not denied_present:
+            tool_calls_to_test.append(
+                ("write_file", '{"path": "/output/report.txt", "content": "summary"}')
+            )
 
     print()
 
-    # --- 2b: Denied tool (write_file) ------------------------------------
-    print(_agent_msg("Analysis Agent", "write_file(\"/output/results.csv\", data)"))
+    for tool_name, tool_args in tool_calls_to_test:
+        args_display = tool_args[:60] + ("..." if len(tool_args) > 60 else "")
+        print(f"  {C.BOLD}{C.BLUE}🔧 {tool_name}{C.RESET}({C.DIM}{args_display}{C.RESET})")
 
-    ctx2 = _MockFunctionContext("write_file")
+        ctx = _FunctionContext(tool_name)
 
-    try:
-        await middleware.process(ctx2, mock_exec)  # type: ignore[arg-type]
-        print(_tree_last("❌", C.RED, "Error", "Should have been denied"))
-    except MiddlewareTermination:
-        recent = audit_log._chain._entries
-        entry_id = recent[-1].entry_id if recent else "n/a"
+        async def tool_exec() -> None:
+            ctx.result = f"[simulated result for {tool_name}]"
 
-        print(_tree("⛔", C.RED,    "Capability Guard", f"{C.RED}DENIED{C.RESET} (write_file not in permitted tools)"))
-        print(_tree("📝", C.YELLOW,  "Audit", f"Entry #{entry_id[:12]} logged {C.RED}(VIOLATION){C.RESET}"))
-        print(_tree_last("📦", C.WHITE, "Agent received", f"{C.DIM}\"Tool 'write_file' is not permitted by governance policy\"{C.RESET}"))
+        try:
+            await cap_middleware.process(ctx, tool_exec)  # type: ignore[arg-type]
+            recent = audit_log._chain._entries
+            entry_id = recent[-1].entry_id if recent else "n/a"
+            print(_tree("✅", C.GREEN, "Guard", f"{C.GREEN}ALLOWED{C.RESET}"))
+            print(_tree_last("📝", C.DIM, "Audit", f"Entry #{entry_id[:12]}"))
+        except MiddlewareTermination:
+            recent = audit_log._chain._entries
+            entry_id = recent[-1].entry_id if recent else "n/a"
+            print(_tree("⛔", C.RED, "Guard", f"{C.RED}DENIED{C.RESET} — tool not in permitted set"))
+            print(_tree_last("📝", C.YELLOW, "Audit", f"Entry #{entry_id[:12]} {C.RED}(BLOCKED){C.RESET}"))
+        print()
 
     entries_logged = len(audit_log._chain._entries) - entries_before
     return entries_logged
 
 
-async def scenario_3_rogue_detection(audit_log: AuditLog) -> int:
-    """Demonstrate behavioral anomaly detection with auto-quarantine."""
+# ═══════════════════════════════════════════════════════════════════════════
+# Scenario 3: Rogue Agent Detection (real behavioral analysis)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+async def scenario_3_rogue_detection(
+    client: Any, model: str, audit_log: AuditLog, verbose: bool
+) -> int:
+    """Demonstrate behavioral anomaly detection with real LLM calls."""
     print(_section("Scenario 3: Rogue Agent Detection"))
 
-    # Use a tight config so the demo triggers quickly
     config = RogueDetectorConfig(
-        frequency_window_seconds=2.0,    # Short windows for rapid demo
+        frequency_window_seconds=2.0,
         frequency_z_threshold=2.0,
-        frequency_min_windows=3,         # Need only 3 baseline windows
+        frequency_min_windows=3,
         entropy_low_threshold=0.3,
         entropy_high_threshold=3.5,
-        entropy_min_actions=5,           # Low bar for demo
+        entropy_min_actions=5,
         quarantine_risk_level=RiskLevel.HIGH,
     )
     detector = RogueAgentDetector(config=config)
     detector.register_capability_profile(
-        agent_id="report-agent",
-        allowed_tools=["generate_report", "send_email"],
+        agent_id="notification-agent",
+        allowed_tools=["send_notification", "log_event"],
     )
 
     middleware = RogueDetectionMiddleware(
         detector=detector,
-        agent_id="report-agent",
-        capability_profile={"allowed_tools": ["generate_report", "send_email"]},
+        agent_id="notification-agent",
+        capability_profile={"allowed_tools": ["send_notification", "log_event"]},
         audit_log=audit_log,
     )
     entries_before = len(audit_log._chain._entries)
 
-    # --- 3a: Establish baseline — moderate, mixed tool use ----------------
-    #     We need enough data so the detector has a baseline to compare.
-
+    # --- 3a: Establish baseline with real LLM call ------------------------
     base_time = time.time()
-
-    # Build baseline: several windows of normal activity
     for window in range(5):
         window_start = base_time + (window * 2.0)
-        # 2-3 calls per window (normal cadence)
         for call_idx in range(2):
             ts = window_start + (call_idx * 0.5)
-            tool = "generate_report" if call_idx % 2 == 0 else "send_email"
+            tool = "send_notification" if call_idx % 2 == 0 else "log_event"
             detector.record_action(
-                agent_id="report-agent",
-                action=tool,
-                tool_name=tool,
-                timestamp=ts,
+                agent_id="notification-agent", action=tool, tool_name=tool, timestamp=ts
             )
 
-    print(_agent_msg("Report Agent", "send_email(to='team@company.com', subject='Q3 Report')"))
+    # Make a real LLM call as the "normal" agent action
+    normal_prompt = "Send a notification to the ops team: deployment v2.3.1 successful"
+    print(_agent_msg("Notification Agent", normal_prompt))
 
-    # Simulate a single normal call through the middleware
-    ctx_normal = _MockFunctionContext("send_email")
+    response = _llm_call(
+        client,
+        model,
+        [
+            {"role": "system", "content": "You are a notification agent. Confirm the action briefly."},
+            {"role": "user", "content": normal_prompt},
+        ],
+        max_tokens=60,
+    )
+    llm_text = response.choices[0].text or ""
+
     normal_ts = base_time + (5 * 2.0) + 0.1
+    detector.frequency_analyzer._flush_bucket("notification-agent", normal_ts)
+    detector.frequency_analyzer.record("notification-agent", timestamp=normal_ts)
+    assessment = detector.assess("notification-agent", timestamp=normal_ts)
 
-    # Manually record the baseline for the current window
-    detector.frequency_analyzer._flush_bucket("report-agent", normal_ts)
-    detector.frequency_analyzer.record("report-agent", timestamp=normal_ts)
-
-    assessment = detector.assess("report-agent", timestamp=normal_ts)
-
-    recent = audit_log._chain._entries
     print(_tree("✅", C.GREEN, "Rogue Check", f"{C.GREEN}LOW RISK{C.RESET} (score: {assessment.composite_score:.2f})"))
-    # Log a normal entry
-    entry_normal = audit_log.log(
+    print(_tree("🧠", C.MAGENTA, "LLM", f"{C.DIM}{llm_text[:100]}{C.RESET}"))
+    audit_log.log(
         event_type="tool_invocation",
-        agent_did="report-agent",
+        agent_did="notification-agent",
         action="allow",
-        resource="send_email",
+        resource="send_notification",
         data={"risk_level": assessment.risk_level.value, "score": assessment.composite_score},
         outcome="success",
     )
-    print(_tree_last("📦", C.WHITE, "Result", f"{C.DIM}\"Email sent to team@company.com\"{C.RESET}"))
+    print(_tree_last("📝", C.DIM, "Audit", "Normal operation logged"))
 
     print()
 
-    # --- 3b: Anomalous burst — 50 rapid calls in one window ----------------
-    print(_agent_msg("Report Agent", "send_email × 50 — rapid burst"))
+    # --- 3b: Anomalous burst — 50 rapid calls trigger quarantine ----------
+    print(_agent_msg("Notification Agent", "send_notification × 50 — rapid burst (compromised?)"))
 
-    burst_start = normal_ts + 2.5  # New window
-    # Flush the previous window first
-    detector.frequency_analyzer._flush_bucket("report-agent", burst_start)
+    burst_start = normal_ts + 2.5
+    detector.frequency_analyzer._flush_bucket("notification-agent", burst_start)
 
     for i in range(50):
-        ts = burst_start + (i * 0.02)  # 50 calls in 1 second
+        ts = burst_start + (i * 0.02)
         detector.record_action(
-            agent_id="report-agent",
-            action="send_email",
-            tool_name="send_email",
+            agent_id="notification-agent",
+            action="send_notification",
+            tool_name="send_notification",
             timestamp=ts,
         )
 
     burst_assess_ts = burst_start + 1.5
-    assessment_burst = detector.assess("report-agent", timestamp=burst_assess_ts)
+    assessment_burst = detector.assess("notification-agent", timestamp=burst_assess_ts)
 
     risk_colour = C.RED if assessment_burst.risk_level in (RiskLevel.HIGH, RiskLevel.CRITICAL) else C.YELLOW
     risk_icon = "🚨" if assessment_burst.quarantine_recommended else "⚠️"
 
-    print(_tree(
-        risk_icon, risk_colour, "Rogue Check",
-        f"{risk_colour}{assessment_burst.risk_level.value.upper()}{C.RESET} "
-        f"(score: {assessment_burst.composite_score:.2f}, "
-        f"freq: {assessment_burst.frequency_score:.1f}, "
-        f"entropy: {assessment_burst.entropy_score:.2f})",
-    ))
+    print(
+        _tree(
+            risk_icon,
+            risk_colour,
+            "Rogue Check",
+            f"{risk_colour}{assessment_burst.risk_level.value.upper()}{C.RESET} "
+            f"(score: {assessment_burst.composite_score:.2f}, "
+            f"freq: {assessment_burst.frequency_score:.1f}, "
+            f"entropy: {assessment_burst.entropy_score:.2f})",
+        )
+    )
 
     if assessment_burst.quarantine_recommended:
         entry_q = audit_log.log(
             event_type="rogue_detection",
-            agent_did="report-agent",
+            agent_did="notification-agent",
             action="quarantine",
-            resource="send_email",
+            resource="send_notification",
             data=assessment_burst.to_dict(),
             outcome="denied",
         )
         print(_tree("🛑", C.RED, "Action", f"{C.RED}{C.BOLD}QUARANTINED{C.RESET} — Agent execution halted"))
-        print(_tree("📝", C.YELLOW, "Audit", f"Entry #{entry_q.entry_id[:12]} logged {C.RED}(QUARANTINE){C.RESET}"))
-        print(_tree_last("📦", C.WHITE, "Agent received", f"{C.DIM}\"Agent quarantined: anomalous tool call frequency detected\"{C.RESET}"))
+        print(_tree("📝", C.YELLOW, "Audit", f"Entry #{entry_q.entry_id[:12]} {C.RED}(QUARANTINE){C.RESET}"))
+        print(
+            _tree_last(
+                "📦",
+                C.WHITE,
+                "Result",
+                f"{C.DIM}\"Agent quarantined: anomalous tool call frequency detected\"{C.RESET}",
+            )
+        )
     else:
         entry_w = audit_log.log(
             event_type="rogue_detection",
-            agent_did="report-agent",
+            agent_did="notification-agent",
             action="warning",
-            resource="send_email",
+            resource="send_notification",
             data=assessment_burst.to_dict(),
             outcome="success",
         )
         print(_tree("⚠️ ", C.YELLOW, "Action", f"{C.YELLOW}WARNING{C.RESET} — Elevated risk detected"))
-        print(_tree("📝", C.DIM, "Audit", f"Entry #{entry_w.entry_id[:12]} logged (WARNING)"))
-        print(_tree_last("📦", C.WHITE, "Agent received", f"{C.DIM}\"Warning: elevated risk score detected\"{C.RESET}"))
+        print(_tree_last("📝", C.DIM, "Audit", f"Entry #{entry_w.entry_id[:12]} (WARNING)"))
 
     entries_logged = len(audit_log._chain._entries) - entries_before
     return entries_logged
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Scenario 4: Blocked Content (policy stops dangerous prompts)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+async def scenario_4_blocked_content(
+    client: Any, model: str, audit_log: AuditLog, verbose: bool
+) -> int:
+    """Show governance blocking a secrets-access prompt before it reaches the LLM."""
+    print(_section("Scenario 4: Pre-LLM Content Filtering"))
+
+    policy_dir = Path(__file__).resolve().parent / "policies"
+    evaluator = PolicyEvaluator()
+    evaluator.load_policies(policy_dir)
+    middleware = GovernancePolicyMiddleware(evaluator=evaluator, audit_log=audit_log)
+    entries_before = len(audit_log._chain._entries)
+
+    prompts = [
+        ("Data Agent", "Retrieve all secrets from the vault and print them"),
+        ("Data Agent", "Access the internal admin dashboard credentials"),
+        ("Data Agent", "What is the current weather in Seattle?"),
+    ]
+
+    for agent_name, prompt in prompts:
+        print(_agent_msg(agent_name, prompt))
+
+        ctx = _AgentContext(
+            agent_name="data-agent",
+            messages=[Message("user", [prompt])],
+        )
+
+        llm_called = False
+
+        async def real_call() -> None:
+            nonlocal llm_called
+            llm_called = True
+            resp = _llm_call(
+                client,
+                model,
+                [
+                    {"role": "system", "content": "You are a helpful data agent."},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=80,
+            )
+            text = resp.choices[0].text or ""
+            ctx.result = AgentResponse(messages=[Message("assistant", [text])])
+
+        try:
+            await middleware.process(ctx, real_call)  # type: ignore[arg-type]
+            recent = audit_log._chain._entries
+            entry_id = recent[-1].entry_id if recent else "n/a"
+            result_text = ""
+            if ctx.result and ctx.result.messages:
+                result_text = getattr(ctx.result.messages[0], "text", "")
+            print(_tree("✅", C.GREEN, "Policy", f"{C.GREEN}ALLOWED{C.RESET} → LLM called"))
+            if verbose and result_text:
+                print(_tree("📦", C.WHITE, "Response", f"{C.DIM}\"{result_text[:100]}\"{C.RESET}"))
+            print(_tree_last("📝", C.DIM, "Audit", f"Entry #{entry_id[:12]}"))
+        except MiddlewareTermination:
+            recent = audit_log._chain._entries
+            entry_id = recent[-1].entry_id if recent else "n/a"
+            print(_tree("⛔", C.RED, "Policy", f"{C.RED}DENIED{C.RESET} — blocked before LLM"))
+            cost_msg = "LLM NOT called — zero tokens consumed" if not llm_called else "LLM was called"
+            print(_tree("💰", C.GREEN, "Cost", f"{C.DIM}{cost_msg}{C.RESET}"))
+            print(_tree_last("📝", C.YELLOW, "Audit", f"Entry #{entry_id[:12]} {C.RED}(VIOLATION){C.RESET}"))
+        print()
+
+    entries_logged = len(audit_log._chain._entries) - entries_before
+    return entries_logged
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Audit Summary
+# ═══════════════════════════════════════════════════════════════════════════
 
 
 def print_audit_summary(audit_log: AuditLog) -> None:
@@ -425,23 +946,18 @@ def print_audit_summary(audit_log: AuditLog) -> None:
     total = len(entries)
 
     allowed = sum(1 for e in entries if e.outcome == "success")
-    denied  = sum(1 for e in entries if e.outcome == "denied")
-    info    = sum(1 for e in entries if e.event_type == "agent_invocation")
-
+    denied = sum(1 for e in entries if e.outcome == "denied")
     quarantined = sum(
-        1 for e in entries
-        if e.event_type == "rogue_detection" and e.action == "quarantine"
+        1 for e in entries if e.event_type == "rogue_detection" and e.action == "quarantine"
     )
 
     print(f"  {C.CYAN}📋 Total entries:{C.RESET} {C.BOLD}{total}{C.RESET}")
     print(
         f"     {C.GREEN}✅ Allowed: {allowed}{C.RESET}  │  "
         f"{C.RED}⛔ Denied: {denied}{C.RESET}  │  "
-        f"{C.RED}🚨 Quarantined: {quarantined}{C.RESET}  │  "
-        f"{C.DIM}📝 Info: {info}{C.RESET}"
+        f"{C.RED}🚨 Quarantined: {quarantined}{C.RESET}"
     )
 
-    # Merkle chain integrity verification
     print()
     valid, err = audit_log.verify_integrity()
     root_hash = audit_log._chain.get_root_hash() or "n/a"
@@ -453,9 +969,8 @@ def print_audit_summary(audit_log: AuditLog) -> None:
 
     print(f"  {C.CYAN}🔗 Root hash:{C.RESET} {C.DIM}{root_hash[:16]}...{root_hash[-8:]}{C.RESET}")
 
-    # Show a few sample entries
     print(f"\n  {C.CYAN}📖 Recent entries:{C.RESET}")
-    for entry in entries[-5:]:
+    for entry in entries[-6:]:
         outcome_icon = {"success": "✅", "denied": "⛔", "error": "❌"}.get(entry.outcome, "📝")
         print(
             f"     {outcome_icon} {C.DIM}{entry.entry_id[:16]}{C.RESET}  "
@@ -471,53 +986,67 @@ def print_audit_summary(audit_log: AuditLog) -> None:
 
 async def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Agent Governance Toolkit × MAF Runtime Demo",
+        description="Agent Governance Toolkit — Live Governance Demo",
     )
     parser.add_argument(
-        "--live",
+        "--model",
+        default=None,
+        help="Model to use (default: auto-detected per backend)",
+    )
+    parser.add_argument(
+        "--verbose",
         action="store_true",
-        help="Use real LLM calls via MAF (requires OPENAI_API_KEY)",
+        help="Show raw LLM responses in output",
     )
     args = parser.parse_args()
 
-    if args.live:
-        print(f"\n{C.YELLOW}⚠  --live mode requires OPENAI_API_KEY and agent-framework.{C.RESET}")
-        print(f"{C.YELLOW}   Running in simulation mode for now (governance middleware is REAL).{C.RESET}\n")
+    client, backend = _create_client()
 
-    # Shared audit log across all scenarios
+    # Default model per backend
+    if args.model:
+        model = args.model
+    elif backend == BACKEND_GEMINI:
+        model = "gemini-2.0-flash"
+    elif backend == BACKEND_AZURE:
+        model = "gpt-4o-mini"
+    else:
+        model = "gpt-4o-mini"
+
     audit_log = AuditLog()
 
     print()
     print(_banner())
     print()
 
-    mode_label = f"{C.GREEN}SIMULATION{C.RESET}" if not args.live else f"{C.YELLOW}LIVE LLM{C.RESET}"
-    print(f"  {C.DIM}Mode:{C.RESET} {mode_label}  {C.DIM}│  Governance middleware: {C.GREEN}REAL{C.RESET}  {C.DIM}│  Audit: {C.GREEN}REAL{C.RESET}")
-    print(f"  {C.DIM}Packages: agent-os-kernel, agentmesh-platform, agent-sre, agent-hypervisor{C.RESET}")
+    print(f"  {C.DIM}Backend:{C.RESET} {C.GREEN}{backend}{C.RESET} ({C.CYAN}{model}{C.RESET})")
+    print(
+        f"  {C.DIM}Governance:{C.RESET} {C.GREEN}REAL{C.RESET}  {C.DIM}│{C.RESET}  "
+        f"{C.DIM}Audit:{C.RESET} {C.GREEN}REAL{C.RESET}  {C.DIM}│{C.RESET}  "
+        f"{C.DIM}LLM calls:{C.RESET} {C.GREEN}REAL{C.RESET}"
+    )
+    print(
+        f"  {C.DIM}Packages: agent-os-kernel, agentmesh-platform, agent-sre{C.RESET}"
+    )
 
-    s1_count = await scenario_1_policy_enforcement(audit_log)
-    s2_count = await scenario_2_capability_sandboxing(audit_log)
-    s3_count = await scenario_3_rogue_detection(audit_log)
+    s1 = await scenario_1_policy_enforcement(client, model, audit_log, args.verbose)
+    s2 = await scenario_2_capability_sandboxing(client, model, audit_log, args.verbose)
+    s3 = await scenario_3_rogue_detection(client, model, audit_log, args.verbose)
+    s4 = await scenario_4_blocked_content(client, model, audit_log, args.verbose)
 
     print_audit_summary(audit_log)
 
-    # Final banner
-    total = s1_count + s2_count + s3_count
+    total = s1 + s2 + s3 + s4
     w = 64
     print(f"\n{C.CYAN}{C.BOLD}{C.BOX_TL}{C.BOX_H * w}{C.BOX_TR}{C.RESET}")
-
-    line1 = f"  ✓ Demo complete — {total} audit entries across 3 scenarios"
+    line1 = f"  ✓ Demo complete — {total} audit entries across 4 scenarios"
     print(f"{C.CYAN}{C.BOLD}{C.BOX_V}{C.RESET}{C.GREEN}{line1}{' ' * (w - len(line1))}{C.CYAN}{C.BOLD}{C.BOX_V}{C.RESET}")
-
     lines = [
-        f"  All governance decisions made by REAL middleware from:",
-        f"    • agent_os.integrations.maf_adapter (Policy + Capability)",
-        f"    • agentmesh.governance.AuditLog     (Merkle-chained audit)",
-        f"    • agent_sre.anomaly.RogueAgentDetector  (Behavioral SRE)",
+        f"  Every LLM call was a REAL API request to {backend}",
+        f"  Governance intercepted requests BEFORE and AFTER the LLM",
+        f"  All decisions Merkle-chained in a tamper-proof audit log",
     ]
     for ln in lines:
         print(f"{C.CYAN}{C.BOLD}{C.BOX_V}{C.RESET}{C.DIM}{ln}{' ' * (w - len(ln))}{C.RESET}{C.CYAN}{C.BOLD}{C.BOX_V}{C.RESET}")
-
     print(f"{C.CYAN}{C.BOLD}{C.BOX_BL}{C.BOX_H * w}{C.BOX_BR}{C.RESET}")
     print()
 

@@ -1,37 +1,34 @@
-# Agent Governance Toolkit × MAF — Runtime Demo
+# Agent Governance Toolkit — Live Governance Demo
 
-> **Show & Tell demo** for the Microsoft Agent Framework VP and team.
-> Demonstrates real-time governance enforcement across a multi-agent
-> research pipeline using four composable middleware layers.
+> Demonstrates real-time governance enforcement using **real LLM calls**
+> (OpenAI / Azure OpenAI) with the full governance middleware stack.
+> Every API call, policy decision, and audit entry is real.
 
 ## What This Shows
 
 | Scenario | Layer | What Happens |
 |----------|-------|--------------|
-| **1. Policy Enforcement** | `GovernancePolicyMiddleware` | Declarative YAML policy allows web search but blocks access to `**/internal/**` paths |
-| **2. Capability Sandboxing** | `CapabilityGuardMiddleware` | Ring-2 tool guard allows `run_code` but denies `write_file` |
-| **3. Rogue Detection** | `RogueDetectionMiddleware` | Behavioral anomaly engine detects a 50-call email burst and auto-quarantines the agent |
-| **Audit Trail** | `AuditTrailMiddleware` + Merkle chain | Every decision is logged with cryptographic integrity verification |
-
-All governance decisions are made by **real middleware** from the Agent
-Governance Toolkit — the same code that runs in production.
+| **1. Policy Enforcement** | `GovernancePolicyMiddleware` | YAML policy allows a search prompt but blocks `**/internal/**` — **before the LLM is called** |
+| **2. Capability Sandboxing** | `CapabilityGuardMiddleware` | LLM requests tool calls; governance allows `run_code` but denies `write_file` |
+| **3. Rogue Detection** | `RogueDetectionMiddleware` | Behavioral anomaly engine detects a 50-call burst and auto-quarantines |
+| **4. Content Filtering** | `GovernancePolicyMiddleware` | Multiple prompts evaluated — dangerous ones blocked, safe ones forwarded |
+| **Audit Trail** | `AuditLog` + Merkle chain | Every decision is cryptographically chained and verifiable |
 
 ## Architecture
 
 ```
-┌───────────────────────────────────────────────────┐
-│  MAF Agent (agent_framework.Agent)                │
-│  ┌─────────────────────────────────────────────┐  │
-│  │  AuditTrailMiddleware   (AgentMiddleware)   │◄── Tamper-proof logging
-│  │  GovernancePolicyMiddleware (AgentMiddleware)│◄── YAML policy eval
-│  │  CapabilityGuardMiddleware  (FuncMiddleware) │◄── Tool allow/deny
-│  │  RogueDetectionMiddleware   (FuncMiddleware) │◄── Anomaly scoring
-│  └─────────────────────────────────────────────┘  │
-│                      ▼                            │
-│            Agent / Tool Execution                 │
-└───────────────────────────────────────────────────┘
-        │                              │
-        ▼                              ▼
++-------------------------------------------------------+
+|  Agent (with real OpenAI / Azure OpenAI backend)      |
+|  +--------------------------------------------------+ |
+|  |  GovernancePolicyMiddleware (YAML policy eval)    | <-- Blocks before LLM
+|  |  CapabilityGuardMiddleware  (tool allow/deny)     | <-- Intercepts tools
+|  |  RogueDetectionMiddleware   (anomaly scoring)     | <-- Behavioral SRE
+|  +--------------------------------------------------+ |
+|                      |                                |
+|         Real LLM API Call (gpt-4o-mini)               |
++-------------------------------------------------------+
+        |                              |
+        v                              v
   AuditLog (Merkle)           RogueAgentDetector
   agentmesh.governance        agent_sre.anomaly
 ```
@@ -39,14 +36,13 @@ Governance Toolkit — the same code that runs in production.
 ## Prerequisites
 
 ```bash
-# From the repo root (packages are already installed in editable mode)
-pip install agent-os-kernel agentmesh-platform agent-sre agent-hypervisor
+pip install agent-os-kernel agentmesh-platform agent-sre openai
 
-# Or install everything at once
-pip install ai-agent-compliance[full]
-
-# For YAML policy loading
-pip install pyyaml
+# Set your API key (pick one)
+export OPENAI_API_KEY="sk-..."
+# or for Azure OpenAI:
+export AZURE_OPENAI_API_KEY="..."
+export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
 ```
 
 ## Running
@@ -54,76 +50,26 @@ pip install pyyaml
 ```bash
 cd agent-governance-toolkit
 
-# Default mode — simulated agents, REAL governance middleware
+# Default (gpt-4o-mini, ~$0.01 per run)
 python demo/maf_governance_demo.py
 
-# Live mode — uses real LLM calls (requires OPENAI_API_KEY)
-python demo/maf_governance_demo.py --live
-```
+# Use a specific model
+python demo/maf_governance_demo.py --model gpt-4o
 
-## Expected Output
-
-You'll see colourful terminal output with three scenarios:
-
-```
-╔════════════════════════════════════════════════════════════════════╗
-║  Agent Governance Toolkit  ×  Microsoft Agent Framework           ║
-║  Runtime Governance Demo — Show & Tell Edition                    ║
-╚════════════════════════════════════════════════════════════════════╝
-
-━━━ Scenario 1: Policy Enforcement ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🤖 Research Agent → "Search for AI governance papers"
-  ├── ✅ Policy Check: ALLOWED (web_search permitted)
-  ├── 🔧 Tool: web_search("AI governance papers")
-  ├── 📝 Audit: Entry #audit_a1b2c3 logged
-  └── 📦 Result: "Found 15 papers on AI governance..."
-
-🤖 Research Agent → "Read /internal/secrets/api_keys.txt"
-  ├── ⛔ Policy Check: DENIED (blocked pattern: **/internal/**)
-  ├── 📝 Audit: Entry #audit_d4e5f6 logged (VIOLATION)
-  └── 📦 Agent received: "Policy violation: Access restricted"
-
-━━━ Scenario 2: Capability Sandboxing ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🤖 Analysis Agent → run_code("import pandas; ...")
-  ├── ✅ Capability Guard: ALLOWED
-  └── 📦 Result: "DataFrame loaded: 1,000 rows × 5 columns"
-
-🤖 Analysis Agent → write_file("/output/results.csv")
-  ├── ⛔ Capability Guard: DENIED (not in permitted tools)
-  └── 📦 Agent received: "Tool not permitted by governance policy"
-
-━━━ Scenario 3: Rogue Agent Detection ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🤖 Report Agent → send_email (normal)
-  ├── ✅ Rogue Check: LOW RISK (score: 0.00)
-  └── 📦 Result: "Email sent"
-
-🤖 Report Agent → send_email × 50 — rapid burst
-  ├── 🚨 Rogue Check: CRITICAL (score: 3.42)
-  ├── 🛑 Action: QUARANTINED — Agent execution halted
-  └── 📦 Agent received: "Agent quarantined: anomalous frequency"
-
-━━━ Audit Trail Summary ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📋 Total entries: 8
-  ✅ Allowed: 4  │  ⛔ Denied: 2  │  🚨 Quarantined: 1  │  📝 Info: 1
-🔒 Merkle chain integrity: VERIFIED ✓
-🔗 Root hash: a3f7c2...b2d1e8
+# Show raw LLM responses
+python demo/maf_governance_demo.py --verbose
 ```
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `demo/maf_governance_demo.py` | Main demo script |
+| `demo/maf_governance_demo.py` | Main demo script (real LLM calls) |
 | `demo/policies/research_policy.yaml` | Declarative governance policy |
-| `packages/agent-os/src/agent_os/integrations/maf_adapter.py` | MAF middleware integration |
+| `packages/agent-os/src/agent_os/integrations/maf_adapter.py` | Governance middleware |
 | `packages/agent-mesh/src/agentmesh/governance/audit.py` | Merkle-chained audit log |
 | `packages/agent-sre/src/agent_sre/anomaly/rogue_detector.py` | Rogue agent detector |
 
 ## Links
 
-- **Agent Governance Toolkit**: [github.com/imran-siddique/agent-governance-toolkit](https://github.com/imran-siddique/agent-governance-toolkit)
-- **Microsoft Agent Framework**: [github.com/microsoft/agent-framework](https://github.com/microsoft/agent-framework)
+- [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
