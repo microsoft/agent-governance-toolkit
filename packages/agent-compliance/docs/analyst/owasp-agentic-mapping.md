@@ -1,6 +1,6 @@
 # OWASP Agentic AI Top 10 — Implementation Guide
 
-A practical implementation guide for mitigating the [OWASP Agentic AI Top 10](https://owasp.org/www-project-agentic-ai-top-10/) risks using open-source tools. Each risk includes a concrete code example, testing methodology, and references.
+A practical implementation guide for mitigating the [OWASP Agentic AI Top 10](https://genai.owasp.org/2025/12/09/owasp-genai-security-project-releases-top-10-risks-and-mitigations-for-agentic-ai-security/) risks using open-source tools. Each risk includes a concrete code example, testing methodology, and references.
 
 This guide is intended as a community contribution — a reference implementation that security teams can adapt to their own agent architectures.
 
@@ -33,7 +33,7 @@ if result.is_injection:
 
 **Testing:** Inject known payloads from [prompt-injection-dataset](https://huggingface.co/datasets/deepset/prompt-injections) and verify detection rate ≥99%. Run canary tokens continuously in production.
 
-**References:** [OWASP ASI01](https://owasp.org/www-project-agentic-ai-top-10/), [Simon Willison's Prompt Injection](https://simonwillison.net/series/prompt-injection/)
+**References:** [OWASP ASI01](https://genai.owasp.org/2025/12/09/owasp-genai-security-project-releases-top-10-risks-and-mitigations-for-agentic-ai-security/), [Simon Willison's Prompt Injection](https://simonwillison.net/series/prompt-injection/)
 
 ---
 
@@ -62,7 +62,7 @@ result = kernel.execute(ctx, action="deploy", target="production")
 
 **Testing:** Attempt to call each denied capability and verify rejection. Fuzz tool names with typos and synonyms to test bypass resistance.
 
-**References:** [OWASP ASI02](https://owasp.org/www-project-agentic-ai-top-10/), [Principle of Least Privilege](https://csrc.nist.gov/glossary/term/least_privilege)
+**References:** [OWASP ASI02](https://genai.owasp.org/2025/12/09/owasp-genai-security-project-releases-top-10-risks-and-mitigations-for-agentic-ai-security/), [Principle of Least Privilege](https://csrc.nist.gov/glossary/term/least_privilege)
 
 ---
 
@@ -92,7 +92,7 @@ channel.send(from_agent="agent-a", to_agent="agent-b",
 
 **Testing:** Attempt to send messages with an unregistered agent identity. Verify that messages below the trust threshold are rejected.
 
-**References:** [OWASP ASI03](https://owasp.org/www-project-agentic-ai-top-10/), [DID Specification](https://www.w3.org/TR/did-core/)
+**References:** [OWASP ASI03](https://genai.owasp.org/2025/12/09/owasp-genai-security-project-releases-top-10-risks-and-mitigations-for-agentic-ai-security/), [DID Specification](https://www.w3.org/TR/did-core/)
 
 ---
 
@@ -123,7 +123,7 @@ assert verified, "Agent identity verification failed"
 
 **Testing:** Attempt to use a revoked or expired DID. Verify that forged DIDs are rejected. Test identity rotation.
 
-**References:** [OWASP ASI04](https://owasp.org/www-project-agentic-ai-top-10/), [W3C DID Core](https://www.w3.org/TR/did-core/)
+**References:** [OWASP ASI04](https://genai.owasp.org/2025/12/09/owasp-genai-security-project-releases-top-10-risks-and-mitigations-for-agentic-ai-security/), [W3C DID Core](https://www.w3.org/TR/did-core/)
 
 > **Note:** DID-based identity is one approach. For many deployments, mTLS client certificates or SPIFFE identities may be more practical. The key requirement is verifiable, non-repudiable agent identity.
 
@@ -155,7 +155,7 @@ result = sandbox.execute(agent_generated_code)
 
 **Testing:** Attempt to escape the sandbox (network calls, filesystem writes, import os). Verify resource limits are enforced (CPU bomb, memory allocation).
 
-**References:** [OWASP ASI05](https://owasp.org/www-project-agentic-ai-top-10/)
+**References:** [OWASP ASI05](https://genai.owasp.org/2025/12/09/owasp-genai-security-project-releases-top-10-risks-and-mitigations-for-agentic-ai-security/)
 
 ---
 
@@ -184,7 +184,7 @@ result = kernel.execute(ctx, action="delete_data", target="user_records")
 
 **Testing:** Trigger each high-impact action and verify it's held for approval. Test the timeout path (no approval → deny).
 
-**References:** [OWASP ASI06](https://owasp.org/www-project-agentic-ai-top-10/), [Human-in-the-Loop AI](https://hai.stanford.edu/)
+**References:** [OWASP ASI06](https://genai.owasp.org/2025/12/09/owasp-genai-security-project-releases-top-10-risks-and-mitigations-for-agentic-ai-security/), [Human-in-the-Loop AI](https://hai.stanford.edu/)
 
 ---
 
@@ -216,7 +216,7 @@ output = kernel.filter_output(agent_response)
 
 **Testing:** Include synthetic PII in agent inputs and verify it's redacted in outputs. Test edge cases (PII in base64, PII split across messages).
 
-**References:** [OWASP ASI07](https://owasp.org/www-project-agentic-ai-top-10/), [GDPR Art. 5](https://gdpr-info.eu/art-5-gdpr/)
+**References:** [OWASP ASI07](https://genai.owasp.org/2025/12/09/owasp-genai-security-project-releases-top-10-risks-and-mitigations-for-agentic-ai-security/), [GDPR Art. 5](https://gdpr-info.eu/art-5-gdpr/)
 
 ---
 
@@ -245,7 +245,7 @@ sre.track(ctx, metrics=["latency", "token_usage", "policy_violations"])
 
 **Testing:** Execute 100 agent actions and verify 100 audit records exist. Query audit logs by agent_id, time range, and action type.
 
-**References:** [OWASP ASI08](https://owasp.org/www-project-agentic-ai-top-10/), [OpenTelemetry](https://opentelemetry.io/)
+**References:** [OWASP ASI08](https://genai.owasp.org/2025/12/09/owasp-genai-security-project-releases-top-10-risks-and-mitigations-for-agentic-ai-security/), [OpenTelemetry](https://opentelemetry.io/)
 
 ---
 
@@ -275,7 +275,7 @@ with governor.monitor(agent_id="research-bot"):
 
 **Testing:** Create an agent that deliberately consumes maximum resources. Verify limits are enforced and other agents are unaffected (no noisy neighbor).
 
-**References:** [OWASP ASI09](https://owasp.org/www-project-agentic-ai-top-10/)
+**References:** [OWASP ASI09](https://genai.owasp.org/2025/12/09/owasp-genai-security-project-releases-top-10-risks-and-mitigations-for-agentic-ai-security/)
 
 ---
 
@@ -310,7 +310,7 @@ def call_agent(task):
 
 **Testing:** Inject failures using chaos engineering (Agent SRE) and verify circuit breakers trip correctly. Validate that error budgets are consumed and alerts fire.
 
-**References:** [OWASP ASI10](https://owasp.org/www-project-agentic-ai-top-10/), [Google SRE Book — Error Budgets](https://sre.google/sre-book/embracing-risk/)
+**References:** [OWASP ASI10](https://genai.owasp.org/2025/12/09/owasp-genai-security-project-releases-top-10-risks-and-mitigations-for-agentic-ai-security/), [Google SRE Book — Error Budgets](https://sre.google/sre-book/embracing-risk/)
 
 ---
 
