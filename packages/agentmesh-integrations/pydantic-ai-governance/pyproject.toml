@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pydantic-ai-governance"
+version = "0.1.0"
+description = "Governance middleware for PydanticAI — semantic policy enforcement, trust scoring, and audit trails for agent tool execution"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.9"
+authors = [
+    { name = "Imran Siddique" }
+]
+keywords = ["pydantic-ai", "governance", "agents", "trust", "policy", "guardrails"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = []
+
+[project.optional-dependencies]
+pydantic-ai = ["pydantic-ai>=0.1.0"]
+
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/imran-siddique/agentmesh-integrations"
+Repository = "https://github.com/imran-siddique/agentmesh-integrations"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pydantic_ai_governance"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "langflow-agentmesh"
+version = "0.1.0"
+description = "Governance components for Langflow — policy enforcement, trust routing, audit logging, and compliance checking for visual AI flows"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.9"
+authors = [
+    { name = "Imran Siddique" }
+]
+keywords = ["langflow", "governance", "agents", "trust", "compliance", "audit", "guardrails"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = []
+
+[project.optional-dependencies]
+langflow = ["langflow>=1.0.0"]
+
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/imran-siddique/agentmesh-integrations"
+Repository = "https://github.com/imran-siddique/agentmesh-integrations"
+Issues = "https://github.com/imran-siddique/agentmesh-integrations/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/langflow_agentmesh"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

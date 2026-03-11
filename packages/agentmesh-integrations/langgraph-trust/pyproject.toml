@@ -1,0 +1,74 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "langgraph-trust"
+version = "0.1.0"
+description = "Trust-gated checkpoint nodes for LangGraph — cryptographic identity, policy enforcement, and trust-aware routing for multi-agent graphs"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Imran Siddique", email = "imran.siddique@microsoft.com" }
+]
+keywords = [
+    "langgraph",
+    "langchain",
+    "agents",
+    "trust",
+    "governance",
+    "identity",
+    "cryptography",
+    "multi-agent",
+    "agentmesh",
+    "checkpoint"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Security :: Cryptography",
+]
+dependencies = [
+    "cryptography>=41.0.0",
+]
+
+[project.optional-dependencies]
+langgraph = [
+    "langgraph>=0.2.0",
+]
+agentmesh = [
+    "agentmesh-platform>=0.1.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "ruff>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/imran-siddique/agentmesh-integrations"
+Documentation = "https://github.com/imran-siddique/agentmesh-integrations/tree/master/langgraph-trust"
+Repository = "https://github.com/imran-siddique/agentmesh-integrations"
+Issues = "https://github.com/imran-siddique/agent-mesh/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["langgraph_trust"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

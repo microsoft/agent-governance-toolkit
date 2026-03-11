@@ -1,0 +1,59 @@
+identity:
+  name: verify_step
+  author: imran-siddique
+  label:
+    en_US: Verify Workflow Step
+    zh_Hans: 验证工作流步骤
+description:
+  human:
+    en_US: Verify that the current agent has permission to execute a workflow step. Checks capability requirements and returns authorization status.
+    zh_Hans: 验证当前代理是否有权限执行工作流步骤。检查能力要求并返回授权状态。
+  llm: Verify authorization to execute a workflow step. Use before executing sensitive operations to ensure the agent has required capabilities. Returns whether the step is authorized and the associated trust score.
+parameters:
+  - name: workflow_id
+    type: string
+    required: true
+    label:
+      en_US: Workflow ID
+      zh_Hans: 工作流ID
+    human_description:
+      en_US: The unique identifier of the workflow
+      zh_Hans: 工作流的唯一标识符
+    llm_description: The unique identifier of the workflow being executed
+    form: llm
+  - name: step_id
+    type: string
+    required: true
+    label:
+      en_US: Step ID
+      zh_Hans: 步骤ID
+    human_description:
+      en_US: The unique identifier of the step within the workflow
+      zh_Hans: 工作流中步骤的唯一标识符
+    llm_description: The unique identifier of the specific step within the workflow
+    form: llm
+  - name: step_type
+    type: string
+    required: true
+    label:
+      en_US: Step Type
+      zh_Hans: 步骤类型
+    human_description:
+      en_US: The type of step (e.g., "llm", "tool", "code", "http", "variable")
+      zh_Hans: 步骤类型（例如 "llm"、"tool"、"code"、"http"、"variable"）
+    llm_description: The type of workflow step being executed. Common types include llm, tool, code, http, variable
+    form: llm
+  - name: required_capability
+    type: string
+    required: false
+    label:
+      en_US: Required Capability
+      zh_Hans: 所需能力
+    human_description:
+      en_US: Override the default capability check with a specific capability requirement
+      zh_Hans: 使用特定能力要求覆盖默认能力检查
+    llm_description: Optional specific capability to check instead of auto-deriving from step_type
+    form: llm
+extra:
+  python:
+    source: tools/verify_step.py

@@ -1,0 +1,27 @@
+identity:
+  name: get_identity
+  author: imran-siddique
+  label:
+    en_US: Get Agent Identity
+    zh_Hans: 获取代理身份
+description:
+  human:
+    en_US: Get the cryptographic identity information for this agent, including DID, public key, and capabilities. Use to share identity with other agents for trust establishment.
+    zh_Hans: 获取此代理的加密身份信息，包括 DID、公钥和能力。用于与其他代理共享身份以建立信任。
+  llm: Get this agent's cryptographic identity (DID, public key, capabilities). Use when you need to share identity with other agents for trust establishment or when building multi-agent workflows that require verification.
+parameters:
+  - name: include_capabilities
+    type: boolean
+    required: false
+    label:
+      en_US: Include Capabilities
+      zh_Hans: 包含能力列表
+    human_description:
+      en_US: Whether to include the list of capabilities in the response
+      zh_Hans: 是否在响应中包含能力列表
+    llm_description: Whether to include the list of capabilities in the response. Default is true.
+    form: form
+    default: true
+extra:
+  python:
+    source: tools/get_identity.py

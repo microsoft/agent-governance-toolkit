@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openai-agents-agentmesh"
+version = "0.1.0"
+description = "AgentMesh trust layer for OpenAI Agents SDK — trust-gated function calling and handoff verification"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [{ name = "Imran Siddique" }]
+keywords = ["openai", "agents", "trust", "multi-agent", "agentmesh", "handoff"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/imran-siddique/agentmesh-integrations"
+
+[tool.hatch.build.targets.wheel]
+packages = ["openai_agents_agentmesh"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

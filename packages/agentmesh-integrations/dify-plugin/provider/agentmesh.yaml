@@ -1,0 +1,67 @@
+identity:
+  author: imran-siddique
+  name: agentmesh
+  label:
+    en_US: AgentMesh Trust Layer
+    zh_Hans: AgentMesh 信任层
+  description:
+    en_US: Provides cryptographic trust verification for multi-agent workflows using Ed25519 digital signatures. Enables agent-to-agent trust establishment, capability verification, and audit logging.
+    zh_Hans: 使用 Ed25519 数字签名为多代理工作流提供加密信任验证。支持代理之间的信任建立、能力验证和审计日志记录。
+  icon: icon.svg
+credentials_for_provider:
+  min_trust_score:
+    type: text-input
+    required: false
+    label:
+      en_US: Minimum Trust Score
+      zh_Hans: 最低信任分数
+    placeholder:
+      en_US: "0.5"
+      zh_Hans: "0.5"
+    help:
+      en_US: Minimum trust score (0.0-1.0) required for verification to pass. Default is 0.5
+      zh_Hans: 验证通过所需的最低信任分数（0.0-1.0）。默认为0.5
+  cache_ttl_seconds:
+    type: text-input
+    required: false
+    label:
+      en_US: Cache TTL (seconds)
+      zh_Hans: 缓存有效期（秒）
+    placeholder:
+      en_US: "900"
+      zh_Hans: "900"
+    help:
+      en_US: How long to cache verification results. Default is 900 seconds (15 minutes)
+      zh_Hans: 验证结果的缓存时间。默认为900秒（15分钟）
+  identity_name:
+    type: text-input
+    required: false
+    label:
+      en_US: Agent Identity Name
+      zh_Hans: 代理身份名称
+    placeholder:
+      en_US: "my-dify-agent"
+      zh_Hans: "my-dify-agent"
+    help:
+      en_US: Name for this agent's cryptographic identity. Used to generate a unique DID.
+      zh_Hans: 此代理的加密身份名称。用于生成唯一的 DID。
+  capabilities:
+    type: text-input
+    required: false
+    label:
+      en_US: Agent Capabilities
+      zh_Hans: 代理能力
+    placeholder:
+      en_US: "workflow:execute,tool:invoke,data:read"
+      zh_Hans: "workflow:execute,tool:invoke,data:read"
+    help:
+      en_US: Comma-separated list of capabilities this agent has (e.g., workflow:execute, tool:invoke). Use * for all capabilities.
+      zh_Hans: 此代理具有的能力列表，以逗号分隔（例如 workflow:execute, tool:invoke）。使用 * 表示所有能力。
+tools:
+  - tools/verify_peer.yaml
+  - tools/verify_step.yaml
+  - tools/get_identity.yaml
+  - tools/record_interaction.yaml
+extra:
+  python:
+    source: provider/agentmesh.py
