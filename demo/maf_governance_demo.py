@@ -209,11 +209,41 @@ def _llm_call(client: Any, model: str, messages: list[dict], **kwargs: Any) -> A
     """Make a real LLM call, dispatching to the correct backend.
 
     Returns a normalized response object with .text and .tool_calls attributes.
+    On API error, returns a fallback response with the error description.
     """
-    if _ACTIVE_BACKEND == BACKEND_GEMINI:
-        return _gemini_call(client, model, messages, **kwargs)
-    # OpenAI / Azure OpenAI
-    return _openai_call(client, model, messages, **kwargs)
+    try:
+        if _ACTIVE_BACKEND == BACKEND_GEMINI:
+            return _gemini_call(client, model, messages, **kwargs)
+        return _openai_call(client, model, messages, **kwargs)
+    except Exception as exc:
+        # Extract the user prompt for the fallback
+        user_msg = next((m["content"] for m in messages if m["role"] == "user"), "")
+        err_type = type(exc).__name__
+        print(
+            _tree(
+                "⚠️ ",
+                C.YELLOW,
+                "LLM Error",
+                f"{C.YELLOW}{err_type}{C.RESET}: {C.DIM}{str(exc)[:80]}{C.RESET}",
+            )
+        )
+        print(
+            _tree(
+                "🔄",
+                C.CYAN,
+                "Fallback",
+                f"{C.DIM}Using simulated response (governance middleware is still REAL){C.RESET}",
+            )
+        )
+        # Return a synthetic response so governance pipeline still runs end-to-end
+        return _NormalizedResponse(
+            choices=[
+                _NormalizedChoice(
+                    text=f"[Simulated: response to '{user_msg[:60]}']",
+                    tool_calls=None,
+                )
+            ]
+        )
 
 
 @dataclass
