@@ -6,6 +6,7 @@ from agent_sre.cascade.circuit_breaker import (
     CascadeDetector,
     CircuitBreaker,
     CircuitBreakerConfig,
+    CircuitBreakerOpen,
     CircuitOpenError,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "CascadeDetector",
     "CircuitBreaker",
     "CircuitBreakerConfig",
+    "CircuitBreakerOpen",
     "CircuitOpenError",
 ]

@@ -3,19 +3,18 @@
 """Per-agent circuit breakers with cascade detection.
 
 Implements the circuit breaker pattern to prevent cascading failures
-across multi-agent workflows, addressing OWASP ASI08.
+across multi-agent workflows, while also preserving the legacy
+``agent_os.circuit_breaker`` API through compatible names and behavior.
 """
 
 from __future__ import annotations
 
+import inspect
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, TypeVar
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 
@@ -38,93 +37,128 @@ class CircuitOpenError(Exception):
         )
 
 
-@dataclass
+CircuitBreakerOpen = CircuitOpenError
+
+
+@dataclass(init=False)
 class CircuitBreakerConfig:
-    """Configuration for a circuit breaker instance."""
+    """Configuration for a circuit breaker instance.
+
+    Supports both the canonical ``recovery_timeout_seconds`` name and the
+    legacy ``reset_timeout_seconds`` alias used by ``agent_os``.
+    """
 
     failure_threshold: int = 5
     recovery_timeout_seconds: float = 30.0
     half_open_max_calls: int = 1
 
+    def __init__(
+        self,
+        failure_threshold: int = 5,
+        recovery_timeout_seconds: float | None = None,
+        half_open_max_calls: int = 1,
+        reset_timeout_seconds: float | None = None,
+    ) -> None:
+        if (
+            recovery_timeout_seconds is not None
+            and reset_timeout_seconds is not None
+            and recovery_timeout_seconds != reset_timeout_seconds
+        ):
+            raise ValueError(
+                "recovery_timeout_seconds and reset_timeout_seconds must match"
+            )
 
-@dataclass
-class _CircuitMetrics:
-    failure_count: int = 0
-    success_count: int = 0
-    half_open_calls: int = 0
-    last_failure_time: float = 0.0
-    last_state_change: float = field(default_factory=time.monotonic)
+        timeout = recovery_timeout_seconds
+        if timeout is None:
+            timeout = reset_timeout_seconds
+        if timeout is None:
+            timeout = 30.0
+
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout_seconds = timeout
+        self.half_open_max_calls = half_open_max_calls
+
+    @property
+    def reset_timeout_seconds(self) -> float:
+        return self.recovery_timeout_seconds
+
+    @reset_timeout_seconds.setter
+    def reset_timeout_seconds(self, value: float) -> None:
+        self.recovery_timeout_seconds = value
 
 
 class CircuitBreaker:
-    """Per-agent circuit breaker.
-
-    States:
-        CLOSED  — normal operation; failures are counted.
-        OPEN    — all calls blocked; returns fallback or raises.
-        HALF_OPEN — limited trial calls to test recovery.
-    """
+    """Hybrid circuit breaker supporting SRE and legacy agent-os callers."""
 
     def __init__(
         self,
-        agent_id: str,
+        agent_id: str | CircuitBreakerConfig | None = None,
         config: CircuitBreakerConfig | None = None,
     ) -> None:
-        self.agent_id = agent_id
-        self.config = config or CircuitBreakerConfig()
-        self._state = CircuitState.CLOSED
-        self._metrics = _CircuitMetrics()
-        self._lock = threading.Lock()
+        if isinstance(agent_id, CircuitBreakerConfig) and config is None:
+            config = agent_id
+            agent_id = None
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
+        self.agent_id = agent_id or "legacy"
+        self.config = config or CircuitBreakerConfig()
+        self._config = self.config
+        self._state = CircuitState.CLOSED
+        self._failure_count = 0
+        self._success_count = 0
+        self._half_open_calls = 0
+        self._last_failure_time = 0.0
+        self._lock = threading.Lock()
 
     @property
     def state(self) -> str:
-        """Return current state, transitioning OPEN → HALF_OPEN if timeout elapsed."""
-        with self._lock:
-            self._maybe_transition_to_half_open()
-            return self._state.value
+        """Return the current state as an uppercase string."""
+        return self.get_state().value
 
     @property
     def failure_count(self) -> int:
-        return self._metrics.failure_count
+        return self._failure_count
+
+    def get_state(self) -> CircuitState:
+        """Return the current state, transitioning OPEN → HALF_OPEN if needed."""
+        with self._lock:
+            self._maybe_transition_to_half_open()
+            return self._state
 
     def call(
         self,
-        func: Callable[..., T],
+        func: Any,
         *args: Any,
         fallback: Any = None,
         **kwargs: Any,
-    ) -> T | Any:
+    ) -> Any:
         """Execute *func* through the circuit breaker.
 
-        If the circuit is OPEN and a *fallback* is provided, the fallback
-        value is returned instead of raising ``CircuitOpenError``.
+        Sync callables return their result directly. Awaitable results are returned
+        as a coroutine so legacy async callers can ``await cb.call(...)``.
         """
-        with self._lock:
-            self._maybe_transition_to_half_open()
+        retry_after = self._prepare_call()
+        if retry_after is not None:
+            if fallback is not None:
+                return fallback
+            raise CircuitOpenError(self.agent_id, retry_after)
 
-            if self._state is CircuitState.OPEN:
-                remaining = self._time_until_recovery()
-                if fallback is not None:
-                    return fallback
-                raise CircuitOpenError(self.agent_id, remaining)
-
-            if self._state is CircuitState.HALF_OPEN:
-                if self._metrics.half_open_calls >= self.config.half_open_max_calls:
-                    if fallback is not None:
-                        return fallback
-                    raise CircuitOpenError(self.agent_id, self._time_until_recovery())
-                self._metrics.half_open_calls += 1
-
-        # Execute outside the lock to avoid holding it during the call.
         try:
             result = func(*args, **kwargs)
         except Exception:
             self.record_failure()
             raise
+
+        if inspect.isawaitable(result):
+            async def _await_result() -> Any:
+                try:
+                    value = await result
+                except Exception:
+                    self.record_failure()
+                    raise
+                self.record_success()
+                return value
+
+            return _await_result()
 
         self.record_success()
         return result
@@ -132,56 +166,62 @@ class CircuitBreaker:
     def record_success(self) -> None:
         with self._lock:
             if self._state is CircuitState.HALF_OPEN:
-                # Recovery confirmed — close the circuit.
                 self._transition(CircuitState.CLOSED)
-            self._metrics.failure_count = 0
-            self._metrics.success_count += 1
+            self._failure_count = 0
+            self._success_count += 1
+            self._half_open_calls = 0
 
     def record_failure(self) -> None:
         with self._lock:
-            self._metrics.failure_count += 1
-            self._metrics.last_failure_time = time.monotonic()
-
+            self._failure_count += 1
+            self._last_failure_time = time.monotonic()
             if self._state is CircuitState.HALF_OPEN:
-                # Failed during trial — reopen.
                 self._transition(CircuitState.OPEN)
-            elif self._metrics.failure_count >= self.config.failure_threshold:
+                self._half_open_calls = 0
+            elif self._failure_count >= self.config.failure_threshold:
                 self._transition(CircuitState.OPEN)
 
     def reset(self) -> None:
         """Manually reset the circuit breaker to CLOSED."""
         with self._lock:
             self._transition(CircuitState.CLOSED)
-            self._metrics = _CircuitMetrics()
+            self._failure_count = 0
+            self._success_count = 0
+            self._half_open_calls = 0
+            self._last_failure_time = 0.0
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
+    def _prepare_call(self) -> float | None:
+        with self._lock:
+            self._maybe_transition_to_half_open()
+
+            if self._state is CircuitState.OPEN:
+                return self._time_until_recovery()
+
+            if self._state is CircuitState.HALF_OPEN:
+                if self._half_open_calls >= self.config.half_open_max_calls:
+                    return self._time_until_recovery()
+                self._half_open_calls += 1
+
+            return None
 
     def _maybe_transition_to_half_open(self) -> None:
-        """Must be called while holding ``_lock``."""
         if self._state is CircuitState.OPEN:
-            elapsed = time.monotonic() - self._metrics.last_failure_time
+            elapsed = time.monotonic() - self._last_failure_time
             if elapsed >= self.config.recovery_timeout_seconds:
                 self._transition(CircuitState.HALF_OPEN)
 
     def _transition(self, new_state: CircuitState) -> None:
         self._state = new_state
-        self._metrics.last_state_change = time.monotonic()
         if new_state is CircuitState.HALF_OPEN:
-            self._metrics.half_open_calls = 0
+            self._half_open_calls = 0
 
     def _time_until_recovery(self) -> float:
-        elapsed = time.monotonic() - self._metrics.last_failure_time
+        elapsed = time.monotonic() - self._last_failure_time
         return max(0.0, self.config.recovery_timeout_seconds - elapsed)
 
 
 class CascadeDetector:
-    """Detects cascading failures across multiple agents.
-
-    When the number of simultaneously-open circuits meets or exceeds
-    *cascade_threshold*, a cascade is declared.
-    """
+    """Detects cascading failures across multiple agents."""
 
     def __init__(
         self,
@@ -214,3 +254,13 @@ class CascadeDetector:
         """Reset every circuit breaker."""
         for breaker in self._breakers.values():
             breaker.reset()
+
+
+__all__ = [
+    "CascadeDetector",
+    "CircuitBreaker",
+    "CircuitBreakerConfig",
+    "CircuitBreakerOpen",
+    "CircuitOpenError",
+    "CircuitState",
+]

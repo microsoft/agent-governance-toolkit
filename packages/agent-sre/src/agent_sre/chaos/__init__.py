@@ -11,6 +11,14 @@ from .adversarial import (
     PlaybookResult,
     PlaybookStep,
 )
+from .adversarial_policy import (
+    BUILTIN_VECTORS,
+    AdversarialEvaluator,
+    AttackCategory,
+    AttackVector,
+    EvaluationReport,
+    VectorResult,
+)
 from .chaos_scheduler import ChaosScheduler
 from .engine import (
     AbortCondition,
@@ -33,5 +41,7 @@ __all__ = [
     "ScheduleExecution", "load_schedules", "ChaosScheduler",
     "AttackTechnique", "AttackResult", "PlaybookStep",
     "AdversarialPlaybook", "PlaybookResult", "AdversarialRunner",
+    "AttackCategory", "AttackVector", "VectorResult",
+    "EvaluationReport", "AdversarialEvaluator", "BUILTIN_VECTORS",
     "BUILTIN_PLAYBOOKS",
 ]
