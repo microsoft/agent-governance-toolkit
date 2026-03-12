@@ -65,7 +65,7 @@ class NodeTrustContext:
     capabilities: List[str]
     verified_at: datetime
     sponsor_id: str = ""
-    
+
     # Audit trail
     nodes_visited: List[str] = field(default_factory=list)
     trust_checks_passed: int = 0
@@ -88,10 +88,10 @@ class NodeTrustContext:
 class TrustedGraphNode(Generic[StateType]):
     """
     LangGraph node with trust verification.
-    
+
     Wraps a node handler with capability and trust score checks.
     """
-    
+
     def __init__(
         self,
         name: str,
@@ -107,7 +107,7 @@ class TrustedGraphNode(Generic[StateType]):
         self.min_trust_score = min_trust_score
         self.min_trust_level = min_trust_level
         self.fail_action = fail_action
-        
+
         # Metrics
         self.total_executions = 0
         self.blocked_executions = 0
@@ -150,7 +150,7 @@ class TrustedGraphNode(Generic[StateType]):
         ]
         context_level_idx = level_order.index(context.trust_level)
         required_level_idx = level_order.index(self.min_trust_level)
-        
+
         if context_level_idx < required_level_idx:
             return False, f"Trust level {context.trust_level.value} < {self.min_trust_level.value}"
         return True, ""
@@ -158,7 +158,7 @@ class TrustedGraphNode(Generic[StateType]):
     async def __call__(self, state: StateType) -> StateType:
         """Execute node with trust verification."""
         context = self._get_trust_context(state)
-        
+
         # If no trust context, behavior depends on fail_action
         if not context:
             if self.fail_action == "block":
@@ -178,7 +178,7 @@ class TrustedGraphNode(Generic[StateType]):
                         f"Trust score {context.trust_score} < {self.min_trust_score}"
                     )
                 logger.warning(f"Node {self.name}: Low trust score {context.trust_score}")
-            
+
             # Check trust level
             ok, reason = self._check_trust_level(context)
             if not ok:
@@ -187,7 +187,7 @@ class TrustedGraphNode(Generic[StateType]):
                     self.blocked_executions += 1
                     raise TrustVerificationError(reason)
                 logger.warning(f"Node {self.name}: {reason}")
-            
+
             # Check capabilities
             ok, reason = self._check_capabilities(context)
             if not ok:
@@ -196,22 +196,22 @@ class TrustedGraphNode(Generic[StateType]):
                     self.blocked_executions += 1
                     raise TrustVerificationError(reason)
                 logger.warning(f"Node {self.name}: {reason}")
-            
+
             # All checks passed
             context.trust_checks_passed += 1
             context.nodes_visited.append(self.name)
-        
+
         # Execute handler
         self.total_executions += 1
         logger.info(f"Executing trusted node: {self.name}")
-        
+
         # Handle both sync and async handlers
         import asyncio
         if asyncio.iscoroutinefunction(self.handler):
             result = await self.handler(state)
         else:
             result = self.handler(state)
-        
+
         return result
 
     def get_stats(self) -> Dict[str, Any]:
@@ -229,10 +229,10 @@ class TrustedGraphNode(Generic[StateType]):
 class TrustCheckpoint:
     """
     Trust-aware checkpoint for LangGraph state persistence.
-    
+
     Stores trust metadata alongside graph state.
     """
-    
+
     def __init__(
         self,
         identity: Any,  # AgentIdentity
@@ -280,7 +280,7 @@ class TrustCheckpoint:
     def create_gate(self) -> Callable[[Dict[str, Any]], Dict[str, Any]]:
         """
         Create a trust gate node for the graph.
-        
+
         Use as: graph.add_node("trust_gate", checkpoint.create_gate())
         """
         def gate(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -294,20 +294,20 @@ class TrustCheckpoint:
     ) -> Callable[[Dict[str, Any]], Dict[str, Any]]:
         """
         Create a trust verification node.
-        
+
         Raises TrustVerificationError if trust requirements not met.
         """
         def verify(state: Dict[str, Any]) -> Dict[str, Any]:
             context = state.get("_trust_context")
             if not context:
                 raise TrustVerificationError("No trust context in state")
-            
+
             if isinstance(context, NodeTrustContext):
                 if context.trust_score < min_score:
                     raise TrustVerificationError(
                         f"Trust score {context.trust_score} < {min_score}"
                     )
-            
+
             return state
         return verify
 
@@ -325,18 +325,18 @@ def create_trusted_graph(
 ) -> Dict[str, TrustedGraphNode]:
     """
     Convenience function to wrap multiple nodes with trust verification.
-    
+
     Args:
         identity: AgentIdentity for trust context
         nodes: Dict of node_name -> handler
         trust_requirements: Dict of node_name -> {min_trust_score, required_capabilities}
-        
+
     Returns:
         Dict of node_name -> TrustedGraphNode
     """
     trust_requirements = trust_requirements or {}
     trusted_nodes = {}
-    
+
     for name, handler in nodes.items():
         reqs = trust_requirements.get(name, {})
         trusted_nodes[name] = TrustedGraphNode(
@@ -345,7 +345,7 @@ def create_trusted_graph(
             required_capabilities=reqs.get("required_capabilities", []),
             min_trust_score=reqs.get("min_trust_score", 300),
         )
-    
+
     return trusted_nodes
 
 

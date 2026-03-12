@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import threading
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 try:
     import redis

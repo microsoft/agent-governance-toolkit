@@ -19,13 +19,13 @@ from __future__ import annotations
 import logging
 import math
 import time
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from agentmesh.constants import TRUST_SCORE_DEFAULT, TRUST_SCORE_MAX
 
 logger = logging.getLogger(__name__)
-from collections import Counter, defaultdict
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
 # ---------------------------------------------------------------------------

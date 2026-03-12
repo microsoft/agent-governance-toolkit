@@ -10,7 +10,6 @@ All key operations are logged for audit compliance.
 from __future__ import annotations
 
 import abc
-import base64
 import logging
 from typing import Optional
 
@@ -322,7 +321,7 @@ class PKCS11KeyStore(KeyStore):
             raise KeyError(f"No keypair found for agent: {agent_id}")
 
         _, priv = self._handles[agent_id]
-        with self._open_session() as session:
+        with self._open_session():
             signature = priv.sign(data, mechanism=self._pkcs11.Mechanism.EDDSA)
 
         logger.debug("PKCS#11 signed %d bytes for agent %s", len(data), agent_id)
@@ -380,7 +379,7 @@ class PKCS11KeyStore(KeyStore):
             raise KeyError(f"No keypair found for agent: {agent_id}")
 
         pub, priv = self._handles[agent_id]
-        with self._open_session() as session:
+        with self._open_session():
             pub.destroy()
             priv.destroy()
 

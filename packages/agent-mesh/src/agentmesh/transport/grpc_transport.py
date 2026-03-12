@@ -259,7 +259,7 @@ class GRPCTransport(Transport):
         if not self.is_connected or self._channel is None:
             raise ConnectionError("gRPC channel is not connected")
         # Encode as a generic JSON-wrapped unary call
-        message = json.dumps({"topic": topic, "payload": payload}).encode("utf-8")
+        json.dumps({"topic": topic, "payload": payload}).encode("utf-8")
         # In a real implementation this would invoke a stub method;
         # here we push to the internal queue for testability.
         await self._receive_queue.put({"topic": topic, "payload": payload, "_echo": True})

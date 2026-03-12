@@ -9,7 +9,7 @@ LangChain tool execution.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Optional, Type
+from typing import Any, Callable, Optional
 
 from agentmesh.exceptions import TrustVerificationError
 

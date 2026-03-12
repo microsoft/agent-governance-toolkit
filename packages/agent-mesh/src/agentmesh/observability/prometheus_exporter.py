@@ -8,7 +8,6 @@ trust, policy, latency, and agent-activity metrics for Prometheus scraping.
 
 from __future__ import annotations
 
-from typing import Optional
 
 
 try:

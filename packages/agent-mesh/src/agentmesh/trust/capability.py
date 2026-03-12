@@ -7,7 +7,7 @@ Simple string-based capability scope checking.
 """
 
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Optional
 from pydantic import BaseModel, Field
 import uuid
 
@@ -15,7 +15,7 @@ import uuid
 class CapabilityGrant(BaseModel):
     """
     A specific capability grant to an agent.
-    
+
     Capabilities follow the format: action:resource[:qualifier]
     Examples:
     - read:data
@@ -23,19 +23,19 @@ class CapabilityGrant(BaseModel):
     - execute:tools:calculator
     - admin:*
     """
-    
+
     grant_id: str = Field(default_factory=lambda: f"grant_{uuid.uuid4().hex[:12]}")
-    
+
     # Capability specification
     capability: str = Field(..., description="Capability string (e.g., 'read:data')")
     action: str = Field(..., description="Action part (e.g., 'read')")
     resource: str = Field(..., description="Resource part (e.g., 'data')")
     qualifier: Optional[str] = Field(None, description="Optional qualifier")
-    
+
     # Grant metadata
     granted_to: str = Field(..., description="DID of grantee")
     granted_by: str = Field(..., description="DID of grantor")
-    
+
     # Scope restrictions
     resource_ids: list[str] = Field(
         default_factory=list,
@@ -45,28 +45,28 @@ class CapabilityGrant(BaseModel):
         default_factory=dict,
         description="Additional conditions for this grant"
     )
-    
+
     # Timing
     granted_at: datetime = Field(default_factory=datetime.utcnow)
     expires_at: Optional[datetime] = Field(None)
-    
+
     # Status
     active: bool = Field(default=True)
     revoked_at: Optional[datetime] = Field(None)
-    
+
     @classmethod
     def parse_capability(cls, capability: str) -> tuple[str, str, Optional[str]]:
         """Parse a capability string into (action, resource, qualifier)."""
         parts = capability.split(":")
         if len(parts) < 2:
             raise ValueError(f"Invalid capability format: {capability}")
-        
+
         action = parts[0]
         resource = parts[1]
         qualifier = parts[2] if len(parts) > 2 else None
-        
+
         return action, resource, qualifier
-    
+
     @classmethod
     def create(
         cls,
@@ -78,7 +78,7 @@ class CapabilityGrant(BaseModel):
     ) -> "CapabilityGrant":
         """Create a new capability grant from a capability string."""
         action, resource, qualifier = cls.parse_capability(capability)
-        
+
         return cls(
             capability=capability,
             action=action,
@@ -89,7 +89,7 @@ class CapabilityGrant(BaseModel):
             resource_ids=resource_ids or [],
             expires_at=expires_at,
         )
-    
+
     def is_valid(self) -> bool:
         """Check if the grant is currently active and not expired."""
         if not self.active:
@@ -97,7 +97,7 @@ class CapabilityGrant(BaseModel):
         if self.expires_at and datetime.utcnow() > self.expires_at:
             return False
         return True
-    
+
     def matches(self, requested: str, resource_id: Optional[str] = None) -> bool:
         """Check if this grant satisfies a requested capability.
 
@@ -105,7 +105,7 @@ class CapabilityGrant(BaseModel):
         """
         if not self.is_valid():
             return False
-        
+
         # Simple string-based scope check
         if self.capability == "*" or self.capability == requested:
             pass  # exact match or wildcard
@@ -125,14 +125,14 @@ class CapabilityGrant(BaseModel):
             if req_qualifier and self.qualifier:
                 if self.qualifier != "*" and self.qualifier != req_qualifier:
                     return False
-        
+
         # Check resource ID if scoped
         if self.resource_ids and resource_id:
             if resource_id not in self.resource_ids:
                 return False
-        
+
         return True
-    
+
     def revoke(self) -> None:
         """Revoke this grant immediately."""
         self.active = False
@@ -142,16 +142,16 @@ class CapabilityGrant(BaseModel):
 class CapabilityScope(BaseModel):
     """
     Complete capability scope for an agent.
-    
+
     Aggregates all grants and provides capability checking.
     """
-    
+
     agent_did: str
     grants: list[CapabilityGrant] = Field(default_factory=list)
-    
+
     # Denied capabilities (blocklist)
     denied: list[str] = Field(default_factory=list)
-    
+
     def add_grant(self, grant: CapabilityGrant) -> None:
         """Add a capability grant to this scope.
 
@@ -165,7 +165,7 @@ class CapabilityScope(BaseModel):
         if grant.granted_to != self.agent_did:
             raise ValueError("Grant is for different agent")
         self.grants.append(grant)
-    
+
     def has_capability(
         self,
         capability: str,
@@ -188,14 +188,14 @@ class CapabilityScope(BaseModel):
         # Check denied first
         if capability in self.denied:
             return False
-        
+
         # Check for matching grant
         for grant in self.grants:
             if grant.matches(capability, resource_id):
                 return True
-        
+
         return False
-    
+
     def get_capabilities(self) -> list[str]:
         """Get all active capability strings for this agent.
 
@@ -208,7 +208,7 @@ class CapabilityScope(BaseModel):
             if grant.is_valid():
                 capabilities.add(grant.capability)
         return list(capabilities)
-    
+
     def filter_capabilities(self, requested: list[str]) -> list[str]:
         """Filter a list of requested capabilities to only those allowed.
 
@@ -219,7 +219,7 @@ class CapabilityScope(BaseModel):
             Subset of *requested* that this scope permits.
         """
         return [cap for cap in requested if self.has_capability(cap)]
-    
+
     def deny(self, capability: str) -> None:
         """Add a capability to the deny list.
 
@@ -231,7 +231,7 @@ class CapabilityScope(BaseModel):
         """
         if capability not in self.denied:
             self.denied.append(capability)
-    
+
     def revoke_all(self) -> int:
         """Revoke all active grants in this scope.
 
@@ -244,7 +244,7 @@ class CapabilityScope(BaseModel):
                 grant.revoke()
                 count += 1
         return count
-    
+
     def revoke_from(self, grantor_did: str) -> int:
         """Revoke all active grants issued by a specific grantor.
 
@@ -261,7 +261,7 @@ class CapabilityScope(BaseModel):
                 grant.revoke()
                 count += 1
         return count
-    
+
     def cleanup_expired(self) -> int:
         """Remove expired and revoked grants from the scope.
 
@@ -276,15 +276,15 @@ class CapabilityScope(BaseModel):
 class CapabilityRegistry:
     """
     Central registry for capability grants.
-    
+
     Tracks who has what capabilities across the mesh.
     """
-    
+
     def __init__(self):
         """Initialise an empty capability registry."""
         self._scopes: dict[str, CapabilityScope] = {}
         self._grants_by_grantor: dict[str, list[str]] = {}  # grantor -> [grant_ids]
-    
+
     def get_scope(self, agent_did: str) -> CapabilityScope:
         """Get or create the capability scope for an agent.
 
@@ -298,7 +298,7 @@ class CapabilityRegistry:
         if agent_did not in self._scopes:
             self._scopes[agent_did] = CapabilityScope(agent_did=agent_did)
         return self._scopes[agent_did]
-    
+
     def grant(
         self,
         capability: str,
@@ -327,17 +327,17 @@ class CapabilityRegistry:
             granted_by=from_agent,
             resource_ids=resource_ids,
         )
-        
+
         scope = self.get_scope(to_agent)
         scope.add_grant(grant)
-        
+
         # Track by grantor
         if from_agent not in self._grants_by_grantor:
             self._grants_by_grantor[from_agent] = []
         self._grants_by_grantor[from_agent].append(grant.grant_id)
-        
+
         return grant
-    
+
     def check(
         self,
         agent_did: str,
@@ -358,7 +358,7 @@ class CapabilityRegistry:
         if not scope:
             return False
         return scope.has_capability(capability, resource_id)
-    
+
     def revoke_all_from(self, grantor_did: str) -> int:
         """Revoke all grants issued by a specific grantor.
 
@@ -376,7 +376,7 @@ class CapabilityRegistry:
         for scope in self._scopes.values():
             count += scope.revoke_from(grantor_did)
         return count
-    
+
     def get_agents_with_capability(self, capability: str) -> list[str]:
         """Get all agent DIDs that currently hold a capability.
 

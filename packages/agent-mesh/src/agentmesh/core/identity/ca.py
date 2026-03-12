@@ -89,7 +89,7 @@ class RegistrationResponse(BaseModel):
 class CertificateAuthority:
     """
     Certificate Authority for AgentMesh.
-    
+
     Issues SPIFFE/SVID certificates for agent identities.
     """
 
@@ -101,7 +101,7 @@ class CertificateAuthority:
     ):
         """
         Initialize the Certificate Authority.
-        
+
         Args:
             ca_private_key: CA's private key (generates new if None)
             ca_certificate: CA's certificate (self-signs if None)
@@ -163,7 +163,7 @@ class CertificateAuthority:
     ) -> bool:
         """
         Validate the sponsor's signature.
-        
+
         The sponsor signs over: agent_name + sponsor_email + capabilities
         """
         # In production, this would verify against a registered sponsor's public key
@@ -190,7 +190,7 @@ class CertificateAuthority:
     ) -> tuple[bytes, str, datetime]:
         """
         Issue a SPIFFE/SVID certificate for an agent.
-        
+
         Returns:
             (certificate_der, key_id, expires_at)
         """
@@ -253,7 +253,7 @@ class CertificateAuthority:
     def _calculate_initial_trust_score(self) -> tuple[int, dict[str, int]]:
         """
         Calculate initial trust score for a new agent.
-        
+
         New agents start with a score of 500/1000 with balanced dimensions.
         """
         dimensions = {
@@ -271,13 +271,13 @@ class CertificateAuthority:
     def register_agent(self, request: RegistrationRequest) -> RegistrationResponse:
         """
         Register a new agent and issue credentials.
-        
+
         Args:
             request: Registration request
-            
+
         Returns:
             Registration response with credentials
-            
+
         Raises:
             ValueError: If validation fails
         """
@@ -335,12 +335,12 @@ class CertificateAuthority:
     ) -> RegistrationResponse:
         """
         Rotate credentials for an existing agent.
-        
+
         Args:
             agent_did: Agent's DID
             refresh_token: Valid refresh token
             new_public_key: Optional new public key for key rotation
-            
+
         Returns:
             New credentials
         """

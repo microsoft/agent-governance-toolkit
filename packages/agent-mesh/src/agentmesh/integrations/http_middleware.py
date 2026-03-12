@@ -158,7 +158,6 @@ def fastapi_trust_required(
 ) -> Callable:
     """FastAPI dependency that rejects untrusted requests."""
     from fastapi import Request  # noqa: late import
-    from fastapi.responses import JSONResponse  # noqa: late import
 
     async def dependency(request: Request) -> Optional[VerificationResult]:
         result, err = middleware.verify_request(dict(request.headers), config)

@@ -7,7 +7,7 @@ Multi-dimensional scoring with trust scores and reward signals.
 """
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 from enum import Enum
 
@@ -35,59 +35,59 @@ class DimensionType(str, Enum):
 class RewardSignal(BaseModel):
     """
     A single reward signal.
-    
+
     Signals feed into dimension scores which aggregate to trust scores.
     """
-    
+
     dimension: DimensionType
     value: float = Field(..., ge=0.0, le=1.0, description="0=bad, 1=good")
-    
+
     # Source
     source: str = Field(..., description="Where this signal came from")
-    
+
     # Context
     details: Optional[str] = None
     trace_id: Optional[str] = None
-    
+
     # Timing
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    
+
     # Weight (for importance)
     weight: float = Field(default=1.0, ge=0.0)
 
 
 class RewardDimension(BaseModel):
     """Score for a single dimension."""
-    
+
     name: str
     score: float = Field(default=50.0, ge=0.0, le=100.0)
-    
+
     # Signal statistics
     signal_count: int = Field(default=0)
     positive_signals: int = Field(default=0)
     negative_signals: int = Field(default=0)
-    
+
     # Trend
     previous_score: Optional[float] = None
     trend: str = "stable"  # improving, degrading, stable
-    
+
     # Last update
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
+
     def add_signal(self, signal: RewardSignal) -> None:
         """Add a signal and update score."""
         self.signal_count += 1
-        
+
         if signal.value >= 0.5:
             self.positive_signals += 1
         else:
             self.negative_signals += 1
-        
+
         # Update score (exponential moving average)
         alpha = 0.1  # Smoothing factor
         self.previous_score = self.score
         self.score = self.score * (1 - alpha) + (signal.value * 100) * alpha
-        
+
         # Update trend
         if self.previous_score is not None:
             diff = self.score - self.previous_score
@@ -97,35 +97,35 @@ class RewardDimension(BaseModel):
                 self.trend = "degrading"
             else:
                 self.trend = "stable"
-        
+
         self.updated_at = datetime.utcnow()
 
 
 class TrustScore(BaseModel):
     """
     Complete trust score for an agent.
-    
+
     Aggregates all dimension scores into a single 0-1000 score.
     """
-    
+
     agent_did: str
-    
+
     # Total score (0-1000)
     total_score: int = Field(default=TRUST_SCORE_DEFAULT, ge=0, le=1000)
-    
+
     # Trust tier
     tier: str = "standard"  # verified_partner, trusted, standard, probationary, untrusted
-    
+
     # Dimension breakdown
     dimensions: dict[str, RewardDimension] = Field(default_factory=dict)
-    
+
     # Timestamps
     calculated_at: datetime = Field(default_factory=datetime.utcnow)
-    
+
     # History
     previous_score: Optional[int] = None
     score_change: int = 0
-    
+
     model_config = {"validate_assignment": True}
 
     @field_validator("agent_did")
@@ -142,7 +142,7 @@ class TrustScore(BaseModel):
     def __init__(self, **data):
         super().__init__(**data)
         self._update_tier()
-    
+
     def _update_tier(self) -> None:
         """Update tier based on score."""
         if self.total_score >= TIER_VERIFIED_PARTNER_THRESHOLD:
@@ -155,7 +155,7 @@ class TrustScore(BaseModel):
             self.tier = "probationary"
         else:
             self.tier = "untrusted"
-    
+
     def update(self, new_score: int, dimensions: dict[str, RewardDimension]) -> None:
         """Update the trust score."""
         self.previous_score = self.total_score
@@ -164,11 +164,11 @@ class TrustScore(BaseModel):
         self.dimensions = dimensions
         self.calculated_at = datetime.utcnow()
         self._update_tier()
-    
+
     def meets_threshold(self, threshold: int) -> bool:
         """Check if score meets a threshold."""
         return self.total_score >= threshold
-    
+
     def to_dict(self) -> dict:
         """Export as dictionary."""
         return {
@@ -189,18 +189,18 @@ class TrustScore(BaseModel):
 
 class ScoreThresholds(BaseModel):
     """Configurable score thresholds."""
-    
+
     # Tier thresholds
     verified_partner: int = TIER_VERIFIED_PARTNER_THRESHOLD
     trusted: int = TIER_TRUSTED_THRESHOLD
     standard: int = TIER_STANDARD_THRESHOLD
     probationary: int = TIER_PROBATIONARY_THRESHOLD
-    
+
     # Action thresholds
     allow_threshold: int = TIER_STANDARD_THRESHOLD
     warn_threshold: int = 400
     revocation_threshold: int = TRUST_REVOCATION_THRESHOLD
-    
+
     def get_tier(self, score: int) -> str:
         """Get tier for a score."""
         if score >= self.verified_partner:
@@ -213,15 +213,15 @@ class ScoreThresholds(BaseModel):
             return "probationary"
         else:
             return "untrusted"
-    
+
     def should_allow(self, score: int) -> bool:
         """Check if score should allow actions."""
         return score >= self.allow_threshold
-    
+
     def should_warn(self, score: int) -> bool:
         """Check if score should trigger warning."""
         return score < self.warn_threshold
-    
+
     def should_revoke(self, score: int) -> bool:
         """Check if score should trigger revocation."""
         return score < self.revocation_threshold

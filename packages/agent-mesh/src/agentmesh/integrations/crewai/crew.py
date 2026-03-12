@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from agentmesh.exceptions import TrustViolationError
 
-from .agent import InMemoryTrustStore, TrustAwareAgent
+from .agent import TrustAwareAgent
 
 logger = logging.getLogger(__name__)
 

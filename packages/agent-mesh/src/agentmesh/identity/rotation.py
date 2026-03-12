@@ -12,7 +12,6 @@ import base64
 import hashlib
 import time
 from datetime import datetime
-from typing import Optional
 
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization

@@ -74,28 +74,28 @@ class UserContext(BaseModel):
 class DelegationLink(BaseModel):
     """
     A single link in a scope chain.
-    
+
     Each link represents a parent granting capabilities to a child.
     The child's capabilities MUST be a subset of the parent's.
     """
-    
+
     link_id: str = Field(..., description="Unique link identifier")
-    
+
     # Chain position
     depth: int = Field(..., ge=0, description="Depth in chain (0 = root)")
-    
+
     # Agents
     parent_did: str = Field(..., description="DID of parent agent")
     child_did: str = Field(..., description="DID of child agent")
-    
+
     # Capability narrowing
     parent_capabilities: list[str] = Field(..., description="Parent's capabilities at delegation time")
     delegated_capabilities: list[str] = Field(..., description="Capabilities granted to child")
-    
+
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     expires_at: Optional[datetime] = Field(None)
-    
+
     # User context for OBO flows
     user_context: Optional[UserContext] = Field(None, description="End-user context for OBO flows")
 
@@ -103,7 +103,7 @@ class DelegationLink(BaseModel):
     parent_signature: str = Field(..., description="Parent's signature on this delegation")
     link_hash: str = Field(..., description="Hash of this link for chain verification")
     previous_link_hash: Optional[str] = Field(None, description="Hash of previous link in chain")
-    
+
     def verify_capability_narrowing(self) -> bool:
         """Verify that delegated capabilities are a subset of parent's."""
         for cap in self.delegated_capabilities:
@@ -111,7 +111,7 @@ class DelegationLink(BaseModel):
                 if not self._is_narrower_capability(cap, self.parent_capabilities):
                     return False
         return True
-    
+
     def _is_narrower_capability(self, cap: str, parent_caps: list[str]) -> bool:
         """Check if a capability is a narrowed version of a parent capability."""
         for parent_cap in parent_caps:
@@ -122,7 +122,7 @@ class DelegationLink(BaseModel):
                 if cap.startswith(prefix + ":"):
                     return True
         return False
-    
+
     def compute_hash(self) -> str:
         """Compute hash of this link."""
         data = {
@@ -137,42 +137,42 @@ class DelegationLink(BaseModel):
         }
         canonical = json.dumps(data, sort_keys=True)
         return hashlib.sha256(canonical.encode()).hexdigest()
-    
+
     def is_valid(self) -> bool:
         """Check if this link is valid (expiration and capability narrowing only)."""
         if self.expires_at and datetime.utcnow() > self.expires_at:
             return False
-        
+
         if not self.verify_capability_narrowing():
             return False
-        
+
         return True
 
 
 class ScopeChain(BaseModel):
     """
     Simple scope chain from root sponsor to current agent.
-    
+
     Sub-agent gets parent's scopes minus any denied ones.
     No cryptographic chain verification.
     """
-    
+
     DEFAULT_MAX_DEPTH: ClassVar[int] = DEFAULT_DELEGATION_MAX_DEPTH
 
     chain_id: str = Field(..., description="Unique chain identifier")
     max_depth: int = Field(default=DEFAULT_DELEGATION_MAX_DEPTH, description="Maximum allowed chain depth")
-    
+
     # Root (human sponsor)
     root_sponsor_email: str = Field(..., description="Human sponsor at chain root")
     root_sponsor_verified: bool = Field(default=False)
     root_capabilities: list[str] = Field(..., description="Capabilities granted by sponsor")
-    
+
     # Known agent identities (kept for API compatibility)
     known_identities: dict[str, AgentIdentity] = Field(default_factory=dict)
-    
+
     # Chain links
     links: list[DelegationLink] = Field(default_factory=list)
-    
+
     # Final agent
     leaf_did: str = Field(..., description="DID of the agent at end of chain")
     leaf_capabilities: list[str] = Field(..., description="Final effective capabilities")
@@ -214,10 +214,10 @@ class ScopeChain(BaseModel):
     # Chain metadata
     created_at: datetime = Field(default_factory=datetime.utcnow)
     total_depth: int = Field(default=0)
-    
+
     # Verification
     chain_hash: str = Field(default="", description="Hash of entire chain")
-    
+
     def get_depth(self) -> int:
         """Return the current depth of the scope chain."""
         return len(self.links)
@@ -240,10 +240,10 @@ class ScopeChain(BaseModel):
         else:
             if link.depth != 0:
                 raise ValueError("First link must have depth 0")
-        
+
         if not link.verify_capability_narrowing():
             raise ValueError("Link does not properly narrow capabilities")
-        
+
         self.links.append(link)
         self.total_depth = len(self.links)
         self.leaf_did = link.child_did
@@ -264,46 +264,46 @@ class ScopeChain(BaseModel):
         """
         if not self.links:
             return True, None
-        
+
         previous_hash = None
         previous_capabilities = self.root_capabilities
-        
+
         for i, link in enumerate(self.links):
             if link.depth != i:
                 return False, f"Invalid depth at link {i}"
-            
+
             if link.previous_link_hash != previous_hash:
                 return False, f"Hash chain broken at link {i}"
-            
+
             # Verify capability narrowing
             for cap in link.delegated_capabilities:
                 if cap not in previous_capabilities:
                     if not link._is_narrower_capability(cap, previous_capabilities):
                         return False, f"Capability escalation at link {i}: {cap}"
-            
+
             # Verify link hash
             if link.link_hash != link.compute_hash():
                 return False, f"Invalid link hash at link {i}"
-            
+
             # Verify Ed25519 signature
             if not self._verify_link_signature(link):
                 return False, f"Invalid signature at link {i}"
-            
+
             previous_hash = link.link_hash
             previous_capabilities = link.delegated_capabilities
-        
+
         return True, None
-    
+
     def get_effective_capabilities(self) -> list[str]:
         """Get the effective capabilities at the end of the chain."""
         if self.links:
             return self.links[-1].delegated_capabilities
         return self.root_capabilities
-    
+
     def trace_capability(self, capability: str) -> list[dict]:
         """Trace how a capability was granted through the chain."""
         trace = []
-        
+
         if capability in self.root_capabilities or "*" in self.root_capabilities:
             trace.append({
                 "level": "root",
@@ -311,7 +311,7 @@ class ScopeChain(BaseModel):
                 "capability": capability,
                 "source_capabilities": self.root_capabilities,
             })
-        
+
         for link in self.links:
             if capability in link.delegated_capabilities:
                 trace.append({
@@ -322,9 +322,9 @@ class ScopeChain(BaseModel):
                     "parent_capabilities": link.parent_capabilities,
                     "delegated_capabilities": link.delegated_capabilities,
                 })
-        
+
         return trace
-    
+
     def _update_chain_hash(self) -> None:
         """Update the overall chain hash."""
         data = {
@@ -334,7 +334,7 @@ class ScopeChain(BaseModel):
         }
         canonical = json.dumps(data, sort_keys=True)
         self.chain_hash = hashlib.sha256(canonical.encode()).hexdigest()
-    
+
     @classmethod
     def create_root(
         cls,
@@ -345,9 +345,9 @@ class ScopeChain(BaseModel):
     ) -> tuple["ScopeChain", DelegationLink]:
         """Create a new chain with a root sponsor."""
         import uuid
-        
+
         chain_id = f"chain_{uuid.uuid4().hex[:16]}"
-        
+
         chain = cls(
             chain_id=chain_id,
             root_sponsor_email=sponsor_email,
@@ -356,7 +356,7 @@ class ScopeChain(BaseModel):
             leaf_did=root_agent_did,
             leaf_capabilities=capabilities,
         )
-        
+
         link = DelegationLink(
             link_id=f"link_{uuid.uuid4().hex[:12]}",
             depth=0,
@@ -368,5 +368,5 @@ class ScopeChain(BaseModel):
             link_hash="",
         )
         link.link_hash = link.compute_hash()
-        
+
         return chain, link

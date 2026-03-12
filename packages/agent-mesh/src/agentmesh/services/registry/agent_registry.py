@@ -71,7 +71,7 @@ class AgentRegistryEntry(BaseModel):
 class AgentRegistry:
     """
     Agent Registry Service.
-    
+
     Maintains a registry of all agents in the mesh with their:
     - Identity and credentials
     - Trust scores and reputation
@@ -86,10 +86,10 @@ class AgentRegistry:
     async def register(self, entry: AgentRegistryEntry) -> None:
         """
         Register a new agent.
-        
+
         Args:
             entry: Agent registry entry
-            
+
         Raises:
             ValueError: If agent is already registered
         """
@@ -102,10 +102,10 @@ class AgentRegistry:
     async def get(self, did: str) -> AgentRegistryEntry | None:
         """
         Get an agent by DID.
-        
+
         Args:
             did: Agent's DID
-            
+
         Returns:
             Agent entry or None if not found
         """
@@ -114,11 +114,11 @@ class AgentRegistry:
     async def update_trust_score(self, did: str, new_score: int) -> None:
         """
         Update an agent's trust score.
-        
+
         Args:
             did: Agent's DID
             new_score: New trust score (0-1000)
-            
+
         Raises:
             ValueError: If agent not found
         """
@@ -150,12 +150,12 @@ class AgentRegistry:
     ) -> None:
         """
         Update an agent's status.
-        
+
         Args:
             did: Agent's DID
             status: New status
             reason: Optional reason for status change
-            
+
         Raises:
             ValueError: If agent not found
         """
@@ -171,7 +171,7 @@ class AgentRegistry:
     async def record_activity(self, did: str) -> None:
         """
         Record that an agent was seen (heartbeat).
-        
+
         Args:
             did: Agent's DID
         """
@@ -187,11 +187,11 @@ class AgentRegistry:
     ) -> list[AgentRegistryEntry]:
         """
         List agents with optional filters.
-        
+
         Args:
             status: Filter by status
             min_trust_score: Filter by minimum trust score
-            
+
         Returns:
             List of matching agent entries
         """
@@ -211,10 +211,10 @@ class AgentRegistry:
     ) -> int:
         """
         Count agents with optional status filter.
-        
+
         Args:
             status: Filter by status
-            
+
         Returns:
             Number of matching agents
         """
@@ -226,7 +226,7 @@ class AgentRegistry:
     async def get_trust_statistics(self) -> dict:
         """
         Get aggregate trust statistics.
-        
+
         Returns:
             Dictionary of trust statistics
         """

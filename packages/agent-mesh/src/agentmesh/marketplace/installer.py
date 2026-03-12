@@ -9,7 +9,6 @@ resolution and basic plugin sandboxing (restricted imports).
 
 from __future__ import annotations
 
-import importlib
 import logging
 import shutil
 from pathlib import Path

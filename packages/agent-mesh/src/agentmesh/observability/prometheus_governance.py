@@ -24,7 +24,7 @@ try:
         Counter,
         Gauge,
         Histogram,
-        CollectorRegistry,
+        CollectorRegistry,  # noqa: F401
         generate_latest,
     )
 

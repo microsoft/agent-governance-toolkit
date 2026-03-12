@@ -10,15 +10,12 @@ Configurable via Django settings; returns 403 JSON on trust failure.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any, Callable, List, Optional
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, JsonResponse
 
-from agentmesh.trust.bridge import TrustBridge
-from agentmesh.trust.handshake import TrustHandshake
 
 logger = logging.getLogger(__name__)
 

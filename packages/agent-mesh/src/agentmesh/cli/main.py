@@ -24,7 +24,6 @@ from pathlib import Path
 from typing import Optional
 import json
 import yaml
-import os
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -35,7 +34,7 @@ logger = logging.getLogger(__name__)
 def app():
     """
     AgentMesh - The Secure Nervous System for Cloud-Native Agent Ecosystems
-    
+
     Identity · Trust · Reward · Governance
     """
     pass
@@ -48,14 +47,14 @@ def app():
 def init(name: str, sponsor: str, output: str):
     """
     Initialize a new governed agent in 30 seconds.
-    
+
     Creates the scaffolding for a governed agent with identity, trust, and audit built in.
     """
     output_path = Path(output)
     agent_dir = output_path / name
-    
+
     console.print(f"\n[bold blue]🚀 Initializing governed agent: {name}[/bold blue]\n")
-    
+
     # Create directory structure
     dirs = [
         agent_dir,
@@ -63,11 +62,11 @@ def init(name: str, sponsor: str, output: str):
         agent_dir / "policies",
         agent_dir / "tests",
     ]
-    
+
     for d in dirs:
         d.mkdir(parents=True, exist_ok=True)
         console.print(f"  [green]✓[/green] Created {d}")
-    
+
     # Create agent manifest
     manifest = {
         "agent": {
@@ -100,12 +99,12 @@ def init(name: str, sponsor: str, output: str):
             },
         },
     }
-    
+
     manifest_path = agent_dir / "agentmesh.yaml"
     with open(manifest_path, "w") as f:
         yaml.dump(manifest, f, default_flow_style=False)
     console.print(f"  [green]✓[/green] Created {manifest_path}")
-    
+
     # Create default policy
     default_policy = {
         "policies": [
@@ -134,12 +133,12 @@ def init(name: str, sponsor: str, output: str):
             }
         ]
     }
-    
+
     policy_path = agent_dir / "policies" / "default.yaml"
     with open(policy_path, "w") as f:
         yaml.dump(default_policy, f, default_flow_style=False)
     console.print(f"  [green]✓[/green] Created {policy_path}")
-    
+
     # Create main agent file
     agent_code = f'''"""
 {name} - A Governed Agent
@@ -170,13 +169,13 @@ async def main():
     async with mesh.run(identity) as agent:
         # Your agent logic here
         print(f"Agent {{identity.name}} is running with trust score: {{agent.trust_score}}")
-        
+
         # Example: Register capabilities
         await agent.register_capabilities([
             "text_processing",
             "data_analysis",
         ])
-        
+
         # Example: Handle incoming requests
         async for request in agent.requests():
             # Policy is automatically enforced
@@ -189,12 +188,12 @@ if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
 '''
-    
+
     main_path = agent_dir / "src" / "main.py"
     with open(main_path, "w") as f:
         f.write(agent_code)
     console.print(f"  [green]✓[/green] Created {main_path}")
-    
+
     # Create pyproject.toml
     pyproject = f'''[project]
 name = "{name}"
@@ -209,12 +208,12 @@ dependencies = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 '''
-    
+
     pyproject_path = agent_dir / "pyproject.toml"
     with open(pyproject_path, "w") as f:
         f.write(pyproject)
     console.print(f"  [green]✓[/green] Created {pyproject_path}")
-    
+
     # Summary
     console.print()
     console.print(Panel(
@@ -246,38 +245,38 @@ def register(agent_dir: str, name: str = None):
     """Register an agent with AgentMesh."""
     agent_path = Path(agent_dir)
     manifest_path = agent_path / "agentmesh.yaml"
-    
+
     if not manifest_path.exists():
         console.print("[red]Error: agentmesh.yaml not found. Run 'agentmesh init' first.[/red]")
         return
-    
+
     with open(manifest_path) as f:
         manifest = yaml.safe_load(f)
-    
+
     agent_name = name or manifest["agent"]["name"]
-    
+
     console.print(f"\n[bold blue]📝 Registering agent: {agent_name}[/bold blue]\n")
-    
+
     # Simulate registration
     from agentmesh.identity import AgentIdentity
     identity = AgentIdentity.create(agent_name)
-    
+
     console.print(f"  [green]✓[/green] Generated identity: {identity.did}")
     console.print(f"  [green]✓[/green] Public key: {identity.public_key[:32]}...")
-    console.print(f"  [green]✓[/green] Registered with AgentMesh CA")
+    console.print("  [green]✓[/green] Registered with AgentMesh CA")
     console.print()
-    
+
     # Save identity
     identity_file = agent_path / ".agentmesh" / "identity.json"
     identity_file.parent.mkdir(parents=True, exist_ok=True)
-    
+
     with open(identity_file, "w") as f:
         json.dump({
             "did": identity.did,
             "public_key": identity.public_key,
             "created_at": identity.created_at.isoformat(),
         }, f, indent=2)
-    
+
     console.print(f"[green]Identity saved to {identity_file}[/green]")
 
 
@@ -288,47 +287,47 @@ def status(agent_dir: str):
     agent_path = Path(agent_dir)
     manifest_path = agent_path / "agentmesh.yaml"
     identity_path = agent_path / ".agentmesh" / "identity.json"
-    
-    console.print(f"\n[bold blue]📊 Agent Status[/bold blue]\n")
-    
+
+    console.print("\n[bold blue]📊 Agent Status[/bold blue]\n")
+
     # Load manifest
     if manifest_path.exists():
         with open(manifest_path) as f:
             manifest = yaml.safe_load(f)
-        
+
         console.print(f"  Agent: [bold]{manifest['agent']['name']}[/bold]")
         console.print(f"  Version: {manifest['agent']['version']}")
         console.print(f"  Sponsor: {manifest['sponsor']['email']}")
     else:
         console.print("  [yellow]No manifest found[/yellow]")
-    
+
     console.print()
-    
+
     # Load identity
     if identity_path.exists():
         with open(identity_path) as f:
             identity = json.load(f)
-        
-        console.print(f"  [green]✓[/green] Identity: Registered")
+
+        console.print("  [green]✓[/green] Identity: Registered")
         console.print(f"    DID: {identity['did']}")
     else:
-        console.print(f"  [yellow]○[/yellow] Identity: Not registered")
-    
+        console.print("  [yellow]○[/yellow] Identity: Not registered")
+
     console.print()
-    
+
     # Trust score (simulated)
     table = Table(title="Trust Score", box=box.ROUNDED)
     table.add_column("Dimension", style="cyan")
     table.add_column("Score", justify="right")
     table.add_column("Trend")
-    
+
     table.add_row("Policy Compliance", "85/100", "[green]↑[/green]")
     table.add_row("Resource Efficiency", "72/100", "[white]→[/white]")
     table.add_row("Output Quality", "91/100", "[green]↑[/green]")
     table.add_row("Security Posture", "88/100", "[white]→[/white]")
     table.add_row("Collaboration Health", "79/100", "[green]↑[/green]")
     table.add_row("[bold]Total", "[bold]820/1000", "[bold green]Trusted")
-    
+
     console.print(table)
 
 
@@ -338,25 +337,25 @@ def status(agent_dir: str):
 def policy(policy_file: str, validate: bool):
     """Load and validate a policy file."""
     console.print(f"\n[bold blue]📜 Policy: {policy_file}[/bold blue]\n")
-    
+
     try:
         with open(policy_file) as f:
             if policy_file.endswith(".yaml") or policy_file.endswith(".yml"):
                 policy_data = yaml.safe_load(f)
             else:
                 policy_data = json.load(f)
-        
+
         from agentmesh.governance import PolicyEngine, Policy
         engine = PolicyEngine()
-        
+
         policies = policy_data.get("policies", [])
         for p in policies:
             policy_obj = Policy(**p)
             engine.load_policy(policy_obj)
             console.print(f"  [green]✓[/green] Loaded: {policy_obj.name} ({len(policy_obj.rules)} rules)")
-        
+
         console.print(f"\n[green]Successfully loaded {len(policies)} policies[/green]")
-        
+
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
 
@@ -375,22 +374,22 @@ def audit(agent: str, limit: int, fmt: str):
         {"timestamp": "2026-01-31T10:13:00Z", "agent": "agent-1", "action": "tool_call", "status": "allowed"},
         {"timestamp": "2026-01-31T10:12:00Z", "agent": "agent-3", "action": "policy_check", "status": "blocked"},
     ]
-    
+
     if agent:
         entries = [e for e in entries if e["agent"] == agent]
-    
+
     entries = entries[:limit]
-    
+
     if fmt == "json":
         click.echo(json.dumps(entries, indent=2))
     else:
-        console.print(f"\n[bold blue]📋 Audit Log[/bold blue]\n")
+        console.print("\n[bold blue]📋 Audit Log[/bold blue]\n")
         table = Table(box=box.SIMPLE)
         table.add_column("Timestamp", style="dim")
         table.add_column("Agent")
         table.add_column("Action")
         table.add_column("Status")
-        
+
         for entry in entries:
             status_style = "green" if entry["status"] in ["success", "allowed"] else "red"
             table.add_row(
@@ -399,16 +398,16 @@ def audit(agent: str, limit: int, fmt: str):
                 entry["action"],
                 f"[{status_style}]{entry['status']}[/{status_style}]",
             )
-        
+
         console.print(table)
 
 
 # Import proxy command from proxy module
-from .proxy import proxy
+from .proxy import proxy  # noqa: E402
 app.add_command(proxy)
 
 # Import trust subcommand group
-from .trust_cli import trust
+from .trust_cli import trust  # noqa: E402
 app.add_command(trust)
 
 
@@ -419,12 +418,12 @@ app.add_command(trust)
 def init_integration(claude: bool, config_path: str, backup: bool):
     """
     Initialize AgentMesh integration with existing tools.
-    
+
     Examples:
-    
+
         # Setup Claude Desktop to use AgentMesh proxy
         agentmesh init-integration --claude
-        
+
         # Specify custom config path
         agentmesh init-integration --claude --config-path ~/custom/config.json
     """
@@ -437,26 +436,26 @@ def init_integration(claude: bool, config_path: str, backup: bool):
 def _init_claude_integration(config_path: Optional[str], backup: bool):
     """Initialize Claude Desktop integration."""
     console.print("\n[bold blue]🔧 Setting up Claude Desktop Integration[/bold blue]\n")
-    
+
     # Determine config path
     if not config_path:
         # Default Claude Desktop config locations
         import platform
         system = platform.system()
-        
+
         if system == "Darwin":  # macOS
             default_path = Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
         elif system == "Windows":
             default_path = Path.home() / "AppData" / "Roaming" / "Claude" / "claude_desktop_config.json"
         else:  # Linux
             default_path = Path.home() / ".config" / "claude" / "claude_desktop_config.json"
-        
+
         config_path = default_path
     else:
         config_path = Path(config_path)
-    
+
     logger.info("Config path: %s", config_path)
-    
+
     # Check if config exists
     if not config_path.exists():
         logger.warning("Config file not found at %s", config_path)
@@ -470,15 +469,15 @@ def _init_claude_integration(config_path: Optional[str], backup: bool):
             import shutil
             shutil.copy(config_path, backup_path)
             logger.debug("Backed up existing config to %s", backup_path)
-        
+
         # Load existing config
         with open(config_path) as f:
             config = json.load(f)
-    
+
     # Ensure mcpServers exists
     if "mcpServers" not in config:
         config["mcpServers"] = {}
-    
+
     # Add example AgentMesh proxy configuration
     example_server = {
         "filesystem-protected": {
@@ -493,25 +492,25 @@ def _init_claude_integration(config_path: Optional[str], backup: bool):
             "env": {},
         }
     }
-    
+
     # Check if already configured
     has_agentmesh = any(
         "agentmesh" in str(server.get("command", ""))
         for server in config["mcpServers"].values()
     )
-    
+
     if not has_agentmesh:
         config["mcpServers"].update(example_server)
         console.print("\n[green]✓ Added AgentMesh-protected filesystem server example[/green]")
     else:
         logger.warning("AgentMesh proxy already configured")
-    
+
     # Save updated config
     with open(config_path, "w") as f:
         json.dump(config, f, indent=2)
-    
+
     console.print(f"\n[green]✓ Updated {config_path}[/green]")
-    
+
     # Show instructions
     console.print()
     console.print(Panel(

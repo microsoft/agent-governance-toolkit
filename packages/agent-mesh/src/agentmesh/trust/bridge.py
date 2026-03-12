@@ -8,17 +8,15 @@ Maintains the same API surface for compatibility.
 """
 
 from datetime import datetime
-from typing import Optional, Literal, Any
+from typing import Optional, Any
 from pydantic import BaseModel, Field
-import asyncio
 
 from .handshake import TrustHandshake, HandshakeResult
-from .capability import CapabilityScope
 
 # Import IATP from agent-os (the source of truth for trust protocol)
 try:
-    from modules.iatp import IATPClient, IATPMessage, TrustLevel
-    from modules.nexus import NexusClient, ReputationEngine
+    from modules.iatp import IATPClient, IATPMessage, TrustLevel  # noqa: F401
+    from modules.nexus import NexusClient, ReputationEngine  # noqa: F401
     AGENT_OS_AVAILABLE = True
 except ImportError:
     # Fallback if agent-os not installed yet (for development)
@@ -42,19 +40,19 @@ class PeerInfo(BaseModel):
         endpoint: Network endpoint URL for the peer.
         connected_at: Timestamp when the connection was established.
     """
-    
+
     peer_did: str
     peer_name: Optional[str] = None
     protocol: str  # "a2a", "mcp", "iatp", "acp"
-    
+
     # Trust info
     trust_score: int = Field(default=0, ge=0, le=1000)
     trust_verified: bool = False
     last_verified: Optional[datetime] = None
-    
+
     # Capabilities
     capabilities: list[str] = Field(default_factory=list)
-    
+
     # Connection info
     endpoint: Optional[str] = None
     connected_at: Optional[datetime] = None
@@ -64,24 +62,24 @@ class TrustBridge(BaseModel):
     """
     Basic trust bridge — direct passthrough without protocol translation.
     """
-    
+
     agent_did: str = Field(..., description="This agent's DID")
-    
+
     # Trust thresholds
     default_trust_threshold: int = Field(default=700, ge=0, le=1000)
-    
+
     # Known peers
     peers: dict[str, PeerInfo] = Field(default_factory=dict)
-    
+
     # Handshake handler
     _handshake: Optional[TrustHandshake] = None
-    
+
     model_config = {"arbitrary_types_allowed": True}
-    
+
     def __init__(self, **data):
         super().__init__(**data)
         self._handshake = TrustHandshake(agent_did=self.agent_did)
-    
+
     async def verify_peer(
         self,
         peer_did: str,
@@ -93,14 +91,14 @@ class TrustBridge(BaseModel):
         Verify a peer before communication.
         """
         threshold = required_trust_score or self.default_trust_threshold
-        
+
         result = await self._handshake.initiate(
             peer_did=peer_did,
             protocol=protocol,
             required_trust_score=threshold,
             required_capabilities=required_capabilities,
         )
-        
+
         if result.verified:
             self.peers[peer_did] = PeerInfo(
                 peer_did=peer_did,
@@ -111,9 +109,9 @@ class TrustBridge(BaseModel):
                 last_verified=datetime.utcnow(),
                 capabilities=result.capabilities,
             )
-        
+
         return result
-    
+
     async def is_peer_trusted(
         self,
         peer_did: str,
@@ -123,14 +121,14 @@ class TrustBridge(BaseModel):
         peer = self.peers.get(peer_did)
         if not peer or not peer.trust_verified:
             return False
-        
+
         threshold = required_score or self.default_trust_threshold
         return peer.trust_score >= threshold
-    
+
     def get_peer(self, peer_did: str) -> Optional[PeerInfo]:
         """Get information about a known peer."""
         return self.peers.get(peer_did)
-    
+
     def get_trusted_peers(self, min_score: Optional[int] = None) -> list[PeerInfo]:
         """Get all peers that are verified and meet the trust threshold."""
         threshold = min_score or self.default_trust_threshold
@@ -138,7 +136,7 @@ class TrustBridge(BaseModel):
             peer for peer in self.peers.values()
             if peer.trust_verified and peer.trust_score >= threshold
         ]
-    
+
     async def revoke_peer_trust(self, peer_did: str, reason: str) -> bool:
         """Revoke trust for a previously verified peer."""
         if peer_did in self.peers:
@@ -152,21 +150,21 @@ class ProtocolBridge(BaseModel):
     """
     Basic protocol bridge — passes messages through without translation.
     """
-    
+
     agent_did: str
     trust_bridge: Optional[TrustBridge] = None
-    
+
     supported_protocols: list[str] = Field(
         default=["a2a", "mcp", "iatp", "acp"]
     )
-    
+
     model_config = {"arbitrary_types_allowed": True}
-    
+
     def __init__(self, **data):
         super().__init__(**data)
         if not self.trust_bridge:
             self.trust_bridge = TrustBridge(agent_did=self.agent_did)
-    
+
     async def send_message(
         self,
         peer_did: str,
@@ -180,17 +178,17 @@ class ProtocolBridge(BaseModel):
             result = await self.trust_bridge.verify_peer(peer_did, source_protocol)
             if not result.verified:
                 raise PermissionError(f"Peer not trusted: {peer_did}")
-        
+
         peer = self.trust_bridge.get_peer(peer_did)
         dest_protocol = target_protocol or peer.protocol
-        
+
         # Translate if needed
         if source_protocol != dest_protocol:
             message = await self._translate(message, source_protocol, dest_protocol)
-        
+
         # Send via appropriate handler
         return await self._send(peer_did, message, dest_protocol)
-    
+
     async def _translate(
         self,
         message: Any,
@@ -209,7 +207,7 @@ class ProtocolBridge(BaseModel):
         else:
             # Default: pass through
             return message
-    
+
     def _a2a_to_mcp(self, message: dict) -> dict:
         """Convert A2A message to MCP format."""
         # A2A task -> MCP tool call
@@ -220,7 +218,7 @@ class ProtocolBridge(BaseModel):
                 "arguments": message.get("parameters", {}),
             },
         }
-    
+
     def _mcp_to_a2a(self, message: dict) -> dict:
         """Convert MCP message to A2A format."""
         # MCP tool call -> A2A task
@@ -229,7 +227,7 @@ class ProtocolBridge(BaseModel):
             "task_type": params.get("name", "execute"),
             "parameters": params.get("arguments", {}),
         }
-    
+
     def add_verification_footer(
         self,
         content: str,
@@ -242,7 +240,7 @@ class ProtocolBridge(BaseModel):
             f"\n\n> 🔒 Verified by AgentMesh (Trust Score: {trust_score}/1000)\n"
             f"> Agent: {agent_did[:40]}...\n"
         )
-        
+
         if metadata:
             if "policy" in metadata:
                 footer += f"> Policy: {metadata['policy']}\n"
@@ -250,9 +248,9 @@ class ProtocolBridge(BaseModel):
                 footer += f"> Audit: {metadata['audit']}\n"
             if "view_log" in metadata:
                 footer += f"> [View Audit Log]({metadata['view_log']})\n"
-        
+
         return content + footer
-    
+
     async def _send(self, peer_did: str, message: Any, protocol: str) -> Any:
         """Send message via protocol handler."""
         return {
@@ -260,7 +258,7 @@ class ProtocolBridge(BaseModel):
             "peer": peer_did,
             "protocol": protocol,
         }
-    
+
     def get_protocol_for_peer(self, peer_did: str) -> Optional[str]:
         """Get the preferred communication protocol for a peer."""
         peer = self.trust_bridge.get_peer(peer_did)
@@ -271,11 +269,11 @@ class A2AAdapter:
     """
     Adapter for Google A2A (Agent-to-Agent) protocol.
     """
-    
+
     def __init__(self, agent_did: str, trust_bridge: TrustBridge):
         self.agent_did = agent_did
         self.trust_bridge = trust_bridge
-    
+
     async def discover_agent(self, endpoint: str) -> Optional[dict]:
         """Discover an agent via A2A Agent Card."""
         return {
@@ -283,7 +281,7 @@ class A2AAdapter:
             "description": "An A2A-compatible agent",
             "capabilities": ["task/execute"],
         }
-    
+
     async def create_task(
         self,
         peer_did: str,
@@ -293,13 +291,13 @@ class A2AAdapter:
         """Create a task on a peer agent via the A2A protocol."""
         if not await self.trust_bridge.is_peer_trusted(peer_did):
             raise PermissionError("Peer not trusted")
-        
+
         return {
             "task_id": f"task_{peer_did}_{datetime.utcnow().timestamp()}",
             "status": "created",
             "type": task_type,
         }
-    
+
     async def get_task_status(self, peer_did: str, task_id: str) -> dict:
         """Get the current status of a task on a peer agent."""
         return {
@@ -312,12 +310,12 @@ class MCPAdapter:
     """
     Adapter for Anthropic MCP (Model Context Protocol).
     """
-    
+
     def __init__(self, agent_did: str, trust_bridge: TrustBridge):
         self.agent_did = agent_did
         self.trust_bridge = trust_bridge
         self._registered_tools: dict[str, dict] = {}
-    
+
     def register_tool(
         self,
         name: str,
@@ -332,7 +330,7 @@ class MCPAdapter:
             "inputSchema": input_schema,
             "required_capability": required_capability,
         }
-    
+
     async def call_tool(
         self,
         peer_did: str,
@@ -342,22 +340,22 @@ class MCPAdapter:
         """Call a tool on a peer with governance enforcement."""
         if not await self.trust_bridge.is_peer_trusted(peer_did):
             raise PermissionError("Peer not trusted for MCP tool call")
-        
+
         peer = self.trust_bridge.get_peer(peer_did)
-        
+
         tool = self._registered_tools.get(tool_name)
         if tool and tool.get("required_capability"):
             if tool["required_capability"] not in peer.capabilities:
                 raise PermissionError(
                     f"Peer lacks capability: {tool['required_capability']}"
                 )
-        
+
         return {
             "tool": tool_name,
             "result": "success",
             "governed": True,
         }
-    
+
     def list_tools(self) -> list[dict]:
         """List all registered tools."""
         return list(self._registered_tools.values())

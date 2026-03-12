@@ -28,10 +28,8 @@ from agentmesh.marketplace import (
     MarketplaceError,
     PluginInstaller,
     PluginRegistry,
-    PluginSigner,
     PluginType,
     load_manifest,
-    verify_signature,
 )
 
 console = Console()

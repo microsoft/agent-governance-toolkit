@@ -39,19 +39,19 @@ class ComplianceControl(BaseModel):
         requirements: List of requirement descriptions for this control.
         evidence_types: Types of evidence needed to demonstrate compliance.
     """
-    
+
     control_id: str
     framework: ComplianceFramework
     name: str
     description: str
-    
+
     # Categorization
     category: str
     subcategory: Optional[str] = None
-    
+
     # Requirements
     requirements: list[str] = Field(default_factory=list)
-    
+
     # Evidence required
     evidence_types: list[str] = Field(default_factory=list)
 
@@ -65,13 +65,13 @@ class ComplianceMapping(BaseModel):
         evidence_generated: Evidence types produced automatically on action.
         evidence_required: Evidence types that must be supplied manually.
     """
-    
+
     action_type: str
     controls: list[str] = Field(default_factory=list)  # Control IDs
-    
+
     # Auto-generated evidence
     evidence_generated: list[str] = Field(default_factory=list)
-    
+
     # Manual evidence required
     evidence_required: list[str] = Field(default_factory=list)
 
@@ -93,25 +93,25 @@ class ComplianceViolation(BaseModel):
         remediated_at: Timestamp of remediation (if applicable).
         remediation_notes: Free-text notes about the remediation.
     """
-    
+
     violation_id: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    
+
     # What happened
     agent_did: str
     action_type: str
-    
+
     # Which control was violated
     control_id: str
     framework: ComplianceFramework
-    
+
     # Severity
     severity: Literal["critical", "high", "medium", "low"] = "medium"
-    
+
     # Details
     description: str
     evidence: dict = Field(default_factory=dict)
-    
+
     # Remediation
     remediated: bool = False
     remediated_at: Optional[datetime] = None
@@ -138,32 +138,32 @@ class ComplianceReport(BaseModel):
         evidence_items: Count of evidence artefacts collected.
         recommendations: Actionable remediation recommendations (max 10).
     """
-    
+
     report_id: str
     generated_at: datetime = Field(default_factory=datetime.utcnow)
-    
+
     # Scope
     framework: ComplianceFramework
     period_start: datetime
     period_end: datetime
-    
+
     # Organization
     organization_id: Optional[str] = None
     agents_covered: list[str] = Field(default_factory=list)
-    
+
     # Summary
     total_controls: int = 0
     controls_met: int = 0
     controls_partial: int = 0
     controls_failed: int = 0
     compliance_score: float = 0.0  # 0-100
-    
+
     # Violations
     violations: list[ComplianceViolation] = Field(default_factory=list)
-    
+
     # Evidence
     evidence_items: int = 0
-    
+
     # Recommendations
     recommendations: list[str] = Field(default_factory=list)
 
@@ -171,11 +171,11 @@ class ComplianceReport(BaseModel):
 class ComplianceEngine:
     """
     Automated compliance mapping and reporting.
-    
+
     Maps every agent action to relevant compliance controls
     and generates audit-ready reports.
     """
-    
+
     def __init__(self, frameworks: Optional[list[ComplianceFramework]] = None):
         """Initialise the compliance engine.
 
@@ -187,13 +187,13 @@ class ComplianceEngine:
         self._controls: dict[str, ComplianceControl] = {}
         self._mappings: dict[str, ComplianceMapping] = {}
         self._violations: list[ComplianceViolation] = []
-        
+
         # Load default controls
         self._load_default_controls()
-    
+
     def _load_default_controls(self) -> None:
         """Load default compliance controls for enabled frameworks."""
-        
+
         # SOC 2 Controls
         if ComplianceFramework.SOC2 in self.frameworks:
             self._add_control(ComplianceControl(
@@ -222,7 +222,7 @@ class ComplianceEngine:
                 ],
                 evidence_types=["monitoring_logs", "alerts"],
             ))
-        
+
         # HIPAA Controls
         if ComplianceFramework.HIPAA in self.frameworks:
             self._add_control(ComplianceControl(
@@ -251,7 +251,7 @@ class ComplianceEngine:
                 ],
                 evidence_types=["audit_logs"],
             ))
-        
+
         # EU AI Act Controls
         if ComplianceFramework.EU_AI_ACT in self.frameworks:
             self._add_control(ComplianceControl(
@@ -280,7 +280,7 @@ class ComplianceEngine:
                 ],
                 evidence_types=["decision_logs", "explanations"],
             ))
-        
+
         # GDPR Controls
         if ComplianceFramework.GDPR in self.frameworks:
             self._add_control(ComplianceControl(
@@ -309,27 +309,27 @@ class ComplianceEngine:
                 ],
                 evidence_types=["decision_logs", "human_review_records"],
             ))
-        
+
         # Set up default mappings
         self._setup_default_mappings()
-    
+
     def _setup_default_mappings(self) -> None:
         """Set up default action-to-control mappings."""
-        
+
         # Agent registration
         self._mappings["agent_registration"] = ComplianceMapping(
             action_type="agent_registration",
             controls=["SOC2-CC6.1", "HIPAA-164.312(a)(1)"],
             evidence_generated=["identity_record", "registration_log"],
         )
-        
+
         # Data access
         self._mappings["data_access"] = ComplianceMapping(
             action_type="data_access",
             controls=["SOC2-CC6.1", "HIPAA-164.312(b)", "GDPR-ART5"],
             evidence_generated=["access_log", "data_classification"],
         )
-        
+
         # Automated decision
         self._mappings["automated_decision"] = ComplianceMapping(
             action_type="automated_decision",
@@ -337,11 +337,11 @@ class ComplianceEngine:
             evidence_generated=["decision_log", "explanation"],
             evidence_required=["human_review"] if ComplianceFramework.GDPR in self.frameworks else [],
         )
-    
+
     def _add_control(self, control: ComplianceControl) -> None:
         """Add a control to the registry."""
         self._controls[control.control_id] = control
-    
+
     def map_action(self, action_type: str) -> Optional[ComplianceMapping]:
         """Get the compliance mapping for an action type.
 
@@ -352,7 +352,7 @@ class ComplianceEngine:
             The ``ComplianceMapping`` if one exists, otherwise ``None``.
         """
         return self._mappings.get(action_type)
-    
+
     def check_compliance(
         self,
         agent_did: str,
@@ -374,23 +374,23 @@ class ComplianceEngine:
         """
         violations = []
         mapping = self.map_action(action_type)
-        
+
         if not mapping:
             return violations
-        
+
         for control_id in mapping.controls:
             control = self._controls.get(control_id)
             if not control:
                 continue
-            
+
             # Check requirements
             violation = self._check_control(agent_did, action_type, control, context)
             if violation:
                 violations.append(violation)
                 self._violations.append(violation)
-        
+
         return violations
-    
+
     def _check_control(
         self,
         agent_did: str,
@@ -400,7 +400,7 @@ class ComplianceEngine:
     ) -> Optional[ComplianceViolation]:
         """Check if an action violates a specific control."""
         import uuid
-        
+
         # Framework-specific checks
         if control.framework == ComplianceFramework.HIPAA:
             # Check for PHI handling
@@ -415,7 +415,7 @@ class ComplianceEngine:
                     description="PHI data accessed without encryption",
                     evidence={"data_type": "phi", "encrypted": False},
                 )
-        
+
         if control.framework == ComplianceFramework.GDPR:
             # Check for consent
             if context.get("personal_data") and not context.get("consent_verified"):
@@ -429,9 +429,9 @@ class ComplianceEngine:
                     description="Personal data processed without verified consent",
                     evidence={"personal_data": True, "consent": False},
                 )
-        
+
         return None
-    
+
     def generate_report(
         self,
         framework: ComplianceFramework,
@@ -452,7 +452,7 @@ class ComplianceEngine:
             A ``ComplianceReport`` with score, violations, and recommendations.
         """
         import uuid
-        
+
         # Filter violations
         violations = [
             v for v in self._violations
@@ -460,21 +460,21 @@ class ComplianceEngine:
             and period_start <= v.timestamp <= period_end
             and (not agent_ids or v.agent_did in agent_ids)
         ]
-        
+
         # Get controls for framework
         framework_controls = [
             c for c in self._controls.values()
             if c.framework == framework
         ]
-        
+
         # Calculate compliance score
         violated_controls = set(v.control_id for v in violations)
         total = len(framework_controls)
         failed = len(violated_controls)
         met = total - failed
-        
+
         score = (met / total * 100) if total > 0 else 100.0
-        
+
         # Generate recommendations
         recommendations = []
         for v in violations:
@@ -482,7 +482,7 @@ class ComplianceEngine:
                 recommendations.append(
                     f"Remediate {v.control_id}: {v.description}"
                 )
-        
+
         return ComplianceReport(
             report_id=f"report_{uuid.uuid4().hex[:12]}",
             framework=framework,
@@ -496,7 +496,7 @@ class ComplianceEngine:
             violations=violations,
             recommendations=recommendations[:10],  # Top 10
         )
-    
+
     def remediate_violation(
         self,
         violation_id: str,
@@ -519,7 +519,7 @@ class ComplianceEngine:
                 v.remediation_notes = notes
                 return True
         return False
-    
+
     def get_violations(
         self,
         framework: Optional[ComplianceFramework] = None,
@@ -537,14 +537,14 @@ class ComplianceEngine:
             List of matching ``ComplianceViolation`` instances.
         """
         violations = self._violations
-        
+
         if framework:
             violations = [v for v in violations if v.framework == framework]
-        
+
         if agent_did:
             violations = [v for v in violations if v.agent_did == agent_did]
-        
+
         if remediated is not None:
             violations = [v for v in violations if v.remediated == remediated]
-        
+
         return violations

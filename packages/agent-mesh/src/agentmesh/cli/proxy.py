@@ -17,7 +17,6 @@ import asyncio
 import json
 import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, Optional, List
 import subprocess
 
@@ -34,11 +33,11 @@ logger = logging.getLogger(__name__)
 class MCPProxy:
     """
     MCP Proxy that intercepts tool calls and enforces governance.
-    
+
     Sits between an MCP client (like Claude Desktop) and an MCP server,
     intercepting JSON-RPC messages and enforcing policies.
     """
-    
+
     def __init__(
         self,
         target_command: List[str],
@@ -48,7 +47,7 @@ class MCPProxy:
     ):
         """
         Initialize the MCP proxy.
-        
+
         Args:
             target_command: Command to spawn the target MCP server
             policy: Policy level (strict, moderate, permissive)
@@ -58,7 +57,7 @@ class MCPProxy:
         self.target_command = target_command
         self.policy_level = policy
         self.enable_footer = enable_footer
-        
+
         # Create proxy identity
         logger.info("Initializing AgentMesh proxy identity...")
         self.identity = AgentIdentity.create(
@@ -66,21 +65,21 @@ class MCPProxy:
             sponsor="proxy@agentmesh.ai",
             capabilities=["tool:*"]
         )
-        
+
         # Initialize governance components
         self.policy_engine = PolicyEngine()
         self._load_default_policies()
-        
+
         self.audit_log = AuditLog()
-        
+
         self.reward_engine = RewardEngine()
         self.trust_score = 800  # Starting score
-        
+
         # Process handle
         self.target_process: Optional[subprocess.Popen] = None
-        
+
         logger.info("Proxy initialized with trust score: %d/1000", self.trust_score)
-    
+
     def _load_default_policies(self):
         """Load default policies based on policy level."""
         if self.policy_level == "strict":
@@ -111,7 +110,7 @@ rules:
     action: "deny"
     priority: 90
     enabled: true
-    
+
   - name: "allow-read-operations"
     description: "Allow filesystem read operations"
     condition: "action.tool == 'filesystem_read'"
@@ -143,19 +142,19 @@ agents: ["*"]
 default_action: "allow"
 rules: []
 """
-        
+
         try:
             self.policy_engine.load_yaml(policy_yaml)
         except Exception as e:
             logger.warning("Could not load policy: %s", e)
-    
+
     async def start(self):
         """Start the proxy server."""
         logger.info("Starting MCP proxy...")
         logger.info("Target: %s", " ".join(self.target_command))
         logger.info("Policy: %s", self.policy_level)
         logger.info("Agent DID: %s", self.identity.did)
-        
+
         # Start target MCP server as subprocess
         self.target_process = subprocess.Popen(
             self.target_command,
@@ -164,14 +163,14 @@ rules: []
             stderr=subprocess.PIPE,
             bufsize=0,
         )
-        
+
         logger.info("Target server started (PID: %d)", self.target_process.pid)
         logger.info("AgentMesh governance active")
-        
+
         # Start message handling loops
         read_task = asyncio.create_task(self._read_from_target())
         write_task = asyncio.create_task(self._read_from_client())
-        
+
         try:
             await asyncio.gather(read_task, write_task)
         except KeyboardInterrupt:
@@ -180,18 +179,18 @@ rules: []
             if self.target_process:
                 self.target_process.terminate()
                 self.target_process.wait()
-    
+
     async def _read_from_client(self):
         """Read JSON-RPC messages from stdin (MCP client)."""
         loop = asyncio.get_event_loop()
-        
+
         while True:
             try:
                 # Read a line from stdin
                 line = await loop.run_in_executor(None, sys.stdin.readline)
                 if not line:
                     break
-                
+
                 # Parse JSON-RPC message
                 try:
                     message = json.loads(line.strip())
@@ -199,22 +198,22 @@ rules: []
                     # Not a JSON message, pass through
                     self._write_to_target(line)
                     continue
-                
+
                 # Intercept tool calls
                 if message.get("method") == "tools/call":
                     message = await self._handle_tool_call(message)
-                
+
                 # Forward to target
                 self._write_to_target(json.dumps(message) + "\n")
-                
+
             except Exception as e:
                 logger.error("Error reading from client: %s", e)
                 break
-    
+
     async def _read_from_target(self):
         """Read responses from target MCP server."""
         loop = asyncio.get_event_loop()
-        
+
         while True:
             try:
                 # Read from target stdout
@@ -222,29 +221,29 @@ rules: []
                     None,
                     self.target_process.stdout.readline
                 )
-                
+
                 if not line:
                     break
-                
+
                 # Parse JSON-RPC response
                 try:
                     message = json.loads(line.decode().strip())
-                    
+
                     # Add verification footer if enabled
                     if self.enable_footer and "result" in message:
                         message = self._add_verification_footer(message)
-                    
+
                     sys.stdout.write(json.dumps(message) + "\n")
                     sys.stdout.flush()
                 except json.JSONDecodeError:
                     # Not JSON, pass through
                     sys.stdout.write(line.decode())
                     sys.stdout.flush()
-                
+
             except Exception as e:
                 logger.error("Error reading from target: %s", e)
                 break
-    
+
     def _write_to_target(self, data: str):
         """Write data to target server stdin."""
         try:
@@ -252,21 +251,21 @@ rules: []
             self.target_process.stdin.flush()
         except Exception as e:
             logger.error("Error writing to target: %s", e)
-    
+
     async def _handle_tool_call(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """
         Handle a tools/call request - enforce policy.
-        
+
         Args:
             message: The JSON-RPC message
-            
+
         Returns:
             Modified message (allowed) or error response (blocked)
         """
         params = message.get("params", {})
         tool_name = params.get("name", "unknown")
         arguments = params.get("arguments", {})
-        
+
         # Build policy context
         context = {
             "action": {
@@ -274,16 +273,16 @@ rules: []
                 "path": arguments.get("path", ""),
             }
         }
-        
+
         # Check policy
         decision = self.policy_engine.evaluate(self.identity.did, context)
-        
+
         # Log the decision
         self._audit_log_tool_call(tool_name, arguments, decision)
-        
+
         if not decision.allowed:
             logger.warning("BLOCKED: %s - %s", tool_name, decision.reason)
-            
+
             # Return error response
             error_response = {
                 "jsonrpc": "2.0",
@@ -301,35 +300,35 @@ rules: []
                     }
                 }
             }
-            
+
             # Don't forward to target, return error directly
             sys.stdout.write(json.dumps(error_response) + "\n")
             sys.stdout.flush()
-            
+
             # Return a marker to skip forwarding
             return {"_agentmesh_blocked": True}
-        
+
         if decision.action == "warn":
             logger.warning("%s - %s", tool_name, decision.reason)
         else:
             logger.debug("Allowed: %s", tool_name)
-        
+
         # Update trust score
         self._update_trust_score(tool_name, allowed=True)
-        
+
         return message
-    
+
     def _add_verification_footer(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """Add AgentMesh verification footer to tool output."""
         result = message.get("result", {})
-        
+
         # Check if result has content we can append to
         if isinstance(result, dict) and "content" in result:
             content_list = result.get("content", [])
-            
+
             # Get DID as string
             did_str = str(self.identity.did) if hasattr(self.identity.did, '__str__') else self.identity.did
-            
+
             # Add footer as a new content item
             footer = {
                 "type": "text",
@@ -339,15 +338,15 @@ rules: []
                     f"> Policy: {self.policy_level} | Audit: Enabled"
                 )
             }
-            
+
             if isinstance(content_list, list):
                 content_list.append(footer)
-            
+
             result["content"] = content_list
             message["result"] = result
-        
+
         return message
-    
+
     def _audit_log_tool_call(
         self,
         tool_name: str,
@@ -355,7 +354,7 @@ rules: []
         decision: Any
     ):
         """Log tool call to audit trail."""
-        entry = {
+        {
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "agent": self.identity.did,
             "action": "mcp_tool_call",
@@ -367,11 +366,11 @@ rules: []
             "rule": decision.matched_rule,
             "trust_score": self.trust_score,
         }
-        
+
         # In production, would write to persistent audit log
         # For now, just track in memory
         logger.debug("Audit: %s - %s", tool_name, decision.action)
-    
+
     def _update_trust_score(self, tool_name: str, allowed: bool):
         """Update trust score based on tool usage."""
         if allowed:
@@ -411,27 +410,27 @@ rules: []
 def proxy(target: tuple, policy: str, no_footer: bool, identity: str):
     """
     Start an AgentMesh MCP proxy.
-    
+
     Wraps an existing MCP server with governance, policy enforcement,
     and trust scoring.
-    
+
     Examples:
-    
+
         # Proxy a filesystem server
         agentmesh proxy --target npx --target -y \\
             --target @modelcontextprotocol/server-filesystem --target /Users/me
-        
+
         # Moderate policy with no footers
         agentmesh proxy --policy moderate --no-footer \\
             --target python --target my_mcp_server.py
     """
     # Convert tuple to list
     target_cmd = list(target)
-    
+
     if not target_cmd:
         click.echo("Error: --target is required", err=True)
         sys.exit(1)
-    
+
     # Create and start proxy
     proxy_server = MCPProxy(
         target_command=target_cmd,
@@ -439,7 +438,7 @@ def proxy(target: tuple, policy: str, no_footer: bool, identity: str):
         identity_name=identity,
         enable_footer=not no_footer,
     )
-    
+
     try:
         asyncio.run(proxy_server.start())
     except KeyboardInterrupt:

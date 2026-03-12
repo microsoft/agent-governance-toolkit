@@ -13,7 +13,6 @@ Commands for inspecting and managing the trust network:
 """
 
 import json
-import sys
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -22,10 +21,7 @@ from rich.console import Console
 from rich.table import Table
 from rich import box
 
-from agentmesh.identity.agent_id import AgentIdentity, IdentityRegistry
-from agentmesh.identity.credentials import CredentialManager
-from agentmesh.identity.revocation import RevocationList
-from agentmesh.trust.bridge import TrustBridge, PeerInfo
+from agentmesh.trust.bridge import PeerInfo
 from agentmesh.constants import (
     TIER_VERIFIED_PARTNER_THRESHOLD,
     TIER_TRUSTED_THRESHOLD,
@@ -432,7 +428,7 @@ def graph(fmt: str, json_flag: bool):
 
     for peer in peers.values():
         label = peer.peer_name or peer.peer_did.split(":")[-1]
-        level = _trust_level_label(peer.trust_score)
+        _trust_level_label(peer.trust_score)
         bar_len = peer.trust_score // 20  # Scale 0-1000 to 0-50
         bar = "█" * bar_len
         verified_mark = "✓" if peer.trust_verified else "✗"
@@ -509,7 +505,7 @@ def revoke(agent_id: str, reason: str, force: bool, fmt: str, json_flag: bool):
     console.print(f"  Agent ID:       {agent_id}")
     console.print(f"  Reason:         {reason}")
     console.print(f"  Previous Score: {peer.trust_score}")
-    console.print(f"  New Score:      [red]0[/red]")
+    console.print("  New Score:      [red]0[/red]")
     console.print(f"  Revoked At:     {revocation_info['revoked_at']}")
     console.print()
 

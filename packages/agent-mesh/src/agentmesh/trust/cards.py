@@ -12,37 +12,38 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 import json
 
-from agentmesh.identity.agent_id import AgentIdentity, AgentDID
+from agentmesh.identity.agent_id import AgentIdentity
+from agentmesh.identity.revocation import RevocationList
 
 
 class TrustedAgentCard(BaseModel):
     """
     Agent card for discovery and verification.
-    
+
     Cards are cryptographically signed to prevent impersonation.
     Based on A2A Protocol's agent card extension pattern.
     """
-    
+
     # Basic info
     name: str = Field(..., description="Agent name")
     description: str = Field(default="", description="Agent description")
     capabilities: List[str] = Field(default_factory=list)
-    
+
     # Identity (public info only)
     agent_did: Optional[str] = Field(None, description="Agent DID")
     public_key: Optional[str] = Field(None, description="Public key for verification")
-    
+
     # Trust metadata
     trust_score: float = Field(default=1.0, ge=0.0, le=1.0)
-    
+
     # Cryptographic signature over card content
     card_signature: Optional[str] = Field(None, description="Signature over card content")
     signature_timestamp: Optional[datetime] = None
-    
+
     # Additional metadata
     metadata: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
+
     def _get_signable_content(self) -> str:
         """Get deterministic content for signing."""
         content = {
@@ -54,48 +55,48 @@ class TrustedAgentCard(BaseModel):
             "public_key": self.public_key,
         }
         return json.dumps(content, sort_keys=True, separators=(",", ":"))
-    
+
     def sign(self, identity: AgentIdentity) -> None:
         """
         Cryptographically sign this card with the given identity.
-        
+
         The signature covers the card's core content to prevent tampering.
         After signing, the card can be verified by anyone with the public key.
-        
+
         Args:
             identity: The identity to sign with (must have private key)
         """
         self.agent_did = str(identity.did)
         self.public_key = identity.public_key
-        
+
         signable = self._get_signable_content()
         self.card_signature = identity.sign(signable.encode())
         self.signature_timestamp = datetime.now(timezone.utc)
-    
+
     def verify_signature(self, identity: Optional[AgentIdentity] = None) -> bool:
         """
         Verify the card's signature is valid.
-        
+
         Args:
             identity: Optional identity to verify against. If not provided,
                      uses the public key embedded in the card.
-        
+
         Returns:
             True if signature is valid, False otherwise
         """
         if not self.card_signature or not self.public_key:
             return False
-        
+
         signable = self._get_signable_content()
-        
+
         if identity:
             return identity.verify_signature(signable.encode(), self.card_signature)
-        
+
         # Verify using embedded public key
         # This requires reconstructing a minimal identity for verification
         from cryptography.hazmat.primitives.asymmetric import ed25519
         import base64
-        
+
         try:
             public_key_bytes = base64.b64decode(self.public_key)
             public_key = ed25519.Ed25519PublicKey.from_public_bytes(public_key_bytes)
@@ -104,15 +105,15 @@ class TrustedAgentCard(BaseModel):
             return True
         except Exception:
             return False
-    
+
     @classmethod
     def from_identity(cls, identity: AgentIdentity) -> "TrustedAgentCard":
         """
         Create a signed card from an identity.
-        
+
         Args:
             identity: The identity to create a card for
-            
+
         Returns:
             A signed TrustedAgentCard
         """
@@ -123,7 +124,7 @@ class TrustedAgentCard(BaseModel):
         )
         card.sign(identity)
         return card
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize the card to a plain dictionary.
 
@@ -149,7 +150,7 @@ class TrustedAgentCard(BaseModel):
             result["card_signature"] = self.card_signature
             result["signature_timestamp"] = self.signature_timestamp.isoformat() if self.signature_timestamp else None
         return result
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TrustedAgentCard":
         """Deserialize a card from a dictionary.
@@ -166,7 +167,7 @@ class TrustedAgentCard(BaseModel):
         """
         signature_ts = data.get("signature_timestamp")
         created_at = data.get("created_at")
-        
+
         return cls(
             name=data.get("name", ""),
             description=data.get("description", ""),
@@ -184,12 +185,12 @@ class TrustedAgentCard(BaseModel):
 class CardRegistry:
     """
     Registry for trusted agent cards.
-    
+
     Provides discovery and caching of verified cards.
     Optionally integrates with a ``RevocationList`` to reject cards
     whose agent DID has been revoked.
     """
-    
+
     def __init__(
         self,
         cache_ttl_seconds: int = 900,
@@ -208,26 +209,26 @@ class CardRegistry:
         self._verified_cache: Dict[str, tuple[bool, datetime]] = {}
         self._cache_ttl = timedelta(seconds=cache_ttl_seconds)
         self._revocation_list = revocation_list
-    
+
     def register(self, card: TrustedAgentCard) -> bool:
         """
         Register a card after verifying its signature.
-        
+
         Args:
             card: The card to register
-            
+
         Returns:
             True if registered successfully, False if verification failed
         """
         if not card.verify_signature():
             return False
-        
+
         if card.agent_did:
             self._cards[card.agent_did] = card
             self._verified_cache[card.agent_did] = (True, datetime.now(timezone.utc))
-        
+
         return True
-    
+
     def get(self, agent_did: str) -> Optional[TrustedAgentCard]:
         """Get a registered card by agent DID.
 
@@ -238,7 +239,7 @@ class CardRegistry:
             The ``TrustedAgentCard``, or ``None`` if not registered.
         """
         return self._cards.get(agent_did)
-    
+
     @property
     def revocation_list(self) -> Optional["RevocationList"]:
         """The attached revocation list, if any."""
@@ -252,7 +253,7 @@ class CardRegistry:
     def is_verified(self, agent_did: str) -> bool:
         """
         Check if a card is verified (with caching).
-        
+
         Uses TTL-based caching to avoid repeated verification.
         Returns False if the agent DID is on the revocation list,
         even if the cryptographic signature is valid.
@@ -266,15 +267,15 @@ class CardRegistry:
             verified, timestamp = self._verified_cache[agent_did]
             if datetime.now(timezone.utc) - timestamp < self._cache_ttl:
                 return verified
-        
+
         card = self._cards.get(agent_did)
         if not card:
             return False
-        
+
         verified = card.verify_signature()
         self._verified_cache[agent_did] = (verified, datetime.now(timezone.utc))
         return verified
-    
+
     def clear_cache(self) -> None:
         """Clear the verification cache.
 
@@ -282,7 +283,7 @@ class CardRegistry:
         signatures from scratch.
         """
         self._verified_cache.clear()
-    
+
     def list_cards(self) -> List[TrustedAgentCard]:
         """List all registered agent cards.
 
@@ -290,7 +291,7 @@ class CardRegistry:
             List of every ``TrustedAgentCard`` in the registry.
         """
         return list(self._cards.values())
-    
+
     def find_by_capability(self, capability: str) -> List[TrustedAgentCard]:
         """Find registered cards that advertise a specific capability.
 

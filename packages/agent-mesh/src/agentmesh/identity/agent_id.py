@@ -10,7 +10,6 @@ Identity persists across restarts; revocation propagates in ≤5s.
 from datetime import datetime
 from typing import Optional, Literal
 from pydantic import BaseModel, Field, field_validator
-from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
 import hashlib
@@ -26,13 +25,13 @@ logger = logging.getLogger(__name__)
 class AgentDID(BaseModel):
     """
     Decentralized Identifier for an agent.
-    
+
     Format: did:mesh:<unique-id>
     """
-    
+
     method: Literal["mesh"] = "mesh"
     unique_id: str = Field(..., description="Unique identifier within the mesh")
-    
+
     @classmethod
     def generate(cls, name: str, org: Optional[str] = None) -> "AgentDID":
         """Generate a new DID for an agent."""
@@ -40,7 +39,7 @@ class AgentDID(BaseModel):
         seed = f"{name}:{org or 'default'}:{uuid.uuid4().hex[:8]}"
         unique_id = hashlib.sha256(seed.encode()).hexdigest()[:32]
         return cls(unique_id=unique_id)
-    
+
     @classmethod
     def from_string(cls, did_string: str) -> "AgentDID":
         """Parse a DID string."""
@@ -48,10 +47,10 @@ class AgentDID(BaseModel):
             raise ValueError(f"Invalid AgentMesh DID: {did_string}")
         unique_id = did_string[9:]  # Remove "did:mesh:"
         return cls(unique_id=unique_id)
-    
+
     def __str__(self) -> str:
         return f"did:{self.method}:{self.unique_id}"
-    
+
     def __hash__(self) -> int:
         return hash(str(self))
 
@@ -59,49 +58,49 @@ class AgentDID(BaseModel):
 class AgentIdentity(BaseModel):
     """
     First-class identity for an AI agent.
-    
+
     Unlike service accounts, agent identities:
     - Are linked to a human sponsor
     - Have ephemeral credentials
     - Support scope chains
     - Are continuously risk-scored
     """
-    
+
     did: AgentDID = Field(..., description="Decentralized identifier")
     name: str = Field(..., description="Human-readable agent name")
     description: Optional[str] = Field(None, description="Agent description")
-    
+
     # Cryptographic identity
     public_key: str = Field(..., description="Ed25519 public key (base64)")
     verification_key_id: str = Field(..., description="Key ID for verification")
-    
+
     # Human sponsor (accountability)
     sponsor_email: str = Field(..., description="Human sponsor email")
     sponsor_verified: bool = Field(default=False, description="Whether sponsor is verified")
-    
+
     # Organization
     organization: Optional[str] = Field(None, description="Organization name")
     organization_id: Optional[str] = Field(None, description="Organization identifier")
-    
+
     # Capabilities (what this agent is allowed to do)
     capabilities: list[str] = Field(default_factory=list)
-    
+
     # Metadata
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     expires_at: Optional[datetime] = Field(None, description="Identity expiration")
-    
+
     # Status
     status: Literal["active", "suspended", "revoked"] = Field(default="active")
     revocation_reason: Optional[str] = Field(None)
-    
+
     # Delegation
     parent_did: Optional[str] = Field(None, description="Parent agent DID if delegated")
     delegation_depth: int = Field(default=0, ge=0, description="Depth in scope chain")
-    
+
     # Private key stored separately (not serialized)
     _private_key: Optional[ed25519.Ed25519PrivateKey] = None
-    
+
     model_config = {"arbitrary_types_allowed": True}
 
     @field_validator("name")
@@ -147,7 +146,7 @@ class AgentIdentity(BaseModel):
     ) -> "AgentIdentity":
         """
         Create a new agent identity.
-        
+
         This is the primary factory method for creating governed agents.
         """
         if not name or not name.strip():
@@ -160,20 +159,20 @@ class AgentIdentity(BaseModel):
         # Generate keypair
         private_key = ed25519.Ed25519PrivateKey.generate()
         public_key = private_key.public_key()
-        
+
         # Encode public key
         public_key_bytes = public_key.public_bytes(
             encoding=serialization.Encoding.Raw,
             format=serialization.PublicFormat.Raw,
         )
         public_key_b64 = base64.b64encode(public_key_bytes).decode()
-        
+
         # Generate DID
         did = AgentDID.generate(name, organization)
-        
+
         # Create key ID
         key_id = f"key-{hashlib.sha256(public_key_bytes).hexdigest()[:16]}"
-        
+
         identity = cls(
             did=did,
             name=name,
@@ -184,20 +183,20 @@ class AgentIdentity(BaseModel):
             organization=organization,
             capabilities=capabilities or [],
         )
-        
+
         # Store private key (not serialized)
         identity._private_key = private_key
-        
+
         return identity
-    
+
     def sign(self, data: bytes) -> str:
         """Sign data with this agent's private key."""
         if self._private_key is None:
             raise ValueError("Private key not available for signing")
-        
+
         signature = self._private_key.sign(data)
         return base64.b64encode(signature).decode()
-    
+
     def verify_signature(self, data: bytes, signature: str) -> bool:
         """Verify a signature against this agent's public key."""
         try:
@@ -209,7 +208,7 @@ class AgentIdentity(BaseModel):
         except Exception:
             logger.debug("Signature verification failed", exc_info=True)
             return False
-    
+
     def delegate(
         self,
         name: str,
@@ -218,7 +217,7 @@ class AgentIdentity(BaseModel):
     ) -> "AgentIdentity":
         """
         Delegate to a child agent with narrowed capabilities.
-        
+
         The child agent's capabilities MUST be a subset of the parent's.
         This is enforced cryptographically - scope chains can only narrow.
         """
@@ -228,7 +227,7 @@ class AgentIdentity(BaseModel):
                 raise ValueError(
                     f"Cannot delegate capability '{cap}' - not in parent's capabilities"
                 )
-        
+
         # Create child identity
         child = AgentIdentity.create(
             name=name,
@@ -237,25 +236,25 @@ class AgentIdentity(BaseModel):
             organization=self.organization,
             description=description,
         )
-        
+
         # Set delegation metadata
         child.parent_did = str(self.did)
         child.delegation_depth = self.delegation_depth + 1
-        
+
         return child
-    
+
     def revoke(self, reason: str) -> None:
         """Revoke this identity."""
         self.status = "revoked"
         self.revocation_reason = reason
         self.updated_at = datetime.utcnow()
-    
+
     def suspend(self, reason: str) -> None:
         """Temporarily suspend this identity."""
         self.status = "suspended"
         self.revocation_reason = reason
         self.updated_at = datetime.utcnow()
-    
+
     def reactivate(self) -> None:
         """Reactivate a suspended identity."""
         if self.status == "revoked":
@@ -263,7 +262,7 @@ class AgentIdentity(BaseModel):
         self.status = "active"
         self.revocation_reason = None
         self.updated_at = datetime.utcnow()
-    
+
     def is_active(self) -> bool:
         """Check if identity is active and not expired."""
         if self.status != "active":
@@ -271,7 +270,7 @@ class AgentIdentity(BaseModel):
         if self.expires_at and datetime.utcnow() > self.expires_at:
             return False
         return True
-    
+
     def has_capability(self, capability: str) -> bool:
         """Check if this agent has a specific capability."""
         # Support wildcard matching
@@ -286,7 +285,7 @@ class AgentIdentity(BaseModel):
                 if capability.startswith(prefix + ":"):
                     return True
         return False
-    
+
     def to_jwk(self, include_private: bool = False) -> dict:
         """Export this identity as a JWK (JSON Web Key).
 
@@ -369,53 +368,53 @@ class AgentIdentity(BaseModel):
 class IdentityRegistry:
     """
     Registry for agent identities.
-    
+
     In production, this would be backed by a database and the AgentMesh CA.
     """
-    
+
     def __init__(self):
         self._identities: dict[str, AgentIdentity] = {}
         self._by_sponsor: dict[str, list[str]] = {}  # sponsor -> list of DIDs
-    
+
     def register(self, identity: AgentIdentity) -> None:
         """Register an identity."""
         did_str = str(identity.did)
-        
+
         if did_str in self._identities:
             raise ValueError(f"Identity already registered: {did_str}")
-        
+
         self._identities[did_str] = identity
-        
+
         # Index by sponsor
         if identity.sponsor_email not in self._by_sponsor:
             self._by_sponsor[identity.sponsor_email] = []
         self._by_sponsor[identity.sponsor_email].append(did_str)
-    
+
     def get(self, did: str | AgentDID) -> Optional[AgentIdentity]:
         """Get an identity by DID."""
         did_str = str(did) if isinstance(did, AgentDID) else did
         return self._identities.get(did_str)
-    
+
     def revoke(self, did: str | AgentDID, reason: str) -> bool:
         """Revoke an identity and all its delegates."""
         identity = self.get(did)
         if not identity:
             return False
-        
+
         identity.revoke(reason)
-        
+
         # Revoke all children
         for child_did, child in self._identities.items():
             if child.parent_did == str(did):
                 self.revoke(child_did, f"Parent revoked: {reason}")
-        
+
         return True
-    
+
     def get_by_sponsor(self, sponsor_email: str) -> list[AgentIdentity]:
         """Get all identities for a sponsor."""
         dids = self._by_sponsor.get(sponsor_email, [])
         return [self._identities[did] for did in dids if did in self._identities]
-    
+
     def list_active(self) -> list[AgentIdentity]:
         """List all active identities."""
         return [i for i in self._identities.values() if i.is_active()]

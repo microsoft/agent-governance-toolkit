@@ -224,7 +224,7 @@ class DashboardAPI:
 
     def get_overview(self) -> DashboardOverview:
         """Returns a summary overview for the main dashboard."""
-        stats = self._analytics.get_stats()
+        self._analytics.get_stats()
         now = datetime.now(timezone.utc)
         one_hour_ago = now - timedelta(hours=1)
 

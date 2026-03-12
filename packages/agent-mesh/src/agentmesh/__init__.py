@@ -81,7 +81,7 @@ from .reward import (
 __all__ = [
     # Version
     "__version__",
-    
+
     # Layer 1: Identity
     "AgentIdentity",
     "AgentDID",
@@ -94,7 +94,7 @@ __all__ = [
     "RiskScore",
     "SPIFFEIdentity",
     "SVID",
-    
+
     # Layer 2: Trust
     "TrustBridge",
     "ProtocolBridge",
@@ -103,7 +103,7 @@ __all__ = [
     "CapabilityScope",
     "CapabilityGrant",
     "CapabilityRegistry",
-    
+
     # Layer 3: Governance
     "PolicyEngine",
     "Policy",
@@ -117,7 +117,7 @@ __all__ = [
     "AuditChain",
     "ShadowMode",
     "ShadowResult",
-    
+
     # Exceptions
     "AgentMeshError",
     "IdentityError",

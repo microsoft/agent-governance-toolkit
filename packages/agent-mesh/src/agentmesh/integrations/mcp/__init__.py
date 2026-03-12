@@ -30,9 +30,7 @@ Example:
 
 from __future__ import annotations
 
-import json
 import logging
-import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Awaitable
@@ -56,12 +54,12 @@ class MCPTool:
     description: str
     handler: Callable[..., Awaitable[Any]]
     input_schema: Dict[str, Any] = field(default_factory=dict)
-    
+
     # Trust requirements
     required_capability: Optional[str] = None
     min_trust_score: int = 300
     require_human_sponsor: bool = False
-    
+
     # Audit
     total_calls: int = 0
     failed_calls: int = 0
@@ -75,16 +73,16 @@ class MCPToolCall:
     tool_name: str
     caller_did: str
     arguments: Dict[str, Any]
-    
+
     # Trust metadata
     trust_verified: bool = False
     trust_score: int = 0
     capabilities_checked: List[str] = field(default_factory=list)
-    
+
     # Timing
     started_at: datetime = field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = None
-    
+
     # Result
     success: bool = False
     result: Any = None
@@ -94,13 +92,13 @@ class MCPToolCall:
 class TrustGatedMCPServer:
     """
     MCP Server with AgentMesh trust verification.
-    
+
     All tool invocations require:
     1. Valid agent identity (CMVK verification)
     2. Sufficient trust score
     3. Required capabilities
     """
-    
+
     def __init__(
         self,
         identity: Any,  # AgentIdentity
@@ -112,7 +110,7 @@ class TrustGatedMCPServer:
         self.trust_bridge = trust_bridge
         self.min_trust_score = min_trust_score
         self.audit_all_calls = audit_all_calls
-        
+
         self._tools: Dict[str, MCPTool] = {}
         self._call_history: List[MCPToolCall] = []
         self._verified_clients: Dict[str, datetime] = {}
@@ -130,7 +128,7 @@ class TrustGatedMCPServer:
     ) -> None:
         """
         Register a tool with trust requirements.
-        
+
         Args:
             name: Tool name
             handler: Async handler function
@@ -162,7 +160,7 @@ class TrustGatedMCPServer:
             cached_time = self._verified_clients[client_did]
             if datetime.utcnow() - cached_time < self._verification_ttl:
                 return True
-        
+
         # Use TrustBridge if available
         if self.trust_bridge:
             try:
@@ -173,14 +171,14 @@ class TrustGatedMCPServer:
             except Exception as e:
                 logger.error(f"Trust verification failed: {e}")
                 return False
-        
+
         # Basic verification via card
         if client_card:
             if hasattr(client_card, "trust_score"):
                 if client_card.trust_score >= self.min_trust_score:
                     self._verified_clients[client_did] = datetime.utcnow()
                     return True
-        
+
         logger.warning(f"Client {client_did} failed trust verification")
         return False
 
@@ -192,7 +190,7 @@ class TrustGatedMCPServer:
         """Check if client has required capability (with wildcard support)."""
         if not required:
             return True
-        
+
         for cap in client_capabilities:
             # Exact match
             if cap == required:
@@ -202,7 +200,7 @@ class TrustGatedMCPServer:
                 prefix = cap[:-1]  # "use:"
                 if required.startswith(prefix):
                     return True
-        
+
         return False
 
     async def invoke_tool(
@@ -215,19 +213,19 @@ class TrustGatedMCPServer:
     ) -> MCPToolCall:
         """
         Invoke a tool with trust verification.
-        
+
         Args:
             tool_name: Name of tool to invoke
             arguments: Tool arguments
             caller_did: Caller's agent DID
             caller_capabilities: Caller's granted capabilities
             caller_trust_score: Caller's trust score
-            
+
         Returns:
             MCPToolCall with result or error
         """
         call_id = f"{tool_name}-{datetime.utcnow().timestamp()}"
-        
+
         call = MCPToolCall(
             call_id=call_id,
             tool_name=tool_name,
@@ -236,16 +234,16 @@ class TrustGatedMCPServer:
             trust_score=caller_trust_score,
             capabilities_checked=caller_capabilities or [],
         )
-        
+
         # Check tool exists
         if tool_name not in self._tools:
             call.error = f"Unknown tool: {tool_name}"
             call.completed_at = datetime.utcnow()
             self._record_call(call)
             return call
-        
+
         tool = self._tools[tool_name]
-        
+
         # Verify trust score
         if caller_trust_score < tool.min_trust_score:
             call.error = (
@@ -256,7 +254,7 @@ class TrustGatedMCPServer:
             self._record_call(call)
             logger.warning(f"Trust check failed for {caller_did} on {tool_name}")
             return call
-        
+
         # Check capability
         if tool.required_capability:
             if not self._check_capability(caller_capabilities or [], tool.required_capability):
@@ -266,7 +264,7 @@ class TrustGatedMCPServer:
                 self._record_call(call)
                 logger.warning(f"Capability check failed for {caller_did} on {tool_name}")
                 return call
-        
+
         # Execute tool
         call.trust_verified = True
         try:
@@ -280,7 +278,7 @@ class TrustGatedMCPServer:
             call.error = str(e)
             tool.failed_calls += 1
             logger.error(f"Tool {tool_name} failed: {e}")
-        
+
         call.completed_at = datetime.utcnow()
         self._record_call(call)
         return call
@@ -323,10 +321,10 @@ class TrustGatedMCPServer:
 class TrustGatedMCPClient:
     """
     MCP Client with AgentMesh identity.
-    
+
     Automatically attaches identity credentials to MCP requests.
     """
-    
+
     def __init__(
         self,
         identity: Any,  # AgentIdentity
@@ -346,7 +344,7 @@ class TrustGatedMCPClient:
                 if not await self.trust_bridge.verify_peer(server_did):
                     logger.warning(f"Server {server_url} failed trust verification")
                     return False
-        
+
         self._connected_servers[server_url] = datetime.utcnow()
         logger.info(f"Connected to MCP server: {server_url}")
         return True
@@ -364,13 +362,13 @@ class TrustGatedMCPClient:
     ) -> Dict[str, Any]:
         """
         Invoke tool on MCP server.
-        
+
         Automatically attaches identity credentials.
         """
         if server_url not in self._connected_servers:
             if not await self.connect(server_url):
                 return {"error": "Failed to connect to server"}
-        
+
         # Build request with identity
         request = {
             "jsonrpc": "2.0",
@@ -387,9 +385,9 @@ class TrustGatedMCPClient:
                 "capabilities": list(self.identity.capabilities) if hasattr(self.identity, "capabilities") else [],
             },
         }
-        
+
         logger.debug(f"MCP request to {server_url}: {tool_name}")
-        
+
         # In real implementation, send HTTP request
         # For now, return placeholder
         return {"status": "request_prepared", "request": request}

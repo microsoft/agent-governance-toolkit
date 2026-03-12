@@ -11,7 +11,7 @@ installed.
 from __future__ import annotations
 
 import time
-from typing import Any, Optional
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Conditional OpenTelemetry imports
@@ -20,8 +20,8 @@ from typing import Any, Optional
 _OTEL_AVAILABLE = False
 try:
     from opentelemetry import trace
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.sdk.trace import TracerProvider  # noqa: F401
+    from opentelemetry.sdk.resources import Resource  # noqa: F401
 
     _OTEL_AVAILABLE = True
 except ImportError:
