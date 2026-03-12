@@ -6,11 +6,13 @@ Agent OS - A Safety-First Kernel for Autonomous AI Agents
 Agent OS provides POSIX-inspired primitives for AI agent systems with
 a 0% policy violation guarantee through kernel-level enforcement.
 
-Architecture Layers:
-    Layer 1 - Primitives: Base models, verification, context, memory
-    Layer 2 - Infrastructure: Trust protocol, message bus, tool registry
-    Layer 3 - Framework: Control plane, signals, VFS, kernel space
-    Layer 4 - Intelligence: Self-correction, reasoning/execution split
+Core capabilities:
+    - Policy engine and action interception
+    - Prompt injection detection
+    - MCP tool-poisoning defense
+    - Semantic policy enforcement
+    - Context budget scheduling
+    - Stateless kernel execution
 
 Quick Start:
     >>> from agent_os import KernelSpace, AgentSignal, AgentVFS
@@ -27,6 +29,16 @@ Stateless API (MCP June 2026):
     ...     policies=["read_only"]
     ... )
 
+Optional ecosystem packages (import directly):
+    - agent_primitives: Base failure models
+    - cmvk: Verification kernel / drift detection
+    - caas: Context-as-a-Service pipelines
+    - emk: Episodic memory kernel
+    - amb_core: Agent message bus
+    - atr: Agent tool registry
+    - agent_kernel: Self-correcting kernel
+    - mute_agent: Reasoning/execution split
+
 Installation:
     pip install agent-os-kernel[full]  # Everything
     pip install agent-os-kernel        # Core
@@ -42,150 +54,59 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# ============================================================================
-# Layer 1: Primitives
-# ============================================================================
 
-# Agent Primitives - Base failure models
-try:
-    from agent_primitives import (
-        AgentFailure,
-        FailureSeverity,
-        FailureType,
-    )
-    _PRIMITIVES_AVAILABLE = True
-except ImportError:
-    _PRIMITIVES_AVAILABLE = False
+def _check_optional(module_name: str) -> bool:
+    """Return True if *module_name* is importable."""
+    try:
+        __import__(module_name)
+        return True
+    except ImportError:
+        return False
 
-# CMVK - Verification Kernel
-# DriftDetector (#138): Compares agent outputs across models or over time to
-# detect semantic drift — situations where an agent's behaviour diverges from
-# its stated intent or baseline.  Drift is quantified as a float score in
-# [0.0, 1.0] (0 = identical, 1 = completely divergent).  When the score
-# exceeds GovernancePolicy.drift_threshold a ``DRIFT_DETECTED`` governance
-# event is emitted.
-#
-# SemanticDrift: Data class holding drift metadata (score, drift type, etc.).
-# verify_outputs: Pure function that compares two text outputs for drift.
-#
-# Threshold parameters (from GovernancePolicy):
-#   - confidence_threshold (float): Minimum confidence for acceptance.
-#   - drift_threshold (float): Maximum tolerable drift before alerting.
-#
-# Example — detecting agent behaviour drift:
-#   >>> from agent_os import DriftDetector  # requires cmvk package
-#   >>> detector = DriftDetector(threshold=0.15)
-#   >>> drift = detector.compare(
-#   ...     baseline="Transfer $100 to savings account",
-#   ...     current="Transfer $10,000 to external account XYZ",
-#   ... )
-#   >>> if drift.score > 0.15:
-#   ...     print(f"DRIFT DETECTED: {drift.score:.2f}")
-try:
-    from cmvk import (
-        DriftDetector,
-        SemanticDrift,
-        verify_outputs,
-    )
-    _CMVK_AVAILABLE = True
-except ImportError:
-    _CMVK_AVAILABLE = False
 
-# CaaS - Context as a Service
-# ContextPipeline (#139): A composable, multi-stage pipeline for transforming
-# and filtering context before it reaches an agent.  The architecture follows
-# a pipes-and-filters pattern where each stage receives a context object,
-# applies a transformation (e.g. PII redaction, summarisation, relevance
-# scoring), and passes the result to the next stage.
-#
-# Pipeline stages:
-#   1. Ingestion  — parse raw documents into structured Sections.
-#   2. Enrichment — add metadata (timestamps, source citations).
-#   3. Filtering  — remove irrelevant or sensitive content.
-#   4. Routing    — classify the query and select the right model tier.
-#   5. Assembly   — build the final context window within token budget.
-#
-# RAGContext: Holds retrieval-augmented generation context with citations.
-#
-# Example — building a context pipeline:
-#   >>> from agent_os import ContextPipeline  # requires caas package
-#   >>> pipeline = ContextPipeline(stages=[
-#   ...     RedactPIIStage(),
-#   ...     SummarizeStage(max_tokens=512),
-#   ...     RelevanceScoringStage(threshold=0.7),
-#   ... ])
-#   >>> context = pipeline.run(raw_documents, query="quarterly revenue")
-try:
-    from caas import (
-        ContextPipeline,
-        RAGContext,
-    )
-    _CAAS_AVAILABLE = True
-except ImportError:
-    _CAAS_AVAILABLE = False
+AVAILABLE_PACKAGES: dict[str, bool] = {
+    "control_plane": _check_optional("agent_control_plane"),
+    "primitives": _check_optional("agent_primitives"),
+    "cmvk": _check_optional("cmvk"),
+    "caas": _check_optional("caas"),
+    "emk": _check_optional("emk"),
+    "amb": _check_optional("amb_core"),
+    "atr": _check_optional("atr"),
+    "scak": _check_optional("agent_kernel"),
+    "mute_agent": _check_optional("mute_agent"),
+}
 
-# EMK - Episodic Memory Kernel
-try:
-    from emk import (
-        Episode,
-        EpisodicMemory,
-        MemoryStore,
-    )
-    _EMK_AVAILABLE = True
-except ImportError:
-    _EMK_AVAILABLE = False
+
+def check_installation() -> None:
+    """Check which Agent OS packages are installed."""
+    logger.info("Agent OS Installation Status:")
+    logger.info("=" * 40)
+    for pkg, available in AVAILABLE_PACKAGES.items():
+        status = "✓ Installed" if available else "✗ Not installed"
+        logger.info(f"  {pkg:15} {status}")
+    logger.info("=" * 40)
+    logger.info("\nInstall missing packages with:")
+    logger.info("  pip install agent-os-kernel[full]")
+
 
 # ============================================================================
-# Layer 2: Infrastructure
-# ============================================================================
-
-# AMB - Agent Message Bus
-try:
-    from amb_core import (
-        Message,
-        MessageBus,
-        Topic,
-    )
-    _AMB_AVAILABLE = True
-except ImportError:
-    _AMB_AVAILABLE = False
-
-# ATR - Agent Tool Registry
-try:
-    from atr import (
-        Tool,
-        ToolExecutor,
-        ToolRegistry,
-    )
-    _ATR_AVAILABLE = True
-except ImportError:
-    _ATR_AVAILABLE = False
-
-# ============================================================================
-# Layer 3: Framework (Control Plane)
+# Control Plane (optional — requires agent_control_plane package)
 # ============================================================================
 
 try:
     from agent_control_plane import (
         AgentContext,
-        # Main Interface
         AgentControlPlane,
         AgentKernelPanic,
-        # Kernel Architecture (v0.3.0)
         AgentSignal,
-        # Agent VFS
         AgentVFS,
-        # Execution
         ExecutionEngine,
         ExecutionStatus,
         FileMode,
-        # Flight Recorder
         FlightRecorder,
-        # Kernel/User Space
         KernelSpace,
         KernelState,
         MemoryBackend,
-        # Policy Engine
         PolicyEngine,
         PolicyRule,
         ProtectionRing,
@@ -209,38 +130,12 @@ except ImportError:
     _CONTROL_PLANE_AVAILABLE = False
 
 # ============================================================================
-# Layer 4: Intelligence
+# Core Governance Modules (always available)
 # ============================================================================
-
-# SCAK - Self-Correcting Agent Kernel
-try:
-    from agent_kernel import (
-        DifferentialAuditor,
-        LazinessDetector,
-        SelfCorrectingKernel,
-    )
-    _SCAK_AVAILABLE = True
-except ImportError:
-    _SCAK_AVAILABLE = False
-
-# Mute Agent (external module)
-try:
-    from mute_agent import (
-        ExecutionAgent,
-        MuteAgent,
-        ReasoningAgent,
-    )
-    _MUTE_AGENT_AVAILABLE = True
-except ImportError:
-    _MUTE_AGENT_AVAILABLE = False
-
-# Mute Agent Primitives — Face/Hands kernel-level decorators (always available)
-from agent_os.agents_compat import (
-    AgentConfig as AgentsConfig,  # Renamed to avoid conflict
-)
 
 # AGENTS.md Compatibility
 from agent_os.agents_compat import (
+    AgentConfig as AgentsConfig,
     AgentSkill,
     AgentsParser,
     discover_agents,
@@ -256,16 +151,15 @@ from agent_os.base_agent import (
     TypedResult,
 )
 
-# Context Budget Scheduler — token budget as a kernel primitive (always available)
+# Context Budget Scheduler
 from agent_os.context_budget import (
-    AgentSignal,
     BudgetExceeded,
     ContextPriority,
     ContextScheduler,
     ContextWindow,
 )
 
-# LlamaFirewall Integration — defense-in-depth with Meta's LlamaFirewall
+# LlamaFirewall Integration
 from agent_os.integrations.llamafirewall import (
     FirewallMode,
     FirewallResult,
@@ -273,7 +167,7 @@ from agent_os.integrations.llamafirewall import (
     LlamaFirewallAdapter,
 )
 
-# MCP Security — tool poisoning defense (always available)
+# MCP Security — tool poisoning defense
 from agent_os.mcp_security import (
     MCPSecurityScanner,
     MCPSeverity,
@@ -282,6 +176,8 @@ from agent_os.mcp_security import (
     ScanResult,
     ToolFingerprint,
 )
+
+# Mute Agent Primitives — Face/Hands kernel-level decorators
 from agent_os.mute import (
     ActionStatus,
     ActionStep,
@@ -294,7 +190,7 @@ from agent_os.mute import (
     pipe,
 )
 
-# Prompt Injection Detection — input screening (always available)
+# Prompt Injection Detection
 from agent_os.prompt_injection import (
     DetectionConfig,
     DetectionResult,
@@ -303,7 +199,7 @@ from agent_os.prompt_injection import (
     ThreatLevel,
 )
 
-# Semantic Policy Engine — intent-based enforcement (always available)
+# Semantic Policy Engine
 from agent_os.semantic_policy import (
     IntentCategory,
     IntentClassification,
@@ -311,9 +207,6 @@ from agent_os.semantic_policy import (
     SemanticPolicyEngine,
 )
 
-# ============================================================================
-# Local Components (Always Available)
-# ============================================================================
 # Stateless Kernel (MCP June 2026)
 from agent_os.stateless import (
     ExecutionContext,
@@ -327,36 +220,6 @@ from agent_os.stateless import (
 )
 
 # ============================================================================
-# Availability Flags
-# ============================================================================
-
-AVAILABLE_PACKAGES = {
-    "primitives": _PRIMITIVES_AVAILABLE if '_PRIMITIVES_AVAILABLE' in dir() else False,
-    "cmvk": _CMVK_AVAILABLE if '_CMVK_AVAILABLE' in dir() else False,
-    "caas": _CAAS_AVAILABLE if '_CAAS_AVAILABLE' in dir() else False,
-    "emk": _EMK_AVAILABLE if '_EMK_AVAILABLE' in dir() else False,
-    "iatp": _IATP_AVAILABLE if '_IATP_AVAILABLE' in dir() else False,
-    "amb": _AMB_AVAILABLE if '_AMB_AVAILABLE' in dir() else False,
-    "atr": _ATR_AVAILABLE if '_ATR_AVAILABLE' in dir() else False,
-    "control_plane": _CONTROL_PLANE_AVAILABLE if '_CONTROL_PLANE_AVAILABLE' in dir() else False,
-    "scak": _SCAK_AVAILABLE if '_SCAK_AVAILABLE' in dir() else False,
-    "mute_agent": _MUTE_AGENT_AVAILABLE if '_MUTE_AGENT_AVAILABLE' in dir() else False,
-}
-
-
-def check_installation() -> None:
-    """Check which Agent OS packages are installed."""
-    logger.info("Agent OS Installation Status:")
-    logger.info("=" * 40)
-    for pkg, available in AVAILABLE_PACKAGES.items():
-        status = "✓ Installed" if available else "✗ Not installed"
-        logger.info(f"  {pkg:15} {status}")
-    logger.info("=" * 40)
-    logger.info("\nInstall missing packages with:")
-    logger.info("  pip install agent-os-kernel[full]")
-
-
-# ============================================================================
 # Public API
 # ============================================================================
 
@@ -367,28 +230,7 @@ __all__ = [
     "AVAILABLE_PACKAGES",
     "check_installation",
 
-    # Layer 1: Primitives
-    "AgentFailure",
-    "FailureType",
-    "FailureSeverity",
-    "DriftDetector",
-    "SemanticDrift",
-    "verify_outputs",
-    "ContextPipeline",
-    "RAGContext",
-    "EpisodicMemory",
-    "Episode",
-    "MemoryStore",
-
-    # Layer 2: Infrastructure
-    "MessageBus",
-    "Message",
-    "Topic",
-    "ToolRegistry",
-    "Tool",
-    "ToolExecutor",
-
-    # Layer 3: Framework
+    # Control Plane
     "AgentControlPlane",
     "create_control_plane",
     "AgentSignal",
@@ -419,15 +261,7 @@ __all__ = [
     "ExecutionEngine",
     "ExecutionStatus",
 
-    # Layer 4: Intelligence
-    "SelfCorrectingKernel",
-    "LazinessDetector",
-    "DifferentialAuditor",
-    "MuteAgent",
-    "ReasoningAgent",
-    "ExecutionAgent",
-
-    # Mute Agent Primitives (Face/Hands kernel-level decorators)
+    # Mute Agent Primitives
     "face_agent",
     "mute_agent",
     "pipe",
@@ -438,7 +272,7 @@ __all__ = [
     "PipelineResult",
     "CapabilityViolation",
 
-    # Stateless API (MCP June 2026)
+    # Stateless API
     "StatelessKernel",
     "ExecutionContext",
     "ExecutionRequest",
@@ -473,7 +307,7 @@ __all__ = [
     "DetectionResult",
     "DetectionConfig",
 
-    # MCP Security — Tool Poisoning Defense
+    # MCP Security
     "MCPSecurityScanner",
     "MCPThreatType",
     "MCPSeverity",
@@ -491,6 +325,5 @@ __all__ = [
     "ContextScheduler",
     "ContextWindow",
     "ContextPriority",
-    "AgentSignal",
     "BudgetExceeded",
 ]
