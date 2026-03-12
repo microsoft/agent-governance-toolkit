@@ -1,10 +1,15 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-Rate Limit Middleware
+"""HTTP-layer rate limiting middleware for Agent Mesh.
 
-HTTP middleware that integrates the token bucket rate limiter with request handling.
-Extracts agent DID from headers, enforces limits, and returns standard rate limit headers.
+This module integrates the service-level token bucket limiter with request handling,
+extracts agent DIDs from headers, and returns standard rate-limit headers.
+
+See also:
+    - hypervisor.security.rate_limiter: runtime-layer per-agent/per-ring limits.
+    - agent_os.integrations.rate_limiter: tool-call policy limits in Agent OS.
+    - agentmesh.services.rate_limiter: service/proxy-level limits in Agent Mesh.
+    - agent_os.policies.rate_limiting: shared token-bucket primitives.
 """
 
 import math

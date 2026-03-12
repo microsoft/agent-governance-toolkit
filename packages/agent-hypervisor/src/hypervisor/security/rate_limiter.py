@@ -1,10 +1,16 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 # Community Edition — basic implementation
-"""
-Per-Agent Rate Limiter — fixed requests/second threshold.
+"""Runtime-layer per-agent/per-ring rate limiting.
 
-Community edition: simple token bucket rate limiting.
+This module enforces token-bucket limits per agent, session, and execution ring
+inside the hypervisor runtime layer.
+
+See also:
+    - agent_os.integrations.rate_limiter: tool-call policy limits in Agent OS.
+    - agentmesh.services.rate_limiter: service/proxy-level limits in Agent Mesh.
+    - agentmesh.services.rate_limit_middleware: HTTP edge middleware in Agent Mesh.
+    - agent_os.policies.rate_limiting: shared token-bucket primitives.
 """
 
 from __future__ import annotations

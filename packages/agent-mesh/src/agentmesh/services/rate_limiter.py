@@ -1,10 +1,15 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-Rate Limiter Service
+"""Service/proxy-level rate limiting for Agent Mesh.
 
-Token bucket rate limiting for the trust proxy with per-agent and global limits,
-backpressure signaling, and configurable thresholds.
+This module applies token-bucket limits at the trust-proxy service layer with
+per-agent and global buckets, backpressure signaling, and configurable thresholds.
+
+See also:
+    - hypervisor.security.rate_limiter: runtime-layer per-agent/per-ring limits.
+    - agent_os.integrations.rate_limiter: tool-call policy limits in Agent OS.
+    - agentmesh.services.rate_limit_middleware: HTTP edge middleware in Agent Mesh.
+    - agent_os.policies.rate_limiting: shared token-bucket primitives.
 """
 
 import time

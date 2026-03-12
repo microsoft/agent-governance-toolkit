@@ -17,6 +17,7 @@ from .conflict_resolution import (
     ResolutionResult,
 )
 from .evaluator import PolicyDecision, PolicyEvaluator
+from .rate_limiting import RateLimitConfig, RateLimitExceeded, TokenBucket
 from .schema import (
     PolicyAction,
     PolicyCondition,
@@ -51,7 +52,10 @@ __all__ = [
     "PolicyOperator",
     "PolicyRule",
     "PolicyScope",
+    "RateLimitConfig",
+    "RateLimitExceeded",
     "ResolutionResult",
+    "TokenBucket",
     "SharedPolicyDecision",
     "SharedPolicyEvaluator",
     "SharedPolicyRule",
