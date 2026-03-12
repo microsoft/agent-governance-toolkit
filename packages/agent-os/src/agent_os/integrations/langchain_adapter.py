@@ -23,7 +23,7 @@ import time
 from datetime import datetime
 from typing import Any, Optional
 
-from .base import BaseIntegration, GovernancePolicy, GovernanceEventType
+from .base import BaseIntegration, GovernancePolicy
 
 logger = logging.getLogger("agent_os.langchain")
 

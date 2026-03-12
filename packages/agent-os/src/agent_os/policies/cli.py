@@ -67,7 +67,7 @@ def _load_file(path: Path) -> dict[str, Any]:
 
 def cmd_validate(args: argparse.Namespace) -> int:
     """Validate a policy YAML/JSON file against the PolicyDocument schema."""
-    from .schema import PolicyDocument  # noqa: delayed import
+    from .schema import PolicyDocument  # noqa: E402
 
     path = Path(args.path)
     if not path.exists():
@@ -117,8 +117,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 def cmd_test(args: argparse.Namespace) -> int:
     """Test a policy against a set of scenarios."""
-    from .evaluator import PolicyEvaluator  # noqa: delayed import
-    from .schema import PolicyDocument  # noqa: delayed import
+    from .evaluator import PolicyEvaluator  # noqa: E402
+    from .schema import PolicyDocument  # noqa: E402
 
     policy_path = Path(args.policy_path)
     scenarios_path = Path(args.test_scenarios_path)
@@ -193,7 +193,7 @@ def cmd_test(args: argparse.Namespace) -> int:
 
 def cmd_diff(args: argparse.Namespace) -> int:
     """Show differences between two policy files."""
-    from .schema import PolicyDocument  # noqa: delayed import
+    from .schema import PolicyDocument  # noqa: E402
 
     path1 = Path(args.path1)
     path2 = Path(args.path2)
@@ -218,7 +218,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
     if doc1.name != doc2.name:
         differences.append(f"  name: '{doc1.name}' -> '{doc2.name}'")
     if doc1.description != doc2.description:
-        differences.append(f"  description changed")
+        differences.append("  description changed")
 
     # Default changes
     if doc1.defaults.action != doc2.defaults.action:
