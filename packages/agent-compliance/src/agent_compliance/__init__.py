@@ -17,11 +17,11 @@ __version__ = "1.0.2"
 
 # Re-export core components for convenience
 try:
-    from agent_os import StatelessKernel, ExecutionContext
+    from agent_os import StatelessKernel, ExecutionContext  # noqa: F401
 except ImportError:
     pass
 
 try:
-    from agentmesh import TrustManager
+    from agentmesh import TrustManager  # noqa: F401
 except ImportError:
     pass
