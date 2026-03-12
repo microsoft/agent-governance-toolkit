@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-marketplace"
+version = "1.0.0"
+description = "Plugin marketplace for the Agent Governance Toolkit — discover, install, verify, and manage plugins"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Imran Siddique", email = "agt@microsoft.com"}
+]
+keywords = [
+    "ai-agents", "governance", "plugins", "marketplace",
+    "agent-os", "agentmesh", "enterprise-ai"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "cryptography>=41.0",
+]
+
+[project.optional-dependencies]
+cli = ["click>=8.0", "rich>=13.0"]
+dev = ["pytest>=7.0", "pytest-cov"]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+"Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
