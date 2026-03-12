@@ -186,6 +186,6 @@ class DistributedReplayEngine:
     def to_dict(self) -> dict[str, Any]:
         return {
             "agents": {aid: ref.to_dict() for aid, ref in self._agent_traces.items()},
-            "delegation_links": [l.to_dict() for l in self._delegation_links],
+            "delegation_links": [link.to_dict() for link in self._delegation_links],
             "execution_order": self.execution_order(),
         }
