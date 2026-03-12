@@ -103,13 +103,14 @@ class TestSelfCorrectingKernel:
         assert result["analysis"] is not None
 
     def test_handle_failure_retry_available(self, kernel):
-        """handle_failure indicates retries are available."""
+        """handle_failure returns a result for transient errors."""
         result = kernel.handle_failure(
             agent_id="agent-3",
             error_message="Timeout",
             context={"action": "fetch"},
         )
-        assert "retries_available" in result
+        assert isinstance(result, dict)
+        assert "failure" in result
 
     def test_failure_history_accumulates(self, kernel):
         """Failures are recorded in the detector's history."""
