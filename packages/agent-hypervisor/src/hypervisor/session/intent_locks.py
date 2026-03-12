@@ -96,22 +96,22 @@ class IntentLockManager:
 
     def get_agent_locks(self, agent_did: str, session_id: str) -> list[IntentLock]:
         return [
-            l for l in self._locks.values()
-            if l.agent_did == agent_did
-            and l.session_id == session_id
-            and l.is_active
+            lock for lock in self._locks.values()
+            if lock.agent_did == agent_did
+            and lock.session_id == session_id
+            and lock.is_active
         ]
 
     def get_resource_locks(self, resource_path: str) -> list[IntentLock]:
         return [
-            l for l in self._locks.values()
-            if l.resource_path == resource_path
-            and l.is_active
+            lock for lock in self._locks.values()
+            if lock.resource_path == resource_path
+            and lock.is_active
         ]
 
     @property
     def active_lock_count(self) -> int:
-        return sum(1 for l in self._locks.values() if l.is_active)
+        return sum(1 for lock in self._locks.values() if lock.is_active)
 
     @property
     def contention_points(self) -> list[str]:

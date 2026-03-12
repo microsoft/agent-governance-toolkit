@@ -67,6 +67,8 @@ jobs:
             safety==3.2.1 --hash=sha256:9f53646717ba052e1bf631bd54fb3da0fafa58e85d578b20a8b9affdcf81889e \
             2>/dev/null || pip install --no-cache-dir safety==3.2.1
       - name: Check dependencies
+        env:
+          GIT_TERMINAL_PROMPT: "0"
         run: |
           for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance; do
             echo "=== $pkg ==="
