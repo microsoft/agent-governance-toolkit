@@ -52,7 +52,7 @@ jobs:
             2>/dev/null || pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==1.1.0 2>/dev/null || true
       - name: Test ${{ matrix.package }}
         working-directory: packages/${{ matrix.package }}
-        run: pytest tests/ -x -q --tb=short
+        run: pytest tests/ -q --tb=short
 
   security:
     runs-on: ubuntu-latest

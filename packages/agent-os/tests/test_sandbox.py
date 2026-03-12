@@ -103,6 +103,7 @@ class TestCheckFileAccess:
         )
         assert sandbox.check_file_access("/etc/passwd", "r") is False
 
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-specific path handling")
     def test_windows_paths(self):
         sandbox = ExecutionSandbox(
             config=SandboxConfig(allowed_paths=["C:/Users/agent/workspace"])
