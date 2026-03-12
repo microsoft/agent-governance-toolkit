@@ -37,6 +37,6 @@ pytest-asyncio==1.1.0
 pytest-cov==5.0.0
 
 # Development
-black==24.10.0
+black==26.3.1
 ruff==0.12.4
 mypy==1.14.0
