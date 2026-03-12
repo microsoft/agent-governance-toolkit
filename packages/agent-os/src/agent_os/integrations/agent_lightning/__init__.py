@@ -1,30 +1,25 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 """
-Agent-Lightning Integration for Agent OS
-=========================================
+Agent-Lightning Integration — backward-compatibility shim.
 
-Provides kernel-level safety during Agent-Lightning RL training.
+The integration has moved to the **agent-lightning** package
+(``agent_lightning_gov``). All symbols are re-exported here so
+existing ``from agent_os.integrations.agent_lightning …`` imports
+continue to work.
 
-Key components:
-- GovernedRunner: Agent-Lightning runner with policy enforcement
-- PolicyReward: Convert policy violations to RL penalties
-- FlightRecorderEmitter: Export audit logs to LightningStore
-
-Example:
-    >>> from agent_os.integrations.agent_lightning import GovernedRunner, PolicyReward
-    >>> from agent_os import KernelSpace
-    >>> from agent_os.policies import SQLPolicy
-    >>>
-    >>> kernel = KernelSpace(policy=SQLPolicy())
-    >>> runner = GovernedRunner(kernel)
-    >>> reward_fn = PolicyReward(kernel, base_reward_fn=accuracy)
+.. deprecated::
+    Import directly from ``agent_lightning_gov`` instead.
 """
 
-from .emitter import FlightRecorderEmitter
-from .environment import GovernedEnvironment
-from .reward import PolicyReward, policy_penalty
-from .runner import GovernedRunner
+# ruff: noqa: F401
+from agent_lightning_gov import (  # noqa: F401 – re-export
+    FlightRecorderEmitter,
+    GovernedEnvironment,
+    GovernedRunner,
+    PolicyReward,
+    policy_penalty,
+)
 
 __all__ = [
     "GovernedRunner",
