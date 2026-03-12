@@ -25,6 +25,7 @@ class TestSandboxConfig:
         cfg = SandboxConfig()
         assert "subprocess" in cfg.blocked_modules
         assert "os" in cfg.blocked_modules
+        assert "importlib" in cfg.blocked_modules
         assert "eval" in cfg.blocked_builtins
         assert cfg.allowed_paths == []
         assert cfg.max_memory_mb is None
@@ -149,6 +150,32 @@ class TestValidateCode:
         violations = sandbox.validate_code("def (broken")
         assert len(violations) == 1
         assert violations[0].violation_type == "syntax_error"
+
+    def test_detects_importlib_import_module_bypass(self):
+        """Regression test for #179: importlib.import_module() must be flagged."""
+        sandbox = ExecutionSandbox()
+        code = "importlib.import_module('subprocess')"
+        violations = sandbox.validate_code(code)
+        assert any(
+            v.violation_type == "blocked_import" and "importlib" in v.description
+            for v in violations
+        )
+
+    def test_importlib_import_module_safe_module_ok(self):
+        sandbox = ExecutionSandbox()
+        code = "importlib.import_module('json')"
+        violations = sandbox.validate_code(code)
+        assert not any(
+            v.violation_type == "blocked_import" and "importlib" in v.description
+            for v in violations
+        )
+
+    def test_import_importlib_blocked(self):
+        """Regression test for #179: 'import importlib' itself must be blocked."""
+        sandbox = ExecutionSandbox()
+        assert sandbox.check_import("importlib") is False
+        violations = sandbox.validate_code("import importlib")
+        assert any(v.violation_type == "blocked_import" for v in violations)
 
 
 # ---------------------------------------------------------------------------

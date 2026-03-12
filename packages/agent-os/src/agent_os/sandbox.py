@@ -27,6 +27,7 @@ _DEFAULT_BLOCKED_MODULES: list[str] = [
     "shutil",
     "socket",
     "ctypes",
+    "importlib",
 ]
 
 _DEFAULT_BLOCKED_BUILTINS: list[str] = [
