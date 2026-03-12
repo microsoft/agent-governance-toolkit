@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-03-12
+
+### Changed
+
+- **agent-hypervisor**: Version bump to align with mono-repo versioning
+
+### Security
+
+- Block `importlib` dynamic imports in sandbox (#189)
+
+## [2.0.1] - 2026-03-11
+
+### Changed
+
+- **agent-hypervisor**: Centralize hardcoded ring thresholds and constants (#188)
+
 ## [1.1.0] - 2026-03-08
 
 ### 🚀 Highlights
