@@ -139,21 +139,6 @@ except ImportError:
 # Layer 2: Infrastructure
 # ============================================================================
 
-# IATP - Inter-Agent Trust Protocol
-try:
-    from iatp import (
-        CapabilityManifest,
-        Pipeline,
-        PipeMessage,
-        PolicyCheckPipe,
-        SidecarProxy,
-        TrustLevel,
-        TypedPipe,
-    )
-    _IATP_AVAILABLE = True
-except ImportError:
-    _IATP_AVAILABLE = False
-
 # AMB - Agent Message Bus
 try:
     from amb_core import (
@@ -396,13 +381,6 @@ __all__ = [
     "MemoryStore",
 
     # Layer 2: Infrastructure
-    "CapabilityManifest",
-    "TrustLevel",
-    "SidecarProxy",
-    "TypedPipe",
-    "Pipeline",
-    "PipeMessage",
-    "PolicyCheckPipe",
     "MessageBus",
     "Message",
     "Topic",
