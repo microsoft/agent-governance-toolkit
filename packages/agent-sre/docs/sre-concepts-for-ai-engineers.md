@@ -489,7 +489,7 @@ python examples/quickstart.py
 
 - [Agent OS](https://github.com/microsoft/agent-governance-toolkit) — Governance kernel for AI agents
 - [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — Identity and trust for multi-agent systems
-- [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) — Runtime session management
+- [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) — Runtime session management
 - [OWASP Agentic Security Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/owasp-agentic-top10-mapping.md) — How Agent SRE addresses OWASP ASI08
 
 ### Examples

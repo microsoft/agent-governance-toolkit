@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-runtime"
+version = "2.0.2"
+description = "Agent Runtime — Execution supervisor for multi-agent sessions with privilege rings, saga orchestration, and audit trails"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    {name = "Imran Siddique", email = "agt@microsoft.com"},
+]
+keywords = [
+    "ai", "agents", "runtime", "trust", "multi-agent",
+    "shared-sessions", "liability", "execution-rings", "saga",
+    "governance", "safety", "audit", "hash-chain",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agent-runtime"
+"Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["../agent-hypervisor/src/hypervisor"]

@@ -1,7 +1,7 @@
 # South Korea AI Framework Act — Compliance Mapping
 
 > **Framework**: AI Framework Act (인공지능기본법), effective January 22, 2026
-> **Stack**: Agent Governance (Agent OS + AgentMesh + Agent SRE + Agent Hypervisor)
+> **Stack**: Agent Governance (Agent OS + AgentMesh + Agent SRE + Agent Runtime)
 > **Last Updated**: February 2026
 
 ---
@@ -18,7 +18,7 @@ high-impact AI (고영향 인공지능) that affect citizens' life, safety, and
 fundamental rights.
 
 The Agent Governance stack — comprising Agent OS (governance kernel), AgentMesh
-(zero-trust identity and trust), Agent Hypervisor (runtime isolation), and Agent
+(zero-trust identity and trust), Agent Runtime (runtime isolation), and Agent
 SRE (reliability engineering) — provides production-ready technical controls for
 every requirement in the Act. This document maps each article to specific
 capabilities, modules, and configuration options in the stack, serving as an
@@ -223,15 +223,15 @@ factors and logic involved (Art. 24).
 
 | Component | Module | Capability |
 |-----------|--------|------------|
-| Agent Hypervisor | `FlightRecorder` | Continuous recording of agent reasoning, state, and decisions |
-| Agent Hypervisor | `DeltaTrail` | Hash-chained tamper-evident decision lineage |
+| Agent Runtime | `FlightRecorder` | Continuous recording of agent reasoning, state, and decisions |
+| Agent Runtime | `DeltaTrail` | Hash-chained tamper-evident decision lineage |
 | Agent OS | `GovernanceLogger` | Structured JSON logs with reasoning fields |
 | Agent OS | `JSONFormatter` | Standardised schema (agent_id, action, decision, reasoning, duration_ms) |
 
 **Implementation:**
 
 ```python
-from agent_hypervisor import FlightRecorder, DeltaTrail
+from hypervisor import FlightRecorder, DeltaTrail
 from agent_os.integrations.logging import GovernanceLogger, JSONFormatter
 import logging
 
@@ -511,14 +511,14 @@ must include validation, versioning, and integrity verification.
 | Component | Module | Capability |
 |-----------|--------|------------|
 | Agent OS | `MemoryGuard` | SHA-256 integrity checking for context and data |
-| Agent Hypervisor | `DeltaTrail` | Hash-chained tamper-evident data lineage |
+| Agent Runtime | `DeltaTrail` | Hash-chained tamper-evident data lineage |
 | Agent OS | `GovernancePolicy` | Data handling constraints (blocked patterns, PII rules) |
 
 **Implementation:**
 
 ```python
 from agent_os.memory_guard import MemoryGuard
-from agent_hypervisor import DeltaTrail
+from hypervisor import DeltaTrail
 
 # Article 20: Data integrity assurance (데이터 무결성 보장)
 guard = MemoryGuard()
@@ -620,8 +620,8 @@ the incident, affected scope, root cause analysis, and remediation steps.
 | Agent SRE | `AlertManager` | Multi-channel alerting with severity escalation |
 | Agent SRE | `SLOSpec`, `SLOObjective` | SLO breach detection triggering incident workflows |
 | Agent OS | `GovernanceMetrics` | Real-time metrics with threshold-based alerts |
-| Agent Hypervisor | `FlightRecorder` | Root cause evidence capture (state + reasoning) |
-| Agent Hypervisor | `DeltaTrail` | Tamper-evident incident timeline |
+| Agent Runtime | `FlightRecorder` | Root cause evidence capture (state + reasoning) |
+| Agent Runtime | `DeltaTrail` | Tamper-evident incident timeline |
 
 **Implementation:**
 
@@ -630,7 +630,7 @@ from agent_sre.alerting.manager import AlertManager, AlertSeverity
 from agent_sre.slo.spec import SLOSpec, SLI
 from agent_sre.slo.objectives import SLOObjective
 from agent_os.metrics import GovernanceMetrics
-from agent_hypervisor import FlightRecorder, DeltaTrail
+from hypervisor import FlightRecorder, DeltaTrail
 
 # Article 30: Incident reporting infrastructure (사고 보고 인프라)
 alert_manager = AlertManager(
@@ -741,8 +741,8 @@ fundamental rights, human confirmation is mandatory before execution.
 | Agent OS | `GovernancePolicy.require_human_approval` | Mandatory human-in-the-loop for policy-defined actions |
 | Agent OS | `GovernancePolicy.checkpoint_frequency` | Periodic human review checkpoints |
 | Agent OS | `HumanApprovalPolicy` | Configurable approval workflows with timeout and escalation |
-| Agent Hypervisor | Kill Switch | Graceful termination with state preservation |
-| Agent Hypervisor | Pause/Resume | Non-destructive suspension of agent execution |
+| Agent Runtime | Kill Switch | Graceful termination with state preservation |
+| Agent Runtime | Pause/Resume | Non-destructive suspension of agent execution |
 | AgentMesh | `PolicyAction.require_approval` | Trust-policy-level approval gates |
 
 **Implementation:**
@@ -750,7 +750,7 @@ fundamental rights, human confirmation is mandatory before execution.
 ```python
 from agent_os.integrations.base import GovernancePolicy
 from agent_os import StatelessKernel, HumanApprovalPolicy
-from agent_hypervisor import KillSwitch
+from hypervisor import KillSwitch
 
 # Article 29: Human oversight configuration (인간 감독 구성)
 policy = GovernancePolicy(
@@ -844,8 +844,8 @@ the prescribed period and made available to regulatory authorities upon request.
 | Component | Module | Capability |
 |-----------|--------|------------|
 | Agent OS | `GovernanceLogger` | Structured JSON audit trail for all agent decisions |
-| Agent Hypervisor | `DeltaTrail` | Hash-chained tamper-evident forensic audit |
-| Agent Hypervisor | `FlightRecorder` | Continuous state recording for compliance review |
+| Agent Runtime | `DeltaTrail` | Hash-chained tamper-evident forensic audit |
+| Agent Runtime | `FlightRecorder` | Continuous state recording for compliance review |
 | AgentMesh | `AuditLog`, `AuditEntry` | Append-only audit with CloudEvents v1.0 serialisation |
 | Agent SRE | OpenTelemetry | Traces, metrics, and logs export to any OTEL backend |
 | Agent OS Control Plane | `ComplianceEngine` | Multi-framework compliance validation |
@@ -854,7 +854,7 @@ the prescribed period and made available to regulatory authorities upon request.
 
 ```python
 from agent_os.integrations.logging import GovernanceLogger, JSONFormatter
-from agent_hypervisor import DeltaTrail, FlightRecorder
+from hypervisor import DeltaTrail, FlightRecorder
 from agentmesh.governance.audit import AuditLog
 import logging
 
@@ -904,7 +904,7 @@ prescribed by regulation. Records must be complete, accurate, and retrievable.
 **Implementation:**
 
 ```python
-from agent_hypervisor import DeltaTrail
+from hypervisor import DeltaTrail
 from agentmesh.governance.audit import AuditLog, AuditEntry
 
 # Article 32: Record-keeping with tamper-evident storage (기록 보관)
@@ -953,7 +953,7 @@ modification, or termination of the AI system.
 ```python
 from agent_os.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from agent_sre.delivery.blue_green import BlueGreenDeployment
-from agent_hypervisor import KillSwitch
+from hypervisor import KillSwitch
 
 # Article 33: Corrective measures (시정 조치)
 
@@ -1006,7 +1006,7 @@ from agentmesh.governance.audit import AuditLog, AuditEntry
 from agent_sre.slo.spec import SLOSpec, SLI
 from agent_sre.anomaly.detector import AnomalyDetector
 from agent_sre.alerting.manager import AlertManager, AlertSeverity
-from agent_hypervisor import DeltaTrail, FlightRecorder, KillSwitch
+from hypervisor import DeltaTrail, FlightRecorder, KillSwitch
 import logging
 
 # ──────────────────────────────────────────────────────────

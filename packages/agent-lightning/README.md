@@ -1,26 +1,32 @@
-# Agent-Lightning Integration
+# Agent Lightning — RL Training Governance
 
 Train AI agents with RL while maintaining **0% policy violations**.
 
+*Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)*
+
 ## 🎯 Overview
 
-This integration combines:
+This package provides governed RL training integration:
 - **Agent-Lightning** = Training/Optimization (the "brains")
 - **Agent-OS** = Governance/Safety (the "guardrails")
 
 **Result**: Agents learn to be smart AND safe from the start.
 
+> **Note:** This package was extracted from `agent_os.integrations.agent_lightning`.
+> The old import path still works via a backward-compatibility shim but new code
+> should import from `agent_lightning_gov` directly.
+
 ## 🚀 Quick Start
 
 ```bash
-pip install agent-os-kernel agentlightning
+pip install agent-lightning
+# Optional: pip install agent-os-kernel  # for kernel integration
 ```
 
 ```python
-from agentlightning import Trainer
+from agent_lightning_gov import GovernedRunner, PolicyReward
 from agent_os import KernelSpace
 from agent_os.policies import SQLPolicy, CostControlPolicy
-from agent_os.integrations.agent_lightning import GovernedRunner, PolicyReward
 
 # 1. Create governed kernel
 kernel = KernelSpace(policy=[
@@ -28,7 +34,7 @@ kernel = KernelSpace(policy=[
     CostControlPolicy(max_cost_usd=100)
 ])
 
-# 2. Create governed runner for Agent-Lightning
+# 2. Create governed runner
 runner = GovernedRunner(kernel)
 
 # 3. Create policy-aware reward function
@@ -38,6 +44,7 @@ def base_accuracy(rollout):
 reward_fn = PolicyReward(kernel, base_reward_fn=base_accuracy)
 
 # 4. Train with Agent-Lightning
+from agentlightning import Trainer
 trainer = Trainer(
     runner=runner,
     reward_fn=reward_fn,
@@ -62,7 +69,7 @@ trainer.train(num_epochs=100)
 Agent-Lightning runner that enforces policies during execution:
 
 ```python
-from agent_os.integrations.agent_lightning import GovernedRunner
+from agent_lightning_gov import GovernedRunner
 
 runner = GovernedRunner(
     kernel,
@@ -81,7 +88,7 @@ print(f"Total penalty: {rollout.total_penalty}")
 Converts policy violations to RL penalties:
 
 ```python
-from agent_os.integrations.agent_lightning import PolicyReward, RewardConfig
+from agent_lightning_gov import PolicyReward, RewardConfig
 
 config = RewardConfig(
     critical_penalty=-100.0,  # Harsh penalty for critical violations
@@ -102,7 +109,7 @@ reward = reward_fn(rollout)  # Base reward + policy penalties
 Gym-compatible training environment:
 
 ```python
-from agent_os.integrations.agent_lightning import GovernedEnvironment
+from agent_lightning_gov import GovernedEnvironment
 
 env = GovernedEnvironment(
     kernel,
@@ -125,7 +132,7 @@ Export audit logs to LightningStore:
 
 ```python
 from agent_os import FlightRecorder
-from agent_os.integrations.agent_lightning import FlightRecorderEmitter
+from agent_lightning_gov import FlightRecorderEmitter
 
 recorder = FlightRecorder()
 emitter = FlightRecorderEmitter(recorder)
@@ -141,100 +148,20 @@ summary = emitter.get_violation_summary()
 print(f"Violation rate: {summary['violation_rate']:.1%}")
 ```
 
-## 📁 Examples
+## Ecosystem
 
-### SQL Agent Training
+Agent Lightning is one of 7 packages in the Agent Governance Toolkit:
 
-```python
-# examples/agent-lightning-training/sql_agent.py
-
-from agent_os import KernelSpace
-from agent_os.policies import SQLPolicy
-from agent_os.integrations.agent_lightning import GovernedRunner, PolicyReward
-
-# Define SQL safety policy
-kernel = KernelSpace(policy=SQLPolicy(
-    allow=["SELECT", "INSERT", "UPDATE"],
-    deny=["DROP", "DELETE", "TRUNCATE"],
-    require_where_on_update=True,
-))
-
-# Train agent to write safe SQL
-runner = GovernedRunner(kernel)
-trainer = Trainer(runner=runner, algorithm="GRPO")
-trainer.train()
-
-# Result: Agent learns SQL that NEVER violates safety policies
-```
-
-### Multi-Agent Training
-
-```python
-# examples/agent-lightning-training/multi_agent.py
-
-from agent_os.iatp import Pipeline
-from agent_os.integrations.agent_lightning import GovernedRunner
-
-# Create governed multi-agent pipeline
-pipeline = Pipeline([
-    research_agent,
-    analysis_agent,
-    report_agent,
-])
-
-runner = GovernedRunner(pipeline.kernel)
-trainer = Trainer(runner=runner, algorithm="Flow-GRPO")
-trainer.train()
-```
-
-## 📈 Metrics & Monitoring
-
-Track governance during training:
-
-```python
-# Get runner statistics
-stats = runner.get_stats()
-print(f"Total rollouts: {stats['total_rollouts']}")
-print(f"Violation rate: {stats['violation_rate']:.1%}")
-
-# Get reward function statistics
-reward_stats = reward_fn.get_stats()
-print(f"Avg penalty: {reward_stats['avg_penalty']:.2f}")
-print(f"Clean rate: {reward_stats['clean_rate']:.1%}")
-
-# Get environment metrics
-env_metrics = env.get_metrics()
-print(f"Success rate: {env_metrics['success_rate']:.1%}")
-```
-
-## 🔗 Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Agent-Lightning                       │
-│               (Trainer, Algorithm, Store)                │
-└─────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│                   GovernedRunner                         │
-│         (Wraps execution with policy checks)             │
-└─────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│                  Agent OS Kernel                         │
-│    (Policy Engine, Flight Recorder, Signal Dispatch)     │
-└─────────────────────────────────────────────────────────┘
-                           │
-              ┌────────────┼────────────┐
-              ▼            ▼            ▼
-         ┌─────────┐  ┌─────────┐  ┌─────────┐
-         │ Policies│  │ Audit   │  │ Signals │
-         │ (YAML)  │  │  Logs   │  │ (POSIX) │
-         └─────────┘  └─────────┘  └─────────┘
-```
+| Package | Role |
+|---------|------|
+| **Agent OS** | Policy engine — deterministic action evaluation |
+| **AgentMesh** | Trust infrastructure — identity, credentials, protocol bridges |
+| **Agent Runtime** | Execution supervisor — rings, sessions, sagas |
+| **Agent SRE** | Reliability — SLOs, circuit breakers, chaos testing |
+| **Agent Compliance** | Regulatory compliance — GDPR, HIPAA, SOX frameworks |
+| **Agent Marketplace** | Plugin lifecycle — discover, install, verify, sign |
+| **Agent Lightning** | RL training governance — governed runners, policy rewards *(this package)* |
 
 ## 📋 License
 
-MIT License - Use freely with attribution.
+MIT — see [LICENSE](../../LICENSE).

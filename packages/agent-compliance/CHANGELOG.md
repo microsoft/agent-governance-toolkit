@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Unified meta-package installing the complete Agent Governance Ecosystem
 - Core dependencies: `agent-os-kernel>=1.0.0`, `agentmesh-platform>=1.0.0`
-- Optional extras: `[hypervisor]`, `[sre]`, `[full]`
+- Optional extras: `[runtime]`, `[sre]`, `[full]`
 - Re-exports of `StatelessKernel`, `ExecutionContext`, `TrustManager` for convenience
 - Multi-version CI testing (Python 3.9–3.12)
 - SECURITY.md with responsible disclosure policy
@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 |-----------|---------|---------|
 | Agent OS | `agent-os-kernel` | ≥1.0.0 |
 | AgentMesh | `agentmesh-platform` | ≥1.0.0 |
-| Agent Hypervisor | `agent-hypervisor` | ≥2.0.0 (optional) |
+| Agent Runtime | `agent-runtime` | ≥2.0.0 (optional) |
 | Agent SRE | `agent-sre` | ≥1.0.0 (optional) |
 
 [1.0.0]: https://github.com/microsoft/agent-governance-toolkit/releases/tag/v1.0.0

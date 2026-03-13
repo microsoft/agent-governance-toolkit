@@ -514,7 +514,7 @@ if result.allowed and policy.require_human_approval:
 
 ### How agent-os Addresses It
 
-The Agent-Hypervisor architecture provides defense-in-depth:
+The Agent-Runtime architecture provides defense-in-depth:
 
 1. **TrustRoot** — a deterministic (non-LLM) policy authority at the top of the
    supervisor hierarchy that cannot be prompt-injected, ensuring governance

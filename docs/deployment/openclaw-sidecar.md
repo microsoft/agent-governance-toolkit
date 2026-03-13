@@ -45,7 +45,7 @@ The governance sidecar intercepts all of OpenClaw's tool calls before execution,
 │  │  Autonomous agent        │  │  Agent OS (policy engine)  │ │
 │  │  Code execution          │  │  AgentMesh (identity)      │ │
 │  │  Web browsing            │  │  Agent SRE (SLOs)          │ │
-│  │  File management         │  │  Agent Hypervisor (rings)  │ │
+│  │  File management         │  │  Agent Runtime (rings)     │ │
 │  │                          │  │                            │ │
 │  │  Tool calls ─────────────────► Policy check              │ │
 │  │              ◄─────────────── Allow / Deny               │ │

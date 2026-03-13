@@ -2,7 +2,7 @@
 
 ## Tool Name
 
-Agent Governance Stack (Agent OS + AgentMesh + Agent SRE + Agent Hypervisor)
+Agent Governance Stack (Agent OS + AgentMesh + Agent SRE + Agent Runtime)
 
 ## Category
 
@@ -37,7 +37,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 - **TrustRoot hierarchy**: Deterministic (non-LLM) policy authority with max escalation depth
 - **SPIFFE integration**: mTLS workload identity via SPIFFEIdentity → SVID issuance
 - **RBAC module**: Role-based access control with capability grants
-- **Agent Hypervisor Execution Rings**: 4-tier privilege model (Ring 0–3) based on trust scores
+- **Agent Runtime Execution Rings**: 4-tier privilege model (Ring 0–3) based on trust scores
 
 ### ASI04 — Agentic Supply Chain
 
@@ -84,7 +84,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 ### ASI09 — Human-Agent Trust Exploitation
 
 - **require_human_approval gates**: MCPGateway with approval workflow (PENDING/APPROVED/REJECTED)
-- **Agent Hypervisor consensus**: Ring 1 operations require human consensus; Ring 0 requires SRE witness
+- **Agent Runtime consensus**: Ring 1 operations require human consensus; Ring 0 requires SRE witness
 - **GovernanceLogger**: Structured JSON audit trail for every policy decision
 - **KillSwitch**: Immediate agent termination with reasons (behavioral drift, rate limit, ring breach, manual)
 - **HumanSponsor / SponsorRegistry**: Accountability through human sponsorship of agent identities
@@ -94,7 +94,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 - **Agent SRE AnomalyDetector**: Behavioral anomaly detection (latency spikes, throughput drops, unusual tool sequences, resource exhaustion)
 - **SLO engine**: Continuous compliance monitoring with error budget tracking
 - **OpenTelemetry export**: TraceExporter + MetricsExporter for full observability
-- **Agent Hypervisor RingEnforcer**: Trust-score-based demotion; automatic sandbox for untrusted agents
+- **Agent Runtime RingEnforcer**: Trust-score-based demotion; automatic sandbox for untrusted agents
 - **QuarantineManager**: Agent isolation with forensic data preservation
 - **CostGuard**: Budget enforcement (throttle at 85%, kill at 95%)
 
@@ -102,7 +102,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                 Agent Hypervisor                 │
+│                  Agent Runtime                   │
 │  Kill Switch · Execution Rings · Saga Rollback  │
 ├─────────────────────────────────────────────────┤
 │                   Agent SRE                     │
@@ -121,7 +121,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 - **GitHub (Agent OS)**: https://github.com/microsoft/agent-governance-toolkit
 - **GitHub (AgentMesh)**: https://github.com/microsoft/agent-governance-toolkit
 - **GitHub (Agent SRE)**: https://github.com/microsoft/agent-governance-toolkit
-- **GitHub (Agent Hypervisor)**: https://github.com/microsoft/agent-governance-toolkit
+- **GitHub (Agent Runtime)**: https://github.com/microsoft/agent-governance-toolkit
 - **Governance Docs**: https://github.com/microsoft/agent-governance-toolkit
 - **OWASP Mapping**: https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/owasp-agentic-top10-mapping.md
 

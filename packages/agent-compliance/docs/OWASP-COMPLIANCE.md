@@ -16,12 +16,12 @@
 | ASI-02 | Tool Misuse & Exploitation | ✅ Covered | Agent OS — Capability Sandboxing |
 | ASI-03 | Identity & Privilege Abuse | ✅ Covered | AgentMesh — DID Identity & Trust Scoring |
 | ASI-04 | Agentic Supply Chain Vulnerabilities | ✅ Covered | AgentMesh — AI-BOM (model + data + weights provenance) |
-| ASI-05 | Unexpected Code Execution | ✅ Covered | Agent Hypervisor — Execution Rings |
+| ASI-05 | Unexpected Code Execution | ✅ Covered | Agent Runtime — Execution Rings |
 | ASI-06 | Memory & Context Poisoning | ✅ Covered | Agent OS — VFS Policies + CMVK Verification |
 | ASI-07 | Insecure Inter-Agent Communication | ✅ Covered | AgentMesh — IATP + Encrypted Channels |
 | ASI-08 | Cascading Failures | ✅ Covered | Agent SRE — Circuit Breakers + SLOs |
 | ASI-09 | Human-Agent Trust Exploitation | ✅ Covered | Agent OS — Approval Workflows |
-| ASI-10 | Rogue Agents | ✅ Covered | Agent Hypervisor — Kill Switch + Ring Isolation |
+| ASI-10 | Rogue Agents | ✅ Covered | Agent Runtime — Kill Switch + Ring Isolation |
 
 **10 of 10 risks covered.** Full coverage achieved with AI-BOM v2.0 closing the supply chain gap.
 
@@ -136,7 +136,7 @@ ai_bom = {
 
 > *Agents trigger remote code execution through tools, interpreters, or APIs.*
 
-**Mitigation:** Agent Hypervisor implements **CPU ring-inspired execution isolation**. Agents run in restricted rings with resource limits and can be terminated instantly.
+**Mitigation:** Agent Runtime implements **CPU ring-inspired execution isolation**. Agents run in restricted rings with resource limits and can be terminated instantly.
 
 - **Execution Rings (Ring 0–3)** — privilege tiers from kernel (0) to untrusted (3)
 - **Resource Limits** — CPU, memory, time bounds per agent execution
@@ -144,7 +144,7 @@ ai_bom = {
 - **Saga Compensation** — automatic rollback when execution fails
 - **Sandboxed Execution** — code runs in isolated contexts
 
-**Component:** [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) — execution rings, resource management, saga orchestration
+**Component:** [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) — execution rings, resource management, saga orchestration
 
 ---
 
@@ -225,7 +225,7 @@ is_valid = iatp_verify(attestation, expected_signer="sender")
 
 > *Agents operating outside their defined scope by configuration drift, reprogramming, or emergent misbehavior.*
 
-**Mitigation:** Agent Hypervisor provides **runtime behavioral monitoring** with instant kill capability, combined with AgentMesh trust decay.
+**Mitigation:** Agent Runtime provides **runtime behavioral monitoring** with instant kill capability, combined with AgentMesh trust decay.
 
 - **Ring Isolation** — rogue agents are confined to their execution ring and cannot escalate
 - **Kill Switch** — immediate termination of agents exhibiting rogue behavior
@@ -234,7 +234,7 @@ is_valid = iatp_verify(attestation, expected_signer="sender")
 - **Shapley-Value Fault Attribution** — identify which agent in a multi-agent system is responsible for failures
 - **Merkle Audit Trails** — cryptographic proof of agent action history
 
-**Component:** [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) + [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) trust decay
+**Component:** [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) + [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) trust decay
 
 ---
 
@@ -250,7 +250,7 @@ This single command installs the complete governance stack:
 |-------|---------|-------------------|
 | **Kernel** | `agent-os-kernel` | ASI-01, ASI-02, ASI-06, ASI-09 |
 | **Trust Mesh** | `agentmesh-platform` | ASI-03, ASI-04, ASI-07, ASI-10 |
-| **Hypervisor** | `agent-hypervisor` | ASI-05, ASI-10 |
+| **Runtime** | `agent-runtime` | ASI-05, ASI-10 |
 | **SRE** | `agent-sre` | ASI-08 |
 
 ---
@@ -267,7 +267,7 @@ Our stack enforces Least Agency at every layer:
 |-------|----------------------|
 | **Agent OS** | Policy engine enforces deny-by-default; agents must be explicitly granted each capability |
 | **AgentMesh** | DID identity with scoped capabilities; delegation requires narrowing (child ≤ parent) |
-| **Agent Hypervisor** | Execution rings (Ring 0–3) enforce privilege tiers; untrusted agents run in Ring 3 |
+| **Agent Runtime** | Execution rings (Ring 0–3) enforce privilege tiers; untrusted agents run in Ring 3 |
 | **Agent SRE** | Resource limits and error budgets cap agent impact radius |
 | **Agent Compliance** | Governance policies audit capability grants against Least Agency principle |
 

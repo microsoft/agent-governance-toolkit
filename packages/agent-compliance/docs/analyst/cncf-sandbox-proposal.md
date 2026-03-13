@@ -6,7 +6,7 @@
 
 ## Description
 
-Agent OS is an open-source governance kernel that provides policy enforcement, prompt injection detection, capability-based security, and audit logging for AI agents running in production. It is the core component of the Agent Governance stack, which adds zero-trust communication (AgentMesh), runtime isolation (Agent Hypervisor), and reliability engineering (Agent SRE). Agent OS is designed to be embedded in cloud-native applications or deployed as a standalone API server, with native OpenTelemetry integration and Kubernetes-friendly deployment patterns.
+Agent OS is an open-source governance kernel that provides policy enforcement, prompt injection detection, capability-based security, and audit logging for AI agents running in production. It is the core component of the Agent Governance stack, which adds zero-trust communication (AgentMesh), runtime isolation (Agent Runtime), and reliability engineering (Agent SRE). Agent OS is designed to be embedded in cloud-native applications or deployed as a standalone API server, with native OpenTelemetry integration and Kubernetes-friendly deployment patterns.
 
 ## Statement on Alignment with CNCF Mission
 
@@ -47,7 +47,7 @@ TBD — Seeking a TOC sponsor. The project aligns with the Runtime and Observabi
                     ┌──────────────────┐   ┌──────────────────┐
     Policy          │  OPA / Gatekeeper│   │  Agent OS         │
                     ├──────────────────┤   ├──────────────────┤
-    Runtime Safety  │  Falco           │   │  Agent Hypervisor │
+    Runtime Safety  │  Falco           │   │  Agent Runtime    │
                     ├──────────────────┤   ├──────────────────┤
     Scanning        │  Trivy           │   │  Prompt Injection │
                     │                  │   │  Detector         │
@@ -64,10 +64,10 @@ TBD — Seeking a TOC sponsor. The project aligns with the Runtime and Observabi
 - **License:** MIT
 - **Language:** Python 3.9+
 - **Installation:** `pip install ai-agent-governance[full]`
-- **Test suite:** 3,000+ tests across the stack (Agent OS: 2,000+, AgentMesh: 500+, Agent SRE: 329+, Agent Hypervisor: 200+)
+- **Test suite:** 3,000+ tests across the stack (Agent OS: 2,000+, AgentMesh: 500+, Agent SRE: 329+, Agent Runtime: 200+)
 - **Framework integrations:** 12+ (LangChain, CrewAI, AutoGen, Semantic Kernel, LlamaIndex, Haystack, OpenAI Agents SDK, Google ADK, MCP, A2A, and more)
 - **Observability integrations:** 11 platforms (Datadog, Grafana, New Relic, Splunk, Azure Monitor, AWS CloudWatch, etc.)
-- **PyPI packages:** `ai-agent-governance`, `agent-os-kernel`, `agentmesh-platform`, `agent-hypervisor`, `agent-sre`
+- **PyPI packages:** `ai-agent-governance`, `agent-os-kernel`, `agentmesh-platform`, `agent-runtime`, `agent-sre`
 
 ## Roadmap Alignment with CNCF
 

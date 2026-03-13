@@ -34,7 +34,9 @@ pip install agent-os-kernel        # Policy enforcement + framework integrations
 pip install agentmesh-platform     # Zero-trust identity + trust cards
 pip install ai-agent-compliance    # OWASP ASI verification + integrity CLI
 pip install agent-sre              # SLOs, error budgets, chaos testing
-pip install agent-hypervisor       # Execution sandboxing + privilege rings
+pip install agent-runtime          # Execution supervisor + privilege rings
+pip install agent-marketplace      # Plugin lifecycle management
+pip install agent-lightning        # RL training governance
 ```
 
 ## 2. Verify Your Installation

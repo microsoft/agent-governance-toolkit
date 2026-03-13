@@ -29,7 +29,7 @@ Whether you're a single team getting started with AI agent governance or a large
 |-----------|------|
 | **Agent OS** | Governance kernel — policy enforcement, capability security, audit trails |
 | **AgentMesh** | Zero-trust communication — mTLS, encrypted channels, trust scoring |
-| **Agent Hypervisor** | Runtime supervisor — execution rings, resource limits, kill switches |
+| **Agent Runtime** | Runtime supervisor — execution rings, resource limits, kill switches |
 | **Agent SRE** | Reliability engineering — SLOs, health monitoring, chaos engineering |
 
 ## Getting Started

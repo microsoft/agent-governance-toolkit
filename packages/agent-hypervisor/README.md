@@ -1,10 +1,18 @@
 <div align="center">
 
-# Agent Hypervisor — Community Edition
+# ⚠️ This package has been renamed to Agent Runtime
 
-**VMware for AI Agents — runtime isolation, execution rings, and governance for autonomous agents**
+> **`agent-hypervisor` is now `agent-runtime`.** This package is maintained for backward compatibility.
+> New projects should use [`agent-runtime`](../agent-runtime/) instead.
+> All imports (`from hypervisor import ...`) continue to work unchanged.
 
-*Just as VMware isolates virtual machines, Agent Hypervisor isolates AI agent sessions<br/>and enforces governance boundaries with a kill switch, blast radius containment, and accountability.*
+---
+
+# Agent Hypervisor → Agent Runtime — Community Edition
+
+**Execution supervisor for AI agents — runtime isolation, execution rings, and governance for autonomous agents**
+
+*Just as a supervisor isolates processes, Agent Runtime isolates AI agent sessions<br/>and enforces governance boundaries with a kill switch, blast radius containment, and accountability.*
 
 [![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4%EF%B8%8F-ff69b4)](https://github.com/microsoft/agent-governance-toolkit)

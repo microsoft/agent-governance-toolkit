@@ -136,7 +136,7 @@ assert verified, "Agent identity verification failed"
 **Implementation:**
 
 ```python
-from agent_hypervisor import Sandbox
+from hypervisor import Sandbox
 
 sandbox = Sandbox(
     timeout=30,
@@ -256,7 +256,7 @@ sre.track(ctx, metrics=["latency", "token_usage", "policy_violations"])
 **Implementation:**
 
 ```python
-from agent_hypervisor import ResourceGovernor
+from hypervisor import ResourceGovernor
 
 governor = ResourceGovernor(
     max_tokens_per_request=10000,

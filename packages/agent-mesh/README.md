@@ -29,11 +29,11 @@
 
 > ⭐ **If this project helps you, please star it!** It helps others discover AgentMesh.
 
-> 🔗 **Part of the Agent Governance Ecosystem** — Works with [Agent OS](https://github.com/microsoft/agent-governance-toolkit) (kernel), [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) (runtime), and [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) (reliability)
+> 🔗 **Part of the Agent Governance Ecosystem** — Works with [Agent OS](https://github.com/microsoft/agent-governance-toolkit) (kernel), [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) (runtime), and [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) (reliability)
 
 > 📦 **Install the full stack:** `pip install ai-agent-governance[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
 
-[Quick Start](#quick-start) • [MCP Proxy](#the-agentmesh-proxy-ssl-for-ai-agents) • [Examples](#examples--integrations) • [Agent OS](https://github.com/microsoft/agent-governance-toolkit) • [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit)
+[Quick Start](#quick-start) • [MCP Proxy](#the-agentmesh-proxy-ssl-for-ai-agents) • [Examples](#examples--integrations) • [Agent OS](https://github.com/microsoft/agent-governance-toolkit) • [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit)
 
 </div>
 
@@ -319,7 +319,7 @@ pip install -e .
 | [Multi-Agent Customer Service](./examples/02-customer-service/) | Customer support automation | Trust handshakes, delegation, A2A |
 | [Healthcare HIPAA](./examples/03-healthcare-hipaa/) | HIPAA-compliant data analysis | Compliance automation, PHI protection, audit logs |
 | [DevOps Automation](./examples/04-devops-automation/) | Just-in-time DevOps credentials | Ephemeral creds, capability scoping |
-| [GitHub PR Review](./examples/05-github-integration/) | Code review agent | Output policies, shadow mode, trust decay |
+| [GitHub PR Review](./examples/05-github-integration/) | Code review agent | Output policies, trust decay. Shadow mode has been moved to Agent SRE. |
 
 **Framework integrations:**
 - **[Claude Desktop](./docs/integrations/claude-desktop.md)** - Secure MCP tools with one command
@@ -512,7 +512,7 @@ agentmesh/
 │   ├── policy.py       # Declarative policy engine (YAML/JSON)
 │   ├── compliance.py   # Compliance mapping (EU AI Act, SOC2, HIPAA, GDPR)
 │   ├── audit.py        # Audit logs
-│   └── shadow.py       # Shadow mode for policy testing
+│   └── shadow.py       # Legacy reference. Shadow mode has been moved to Agent SRE.
 │
 ├── reward/             # Layer 4: Reward & Learning
 │   ├── engine.py       # Multi-dimensional reward engine
@@ -585,7 +585,7 @@ report = compliance.generate_report(
 | Quarter | Milestone |
 |---------|-----------|
 | **Q1 2026** | ✅ Core trust layer, identity, governance engine, 6 framework integrations |
-| **Q2 2026** | TypeScript SDK, Go SDK, Dashboard UI, Plugin Marketplace |
+| **Q2 2026** | TypeScript SDK, Go SDK, Dashboard UI. Marketplace is now a standalone `agent-marketplace` package. |
 | **Q3 2026** | AI Card spec contribution, CNCF Sandbox application |
 | **Q4 2026** | Managed cloud service (AgentMesh Cloud), SOC2 Type II |
 
@@ -630,7 +630,7 @@ The [Dify integration](https://github.com/microsoft/agent-governance-toolkit/tre
 AgentMesh builds on:
 
 - **[Agent OS](https://github.com/microsoft/agent-governance-toolkit)** — IATP protocol, Nexus trust exchange
-- **[Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit)** — Runtime session governance
+- **[Agent Runtime](https://github.com/microsoft/agent-governance-toolkit)** — Runtime session governance
 - **[Agent SRE](https://github.com/microsoft/agent-governance-toolkit)** — SLO monitoring, chaos testing
 - **SPIFFE/SPIRE** — Workload identity
 - **OpenTelemetry** — Observability

@@ -30,7 +30,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-agent-os = ["agent-os>=1.0.0"]
+agent-os = ["agent-os-kernel>=1.0.0"]
 dev = ["pytest>=7.0", "pytest-cov"]
 
 [project.urls]

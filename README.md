@@ -54,12 +54,19 @@ Addresses **10 of 10 [OWASP Agentic Top 10](https://genai.owasp.org/resource/owa
 │            │                               │                   │
 │            ▼                               ▼                   │
 │   ┌───────────────────┐      ┌───────────────────────────┐     │
-│   │ Agent Hypervisor  │      │     Agent SRE             │     │
+│   │  Agent Runtime    │      │     Agent SRE             │     │
 │   │                   │      │                           │     │
 │   │  Execution Rings  │      │  SLO Engine + Error Budget│     │
 │   │  Resource Limits  │      │  Replay & Chaos Testing   │     │
 │   │  Runtime Sandboxing│     │  Progressive Delivery     │     │
 │   │  Termination Ctrl │      │  Circuit Breakers         │     │
+│   └───────────────────┘      └───────────────────────────┘     │
+│                                                                 │
+│   ┌───────────────────┐      ┌───────────────────────────┐     │
+│   │ Agent Marketplace │      │   Agent Lightning         │     │
+│   │                   │      │                           │     │
+│   │  Plugin Discovery │      │  RL Training Governance   │     │
+│   │  Signing & Verify │      │  Policy Rewards           │     │
 │   └───────────────────┘      └───────────────────────────┘     │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -71,9 +78,11 @@ Addresses **10 of 10 [OWASP Agentic Top 10](https://genai.owasp.org/resource/owa
 |---------|------|-------------|
 | **Agent OS** | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | Policy engine — deterministic action evaluation, capability model, audit logging, action interception, MCP gateway |
 | **AgentMesh** | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | Inter-agent trust — Ed25519 identity, SPIFFE/SVID credentials, trust scoring, A2A/MCP/IATP protocol bridges |
-| **Agent Hypervisor** | [`agent-hypervisor`](https://pypi.org/project/agent-hypervisor/) | Execution sandboxing — 4-tier privilege rings, saga orchestration, termination control, joint liability, append-only audit log |
+| **Agent Runtime** | [`agent-runtime`](packages/agent-runtime/) | Execution supervisor — 4-tier privilege rings, saga orchestration, termination control, joint liability, append-only audit log |
 | **Agent SRE** | [`agent-sre`](https://pypi.org/project/agent-sre/) | Reliability engineering — SLOs, error budgets, replay debugging, chaos engineering, progressive delivery |
-| **Agent Compliance** | [`ai-agent-compliance`](https://pypi.org/project/ai-agent-compliance/) | Unified installer and compliance documentation |
+| **Agent Compliance** | [`ai-agent-compliance`](https://pypi.org/project/ai-agent-compliance/) | Regulatory compliance — GDPR, HIPAA, SOX audit frameworks |
+| **Agent Marketplace** | [`agent-marketplace`](packages/agent-marketplace/) | Plugin lifecycle — discover, install, verify, and sign plugins |
+| **Agent Lightning** | [`agent-lightning`](packages/agent-lightning/) | RL training governance — governed runners, policy rewards |
 
 ## Quick Start
 
@@ -106,8 +115,10 @@ Or install individual packages:
 ```bash
 pip install agent-os-kernel    # Just the policy engine
 pip install agentmesh           # Just the trust mesh
-pip install agent-hypervisor    # Just the hypervisor
+pip install agent-runtime       # Just the runtime supervisor
 pip install agent-sre           # Just the SRE toolkit
+pip install agent-marketplace   # Just the plugin marketplace
+pip install agent-lightning     # Just the RL training governance
 ```
 
 ## Framework Integrations
@@ -133,7 +144,7 @@ Works with **12+ agent frameworks** including:
 | Agent Goal Hijacking | ASI-01 | ✅ Policy engine blocks unauthorized goal changes |
 | Excessive Capabilities | ASI-02 | ✅ Capability model enforces least-privilege |
 | Identity & Privilege Abuse | ASI-03 | ✅ Zero-trust identity with Ed25519 certs |
-| Uncontrolled Code Execution | ASI-04 | ✅ Hypervisor execution rings + sandboxing |
+| Uncontrolled Code Execution | ASI-04 | ✅ Agent Runtime execution rings + sandboxing |
 | Insecure Output Handling | ASI-05 | ✅ Content policies validate all outputs |
 | Memory Poisoning | ASI-06 | ✅ Episodic memory with integrity checks |
 | Unsafe Inter-Agent Communication | ASI-07 | ✅ AgentMesh encrypted channels + trust gates |
@@ -155,7 +166,7 @@ Works with **12+ agent frameworks** including:
 
 ### Security Model & Boundaries
 
-This toolkit operates as **Python middleware** — it intercepts agent actions at the application level, not at the OS or hypervisor level. Understanding this boundary is critical:
+This toolkit operates as **Python middleware** — it intercepts agent actions at the application level, not at the OS or hardware level. Understanding this boundary is critical:
 
 | What it does | What it does NOT do |
 |---|---|

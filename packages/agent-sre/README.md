@@ -23,11 +23,11 @@
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent SRE.
 
-> 🔗 **Part of the [Agent Governance Ecosystem](https://github.com/microsoft/agent-governance-toolkit)** — Works with [Agent OS](https://github.com/microsoft/agent-governance-toolkit) (governance), [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) (identity & trust), and [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) (runtime sessions)
+> 🔗 **Part of the [Agent Governance Ecosystem](https://github.com/microsoft/agent-governance-toolkit)** — Works with [Agent OS](https://github.com/microsoft/agent-governance-toolkit) (governance), [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) (identity & trust), and [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) (runtime sessions)
 
 > 📦 **Install the full stack:** `pip install ai-agent-governance[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
 
-[Quick Start](#-quick-start-in-30-seconds) • [Architecture](#-architecture-diagram) • [Examples](examples/) • [Benchmarks](benchmarks/results/BENCHMARKS.md) • [Docs](docs/) • [Agent OS](https://github.com/microsoft/agent-governance-toolkit) • [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) • [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit)
+[Quick Start](#-quick-start-in-30-seconds) • [Architecture](#-architecture-diagram) • [Examples](examples/) • [Benchmarks](benchmarks/results/BENCHMARKS.md) • [Docs](docs/) • [Agent OS](https://github.com/microsoft/agent-governance-toolkit) • [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) • [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit)
 
 </div>
 
@@ -116,7 +116,7 @@ flowchart LR
     subgraph Ecosystem["🌐 Agent Governance Ecosystem"]
         OS["Agent OS\nPolicy & Audit"]
         MESH["AgentMesh\nIdentity & Trust"]
-        HV["Agent Hypervisor\nRuntime Sessions"]
+        HV["Agent Runtime\nRuntime Sessions"]
     end
 
     A1 & A2 --> SLO
@@ -409,7 +409,7 @@ Agent SRE completes the governance-to-reliability stack:
 | Layer | Project | What It Does |
 |---|---|---|
 | **Reliability** | **Agent SRE** (this) | SLOs, chaos testing, canary deploys, cost guard, replay |
-| **Runtime** | [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) | Session isolation, execution rings, saga orchestration |
+| **Runtime** | [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) | Session isolation, execution rings, saga orchestration |
 | **Networking** | [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) | Identity, trust, routing, delegation |
 | **Kernel** | [Agent OS](https://github.com/microsoft/agent-governance-toolkit) | Policy enforcement, audit, compliance |
 
@@ -668,13 +668,15 @@ MIT — See [LICENSE](LICENSE) for details.
 
 ### 🌐 Agent Governance Ecosystem
 
-| Repository | Purpose | Stars |
-|---|---|---|
-| [**Agent OS**](https://github.com/microsoft/agent-governance-toolkit) | Governance kernel — policy enforcement, audit, compliance | [![Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit) |
-| [**Agent SRE**](https://github.com/microsoft/agent-governance-toolkit) | Reliability — SLOs, chaos testing, cost guard (this repo) | [![Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit) |
-| [**AgentMesh**](https://github.com/microsoft/agent-governance-toolkit) | Networking — identity, trust, routing, delegation | [![Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit) |
-| [**Agent Hypervisor**](https://github.com/microsoft/agent-governance-toolkit) | Runtime — session isolation, execution rings, sagas | [![Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit) |
-| [**Agent Governance**](https://github.com/microsoft/agent-governance-toolkit) | Unified installer — `pip install ai-agent-governance[full]` | [![Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit) |
+| Package | Role |
+|---------|------|
+| **Agent OS** | Policy engine — deterministic action evaluation |
+| **AgentMesh** | Trust infrastructure — identity, credentials, protocol bridges |
+| **Agent Runtime** | Execution supervisor — rings, sessions, sagas |
+| **Agent SRE** | Reliability — SLOs, circuit breakers, chaos testing *(this package)* |
+| **Agent Compliance** | Regulatory compliance — GDPR, HIPAA, SOX frameworks |
+| **Agent Marketplace** | Plugin lifecycle — discover, install, verify, sign |
+| **Agent Lightning** | RL training governance — governed runners, policy rewards |
 
 [GitHub](https://github.com/microsoft/agent-governance-toolkit) · [Docs](docs/) · [PyPI](https://pypi.org/project/agent-sre/) · [Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions) · [Sponsor](https://github.com/microsoft/agent-governance-toolkit)
 

@@ -44,7 +44,7 @@ The OWASP Agentic Top 10 codifies these risks. The Agent Governance Toolkit addr
 │            │                               │                   │
 │            ▼                               ▼                   │
 │   ┌───────────────────┐      ┌───────────────────────────┐     │
-│   │ Agent Hypervisor  │      │     Agent SRE             │     │
+│   │ Agent Runtime     │      │     Agent SRE             │     │
 │   │                   │      │                           │     │
 │   │  Execution Rings  │      │  SLO Engine + Error Budget│     │
 │   │  Resource Limits  │      │  Replay & Chaos Testing   │     │
@@ -60,7 +60,7 @@ The OWASP Agentic Top 10 codifies these risks. The Agent Governance Toolkit addr
 |---------|------------|-------|
 | **Agent OS** | Core governance kernel — policy engine, capability model, audit logging, syscall interception, MCP gateway | 700+ |
 | **AgentMesh** | Inter-agent trust — Ed25519 DID identity, SPIFFE/SVID credentials, trust scoring (0-1000), A2A/MCP/IATP protocol bridges | 1,600+ |
-| **Agent Hypervisor** | Execution isolation — 4-tier privilege rings, saga orchestration, kill switch, Shapley-value fault attribution | 326 |
+| **Agent Runtime** | Execution isolation — 4-tier privilege rings, saga orchestration, kill switch, Shapley-value fault attribution | 326 |
 | **Agent SRE** | Reliability engineering — SLO engine, error budgets, chaos testing, progressive delivery, anomaly detection | 1,071+ |
 | **Agent Governance** | Unified installer, compliance documentation, OWASP mapping | 200+ |
 
@@ -74,7 +74,7 @@ The OWASP Agentic Top 10 codifies these risks. The Agent Governance Toolkit addr
 | Tool Misuse | ASI-02 | ✅ Covered | Capability Sandbox — tool allow/deny, rate limits |
 | Insecure Identity | ASI-03 | ✅ Covered | AgentMesh — DID identity, IATP, SPIFFE certs |
 | Supply Chain | ASI-04 | ⚠️ Partial | Agent-SBOM planned |
-| Insecure Output | ASI-05 | ✅ Covered | Hypervisor — execution rings, output validation |
+| Insecure Output | ASI-05 | ✅ Covered | Runtime — execution rings, output validation |
 | Memory Poisoning | ASI-06 | ✅ Covered | VFS + CMVK (content-addressable memory) |
 | Insufficient Monitoring | ASI-07 | ✅ Covered | Agent SRE — SLOs, OTel export, anomaly detection |
 | Error Handling | ASI-08 | ✅ Covered | Circuit breakers, saga compensation, error budgets |

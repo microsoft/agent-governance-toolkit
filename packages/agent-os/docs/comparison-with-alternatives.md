@@ -356,7 +356,7 @@ raise "Don't send email after reading website" if:
 - **Framework coverage** — 12+ framework integrations vs. proxy-only approach
 - **Multi-agent governance** — Per-agent policies, inter-agent trust, fleet management
 - **Human-in-the-loop** — Native human approval workflows
-- **Ecosystem** — Part of a broader governance stack (AgentMesh, Agent SRE, Agent Hypervisor)
+- **Ecosystem** — Part of a broader governance stack (AgentMesh, Agent SRE, Agent Runtime)
 
 #### Complementary?
 

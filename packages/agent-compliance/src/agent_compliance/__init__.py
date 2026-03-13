@@ -9,8 +9,10 @@ Install the full stack:
 Components:
     - agent-os-kernel: Governance kernel with policy enforcement
     - agentmesh-platform: Zero-trust agent communication (SSL for AI Agents)
-    - agent-hypervisor: Runtime supervisor with execution rings
+    - agent-runtime: Runtime supervisor with execution rings
     - agent-sre: Site reliability engineering for AI agents
+    - agent-marketplace: Plugin lifecycle management
+    - agent-lightning: RL training governance
 """
 
 __version__ = "1.0.2"

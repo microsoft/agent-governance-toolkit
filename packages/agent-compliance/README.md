@@ -23,7 +23,7 @@ pip install ai-agent-compliance[full]
 
 > ⭐ **If this project helps you, please star it!** It helps others discover the agent governance stack.
 
-> 🔗 **Part of the Agent Governance Ecosystem** — Installs [Agent OS](https://github.com/microsoft/agent-governance-toolkit) · [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) · [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) · [Agent SRE](https://github.com/microsoft/agent-governance-toolkit)
+> 🔗 **Part of the Agent Governance Ecosystem** — Installs [Agent OS](https://github.com/microsoft/agent-governance-toolkit) · [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) · [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) · [Agent SRE](https://github.com/microsoft/agent-governance-toolkit)
 
 ---
 
@@ -46,7 +46,7 @@ pip install ai-agent-compliance[full]
 │            │                               │                   │
 │            ▼                               ▼                   │
 │   ┌───────────────────┐      ┌───────────────────────────┐     │
-│   │ Agent Hypervisor  │      │   Agent SRE               │     │
+│   │ Agent Runtime     │      │   Agent SRE               │     │
 │   │                   │      │                           │     │
 │   │  Execution Rings  │      │  Health Monitoring        │     │
 │   │  Resource Limits  │      │  SLO Enforcement          │     │
@@ -95,11 +95,11 @@ Install only what you need:
 # Core: kernel + trust mesh
 pip install ai-agent-compliance
 
-# Full stack: adds hypervisor + SRE
+# Full stack: adds runtime + SRE
 pip install ai-agent-compliance[full]
 
 # À la carte
-pip install ai-agent-compliance[hypervisor]
+pip install ai-agent-compliance[runtime]
 pip install ai-agent-compliance[sre]
 ```
 
@@ -107,12 +107,15 @@ pip install ai-agent-compliance[sre]
 
 ## Components
 
-| Component | Package | What It Does |
-|-----------|---------|--------------|
-| **[Agent OS](https://github.com/microsoft/agent-governance-toolkit)** | `agent-os-kernel` | Governance kernel — policy enforcement, capability-based security, audit trails, and the syscall abstraction layer for AI agents |
-| **[AgentMesh](https://github.com/microsoft/agent-governance-toolkit)** | `agentmesh-platform` | Zero-trust communication — mutual TLS for agents, encrypted channels, trust scoring, and secure multi-agent orchestration ("SSL for AI Agents") |
-| **[Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit)** | `agent-hypervisor` | Runtime supervisor — execution rings, resource limits, sandboxed execution, kill switches, and real-time intervention for autonomous agents |
-| **[Agent SRE](https://github.com/microsoft/agent-governance-toolkit)** | `agent-sre` | Reliability engineering — health monitoring, SLO enforcement, incident response automation, and chaos engineering for agent fleets |
+| Package | Role |
+|---------|------|
+| **Agent OS** | Policy engine — deterministic action evaluation |
+| **AgentMesh** | Trust infrastructure — identity, credentials, protocol bridges |
+| **Agent Runtime** | Execution supervisor — rings, sessions, sagas |
+| **Agent SRE** | Reliability — SLOs, circuit breakers, chaos testing |
+| **Agent Compliance** | Regulatory compliance — GDPR, HIPAA, SOX frameworks *(this package)* |
+| **Agent Marketplace** | Plugin lifecycle — discover, install, verify, sign |
+| **Agent Lightning** | RL training governance — governed runners, policy rewards |
 
 ### Star the ecosystem
 
@@ -120,7 +123,7 @@ pip install ai-agent-compliance[sre]
 
 [![Agent OS Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=Agent%20OS&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
 [![AgentMesh Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=AgentMesh&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
-[![Agent Hypervisor Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=Agent%20Hypervisor&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
+[![Agent Runtime Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=Agent%20Runtime&style=social)](https://github.com/microsoft/agent-governance-toolkit)&nbsp;&nbsp;
 [![Agent SRE Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?label=Agent%20SRE&style=social)](https://github.com/microsoft/agent-governance-toolkit)
 
 </p>
@@ -151,11 +154,11 @@ The meta-package ensures all components are version-compatible and properly inte
 agent-compliance ─── The meta-package (you are here)
 ├── agent-os-kernel ─── Governance kernel
 ├── agentmesh-platform ─── Zero-trust mesh
-├── agent-hypervisor ─── Runtime supervisor (optional)
+├── agent-runtime ─── Runtime supervisor (optional)
 └── agent-sre ─── Reliability engineering (optional)
 ```
 
-Each component works standalone, but they're designed to work together. The kernel enforces policy, the mesh secures communication, the hypervisor controls execution, and SRE keeps everything running.
+Each component works standalone, but they're designed to work together. The kernel enforces policy, the mesh secures communication, the runtime controls execution, and SRE keeps everything running.
 
 ---
 
@@ -209,12 +212,12 @@ The agent governance stack covers **10 of 10** risks from the [OWASP Top 10 for 
 | Tool Misuse | ✅ | Agent OS — Capability Sandboxing |
 | Identity & Privilege Abuse | ✅ | AgentMesh — DID Identity |
 | Supply Chain Vulnerabilities | ✅ | AgentMesh — AI-BOM v2.0 |
-| Unexpected Code Execution | ✅ | Agent Hypervisor — Execution Rings |
+| Unexpected Code Execution | ✅ | Agent Runtime — Execution Rings |
 | Memory & Context Poisoning | ✅ | Agent OS — VFS + CMVK |
 | Insecure Inter-Agent Communication | ✅ | AgentMesh — IATP Protocol |
 | Cascading Failures | ✅ | Agent SRE — Circuit Breakers |
 | Human-Agent Trust Exploitation | ✅ | Agent OS — Approval Workflows |
-| Rogue Agents | ✅ | Agent Hypervisor — Kill Switch |
+| Rogue Agents | ✅ | Agent Runtime — Kill Switch |
 
 **[→ Full OWASP compliance mapping with code examples](docs/OWASP-COMPLIANCE.md)**
 
@@ -235,7 +238,7 @@ We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for deta
 For component-specific contributions, see:
 - [Agent OS](https://github.com/microsoft/agent-governance-toolkit/blob/master/CONTRIBUTING.md)
 - [AgentMesh](https://github.com/microsoft/agent-governance-toolkit/blob/master/CONTRIBUTING.md)
-- [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit/blob/master/CONTRIBUTING.md)
+- [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit/blob/master/CONTRIBUTING.md)
 - [Agent SRE](https://github.com/microsoft/agent-governance-toolkit/blob/master/CONTRIBUTING.md)
 
 ## License

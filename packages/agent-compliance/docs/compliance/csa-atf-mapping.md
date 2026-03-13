@@ -17,8 +17,8 @@ The CSA Agentic Trust Framework (ATF) applies Zero Trust security principles to 
 | **4.1 Identity Management** | Unique, verifiable agent identity | Ed25519 DID identity, SPIFFE/SVID certs, trust scoring (0–1000) | AgentMesh | ✅ Full |
 | **4.2 Behavioral Monitoring** | Continuous anomaly detection | SLI/SLO tracking, anomaly detection, behavioral baselines | Agent SRE | ✅ Full |
 | **4.3 Data Governance** | Input/output validation | Policy engine input validation, output filtering, PII detection | Agent OS | ✅ Full |
-| **4.4 Segmentation** | Least-privilege access control | 4-tier Ring model (Ring 0–3), capability sandbox, tool allow/deny | Agent OS + Hypervisor | ✅ Full |
-| **4.5 Incident Response** | Rapid containment and recovery | Kill switch (<1s), saga rollback, circuit breakers | Agent Hypervisor + SRE | ✅ Full |
+| **4.4 Segmentation** | Least-privilege access control | 4-tier Ring model (Ring 0–3), capability sandbox, tool allow/deny | Agent OS + Runtime | ✅ Full |
+| **4.5 Incident Response** | Rapid containment and recovery | Kill switch (<1s), saga rollback, circuit breakers | Agent Runtime + SRE | ✅ Full |
 
 ---
 
@@ -130,7 +130,7 @@ The CSA Agentic Trust Framework (ATF) applies Zero Trust security principles to 
 
 | ATF SHOULD | Implementation |
 |------------|---------------|
-| Network-level segmentation | Agent Hypervisor execution rings provide process-level isolation |
+| Network-level segmentation | Agent Runtime execution rings provide process-level isolation |
 | API gateway integration | MCP server acts as governance gateway for tool calls |
 | Service mesh compatibility | AgentMesh IATP protocol integrates with service mesh patterns |
 
@@ -143,7 +143,7 @@ The CSA Agentic Trust Framework (ATF) applies Zero Trust security principles to 
 | ATF MUST | Implementation | Component |
 |----------|---------------|-----------|
 | Immediate termination (<1 second) | Kill switch with state preservation, < 100ms response | `KillSwitch.activate()` |
-| Graceful and forced shutdown modes | Graceful (drain + save state) and forced (immediate halt) modes | Agent Hypervisor |
+| Graceful and forced shutdown modes | Graceful (drain + save state) and forced (immediate halt) modes | Agent Runtime |
 | Audit log of all activations | Kill switch events logged with timestamp, reason, initiator | Audit subsystem |
 
 #### 4.5.2 Recovery
@@ -152,7 +152,7 @@ The CSA Agentic Trust Framework (ATF) applies Zero Trust security principles to 
 |----------|---------------|-----------|
 | Rollback to last known good config | Saga rollback with compensation actions | `SagaOrchestrator.rollback()` |
 | Incident investigation capabilities | Incident timeline reconstruction, event replay | Agent SRE |
-| Selective restart with restrictions | Ring demotion (e.g., Ring 1 → Ring 3) on restart | Agent Hypervisor |
+| Selective restart with restrictions | Ring demotion (e.g., Ring 1 → Ring 3) on restart | Agent Runtime |
 
 | ATF SHOULD | Implementation |
 |------------|---------------|

@@ -104,6 +104,6 @@ sandbox.check("execute_shell")  # Not granted → blocked
 - [OWASP Agentic Top 10 Compliance Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
 - [Agent OS](https://github.com/microsoft/agent-governance-toolkit) — reference implementation
 - [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit) — inter-agent trust layer
-- [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) — execution isolation
+- [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) — execution isolation
 - [CoSAI MCP Security Analysis](https://github.com/cosai-oasis/ws4-secure-design-agentic-systems/blob/main/model-context-protocol-security.md) — complementary work
 - OS kernel security model (Linux capabilities, SELinux mandatory access control) — inspiration for ring-based approach

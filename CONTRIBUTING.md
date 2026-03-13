@@ -39,9 +39,11 @@ cd agent-governance-toolkit
 # Install in development mode
 pip install -e "packages/agent-os[dev]"
 pip install -e "packages/agent-mesh[dev]"
-pip install -e "packages/agent-hypervisor[dev]"
+pip install -e "packages/agent-runtime[dev]"
 pip install -e "packages/agent-sre[dev]"
 pip install -e "packages/agent-compliance[dev]"
+pip install -e "packages/agent-marketplace[dev]"
+pip install -e "packages/agent-lightning[dev]"
 
 # Run tests
 pytest
@@ -49,15 +51,17 @@ pytest
 
 ### Package Structure
 
-This is a mono-repo with five packages:
+This is a mono-repo with seven packages:
 
 | Package | Directory | Description |
 |---------|-----------|-------------|
 | `agent-os-kernel` | `packages/agent-os/` | Kernel architecture for policy enforcement |
 | `agentmesh` | `packages/agent-mesh/` | Inter-agent trust and identity mesh |
-| `agent-hypervisor` | `packages/agent-hypervisor/` | Runtime sandboxing and capability isolation |
+| `agent-runtime` | `packages/agent-runtime/` | Runtime sandboxing and capability isolation |
 | `agent-sre` | `packages/agent-sre/` | Observability, alerting, and reliability |
 | `ai-agent-compliance` | `packages/agent-compliance/` | Unified installer and compliance docs |
+| `agent-marketplace` | `packages/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
+| `agent-lightning` | `packages/agent-lightning/` | RL training governance with governed runners and policy rewards |
 
 ### Coding Guidelines
 

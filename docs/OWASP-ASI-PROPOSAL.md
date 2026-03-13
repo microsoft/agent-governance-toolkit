@@ -37,8 +37,8 @@ Contribution of insecure/secure code pairs to the OWASP Agent Security Initiativ
 |---|---|
 | **Vulnerability** | Raw agent output passed directly to SQL queries — SQL injection risk |
 | **Insecure** | Agent output used in f-string SQL query without sanitization |
-| **Secure** | `OutputValidator` from Agent Hypervisor sanitizes output before downstream consumption |
-| **Package** | Agent Hypervisor (`agent_hypervisor.OutputValidator`) |
+| **Secure** | `OutputValidator` from Agent Runtime sanitizes output before downstream consumption |
+| **Package** | Agent Runtime (`hypervisor.OutputValidator`) |
 
 ## File Structure
 
@@ -66,10 +66,10 @@ The Agent Governance Toolkit covers 10 of 10 OWASP Agentic Top 10 risks. Future 
 | ASI-02 | Excessive Capabilities | Agent OS | ✅ In this PR |
 | ASI-03 | Insecure Communication | Agent Mesh | 🔜 Planned |
 | ASI-04 | Supply Chain (Agent-SBOM) | Agent Mesh | 🔜 Planned |
-| ASI-05 | Insecure Output | Agent Hypervisor | ✅ In this PR |
+| ASI-05 | Insecure Output | Agent Runtime | ✅ In this PR |
 | ASI-06 | Confused Deputy | Agent OS | 🔜 Planned |
 | ASI-07 | Identity Spoofing | Agent Mesh | 🔜 Planned |
-| ASI-08 | Unbounded Autonomy | Agent Hypervisor | 🔜 Planned |
+| ASI-08 | Unbounded Autonomy | Agent Runtime | 🔜 Planned |
 | ASI-09 | Missing Audit Trails | Agent SRE | 🔜 Planned |
 | ASI-10 | Cascading Hallucinations | Agent SRE | 🔜 Planned |
 
@@ -85,5 +85,5 @@ The Agent Governance Toolkit covers 10 of 10 OWASP Agentic Top 10 risks. Future 
 
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
 - [Agent OS](https://github.com/microsoft/agent-governance-toolkit)
-- [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit)
+- [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit)
 - [OWASP Agentic Top 10](https://owasp.org/www-project-agentic-ai-threats-and-mitigations/)

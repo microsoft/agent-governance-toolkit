@@ -102,7 +102,7 @@ byte[] signature = identity.Sign("important data");
 bool valid = identity.Verify(Encoding.UTF8.GetBytes("important data"), signature);
 ```
 
-### Execution Rings (Hypervisor)
+### Execution Rings (Runtime)
 
 OS-inspired privilege rings (Ring 0–3) that assign agents different capability levels based on trust scores. Higher trust → higher privilege → more capabilities:
 

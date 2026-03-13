@@ -99,11 +99,11 @@ agentMesh:
     mtlsEnabled: true
     trustScoreThreshold: 0.7
 
-hypervisor:
+runtime:
   enabled: true
   replicas: 2
   image:
-    repository: agent-hypervisor
+    repository: agent-runtime
     tag: latest
   resources:
     requests:
@@ -219,7 +219,7 @@ Recommended resource configurations by deployment size:
 |-----------|----------------------|----------------------|--------------------|
 | Agent OS | 250m/256Mi → 500m/512Mi | 500m/512Mi → 1/1Gi | 1/1Gi → 2/2Gi |
 | AgentMesh | 100m/128Mi → 250m/256Mi | 250m/256Mi → 500m/512Mi | 500m/512Mi → 1/1Gi |
-| Hypervisor | 250m/256Mi → 500m/512Mi | 500m/512Mi → 1/1Gi | 1/1Gi → 2/2Gi |
+| Agent Runtime | 250m/256Mi → 500m/512Mi | 500m/512Mi → 1/1Gi | 1/1Gi → 2/2Gi |
 | Agent SRE | 100m/128Mi → 250m/256Mi | 250m/256Mi → 500m/512Mi | 500m/512Mi → 1/1Gi |
 
 > Format: `requests.cpu/requests.memory → limits.cpu/limits.memory`
