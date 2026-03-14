@@ -46,6 +46,10 @@ class ErrorBudget:
 
     Error Budget = 1 - SLO target
     Burn Rate = actual error rate / allowed error rate
+
+    Events are stored in a bounded ``deque(maxlen=max_events)`` to
+    prevent unbounded memory growth in long-running SLOs.  When the
+    buffer is full, the oldest events are silently evicted on append.
     """
 
     total: float = 0.0  # Set from SLO target
@@ -57,6 +61,11 @@ class ErrorBudget:
     max_events: int = 100_000
     _events: collections.deque = field(default_factory=lambda: collections.deque(maxlen=100_000))
     _monotonic_offset: float = field(default_factory=lambda: time.time() - time.monotonic())
+
+    def __post_init__(self) -> None:
+        """Ensure _events is a bounded deque with the correct maxlen."""
+        if not isinstance(self._events, collections.deque) or self._events.maxlen != self.max_events:
+            self._events = collections.deque(self._events, maxlen=self.max_events)
 
     @property
     def remaining(self) -> float:
@@ -76,10 +85,23 @@ class ErrorBudget:
         return self.consumed >= self.total
 
     def record_event(self, good: bool) -> None:
-        """Record a good or bad event against the budget."""
+        """Record a good or bad event against the budget.
+
+        Events are stored in a bounded deque.  When ``max_events`` is
+        reached, the oldest event is silently evicted.
+        """
         if not good:
             self.consumed += 1.0
         self._events.append({"good": good, "timestamp": time.monotonic()})
+
+    def clear_events(self) -> None:
+        """Clear all recorded events (does **not** reset ``consumed``)."""
+        self._events.clear()
+
+    @property
+    def event_count(self) -> int:
+        """Number of events currently in the buffer."""
+        return len(self._events)
 
     def burn_rate(self, window_seconds: int | None = None) -> float:
         """Calculate current burn rate within a time window.

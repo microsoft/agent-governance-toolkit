@@ -57,6 +57,33 @@ class TestErrorBudget:
         assert "burn_rate_warning" in names
         assert "burn_rate_critical" in names
 
+    def test_events_bounded_by_max_events(self) -> None:
+        """Events beyond max_events are silently evicted (oldest first)."""
+        budget = ErrorBudget(total=10.0, max_events=100)
+        for _ in range(200):
+            budget.record_event(good=True)
+        assert budget.event_count == 100  # capped at maxlen
+
+    def test_custom_max_events(self) -> None:
+        """Custom max_events parameter is respected."""
+        budget = ErrorBudget(total=10.0, max_events=5)
+        for i in range(10):
+            budget.record_event(good=(i % 2 == 0))
+        assert budget.event_count == 5
+        # The deque should contain only the last 5 events
+        assert budget._events.maxlen == 5
+
+    def test_clear_events(self) -> None:
+        """clear_events() empties the deque but does not reset consumed."""
+        budget = ErrorBudget(total=10.0)
+        for _ in range(5):
+            budget.record_event(good=False)
+        assert budget.consumed == 5.0
+        assert budget.event_count == 5
+        budget.clear_events()
+        assert budget.event_count == 0
+        assert budget.consumed == 5.0  # consumed is NOT reset
+
 
 class TestSLO:
     def test_creation(self) -> None:
