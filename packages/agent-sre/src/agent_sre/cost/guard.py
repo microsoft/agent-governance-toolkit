@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
-"""Cost guard — budget management and simple threshold alerting for agents."""
+# Community Edition -- basic implementation
+"""Cost guard -- budget management and simple threshold alerting for agents."""
 
 from __future__ import annotations
 
@@ -133,19 +133,39 @@ class CostGuard:
         kill_switch_threshold: float = 0.95,
         alert_thresholds: list[float] | None = None,
     ) -> None:
+        # Validate all numeric inputs BEFORE any assignment to prevent
+        # partially-initialized objects with corrupt state.
+        if not math.isfinite(org_monthly_budget) or org_monthly_budget < 0:
+            raise ValueError(f"org_monthly_budget must be finite and non-negative, got {org_monthly_budget}")
+        if not math.isfinite(per_task_limit) or per_task_limit < 0:
+            raise ValueError(f"per_task_limit must be finite and non-negative, got {per_task_limit}")
+        if not math.isfinite(per_agent_daily_limit) or per_agent_daily_limit < 0:
+            raise ValueError(f"per_agent_daily_limit must be finite and non-negative, got {per_agent_daily_limit}")
+        if not math.isfinite(kill_switch_threshold) or not (0.0 <= kill_switch_threshold <= 1.0):
+            raise ValueError(
+                f"kill_switch_threshold must be finite and in [0.0, 1.0], got {kill_switch_threshold}"
+            )
+        resolved_thresholds = alert_thresholds if alert_thresholds is not None else [0.50, 0.75, 0.90, 0.95]
+        for i, t in enumerate(resolved_thresholds):
+            if not math.isfinite(t) or not (0.0 <= t <= 1.0):
+                raise ValueError(
+                    f"alert_thresholds[{i}] must be finite and in [0.0, 1.0], got {t}"
+                )
+
         self.per_task_limit = per_task_limit
         self.per_agent_daily_limit = per_agent_daily_limit
         self.org_monthly_budget = org_monthly_budget
         self.anomaly_detection = anomaly_detection
         self.auto_throttle = auto_throttle
         self.kill_switch_threshold = kill_switch_threshold
-        self.alert_thresholds = alert_thresholds or [0.50, 0.75, 0.90, 0.95]
+        self.alert_thresholds = resolved_thresholds
 
         self._budgets: dict[str, AgentBudget] = {}
         self._records: list[CostRecord] = []
         self._alerts: list[CostAlert] = []
         self._cost_history: deque[float] = deque(maxlen=1000)
         self._org_spent_month: float = 0.0
+        self._org_killed: bool = False
 
     def get_budget(self, agent_id: str) -> AgentBudget:
         """Get or create budget for an agent."""
@@ -162,13 +182,21 @@ class CostGuard:
 
         Returns (allowed, reason).
         """
+        if not math.isfinite(estimated_cost):
+            return False, f"Invalid estimated cost: {estimated_cost}"
+        if estimated_cost < 0:
+            return False, f"Invalid negative estimated cost: {estimated_cost}"
+
+        if self._org_killed:
+            return False, "Organization budget exhausted"
+
         budget = self.get_budget(agent_id)
 
         if budget.killed:
-            return False, "Agent killed — budget exhausted"
+            return False, "Agent killed -- budget exhausted"
 
         if budget.throttled:
-            return False, "Agent throttled — approaching daily limit"
+            return False, "Agent throttled -- approaching daily limit"
 
         if estimated_cost > self.per_task_limit:
             return False, f"Estimated cost ${estimated_cost:.2f} exceeds per-task limit ${self.per_task_limit:.2f}"
@@ -196,6 +224,10 @@ class CostGuard:
 
         Returns any alerts triggered.
         """
+        if not math.isfinite(cost_usd):
+            raise ValueError(f"cost_usd must be finite, got {cost_usd}")
+        if cost_usd < 0:
+            raise ValueError(f"cost_usd must be non-negative, got {cost_usd}")
         alerts: list[CostAlert] = []
         budget = self.get_budget(agent_id)
         record = CostRecord(
@@ -241,7 +273,7 @@ class CostGuard:
             budget.killed = True
             alerts.append(CostAlert(
                 severity=CostAlertSeverity.CRITICAL,
-                message=f"Agent {agent_id} KILLED — {utilization * 100:.0f}% budget consumed",
+                message=f"Agent {agent_id} KILLED -- {utilization * 100:.0f}% budget consumed",
                 agent_id=agent_id,
                 current_value=budget.spent_today_usd,
                 threshold=budget.daily_limit_usd * self.kill_switch_threshold,
@@ -251,7 +283,7 @@ class CostGuard:
             budget.throttled = True
             alerts.append(CostAlert(
                 severity=CostAlertSeverity.WARNING,
-                message=f"Agent {agent_id} THROTTLED — {utilization * 100:.0f}% budget consumed",
+                message=f"Agent {agent_id} THROTTLED -- {utilization * 100:.0f}% budget consumed",
                 agent_id=agent_id,
                 current_value=budget.spent_today_usd,
                 threshold=budget.daily_limit_usd * 0.85,
@@ -266,6 +298,7 @@ class CostGuard:
                 if self.org_monthly_budget > 0 else 0.0
             )
             if prev_org_util < self.kill_switch_threshold <= org_util:
+                self._org_killed = True
                 for b in self._budgets.values():
                     b.killed = True
                 alerts.append(CostAlert(

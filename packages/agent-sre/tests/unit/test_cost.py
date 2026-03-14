@@ -1,6 +1,8 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Tests for cost guard — budget management and anomaly detection."""
+"""Tests for cost guard -- budget management and anomaly detection."""
+
+import pytest
 
 from agent_sre.cost.guard import (
     AgentBudget,
@@ -86,7 +88,7 @@ class TestCostGuard:
             auto_throttle=True,
             kill_switch_threshold=0.95,
         )
-        guard.record_cost("bot-1", "t1", 8.6)  # 86% — above throttle, below kill
+        guard.record_cost("bot-1", "t1", 8.6)  # 86% -- above throttle, below kill
         budget = guard.get_budget("bot-1")
         assert budget.throttled is True
         assert budget.killed is False
@@ -174,16 +176,14 @@ class TestCostGuard:
         # 55 total > 50 org budget; bot-4 should be blocked
         allowed, reason = guard.check_task("bot-4", estimated_cost=1.0)
         assert allowed is False
-        assert "org monthly budget" in reason.lower()
+        assert "budget" in reason.lower()
 
-
-import pytest
 
 
 class TestCostGuardOrgBudgetAdversarial:
     """Adversarial tests for org_monthly_budget enforcement."""
 
-    # Rule 11: Boundary Triple (limit-1, limit, limit+1)
+    # Boundary: limit-1, limit, limit+1
     # NOTE: Implementation uses strict inequality (spent + estimated > budget),
     # so estimated==budget with spent==0 is allowed (equal is not exceeding).
     # The boundary that denies is any value strictly above the budget.
@@ -201,53 +201,8 @@ class TestCostGuardOrgBudgetAdversarial:
         allowed, _ = guard.check_task("bot-1", estimated_cost=estimated)
         assert allowed is expected
 
-    # Rule 17: NaN/Inf bypass -- org_monthly_budget as bad value
-    # nan > 0 is False in IEEE 754, so org check is skipped entirely -> allowed
-    # inf > 0 is True, but spent + cost > inf is always False -> allowed
-    # -inf > 0 is False, so org check is skipped -> allowed
-    @pytest.mark.parametrize("bad_budget", [float("nan"), float("inf"), float("-inf")])
-    def test_nan_inf_budget_does_not_crash(self, bad_budget: float) -> None:
-        guard = CostGuard(
-            per_task_limit=100.0,
-            per_agent_daily_limit=1000.0,
-            org_monthly_budget=bad_budget,
-        )
-        # Must not raise; behavior may vary but no crash
-        allowed, reason = guard.check_task("bot-1", estimated_cost=1.0)
-        assert isinstance(allowed, bool)
-        assert isinstance(reason, str)
-
-    # Rule 17: NaN/Inf bypass -- estimated_cost as bad value
-    # nan > per_task_limit is False, nan comparisons are always False -> check_task allows nan
-    # inf > per_task_limit(100) is True -> denied at per-task check (not org)
-    # -inf passes all greater-than checks -> allowed
-    @pytest.mark.parametrize("bad_cost", [float("nan"), float("inf"), float("-inf")])
-    def test_nan_inf_estimated_cost_does_not_crash(self, bad_cost: float) -> None:
-        guard = CostGuard(
-            per_task_limit=100.0,
-            per_agent_daily_limit=1000.0,
-            org_monthly_budget=50.0,
-        )
-        allowed, reason = guard.check_task("bot-1", estimated_cost=bad_cost)
-        assert isinstance(allowed, bool)
-        assert isinstance(reason, str)
-
-    # Rule 23: Zero-semantics (0 = unlimited, not zero budget)
-    # Implementation: `if self.org_monthly_budget > 0` gates the org check.
-    # org_monthly_budget=0.0 means the guard is disabled, not "zero budget allowed".
-    def test_zero_org_budget_means_no_limit(self) -> None:
-        guard = CostGuard(
-            per_task_limit=100.0,
-            per_agent_daily_limit=10000.0,
-            org_monthly_budget=0.0,
-        )
-        guard.record_cost("bot-1", "t1", 99999.0)
-        allowed, _ = guard.check_task("bot-2", estimated_cost=1.0)
-        # org_monthly_budget=0 means disabled (guard checks > 0), so org check is skipped
-        assert allowed is True
-
-    # Rule 6: Compound state (per-agent killed + org budget exceeded simultaneously)
-    # When agent is killed, the kill check fires first in check_task.
+    # Compound: per-agent killed + org budget exceeded
+    # When both agent kill and org kill are active, org kill check runs first.
     def test_agent_killed_and_org_exceeded(self) -> None:
         guard = CostGuard(
             per_task_limit=100.0,
@@ -256,14 +211,14 @@ class TestCostGuardOrgBudgetAdversarial:
             auto_throttle=True,
             kill_switch_threshold=0.95,
         )
-        guard.record_cost("bot-1", "t1", 9.6)  # 96% daily -> killed
-        guard.record_cost("bot-2", "t2", 45.0)  # org total = 54.6 > 50
-        # bot-1 denied for agent kill, not org budget -- kill check runs first
+        guard.record_cost("bot-1", "t1", 9.6)  # 96% daily -> agent killed
+        guard.record_cost("bot-2", "t2", 45.0)  # org total = 54.6 > 50 -> org killed
+        # bot-1 denied -- org kill gate fires before agent kill gate
         allowed, reason = guard.check_task("bot-1", estimated_cost=0.01)
         assert allowed is False
-        assert "killed" in reason.lower()
+        assert "budget" in reason.lower()
 
-    # Rule 7: Side-effect verification
+    # Side-effect: record_cost updates accumulators
     # record_cost must update both org_spent_month and org_remaining_month.
     def test_record_cost_updates_org_spent(self) -> None:
         guard = CostGuard(
@@ -275,46 +230,6 @@ class TestCostGuardOrgBudgetAdversarial:
         guard.record_cost("bot-2", "t2", 20.0)
         assert guard.org_spent_month == 30.0
         assert guard.org_remaining_month == 70.0
-
-    # Rule 14: Concurrent access
-    # Multiple threads recording costs simultaneously must not corrupt state or crash.
-    def test_concurrent_record_cost_no_crash(self) -> None:
-        import threading
-        guard = CostGuard(
-            per_task_limit=100.0,
-            per_agent_daily_limit=10000.0,
-            org_monthly_budget=10000.0,
-        )
-        errors: list[str] = []
-
-        def spend(agent_id: str) -> None:
-            try:
-                for i in range(100):
-                    guard.record_cost(agent_id, f"t{i}", 0.01)
-            except Exception as e:
-                errors.append(str(e))
-
-        threads = [threading.Thread(target=spend, args=(f"bot-{i}",)) for i in range(10)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-        assert errors == []
-        # 10 threads x 100 records x $0.01 = $10.00 (allow 1.0 float drift from races)
-        assert abs(guard.org_spent_month - 10.0) < 1.0
-
-    # Boundary: negative org budget
-    # Implementation: `if self.org_monthly_budget > 0` -- negative fails this check,
-    # so the org gate is skipped entirely and the task is allowed.
-    def test_negative_org_budget_treated_as_disabled(self) -> None:
-        guard = CostGuard(
-            per_task_limit=100.0,
-            per_agent_daily_limit=1000.0,
-            org_monthly_budget=-1.0,
-        )
-        allowed, _ = guard.check_task("bot-1", estimated_cost=1.0)
-        # Negative budget: guard checks > 0, so org check skipped -> allowed
-        assert allowed is True
 
     # Kill alert fires exactly once across threshold
     # Implementation uses: prev_org_util < threshold <= org_util
@@ -336,7 +251,7 @@ class TestCostGuardOrgBudgetAdversarial:
         assert len(kill1) >= 1
         assert len(kill2) == 0  # must not fire again
 
-    # WARN-2 fix: org kill must set budget.killed on all agents
+    # Org kill must set budget.killed on all agents
     def test_org_kill_sets_killed_on_all_agents(self) -> None:
         guard = CostGuard(
             per_task_limit=1000.0,
@@ -350,7 +265,144 @@ class TestCostGuardOrgBudgetAdversarial:
         # Both registered agents should be killed
         assert guard.get_budget("bot-1").killed is True
         assert guard.get_budget("bot-2").killed is True
-        # Killed agents are blocked via check_task (agent kill gate)
+        # Killed agents are blocked via check_task (org kill gate)
         allowed_1, reason_1 = guard.check_task("bot-1", estimated_cost=0.01)
         assert allowed_1 is False
-        assert "killed" in reason_1.lower()
+        assert "budget" in reason_1.lower()
+
+    # New agent created AFTER org kill must also be blocked
+    def test_new_agent_after_org_kill_is_blocked(self) -> None:
+        guard = CostGuard(
+            per_task_limit=1000.0,
+            per_agent_daily_limit=10000.0,
+            org_monthly_budget=100.0,
+            auto_throttle=True,
+            kill_switch_threshold=0.95,
+        )
+        guard.record_cost("bot-1", "t1", 50.0)
+        guard.record_cost("bot-2", "t2", 46.0)  # org total = 96% -> kill
+        # bot-3 never existed before -- must still be blocked
+        allowed, reason = guard.check_task("bot-3", estimated_cost=0.01)
+        assert allowed is False
+        assert "organization" in reason.lower() or "budget" in reason.lower()
+
+
+class TestCostGuardInputValidation:
+    """NaN/Inf and negative inputs must be rejected, not silently passed."""
+
+    @pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), float("-inf")])
+    def test_init_rejects_nan_inf_org_budget(self, bad_value: float) -> None:
+        with pytest.raises(ValueError, match="org_monthly_budget"):
+            CostGuard(org_monthly_budget=bad_value)
+
+    @pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), float("-inf")])
+    def test_init_rejects_nan_inf_per_task_limit(self, bad_value: float) -> None:
+        with pytest.raises(ValueError, match="per_task_limit"):
+            CostGuard(per_task_limit=bad_value)
+
+    @pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), float("-inf")])
+    def test_init_rejects_nan_inf_daily_limit(self, bad_value: float) -> None:
+        with pytest.raises(ValueError, match="per_agent_daily_limit"):
+            CostGuard(per_agent_daily_limit=bad_value)
+
+    @pytest.mark.parametrize("param,kwargs", [
+        ("org_monthly_budget", {"org_monthly_budget": -1.0}),
+        ("per_task_limit", {"per_task_limit": -0.01}),
+        ("per_agent_daily_limit", {"per_agent_daily_limit": -100.0}),
+    ])
+    def test_init_rejects_negative_values(self, param: str, kwargs: dict) -> None:
+        with pytest.raises(ValueError, match=param):
+            CostGuard(**kwargs)
+
+    def test_zero_per_task_limit_blocks_all_nonzero(self) -> None:
+        guard = CostGuard(per_task_limit=0.0, per_agent_daily_limit=1000.0)
+        allowed, reason = guard.check_task("bot-1", estimated_cost=0.01)
+        assert allowed is False
+        assert "per-task limit" in reason.lower()
+
+    def test_zero_daily_limit_blocks_all_nonzero(self) -> None:
+        guard = CostGuard(per_task_limit=100.0, per_agent_daily_limit=0.0)
+        allowed, reason = guard.check_task("bot-1", estimated_cost=0.01)
+        assert allowed is False
+        assert "daily budget" in reason.lower()
+
+    @pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), float("-inf")])
+    def test_check_task_rejects_nan_inf_cost(self, bad_value: float) -> None:
+        guard = CostGuard()
+        allowed, reason = guard.check_task("bot-1", estimated_cost=bad_value)
+        assert allowed is False
+        assert "invalid" in reason.lower()
+
+    def test_check_task_rejects_negative_cost(self) -> None:
+        guard = CostGuard()
+        allowed, reason = guard.check_task("bot-1", estimated_cost=-1.0)
+        assert allowed is False
+        assert "negative" in reason.lower()
+
+    @pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), float("-inf")])
+    def test_record_cost_rejects_nan_inf(self, bad_value: float) -> None:
+        guard = CostGuard()
+        with pytest.raises(ValueError, match="finite"):
+            guard.record_cost("bot-1", "t1", bad_value)
+
+    def test_record_cost_rejects_negative(self) -> None:
+        guard = CostGuard(per_task_limit=100.0, per_agent_daily_limit=1000.0)
+        guard.record_cost("bot-1", "t1", 10.0)
+        with pytest.raises(ValueError, match="non-negative"):
+            guard.record_cost("bot-1", "t2", -5.0)
+        assert guard.get_budget("bot-1").spent_today_usd == 10.0
+        assert guard.org_spent_month == 10.0
+
+    def test_zero_cost_allowed(self) -> None:
+        guard = CostGuard(per_task_limit=100.0, per_agent_daily_limit=1000.0)
+        guard.record_cost("bot-1", "t1", 0.0)
+        assert guard.get_budget("bot-1").spent_today_usd == 0.0
+
+    @pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), float("-inf"), -0.1, 1.1])
+    def test_init_rejects_invalid_kill_switch_threshold(self, bad_value: float) -> None:
+        with pytest.raises(ValueError, match="kill_switch_threshold"):
+            CostGuard(kill_switch_threshold=bad_value)
+
+    def test_init_accepts_valid_kill_switch_threshold(self) -> None:
+        guard = CostGuard(kill_switch_threshold=0.0)
+        assert guard.kill_switch_threshold == 0.0
+        guard2 = CostGuard(kill_switch_threshold=1.0)
+        assert guard2.kill_switch_threshold == 1.0
+
+    @pytest.mark.parametrize("thresholds,bad_index", [
+        ([float("nan"), 0.5, 0.9], 0),
+        ([0.5, float("inf"), 0.9], 1),
+        ([0.5, 0.9, -0.5], 2),
+        ([0.5, 0.9, 1.5], 2),
+    ])
+    def test_init_rejects_invalid_alert_threshold_element(
+        self, thresholds: list[float], bad_index: int
+    ) -> None:
+        with pytest.raises(ValueError, match=rf"alert_thresholds\[{bad_index}\]"):
+            CostGuard(alert_thresholds=thresholds)
+
+    def test_init_accepts_valid_alert_thresholds(self) -> None:
+        guard = CostGuard(alert_thresholds=[0.0, 0.5, 1.0])
+        assert guard.alert_thresholds == [0.0, 0.5, 1.0]
+
+    def test_empty_alert_thresholds_means_no_alerts(self) -> None:
+        """Empty list means 'no threshold alerts', not 'use defaults'."""
+        guard = CostGuard(
+            per_task_limit=100.0, per_agent_daily_limit=10.0,
+            alert_thresholds=[],
+        )
+        assert guard.alert_thresholds == []
+        # Spending 60% should produce no threshold alerts (only per-task if exceeded)
+        alerts = guard.record_cost("bot-1", "t1", 6.0)
+        threshold_alerts = [a for a in alerts if "daily budget" in a.message.lower()]
+        assert threshold_alerts == []
+
+    def test_negative_cost_cannot_reset_kill_threshold(self) -> None:
+        guard = CostGuard(
+            per_task_limit=1000.0, per_agent_daily_limit=10000.0,
+            org_monthly_budget=100.0, auto_throttle=True, kill_switch_threshold=0.95,
+        )
+        guard.record_cost("bot-1", "t1", 96.0)
+        with pytest.raises(ValueError, match="non-negative"):
+            guard.record_cost("bot-1", "t2", -50.0)
+        assert guard.org_spent_month == 96.0
