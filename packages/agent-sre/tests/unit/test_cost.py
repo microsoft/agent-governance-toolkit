@@ -125,3 +125,53 @@ class TestCostGuard:
         s = guard.summary()
         assert s["total_records"] == 1
         assert "bot-1" in s["agents"]
+
+    def test_check_task_exceeds_org_budget(self) -> None:
+        guard = CostGuard(
+            per_task_limit=100.0,
+            per_agent_daily_limit=1000.0,
+            org_monthly_budget=50.0,
+        )
+        guard.record_cost("bot-1", "t1", 30.0)
+        guard.record_cost("bot-2", "t2", 15.0)
+        # 45 spent, trying to add 10 -> 55 > 50
+        allowed, reason = guard.check_task("bot-3", estimated_cost=10.0)
+        assert allowed is False
+        assert "org monthly budget" in reason.lower()
+
+    def test_check_task_within_org_budget(self) -> None:
+        guard = CostGuard(
+            per_task_limit=100.0,
+            per_agent_daily_limit=1000.0,
+            org_monthly_budget=100.0,
+        )
+        guard.record_cost("bot-1", "t1", 30.0)
+        allowed, reason = guard.check_task("bot-2", estimated_cost=10.0)
+        assert allowed is True
+
+    def test_org_budget_kill_alert(self) -> None:
+        guard = CostGuard(
+            per_task_limit=1000.0,
+            per_agent_daily_limit=10000.0,
+            org_monthly_budget=100.0,
+            auto_throttle=True,
+            kill_switch_threshold=0.95,
+        )
+        alerts = guard.record_cost("bot-1", "t1", 96.0)  # 96% of org budget
+        kill_alerts = [a for a in alerts if "org budget" in a.message.lower() and "kill" in a.message.lower()]
+        assert len(kill_alerts) >= 1
+
+    def test_org_budget_multi_agent_aggregate(self) -> None:
+        guard = CostGuard(
+            per_task_limit=100.0,
+            per_agent_daily_limit=100.0,
+            org_monthly_budget=50.0,
+        )
+        # Each agent within daily limit, but org total exceeds
+        guard.record_cost("bot-1", "t1", 20.0)
+        guard.record_cost("bot-2", "t2", 20.0)
+        guard.record_cost("bot-3", "t3", 15.0)
+        # 55 total > 50 org budget; bot-4 should be blocked
+        allowed, reason = guard.check_task("bot-4", estimated_cost=1.0)
+        assert allowed is False
+        assert "org monthly budget" in reason.lower()
