@@ -51,7 +51,7 @@ class AuditEntry(BaseModel):
     policy_decision: Optional[str] = None
     matched_rule: Optional[str] = None
 
-    # Chaining — kept for API compatibility but not computed
+    # Chaining — populated automatically by MerkleAuditChain.add_entry()
     previous_hash: str = Field(default="")
     entry_hash: str = Field(default="")
 

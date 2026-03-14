@@ -26,9 +26,11 @@ import inspect
 import json
 import logging
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional
+from types import ModuleType
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +180,7 @@ def _hash_file(path: str) -> str:
     return h.hexdigest()
 
 
-def _hash_function_bytecode(func) -> str:
+def _hash_function_bytecode(func: Callable[..., Any]) -> str:
     """SHA-256 hash of a function's compiled bytecode."""
     code = func.__code__
     h = hashlib.sha256()
@@ -187,10 +189,10 @@ def _hash_function_bytecode(func) -> str:
     return h.hexdigest()
 
 
-def _resolve_function(module, dotted_name: str):
+def _resolve_function(module: ModuleType, dotted_name: str) -> Any | None:
     """Resolve 'ClassName.method' or 'function_name' from a module."""
     parts = dotted_name.split(".")
-    obj = module
+    obj: Any = module
     for part in parts:
         obj = getattr(obj, part, None)
         if obj is None:

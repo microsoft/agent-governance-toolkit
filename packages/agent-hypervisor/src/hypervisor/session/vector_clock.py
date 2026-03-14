@@ -10,6 +10,7 @@ VectorClock and VectorClockManager are retained for API compatibility.
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, field
 
 
@@ -19,23 +20,37 @@ class CausalViolationError(Exception):
 
 @dataclass
 class VectorClock:
-    """A version counter (community edition: tracking only, no enforcement)."""
+    """A version counter (community edition: tracking only, no enforcement).
+
+    Thread-safe: all reads and mutations are guarded by an internal lock
+    to prevent data races when multiple agents tick/merge concurrently.
+    """
 
     clocks: dict[str, int] = field(default_factory=dict)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def tick(self, agent_did: str) -> None:
         """Increment the clock for an agent."""
-        self.clocks[agent_did] = self.clocks.get(agent_did, 0) + 1
+        with self._lock:
+            self.clocks[agent_did] = self.clocks.get(agent_did, 0) + 1
 
     def get(self, agent_did: str) -> int:
-        return self.clocks.get(agent_did, 0)
+        with self._lock:
+            return self.clocks.get(agent_did, 0)
 
     def merge(self, other: VectorClock) -> VectorClock:
-        """Merge two version counters (take component-wise max)."""
-        merged = VectorClock(clocks=dict(self.clocks))
-        for agent, clock in other.clocks.items():
-            merged.clocks[agent] = max(merged.clocks.get(agent, 0), clock)
-        return merged
+        """Merge two version counters (take component-wise max).
+
+        Acquires locks on both clocks to get consistent snapshots.
+        """
+        # Deterministic lock ordering by id() to prevent deadlocks
+        first, second = sorted([self, other], key=id)
+        with first._lock:
+            with second._lock:
+                merged_clocks = dict(self.clocks)
+                for agent, clock in other.clocks.items():
+                    merged_clocks[agent] = max(merged_clocks.get(agent, 0), clock)
+        return VectorClock(clocks=merged_clocks)
 
     def happens_before(self, other: VectorClock) -> bool:
         return False
@@ -44,16 +59,20 @@ class VectorClock:
         return False
 
     def copy(self) -> VectorClock:
-        return VectorClock(clocks=dict(self.clocks))
+        with self._lock:
+            return VectorClock(clocks=dict(self.clocks))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, VectorClock):
             return False
-        all_agents = set(self.clocks.keys()) | set(other.clocks.keys())
-        return all(
-            self.clocks.get(a, 0) == other.clocks.get(a, 0)
-            for a in all_agents
-        )
+        first, second = sorted([self, other], key=id)
+        with first._lock:
+            with second._lock:
+                all_agents = set(self.clocks.keys()) | set(other.clocks.keys())
+                return all(
+                    self.clocks.get(a, 0) == other.clocks.get(a, 0)
+                    for a in all_agents
+                )
 
 
 class VectorClockManager:
