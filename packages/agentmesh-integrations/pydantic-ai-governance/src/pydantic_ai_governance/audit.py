@@ -22,13 +22,16 @@ class AuditEntry:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d: Dict[str, Any] = {
             "timestamp": self.timestamp,
             "event_type": self.event_type.value,
             "tool_name": self.tool_name,
             "allowed": self.allowed,
             "reason": self.reason,
         }
+        if self.agent_id is not None:
+            d["agent_id"] = self.agent_id
+        return d
 
 
 class AuditTrail:
@@ -66,4 +69,11 @@ class AuditTrail:
     def summary(self) -> Dict[str, Any]:
         total = len(self._entries)
         blocked = len(self.violations)
-        return {"total_checks": total, "allowed": total - blocked, "blocked": blocked}
+        result: Dict[str, Any] = {
+            "total_checks": total,
+            "allowed": total - blocked,
+            "blocked": blocked,
+        }
+        if total > 0:
+            result["block_rate"] = blocked / total
+        return result

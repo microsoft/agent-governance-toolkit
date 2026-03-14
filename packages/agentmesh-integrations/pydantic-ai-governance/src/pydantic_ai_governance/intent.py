@@ -34,12 +34,19 @@ class IntentClassification:
     signals: List[str] = field(default_factory=list)
 
 
-# Basic threat keywords
+# Threat keywords with confidence levels
 _THREAT_KEYWORDS: Dict[SemanticIntent, List[str]] = {
     SemanticIntent.DESTRUCTIVE_DATA: ["drop table", "delete from", "truncate", "rm -rf", "format"],
     SemanticIntent.DATA_EXFILTRATION: ["curl", "wget", "scp", "rsync", "ftp"],
     SemanticIntent.PRIVILEGE_ESCALATION: ["sudo", "chmod", "chown", "su root"],
-    SemanticIntent.CODE_EXECUTION: ["eval(", "exec(", "__import__", "subprocess"],
+    SemanticIntent.SYSTEM_MODIFICATION: ["/etc/", "registry", "systemctl", "sysctl"],
+    SemanticIntent.CODE_EXECUTION: ["eval", "exec(", "__import__", "subprocess"],
+}
+
+# High-confidence patterns that warrant confidence >= 0.9
+_HIGH_CONFIDENCE: Dict[SemanticIntent, List[str]] = {
+    SemanticIntent.DESTRUCTIVE_DATA: ["rm -rf", "drop table", "truncate", "delete from"],
+    SemanticIntent.SYSTEM_MODIFICATION: ["/etc/"],
 }
 
 
@@ -55,12 +62,24 @@ def classify_intent(
     if arguments:
         combined = f"{combined} {' '.join(str(v) for v in arguments.values())}"
 
+    best_match: Optional[IntentClassification] = None
+    best_confidence = 0.0
+
     for intent, keywords in _THREAT_KEYWORDS.items():
         for keyword in keywords:
             if keyword.lower() in combined:
-                return IntentClassification(
-                    intent=intent, confidence=0.8, signals=[keyword],
-                )
+                confidence = 0.8
+                high = _HIGH_CONFIDENCE.get(intent, [])
+                if keyword.lower() in [h.lower() for h in high]:
+                    confidence = 0.9
+                if confidence > best_confidence:
+                    best_confidence = confidence
+                    best_match = IntentClassification(
+                        intent=intent, confidence=confidence, signals=[keyword],
+                    )
+
+    if best_match is not None:
+        return best_match
 
     return IntentClassification(
         intent=SemanticIntent.BENIGN, confidence=1.0,
