@@ -84,7 +84,7 @@ async def train_sql_agent():
     """Train a SQL agent with governance."""
     
     # Import Agent OS integration
-    from agent_os.integrations.agent_lightning import (
+    from agent_lightning_gov import (
         GovernedRunner,
         PolicyReward,
         GovernedEnvironment,
@@ -202,7 +202,7 @@ async def train_sql_agent():
 async def demo_environment():
     """Demonstrate the GovernedEnvironment."""
     
-    from agent_os.integrations.agent_lightning import (
+    from agent_lightning_gov import (
         GovernedEnvironment,
         EnvironmentConfig,
     )

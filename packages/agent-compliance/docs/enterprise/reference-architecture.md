@@ -113,7 +113,7 @@ curl -X POST https://governance.internal/api/v1/evaluate \
 
 **When to use:** Multiple business units. Federated governance with local policy overrides. Hundreds to thousands of agents. Regulatory requirements (SOC2, HIPAA, GDPR).
 
-**Components needed:** Full stack — Agent OS, AgentMesh, Agent Hypervisor, Agent SRE, DID Registry, Federated Policy Store
+**Components needed:** Full stack — Agent OS, AgentMesh, Agent Runtime, Agent SRE, DID Registry, Federated Policy Store
 
 **Estimated scale:** 50,000+ requests/sec, 10+ replicas, multi-region capable
 
@@ -126,7 +126,7 @@ graph TB
         T2[Agent Teams] --> GW2[Mesh Gateway]
     end
     subgraph "Governance Platform"
-        GW1 & GW2 --> HV[Agent Hypervisor]
+        GW1 & GW2 --> HV[Agent Runtime]
         HV --> OS[Agent OS Kernel]
         HV --> MESH[AgentMesh Trust Layer]
         OS --> PE[Federated Policy Engine]
@@ -144,14 +144,14 @@ graph TB
 
 ### How It Works
 
-The full enterprise deployment adds trust mesh, runtime isolation, and federated policies on top of the multi-team pattern. Each business unit connects through a mesh gateway that authenticates agents using decentralized identifiers (DIDs). The Agent Hypervisor provides runtime isolation, resource limits, and kill switches. Agent SRE adds chaos engineering and anomaly detection for fleet-wide reliability.
+The full enterprise deployment adds trust mesh, runtime isolation, and federated policies on top of the multi-team pattern. Each business unit connects through a mesh gateway that authenticates agents using decentralized identifiers (DIDs). The Agent Runtime provides runtime isolation, resource limits, and kill switches. Agent SRE adds chaos engineering and anomaly detection for fleet-wide reliability.
 
 **Deployment model:** Platform-as-a-service with mesh gateways per business unit
 
 **Key capabilities:**
 - **Federated policies:** Global policies set by security team, local overrides per business unit
 - **DID-based identity:** Cryptographic agent identity that works across organizational boundaries
-- **Runtime isolation:** Hypervisor enforces execution rings and resource limits per agent
+- **Runtime isolation:** Agent Runtime enforces execution rings and resource limits per agent
 - **Chaos engineering:** Continuous adversarial testing of governance controls
 - **Anomaly detection:** ML-based behavioral analysis across the entire agent fleet
 
@@ -198,7 +198,7 @@ business_units:
 Most teams start with the single-team pattern and migrate as needs grow:
 
 1. **Single → Multi-Team:** Extract the embedded kernel into a standalone API server. Add a shared audit store. Migrate policy files to the central API.
-2. **Multi-Team → Enterprise:** Add AgentMesh gateways. Deploy Agent Hypervisor for runtime isolation. Set up DID registry. Configure federated policies.
+2. **Multi-Team → Enterprise:** Add AgentMesh gateways. Deploy Agent Runtime for runtime isolation. Set up DID registry. Configure federated policies.
 
 Each migration is incremental — no big-bang cutover required.
 

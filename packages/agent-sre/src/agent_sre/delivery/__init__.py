@@ -10,6 +10,12 @@ from agent_sre.delivery.blue_green import (
     Environment,
     EnvironmentState,
 )
+from agent_sre.delivery.rollout import (
+    ShadowMode,
+    ShadowResult,
+    ShadowSession,
+    SimulatedAction,
+)
 
 __all__ = [
     "AgentEnvironment",
@@ -18,4 +24,8 @@ __all__ = [
     "BlueGreenManager",
     "Environment",
     "EnvironmentState",
+    "ShadowMode",
+    "ShadowResult",
+    "ShadowSession",
+    "SimulatedAction",
 ]

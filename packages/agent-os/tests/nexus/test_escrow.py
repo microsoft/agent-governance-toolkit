@@ -7,9 +7,9 @@ Tests for Nexus Escrow / Proof of Outcome
 import pytest
 from datetime import datetime
 
-from modules.nexus.escrow import EscrowManager, ProofOfOutcome
-from modules.nexus.schemas.escrow import EscrowRequest, EscrowStatus
-from modules.nexus.exceptions import (
+from nexus.escrow import EscrowManager, ProofOfOutcome
+from nexus.schemas.escrow import EscrowRequest, EscrowStatus
+from nexus.exceptions import (
     EscrowNotFoundError,
     EscrowAlreadyResolvedError,
     InsufficientCreditsError,
@@ -91,7 +91,7 @@ class TestEscrowManager:
         receipt = await manager.create_escrow(request, "sig")
         await manager.activate_escrow(receipt.escrow_id)
         
-        from modules.nexus.schemas.escrow import EscrowRelease
+        from nexus.schemas.escrow import EscrowRelease
         release = EscrowRelease(
             escrow_id=receipt.escrow_id,
             outcome="success",
@@ -120,7 +120,7 @@ class TestEscrowManager:
         receipt = await manager.create_escrow(request, "sig")
         await manager.activate_escrow(receipt.escrow_id)
         
-        from modules.nexus.schemas.escrow import EscrowRelease
+        from nexus.schemas.escrow import EscrowRelease
         release = EscrowRelease(
             escrow_id=receipt.escrow_id,
             outcome="failure",

@@ -7,9 +7,9 @@ Tests for Nexus Registry
 import pytest
 from datetime import datetime
 
-from modules.nexus.registry import AgentRegistry, RegistrationResult, PeerVerification
-from modules.nexus.schemas.manifest import AgentManifest, AgentIdentity, AgentCapabilities, AgentPrivacy
-from modules.nexus.exceptions import (
+from nexus.registry import AgentRegistry, RegistrationResult, PeerVerification
+from nexus.schemas.manifest import AgentManifest, AgentIdentity, AgentCapabilities, AgentPrivacy
+from nexus.exceptions import (
     AgentAlreadyRegisteredError,
     AgentNotFoundError,
     IATPUnverifiedPeerException,

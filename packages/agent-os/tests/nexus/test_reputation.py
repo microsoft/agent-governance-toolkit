@@ -7,7 +7,7 @@ Tests for Nexus Reputation Engine
 import pytest
 from datetime import datetime
 
-from modules.nexus.reputation import (
+from nexus.reputation import (
     ReputationEngine,
     ReputationHistory,
     TrustScore,

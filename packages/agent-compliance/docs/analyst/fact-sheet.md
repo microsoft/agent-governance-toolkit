@@ -12,7 +12,7 @@
 |-----------|---------|-------|------------|
 | **[Agent OS](https://github.com/microsoft/agent-governance-toolkit)** | Governance kernel — policy enforcement, capability security, audit trails | 2,000+ | 0% policy violations in governed agents |
 | **[AgentMesh](https://github.com/microsoft/agent-governance-toolkit)** | Trust & identity — zero-trust communication, encrypted channels | 500+ | DID-based cryptographic auth |
-| **[Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit)** | Runtime isolation — execution rings, resource limits, kill switches | 200+ | Process-level isolation |
+| **[Agent Runtime](https://github.com/microsoft/agent-governance-toolkit)** | Runtime isolation — execution rings, resource limits, kill switches | 200+ | Process-level isolation |
 | **[Agent SRE](https://github.com/microsoft/agent-governance-toolkit)** | Reliability engineering — SLOs, chaos engineering, incident response | 329+ | 11 observability platforms |
 | **[Agent Governance](https://github.com/microsoft/agent-governance-toolkit)** | Unified installer — single package for the complete stack | — | `pip install ai-agent-governance[full]` |
 
@@ -79,7 +79,7 @@ See the full [OWASP Implementation Guide](owasp-agentic-mapping.md) for code exa
 │  └────────┬─────────┘          └────────────┬────────────┘   │
 │           │                                 │                │
 │  ┌────────▼─────────┐          ┌────────────▼────────────┐   │
-│  │ Agent Hypervisor  │          │  Agent SRE              │   │
+│  │ Agent Runtime     │          │  Agent SRE              │   │
 │  │ Execution Rings   │          │  SLO Enforcement        │   │
 │  │ Resource Limits   │          │  Chaos Engineering      │   │
 │  │ Kill Switch       │          │  Anomaly Detection      │   │
@@ -98,7 +98,7 @@ pip install ai-agent-governance[full]
 # Or install individual components
 pip install agent-os-kernel          # Governance kernel only
 pip install agentmesh-platform       # Trust mesh only
-pip install agent-hypervisor         # Runtime isolation only
+pip install agent-runtime            # Runtime isolation only
 pip install agent-sre                # Reliability engineering only
 ```
 

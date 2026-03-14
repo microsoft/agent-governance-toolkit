@@ -42,6 +42,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "packages" / "agent-os" / "src"))
 sys.path.insert(0, str(_REPO_ROOT / "packages" / "agent-mesh" / "src"))
 sys.path.insert(0, str(_REPO_ROOT / "packages" / "agent-sre" / "src"))
+# agent-hypervisor is the legacy name; the package is now called agent-runtime
 sys.path.insert(0, str(_REPO_ROOT / "packages" / "agent-hypervisor" / "src"))
 
 # Suppress library-level log messages to keep terminal output clean.

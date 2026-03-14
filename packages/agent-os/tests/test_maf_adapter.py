@@ -9,6 +9,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+pytest.importorskip("agentmesh", reason="agentmesh not installed")
+pytest.importorskip("agent_sre", reason="agent_sre not installed")
+
 from agentmesh.governance import AuditLog
 from agent_os.policies import PolicyDecision, PolicyEvaluator
 from agent_sre.anomaly import RiskLevel, RogueAgentDetector, RogueDetectorConfig

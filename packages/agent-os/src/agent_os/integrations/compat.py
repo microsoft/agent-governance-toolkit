@@ -55,7 +55,7 @@ KNOWN_PACKAGES = [
     "agentmesh-platform",
     "agent-sre",
     "ai-agent-compliance",
-    "agent-hypervisor",
+    "agent-runtime",
 ]
 
 

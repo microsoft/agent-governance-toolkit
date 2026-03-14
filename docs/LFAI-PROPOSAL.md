@@ -17,7 +17,7 @@ The ecosystem consists of 5 interoperating packages:
 |---------|---------|------|
 | **Agent OS** | Core governance kernel (policy engine, capability sandbox, VFS) | [agent-os](https://pypi.org/project/agent-os/) |
 | **Agent Mesh** | Inter-agent trust layer (DID identity, IATP protocol) | [agent-mesh](https://pypi.org/project/agent-mesh/) |
-| **Agent Hypervisor** | Execution isolation (ring model, kill switch) | [agent-hypervisor](https://pypi.org/project/agent-hypervisor/) |
+| **Agent Runtime** | Execution isolation (ring model, kill switch) | [agent-runtime](https://pypi.org/project/agent-runtime/) |
 | **Agent SRE** | Observability & reliability (circuit breakers, anomaly detection) | [agent-sre](https://pypi.org/project/agent-sre/) |
 | **Agent Governance** | Meta-framework & compliance mapping | [agent-governance](https://pypi.org/project/agent-governance/) |
 
@@ -50,7 +50,7 @@ As AI agents become increasingly autonomous, governance infrastructure is critic
 │         (Meta-framework + Compliance)        │
 ├──────────┬──────────┬───────────┬───────────┤
 │ Agent OS │  Agent   │  Agent    │  Agent    │
-│ (Kernel) │  Mesh    │Hypervisor │  SRE      │
+│ (Kernel) │  Mesh    │ Runtime   │  SRE      │
 │          │ (Trust)  │(Isolation)│(Observe)  │
 ├──────────┴──────────┴───────────┴───────────┤
 │         Framework Integrations               │
@@ -65,10 +65,10 @@ As AI agents become increasingly autonomous, governance infrastructure is critic
 | ASI-01 | Agent Hijacking | Agent OS (PolicyEngine) |
 | ASI-02 | Excessive Capabilities | Agent OS (CapabilitySandbox) |
 | ASI-03 | Insecure Communication | Agent Mesh (IATP + DID) |
-| ASI-05 | Insecure Output | Agent Hypervisor (OutputValidator) |
+| ASI-05 | Insecure Output | Agent Runtime (OutputValidator) |
 | ASI-06 | Confused Deputy | Agent OS (CapabilityGuard) |
 | ASI-07 | Identity Spoofing | Agent Mesh (TrustScorer) |
-| ASI-08 | Unbounded Autonomy | Agent Hypervisor (KillSwitch) |
+| ASI-08 | Unbounded Autonomy | Agent Runtime (KillSwitch) |
 | ASI-09 | Missing Audit Trails | Agent SRE (IncidentTimeline) |
 | ASI-10 | Cascading Hallucinations | Agent SRE (CircuitBreaker) |
 
@@ -78,7 +78,7 @@ As AI agents become increasingly autonomous, governance infrastructure is critic
 |---------|-------|----------|
 | Agent OS | 1,327 | Policy engine, capability sandbox, VFS |
 | Agent Mesh | 476 | Trust scoring, DID identity, IATP |
-| Agent Hypervisor | 489 | Ring model, kill switch, sagas |
+| Agent Runtime | 489 | Ring model, kill switch, sagas |
 | Agent SRE | 1,071 | SLOs, chaos testing, circuit breakers |
 | Agent Governance | 537 | Compliance mapping, meta-framework |
 | **Total** | **3,900+** | |
@@ -101,7 +101,7 @@ As AI agents become increasingly autonomous, governance infrastructure is critic
 
 ## Links
 
-- [Agent OS](https://github.com/microsoft/agent-governance-toolkit) | [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit) | [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) | [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) | [Agent Governance](https://github.com/microsoft/agent-governance-toolkit)
+- [Agent OS](https://github.com/microsoft/agent-governance-toolkit) | [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit) | [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) | [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) | [Agent Governance](https://github.com/microsoft/agent-governance-toolkit)
 - [Microsoft mono-repo](https://github.com/microsoft/agent-governance-toolkit) (pending public release)
 - [OWASP Compliance Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
 - [PyPI: agent-os](https://pypi.org/project/agent-os/)

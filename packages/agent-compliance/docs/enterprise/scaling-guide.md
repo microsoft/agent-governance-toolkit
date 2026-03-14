@@ -48,7 +48,7 @@ EOF
 |-----------|-----------|----------------|
 | Agent OS API | Yes | Horizontal replicas + HPA |
 | AgentMesh Gateway | Yes | Horizontal replicas per BU |
-| Agent Hypervisor | Stateful (agent sessions) | Scale with agent count; sticky sessions |
+| Agent Runtime | Stateful (agent sessions) | Scale with agent count; sticky sessions |
 | Agent SRE | Yes | Single replica per cluster usually sufficient |
 | Audit Store (Postgres) | Stateful | Vertical scaling or read replicas |
 
@@ -110,7 +110,7 @@ For teams getting started. Minimal infrastructure footprint.
 |-----------|----------|-------------|----------------|---------|
 | Agent OS | 1 | 250m | 256Mi | — |
 | AgentMesh | 1 | 100m | 128Mi | — |
-| Hypervisor | 1 | 250m | 256Mi | — |
+| Agent Runtime | 1 | 250m | 256Mi | — |
 | Agent SRE | 1 | 100m | 128Mi | — |
 | Postgres | 1 | 250m | 512Mi | 10Gi |
 | **Total** | **5 pods** | **950m** | **1.3Gi** | **10Gi** |
@@ -123,7 +123,7 @@ For multiple teams with centralized governance.
 |-----------|----------|-------------|----------------|---------|
 | Agent OS | 3 | 500m | 512Mi | — |
 | AgentMesh | 2 | 250m | 256Mi | — |
-| Hypervisor | 2 | 500m | 512Mi | — |
+| Agent Runtime | 2 | 500m | 512Mi | — |
 | Agent SRE | 1 | 250m | 256Mi | — |
 | Postgres | 2 (primary + replica) | 1 | 2Gi | 100Gi |
 | **Total** | **10 pods** | **4.25** | **5.8Gi** | **100Gi** |
@@ -136,7 +136,7 @@ For large organizations with federated governance.
 |-----------|----------|-------------|----------------|---------|
 | Agent OS | 5–10 | 1 | 1Gi | — |
 | AgentMesh | 3–5 | 500m | 512Mi | — |
-| Hypervisor | 3–5 | 1 | 1Gi | — |
+| Agent Runtime | 3–5 | 1 | 1Gi | — |
 | Agent SRE | 2 | 500m | 512Mi | — |
 | Postgres | 3 (primary + 2 replicas) | 2 | 4Gi | 500Gi |
 | **Total** | **16–25 pods** | **14–22** | **16–26Gi** | **500Gi** |

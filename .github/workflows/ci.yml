@@ -52,7 +52,7 @@ jobs:
             2>/dev/null || pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==1.1.0 2>/dev/null || true
       - name: Test ${{ matrix.package }}
         working-directory: packages/${{ matrix.package }}
-        run: pytest tests/ -x -q --tb=short
+        run: pytest tests/ -q --tb=short
 
   security:
     runs-on: ubuntu-latest
@@ -67,6 +67,8 @@ jobs:
             safety==3.2.1 --hash=sha256:9f53646717ba052e1bf631bd54fb3da0fafa58e85d578b20a8b9affdcf81889e \
             2>/dev/null || pip install --no-cache-dir safety==3.2.1
       - name: Check dependencies
+        env:
+          GIT_TERMINAL_PROMPT: "0"
         run: |
           for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance; do
             echo "=== $pkg ==="

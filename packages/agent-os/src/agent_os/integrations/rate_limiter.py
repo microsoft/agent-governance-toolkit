@@ -1,10 +1,15 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-Rate Limiting for Tool Calls
+"""Tool-call rate limiting tied to governance policy.
 
-Token bucket algorithm to rate-limit tool invocations per agent.
-Integrates with GovernancePolicy's max_tool_calls field.
+This module enforces token-bucket limits for tool invocations, optionally scoped
+per agent and governed by ``GovernancePolicy.max_tool_calls``.
+
+See also:
+    - hypervisor.security.rate_limiter: runtime-layer per-agent/per-ring limits.
+    - agentmesh.services.rate_limiter: service/proxy-level limits in Agent Mesh.
+    - agentmesh.services.rate_limit_middleware: HTTP edge middleware in Agent Mesh.
+    - agent_os.policies.rate_limiting: shared token-bucket primitives.
 """
 
 import threading

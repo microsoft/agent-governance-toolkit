@@ -14,7 +14,7 @@ The stack consists of four components:
 | **Agent OS** | Governance kernel — policy, sandbox, memory, MCP security | `pip install agent-os` |
 | **AgentMesh** | Identity & trust — DIDs, SPIFFE, handshake, reputation | `pip install agentmesh` |
 | **Agent SRE** | Observability — SLOs, anomaly detection, chaos, OpenTelemetry | `pip install agent-sre` |
-| **Agent Hypervisor** | Runtime control — kill switch, execution rings, saga rollback | `pip install agent-hypervisor` |
+| **Agent Runtime** | Runtime control — kill switch, execution rings, saga rollback | `pip install agent-runtime` |
 
 ---
 
@@ -227,7 +227,7 @@ no accountability trail linking actions to specific agents or their human sponso
 
 AgentMesh provides DID-based cryptographic identity with Ed25519 keypairs,
 human sponsor linkage, and SPIFFE integration for mTLS workload identity.
-Agent Hypervisor enforces a 4-tier execution ring model based on trust scores.
+Agent Runtime enforces a 4-tier execution ring model based on trust scores.
 
 ### Code Example
 
@@ -790,7 +790,7 @@ expected norms.
 
 ### Implementation
 
-Agent OS provides `MCPGateway` with human approval workflows. Agent Hypervisor
+Agent OS provides `MCPGateway` with human approval workflows. Agent Runtime
 adds `KillSwitch` for immediate termination and `RingEnforcer` with consensus
 gates. AgentMesh provides `HumanSponsor` for accountability.
 
@@ -1035,7 +1035,7 @@ assert "baselines" in summary or "alerts" in summary
 | **ASI06** Memory Poisoning | Agent OS | `MemoryGuard` | ✅ Full |
 | **ASI07** Inter-Agent Comms | AgentMesh | `TrustHandshake`, `AuditChain`, `TrustBridge` | ✅ Full |
 | **ASI08** Cascading Failures | Agent OS + SRE | `CircuitBreaker`, `ErrorBudget`, `ChaosExperiment` | ✅ Full |
-| **ASI09** Human Oversight | Hypervisor | `KillSwitch`, `RingEnforcer`, `MCPGateway` | ✅ Full |
+| **ASI09** Human Oversight | Runtime | `KillSwitch`, `RingEnforcer`, `MCPGateway` | ✅ Full |
 | **ASI10** Observability | Agent SRE | `AnomalyDetector`, `TraceExporter`, `MetricsExporter` | ✅ Full |
 
 ## Contributing
@@ -1044,7 +1044,7 @@ This implementation guide is a community contribution to the OWASP GenAI project
 To reproduce the examples, install the stack:
 
 ```bash
-pip install agent-os agentmesh agent-sre agent-hypervisor
+pip install agent-os agentmesh agent-sre agent-runtime
 ```
 
 All source code is available under the MIT license. PRs and issues welcome at

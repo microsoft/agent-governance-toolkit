@@ -1,7 +1,7 @@
 # Singapore Model Governance Framework — Compliance Mapping
 
 > **Framework**: IMDA Model AI Governance Framework for Agentic AI (January 2026)
-> **Stack**: Agent Governance (Agent OS + AgentMesh + Agent SRE + Agent Hypervisor)
+> **Stack**: Agent Governance (Agent OS + AgentMesh + Agent SRE + Agent Runtime)
 > **Last Updated**: February 2026
 
 ---
@@ -20,7 +20,7 @@ AI agents must satisfy: bounding risks upfront, maintaining meaningful human
 accountability, implementing technical controls, and ensuring end-user transparency.
 
 The Agent Governance stack — comprising Agent OS (governance kernel), AgentMesh
-(zero-trust identity and trust), Agent Hypervisor (runtime isolation), and Agent SRE
+(zero-trust identity and trust), Agent Runtime (runtime isolation), and Agent SRE
 (reliability engineering) — provides production-ready implementations for every
 requirement across all four pillars. This document serves as an auditable compliance
 artefact for APAC enterprises adopting agentic AI.
@@ -40,7 +40,7 @@ artefact for APAC enterprises adopting agentic AI.
 | **2 — Accountability** | Human oversight mechanisms | ✅ Full | `GovernancePolicy.require_human_approval`, `checkpoint_frequency` |
 | **2 — Accountability** | Mitigate automation bias | ✅ Full | `GovernanceLogger` audit trail, `FlightRecorder`, `DifferentialAuditor` |
 | **2 — Accountability** | Sponsor accountability | ✅ Full | AgentMesh `SponsorManager`, delegation chains |
-| **2 — Accountability** | Decision lineage tracking | ✅ Full | Agent Hypervisor `DeltaTrail` hash-chained audit |
+| **2 — Accountability** | Decision lineage tracking | ✅ Full | Agent Runtime `DeltaTrail` hash-chained audit |
 | **3 — Technical Controls** | Sandboxing and safety testing | ✅ Full | `ExecutionSandbox`, AST analysis, blocked modules/builtins |
 | **3 — Technical Controls** | Behaviour monitoring | ✅ Full | Agent SRE `AnomalyDetector`, `GovernanceMetrics`, 7 SLI types |
 | **3 — Technical Controls** | Identity and permission management | ✅ Full | AgentMesh `AgentDID`, `TrustHandshake`, SPIFFE mTLS |
@@ -50,7 +50,7 @@ artefact for APAC enterprises adopting agentic AI.
 | **4 — Transparency** | User training and intervention | ✅ Full | `require_human_approval`, `kill_agent`, `pause_agent` signals |
 | **4 — Transparency** | Structured audit logs | ✅ Full | `GovernanceLogger` JSON logs, OpenTelemetry export |
 | **4 — Transparency** | Agent capability communication | ✅ Full | `CapabilityGrant` manifests, `PolicyDocument` schemas |
-| **4 — Transparency** | Tamper-evident audit chains | ✅ Full | Agent Hypervisor `DeltaTrail`, Merkle hash chains |
+| **4 — Transparency** | Tamper-evident audit chains | ✅ Full | Agent Runtime `DeltaTrail`, Merkle hash chains |
 
 **Overall: 20/20 requirements mapped with full coverage.**
 
@@ -149,7 +149,7 @@ only have access to the tools, data, and actions necessary for their specific ta
 | Agent OS | `GovernancePolicy.max_tool_calls` | Upper bound on tool invocations per session |
 | Agent OS | `ExecutionContext.capabilities` | Capability-based access control at the kernel level |
 | Agent OS | `PolicyDocument` | Declarative YAML/JSON policy rules with condition-based evaluation |
-| Agent Hypervisor | `ExecutionSandbox` | AST-based static analysis blocking dangerous imports |
+| Agent Runtime | `ExecutionSandbox` | AST-based static analysis blocking dangerous imports |
 | AgentMesh | `CapabilityGrant` | Fine-grained `action:resource[:qualifier]` grants |
 
 **Implementation:**
@@ -212,7 +212,7 @@ graceful degradation.
 | Agent OS | `CircuitBreakerConfig` | Configurable thresholds (failure count, reset timeout) |
 | Agent SRE | `SLOSpec`, `SLOObjective` | Error budget tracking with burn rate alerts |
 | Agent SRE | `CircuitBreakerRegistry` | Centralised breaker management with metrics |
-| Agent Hypervisor | Execution Rings | Ring 0–3 isolation preventing cross-agent contamination |
+| Agent Runtime | Execution Rings | Ring 0–3 isolation preventing cross-agent contamination |
 
 **Implementation:**
 
@@ -280,7 +280,7 @@ responsibility.
 | Agent OS | `Role` enum | READER, WRITER, ADMIN, AUDITOR roles |
 | AgentMesh | `SponsorManager` | Human sponsor accountability for each agent |
 | AgentMesh | `DelegationChain` | Max depth: 3 (configurable), traceable delegation |
-| Agent Hypervisor | Execution Rings | Ring-based privilege levels (Ring 0 = highest trust) |
+| Agent Runtime | Execution Rings | Ring-based privilege levels (Ring 0 = highest trust) |
 
 **Implementation:**
 
@@ -340,7 +340,7 @@ must exist at meaningful intervals.
 | Agent OS | `GovernancePolicy.require_human_approval` | Mandatory human-in-the-loop for policy-defined actions |
 | Agent OS | `GovernancePolicy.checkpoint_frequency` | Periodic human review checkpoints (every N actions) |
 | Agent OS | `HumanApprovalPolicy` | Configurable approval workflows with timeout and escalation |
-| Agent Hypervisor | Kill Switch | Graceful termination with step handoff |
+| Agent Runtime | Kill Switch | Graceful termination with step handoff |
 | AgentMesh | `PolicyAction.require_approval` | Trust-policy-level approval gates |
 
 **Implementation:**
@@ -402,8 +402,8 @@ acceptance.
 |-----------|--------|------------|
 | Agent OS | `GovernanceLogger` | Structured JSON audit trail for every agent decision |
 | Agent OS | `JSONFormatter` | Standardised log format (agent_id, action, decision, duration_ms) |
-| Agent Hypervisor | `DeltaTrail` | Hash-chained tamper-evident forensic audit |
-| Agent Hypervisor | `FlightRecorder` | Continuous recording of agent state and decisions |
+| Agent Runtime | `DeltaTrail` | Hash-chained tamper-evident forensic audit |
+| Agent Runtime | `FlightRecorder` | Continuous recording of agent state and decisions |
 | Agent SRE | `AnomalyDetector` | Detects patterns of blindly accepted recommendations |
 
 **Implementation:**
@@ -437,7 +437,7 @@ logger.log_decision(
 **Tamper-Evident Audit with DeltaTrail:**
 
 ```python
-from agent_hypervisor import DeltaTrail
+from hypervisor import DeltaTrail
 
 # Hash-chained audit — impossible to tamper without detection
 trail = DeltaTrail(agent_id="financial-advisor-v2")
@@ -474,7 +474,7 @@ deployment.
 | Agent OS | `SecurityViolation` | Structured exception for sandbox violations |
 | Agent OS | `PromptInjectionDetector` | 7-strategy injection detection |
 | Agent OS | `MemoryGuard` | SHA-256 integrity checking for context poisoning defence |
-| Agent Hypervisor | Execution Rings | Ring 0–3 process-level isolation |
+| Agent Runtime | Execution Rings | Ring 0–3 process-level isolation |
 
 **Implementation:**
 
@@ -727,8 +727,8 @@ are interacting with an AI agent.
 | Component | Module | Capability |
 |-----------|--------|------------|
 | Agent OS | `GovernancePolicy.require_human_approval` | Mandatory approval gates |
-| Agent Hypervisor | Kill Switch | Graceful termination with state preservation |
-| Agent Hypervisor | Saga Transactions | Automatic rollback on termination |
+| Agent Runtime | Kill Switch | Graceful termination with state preservation |
+| Agent Runtime | Saga Transactions | Automatic rollback on termination |
 | AgentMesh | `PolicyAction` | `allow`, `deny`, `warn`, `require_approval`, `log` |
 
 **Implementation:**
@@ -747,7 +747,7 @@ policy = GovernancePolicy(
 )
 
 # Kill switch — immediate graceful termination
-from agent_hypervisor import KillSwitch
+from hypervisor import KillSwitch
 
 kill_switch = KillSwitch(agent_id="financial-advisor-v2")
 
@@ -783,8 +783,8 @@ exportable in standard formats.
 |-----------|--------|------------|
 | Agent OS | `GovernanceLogger` | Structured JSON audit logs |
 | Agent OS | `JSONFormatter` | Standardised log schema (agent_id, action, decision, duration_ms, error_code) |
-| Agent Hypervisor | `DeltaTrail` | Hash-chained tamper-evident audit |
-| Agent Hypervisor | `FlightRecorder` | Continuous state recording |
+| Agent Runtime | `DeltaTrail` | Hash-chained tamper-evident audit |
+| Agent Runtime | `FlightRecorder` | Continuous state recording |
 | AgentMesh | `AuditEntry`, `AuditLog` | Append-only audit with CloudEvents v1.0 serialisation |
 | Agent SRE | OpenTelemetry | Traces, metrics, and logs to any OTEL-compatible backend |
 

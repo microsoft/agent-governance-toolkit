@@ -6,7 +6,7 @@ Agent Governance — Full Stack Example
 Shows all four governance layers working together:
   1. Agent OS Kernel — policy enforcement
   2. AgentMesh — zero-trust identity and communication
-  3. Agent Hypervisor — execution rings and resource limits
+  3. Agent Runtime — execution rings and resource limits
   4. Agent SRE — health monitoring and SLO enforcement
 
 Usage:
@@ -18,12 +18,12 @@ import asyncio
 from agent_os import StatelessKernel, ExecutionContext
 from agentmesh import AgentIdentity
 
-# Optional: import hypervisor and SRE if installed
+# Optional: import Agent Runtime (legacy Python module name: hypervisor) and SRE if installed
 try:
-    from hypervisor import Hypervisor, SessionConfig, ConsistencyMode
-    HAS_HYPERVISOR = True
+    from hypervisor import Hypervisor as AgentRuntime, SessionConfig, ConsistencyMode
+    HAS_RUNTIME = True
 except ImportError:
-    HAS_HYPERVISOR = False
+    HAS_RUNTIME = False
 
 try:
     from agent_sre import SLO, ErrorBudget
@@ -54,16 +54,16 @@ async def main():
     )
     print(f"[AgentMesh] Agent registered — DID: {identity.did}")
 
-    # --- Layer 3: Hypervisor ---
-    if HAS_HYPERVISOR:
-        hv = Hypervisor()
-        session = await hv.create_session(
+    # --- Layer 3: Agent Runtime ---
+    if HAS_RUNTIME:
+        runtime = AgentRuntime()
+        session = await runtime.create_session(
             config=SessionConfig(consistency_mode=ConsistencyMode.EVENTUAL),
             creator_did=identity.did,
         )
-        print(f"[Hypervisor] Session created: {session.sso.session_id}")
+        print(f"[Agent Runtime] Session created: {session.sso.session_id}")
     else:
-        print("[Hypervisor] Not installed — pip install ai-agent-governance[full]")
+        print("[Agent Runtime] Not installed — pip install ai-agent-governance[full]")
 
     # --- Layer 4: SRE ---
     if HAS_SRE:

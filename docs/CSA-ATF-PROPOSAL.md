@@ -16,9 +16,9 @@ The ATF defines 5 core pillars and 15 security requirements. The Agent Governanc
 | ATF Pillar | Toolkit Package | Coverage |
 |------------|----------------|----------|
 | 1. Identity Management | AgentMesh (DID + Entra Agent ID) | ✅ Full |
-| 2. Behavioral Monitoring | Agent Hypervisor + Agent SRE | ✅ Full |
+| 2. Behavioral Monitoring | Agent Runtime + Agent SRE | ✅ Full |
 | 3. Data Governance | Agent OS (VFS + Policy Engine) | ✅ Full |
-| 4. Segmentation | Agent Hypervisor (Execution Rings) | ✅ Full |
+| 4. Segmentation | Agent Runtime (Execution Rings) | ✅ Full |
 | 5. Incident Response | Agent SRE (Circuit Breakers + Kill Switch) | ✅ Full |
 
 ## Key Differentiators

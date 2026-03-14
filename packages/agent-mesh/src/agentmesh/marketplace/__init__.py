@@ -1,23 +1,46 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+"""Plugin Marketplace — backward-compatibility shim.
+
+Attempts to import the canonical implementation from the
+``agent_marketplace`` package.  When ``agent_marketplace`` is not
+installed the standalone fallback in
+``agentmesh.marketplace._marketplace_impl`` is re-exported so that
+``agentmesh`` continues to work without requiring the optional
+marketplace package.
+
+.. deprecated::
+    Import directly from ``agent_marketplace`` instead.
 """
-Plugin Marketplace
 
-Discover, install, verify, and manage AgentMesh plugins.
-"""
+from __future__ import annotations
 
-from agentmesh.exceptions import MarketplaceError
-
-from .installer import PluginInstaller
-from .manifest import (
-    MANIFEST_FILENAME,
-    PluginManifest,
-    PluginType,
-    load_manifest,
-    save_manifest,
-)
-from .registry import PluginRegistry
-from .signing import PluginSigner, verify_signature
+try:
+    from agent_marketplace import (  # noqa: F401
+        MANIFEST_FILENAME,
+        MarketplaceError,
+        PluginInstaller,
+        PluginManifest,
+        PluginRegistry,
+        PluginSigner,
+        PluginType,
+        load_manifest,
+        save_manifest,
+        verify_signature,
+    )
+except ImportError:
+    from agentmesh.marketplace._marketplace_impl import (  # noqa: F401
+        MANIFEST_FILENAME,
+        MarketplaceError,
+        PluginInstaller,
+        PluginManifest,
+        PluginRegistry,
+        PluginSigner,
+        PluginType,
+        load_manifest,
+        save_manifest,
+        verify_signature,
+    )
 
 __all__ = [
     "MANIFEST_FILENAME",

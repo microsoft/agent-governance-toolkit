@@ -7,7 +7,7 @@
 
 **Platform Plugins & Trust Providers for AgentMesh**
 
-*Dify · LangChain · LangGraph · LlamaIndex · Agent Lightning · OpenAI Agents · OpenClaw · Nostr WoT · Moltbook*
+*Dify · LangChain · LangGraph · LlamaIndex · OpenAI Agents · OpenClaw · Nostr WoT · Moltbook*
 
 [![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit/tree/main/packages/agentmesh-integrations?style=social)](https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agentmesh-integrations/stargazers)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -41,7 +41,7 @@ AgentMesh core is a lean, zero-external-dependency library. Platform integration
 | [LangChain](langchain-agentmesh/) | `langchain-agentmesh` | ✅ Stable | Ed25519 identity, trust-gated tools, scope chains, callbacks |
 | [LangGraph](langgraph-trust/) | [`langgraph-trust`](https://pypi.org/project/langgraph-trust/) | ✅ Published (PyPI) | Trust-gated checkpoint nodes, governance policy enforcement, trust-aware routing |
 | [LlamaIndex](llamaindex-agentmesh/) | `llama-index-agent-agentmesh` | ✅ Merged Upstream | Trust-verified workers, identity-aware query engines, scope chains |
-| [Agent Lightning](agent-lightning/) | — | ✅ Merged Upstream | Agent-OS governance adapters, reward shaping, governed RL training |
+| [Agent Lightning](https://github.com/microsoft/agent-lightning/tree/main/contrib/recipes/agentos) | — | ✅ Merged Upstream | Agent-OS governance adapters, reward shaping, governed RL training — maintained in [microsoft/agent-lightning](https://github.com/microsoft/agent-lightning) |
 | [Dify Plugin](dify-plugin/) | `agentmesh-trust-layer` | ✅ Stable | Packaged `.difypkg` with peer verification, step auth, trust scoring |
 | [Dify Middleware](dify/) | — | 📦 Archived | Flask middleware (archived — use the plugin instead) |
 | [Moltbook](moltbook/) | — | ✅ Stable | AgentMesh governance skill for [Moltbook](https://moltbook.com) agent registry |

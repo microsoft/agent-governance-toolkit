@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-03-12
+
+### Changed
+
+- **agent-runtime**: Version bump to align with mono-repo versioning
+
+### Security
+
+- Block `importlib` dynamic imports in sandbox (#189)
+
+## [2.0.1] - 2026-03-11
+
+### Changed
+
+- **agent-runtime**: Centralize hardcoded ring thresholds and constants (#188)
+
 ## [1.1.0] - 2026-03-08
 
 ### 🚀 Highlights
@@ -112,7 +128,7 @@ pip install ai-agent-compliance[full]
 - **AgentMesh** (`agentmesh`) — Zero-trust inter-agent identity mesh with SPIFFE-based
   identity, DID-linked credentials, Microsoft Entra Agent ID adapter, and AI-BOM v2.0
   supply-chain provenance.
-- **Agent Hypervisor** (`agent-hypervisor`) — Runtime sandboxing with capability-based
+- **Agent Runtime** (`agent-runtime`) — Runtime sandboxing with capability-based
   isolation, resource quotas, and Docker/Firecracker execution environments.
 - **Agent SRE** (`agent-sre`) — Observability toolkit with chaos-engineering probes,
   canary deployment framework, and automated incident response.

@@ -12,7 +12,7 @@
 ## Package(s) Affected
 - [ ] agent-os-kernel
 - [ ] agent-mesh
-- [ ] agent-hypervisor
+- [ ] agent-runtime
 - [ ] agent-sre
 - [ ] agent-governance
 - [ ] docs / root

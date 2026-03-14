@@ -9,7 +9,15 @@ enabling policies to be authored, versioned, and shared as plain files.
 
 from .async_evaluator import AsyncPolicyEvaluator, ConcurrencyStats
 from .bridge import document_to_governance, governance_to_document
+from .conflict_resolution import (
+    CandidateDecision,
+    ConflictResolutionStrategy,
+    PolicyConflictResolver,
+    PolicyScope,
+    ResolutionResult,
+)
 from .evaluator import PolicyDecision, PolicyEvaluator
+from .rate_limiting import RateLimitConfig, RateLimitExceeded, TokenBucket
 from .schema import (
     PolicyAction,
     PolicyCondition,
@@ -30,16 +38,24 @@ from .shared import (
 
 __all__ = [
     "AsyncPolicyEvaluator",
+    "CandidateDecision",
     "ConcurrencyStats",
     "Condition",
+    "ConflictResolutionStrategy",
     "PolicyAction",
     "PolicyCondition",
+    "PolicyConflictResolver",
     "PolicyDecision",
     "PolicyDefaults",
     "PolicyDocument",
     "PolicyEvaluator",
     "PolicyOperator",
     "PolicyRule",
+    "PolicyScope",
+    "RateLimitConfig",
+    "RateLimitExceeded",
+    "ResolutionResult",
+    "TokenBucket",
     "SharedPolicyDecision",
     "SharedPolicyEvaluator",
     "SharedPolicyRule",

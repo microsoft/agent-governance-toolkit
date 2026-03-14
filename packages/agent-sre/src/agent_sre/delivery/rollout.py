@@ -11,6 +11,7 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -100,7 +101,22 @@ class RollbackCondition:
         return {"metric": self.metric, "threshold": self.threshold, "comparator": self.comparator}
 
 
-# --- Preview Mode ---
+# --- Preview Mode + Governance Shadow Evaluation ---
+
+
+@dataclass
+class SimulatedAction:
+    """An action to simulate in shadow mode."""
+
+    action_id: str
+    agent_did: str
+    action_type: str
+    context: dict[str, Any]
+    timestamp: datetime | None = None
+
+    def __post_init__(self) -> None:
+        if self.timestamp is None:
+            self.timestamp = datetime.utcnow()
 
 
 @dataclass
@@ -138,12 +154,24 @@ class ShadowComparison:
 
 @dataclass
 class ShadowResult:
-    """Aggregated results from a shadow testing session."""
+    """Unified shadow result for delivery comparisons and policy evaluations."""
 
     session_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     comparisons: list[ShadowComparison] = field(default_factory=list)
     start_time: float = field(default_factory=time.time)
     end_time: float | None = None
+    action_id: str = ""
+    shadow_allowed: bool | None = None
+    shadow_action: str | None = None
+    shadow_rule: str | None = None
+    production_allowed: bool | None = None
+    production_action: str | None = None
+    production_rule: str | None = None
+    diverged: bool = False
+    divergence_reason: str | None = None
+    evaluated_at: datetime = field(default_factory=datetime.utcnow)
+    shadow_latency_ms: float | None = None
+    production_latency_ms: float | None = None
 
     @property
     def total_requests(self) -> int:
@@ -153,25 +181,25 @@ class ShadowResult:
     def match_rate(self) -> float:
         if not self.comparisons:
             return 0.0
-        return sum(1 for c in self.comparisons if c.match) / len(self.comparisons)
+        return sum(1 for comparison in self.comparisons if comparison.match) / len(self.comparisons)
 
     @property
     def avg_similarity(self) -> float:
         if not self.comparisons:
             return 0.0
-        return sum(c.similarity_score for c in self.comparisons) / len(self.comparisons)
+        return sum(comparison.similarity_score for comparison in self.comparisons) / len(self.comparisons)
 
     @property
     def avg_latency_delta_ms(self) -> float:
         if not self.comparisons:
             return 0.0
-        return sum(c.latency_delta_ms for c in self.comparisons) / len(self.comparisons)
+        return sum(comparison.latency_delta_ms for comparison in self.comparisons) / len(self.comparisons)
 
     @property
     def avg_cost_delta_usd(self) -> float:
         if not self.comparisons:
             return 0.0
-        return sum(c.cost_delta_usd for c in self.comparisons) / len(self.comparisons)
+        return sum(comparison.cost_delta_usd for comparison in self.comparisons) / len(self.comparisons)
 
     @property
     def confidence_score(self) -> float:
@@ -190,7 +218,7 @@ class ShadowResult:
         self.end_time = time.time()
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data = {
             "session_id": self.session_id,
             "total_requests": self.total_requests,
             "match_rate": self.match_rate,
@@ -199,23 +227,63 @@ class ShadowResult:
             "avg_cost_delta_usd": self.avg_cost_delta_usd,
             "confidence_score": self.confidence_score,
         }
+        if self.action_id:
+            data.update(
+                {
+                    "action_id": self.action_id,
+                    "shadow_allowed": self.shadow_allowed,
+                    "shadow_action": self.shadow_action,
+                    "shadow_rule": self.shadow_rule,
+                    "production_allowed": self.production_allowed,
+                    "production_action": self.production_action,
+                    "production_rule": self.production_rule,
+                    "diverged": self.diverged,
+                    "divergence_reason": self.divergence_reason,
+                    "shadow_latency_ms": self.shadow_latency_ms,
+                    "production_latency_ms": self.production_latency_ms,
+                }
+            )
+        return data
+
+
+@dataclass
+class ShadowSession:
+    """A governance shadow-mode evaluation session."""
+
+    session_id: str = field(default_factory=lambda: f"shadow_{uuid.uuid4().hex[:12]}")
+    started_at: datetime = field(default_factory=datetime.utcnow)
+    agent_dids: list[str] = field(default_factory=list)
+    policy_names: list[str] = field(default_factory=list)
+    total_evaluated: int = 0
+    total_diverged: int = 0
+    divergence_rate: float = 0.0
+    results: list[ShadowResult] = field(default_factory=list)
+    active: bool = True
+    ended_at: datetime | None = None
 
 
 class ShadowMode:
-    """Preview testing — not available in Community Edition.
+    """Hybrid shadow mode for delivery preview and governance evaluation."""
 
-    Class retained for API compatibility. Use blue/green deployment instead.
-    """
+    DIVERGENCE_TARGET = 0.02
 
     def __init__(
         self,
+        policy_engine: Any | None = None,
         similarity_threshold: float = 0.9,
         max_comparisons: int = 1000,
     ) -> None:
+        if isinstance(policy_engine, (int, float)) and not isinstance(policy_engine, bool):
+            similarity_threshold = float(policy_engine)
+            policy_engine = None
+
+        self.policy_engine = policy_engine
         self.similarity_threshold = similarity_threshold
         self.max_comparisons = max_comparisons
         self._result = ShadowResult()
         self._similarity_fn: Callable[[Any, Any], float] | None = None
+        self._sessions: dict[str, ShadowSession] = {}
+        self._active_session: str | None = None
 
     def set_similarity_function(self, fn: Callable[[Any, Any], float]) -> None:
         """Set custom similarity function — not available in Community Edition."""
@@ -239,12 +307,144 @@ class ShadowMode:
         return self._result
 
     def is_passing(self, min_confidence: float = 0.8) -> bool:
-        """Check if preview results meet promotion criteria — not available in Community Edition."""
+        """Check delivery preview results — not available in Community Edition."""
         raise NotImplementedError("Not available in Community Edition")
 
     def finish(self) -> ShadowResult:
-        """Complete the preview session — not available in Community Edition."""
+        """Complete a delivery preview session — not available in Community Edition."""
         raise NotImplementedError("Not available in Community Edition")
+
+    def start_session(
+        self,
+        agent_dids: list[str] | None = None,
+        policy_names: list[str] | None = None,
+    ) -> ShadowSession:
+        session = ShadowSession(
+            agent_dids=agent_dids or [],
+            policy_names=policy_names or [],
+        )
+        self._sessions[session.session_id] = session
+        self._active_session = session.session_id
+        return session
+
+    def evaluate(
+        self,
+        action: SimulatedAction,
+        production_decision: dict[str, Any] | None = None,
+    ) -> ShadowResult:
+        if self.policy_engine is None:
+            raise RuntimeError("A policy_engine is required for governance shadow evaluation")
+
+        start = datetime.utcnow()
+        shadow_decision = self.policy_engine.evaluate(
+            agent_did=action.agent_did,
+            context=action.context,
+        )
+        shadow_latency = (datetime.utcnow() - start).total_seconds() * 1000
+
+        result = ShadowResult(
+            action_id=action.action_id,
+            shadow_allowed=shadow_decision.allowed,
+            shadow_action=shadow_decision.action,
+            shadow_rule=getattr(shadow_decision, "matched_rule", None),
+            shadow_latency_ms=shadow_latency,
+        )
+
+        if production_decision:
+            result.production_allowed = production_decision.get("allowed")
+            result.production_action = production_decision.get("action")
+            result.production_rule = production_decision.get("matched_rule")
+            result.production_latency_ms = production_decision.get("latency_ms")
+
+            if result.shadow_allowed != result.production_allowed:
+                result.diverged = True
+                result.divergence_reason = (
+                    f"Shadow={result.shadow_action}, Production={result.production_action}"
+                )
+            elif result.shadow_action != result.production_action:
+                result.diverged = True
+                result.divergence_reason = (
+                    f"Action mismatch: {result.shadow_action} vs {result.production_action}"
+                )
+
+        if self._active_session:
+            session = self._sessions[self._active_session]
+            session.results.append(result)
+            session.total_evaluated += 1
+            if result.diverged:
+                session.total_diverged += 1
+            session.divergence_rate = (
+                session.total_diverged / session.total_evaluated
+                if session.total_evaluated > 0
+                else 0.0
+            )
+
+        return result
+
+    def replay_batch(
+        self,
+        actions: list[SimulatedAction],
+        production_decisions: list[dict[str, Any]] | None = None,
+    ) -> list[ShadowResult]:
+        results: list[ShadowResult] = []
+
+        for index, action in enumerate(actions):
+            production_decision = None
+            if production_decisions and index < len(production_decisions):
+                production_decision = production_decisions[index]
+            results.append(self.evaluate(action, production_decision))
+
+        return results
+
+    def end_session(self, session_id: str | None = None) -> ShadowSession:
+        sid = session_id or self._active_session
+        if not sid or sid not in self._sessions:
+            raise ValueError("No active session")
+
+        session = self._sessions[sid]
+        session.active = False
+        session.ended_at = datetime.utcnow()
+
+        if sid == self._active_session:
+            self._active_session = None
+
+        return session
+
+    def get_session(self, session_id: str) -> ShadowSession | None:
+        return self._sessions.get(session_id)
+
+    def get_divergence_report(self, session_id: str | None = None) -> dict[str, Any]:
+        sid = session_id or self._active_session
+        if not sid or sid not in self._sessions:
+            return {"error": "No session found"}
+
+        session = self._sessions[sid]
+        divergence_reasons: dict[str, int] = {}
+        for result in session.results:
+            if result.diverged:
+                reason = result.divergence_reason or "unknown"
+                divergence_reasons[reason] = divergence_reasons.get(reason, 0) + 1
+
+        within_target = session.divergence_rate <= self.DIVERGENCE_TARGET
+        return {
+            "session_id": session.session_id,
+            "total_evaluated": session.total_evaluated,
+            "total_diverged": session.total_diverged,
+            "divergence_rate": session.divergence_rate,
+            "divergence_rate_pct": f"{session.divergence_rate * 100:.2f}%",
+            "target_rate_pct": f"{self.DIVERGENCE_TARGET * 100:.2f}%",
+            "within_target": within_target,
+            "divergence_breakdown": divergence_reasons,
+            "recommendation": (
+                "Ready for production"
+                if within_target
+                else "Review divergent cases before production"
+            ),
+        }
+
+    def is_ready_for_production(self, session_id: str | None = None) -> bool:
+        report = self.get_divergence_report(session_id)
+        return report.get("within_target", False)
 
 
 # --- Staged Rollout ---
@@ -364,3 +564,19 @@ class CanaryRollout:
             "rollback_conditions": [r.to_dict() for r in self.rollback_conditions],
             "events": [e.to_dict() for e in self.events],
         }
+
+
+__all__ = [
+    "AnalysisCriterion",
+    "CanaryRollout",
+    "DeploymentStrategy",
+    "RollbackCondition",
+    "RolloutEvent",
+    "RolloutState",
+    "RolloutStep",
+    "ShadowComparison",
+    "ShadowMode",
+    "ShadowResult",
+    "ShadowSession",
+    "SimulatedAction",
+]

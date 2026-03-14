@@ -738,7 +738,7 @@ Prevents agents from bypassing the kernel via direct stdlib calls using import h
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `blocked_modules` | `list[str]` | `["subprocess", "os", "shutil", "socket", "ctypes"]` | Modules to block |
+| `blocked_modules` | `list[str]` | `["subprocess", "os", "shutil", "socket", "ctypes", "importlib"]` | Modules to block |
 | `blocked_builtins` | `list[str]` | `["exec", "eval", "compile", "__import__"]` | Builtins to block |
 | `allowed_paths` | `list[str]` | `[]` | Allowed file system paths |
 | `max_memory_mb` | `int \| None` | `None` | Memory limit |

@@ -61,7 +61,7 @@ graph TD
         iatp[iatp]
         amb[amb]
         atr[atr]
-        hypervisor[hypervisor]
+        runtime[runtime]
     end
 
     subgraph "Layer 1 — Primitives"
@@ -77,8 +77,8 @@ graph TD
     scak -.->|optional| cmvk
     iatp --> prim
     nexus --> iatp
-    hypervisor --> nexus
-    hypervisor --> iatp
+    runtime --> nexus
+    runtime --> iatp
     mcp -.->|optional| cp
     mcp -.->|optional| cmvk
     mcp -.->|optional| iatp

@@ -29,7 +29,7 @@
 
 > 📦 **Install the full stack:** `pip install ai-agent-governance[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
 
-[Quick Start](#quick-example) • [Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs) • [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=agent-os.agent-os-vscode) • [Examples](examples/) • [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) • [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) • [Agent SRE](https://github.com/microsoft/agent-governance-toolkit)
+[Quick Start](#quick-example) • [Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs) • [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=agent-os.agent-os-vscode) • [Examples](examples/) • [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) • [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) • [Agent SRE](https://github.com/microsoft/agent-governance-toolkit)
 
 <br/>
 
@@ -138,19 +138,21 @@ Agent OS + ecosystem covers **10 out of 10** [OWASP Agentic Application Security
 | ASI07 Inter-Agent Comms | ✅ Full | AgentMesh trust handshake, HMAC auth |
 | ASI08 Cascading Failures | ✅ Full | Agent SRE circuit breakers, cascade detection |
 | ASI09 Human-Agent Trust | ✅ Full | Human approval workflows, audit logging |
-| ASI10 Rogue Agents | ✅ Full | Agent Hypervisor kill switch + ring isolation |
+| ASI10 Rogue Agents | ✅ Full | Agent Runtime kill switch + ring isolation |
 
 > 📄 [Full OWASP mapping →](docs/owasp-agentic-top10-mapping.md)
 
 ### 🌐 The Agent Governance Ecosystem
 
-| Layer | Package | Purpose | Install |
-|-------|---------|---------|---------|
-| **Kernel** | [Agent OS](https://github.com/microsoft/agent-governance-toolkit) | Policy enforcement, action interception | `pip install agent-os-kernel` |
-| **Network** | [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) | Identity, trust, delegation | `pip install agentmesh-platform` |
-| **Reliability** | [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) | SLOs, chaos testing, circuit breakers | `pip install agent-sre` |
-| **Runtime** | [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) | Execution rings, resource limits, saga | `pip install agent-hypervisor` |
-| **Full Stack** | [ai-agent-governance](https://pypi.org/project/ai-agent-governance/) | All of the above | `pip install ai-agent-governance[full]` |
+| Package | Role |
+|---------|------|
+| **Agent OS** | Policy engine — deterministic action evaluation *(this package)* |
+| **AgentMesh** | Trust infrastructure — identity, credentials, protocol bridges |
+| **Agent Runtime** | Execution supervisor — rings, sessions, sagas |
+| **Agent SRE** | Reliability — SLOs, circuit breakers, chaos testing |
+| **Agent Compliance** | Regulatory compliance — GDPR, HIPAA, SOX frameworks |
+| **Agent Marketplace** | Plugin lifecycle — discover, install, verify, sign |
+| **Agent Lightning** | RL training governance — governed runners, policy rewards |
 
 ---
 
@@ -428,21 +430,21 @@ agent-os/
 | [`mute-agent`](modules/mute-agent/) | 4 | `mute-agent` | Decoupled reasoning/execution architecture | ⚠️ No tests |
 | [`nexus`](modules/nexus/) | — | *Not published* | Trust exchange network | 🔬 Prototype |
 | [`mcp-kernel-server`](modules/mcp-kernel-server/) | Int | `mcp-kernel-server` | MCP server for Claude Desktop | ⚠️ No tests |
-| [**`hypervisor`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agent-hypervisor` | **Runtime supervisor — Execution Rings, Joint Liability, Saga Orchestrator** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
+| [**`runtime`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agent-runtime` | **Execution supervisor — Execution Rings, Joint Liability, Saga Orchestrator** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
 
 ---
 
-## ⭐ Star Feature: Agent Hypervisor
+## ⭐ Star Feature: Agent Runtime
 
-> **Runtime supervisor for multi-agent collaboration** — think "VMware for AI agents."
+> **Execution supervisor for multi-agent collaboration** — think "VMware for AI agents."
 > 
-> **Now its own repo: [`agent-hypervisor`](https://github.com/microsoft/agent-governance-toolkit)** — 184 tests, 268μs full pipeline, zero dependencies beyond pydantic.
+> **Now its own repo: [`agent-runtime`](https://github.com/microsoft/agent-governance-toolkit)** — 184 tests, 268μs full pipeline, zero dependencies beyond pydantic.
 
-Just as OS hypervisors isolate virtual machines and enforce resource boundaries, the Agent Hypervisor isolates AI agent sessions and enforces **governance boundaries** at sub-millisecond latency.
+Just as OS runtimes isolate execution environments and enforce resource boundaries, the Agent Runtime isolates AI agent sessions and enforces **governance boundaries** at sub-millisecond latency.
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│                    AGENT HYPERVISOR                         │
+│                      AGENT RUNTIME                         │
 │                                                            │
 │   Ring 0 (Root)      ← SRE Witness required                │
 │   Ring 1 (Privileged)← σ_eff > 0.95 + consensus           │
@@ -470,22 +472,22 @@ Just as OS hypervisors isolate virtual machines and enforce resource boundaries,
 ### Quick Start
 
 ```bash
-pip install agent-hypervisor
+pip install agent-runtime
 ```
 
 ```python
-from hypervisor import Hypervisor, SessionConfig, ConsistencyMode
+from runtime import Runtime, SessionConfig, ConsistencyMode
 
-hv = Hypervisor()
+rt = Runtime()
 
 # Create a governed multi-agent session
-session = await hv.create_session(
+session = await rt.create_session(
     config=SessionConfig(consistency_mode=ConsistencyMode.EVENTUAL, max_participants=5),
     creator_did="did:mesh:admin",
 )
 
 # Agents are automatically assigned privilege rings based on trust score
-ring = await hv.join_session(session.sso.session_id, "did:mesh:agent-alpha", sigma_raw=0.85)
+ring = await rt.join_session(session.sso.session_id, "did:mesh:agent-alpha", sigma_raw=0.85)
 # → Ring 2 (Standard) — can execute reversible actions
 
 # Multi-step saga with automatic timeout and compensation
@@ -497,10 +499,10 @@ step = session.saga.add_step(
 )
 
 # Terminate — returns tamper-evident summary hash
-summary_hash = await hv.terminate_session(session.sso.session_id)
+summary_hash = await rt.terminate_session(session.sso.session_id)
 ```
 
-📖 **[Full Hypervisor documentation →](https://github.com/microsoft/agent-governance-toolkit)**
+📖 **[Full Runtime documentation →](https://github.com/microsoft/agent-governance-toolkit)**
 
 ---
 
@@ -1087,7 +1089,7 @@ Prompt-based guardrails ask the LLM to self-police, which is probabilistic. Agen
 Agent OS integrates with 14+ frameworks via adapters. Install the governance layer alongside your existing framework: use `langgraph-trust` for LangGraph, `openai-agents-trust` for OpenAI Agents, or the MCP server for any MCP-compatible client. Agent OS acts as a kernel layer underneath your agent framework.
 
 **What is the Agent Governance Ecosystem?**
-Agent OS is part of a suite of four projects: Agent OS (policy kernel), [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) (trust network), [Agent Hypervisor](https://github.com/microsoft/agent-governance-toolkit) (runtime supervisor), and [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) (reliability platform). Together they provide 4,310+ tests across 17 modules.
+Agent OS is part of a suite of seven packages: Agent OS (policy engine), [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) (trust infrastructure), [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) (execution supervisor), [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) (reliability), [Agent Compliance](https://github.com/microsoft/agent-governance-toolkit) (regulatory compliance), [Agent Marketplace](https://github.com/microsoft/agent-governance-toolkit) (plugin lifecycle), and [Agent Lightning](https://github.com/microsoft/agent-governance-toolkit) (RL training governance). Together they provide 4,310+ tests across 17 modules.
 
 **Can I use Agent OS in production?**
 Yes. Agent OS has 1,500+ tests, a VS Code extension, PyPI package (`pip install agent-os-kernel`), and is integrated into production frameworks like Dify (65K stars) and LlamaIndex (47K stars). It supports Python 3.9+ and runs on any platform.

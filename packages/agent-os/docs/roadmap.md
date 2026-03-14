@@ -15,7 +15,7 @@ Q1 2026                Q2 2026                Q3 2026
 │  ✓ Governance kernel │  ✓ WebSocket events  │  ◇ SSO/SAML       │
 │  ✓ All adapters      │  ✓ Plugin system     │  ◇ Policy console │
 │  ✓ MCP tools & CLI   │  ✓ Federated gov.    │  ◇ Compliance     │
-│  ✓ Hypervisor module │  ✓ Profiling dash.   │  ◇ Multi-tenant   │
+│  ✓ Runtime module    │  ✓ Profiling dash.   │  ◇ Multi-tenant   │
 │  ✓ Trust & safety    │                      │  ◇ Support & SLAs │
 ───────────────────────────────────────────────────────────────
   ✓ = open source                           ◇ = future / TBD
@@ -52,7 +52,7 @@ These features are and will remain fully open source under the project's existin
 - `audit` — query the audit log
 - `validate` — check policy files
 
-### Hypervisor Module
+### Runtime Module
 - SSO and identity-aware sessions
 - Virtual File System (VFS)
 - Ring-based permission model

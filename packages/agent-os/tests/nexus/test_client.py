@@ -7,10 +7,10 @@ Tests for Nexus Client
 import pytest
 from datetime import datetime
 
-from modules.nexus.client import NexusClient
-from modules.nexus.schemas.manifest import AgentManifest, AgentIdentity, AgentCapabilities, AgentPrivacy
-from modules.nexus.dmz import DataHandlingPolicy
-from modules.nexus.exceptions import (
+from nexus.client import NexusClient
+from nexus.schemas.manifest import AgentManifest, AgentIdentity, AgentCapabilities, AgentPrivacy
+from nexus.dmz import DataHandlingPolicy
+from nexus.exceptions import (
     IATPUnverifiedPeerException,
     IATPInsufficientTrustException,
 )

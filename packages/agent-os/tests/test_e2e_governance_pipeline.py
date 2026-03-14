@@ -27,6 +27,9 @@ from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 
+agentmesh = pytest.importorskip("agentmesh", reason="agentmesh not installed")
+agent_sre = pytest.importorskip("agent_sre", reason="agent_sre not installed")
+
 from agent_os.policies.schema import (
     PolicyAction,
     PolicyCondition,

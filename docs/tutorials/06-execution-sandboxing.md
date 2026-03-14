@@ -2,7 +2,7 @@
 
 **Isolate AI agents at runtime using privilege rings, saga transactions, and kill switches.**
 
-See also: [Deployment Guide](../deployment/README.md) | [Agent Hypervisor README](../../packages/agent-hypervisor/README.md)
+See also: [Deployment Guide](../deployment/README.md) | [Agent Runtime README](../../packages/agent-runtime/README.md)
 
 ---
 
@@ -29,7 +29,7 @@ Without sandboxing, a misbehaving agent can:
 - **Consume resources** — spin up infinite loops that exhaust CPU and memory.
 - **Cascade failures** — a failed step in a multi-agent workflow leaves the system in a broken half-finished state.
 
-The **Agent Hypervisor** (`pip install agent-hypervisor`) solves this with four
+The **Agent Runtime** (`pip install agent-runtime`) solves this with four
 layers of defense:
 
 ```
@@ -54,7 +54,7 @@ layers of defense:
 ### Prerequisites
 
 - Python ≥ 3.11
-- `pip install agent-hypervisor` (v2.0.2+)
+- `pip install agent-runtime` (v2.0.2+)
 - For capability guards: `pip install agent-os`
 
 ---
@@ -68,7 +68,7 @@ from hypervisor import Hypervisor, ExecutionRing
 from hypervisor.rings.classifier import ActionClassifier
 from hypervisor.rings.enforcer import RingEnforcer
 
-# 1. Create the hypervisor
+# 1. Create the runtime
 hv = Hypervisor()
 
 # 2. Classify an action — the classifier maps actions to rings
@@ -97,14 +97,14 @@ enforcer checks whether the agent's effective score grants sufficient privilege.
 
 ## 3. The 4-Ring Model
 
-The hypervisor uses a hardware-inspired 4-ring privilege model. Each ring
+The runtime uses a hardware-inspired 4-ring privilege model. Each ring
 defines what an agent can do, how many calls it can make, and what level of
 trust is required.
 
 ```
         ┌───────────────────────┐
         │   Ring 0 — Root       │  eff_score: N/A (SRE Witness required)
-        │   Hypervisor config,  │  Penalty/slashing operations
+        │   Runtime config,     │  Penalty/slashing operations
         │   penalty ops         │  Rate: unlimited
         ├───────────────────────┤
         │   Ring 1 — Privileged │  eff_score ≥ 0.95 + consensus
@@ -141,7 +141,7 @@ assert ring == ExecutionRing.RING_3_SANDBOX
 ```
 
 > **Note:** Ring 0 is never assigned by score alone — it requires an SRE
-> Witness attestation and is reserved for hypervisor-level configuration.
+> Witness attestation and is reserved for runtime-level configuration.
 
 ### 3.2 Action Classification
 
@@ -785,13 +785,13 @@ async def on_agent_action(agent_did: str, session_id: str, action_id: str):
 
 ## 8. Production Deployment
 
-### 8.1 Running the Hypervisor API Server
+### 8.1 Running the Runtime API Server
 
-The hypervisor includes a FastAPI server for HTTP-based enforcement:
+The runtime includes a FastAPI server for HTTP-based enforcement:
 
 ```bash
 # Install with API extras
-pip install "agent-hypervisor[api]"
+pip install "agent-runtime[api]"
 
 # Start the server
 hypervisor serve --host 0.0.0.0 --port 8000
@@ -804,7 +804,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install "agent-hypervisor[full,api]"
+RUN pip install "agent-runtime[full,api]"
 
 EXPOSE 8000
 
@@ -814,35 +814,35 @@ CMD ["hypervisor", "serve", "--host", "0.0.0.0", "--port", "8000"]
 Build and run:
 
 ```bash
-docker build -t agent-hypervisor:latest .
-docker run -p 8000:8000 agent-hypervisor:latest
+docker build -t agent-runtime:latest .
+docker run -p 8000:8000 agent-runtime:latest
 ```
 
 ### 8.3 Kubernetes Deployment
 
-Deploy the hypervisor as a sidecar alongside your agent pods:
+Deploy the runtime as a sidecar alongside your agent pods:
 
 ```yaml
-# hypervisor-deployment.yaml
+# runtime-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: agent-hypervisor
+  name: agent-runtime
   labels:
-    app: agent-hypervisor
+    app: agent-runtime
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: agent-hypervisor
+      app: agent-runtime
   template:
     metadata:
       labels:
-        app: agent-hypervisor
+        app: agent-runtime
     spec:
       containers:
-        - name: hypervisor
-          image: agent-hypervisor:latest
+        - name: runtime
+          image: agent-runtime:latest
           ports:
             - containerPort: 8000
           resources:
@@ -871,10 +871,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: agent-hypervisor
+  name: agent-runtime
 spec:
   selector:
-    app: agent-hypervisor
+    app: agent-runtime
   ports:
     - port: 8000
       targetPort: 8000
@@ -882,7 +882,7 @@ spec:
 
 ### 8.4 Sidecar Pattern
 
-For fine-grained per-pod enforcement, run the hypervisor as a sidecar:
+For fine-grained per-pod enforcement, run the runtime as a sidecar:
 
 ```yaml
 # agent-pod-with-sidecar.yaml
@@ -899,9 +899,9 @@ spec:
         - name: HYPERVISOR_URL
           value: "http://localhost:8000"
 
-    # Hypervisor sidecar — enforces sandboxing for this pod
-    - name: hypervisor-sidecar
-      image: agent-hypervisor:latest
+    # Runtime sidecar — enforces sandboxing for this pod
+    - name: runtime-sidecar
+      image: agent-runtime:latest
       ports:
         - containerPort: 8000
       resources:
@@ -922,7 +922,7 @@ Create a values file for parameterized deployments:
 replicaCount: 2
 
 image:
-  repository: agent-hypervisor
+  repository: agent-runtime
   tag: "latest"
   pullPolicy: IfNotPresent
 
@@ -938,7 +938,7 @@ resources:
     memory: "512Mi"
     cpu: "500m"
 
-hypervisor:
+runtime:
   logLevel: INFO
   rateLimiting:
     ring3MaxCalls: 10
@@ -956,7 +956,7 @@ hypervisor:
 
 ### 8.6 Observability
 
-Monitor your hypervisor with the built-in event bus:
+Monitor your runtime with the built-in event bus:
 
 ```python
 from hypervisor.observability.event_bus import HypervisorEventBus, EventType
