@@ -176,6 +176,13 @@ class CostGuard:
         if budget.spent_today_usd + estimated_cost > budget.daily_limit_usd:
             return False, f"Would exceed daily budget (${budget.remaining_today_usd:.2f} remaining)"
 
+        if self.org_monthly_budget > 0:
+            if self._org_spent_month + estimated_cost > self.org_monthly_budget:
+                return False, (
+                    f"Would exceed org monthly budget "
+                    f"(${self.org_remaining_month:.2f} remaining)"
+                )
+
         return True, "ok"
 
     def record_cost(
@@ -250,6 +257,28 @@ class CostGuard:
                 threshold=budget.daily_limit_usd * 0.85,
                 action=BudgetAction.THROTTLE,
             ))
+
+        # Org budget kill alert
+        if self.auto_throttle and self.org_monthly_budget > 0:
+            org_util = self._org_spent_month / self.org_monthly_budget
+            prev_org_util = (
+                (self._org_spent_month - cost_usd) / self.org_monthly_budget
+                if self.org_monthly_budget > 0 else 0.0
+            )
+            if prev_org_util < self.kill_switch_threshold <= org_util:
+                for b in self._budgets.values():
+                    b.killed = True
+                alerts.append(CostAlert(
+                    severity=CostAlertSeverity.CRITICAL,
+                    message=(
+                        f"Org budget kill switch triggered -- "
+                        f"{org_util * 100:.0f}% of monthly budget consumed"
+                    ),
+                    agent_id=agent_id,
+                    current_value=self._org_spent_month,
+                    threshold=self.org_monthly_budget * self.kill_switch_threshold,
+                    action=BudgetAction.KILL,
+                ))
 
         # Anomaly detection
         if self.anomaly_detection and len(self._cost_history) >= 10:
