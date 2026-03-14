@@ -198,6 +198,20 @@ Default score for new agents: **500** (Standard tier). Score changes are driven 
 
 Policy enforcement benchmarks are measured on a **30-scenario test suite** covering the OWASP Agentic Top 10 risk categories. Results (e.g., policy violation rates, latency) are specific to this test suite and should not be interpreted as universal guarantees. See [`packages/agent-os/modules/control-plane/benchmark/`](packages/agent-os/modules/control-plane/benchmark/) for methodology, datasets, and reproduction instructions.
 
+### Performance
+
+Full benchmark results with p50/p95/p99 latencies, throughput numbers, and memory profiling are published in **[BENCHMARKS.md](BENCHMARKS.md)**. Headlines:
+
+| Metric | Value |
+|---|---|
+| Policy evaluation (single rule) | 0.012 ms p50 — 72K ops/sec |
+| Policy evaluation (100 rules) | 0.029 ms p50 — 31K ops/sec |
+| Kernel enforcement overhead | 0.091 ms p50 — 9.3K ops/sec |
+| Adapter governance overhead | 0.004–0.006 ms p50 — 130K–230K ops/sec |
+| Concurrent throughput (50 agents) | 35,481 ops/sec |
+
+Benchmarks run on every release via CI ([`.github/workflows/benchmarks.yml`](.github/workflows/benchmarks.yml)).
+
 ### Known Limitations & Roadmap
 
 - **ASI-10 Behavioral Detection**: Fully implemented in Agent SRE — tool-call frequency analysis (z-score spike detection), action entropy scoring, and capability profile violation detection. See [`packages/agent-sre/src/agent_sre/anomaly/`](packages/agent-sre/src/agent_sre/anomaly/) (72 tests passing)
