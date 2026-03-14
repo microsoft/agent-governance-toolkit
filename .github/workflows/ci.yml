@@ -91,3 +91,75 @@ jobs:
       - name: Test .NET SDK
         working-directory: packages/agent-governance-dotnet
         run: dotnet test --configuration Release --verbosity normal --no-build
+
+  test-integrations:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: a2a-protocol
+            import-module: a2a_agentmesh
+          - package: crewai-agentmesh
+            import-module: crewai_agentmesh
+          - package: dify-plugin
+            import-module: provider
+          - package: flowise-agentmesh
+            import-module: flowise_agentmesh
+          - package: haystack-agentmesh
+            import-module: haystack_agentmesh
+          - package: langchain-agentmesh
+            import-module: langchain_agentmesh
+          - package: langflow-agentmesh
+            import-module: langflow_agentmesh
+          - package: langgraph-trust
+            import-module: langgraph_trust
+          - package: llamaindex-agentmesh
+            import-module: llama_index.agent.agentmesh
+          - package: mcp-trust-proxy
+            import-module: mcp_trust_proxy
+          - package: nostr-wot
+            import-module: agentmesh_nostr_wot
+          - package: openai-agents-agentmesh
+            import-module: openai_agents_agentmesh
+          - package: openai-agents-trust
+            import-module: openai_agents_trust
+          - package: pydantic-ai-governance
+            import-module: pydantic_ai_governance
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Install ${{ matrix.package }}
+        working-directory: packages/agentmesh-integrations/${{ matrix.package }}
+        run: |
+          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .
+          pip install --no-cache-dir pytest pytest-asyncio 2>/dev/null || true
+      - name: Smoke test — import ${{ matrix.import-module }}
+        run: python -c "import ${{ matrix.import-module }}"
+      - name: Run tests
+        working-directory: packages/agentmesh-integrations/${{ matrix.package }}
+        run: |
+          if [ -d tests ]; then
+            pytest tests/ -q --tb=short
+          else
+            echo "No tests/ directory — smoke import passed"
+          fi
+
+  test-integrations-ts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+      - name: Install mastra-agentmesh
+        working-directory: packages/agentmesh-integrations/mastra-agentmesh
+        run: npm ci 2>/dev/null || npm install
+      - name: Lint mastra-agentmesh
+        working-directory: packages/agentmesh-integrations/mastra-agentmesh
+        run: npm run lint 2>/dev/null || true
+      - name: Test mastra-agentmesh
+        working-directory: packages/agentmesh-integrations/mastra-agentmesh
+        run: npm test
