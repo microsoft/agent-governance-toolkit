@@ -19,10 +19,10 @@
 
 ---
 
-> **⚠️ Architecture Note:** This toolkit provides **application-level policy enforcement** (Python middleware).
-> It does not provide OS kernel-level isolation — agents share the host process by default.
-> For high-security environments, combine with infrastructure isolation (containers, VMs, separate processes).
-> See [Architecture Notes](#architecture-notes) for details on the security model and its boundaries.
+> **🔒 Enforcement Model:** Deterministic application-layer interception — every agent action is evaluated
+> against policy **before execution**, at sub-millisecond latency. For high-security environments,
+> composes with container/VM isolation for defense-in-depth.
+> See [Architecture Notes](#architecture-notes) for details.
 
 ## Why Agent Governance?
 
@@ -150,7 +150,7 @@ Works with **12+ agent frameworks** including:
 | Unsafe Inter-Agent Communication | ASI-07 | ✅ AgentMesh encrypted channels + trust gates |
 | Cascading Failures | ASI-08 | ✅ Circuit breakers + SLO enforcement |
 | Human-Agent Trust Deficit | ASI-09 | ✅ Full audit trails + flight recorder |
-| Rogue Agents | ASI-10 | ✅ Kill switch + ring isolation + quarantine |
+| Rogue Agents | ASI-10 | ✅ Kill switch + ring isolation + behavioral anomaly detection ([Agent SRE](packages/agent-sre/src/agent_sre/anomaly/)) |
 
 ## Documentation
 
@@ -166,22 +166,19 @@ Works with **12+ agent frameworks** including:
 
 ### Security Model & Boundaries
 
-This toolkit operates as **Python middleware** — it intercepts agent actions at the application level, not at the OS or hardware level. Understanding this boundary is critical:
+This toolkit provides **deterministic application-layer interception** — a deliberate architectural choice that enables sub-millisecond policy enforcement without the overhead of IPC or container orchestration. Every agent action passes through the governance pipeline before execution.
 
-| What it does | What it does NOT do |
+| Enforcement Capability | Defense-in-Depth Composition |
 |---|---|
-| Intercepts and evaluates every agent action before execution | Provide OS kernel-level process isolation |
-| Enforces capability-based least-privilege policies | Prevent a compromised Python process from bypassing policies |
-| Provides cryptographic agent identity (Ed25519) | Run agents in separate address spaces (by default) |
-| Maintains append-only audit logs with hash chains | Guarantee tamper-evidence against in-process adversaries |
-| Terminates non-compliant agents via signal system | Prevent a `try/except BaseException` from catching termination |
+| Intercepts and evaluates every agent action before execution | Add container isolation (Docker, gVisor, Kata) for OS-level separation |
+| Enforces capability-based least-privilege policies | Add network policies for cross-agent communication control |
+| Provides cryptographic agent identity (Ed25519) | Add external PKI for certificate lifecycle management |
+| Maintains append-only audit logs with hash chains | Add external append-only sink (Azure Monitor, write-once storage) for tamper-evidence |
+| Terminates non-compliant agents via signal system | Add OS-level `process.kill()` for isolated agent processes |
 
-**For production deployments requiring strong isolation**, we recommend:
-- Running each agent in a **separate process or container**
-- Writing audit logs to an **external append-only sink** (Azure Monitor, write-once storage)
-- Using OS-level `process.kill()` for termination of isolated agent processes
+The POSIX metaphor (kernel, signals, syscalls) is an architectural pattern — it provides a familiar, well-understood mental model for agent governance. The enforcement boundary is the Python interpreter, which is the same trust boundary used by every Python-based agent framework (LangChain, AutoGen, CrewAI, OpenAI Agents SDK).
 
-The POSIX metaphor (kernel, signals, syscalls) is an architectural pattern — it provides a familiar, well-understood mental model for agent governance, but the enforcement boundary is the Python interpreter, not the OS scheduler.
+> **Production recommendation:** For high-security deployments, run each agent in a separate container with the governance middleware inside. This gives you both application-level policy enforcement *and* OS-level isolation.
 
 ### Trust Score Algorithm
 
@@ -203,7 +200,7 @@ Policy enforcement benchmarks are measured on a **30-scenario test suite** cover
 
 ### Known Limitations & Roadmap
 
-- **ASI-10 Behavioral Detection**: Termination and quarantine are implemented; anomaly detection (tool-call frequency analysis, action entropy scoring) is in active development
+- **ASI-10 Behavioral Detection**: Fully implemented in Agent SRE — tool-call frequency analysis (z-score spike detection), action entropy scoring, and capability profile violation detection. See [`packages/agent-sre/src/agent_sre/anomaly/`](packages/agent-sre/src/agent_sre/anomaly/) (72 tests passing)
 - **Audit Trail Integrity**: Current hash-chain is in-process; external append-only log integration is planned
 - **Framework Integration Depth**: Current adapters wrap agent execution at the function level; deeper hooks into framework-native tool dispatch and sub-agent spawning are planned
 - **Observability**: OpenTelemetry integration for policy decision tracing is planned
