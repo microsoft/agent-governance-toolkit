@@ -22,6 +22,12 @@ public sealed class AuditEmitter
     private readonly ConcurrentBag<Action<GovernanceEvent>> _wildcardHandlers = new();
 
     /// <summary>
+    /// Optional callback invoked when a handler throws an exception.
+    /// Allows callers to log or monitor handler failures without disrupting other subscribers.
+    /// </summary>
+    public Action<Exception, GovernanceEvent>? HandlerError { get; init; }
+
+    /// <summary>
     /// Subscribes a handler to a specific governance event type.
     /// </summary>
     /// <param name="type">The event type to listen for.</param>
@@ -116,19 +122,19 @@ public sealed class AuditEmitter
     public int WildcardHandlerCount => _wildcardHandlers.Count;
 
     /// <summary>
-    /// Safely invokes a handler, catching and swallowing any exceptions
-    /// to prevent one faulty handler from disrupting other subscribers.
+    /// Safely invokes a handler, catching exceptions to prevent one faulty
+    /// handler from disrupting other subscribers. Exceptions are surfaced
+    /// through the <see cref="HandlerError"/> callback when configured.
     /// </summary>
-    private static void InvokeSafe(Action<GovernanceEvent> handler, GovernanceEvent governanceEvent)
+    private void InvokeSafe(Action<GovernanceEvent> handler, GovernanceEvent governanceEvent)
     {
         try
         {
             handler(governanceEvent);
         }
-        catch
+        catch (Exception ex)
         {
-            // Swallow handler exceptions to maintain event bus stability.
-            // In production, consider logging handler errors.
+            HandlerError?.Invoke(ex, governanceEvent);
         }
     }
 }

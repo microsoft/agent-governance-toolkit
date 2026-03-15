@@ -121,16 +121,16 @@ public sealed class AgentIdentity
     }
 
     /// <summary>
-    /// Verifies a signature against data using this identity's public key.
+    /// Verifies a signature against data using this identity's key material.
     /// </summary>
     /// <param name="data">The data that was signed.</param>
     /// <param name="signature">The signature to verify.</param>
     /// <returns><c>true</c> if the signature is valid; otherwise <c>false</c>.</returns>
-    /// <remarks>
-    /// In the HMAC-SHA256 fallback, verification requires the private key to
-    /// recompute the HMAC. This is a known limitation; with Ed25519, verification
-    /// uses only the public key.
-    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when this identity does not have a private key. HMAC-SHA256
+    /// verification requires the signing key. For public-key verification,
+    /// migrate to Ed25519 on .NET 9+.
+    /// </exception>
     public bool Verify(byte[] data, byte[] signature)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -138,9 +138,9 @@ public sealed class AgentIdentity
 
         if (PrivateKey is null)
         {
-            // Without Ed25519, we cannot verify with only the public key.
-            // In production with .NET 9+, use Ed25519 public-key verification.
-            return false;
+            throw new InvalidOperationException(
+                "Cannot verify signature: HMAC-SHA256 requires the private key. " +
+                "For cross-agent verification with only a public key, migrate to Ed25519 (.NET 9+).");
         }
 
         var expected = Sign(data);
@@ -148,17 +148,21 @@ public sealed class AgentIdentity
     }
 
     /// <summary>
-    /// Verifies a signature using a standalone public key and private key pair.
+    /// Verifies a signature using a standalone key pair.
     /// This static overload is provided for cross-agent verification scenarios.
     /// </summary>
-    /// <param name="publicKey">The public key of the signer.</param>
+    /// <param name="publicKey">The public key of the signer (unused in HMAC mode; reserved for Ed25519).</param>
     /// <param name="data">The signed data.</param>
     /// <param name="signature">The signature to verify.</param>
     /// <param name="privateKey">
-    /// The private key for HMAC recomputation (required for HMAC-SHA256 fallback;
-    /// not needed with Ed25519 on .NET 9+).
+    /// The private key for HMAC recomputation. Required for HMAC-SHA256;
+    /// will not be needed with Ed25519 on .NET 9+.
     /// </param>
     /// <returns><c>true</c> if the signature is valid; otherwise <c>false</c>.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when <paramref name="privateKey"/> is <c>null</c> because HMAC-SHA256
+    /// cannot verify without the signing key.
+    /// </exception>
     public static bool VerifySignature(byte[] publicKey, byte[] data, byte[] signature, byte[]? privateKey = null)
     {
         ArgumentNullException.ThrowIfNull(publicKey);
@@ -167,9 +171,9 @@ public sealed class AgentIdentity
 
         if (privateKey is null)
         {
-            // Cannot verify without private key in HMAC-SHA256 mode.
-            // With Ed25519 (.NET 9+), this would use the public key directly.
-            return false;
+            throw new InvalidOperationException(
+                "Cannot verify signature: HMAC-SHA256 requires the private key. " +
+                "For public-key-only verification, migrate to Ed25519 (.NET 9+).");
         }
 
         using var hmac = new HMACSHA256(privateKey);

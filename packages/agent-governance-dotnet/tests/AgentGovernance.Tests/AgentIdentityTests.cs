@@ -87,16 +87,16 @@ public class AgentIdentityTests
     }
 
     [Fact]
-    public void Verify_VerificationOnlyIdentity_ReturnsFalse()
+    public void Verify_VerificationOnlyIdentity_ThrowsInvalidOperationException()
     {
-        // An identity with no private key cannot verify in HMAC mode.
+        // An identity with no private key cannot verify in HMAC mode — throws to make the limitation explicit.
         var identity = AgentIdentity.Create("full");
         var verifyOnly = new AgentIdentity(identity.Did, identity.PublicKey);
 
         var data = "test"u8.ToArray();
         var sig = identity.Sign(data);
 
-        Assert.False(verifyOnly.Verify(data, sig));
+        Assert.Throws<InvalidOperationException>(() => verifyOnly.Verify(data, sig));
     }
 
     [Fact]
@@ -120,14 +120,14 @@ public class AgentIdentityTests
     }
 
     [Fact]
-    public void VerifySignature_Static_WithoutPrivateKey_ReturnsFalse()
+    public void VerifySignature_Static_WithoutPrivateKey_ThrowsInvalidOperationException()
     {
         var identity = AgentIdentity.Create("static-test");
         var data = "test"u8.ToArray();
         var signature = identity.Sign(data);
 
-        Assert.False(AgentIdentity.VerifySignature(
-            identity.PublicKey, data, signature));
+        Assert.Throws<InvalidOperationException>(() =>
+            AgentIdentity.VerifySignature(identity.PublicKey, data, signature));
     }
 
     [Fact]

@@ -75,6 +75,11 @@ public sealed class Saga
     public List<SagaStep> Steps { get; } = new();
     public List<string> FailedCompensations { get; } = new();
     public DateTime CreatedUtc { get; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Per-saga lock for synchronizing state mutations during execution and compensation.
+    /// </summary>
+    internal object SyncRoot { get; } = new();
 }
 
 /// <summary>
@@ -122,11 +127,11 @@ public sealed class SagaOrchestrator
     public async Task<bool> ExecuteAsync(Saga saga, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(saga);
-        saga.State = SagaState.Executing;
+        lock (saga.SyncRoot) { saga.State = SagaState.Executing; }
 
         foreach (var step in saga.Steps)
         {
-            var success = await ExecuteStepAsync(step, cancellationToken).ConfigureAwait(false);
+            var success = await ExecuteStepAsync(saga, step, cancellationToken).ConfigureAwait(false);
             if (!success)
             {
                 await CompensateAsync(saga, cancellationToken).ConfigureAwait(false);
@@ -134,7 +139,7 @@ public sealed class SagaOrchestrator
             }
         }
 
-        saga.State = SagaState.Committed;
+        lock (saga.SyncRoot) { saga.State = SagaState.Committed; }
         return true;
     }
 
@@ -149,32 +154,30 @@ public sealed class SagaOrchestrator
         }
     }
 
-    private async Task<bool> ExecuteStepAsync(SagaStep step, CancellationToken cancellationToken)
+    private async Task<bool> ExecuteStepAsync(Saga saga, SagaStep step, CancellationToken cancellationToken)
     {
         for (int attempt = 0; attempt < step.MaxRetries; attempt++)
         {
-            step.State = StepState.Executing;
-            step.Error = null;
+            lock (saga.SyncRoot) { step.State = StepState.Executing; step.Error = null; }
 
             try
             {
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 cts.CancelAfter(step.Timeout);
 
-                step.Result = await step.Execute(cts.Token).ConfigureAwait(false);
-                step.State = StepState.Committed;
+                var result = await step.Execute(cts.Token).ConfigureAwait(false);
+                lock (saga.SyncRoot) { step.Result = result; step.State = StepState.Committed; }
                 return true;
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                step.Error = $"Step '{step.ActionId}' timed out after {step.Timeout.TotalSeconds}s.";
+                lock (saga.SyncRoot) { step.Error = $"Step '{step.ActionId}' timed out after {step.Timeout.TotalSeconds}s."; }
             }
             catch (Exception ex)
             {
-                step.Error = $"Step '{step.ActionId}' failed: {ex.Message}";
+                lock (saga.SyncRoot) { step.Error = $"Step '{step.ActionId}' failed: {ex.Message}"; }
             }
 
-            // Exponential backoff before retry.
             if (attempt + 1 < step.MaxRetries)
             {
                 var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
@@ -182,25 +185,27 @@ public sealed class SagaOrchestrator
             }
         }
 
-        step.State = StepState.Failed;
+        lock (saga.SyncRoot) { step.State = StepState.Failed; }
         return false;
     }
 
     private async Task CompensateAsync(Saga saga, CancellationToken cancellationToken)
     {
-        saga.State = SagaState.Compensating;
-
-        // Compensate in reverse order of committed steps.
-        var committedSteps = saga.Steps
-            .Where(s => s.State == StepState.Committed)
-            .Reverse()
-            .ToList();
+        List<SagaStep> committedSteps;
+        lock (saga.SyncRoot)
+        {
+            saga.State = SagaState.Compensating;
+            committedSteps = saga.Steps
+                .Where(s => s.State == StepState.Committed)
+                .Reverse()
+                .ToList();
+        }
 
         foreach (var step in committedSteps)
         {
             if (step.Compensate is null)
             {
-                step.State = StepState.Compensated;
+                lock (saga.SyncRoot) { step.State = StepState.Compensated; }
                 continue;
             }
 
@@ -210,18 +215,24 @@ public sealed class SagaOrchestrator
                 cts.CancelAfter(step.Timeout);
 
                 await step.Compensate(cts.Token).ConfigureAwait(false);
-                step.State = StepState.Compensated;
+                lock (saga.SyncRoot) { step.State = StepState.Compensated; }
             }
             catch (Exception ex)
             {
-                step.State = StepState.CompensationFailed;
-                step.Error = $"Compensation for '{step.ActionId}' failed: {ex.Message}";
-                saga.FailedCompensations.Add(step.ActionId);
+                lock (saga.SyncRoot)
+                {
+                    step.State = StepState.CompensationFailed;
+                    step.Error = $"Compensation for '{step.ActionId}' failed: {ex.Message}";
+                    saga.FailedCompensations.Add(step.ActionId);
+                }
             }
         }
 
-        saga.State = saga.FailedCompensations.Count > 0
-            ? SagaState.Escalated
-            : SagaState.Aborted;
+        lock (saga.SyncRoot)
+        {
+            saga.State = saga.FailedCompensations.Count > 0
+                ? SagaState.Escalated
+                : SagaState.Aborted;
+        }
     }
 }

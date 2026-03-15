@@ -16,6 +16,7 @@ public sealed class FileTrustStore : IDisposable
     private readonly object _ioLock = new();
     private readonly double _defaultScore;
     private readonly double _decayRate;
+    private readonly Action<Exception, string>? _loadErrorHandler;
     private bool _disposed;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -34,12 +35,17 @@ public sealed class FileTrustStore : IDisposable
     /// Trust decay rate per hour of inactivity (0–1000). Defaults to 10.
     /// Agents that have not had positive signals lose trust over time.
     /// </param>
-    public FileTrustStore(string filePath, double defaultScore = 500.0, double decayRate = 10.0)
+    /// <param name="loadErrorHandler">
+    /// Optional callback invoked when the trust store file is corrupted.
+    /// Receives the exception and file path. When null, corruption is handled silently.
+    /// </param>
+    public FileTrustStore(string filePath, double defaultScore = 500.0, double decayRate = 10.0, Action<Exception, string>? loadErrorHandler = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
         _filePath = filePath;
         _defaultScore = Math.Clamp(defaultScore, 0, 1000);
         _decayRate = Math.Max(0, decayRate);
+        _loadErrorHandler = loadErrorHandler;
 
         Load();
     }
@@ -179,9 +185,20 @@ public sealed class FileTrustStore : IDisposable
                     }
                 }
             }
-            catch (JsonException)
+            catch (JsonException ex)
             {
-                // Corrupted file — start fresh.
+                // Preserve corrupted file for forensics.
+                try
+                {
+                    var corruptPath = _filePath + ".corrupt";
+                    File.Copy(_filePath, corruptPath, overwrite: true);
+                }
+                catch
+                {
+                    // Best-effort backup; ignore if it fails.
+                }
+
+                _loadErrorHandler?.Invoke(ex, _filePath);
             }
         }
     }

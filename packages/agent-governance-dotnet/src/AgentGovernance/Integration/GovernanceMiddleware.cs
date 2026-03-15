@@ -58,6 +58,8 @@ public sealed class GovernanceMiddleware
 {
     private readonly PolicyEngine _policyEngine;
     private readonly AuditEmitter _auditEmitter;
+    private Dictionary<string, PolicyRule>? _ruleLookupCache;
+    private int _cachedPolicyCount = -1;
     private readonly RateLimiter? _rateLimiter;
     private readonly GovernanceMetrics? _metrics;
     private readonly RingEnforcer? _ringEnforcer;
@@ -296,18 +298,28 @@ public sealed class GovernanceMiddleware
     }
 
     /// <summary>
-    /// Searches loaded policies for a rule by name.
+    /// Searches loaded policies for a rule by name using a cached lookup.
+    /// Cache is invalidated when the policy count changes.
     /// </summary>
     private PolicyRule? FindMatchingRule(string ruleName)
     {
-        foreach (var policy in _policyEngine.ListPolicies())
+        var policies = _policyEngine.ListPolicies();
+        var currentCount = policies.Count;
+
+        if (_ruleLookupCache is null || _cachedPolicyCount != currentCount)
         {
-            foreach (var rule in policy.Rules)
+            var cache = new Dictionary<string, PolicyRule>(StringComparer.Ordinal);
+            foreach (var policy in policies)
             {
-                if (string.Equals(rule.Name, ruleName, StringComparison.Ordinal))
-                    return rule;
+                foreach (var rule in policy.Rules)
+                {
+                    cache.TryAdd(rule.Name, rule);
+                }
             }
+            _ruleLookupCache = cache;
+            _cachedPolicyCount = currentCount;
         }
-        return null;
+
+        return _ruleLookupCache.TryGetValue(ruleName, out var cached) ? cached : null;
     }
 }

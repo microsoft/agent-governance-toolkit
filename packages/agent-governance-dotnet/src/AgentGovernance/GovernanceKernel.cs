@@ -102,7 +102,7 @@ public sealed class GovernanceOptions
 /// }
 /// </code>
 /// </remarks>
-public sealed class GovernanceKernel
+public sealed class GovernanceKernel : IDisposable
 {
     /// <summary>
     /// The policy evaluation engine used by this kernel.
@@ -261,4 +261,14 @@ public sealed class GovernanceKernel
     {
         AuditEmitter.OnAll(handler);
     }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        (Metrics as IDisposable)?.Dispose();
+    }
+
+    private bool _disposed;
 }
