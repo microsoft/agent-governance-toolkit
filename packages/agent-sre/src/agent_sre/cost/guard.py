@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import math
+import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -146,6 +147,7 @@ class CostGuard:
         self._alerts: list[CostAlert] = []
         self._cost_history: deque[float] = deque(maxlen=1000)
         self._org_spent_month: float = 0.0
+        self._lock = threading.Lock()
 
     def get_budget(self, agent_id: str) -> AgentBudget:
         """Get or create budget for an agent."""
@@ -177,11 +179,12 @@ class CostGuard:
             return False, f"Would exceed daily budget (${budget.remaining_today_usd:.2f} remaining)"
 
         if self.org_monthly_budget > 0:
-            if self._org_spent_month + estimated_cost > self.org_monthly_budget:
-                return False, (
-                    f"Would exceed org monthly budget "
-                    f"(${self.org_remaining_month:.2f} remaining)"
-                )
+            with self._lock:
+                if self._org_spent_month + estimated_cost > self.org_monthly_budget:
+                    return False, (
+                        f"Would exceed org monthly budget "
+                        f"(${self.org_remaining_month:.2f} remaining)"
+                    )
 
         return True, "ok"
 
@@ -208,9 +211,10 @@ class CostGuard:
         self._cost_history.append(cost_usd)
 
         # Update budget
-        budget.spent_today_usd += cost_usd
-        budget.task_count_today += 1
-        self._org_spent_month += cost_usd
+        with self._lock:
+            budget.spent_today_usd += cost_usd
+            budget.task_count_today += 1
+            self._org_spent_month += cost_usd
 
         # Per-task limit check
         if cost_usd > self.per_task_limit:

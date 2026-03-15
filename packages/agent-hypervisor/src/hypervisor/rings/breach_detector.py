@@ -84,6 +84,7 @@ class RingBreachDetector:
         window_seconds: int = 60,
         baseline_rate: float = 10.0,
         max_events_per_agent: int = 1_000,
+        max_breach_history: int = 10_000,
     ) -> None:
         self.window_seconds = window_seconds
         self.baseline_rate = baseline_rate
@@ -93,8 +94,8 @@ class RingBreachDetector:
         self._call_windows: dict[str, deque[float]] = {}
         # Per-agent circuit-breaker flag
         self._tripped: dict[str, bool] = {}
-        # Global breach history
-        self._breach_history: list[BreachEvent] = []
+        # Global breach history (bounded)
+        self._breach_history: deque[BreachEvent] = deque(maxlen=max_breach_history)
 
     # ------------------------------------------------------------------
     # Public API
