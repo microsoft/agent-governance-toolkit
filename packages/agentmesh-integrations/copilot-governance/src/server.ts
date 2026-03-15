@@ -15,15 +15,21 @@
  * `https://your-host/agent`.
  */
 
+import crypto from "crypto";
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from "http";
 import { handleAgentRequest } from "./agent";
 import type { AgentRequest } from "./types";
+
+/** Maximum request body size (1 MB). */
+const MAX_BODY_BYTES = 1024 * 1024;
 
 export interface ServerOptions {
   /** TCP port to listen on (default: 3000). */
   port?: number;
   /** Host to bind (default: "0.0.0.0"). */
   host?: string;
+  /** GitHub App webhook secret for request signature verification. */
+  webhookSecret?: string;
 }
 
 /**
@@ -36,6 +42,18 @@ export interface ServerOptions {
 export function createServer(options: ServerOptions = {}) {
   const port = options.port ?? 3000;
   const host = options.host ?? "0.0.0.0";
+  const webhookSecret = options.webhookSecret ?? process.env.GITHUB_WEBHOOK_SECRET;
+
+  function verifySignature(body: string, signature: string | undefined): boolean {
+    if (!webhookSecret || !signature) return !webhookSecret;
+    const hmac = crypto.createHmac("sha256", webhookSecret);
+    const expected = "sha256=" + hmac.update(body).digest("hex");
+    try {
+      return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+    } catch {
+      return false;
+    }
+  }
 
   const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
     // ── Health check ────────────────────────────────────────────────────────
@@ -48,11 +66,28 @@ export function createServer(options: ServerOptions = {}) {
     // ── Agent endpoint ───────────────────────────────────────────────────────
     if (req.method === "POST" && req.url === "/agent") {
       let body = "";
+      let bodySize = 0;
+
       req.on("data", (chunk: Buffer) => {
+        bodySize += chunk.length;
+        if (bodySize > MAX_BODY_BYTES) {
+          res.writeHead(413, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Request body too large" }));
+          req.destroy();
+          return;
+        }
         body += chunk.toString();
       });
 
       req.on("end", async () => {
+        // Verify GitHub webhook signature when secret is configured
+        const signature = req.headers["x-hub-signature-256"] as string | undefined;
+        if (!verifySignature(body, signature)) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Invalid signature" }));
+          return;
+        }
+
         let parsed: AgentRequest;
         try {
           parsed = JSON.parse(body) as AgentRequest;
