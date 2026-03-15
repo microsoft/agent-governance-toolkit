@@ -14,7 +14,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ```
-pip install agent-governance[full]
+pip install agent-governance-toolkit[full]
 ```
 
 [Architecture](#architecture) • [Quick Start](#quick-start) • [Components](#components) • [Why Unified?](#why-a-unified-governance-stack) • [Ecosystem](#the-agent-governance-ecosystem) • [OWASP Compliance](docs/OWASP-COMPLIANCE.md) • [Traction](docs/TRACTION.md)
@@ -25,7 +25,7 @@ pip install agent-governance[full]
 
 > 🔗 **Part of the Agent Governance Ecosystem** — Installs [Agent OS](https://github.com/microsoft/agent-governance-toolkit) · [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) · [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) · [Agent SRE](https://github.com/microsoft/agent-governance-toolkit)
 
-> **Migrating from `ai-agent-compliance`?** The package has been renamed to `agent-governance`.
+> **Migrating from `ai-agent-compliance`?** The package has been renamed to `agent-governance-toolkit`.
 > Run `pip install agent-governance` — the old name is deprecated and will redirect here for 6 months.
 
 ---
@@ -35,7 +35,7 @@ pip install agent-governance[full]
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                      agent-governance                            │
-│                  pip install agent-governance[full]              │
+│                  pip install agent-governance-toolkit[full]              │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │   ┌───────────────────┐      ┌───────────────────────────┐     │
@@ -96,14 +96,14 @@ Install only what you need:
 
 ```bash
 # Core: kernel + trust mesh
-pip install agent-governance
+pip install agent-governance-toolkit
 
 # Full stack: adds runtime + SRE
-pip install agent-governance[full]
+pip install agent-governance-toolkit[full]
 
 # À la carte
-pip install agent-governance[runtime]
-pip install agent-governance[sre]
+pip install agent-governance-toolkit[runtime]
+pip install agent-governance-toolkit[sre]
 ```
 
 ---

@@ -12,7 +12,7 @@ The toolkit is now a **polyglot governance layer**. All three SDKs have first-cl
 
 | Language | Package | Install |
 |----------|---------|---------|
-| **Python** | [`agent-governance[full]`](https://pypi.org/project/agent-governance/) | `pip install agent-governance[full]` |
+| **Python** | [`agent-governance-toolkit[full]`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
 | **TypeScript** | [`@agentmesh/sdk`](https://www.npmjs.com/package/@agentmesh/sdk) | `npm install @agentmesh/sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 
@@ -91,7 +91,7 @@ Full methodology: [BENCHMARKS.md](BENCHMARKS.md)
 
 ```bash
 # Python
-pip install agent-governance[full]
+pip install agent-governance-toolkit[full]
 
 # TypeScript
 npm install @agentmesh/sdk

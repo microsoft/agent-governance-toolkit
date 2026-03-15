@@ -19,7 +19,7 @@ Runtime governance for AI agents — the only toolkit covering all **10 OWASP Ag
 
 **Python** (PyPI)
 ```bash
-pip install agent-governance[full]
+pip install agent-governance-toolkit[full]
 ```
 
 **TypeScript / Node.js** (npm)
@@ -40,7 +40,7 @@ pip install agent-os-kernel        # Policy engine
 pip install agentmesh-platform     # Trust mesh
 pip install agent-runtime          # Runtime supervisor
 pip install agent-sre              # SRE toolkit
-pip install agent-governance       # Compliance & attestation
+pip install agent-governance-toolkit    # Compliance & attestation
 pip install agent-marketplace      # Plugin marketplace
 pip install agent-lightning        # RL training governance
 ```
@@ -150,7 +150,7 @@ if (result.Allowed) { /* proceed */ }
 
 | Language | Package | Install |
 |----------|---------|---------|
-| **Python** | [`agent-governance[full]`](https://pypi.org/project/agent-governance/) | `pip install agent-governance[full]` |
+| **Python** | [`agent-governance-toolkit[full]`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
 | **TypeScript** | [`@agentmesh/sdk`](packages/agent-mesh/sdks/typescript/) | `npm install @agentmesh/sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 
@@ -162,7 +162,7 @@ if (result.Allowed) { /* proceed */ }
 | **AgentMesh** | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | Inter-agent trust — Ed25519 identity, SPIFFE/SVID credentials, trust scoring, A2A/MCP/IATP protocol bridges |
 | **Agent Runtime** | [`agent-runtime`](packages/agent-runtime/) | Execution supervisor — 4-tier privilege rings, saga orchestration, termination control, joint liability, append-only audit log |
 | **Agent SRE** | [`agent-sre`](https://pypi.org/project/agent-sre/) | Reliability engineering — SLOs, error budgets, replay debugging, chaos engineering, progressive delivery |
-| **Agent Compliance** | [`agent-governance`](https://pypi.org/project/agent-governance/) | Runtime policy enforcement — OWASP ASI 2026 controls, governance attestation, integrity verification |
+| **Agent Compliance** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | Runtime policy enforcement — OWASP ASI 2026 controls, governance attestation, integrity verification |
 | **Agent Marketplace** | [`agent-marketplace`](packages/agent-marketplace/) | Plugin lifecycle — discover, install, verify, and sign plugins |
 | **Agent Lightning** | [`agent-lightning`](packages/agent-lightning/) | RL training governance — governed runners, policy rewards |
 

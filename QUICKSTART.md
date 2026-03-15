@@ -24,7 +24,7 @@ graph LR
 Install the governance toolkit:
 
 ```bash
-pip install agent-governance[full]
+pip install agent-governance-toolkit[full]
 ```
 
 Or install individual packages:
@@ -32,7 +32,7 @@ Or install individual packages:
 ```bash
 pip install agent-os-kernel        # Policy enforcement + framework integrations
 pip install agentmesh-platform     # Zero-trust identity + trust cards
-pip install agent-governance          # OWASP ASI verification + integrity CLI
+pip install agent-governance-toolkit    # OWASP ASI verification + integrity CLI
 pip install agent-sre              # SLOs, error budgets, chaos testing
 pip install agent-runtime          # Execution supervisor + privilege rings
 pip install agent-marketplace      # Plugin lifecycle management

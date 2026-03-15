@@ -10,7 +10,7 @@ The Agent Governance Toolkit gives you two complementary pieces:
 | Package | Install | Purpose |
 |---------|---------|---------|
 | `agentmesh-platform` | `pip install agentmesh-platform` | `AuditLog` with Merkle-chain integrity |
-| `agent-governance` | `pip install agent-governance` | OWASP ASI 2026 compliance CLI |
+| `agent-governance-toolkit` | `pip install agent-governance-toolkit` | OWASP ASI 2026 compliance CLI |
 
 This tutorial walks through both, from a single log call to a CI/CD
 compliance gate.
@@ -430,13 +430,13 @@ audit = AuditLog(sink=sink)
 
 ## 6 — OWASP ASI 2026 Compliance Checking
 
-The `agent-governance` package verifies that your deployment covers
+The `agent-governance-toolkit` package verifies that your deployment covers
 all 10 OWASP ASI 2026 security controls.
 
 ### 6.1 Install
 
 ```bash
-pip install agent-governance
+pip install agent-governance-toolkit
 ```
 
 ### 6.2 Verify Governance Coverage

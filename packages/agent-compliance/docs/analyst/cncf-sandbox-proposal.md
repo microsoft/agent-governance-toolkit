@@ -63,7 +63,7 @@ TBD — Seeking a TOC sponsor. The project aligns with the Runtime and Observabi
 
 - **License:** MIT
 - **Language:** Python 3.9+
-- **Installation:** `pip install ai-agent-governance[full]`
+- **Installation:** `pip install agent-governance-toolkit[full]`
 - **Test suite:** 3,000+ tests across the stack (Agent OS: 2,000+, AgentMesh: 500+, Agent SRE: 329+, Agent Runtime: 200+)
 - **Framework integrations:** 12+ (LangChain, CrewAI, AutoGen, Semantic Kernel, LlamaIndex, Haystack, OpenAI Agents SDK, Google ADK, MCP, A2A, and more)
 - **Observability integrations:** 11 platforms (Datadog, Grafana, New Relic, Splunk, Azure Monitor, AWS CloudWatch, etc.)

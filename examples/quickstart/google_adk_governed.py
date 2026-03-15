@@ -4,7 +4,7 @@
 Google ADK Agent with Policy Gates — Quickstart
 ================================================
 
-pip install agent-governance[full] google-adk
+pip install agent-governance-toolkit[full] google-adk
 python examples/quickstart/google_adk_governed.py
 
 Shows real policy violations being caught by ADK governance callbacks,

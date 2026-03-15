@@ -4,7 +4,7 @@
 Agent Governance - Unified installer and runtime policy enforcement.
 
 Install the full stack:
-    pip install agent-governance[full]
+    pip install agent-governance-toolkit[full]
 
 Note: The package was previously published as ``ai-agent-compliance``.
 That name is deprecated and will redirect here for 6 months.

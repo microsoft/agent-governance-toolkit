@@ -241,7 +241,7 @@ is_valid = iatp_verify(attestation, expected_signer="sender")
 ## One Install, Nine Protections
 
 ```bash
-pip install ai-agent-governance[full]
+pip install agent-governance-toolkit[full]
 ```
 
 This single command installs the complete governance stack:

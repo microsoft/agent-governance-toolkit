@@ -88,7 +88,7 @@ This isn't just a prototype. The ecosystem runs production-grade CI/CD:
 ## Install It Now
 
 ```bash
-pip install ai-agent-governance[full]
+pip install agent-governance-toolkit[full]
 ```
 
 Five packages. One install. Production-grade agent governance.

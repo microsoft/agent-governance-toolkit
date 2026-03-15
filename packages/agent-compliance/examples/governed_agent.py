@@ -10,7 +10,7 @@ Shows all four governance layers working together:
   4. Agent SRE — health monitoring and SLO enforcement
 
 Usage:
-    pip install ai-agent-governance[full]
+    pip install agent-governance-toolkit[full]
     python examples/governed_agent.py
 """
 
@@ -63,7 +63,7 @@ async def main():
         )
         print(f"[Agent Runtime] Session created: {session.sso.session_id}")
     else:
-        print("[Agent Runtime] Not installed — pip install ai-agent-governance[full]")
+        print("[Agent Runtime] Not installed — pip install agent-governance-toolkit[full]")
 
     # --- Layer 4: SRE ---
     if HAS_SRE:
@@ -77,7 +77,7 @@ async def main():
         evaluation = slo.evaluate()
         print(f"[Agent SRE] SLO evaluation: status={evaluation.value}")
     else:
-        print("[Agent SRE] Not installed — pip install ai-agent-governance[full]")
+        print("[Agent SRE] Not installed — pip install agent-governance-toolkit[full]")
 
     # --- Execute a governed action ---
     print("\n--- Executing governed action ---")

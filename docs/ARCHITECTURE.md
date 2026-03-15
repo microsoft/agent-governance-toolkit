@@ -9,7 +9,7 @@ The Agent Governance Toolkit provides **deterministic application-layer intercep
 ```
 ╔══════════════════════════════════════════════════════════════════════════╗
 ║                    AGENT GOVERNANCE TOOLKIT                              ║
-║                 pip install agent-governance[full]                        ║
+║                 pip install agent-governance-toolkit[full]                        ║
 ║                                                                          ║
 ║   Agent Action ───► POLICY CHECK ───► Allow / Deny    (< 0.1 ms)        ║
 ║                                                                          ║

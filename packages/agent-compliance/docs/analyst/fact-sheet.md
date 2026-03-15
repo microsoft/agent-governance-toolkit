@@ -14,7 +14,7 @@
 | **[AgentMesh](https://github.com/microsoft/agent-governance-toolkit)** | Trust & identity — zero-trust communication, encrypted channels | 500+ | DID-based cryptographic auth |
 | **[Agent Runtime](https://github.com/microsoft/agent-governance-toolkit)** | Runtime isolation — execution rings, resource limits, kill switches | 200+ | Process-level isolation |
 | **[Agent SRE](https://github.com/microsoft/agent-governance-toolkit)** | Reliability engineering — SLOs, chaos engineering, incident response | 329+ | 11 observability platforms |
-| **[Agent Governance](https://github.com/microsoft/agent-governance-toolkit)** | Unified installer — single package for the complete stack | — | `pip install ai-agent-governance[full]` |
+| **[Agent Governance](https://github.com/microsoft/agent-governance-toolkit)** | Unified installer — single package for the complete stack | — | `pip install agent-governance-toolkit[full]` |
 
 ---
 
@@ -69,7 +69,7 @@ See the full [OWASP Implementation Guide](owasp-agentic-mapping.md) for code exa
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    agent-governance                          │
-│               pip install ai-agent-governance[full]          │
+│               pip install agent-governance-toolkit[full]          │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐          ┌─────────────────────────┐   │
 │  │  Agent OS Kernel │◄────────►│  AgentMesh Platform     │   │
@@ -93,7 +93,7 @@ See the full [OWASP Implementation Guide](owasp-agentic-mapping.md) for code exa
 
 ```bash
 # Install the full stack
-pip install ai-agent-governance[full]
+pip install agent-governance-toolkit[full]
 
 # Or install individual components
 pip install agent-os-kernel          # Governance kernel only

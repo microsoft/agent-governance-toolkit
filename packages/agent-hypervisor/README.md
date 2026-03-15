@@ -28,7 +28,7 @@
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent Hypervisor.
 
-> 📦 **Install the full stack:** `pip install ai-agent-governance[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
+> 📦 **Install the full stack:** `pip install agent-governance-toolkit[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
 
 [Quick Start](#quick-start) • [Configuration](#configuration) • [Why a Hypervisor?](#-why-agent-hypervisor) • [Features](#key-features) • [Architecture](#architecture-diagrams) • [Performance](#performance) • [Ecosystem](#ecosystem)
 

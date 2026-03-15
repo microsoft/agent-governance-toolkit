@@ -69,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ```bash
 # Python
-pip install agent-governance[full]
+pip install agent-governance-toolkit[full]
 
 # TypeScript
 npm install @agentmesh/sdk
@@ -152,7 +152,7 @@ dotnet add package Microsoft.AgentGovernance
 ### Install
 
 ```bash
-pip install agent-governance[full]
+pip install agent-governance-toolkit[full]
 ```
 
 ## [1.0.1] - 2026-03-06

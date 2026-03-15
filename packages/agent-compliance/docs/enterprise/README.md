@@ -19,7 +19,7 @@ Whether you're a single team getting started with AI agent governance or a large
 
 ## Prerequisites
 
-- **Agent Governance** installed: `pip install ai-agent-governance[full]`
+- **Agent Governance** installed: `pip install agent-governance-toolkit[full]`
 - Familiarity with the [Agent Governance architecture](../../README.md#architecture)
 - For Kubernetes guides: K8s 1.27+, Helm 3.x, kubectl configured
 

@@ -39,7 +39,7 @@ def verify_installation() -> int:
     print("Core Packages:")
     results.append(_check("agent-os-kernel", "agent_os"))
     results.append(_check("agentmesh-platform", "agentmesh"))
-    results.append(_check("agent-governance", "agent_compliance"))
+    results.append(_check("agent-governance-toolkit", "agent_compliance"))
     results.append(_check("agent-sre", "agent_sre"))
     print()
 
@@ -75,7 +75,7 @@ def verify_installation() -> int:
 
     if not all(results):
         print("To install missing packages:")
-        print("  pip install agent-governance[full]")
+        print("  pip install agent-governance-toolkit[full]")
         print()
         return 1
 

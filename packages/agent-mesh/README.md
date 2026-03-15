@@ -31,7 +31,7 @@
 
 > 🔗 **Part of the Agent Governance Ecosystem** — Works with [Agent OS](https://github.com/microsoft/agent-governance-toolkit) (kernel), [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) (runtime), and [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) (reliability)
 
-> 📦 **Install the full stack:** `pip install ai-agent-governance[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
+> 📦 **Install the full stack:** `pip install agent-governance-toolkit[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
 
 [Quick Start](#quick-start) • [MCP Proxy](#the-agentmesh-proxy-ssl-for-ai-agents) • [Examples](#examples--integrations) • [Agent OS](https://github.com/microsoft/agent-governance-toolkit) • [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit)
 

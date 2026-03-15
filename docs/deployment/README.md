@@ -2,7 +2,7 @@
 
 Deploy the Agent Governance Toolkit on Azure for production-grade runtime security governance of AI agents.
 
-> **Quick start:** `pip install agent-governance[full]` — see the [main README](../../README.md) for local development.
+> **Quick start:** `pip install agent-governance-toolkit[full]` — see the [main README](../../README.md) for local development.
 
 ---
 

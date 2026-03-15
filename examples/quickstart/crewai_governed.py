@@ -4,7 +4,7 @@
 CrewAI Crew with Governance Middleware — Quickstart
 ====================================================
 
-pip install agent-governance[full] crewai
+pip install agent-governance-toolkit[full] crewai
 python examples/quickstart/crewai_governed.py
 
 Shows a real policy violation being caught, then a compliant run succeeding,
