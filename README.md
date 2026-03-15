@@ -13,7 +13,7 @@
 [![OpenSSF Best Practices](https://img.shields.io/cii/percentage/12085?label=OpenSSF%20Best%20Practices&logo=opensourcesecurity)](https://www.bestpractices.dev/projects/12085)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 
-[Quick Start](#quick-start) · [Packages](#packages) · [Integrations](#framework-integrations) · [OWASP Coverage](#owasp-agentic-top-10-coverage) · [Deploy on Azure](docs/deployment/README.md) · [Architecture Notes](#architecture-notes) · [Contributing](CONTRIBUTING.md)
+[Quick Start](#quick-start) · [Packages](#packages) · [Integrations](#framework-integrations) · [OWASP Coverage](#owasp-agentic-top-10-coverage) · [Performance](#performance) · [Deploy on Azure](docs/deployment/README.md) · [Architecture Notes](#architecture-notes) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -38,38 +38,40 @@ Addresses **10 of 10 [OWASP Agentic Top 10](https://genai.owasp.org/resource/owa
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Agent Governance Toolkit                      │
-│               pip install ai-agent-compliance[full]              │
-├─────────────────────────────────────────────────────────────────┤
-│                  (Python middleware layer)                       │
-│   ┌───────────────────┐      ┌───────────────────────────┐     │
-│   │  Agent OS Engine  │◄────►│     AgentMesh             │     │
-│   │                   │      │                           │     │
-│   │  Policy Engine    │      │  Zero-Trust Identity      │     │
-│   │  Capability Model │      │  Ed25519 / SPIFFE Certs   │     │
-│   │  Audit Logging    │      │  Trust Scoring (0-1000)   │     │
-│   │  Action Interception│    │  A2A + MCP Protocol Bridge│     │
-│   └────────┬──────────┘      └─────────────┬─────────────┘     │
-│            │                               │                   │
-│            ▼                               ▼                   │
-│   ┌───────────────────┐      ┌───────────────────────────┐     │
-│   │  Agent Runtime    │      │     Agent SRE             │     │
-│   │                   │      │                           │     │
-│   │  Execution Rings  │      │  SLO Engine + Error Budget│     │
-│   │  Resource Limits  │      │  Replay & Chaos Testing   │     │
-│   │  Runtime Sandboxing│     │  Progressive Delivery     │     │
-│   │  Termination Ctrl │      │  Circuit Breakers         │     │
-│   └───────────────────┘      └───────────────────────────┘     │
-│                                                                 │
-│   ┌───────────────────┐      ┌───────────────────────────┐     │
-│   │ Agent Marketplace │      │   Agent Lightning         │     │
-│   │                   │      │                           │     │
-│   │  Plugin Discovery │      │  RL Training Governance   │     │
-│   │  Signing & Verify │      │  Policy Rewards           │     │
-│   └───────────────────┘      └───────────────────────────┘     │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+╔═════════════════════════════════════════════════════════════════════════════╗
+║                                                                             ║
+║               ════════  AGENT GOVERNANCE TOOLKIT   ═══════════              ║
+║                    pip install ai-agent-compliance[full]                    ║
+║                                                                             ║
+║      Agent Action ───► POLICY CHECK ───► Allow / Deny    (< 0.1 ms)         ║
+║                                                                             ║
+║   ┌─────────────────────────────┐     ┌─────────────────────────────────┐   ║
+║   │       AGENT OS ENGINE       │◄───►│            AGENTMESH            │   ║
+║   │                             │     │                                 │   ║
+║   │  ● Policy Engine            │     │  ● Zero-Trust Identity          │   ║
+║   │  ● Capability Model         │     │  ● Ed25519 / SPIFFE Certs       │   ║
+║   │  ● Audit Logging            │     │  ● Trust Scoring (0-1000)       │   ║
+║   │  ● Action Interception      │     │  ● A2A + MCP Protocol Bridge    │   ║
+║   └──────────────┬──────────────┘     └────────────────┬────────────────┘   ║
+║                  │                                     │                    ║
+║                  ▼                                     ▼                    ║
+║   ┌─────────────────────────────┐     ┌─────────────────────────────────┐   ║
+║   │        AGENT RUNTIME        │     │            AGENT SRE            │   ║
+║   │                             │     │                                 │   ║
+║   │  ● Execution Rings          │     │  ● SLO Engine + Error Budgets   │   ║
+║   │  ● Resource Limits          │     │  ● Replay & Chaos Testing       │   ║
+║   │  ● Runtime Sandboxing       │     │  ● Progressive Delivery         │   ║
+║   │  ● Termination Control      │     │  ● Circuit Breakers             │   ║
+║   └─────────────────────────────┘     └─────────────────────────────────┘   ║
+║                                                                             ║
+║   ┌─────────────────────────────┐     ┌─────────────────────────────────┐   ║
+║   │      AGENT MARKETPLACE      │     │         AGENT LIGHTNING         │   ║
+║   │                             │     │                                 │   ║
+║   │  ● Plugin Discovery         │     │  ● RL Training Governance       │   ║
+║   │  ● Signing & Verification   │     │  ● Policy Rewards               │   ║
+║   └─────────────────────────────┘     └─────────────────────────────────┘   ║
+║                                                                             ║
+╚═════════════════════════════════════════════════════════════════════════════╝
 ```
 
 ## Packages
@@ -152,6 +154,22 @@ Works with **12+ agent frameworks** including:
 | Human-Agent Trust Deficit | ASI-09 | ✅ Full audit trails + flight recorder |
 | Rogue Agents | ASI-10 | ✅ Kill switch + ring isolation + behavioral anomaly detection ([Agent SRE](packages/agent-sre/src/agent_sre/anomaly/)) |
 
+## Performance
+
+Governance overhead is **sub-millisecond** — negligible compared to any LLM API call (typically 200–2,000 ms). 
+
+| Metric | Latency (p50) | Throughput |
+|---|---|---|
+| Policy evaluation (1 rule) | 0.012 ms | 72K ops/sec |
+| Policy evaluation (100 rules) | 0.029 ms | 31K ops/sec |
+| Kernel enforcement | 0.091 ms | 9.3K ops/sec |
+| Adapter overhead | 0.004–0.006 ms | 130K–230K ops/sec |
+| Concurrent throughput (50 agents) | — | 35,481 ops/sec |
+
+**Bottom line:** Governance adds **< 0.1 ms per action** — roughly 10,000× faster than an LLM API call.
+
+Full methodology, per-adapter breakdowns, and memory profiling: **[BENCHMARKS.md](BENCHMARKS.md)**. Benchmarks are reproducible via the scripts in each package's `benchmarks/` directory and run on every release via CI ([`.github/workflows/benchmarks.yml`](.github/workflows/benchmarks.yml)).
+
 ## Documentation
 
 - **[Azure Deployment Guides](docs/deployment/README.md)** — AKS, Azure AI Foundry, Container Apps, OpenClaw sidecar
@@ -197,20 +215,6 @@ Default score for new agents: **500** (Standard tier). Score changes are driven 
 ### Benchmark Methodology
 
 Policy enforcement benchmarks are measured on a **30-scenario test suite** covering the OWASP Agentic Top 10 risk categories. Results (e.g., policy violation rates, latency) are specific to this test suite and should not be interpreted as universal guarantees. See [`packages/agent-os/modules/control-plane/benchmark/`](packages/agent-os/modules/control-plane/benchmark/) for methodology, datasets, and reproduction instructions.
-
-### Performance
-
-Full benchmark results with p50/p95/p99 latencies, throughput numbers, and memory profiling are published in **[BENCHMARKS.md](BENCHMARKS.md)**. Headlines:
-
-| Metric | Value |
-|---|---|
-| Policy evaluation (single rule) | 0.012 ms p50 — 72K ops/sec |
-| Policy evaluation (100 rules) | 0.029 ms p50 — 31K ops/sec |
-| Kernel enforcement overhead | 0.091 ms p50 — 9.3K ops/sec |
-| Adapter governance overhead | 0.004–0.006 ms p50 — 130K–230K ops/sec |
-| Concurrent throughput (50 agents) | 35,481 ops/sec |
-
-Benchmarks run on every release via CI ([`.github/workflows/benchmarks.yml`](.github/workflows/benchmarks.yml)).
 
 ### Known Limitations & Roadmap
 
