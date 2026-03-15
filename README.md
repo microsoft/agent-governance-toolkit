@@ -1,10 +1,6 @@
-<div align="center">
+![Agent Governance Toolkit](docs/assets/readme-banner.svg)
 
-# 🛡️ Agent Governance Toolkit
-
-**Runtime governance for AI agents — the only toolkit covering all 10 OWASP Agentic risks with 6,100+ tests**
-
-*Governs what agents DO, not just what they say · Policy enforcement · Zero-trust identity · Sandboxing · SRE — one pip install*
+# Welcome to Agent Governance Toolkit!
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -13,101 +9,67 @@
 [![OpenSSF Best Practices](https://img.shields.io/cii/percentage/12085?label=OpenSSF%20Best%20Practices&logo=opensourcesecurity)](https://www.bestpractices.dev/projects/12085)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 
-[Quick Start](#quick-start) · [Packages](#packages) · [Integrations](#framework-integrations) · [OWASP Coverage](#owasp-agentic-top-10-coverage) · [Performance](#performance) · [Deploy on Azure](docs/deployment/README.md) · [Architecture Notes](#architecture-notes) · [Contributing](CONTRIBUTING.md)
+Runtime governance for AI agents — the only toolkit covering all **10 OWASP Agentic risks** with **6,100+ tests**. Governs what agents *do*, not just what they say — deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE — one `pip install`.
 
-</div>
+## 📋 Getting Started
 
----
-
-> **🔒 Enforcement Model:** Deterministic application-layer interception — every agent action is evaluated
-> against policy **before execution**, at sub-millisecond latency. For high-security environments,
-> composes with container/VM isolation for defense-in-depth.
-> See [Architecture Notes](#architecture-notes) for details.
-
-## By The Numbers
-
-| Metric | Value |
-|---|---|
-| **Tests Passing** | 6,100+ across all packages |
-| **Packages** | 7 (kernel, trust mesh, runtime, SRE, compliance, marketplace, lightning) |
-| **Framework Integrations** | 12+ (LangChain, CrewAI, AutoGen, Dify, LlamaIndex, OpenAI Agents, Google ADK, …) |
-| **Policy Eval Latency** | 0.012 ms p50 — [full benchmarks](BENCHMARKS.md) |
-| **OWASP Coverage** | 10/10 Agentic Top 10 risks |
-| **Observability** | Prometheus, OpenTelemetry, PagerDuty, Grafana |
-
-## Why Agent Governance?
-
-AI agent frameworks (LangChain, AutoGen, CrewAI, Google ADK, OpenAI Agents SDK) enable agents to call tools, spawn sub-agents, and take real-world actions — but provide **no runtime security model**. The Agent Governance Toolkit provides:
-
-- **Deterministic policy enforcement** before every agent action
-- **Zero-trust identity** with cryptographic agent credentials
-- **Execution sandboxing** with privilege rings and termination controls
-- **Reliability engineering** with SLOs, error budgets, and chaos testing
-
-Addresses **10 of 10 [OWASP Agentic Top 10](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)** risks with full coverage across all ASI-01 through ASI-10 categories.
-
-## Architecture
-
-```
-╔═════════════════════════════════════════════════════════════════════════════╗
-║                                                                             ║
-║               ════════  AGENT GOVERNANCE TOOLKIT   ═══════════              ║
-║                    pip install agent-governance[full]                       ║
-║                                                                             ║
-║      Agent Action ───► POLICY CHECK ───► Allow / Deny    (< 0.1 ms)         ║
-║                                                                             ║
-║   ┌─────────────────────────────┐     ┌─────────────────────────────────┐   ║
-║   │       AGENT OS ENGINE       │◄───►│            AGENTMESH            │   ║
-║   │                             │     │                                 │   ║
-║   │  ● Policy Engine            │     │  ● Zero-Trust Identity          │   ║
-║   │  ● Capability Model         │     │  ● Ed25519 / SPIFFE Certs       │   ║
-║   │  ● Audit Logging            │     │  ● Trust Scoring (0-1000)       │   ║
-║   │  ● Action Interception      │     │  ● A2A + MCP Protocol Bridge    │   ║
-║   └──────────────┬──────────────┘     └────────────────┬────────────────┘   ║
-║                  │                                     │                    ║
-║                  ▼                                     ▼                    ║
-║   ┌─────────────────────────────┐     ┌─────────────────────────────────┐   ║
-║   │        AGENT RUNTIME        │     │            AGENT SRE            │   ║
-║   │                             │     │                                 │   ║
-║   │  ● Execution Rings          │     │  ● SLO Engine + Error Budgets   │   ║
-║   │  ● Resource Limits          │     │  ● Replay & Chaos Testing       │   ║
-║   │  ● Runtime Sandboxing       │     │  ● Progressive Delivery         │   ║
-║   │  ● Termination Control      │     │  ● Circuit Breakers             │   ║
-║   └─────────────────────────────┘     └─────────────────────────────────┘   ║
-║                                                                             ║
-║   ┌─────────────────────────────┐     ┌─────────────────────────────────┐   ║
-║   │      AGENT MARKETPLACE      │     │         AGENT LIGHTNING         │   ║
-║   │                             │     │                                 │   ║
-║   │  ● Plugin Discovery         │     │  ● RL Training Governance       │   ║
-║   │  ● Signing & Verification   │     │  ● Policy Rewards               │   ║
-║   └─────────────────────────────┘     └─────────────────────────────────┘   ║
-║                                                                             ║
-╚═════════════════════════════════════════════════════════════════════════════╝
-```
-
-## Packages
-
-| Package | PyPI | Description |
-|---------|------|-------------|
-| **Agent OS** | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | Policy engine — deterministic action evaluation, capability model, audit logging, action interception, MCP gateway |
-| **AgentMesh** | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | Inter-agent trust — Ed25519 identity, SPIFFE/SVID credentials, trust scoring, A2A/MCP/IATP protocol bridges |
-| **Agent Runtime** | [`agent-runtime`](packages/agent-runtime/) | Execution supervisor — 4-tier privilege rings, saga orchestration, termination control, joint liability, append-only audit log |
-| **Agent SRE** | [`agent-sre`](https://pypi.org/project/agent-sre/) | Reliability engineering — SLOs, error budgets, replay debugging, chaos engineering, progressive delivery |
-| **Agent Compliance** | [`agent-governance`](https://pypi.org/project/agent-governance/) | Runtime policy enforcement — OWASP ASI 2026 controls, governance attestation, integrity verification |
-| **Agent Marketplace** | [`agent-marketplace`](packages/agent-marketplace/) | Plugin lifecycle — discover, install, verify, and sign plugins |
-| **Agent Lightning** | [`agent-lightning`](packages/agent-lightning/) | RL training governance — governed runners, policy rewards |
-
-## Quick Start
+### 📦 Installation
 
 ```bash
-# Install the full governance stack
 pip install agent-governance[full]
+# This will install all sub-packages, see `packages/` for individual packages.
 ```
+
+Or install individual packages:
+
+```bash
+pip install agent-os-kernel    # Policy engine
+pip install agentmesh           # Trust mesh
+pip install agent-runtime       # Runtime supervisor
+pip install agent-sre           # SRE toolkit
+pip install agent-governance    # Compliance & attestation
+pip install agent-marketplace   # Plugin marketplace
+pip install agent-lightning     # RL training governance
+```
+
+### 📚 Documentation
+
+- **[Quick Start](QUICKSTART.md)** — Get from zero to governed agents in 10 minutes
+- **[Tutorials](docs/tutorials/)** — Step-by-step guides for policy, identity, integrations, compliance, SRE, and sandboxing
+- **[Azure Deployment](docs/deployment/README.md)** — AKS, Azure AI Foundry, Container Apps, OpenClaw sidecar
+- **[OWASP Compliance](docs/OWASP-COMPLIANCE.md)** — Full ASI-01 through ASI-10 mapping
+- **[Architecture](docs/ARCHITECTURE.md)** — System design, security model, trust scoring
+- **[NIST RFI Mapping](docs/nist-rfi-mapping.md)** — Mapping to NIST AI Agent Security RFI (2026-00206)
+
+Still have questions? File a [GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) or see our [Community page](COMMUNITY.md).
+
+### ✨ **Highlights**
+
+- **Deterministic Policy Enforcement**: Every agent action evaluated against policy *before* execution at sub-millisecond latency (<0.1 ms)
+  - [Policy Engine](packages/agent-os/) | [Benchmarks](BENCHMARKS.md)
+- **Zero-Trust Agent Identity**: Ed25519 cryptographic credentials, SPIFFE/SVID support, trust scoring on a 0–1000 scale
+  - [AgentMesh](packages/agent-mesh/) | [Trust Scoring docs](packages/agent-mesh/docs/TRUST-SCORING.md)
+- **Execution Sandboxing**: 4-tier privilege rings, saga orchestration, termination control, kill switch
+  - [Agent Runtime](packages/agent-runtime/) | [Agent Hypervisor](packages/agent-hypervisor/)
+- **Agent SRE**: SLOs, error budgets, replay debugging, chaos engineering, circuit breakers, progressive delivery
+  - [Agent SRE](packages/agent-sre/) | [Observability integrations](packages/agent-hypervisor/src/hypervisor/observability/)
+- **12+ Framework Integrations**: Microsoft Agent Framework, LangChain, CrewAI, AutoGen, Dify, LlamaIndex, OpenAI Agents, Google ADK, and more
+  - [Framework quickstarts](examples/quickstart/) | [Integration proposals](docs/proposals/)
+- **Full OWASP Coverage**: 10/10 Agentic Top 10 risks addressed with dedicated controls for each ASI category
+  - [OWASP Compliance](docs/OWASP-COMPLIANCE.md) | [Competitive Comparison](docs/COMPARISON.md)
+
+### 💬 **We want your feedback!**
+
+- For bugs, please file a [GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues).
+
+## Quickstart
+
+### Enforce a policy — Python
 
 ```python
 from agent_os import PolicyEngine, CapabilityModel
 
-# Define agent capabilities
+# Define what this agent is allowed to do
 capabilities = CapabilityModel(
     allowed_tools=["web_search", "file_read"],
     denied_tools=["file_write", "shell_exec"],
@@ -123,16 +85,27 @@ if decision.allowed:
     ...
 ```
 
-Or install individual packages:
+## More Examples & Samples
 
-```bash
-pip install agent-os-kernel    # Just the policy engine
-pip install agentmesh           # Just the trust mesh
-pip install agent-runtime       # Just the runtime supervisor
-pip install agent-sre           # Just the SRE toolkit
-pip install agent-marketplace   # Just the plugin marketplace
-pip install agent-lightning     # Just the RL training governance
-```
+- **[Framework Quickstarts](examples/quickstart/)** — One-file governed agents for LangChain, CrewAI, AutoGen, OpenAI Agents, Google ADK
+- **[Tutorial 1: Policy Engine](docs/tutorials/01-policy-engine.md)** — Define and enforce governance policies
+- **[Tutorial 2: Trust & Identity](docs/tutorials/02-trust-and-identity.md)** — Zero-trust agent credentials
+- **[Tutorial 3: Framework Integrations](docs/tutorials/03-framework-integrations.md)** — Add governance to any framework
+- **[Tutorial 4: Audit & Compliance](docs/tutorials/04-audit-and-compliance.md)** — OWASP compliance and attestation
+- **[Tutorial 5: Agent Reliability](docs/tutorials/05-agent-reliability.md)** — SLOs, error budgets, chaos testing
+- **[Tutorial 6: Execution Sandboxing](docs/tutorials/06-execution-sandboxing.md)** — Privilege rings and termination
+
+## Packages
+
+| Package | PyPI | Description |
+|---------|------|-------------|
+| **Agent OS** | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | Policy engine — deterministic action evaluation, capability model, audit logging, action interception, MCP gateway |
+| **AgentMesh** | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | Inter-agent trust — Ed25519 identity, SPIFFE/SVID credentials, trust scoring, A2A/MCP/IATP protocol bridges |
+| **Agent Runtime** | [`agent-runtime`](packages/agent-runtime/) | Execution supervisor — 4-tier privilege rings, saga orchestration, termination control, joint liability, append-only audit log |
+| **Agent SRE** | [`agent-sre`](https://pypi.org/project/agent-sre/) | Reliability engineering — SLOs, error budgets, replay debugging, chaos engineering, progressive delivery |
+| **Agent Compliance** | [`agent-governance`](https://pypi.org/project/agent-governance/) | Runtime policy enforcement — OWASP ASI 2026 controls, governance attestation, integrity verification |
+| **Agent Marketplace** | [`agent-marketplace`](packages/agent-marketplace/) | Plugin lifecycle — discover, install, verify, and sign plugins |
+| **Agent Lightning** | [`agent-lightning`](packages/agent-lightning/) | RL training governance — governed runners, policy rewards |
 
 ## Framework Integrations
 
@@ -163,11 +136,11 @@ Works with **12+ agent frameworks** including:
 | Unsafe Inter-Agent Communication | ASI-07 | ✅ AgentMesh encrypted channels + trust gates |
 | Cascading Failures | ASI-08 | ✅ Circuit breakers + SLO enforcement |
 | Human-Agent Trust Deficit | ASI-09 | ✅ Full audit trails + flight recorder |
-| Rogue Agents | ASI-10 | ✅ Kill switch + ring isolation + behavioral anomaly detection ([Agent SRE](packages/agent-sre/src/agent_sre/anomaly/)) |
+| Rogue Agents | ASI-10 | ✅ Kill switch + ring isolation + behavioral anomaly detection |
 
 ## Performance
 
-Governance overhead is **sub-millisecond** — negligible compared to any LLM API call (typically 200–2,000 ms). 
+Governance adds **< 0.1 ms per action** — roughly 10,000× faster than an LLM API call.
 
 | Metric | Latency (p50) | Throughput |
 |---|---|---|
@@ -177,75 +150,20 @@ Governance overhead is **sub-millisecond** — negligible compared to any LLM AP
 | Adapter overhead | 0.004–0.006 ms | 130K–230K ops/sec |
 | Concurrent throughput (50 agents) | — | 35,481 ops/sec |
 
-**Bottom line:** Governance adds **< 0.1 ms per action** — roughly 10,000× faster than an LLM API call.
+Full methodology and per-adapter breakdowns: **[BENCHMARKS.md](BENCHMARKS.md)**
 
-Full methodology, per-adapter breakdowns, and memory profiling: **[BENCHMARKS.md](BENCHMARKS.md)**. Benchmarks are reproducible via the scripts in each package's `benchmarks/` directory and run on every release via CI ([`.github/workflows/benchmarks.yml`](.github/workflows/benchmarks.yml)).
+## Contributor Resources
 
-## Documentation
-
-- **[Azure Deployment Guides](docs/deployment/README.md)** — AKS, Azure AI Foundry, Container Apps, OpenClaw sidecar
-- **[NIST RFI Mapping](docs/nist-rfi-mapping.md)** — Question-by-question mapping to NIST AI Agent Security RFI (2026-00206)
-- [OWASP Compliance Mapping](docs/OWASP-COMPLIANCE.md)
-- [Competitive Comparison](docs/COMPARISON.md) — vs. NeMo Guardrails, Guardrails AI, LiteLLM, Portkey
-- [CSA Agentic Trust Framework Mapping](docs/CSA-ATF-PROPOSAL.md)
-- [Performance Benchmarks](BENCHMARKS.md)
-- [Changelog](CHANGELOG.md)
 - [Contributing Guide](CONTRIBUTING.md)
+- [Community](COMMUNITY.md)
 - [Security Policy](SECURITY.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Changelog](CHANGELOG.md)
 - [Support](SUPPORT.md)
 
-## Architecture Notes
+## Important Notes
 
-### Security Model & Boundaries
-
-This toolkit provides **deterministic application-layer interception** — a deliberate architectural choice that enables sub-millisecond policy enforcement without the overhead of IPC or container orchestration. Every agent action passes through the governance pipeline before execution.
-
-| Enforcement Capability | Defense-in-Depth Composition |
-|---|---|
-| Intercepts and evaluates every agent action before execution | Add container isolation (Docker, gVisor, Kata) for OS-level separation |
-| Enforces capability-based least-privilege policies | Add network policies for cross-agent communication control |
-| Provides cryptographic agent identity (Ed25519) | Add external PKI for certificate lifecycle management |
-| Maintains append-only audit logs with hash chains | Add external append-only sink (Azure Monitor, write-once storage) for tamper-evidence |
-| Terminates non-compliant agents via signal system | Add OS-level `process.kill()` for isolated agent processes |
-
-The POSIX metaphor (kernel, signals, syscalls) is an architectural pattern — it provides a familiar, well-understood mental model for agent governance. The enforcement boundary is the Python interpreter, which is the same trust boundary used by every Python-based agent framework (LangChain, AutoGen, CrewAI, OpenAI Agents SDK).
-
-> **Production recommendation:** For high-security deployments, run each agent in a separate container with the governance middleware inside. This gives you both application-level policy enforcement *and* OS-level isolation.
-
-### Trust Score Algorithm
-
-AgentMesh assigns trust scores on a 0–1000 scale with the following tiers:
-
-| Score Range | Tier | Meaning |
-|---|---|---|
-| 900–1000 | Verified Partner | Cryptographically verified, long-term trusted |
-| 700–899 | Trusted | Established track record, elevated privileges |
-| 500–699 | Standard | Default for new agents with valid identity |
-| 300–499 | Probationary | Limited privileges, under observation |
-| 0–299 | Untrusted | Restricted to read-only or blocked |
-
-Default score for new agents: **500** (Standard tier). Score changes are driven by policy compliance history, successful task completions, and trust boundary violations. Full algorithm documentation is in [`packages/agent-mesh/docs/TRUST-SCORING.md`](packages/agent-mesh/docs/TRUST-SCORING.md).
-
-### Benchmark Methodology
-
-Policy enforcement benchmarks are measured on a **30-scenario test suite** covering the OWASP Agentic Top 10 risk categories. Results (e.g., policy violation rates, latency) are specific to this test suite and should not be interpreted as universal guarantees. See [`packages/agent-os/modules/control-plane/benchmark/`](packages/agent-os/modules/control-plane/benchmark/) for methodology, datasets, and reproduction instructions.
-
-### Known Limitations & Roadmap
-
-- **ASI-10 Behavioral Detection**: Fully implemented — tool-call frequency analysis (z-score spike detection), action entropy scoring, capability profile violation detection, and behavioral anomaly detection with ring-distance amplification. See [`packages/agent-sre/src/agent_sre/anomaly/`](packages/agent-sre/src/agent_sre/anomaly/) and [`packages/agent-hypervisor/src/hypervisor/rings/breach_detector.py`](packages/agent-hypervisor/src/hypervisor/rings/breach_detector.py)
-- **Audit Trail Integrity**: Current hash-chain is in-process; external append-only log integration is planned
-- **Framework Integration Depth**: Current adapters wrap agent execution at the function level; deeper hooks into framework-native tool dispatch and sub-agent spawning are planned
-- **Observability**: Prometheus metrics collection, OpenTelemetry span export, PagerDuty alerting, and Grafana dashboards are implemented. See [`packages/agent-hypervisor/src/hypervisor/observability/`](packages/agent-hypervisor/src/hypervisor/observability/) and [`packages/agent-sre/src/agent_sre/integrations/`](packages/agent-sre/src/agent_sre/integrations/)
-
-## Contributing
-
-This project welcomes contributions and suggestions. Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
-
-Most contributions require you to agree to a Contributor License Agreement (CLA). For details, visit https://cla.opensource.microsoft.com.
-
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions provided by the bot.
-
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any questions.
+If you use the Agent Governance Toolkit to build applications that operate with third-party agent frameworks or services, you do so at your own risk. We recommend reviewing all data being shared with third-party services and being cognizant of third-party practices for retention and location of data. It is your responsibility to manage whether your data will flow outside of your organization's compliance and geographic boundaries and any related implications.
 
 ## License
 

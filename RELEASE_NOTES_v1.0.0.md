@@ -69,7 +69,7 @@
 - **Merged:** GitHub Copilot (×3), Dify (×1)
 - **Under Review:** Microsoft Agent Framework, Google ADK, AutoGen, CrewAI, LangChain, OpenAI Swarm, MetaGPT, Anthropic, MCP, OpenLit, OWASP, LF AI, CoSAI, AAIF
 
-See [docs/PROPOSALS-INDEX.md](docs/PROPOSALS-INDEX.md) for the full list.
+See [docs/proposals/](docs/proposals/) for the full list.
 
 ## Quick Start
 

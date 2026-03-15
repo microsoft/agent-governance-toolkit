@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0078D4;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#005A9E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#003D6B;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="shield" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#50E6FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0078D4;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="300" fill="url(#bg)" rx="0"/>
+  <!-- Grid pattern -->
+  <g opacity="0.06">
+    <line x1="0" y1="0" x2="0" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="60" y1="0" x2="60" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="120" y1="0" x2="120" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="180" y1="0" x2="180" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="240" y1="0" x2="240" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="300" y1="0" x2="300" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="360" y1="0" x2="360" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="420" y1="0" x2="420" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="480" y1="0" x2="480" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="540" y1="0" x2="540" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="600" y1="0" x2="600" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="660" y1="0" x2="660" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="720" y1="0" x2="720" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="780" y1="0" x2="780" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="840" y1="0" x2="840" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="900" y1="0" x2="900" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="960" y1="0" x2="960" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="1020" y1="0" x2="1020" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="1080" y1="0" x2="1080" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="1140" y1="0" x2="1140" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="1200" y1="0" x2="1200" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="0" y1="60" x2="1200" y2="60" stroke="white" stroke-width="1"/>
+    <line x1="0" y1="120" x2="1200" y2="120" stroke="white" stroke-width="1"/>
+    <line x1="0" y1="180" x2="1200" y2="180" stroke="white" stroke-width="1"/>
+    <line x1="0" y1="240" x2="1200" y2="240" stroke="white" stroke-width="1"/>
+  </g>
+  <!-- Shield icon -->
+  <g transform="translate(130, 75)">
+    <path d="M75 0 L150 40 L150 100 C150 140 115 165 75 180 C35 165 0 140 0 100 L0 40 Z"
+          fill="url(#shield)" opacity="0.9"/>
+    <path d="M75 25 L55 70 L95 70 Z" fill="white" opacity="0.9"/>
+    <rect x="65" y="70" width="20" height="50" rx="3" fill="white" opacity="0.9"/>
+    <circle cx="75" cy="135" r="8" fill="white" opacity="0.7"/>
+  </g>
+  <!-- Microsoft text -->
+  <text x="340" y="115" font-family="Segoe UI, -apple-system, sans-serif" font-size="22" fill="#50E6FF" font-weight="300" letter-spacing="3">MICROSOFT</text>
+  <!-- Main title -->
+  <text x="340" y="165" font-family="Segoe UI, -apple-system, sans-serif" font-size="46" fill="white" font-weight="600">Agent Governance Toolkit</text>
+  <!-- Subtitle -->
+  <text x="340" y="210" font-family="Segoe UI, -apple-system, sans-serif" font-size="18" fill="#B4D6F0" font-weight="300">Runtime governance for AI agents — covering all 10 OWASP Agentic risks</text>
+  <!-- Accent line -->
+  <rect x="340" y="230" width="80" height="3" rx="1.5" fill="#50E6FF"/>
+</svg>
