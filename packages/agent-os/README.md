@@ -65,7 +65,7 @@
 
 <table>
 <tr>
-<td align="center"><h3>1,680+</h3><sub>Tests Passing</sub></td>
+<td align="center"><h3>2,573+</h3><sub>Tests Passing</sub></td>
 <td align="center"><h3>12</h3><sub>Framework Integrations</sub></td>
 <td align="center"><h3>170K+</h3><sub>Combined Stars of<br/>Integrated Projects</sub></td>
 <td align="center"><h3>&lt;0.1ms p99</h3><sub>Governance Latency<br/><a href="benchmarks/results/BENCHMARKS.md">Benchmarks</a></sub></td>

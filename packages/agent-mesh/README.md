@@ -62,7 +62,7 @@
 
 <table>
 <tr>
-<td align="center"><h3>1,300+</h3><sub>Tests Passing</sub></td>
+<td align="center"><h3>1,669+</h3><sub>Tests Passing</sub></td>
 <td align="center"><h3>6</h3><sub>Framework Integrations</sub></td>
 <td align="center"><h3>170K+</h3><sub>Combined Stars of<br/>Integrated Projects</sub></td>
 <td align="center"><h3>4</h3><sub>Protocol Bridges<br/>(A2A · MCP · IATP · AI Card)</sub></td>

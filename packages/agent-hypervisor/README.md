@@ -22,7 +22,7 @@
 [![PyPI](https://img.shields.io/pypi/v/agent-hypervisor)](https://pypi.org/project/agent-hypervisor/)
 [![Downloads](https://img.shields.io/pypi/dm/agent-hypervisor)](https://pypi.org/project/agent-hypervisor/)
 [![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-ASI--05,_10-brightgreen)](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
-[![Tests](https://img.shields.io/badge/tests-457%20passing-brightgreen)](https://github.com/microsoft/agent-governance-toolkit)
+[![Tests](https://img.shields.io/badge/tests-644%20passing-brightgreen)](https://github.com/microsoft/agent-governance-toolkit)
 [![Benchmark](https://img.shields.io/badge/latency-268%CE%BCs%20pipeline-orange)](benchmarks/)
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 
@@ -50,7 +50,7 @@
 
 <table>
 <tr>
-<td align="center"><h3>457+</h3><sub>Tests Passing</sub></td>
+<td align="center"><h3>644+</h3><sub>Tests Passing</sub></td>
 <td align="center"><h3>4</h3><sub>Execution Rings<br/>(Ring 0–3)</sub></td>
 <td align="center"><h3>268μs</h3><sub>Full Governance<br/>Pipeline Latency</sub></td>
 <td align="center"><h3>v2.0</h3><sub>Saga Compensation<br/>Kill Switch · Rate Limits</sub></td>
@@ -587,7 +587,7 @@ Forensic-grade delta trails — semantic diffs, hash-chained entries, summary co
 <td width="50%">
 
 ### 📡 Observability
-Structured event bus emits typed events for every action. Causal trace IDs with full delegation tree encoding. Version counters for causal consistency.
+Structured event bus emits typed events for every action. Causal trace IDs with full delegation tree encoding. Version counters for causal consistency. **Prometheus metrics collector** for ring transitions and breaches. **OpenTelemetry span exporter** for saga-to-span mapping with distributed trace context.
 
 </td>
 </tr>
@@ -605,7 +605,7 @@ Ring 2 (Standard)   — Reversible actions — requires eff_score > 0.60
 Ring 3 (Sandbox)    — Read-only / research — default for unknown agents
 ```
 
-**v2.0 additions:** Dynamic ring elevation (sudo with TTL), ring breach detection with circuit breakers, ring inheritance for spawned agents.
+**v2.0 additions:** Dynamic ring elevation (sudo with TTL), ring breach detection with circuit breakers, ring inheritance for spawned agents, **behavioral anomaly detection** with sliding-window rate analysis and ring-distance amplification.
 
 ### 🔄 Saga Orchestrator — Deep Dive
 
@@ -659,7 +659,7 @@ pip install agent-hypervisor
 | `hypervisor.integrations` | Nexus, Verification, IATP cross-module adapters | -- |
 | **Integration** | End-to-end lifecycle, edge cases, security | **24** |
 | **Scenarios** | Cross-module governance pipelines (7 suites) | **18** |
-| **Total** | | **457** |
+| **Total** | | **644** |
 
 ## Test Suite
 
@@ -728,7 +728,7 @@ graph TB
 | [Agent OS](https://github.com/microsoft/agent-governance-toolkit) | Policy enforcement kernel | 1,500+ tests |
 | [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit) | Cryptographic trust network | 1,400+ tests |
 | [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) | SLO, chaos, cost guardrails | 1,070+ tests |
-| **Agent Hypervisor** | Session isolation & governance runtime | 457+ tests |
+| **Agent Hypervisor** | Session isolation & governance runtime | 644+ tests |
 
 ## 🗺️ Roadmap
 

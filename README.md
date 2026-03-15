@@ -24,6 +24,17 @@
 > composes with container/VM isolation for defense-in-depth.
 > See [Architecture Notes](#architecture-notes) for details.
 
+## By The Numbers
+
+| Metric | Value |
+|---|---|
+| **Tests Passing** | 6,100+ across all packages |
+| **Packages** | 7 (kernel, trust mesh, runtime, SRE, compliance, marketplace, lightning) |
+| **Framework Integrations** | 12+ (LangChain, CrewAI, AutoGen, Dify, LlamaIndex, OpenAI Agents, Google ADK, …) |
+| **Policy Eval Latency** | 0.012 ms p50 — [full benchmarks](BENCHMARKS.md) |
+| **OWASP Coverage** | 10/10 Agentic Top 10 risks |
+| **Observability** | Prometheus, OpenTelemetry, PagerDuty, Grafana |
+
 ## Why Agent Governance?
 
 AI agent frameworks (LangChain, AutoGen, CrewAI, Google ADK, OpenAI Agents SDK) enable agents to call tools, spawn sub-agents, and take real-world actions — but provide **no runtime security model**. The Agent Governance Toolkit provides:
@@ -155,8 +166,10 @@ Works with **12+ agent frameworks** including:
 ## Documentation
 
 - **[Azure Deployment Guides](docs/deployment/README.md)** — AKS, Azure AI Foundry, Container Apps, OpenClaw sidecar
+- **[NIST RFI Mapping](docs/nist-rfi-mapping.md)** — Question-by-question mapping to NIST AI Agent Security RFI (2026-00206)
 - [OWASP Compliance Mapping](docs/OWASP-COMPLIANCE.md)
 - [CSA Agentic Trust Framework Mapping](docs/CSA-ATF-PROPOSAL.md)
+- [Performance Benchmarks](BENCHMARKS.md)
 - [Changelog](CHANGELOG.md)
 - [Contributing Guide](CONTRIBUTING.md)
 - [Security Policy](SECURITY.md)
@@ -214,10 +227,10 @@ Benchmarks run on every release via CI ([`.github/workflows/benchmarks.yml`](.gi
 
 ### Known Limitations & Roadmap
 
-- **ASI-10 Behavioral Detection**: Fully implemented in Agent SRE — tool-call frequency analysis (z-score spike detection), action entropy scoring, and capability profile violation detection. See [`packages/agent-sre/src/agent_sre/anomaly/`](packages/agent-sre/src/agent_sre/anomaly/) (72 tests passing)
+- **ASI-10 Behavioral Detection**: Fully implemented — tool-call frequency analysis (z-score spike detection), action entropy scoring, capability profile violation detection, and behavioral anomaly detection with ring-distance amplification. See [`packages/agent-sre/src/agent_sre/anomaly/`](packages/agent-sre/src/agent_sre/anomaly/) and [`packages/agent-hypervisor/src/hypervisor/rings/breach_detector.py`](packages/agent-hypervisor/src/hypervisor/rings/breach_detector.py)
 - **Audit Trail Integrity**: Current hash-chain is in-process; external append-only log integration is planned
 - **Framework Integration Depth**: Current adapters wrap agent execution at the function level; deeper hooks into framework-native tool dispatch and sub-agent spawning are planned
-- **Observability**: OpenTelemetry integration for policy decision tracing is planned
+- **Observability**: Prometheus metrics collection, OpenTelemetry span export, PagerDuty alerting, and Grafana dashboards are implemented. See [`packages/agent-hypervisor/src/hypervisor/observability/`](packages/agent-hypervisor/src/hypervisor/observability/) and [`packages/agent-sre/src/agent_sre/integrations/`](packages/agent-sre/src/agent_sre/integrations/)
 
 ## Contributing
 

@@ -50,9 +50,9 @@ Reliability layer across **170K+ combined GitHub stars** of integrated projects 
 
 <table>
 <tr>
-<td align="center"><h3>1,089+</h3><sub>Tests Passing</sub></td>
+<td align="center"><h3>1,240+</h3><sub>Tests Passing</sub></td>
 <td align="center"><h3>12+</h3><sub>Framework Adapters<br/><sub>LangChain · CrewAI · AutoGen<br/>LangGraph · Dify · more</sub></sub></td>
-<td align="center"><h3>11</h3><sub>Observability Platforms<br/><sub>Langfuse · LangSmith · Arize<br/>Datadog · Prometheus · more</sub></sub></td>
+<td align="center"><h3>13</h3><sub>Observability Platforms<br/><sub>Langfuse · LangSmith · Arize<br/>Datadog · Prometheus · PagerDuty<br/>Grafana · OTel · more</sub></sub></td>
 <td align="center"><h3>OpenTelemetry</h3><sub>Native OTLP Export</sub></td>
 </tr>
 <tr>
@@ -479,7 +479,7 @@ agent-sre/
 ├── operator/              # Kubernetes CRDs (AgentSLO, CostBudget)
 ├── .github/actions/       # GitHub Actions (canary deployment)
 ├── examples/              # 4 runnable demos
-├── tests/                 # 1,089 tests
+├── tests/                 # 1,240 tests
 ├── docs/                  # Getting started, concepts, integration guide
 └── specs/                 # SLO templates (coming soon)
 ```
@@ -512,7 +512,7 @@ Agent SRE tells you *if it was within budget* and *what to do about it*.
 
 ## Status & Maturity
 
-### ✅ Fully Implemented (20,000+ lines, 1,089 tests)
+### ✅ Fully Implemented (20,000+ lines, 1,240 tests)
 
 | Component | Status | Description |
 |---|---|---|
@@ -650,7 +650,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 | Quarter | Milestone |
 |---------|-----------|
 | **Q1 2026** | ✅ Core 7 engines, OTel integration, Prometheus dashboards |
-| **Q2 2026** | Kubernetes operator, PagerDuty/OpsGenie integration |
+| **Q1 2026** | ✅ PagerDuty alerting, Grafana SLO dashboards, org budget enforcement, bounded ErrorBudget events |
+| **Q2 2026** | Kubernetes operator, OpsGenie integration |
 | **Q3 2026** | ML-powered anomaly detection, auto-remediation |
 | **Q4 2026** | Managed cloud service, SOC2 compliance automation |
 
