@@ -1,0 +1,96 @@
+# Prompt Injection Safety — Sample Configuration
+#
+# ⚠️  IMPORTANT: This is a SAMPLE configuration provided as a starting point.
+# You MUST review, customize, and extend these rules for your specific
+# use case before deploying to production. Microsoft does not guarantee
+# that these rules are comprehensive or sufficient for your security
+# requirements.
+
+version: "1.0"
+name: prompt-injection-safety
+description: >
+  Sample prompt injection detection configuration — defines regex patterns
+  and thresholds for detecting prompt injection attacks (OWASP LLM01 / ASI01).
+
+disclaimer: >
+  This is a sample configuration. It is NOT exhaustive and should be
+  customized for your specific security requirements.
+
+detection_patterns:
+  direct_override:
+    - 'ignore\s+(all\s+)?previous\s+instructions'
+    - 'you\s+are\s+now\b'
+    - 'new\s+role\s*:'
+    - 'forget\s+(everything|all|your)\b'
+    - 'disregard\s+(all\s+)?(above|prior|previous)\b'
+    - 'override\s+(previous\s+)?instructions'
+    - 'do\s+not\s+follow\s+(your|the)\s+(previous\s+)?instructions'
+
+  delimiter:
+    - '^-{3,}\s*$'
+    - '^#{3,}\s*$'
+    - '^```\s*$'
+    - 'END\s+SYSTEM'
+    - 'BEGIN\s+USER'
+    - '<\|im_start\|>'
+    - '<\|im_end\|>'
+    - '\[INST\]'
+    - '<<SYS>>'
+    - '<\|system\|>'
+    - '<\|user\|>'
+    - '<\|assistant\|>'
+
+  role_play:
+    - 'pretend\s+you\s+are'
+    - 'act\s+as\s+if\s+you\s+have\s+no\s+restrictions'
+    - '\bjailbreak\b'
+    - '\bDAN\s+mode\b'
+    - 'developer\s+mode\s+override'
+    - 'bypass\s+(all\s+)?(safety|content)\s+(filters?|restrictions?)'
+    - 'you\s+have\s+no\s+(limitations?|restrictions?|rules?)'
+
+  context_manipulation:
+    - 'the\s+above\s+instructions\s+are\s+wrong'
+    - 'actually\s+your\s+real\s+instructions\s+are'
+    - 'the\s+developer\s+told\s+me\s+to\s+tell\s+you'
+    - 'secret\s+password\s+is'
+    - 'your\s+true\s+purpose\s+is'
+    - 'the\s+real\s+system\s+prompt\s+is'
+
+  multi_turn:
+    - 'as\s+I\s+mentioned\s+before.*you\s+agreed\s+to'
+    - 'you\s+already\s+said\s+yes'
+    - 'continuing\s+from\s+where\s+you\s+unlocked'
+    - 'you\s+previously\s+confirmed'
+    - 'we\s+already\s+established\s+that\s+you\s+can'
+
+  encoding:
+    - '\\x[0-9a-fA-F]{2}(?:\\x[0-9a-fA-F]{2}){3,}'
+    - '\\u[0-9a-fA-F]{4}(?:\\u[0-9a-fA-F]{4}){3,}'
+    - '\brot13\b'
+    - '\bbase64\s*decode\b'
+    - '\bhex\s*decode\b'
+
+  base64_pattern: '[A-Za-z0-9+/]{20,}={0,2}'
+
+suspicious_decoded_keywords:
+  - ignore
+  - override
+  - system
+  - password
+  - secret
+  - admin
+  - root
+  - exec
+  - eval
+  - "import os"
+
+sensitivity_thresholds:
+  strict: 0.3
+  balanced: 0.5
+  permissive: 0.7
+
+sensitivity_min_threat:
+  strict: low
+  balanced: low
+  permissive: high

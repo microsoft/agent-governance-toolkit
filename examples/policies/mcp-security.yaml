@@ -1,0 +1,87 @@
+# MCP Security — Sample Configuration
+#
+# ⚠️  IMPORTANT: This is a SAMPLE configuration provided as a starting point.
+# You MUST review, customize, and extend these rules for your specific
+# use case before deploying to production. Microsoft does not guarantee
+# that these rules are comprehensive or sufficient for your security
+# requirements.
+
+version: "1.0"
+name: mcp-security
+description: >
+  Sample MCP security configuration — defines patterns for detecting tool
+  poisoning, hidden instructions, and protocol attacks in MCP tool definitions.
+
+disclaimer: >
+  This is a sample configuration. It is NOT exhaustive and should be
+  customized for your specific security requirements.
+
+detection_patterns:
+  invisible_unicode:
+    - '[\u200b\u200c\u200d\ufeff]'
+    - '[\u202a-\u202e]'
+    - '[\u2066-\u2069]'
+    - '[\u00ad]'
+    - '[\u2060\u180e]'
+
+  hidden_comments:
+    - '<!--.*?-->'
+    - '\[//\]:\s*#\s*\(.*?\)'
+    - '\[comment\]:\s*<>\s*\(.*?\)'
+
+  hidden_instructions:
+    - 'ignore\s+(all\s+)?previous'
+    - 'override\s+(the\s+)?(previous|above|original)'
+    - 'instead\s+of\s+(the\s+)?(above|previous|described)'
+    - 'actually\s+do'
+    - '\bsystem\s*:'
+    - '\bassistant\s*:'
+    - 'do\s+not\s+follow'
+    - 'disregard\s+(all\s+)?(above|prior|previous)'
+
+  encoded_payloads:
+    - '[A-Za-z0-9+/]{40,}={0,2}'
+    - '(?:\\x[0-9a-fA-F]{2}){4,}'
+
+  exfiltration:
+    - '\bcurl\b'
+    - '\bwget\b'
+    - '\bfetch\s*\('
+    - 'https?://'
+    - '\bsend\s+email\b'
+    - '\bsend\s+to\b'
+    - '\bpost\s+to\b'
+    - 'include\s+the\s+contents?\s+of\b'
+
+  privilege_escalation:
+    - '\bsudo\b'
+    - '\badmin\s+access\b'
+    - '\broot\s+access\b'
+    - '\belevate\s+privile'
+    - '\bexec\s*\('
+    - '\beval\s*\('
+
+  role_override:
+    - 'you\s+are\b'
+    - 'your\s+task\s+is\b'
+    - 'respond\s+with\b'
+    - 'always\s+return\b'
+    - 'you\s+must\b'
+    - 'your\s+role\s+is\b'
+
+  excessive_whitespace: '\n{5,}.+'
+
+suspicious_decoded_keywords:
+  - ignore
+  - override
+  - system
+  - password
+  - secret
+  - admin
+  - root
+  - exec
+  - eval
+  - "import os"
+  - send
+  - curl
+  - fetch

@@ -1,0 +1,25 @@
+# PII Detection — Sample Configuration
+#
+# ⚠️  IMPORTANT: This is a SAMPLE configuration provided as a starting point.
+# You MUST review, customize, and extend these rules for your specific
+# use case before deploying to production. Microsoft does not guarantee
+# that these rules are comprehensive or sufficient for your security
+# requirements.
+
+version: "1.0"
+name: pii-detection
+description: >
+  Sample PII detection configuration — defines regex patterns for identifying
+  and redacting personally identifiable information (email, phone, SSN,
+  credit card numbers, API keys) in agent output.
+
+disclaimer: >
+  This is a sample configuration. It is NOT exhaustive and should be
+  customized for your specific security requirements.
+
+builtin_patterns:
+  email: '[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'
+  phone: '(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
+  ssn: '\b\d{3}-\d{2}-\d{4}\b'
+  credit_card: '\b(?:\d[ -]*?){13,19}\b'
+  api_key: '(?:api[_-]?key|secret[_-]?key|access[_-]?token|bearer)[\s:=]+[''"]?[A-Za-z0-9_\-]{16,}[''"]?'

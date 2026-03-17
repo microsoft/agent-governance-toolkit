@@ -38,16 +38,24 @@ Example:
 from __future__ import annotations
 
 import logging
+import os
 import re
 import threading
 import time
 import unicodedata
+import warnings
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_SAMPLE_DISCLAIMER = (
+    "\u26a0\ufe0f  These are SAMPLE conversation guardian rules provided as a "
+    "starting point. You MUST review, customise, and extend them for your "
+    "specific use case before deploying to production."
+)
 
 
 # ── Text Normalization (Evasion Resistance) ──────────────────────────
@@ -150,6 +158,47 @@ class ConversationGuardianConfig:
     # Transcript audit
     capture_transcript: bool = True
     max_transcript_entries: int = 10_000
+
+
+def load_conversation_guardian_config(path: str) -> ConversationGuardianConfig:
+    """Load conversation guardian configuration from a YAML file.
+
+    Args:
+        path: Path to a YAML file with a ``thresholds`` section.
+
+    Returns:
+        ConversationGuardianConfig populated from the YAML data.
+
+    Raises:
+        FileNotFoundError: If the config file does not exist.
+        ValueError: If the YAML is missing the ``thresholds`` section.
+    """
+    import yaml
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Conversation guardian config not found: {path}")
+
+    with open(path, "r", encoding="utf-8") as fh:
+        data = yaml.safe_load(fh.read())
+
+    if not isinstance(data, dict) or "thresholds" not in data:
+        raise ValueError(f"YAML file must contain a 'thresholds' section: {path}")
+
+    t = data["thresholds"]
+    return ConversationGuardianConfig(
+        escalation_score_threshold=float(t.get("escalation_score_threshold", 0.6)),
+        escalation_critical_threshold=float(t.get("escalation_critical_threshold", 0.85)),
+        max_retry_cycles=int(t.get("max_retry_cycles", 3)),
+        max_conversation_turns=int(t.get("max_conversation_turns", 30)),
+        loop_window_seconds=float(t.get("loop_window_seconds", 300.0)),
+        offensive_score_threshold=float(t.get("offensive_score_threshold", 0.5)),
+        offensive_critical_threshold=float(t.get("offensive_critical_threshold", 0.8)),
+        composite_warn_threshold=float(t.get("composite_warn_threshold", 0.4)),
+        composite_pause_threshold=float(t.get("composite_pause_threshold", 0.6)),
+        composite_break_threshold=float(t.get("composite_break_threshold", 0.8)),
+        capture_transcript=bool(t.get("capture_transcript", True)),
+        max_transcript_entries=int(t.get("max_transcript_entries", 10_000)),
+    )
 
 
 # ── Transcript Audit ─────────────────────────────────────────────────
@@ -633,6 +682,14 @@ class ConversationGuardian:
         self,
         config: ConversationGuardianConfig | None = None,
     ) -> None:
+        if config is None:
+            warnings.warn(
+                "ConversationGuardian() uses built-in sample rules that may not "
+                "cover all adversarial conversation patterns. For production use, load an "
+                "explicit config with load_conversation_guardian_config(). "
+                "See examples/policies/conversation-guardian.yaml for a sample configuration.",
+                stacklevel=2,
+            )
         self._config = config or ConversationGuardianConfig()
         self._lock = threading.Lock()
 
@@ -895,5 +952,6 @@ __all__ = [
     "FeedbackLoopBreaker",
     "OffensiveIntentDetector",
     "TranscriptEntry",
+    "load_conversation_guardian_config",
     "normalize_text",
 ]

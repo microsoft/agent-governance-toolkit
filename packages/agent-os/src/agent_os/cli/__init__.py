@@ -33,6 +33,7 @@ import re
 import subprocess
 import sys
 import time
+import warnings
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
@@ -50,6 +51,12 @@ AGENTOS_ENV_VARS = {
 
 VALID_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
 VALID_BACKENDS = ("memory", "redis")
+
+_SAMPLE_DISCLAIMER = (
+    "\u26a0\ufe0f  These are SAMPLE CLI security rules provided as a starting point. "
+    "You MUST review, customise, and extend them for your specific use case "
+    "before deploying to production."
+)
 
 
 def get_env_config() -> dict[str, str | None]:
@@ -227,14 +234,56 @@ class PolicyViolation:
         self.suggestion = suggestion
 
 
+def load_cli_policy_rules(path: str) -> list[dict[str, Any]]:
+    """Load CLI policy checker rules from a YAML file.
+
+    Args:
+        path: Path to a YAML file with a ``rules`` section.
+
+    Returns:
+        List of rule dicts suitable for ``PolicyChecker``.
+
+    Raises:
+        FileNotFoundError: If the config file does not exist.
+        ValueError: If the YAML is missing the ``rules`` section.
+    """
+    import yaml
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"CLI policy rules config not found: {path}")
+
+    with open(path, "r", encoding="utf-8") as fh:
+        data = yaml.safe_load(fh.read())
+
+    if not isinstance(data, dict) or "rules" not in data:
+        raise ValueError(f"YAML file must contain a 'rules' section: {path}")
+
+    return data["rules"]
+
+
 class PolicyChecker:
     """Local-first code policy checker."""
 
-    def __init__(self) -> None:
-        self.rules = self._load_default_rules()
+    def __init__(self, rules: list[dict[str, Any]] | None = None) -> None:
+        if rules is not None:
+            self.rules = rules
+        else:
+            self.rules = self._load_default_rules()
 
     def _load_default_rules(self) -> list[dict[str, Any]]:
-        """Load default safety rules."""
+        """Load default safety rules.
+
+        .. deprecated::
+            Uses built-in sample rules. For production use, load an explicit
+            config with ``load_cli_policy_rules()``.
+        """
+        warnings.warn(
+            "PolicyChecker._load_default_rules() uses built-in sample rules that may not "
+            "cover all security violations. For production use, load an "
+            "explicit config with load_cli_policy_rules(). "
+            "See examples/policies/cli-security-rules.yaml for a sample configuration.",
+            stacklevel=2,
+        )
         return [
             # Destructive SQL
             {

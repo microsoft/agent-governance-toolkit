@@ -1,0 +1,176 @@
+# Semantic Policy — Sample Configuration
+#
+# ⚠️  IMPORTANT: This is a SAMPLE configuration provided as a starting point.
+# You MUST review, customize, and extend these rules for your specific
+# use case before deploying to production. Microsoft does not guarantee
+# that these rules are comprehensive or sufficient for your security
+# requirements.
+
+version: "1.0"
+name: semantic-policy
+description: >
+  Sample semantic policy configuration — defines weighted signal patterns
+  for intent classification (destructive data, exfiltration, privilege
+  escalation, etc.).
+
+disclaimer: >
+  This is a sample configuration. It is NOT exhaustive and should be
+  customized for your specific security requirements.
+
+signals:
+  destructive_data:
+    - pattern: '\bDROP\s+(TABLE|DATABASE|INDEX|VIEW|SCHEMA)\b'
+      weight: 0.9
+      explanation: "SQL DROP statement"
+    - pattern: '\bTRUNCATE\s+TABLE\b'
+      weight: 0.9
+      explanation: "SQL TRUNCATE"
+    - pattern: '\bDELETE\s+FROM\b.*\bWHERE\s+1\s*=\s*1\b'
+      weight: 0.95
+      explanation: "DELETE all rows"
+    - pattern: '\bDELETE\s+FROM\b(?!.*\bWHERE\b)'
+      weight: 0.85
+      explanation: "DELETE without WHERE"
+    - pattern: '\bDELETE\s+FROM\b'
+      weight: 0.4
+      explanation: "DELETE with filter"
+    - pattern: '\b(wipe|purge|destroy|erase|nuke)\b'
+      weight: 0.7
+      explanation: "destructive verb"
+    - pattern: '\bremove\s+(all|every|entire)\b'
+      weight: 0.75
+      explanation: "remove-all pattern"
+    - pattern: '\bformat\s+(disk|drive|partition)\b'
+      weight: 0.9
+      explanation: "disk format"
+    - pattern: '\bALTER\s+TABLE\b.*\bDROP\b'
+      weight: 0.8
+      explanation: "ALTER TABLE DROP column"
+
+  data_exfiltration:
+    - pattern: '\bSELECT\s+\*\s+FROM\b.*\bINTO\s+OUTFILE\b'
+      weight: 0.9
+      explanation: "SQL dump to file"
+    - pattern: '\bCOPY\s+.*\bTO\s+STDOUT\b'
+      weight: 0.8
+      explanation: "Postgres COPY to stdout"
+    - pattern: '\b(dump|export|backup)\s+(all|entire|full|complete)\b'
+      weight: 0.75
+      explanation: "full data export"
+    - pattern: '\b(upload|send|transmit)\s+.*\b(external|remote|s3|bucket)\b'
+      weight: 0.8
+      explanation: "external transfer"
+    - pattern: '\bpg_dump\b'
+      weight: 0.7
+      explanation: "database dump tool"
+    - pattern: '\bmysqldump\b'
+      weight: 0.7
+      explanation: "MySQL dump tool"
+    - pattern: '\b(wget|curl)\s+.*\|\s*'
+      weight: 0.6
+      explanation: "piped download"
+
+  privilege_escalation:
+    - pattern: '\bGRANT\s+(ALL|SUPERUSER|ADMIN)\b'
+      weight: 0.9
+      explanation: "SQL GRANT elevated"
+    - pattern: '\bGRANT\b'
+      weight: 0.4
+      explanation: "SQL GRANT"
+    - pattern: '\bsudo\b'
+      weight: 0.7
+      explanation: "sudo invocation"
+    - pattern: '\bchmod\s+777\b'
+      weight: 0.8
+      explanation: "world-writable permissions"
+    - pattern: '\bchmod\s+[0-7]*[67][0-7]{2}\b'
+      weight: 0.5
+      explanation: "permissive chmod"
+    - pattern: '\b(escalat|elevat)\w*\s*(privilege|permission|access)\b'
+      weight: 0.8
+      explanation: "escalation language"
+    - pattern: '\bALTER\s+USER\b.*\bSUPERUSER\b'
+      weight: 0.9
+      explanation: "make superuser"
+    - pattern: '\bsu\s+-\b'
+      weight: 0.7
+      explanation: "switch user root"
+    - pattern: '\bpasswd\b'
+      weight: 0.5
+      explanation: "password change"
+
+  system_modification:
+    - pattern: '\brm\s+-rf\b'
+      weight: 0.95
+      explanation: "recursive force delete"
+    - pattern: '\brm\s+-r\b'
+      weight: 0.7
+      explanation: "recursive delete"
+    - pattern: '\b(shutdown|reboot|halt|poweroff)\b'
+      weight: 0.8
+      explanation: "system power"
+    - pattern: '\bkill\s+-9\b'
+      weight: 0.7
+      explanation: "force kill process"
+    - pattern: '\bsystemctl\s+(stop|disable|mask)\b'
+      weight: 0.7
+      explanation: "stop system service"
+    - pattern: '\biptables\s+.*\bDROP\b'
+      weight: 0.8
+      explanation: "firewall drop rule"
+    - pattern: '\bregistry\s*(delete|modify)\b'
+      weight: 0.7
+      explanation: "Windows registry modification"
+    - pattern: '\bformat\s+[A-Z]:\b'
+      weight: 0.9
+      explanation: "format drive"
+
+  code_execution:
+    - pattern: '\b(exec|eval)\s*\('
+      weight: 0.8
+      explanation: "dynamic code execution"
+    - pattern: '\bsubprocess\b'
+      weight: 0.5
+      explanation: "subprocess call"
+    - pattern: '\bos\.system\b'
+      weight: 0.7
+      explanation: "os.system call"
+    - pattern: '\b__import__\b'
+      weight: 0.7
+      explanation: "dynamic import"
+    - pattern: '\bcompile\s*\('
+      weight: 0.5
+      explanation: "compile code"
+    - pattern: '\bpickle\.loads\b'
+      weight: 0.7
+      explanation: "unsafe deserialization"
+
+  network_access:
+    - pattern: '\b(fetch|requests\.get|requests\.post|urllib)\b'
+      weight: 0.4
+      explanation: "HTTP request"
+    - pattern: '\b(curl|wget)\s+http'
+      weight: 0.5
+      explanation: "command-line HTTP"
+    - pattern: '\bsocket\.connect\b'
+      weight: 0.6
+      explanation: "raw socket connection"
+    - pattern: '\bsmtplib\b'
+      weight: 0.5
+      explanation: "SMTP email"
+
+  data_read:
+    - pattern: '\bSELECT\b(?!.*\bINTO\b)'
+      weight: 0.6
+      explanation: "SQL SELECT"
+    - pattern: '\b(read|get|fetch|list|show|describe)\b'
+      weight: 0.3
+      explanation: "read verb"
+
+  data_write:
+    - pattern: '\b(INSERT|UPDATE)\b'
+      weight: 0.5
+      explanation: "SQL write"
+    - pattern: '\b(write|create|put|post|append)\b'
+      weight: 0.3
+      explanation: "write verb"

@@ -12,14 +12,22 @@ from __future__ import annotations
 import ast
 import importlib.abc
 import importlib.machinery
+import os
 import pathlib
 import sys
-from dataclasses import dataclass
+import warnings
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from pydantic import BaseModel, Field
 
 from agent_os.exceptions import SecurityError
+
+_SAMPLE_DISCLAIMER = (
+    "\u26a0\ufe0f  These are SAMPLE sandbox rules provided as a starting point. "
+    "You MUST review, customise, and extend them for your specific use case "
+    "before deploying to production."
+)
 
 _DEFAULT_BLOCKED_MODULES: list[str] = [
     "subprocess",
@@ -36,6 +44,57 @@ _DEFAULT_BLOCKED_BUILTINS: list[str] = [
     "compile",
     "__import__",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Externalised configuration dataclass
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SandboxSecurityConfig:
+    """Structured configuration for sandbox security rules, loadable from YAML.
+
+    Attributes:
+        blocked_modules: Python modules to deny inside the sandbox.
+        blocked_builtins: Built-in functions to block.
+        disclaimer: Disclaimer text shown in logs.
+    """
+
+    blocked_modules: list[str] = field(default_factory=lambda: list(_DEFAULT_BLOCKED_MODULES))
+    blocked_builtins: list[str] = field(default_factory=lambda: list(_DEFAULT_BLOCKED_BUILTINS))
+    disclaimer: str = ""
+
+
+def load_sandbox_config(path: str) -> SandboxSecurityConfig:
+    """Load sandbox security configuration from a YAML file.
+
+    Args:
+        path: Path to a YAML file with a ``sandbox`` section.
+
+    Returns:
+        SandboxSecurityConfig populated from the YAML data.
+
+    Raises:
+        FileNotFoundError: If the config file does not exist.
+        ValueError: If the YAML is missing the ``sandbox`` section.
+    """
+    import yaml
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Sandbox config not found: {path}")
+
+    with open(path, "r", encoding="utf-8") as fh:
+        data = yaml.safe_load(fh.read())
+
+    if not isinstance(data, dict) or "sandbox" not in data:
+        raise ValueError(f"YAML file must contain a 'sandbox' section: {path}")
+
+    sp = data["sandbox"]
+    return SandboxSecurityConfig(
+        blocked_modules=sp.get("blocked_modules", list(_DEFAULT_BLOCKED_MODULES)),
+        blocked_builtins=sp.get("blocked_builtins", list(_DEFAULT_BLOCKED_BUILTINS)),
+        disclaimer=data.get("disclaimer", ""),
+    )
 
 
 class SandboxConfig(BaseModel):
@@ -218,6 +277,14 @@ class ExecutionSandbox:
         config: SandboxConfig | None = None,
         policy: Any = None,
     ) -> None:
+        if config is None:
+            warnings.warn(
+                "ExecutionSandbox() uses built-in sample rules that may not "
+                "cover all sandbox evasion techniques. For production use, load an "
+                "explicit config with load_sandbox_config(). "
+                "See examples/policies/sandbox-safety.yaml for a sample configuration.",
+                stacklevel=2,
+            )
         self.config = config or SandboxConfig()
         self.policy = policy
         self._hook = SandboxImportHook(self.config.blocked_modules)

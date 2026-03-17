@@ -23,10 +23,22 @@ Example:
 
 from __future__ import annotations
 
+import os
 import re
-from dataclasses import dataclass
+import warnings
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+# =============================================================================
+# Disclaimer
+# =============================================================================
+
+_SAMPLE_DISCLAIMER = (
+    "\u26a0\ufe0f  These are SAMPLE semantic policy signals provided as a starting "
+    "point. You MUST review, customise, and extend them for your specific use "
+    "case before deploying to production."
+)
 
 # =============================================================================
 # Intent Categories
@@ -167,6 +179,68 @@ _SIGNALS: dict[IntentCategory, list[tuple]] = {
 
 
 # =============================================================================
+# Externalised configuration dataclass
+# =============================================================================
+
+
+@dataclass
+class SemanticPolicyConfig:
+    """Structured configuration for semantic policy signals, loadable from YAML.
+
+    Attributes:
+        signals: Mapping of IntentCategory names to lists of
+            ``(pattern, weight, explanation)`` tuples.
+        disclaimer: Disclaimer text shown in logs.
+    """
+
+    signals: dict[str, list[tuple[str, float, str]]] = field(
+        default_factory=lambda: {
+            cat.value: [(p, w, e) for p, w, e in sigs]
+            for cat, sigs in _SIGNALS.items()
+        }
+    )
+    disclaimer: str = ""
+
+
+def load_semantic_policy_config(path: str) -> SemanticPolicyConfig:
+    """Load semantic policy configuration from a YAML file.
+
+    Args:
+        path: Path to a YAML file with a ``signals`` section.
+
+    Returns:
+        SemanticPolicyConfig populated from the YAML data.
+
+    Raises:
+        FileNotFoundError: If the config file does not exist.
+        ValueError: If the YAML is missing the ``signals`` section.
+    """
+    import yaml
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Semantic policy config not found: {path}")
+
+    with open(path, "r", encoding="utf-8") as fh:
+        data = yaml.safe_load(fh.read())
+
+    if not isinstance(data, dict) or "signals" not in data:
+        raise ValueError(f"YAML file must contain a 'signals' section: {path}")
+
+    raw_signals = data["signals"]
+    signals: dict[str, list[tuple[str, float, str]]] = {}
+    for category_name, entries in raw_signals.items():
+        signals[category_name] = [
+            (entry["pattern"], float(entry["weight"]), entry.get("explanation", ""))
+            for entry in entries
+        ]
+
+    return SemanticPolicyConfig(
+        signals=signals,
+        disclaimer=data.get("disclaimer", ""),
+    )
+
+
+# =============================================================================
 # Semantic Policy Engine
 # =============================================================================
 
@@ -187,13 +261,24 @@ class SemanticPolicyEngine:
         deny: list[IntentCategory] | None = None,
         confidence_threshold: float = 0.5,
         custom_signals: dict[IntentCategory, list[tuple]] | None = None,
+        config: SemanticPolicyConfig | None = None,
     ):
         """
         Args:
             deny: Intent categories to deny (default: all dangerous categories)
             confidence_threshold: Minimum confidence to trigger deny (0.0-1.0)
             custom_signals: Additional signal patterns to merge with defaults
+            config: Optional externalized configuration loaded via
+                ``load_semantic_policy_config()``.
         """
+        if config is None and custom_signals is None:
+            warnings.warn(
+                "SemanticPolicyEngine() uses built-in sample rules that may not "
+                "cover all malicious intent patterns. For production use, load an "
+                "explicit config with load_semantic_policy_config(). "
+                "See examples/policies/semantic-policy.yaml for a sample configuration.",
+                stacklevel=2,
+            )
         self.deny_categories: set[IntentCategory] = set(deny) if deny else {
             IntentCategory.DESTRUCTIVE_DATA,
             IntentCategory.DATA_EXFILTRATION,
@@ -202,7 +287,19 @@ class SemanticPolicyEngine:
             IntentCategory.CODE_EXECUTION,
         }
         self.confidence_threshold = confidence_threshold
-        self.signals = {k: list(v) for k, v in _SIGNALS.items()}
+
+        # Build signals from config or defaults
+        if config is not None:
+            self.signals: dict[IntentCategory, list[tuple]] = {}
+            for cat_name, sigs in config.signals.items():
+                try:
+                    cat = IntentCategory(cat_name)
+                except ValueError:
+                    continue
+                self.signals[cat] = list(sigs)
+        else:
+            self.signals = {k: list(v) for k, v in _SIGNALS.items()}
+
         if custom_signals:
             for cat, sigs in custom_signals.items():
                 self.signals.setdefault(cat, []).extend(sigs)
@@ -319,5 +416,7 @@ __all__ = [
     "IntentCategory",
     "IntentClassification",
     "PolicyDenied",
+    "SemanticPolicyConfig",
     "SemanticPolicyEngine",
+    "load_semantic_policy_config",
 ]

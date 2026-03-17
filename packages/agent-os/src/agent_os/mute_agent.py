@@ -21,11 +21,19 @@ Built-in pattern categories:
 from __future__ import annotations
 
 import logging
+import os
 import re
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_SAMPLE_DISCLAIMER = (
+    "\u26a0\ufe0f  These are SAMPLE PII detection patterns provided as a starting "
+    "point. You MUST review, customise, and extend them for your specific use "
+    "case before deploying to production."
+)
 
 
 # ---------------------------------------------------------------------------
@@ -48,6 +56,53 @@ _COMPILED: dict[str, re.Pattern[str]] = {
     name: re.compile(pattern, re.IGNORECASE)
     for name, pattern in BUILTIN_PATTERNS.items()
 }
+
+
+# ---------------------------------------------------------------------------
+# Externalised configuration dataclass
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PIIDetectionConfig:
+    """Structured configuration for PII detection patterns, loadable from YAML.
+
+    Attributes:
+        builtin_patterns: Mapping of pattern name to regex string.
+        disclaimer: Disclaimer text shown in logs.
+    """
+
+    builtin_patterns: dict[str, str] = field(default_factory=lambda: dict(BUILTIN_PATTERNS))
+    disclaimer: str = ""
+
+
+def load_pii_config(path: str) -> PIIDetectionConfig:
+    """Load PII detection configuration from a YAML file.
+
+    Args:
+        path: Path to a YAML file with a ``builtin_patterns`` section.
+
+    Returns:
+        PIIDetectionConfig populated from the YAML data.
+
+    Raises:
+        FileNotFoundError: If the config file does not exist.
+        ValueError: If the YAML is missing the ``builtin_patterns`` section.
+    """
+    import yaml
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"PII detection config not found: {path}")
+
+    with open(path, "r", encoding="utf-8") as fh:
+        data = yaml.safe_load(fh.read())
+
+    if not isinstance(data, dict) or "builtin_patterns" not in data:
+        raise ValueError(f"YAML file must contain a 'builtin_patterns' section: {path}")
+
+    return PIIDetectionConfig(
+        builtin_patterns=data["builtin_patterns"],
+        disclaimer=data.get("disclaimer", ""),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +138,14 @@ class MuteAgent:
     """
 
     def __init__(self, policy: MutePolicy | None = None) -> None:
+        if policy is None:
+            warnings.warn(
+                "MuteAgent() uses built-in sample rules that may not "
+                "cover all PII patterns. For production use, load an "
+                "explicit config with load_pii_config(). "
+                "See examples/policies/pii-detection.yaml for a sample configuration.",
+                stacklevel=2,
+            )
         self.policy = policy or MutePolicy()
         self._custom_compiled: list[re.Pattern[str]] = [
             re.compile(p, re.IGNORECASE) for p in self.policy.custom_patterns

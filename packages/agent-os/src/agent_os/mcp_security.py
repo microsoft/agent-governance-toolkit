@@ -36,8 +36,10 @@ import base64
 import hashlib
 import json
 import logging
+import os
 import re
 import time
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -46,6 +48,12 @@ from typing import Any
 from agent_os.prompt_injection import PromptInjectionDetector
 
 logger = logging.getLogger(__name__)
+
+_SAMPLE_DISCLAIMER = (
+    "\u26a0\ufe0f  These are SAMPLE MCP security rules provided as a starting point. "
+    "You MUST review, customise, and extend them for your specific use case "
+    "before deploying to production."
+)
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +194,78 @@ _SUSPICIOUS_DECODED_KEYWORDS: list[str] = [
 
 
 # ---------------------------------------------------------------------------
+# Externalised configuration dataclass
+# ---------------------------------------------------------------------------
+
+@dataclass
+class MCPSecurityConfig:
+    """Structured configuration for MCP security scanning, loadable from YAML.
+
+    Attributes:
+        invisible_unicode_patterns: Regex strings for invisible unicode detection.
+        hidden_comment_patterns: Regex strings for hidden comments.
+        hidden_instruction_patterns: Regex strings for instruction-like text.
+        encoded_payload_patterns: Regex strings for encoded payloads.
+        exfiltration_patterns: Regex strings for data exfiltration.
+        privilege_escalation_patterns: Regex strings for privilege escalation.
+        role_override_patterns: Regex strings for role overrides.
+        excessive_whitespace_pattern: Regex string for excessive whitespace.
+        suspicious_decoded_keywords: Keywords to check in decoded payloads.
+        disclaimer: Disclaimer text shown in logs.
+    """
+
+    invisible_unicode_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _INVISIBLE_UNICODE_PATTERNS])
+    hidden_comment_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _HIDDEN_COMMENT_PATTERNS])
+    hidden_instruction_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _HIDDEN_INSTRUCTION_PATTERNS])
+    encoded_payload_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _ENCODED_PAYLOAD_PATTERNS])
+    exfiltration_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _EXFILTRATION_PATTERNS])
+    privilege_escalation_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _PRIVILEGE_ESCALATION_PATTERNS])
+    role_override_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _ROLE_OVERRIDE_PATTERNS])
+    excessive_whitespace_pattern: str = field(default_factory=lambda: _EXCESSIVE_WHITESPACE_PATTERN.pattern)
+    suspicious_decoded_keywords: list[str] = field(default_factory=lambda: list(_SUSPICIOUS_DECODED_KEYWORDS))
+    disclaimer: str = ""
+
+
+def load_mcp_security_config(path: str) -> MCPSecurityConfig:
+    """Load MCP security configuration from a YAML file.
+
+    Args:
+        path: Path to a YAML file with a ``detection_patterns`` section.
+
+    Returns:
+        MCPSecurityConfig populated from the YAML data.
+
+    Raises:
+        FileNotFoundError: If the config file does not exist.
+        ValueError: If the YAML is missing the ``detection_patterns`` section.
+    """
+    import yaml
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"MCP security config not found: {path}")
+
+    with open(path, "r", encoding="utf-8") as fh:
+        data = yaml.safe_load(fh.read())
+
+    if not isinstance(data, dict) or "detection_patterns" not in data:
+        raise ValueError(f"YAML file must contain a 'detection_patterns' section: {path}")
+
+    dp = data["detection_patterns"]
+    return MCPSecurityConfig(
+        invisible_unicode_patterns=dp.get("invisible_unicode", [p.pattern for p in _INVISIBLE_UNICODE_PATTERNS]),
+        hidden_comment_patterns=dp.get("hidden_comments", [p.pattern for p in _HIDDEN_COMMENT_PATTERNS]),
+        hidden_instruction_patterns=dp.get("hidden_instructions", [p.pattern for p in _HIDDEN_INSTRUCTION_PATTERNS]),
+        encoded_payload_patterns=dp.get("encoded_payloads", [p.pattern for p in _ENCODED_PAYLOAD_PATTERNS]),
+        exfiltration_patterns=dp.get("exfiltration", [p.pattern for p in _EXFILTRATION_PATTERNS]),
+        privilege_escalation_patterns=dp.get("privilege_escalation", [p.pattern for p in _PRIVILEGE_ESCALATION_PATTERNS]),
+        role_override_patterns=dp.get("role_override", [p.pattern for p in _ROLE_OVERRIDE_PATTERNS]),
+        excessive_whitespace_pattern=dp.get("excessive_whitespace", _EXCESSIVE_WHITESPACE_PATTERN.pattern),
+        suspicious_decoded_keywords=data.get("suspicious_decoded_keywords", list(_SUSPICIOUS_DECODED_KEYWORDS)),
+        disclaimer=data.get("disclaimer", ""),
+    )
+
+
+# ---------------------------------------------------------------------------
 # MCPSecurityScanner
 # ---------------------------------------------------------------------------
 
@@ -204,6 +284,13 @@ class MCPSecurityScanner:
     """
 
     def __init__(self) -> None:
+        warnings.warn(
+            "MCPSecurityScanner() uses built-in sample rules that may not "
+            "cover all MCP tool poisoning techniques. For production use, load an "
+            "explicit config with load_mcp_security_config(). "
+            "See examples/policies/mcp-security.yaml for a sample configuration.",
+            stacklevel=2,
+        )
         self._tool_registry: dict[str, ToolFingerprint] = {}
         self._audit_log: list[dict[str, Any]] = []
         self._injection_detector = PromptInjectionDetector()

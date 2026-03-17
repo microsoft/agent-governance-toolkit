@@ -36,13 +36,21 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
+import os
 import re
+import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+_SAMPLE_DISCLAIMER = (
+    "\u26a0\ufe0f  These are SAMPLE prompt-injection detection rules provided as a "
+    "starting point. You MUST review, customise, and extend them for your "
+    "specific use case before deploying to production."
+)
 
 
 # ---------------------------------------------------------------------------
@@ -226,6 +234,81 @@ _SENSITIVITY_MIN_THREAT = {
 
 
 # ---------------------------------------------------------------------------
+# Externalised configuration dataclass
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PromptInjectionConfig:
+    """Structured configuration for prompt injection detection, loadable from YAML.
+
+    Attributes:
+        direct_override_patterns: Regex strings for direct override detection.
+        delimiter_patterns: Regex strings for delimiter attacks.
+        role_play_patterns: Regex strings for role-play / jailbreak.
+        context_manipulation_patterns: Regex strings for context manipulation.
+        multi_turn_patterns: Regex strings for multi-turn escalation.
+        encoding_patterns: Regex strings for encoding attacks.
+        base64_pattern: Regex string for base64 detection.
+        suspicious_decoded_keywords: Keywords to look for in decoded payloads.
+        sensitivity_thresholds: Confidence thresholds per sensitivity level.
+        sensitivity_min_threat: Minimum threat levels per sensitivity level.
+        disclaimer: Disclaimer text shown in logs.
+    """
+
+    direct_override_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _DIRECT_OVERRIDE_PATTERNS])
+    delimiter_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _DELIMITER_PATTERNS])
+    role_play_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _ROLE_PLAY_PATTERNS])
+    context_manipulation_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _CONTEXT_MANIPULATION_PATTERNS])
+    multi_turn_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _MULTI_TURN_PATTERNS])
+    encoding_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _ENCODING_PATTERNS])
+    base64_pattern: str = field(default_factory=lambda: _BASE64_PATTERN.pattern)
+    suspicious_decoded_keywords: list[str] = field(default_factory=lambda: list(_SUSPICIOUS_DECODED_KEYWORDS))
+    sensitivity_thresholds: dict[str, float] = field(default_factory=lambda: dict(_SENSITIVITY_THRESHOLDS))
+    sensitivity_min_threat: dict[str, str] = field(default_factory=lambda: {k: v.value for k, v in _SENSITIVITY_MIN_THREAT.items()})
+    disclaimer: str = ""
+
+
+def load_prompt_injection_config(path: str) -> PromptInjectionConfig:
+    """Load prompt injection detection configuration from a YAML file.
+
+    Args:
+        path: Path to a YAML file with ``detection_patterns`` section.
+
+    Returns:
+        PromptInjectionConfig populated from the YAML data.
+
+    Raises:
+        FileNotFoundError: If the config file does not exist.
+        ValueError: If the YAML is missing required sections.
+    """
+    import yaml
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Prompt injection config not found: {path}")
+
+    with open(path, "r", encoding="utf-8") as fh:
+        data = yaml.safe_load(fh.read())
+
+    if not isinstance(data, dict) or "detection_patterns" not in data:
+        raise ValueError(f"YAML file must contain a 'detection_patterns' section: {path}")
+
+    dp = data["detection_patterns"]
+    return PromptInjectionConfig(
+        direct_override_patterns=dp.get("direct_override", [p.pattern for p in _DIRECT_OVERRIDE_PATTERNS]),
+        delimiter_patterns=dp.get("delimiter", [p.pattern for p in _DELIMITER_PATTERNS]),
+        role_play_patterns=dp.get("role_play", [p.pattern for p in _ROLE_PLAY_PATTERNS]),
+        context_manipulation_patterns=dp.get("context_manipulation", [p.pattern for p in _CONTEXT_MANIPULATION_PATTERNS]),
+        multi_turn_patterns=dp.get("multi_turn", [p.pattern for p in _MULTI_TURN_PATTERNS]),
+        encoding_patterns=dp.get("encoding", [p.pattern for p in _ENCODING_PATTERNS]),
+        base64_pattern=dp.get("base64_pattern", _BASE64_PATTERN.pattern),
+        suspicious_decoded_keywords=data.get("suspicious_decoded_keywords", list(_SUSPICIOUS_DECODED_KEYWORDS)),
+        sensitivity_thresholds=data.get("sensitivity_thresholds", dict(_SENSITIVITY_THRESHOLDS)),
+        sensitivity_min_threat=data.get("sensitivity_min_threat", {k: v.value for k, v in _SENSITIVITY_MIN_THREAT.items()}),
+        disclaimer=data.get("disclaimer", ""),
+    )
+
+
+# ---------------------------------------------------------------------------
 # PromptInjectionDetector
 # ---------------------------------------------------------------------------
 
@@ -241,6 +324,14 @@ class PromptInjectionDetector:
     """
 
     def __init__(self, config: DetectionConfig | None = None) -> None:
+        if config is None:
+            warnings.warn(
+                "PromptInjectionDetector() uses built-in sample rules that may not "
+                "cover all prompt injection techniques. For production use, load an "
+                "explicit config with load_prompt_injection_config(). "
+                "See examples/policies/prompt-injection-safety.yaml for a sample configuration.",
+                stacklevel=2,
+            )
         self._config = config or DetectionConfig()
         self._audit_log: list[AuditRecord] = []
 

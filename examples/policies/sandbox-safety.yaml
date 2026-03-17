@@ -1,0 +1,32 @@
+# Sandbox Safety — Sample Configuration
+#
+# ⚠️  IMPORTANT: This is a SAMPLE configuration provided as a starting point.
+# You MUST review, customize, and extend these rules for your specific
+# use case before deploying to production. Microsoft does not guarantee
+# that these rules are comprehensive or sufficient for your security
+# requirements.
+
+version: "1.0"
+name: sandbox-safety
+description: >
+  Sample sandbox safety configuration — defines which Python modules and
+  builtins are blocked inside the execution sandbox.
+
+disclaimer: >
+  This is a sample configuration. It is NOT exhaustive and should be
+  customized for your specific security requirements.
+
+sandbox:
+  blocked_modules:
+    - subprocess      # shell command execution
+    - os              # filesystem and process operations
+    - shutil          # high-level file operations (copy, move, delete)
+    - socket          # raw network access
+    - ctypes          # foreign function interface / memory access
+    - importlib       # dynamic module loading (bypass vector)
+
+  blocked_builtins:
+    - exec            # execute arbitrary code strings
+    - eval            # evaluate arbitrary expressions
+    - compile         # compile code objects
+    - __import__      # dynamic import function

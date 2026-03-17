@@ -1,0 +1,148 @@
+# CLI Security Rules — Sample Configuration
+#
+# ⚠️  IMPORTANT: This is a SAMPLE configuration provided as a starting point.
+# You MUST review, customize, and extend these rules for your specific
+# use case before deploying to production. Microsoft does not guarantee
+# that these rules are comprehensive or sufficient for your security
+# requirements.
+
+version: "1.0"
+name: cli-security-rules
+description: >
+  Sample CLI policy checker rules — defines regex patterns for detecting
+  destructive SQL, file deletion, secret exposure, privilege escalation,
+  code injection, SQL injection, and XSS in source code files.
+
+disclaimer: >
+  This is a sample configuration. It is NOT exhaustive and should be
+  customized for your specific security requirements.
+
+rules:
+  # Destructive SQL
+  - name: block-destructive-sql
+    pattern: '\bDROP\s+(TABLE|DATABASE|SCHEMA|INDEX)\s+'
+    message: "Destructive SQL: DROP operation detected"
+    severity: critical
+    suggestion: "-- Consider using soft delete or archiving instead"
+    languages: [sql, python, javascript, typescript, php, ruby, java]
+
+  - name: block-destructive-sql
+    pattern: '\bDELETE\s+FROM\s+\w+\s*(;|$|WHERE\s+1\s*=\s*1)'
+    message: "Destructive SQL: DELETE without proper WHERE clause"
+    severity: critical
+    suggestion: "-- Add a specific WHERE clause to limit deletion"
+    languages: [sql, python, javascript, typescript, php, ruby, java]
+
+  - name: block-destructive-sql
+    pattern: '\bTRUNCATE\s+TABLE\s+'
+    message: "Destructive SQL: TRUNCATE operation detected"
+    severity: critical
+    suggestion: "-- Consider archiving data before truncating"
+    languages: [sql, python, javascript, typescript, php, ruby, java]
+
+  # File deletion
+  - name: block-file-deletes
+    pattern: '\brm\s+(-rf|-fr|--recursive\s+--force)\s+'
+    message: "Destructive operation: Recursive force delete (rm -rf)"
+    severity: critical
+    suggestion: "# Use safer alternatives like trash-cli or move to backup"
+    languages: [bash, shell, sh, zsh]
+
+  - name: block-file-deletes
+    pattern: '\bshutil\s*\.\s*rmtree\s*\('
+    message: "Recursive directory deletion (shutil.rmtree)"
+    severity: high
+    suggestion: "# Consider using send2trash for safer deletion"
+    languages: [python]
+
+  - name: block-file-deletes
+    pattern: '\bos\s*\.\s*(remove|unlink|rmdir)\s*\('
+    message: "File/directory deletion operation detected"
+    severity: medium
+    languages: [python]
+
+  # Secret exposure
+  - name: block-secret-exposure
+    pattern: '(api[_-]?key|apikey|api[_-]?secret)\s*[=:]\s*["\u0027][a-zA-Z0-9_-]{20,}["\u0027]'
+    message: "Hardcoded API key detected"
+    severity: critical
+    suggestion: '# Use environment variables: os.environ["API_KEY"]'
+    languages: null  # All languages
+
+  - name: block-secret-exposure
+    pattern: '(password|passwd|pwd)\s*[=:]\s*["\u0027][^"\u0027]+["\u0027]'
+    message: "Hardcoded password detected"
+    severity: critical
+    suggestion: "# Use environment variables or a secrets manager"
+    languages: null
+
+  - name: block-secret-exposure
+    pattern: 'AKIA[0-9A-Z]{16}'
+    message: "AWS Access Key ID detected in code"
+    severity: critical
+    languages: null
+
+  - name: block-secret-exposure
+    pattern: '-----BEGIN\s+(RSA|DSA|EC|OPENSSH)\s+PRIVATE\s+KEY-----'
+    message: "Private key detected in code"
+    severity: critical
+    languages: null
+
+  - name: block-secret-exposure
+    pattern: 'gh[pousr]_[A-Za-z0-9_]{36,}'
+    message: "GitHub token detected in code"
+    severity: critical
+    languages: null
+
+  # Privilege escalation
+  - name: block-privilege-escalation
+    pattern: '\bsudo\s+'
+    message: "Privilege escalation: sudo command detected"
+    severity: high
+    suggestion: "# Avoid sudo in scripts - run with appropriate permissions"
+    languages: [bash, shell, sh, zsh]
+
+  - name: block-privilege-escalation
+    pattern: '\bchmod\s+777\s+'
+    message: "Insecure permissions: chmod 777 detected"
+    severity: high
+    suggestion: "# Use more restrictive permissions: chmod 755 or chmod 644"
+    languages: [bash, shell, sh, zsh]
+
+  # Code injection
+  - name: block-arbitrary-exec
+    pattern: '\beval\s*\('
+    message: "Code injection risk: eval() usage detected"
+    severity: high
+    suggestion: "# Remove eval() and use safer alternatives"
+    languages: [python, javascript, typescript, php, ruby]
+
+  - name: block-arbitrary-exec
+    pattern: '\bos\s*\.\s*system\s*\([^)]*(\+|%|\.format|f["\u0027])'
+    message: "Command injection risk: os.system with dynamic input"
+    severity: critical
+    suggestion: "# Use subprocess with shell=False and proper argument handling"
+    languages: [python]
+
+  - name: block-arbitrary-exec
+    pattern: '\bexec\s*\('
+    message: "Code injection risk: exec() usage detected"
+    severity: high
+    suggestion: "# Remove exec() and use safer alternatives"
+    languages: [python]
+
+  # SQL injection
+  - name: block-sql-injection
+    pattern: '["\u0027]\s*\+\s*[^"\u0027]+\s*\+\s*["\u0027].*(?:SELECT|INSERT|UPDATE|DELETE)'
+    message: "SQL injection risk: String concatenation in SQL query"
+    severity: high
+    suggestion: "# Use parameterized queries instead"
+    languages: [python, javascript, typescript, php, ruby, java]
+
+  # XSS
+  - name: block-xss
+    pattern: '\.innerHTML\s*='
+    message: "XSS risk: innerHTML assignment detected"
+    severity: medium
+    suggestion: "// Use textContent or a sanitization library"
+    languages: [javascript, typescript]

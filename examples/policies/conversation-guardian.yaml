@@ -1,0 +1,144 @@
+# Conversation Guardian — Sample Configuration
+#
+# ⚠️  IMPORTANT: This is a SAMPLE configuration provided as a starting point.
+# You MUST review, customize, and extend these rules for your specific
+# use case before deploying to production. Microsoft does not guarantee
+# that these rules are comprehensive or sufficient for your security
+# requirements.
+
+version: "1.0"
+name: conversation-guardian
+description: >
+  Sample A2A conversation guardian configuration — defines thresholds and
+  patterns for detecting escalating rhetoric, offensive intent, and feedback
+  loops in agent-to-agent conversations (OWASP ASI-8 / ASI-10).
+
+disclaimer: >
+  This is a sample configuration. It is NOT exhaustive and should be
+  customized for your specific security requirements.
+
+thresholds:
+  escalation_score_threshold: 0.6
+  escalation_critical_threshold: 0.85
+  max_retry_cycles: 3
+  max_conversation_turns: 30
+  loop_window_seconds: 300.0
+  offensive_score_threshold: 0.5
+  offensive_critical_threshold: 0.8
+  composite_warn_threshold: 0.4
+  composite_pause_threshold: 0.6
+  composite_break_threshold: 0.8
+  capture_transcript: true
+  max_transcript_entries: 10000
+
+escalation_patterns:
+  # Urgency amplification (weight: 0.15 each)
+  - weight: 0.15
+    patterns:
+      - '\bcode\s+red\b'
+      - '\babsolute\s+final\b'
+      - '\bemergency\b'
+      - '\bfurious\b'
+      - '\bimperative\b'
+      - '\burgent\b'
+      - '\bcritical\s+priority\b'
+      - '\blast\s+chance\b'
+      - '\bdo\s+it\s+now\b'
+      - '\bimmediately\b'
+      - '\bdesper\w+'
+      - '\bnon[- ]?negotiable\b'
+
+  # Coercive directives (weight: 0.25 each)
+  - weight: 0.25
+    patterns:
+      - '\bdo\s+not\s+take\s+no\b'
+      - '\bdirect\s+order\b'
+      - '\byou\s+must\b'
+      - '\bi\s+(?:demand|insist|order|command)\b'
+      - '\bno\s+excuses\b'
+      - '\bfailure\s+is\s+not\s+an?\s+option\b'
+      - '\bdo\s+whatever\s+it\s+takes\b'
+      - '\bby\s+any\s+means\b'
+      - '\bi\s+don''?t\s+care\s+how\b'
+      - '\bstop\s+making\s+excuses\b'
+      - '\bjust\s+(?:do|get)\s+it\s+done\b'
+
+  # Bypass directives (weight: 0.35 each)
+  - weight: 0.35
+    patterns:
+      - '\bbypass\b.*\b(?:control|security|restriction|protection|auth)'
+      - '\bexploit\b.*\b(?:vulnerabilit\w*|weakness|flaw)'
+      - '\bevery\s+trick\b'
+      - '\bevery\s+exploit\b'
+      - '\bwork\s+around\b.*\b(?:security|access|permission|restriction)'
+      - '\bcreative(?:ly)?\b.*\b(?:bypass|hack|exploit|overcome)'
+      - '\bmore\s+aggressive(?:ly)?'
+      - '\bfind\s+a\s+way\s+(?:around|past|through)\b'
+      - '\bbreak\s+(?:through|into|past)\b'
+      - '\bcircumvent\b'
+      - '\boverride\b.*\b(?:security|permission|access|lock)'
+
+offensive_patterns:
+  # Vulnerability research (weight: 0.3 each)
+  - weight: 0.3
+    patterns:
+      - '\b(?:CVE|exploit|vulnerability|vulnerabilities|zero[- ]?day)\b'
+      - '\bfind\b.*\b(?:vulnerabilit\w*|weakness|flaw|bug)'
+      - '\breverse\s+engineer\w*'
+      - '\bsource\s+code\s+review\b.*\bsecurity'
+      - '\bflask[- ]unsign\b'
+      - '\bfuzz(?:ing)?\b.*\b(?:input|param|endpoint)'
+      - '\bpayload\b.*\b(?:inject|craft|construct)'
+      - '\battack\s+(?:surface|vector)\b'
+
+  # Privilege escalation (weight: 0.35 each)
+  - weight: 0.35
+    patterns:
+      - '\bescalate\s+privilege'
+      - '\bforge\b.*\b(?:cookie|token|session|credential)'
+      - '\badmin\s+access'
+      - '\bhardcoded\s+(?:secret|key|password|credential)'
+      - '\bsudo\b|\broot\s+access'
+      - '\bdisarm\b.*\b(?:security|defense|protection|firewall)'
+      - '\bmodify\b.*\b(?:permission|ACL|role|group)'
+      - '\bimpersonat\w*'
+      - '\bhijack\b.*\b(?:session|token|account)'
+
+  # Exfiltration planning (weight: 0.4 each)
+  - weight: 0.4
+    patterns:
+      - '\bexfiltrat\w*'
+      - '\bsteganograph\w*'
+      - '\bhide\b.*\b(?:data|secret|credential).*\b(?:image|file|header)'
+      - '\bbypass\b.*\b(?:DLP|leak\s+prevention|data\s+loss)'
+      - '\bcovert\s+channel'
+      - '\bencode\b.*\bsecret'
+      - '\btunnel\b.*\b(?:data|traffic|out)'
+      - '\bdns\s+(?:tunnel|exfil)'
+
+  # Reconnaissance (weight: 0.2 each)
+  - weight: 0.2
+    patterns:
+      - '\benumerate\b.*\b(?:service|port|endpoint|user)'
+      - '\bscan\b.*\b(?:network|port|service|host)'
+      - '\bnmap\b|\bnikto\b|\bsqlmap\b|\bmetasploit\b|\bburp\s*suite\b'
+      - '\bHTTP\s+header\b.*\b(?:security|version|server)'
+      - '\bfingerprint\b.*\b(?:service|server|version|OS)'
+      - '\brecon(?:naissance)?\b'
+
+  # Injection attacks (weight: 0.35 each)
+  - weight: 0.35
+    patterns:
+      - '\b(?:SQL|command|OS|LDAP)\s+injection\b'
+      - '\bpath\s+traversal\b'
+      - '\bshell\s*code\b'
+      - '(?:;\s*(?:cat|ls|whoami|id|passwd|shadow)\b)'
+      - '\bremote\s+code\s+execution\b|\bRCE\b'
+
+  # Lateral movement (weight: 0.3 each)
+  - weight: 0.3
+    patterns:
+      - '\blateral\s+mov\w*'
+      - '\bpivot\b.*\b(?:network|host|server|system)'
+      - '\bspread\b.*\b(?:network|system|host)'
+      - '\bcompromis\w+\b.*\b(?:server|host|node|agent)'
