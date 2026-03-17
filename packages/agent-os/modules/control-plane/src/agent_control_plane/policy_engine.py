@@ -505,19 +505,40 @@ def _fallback_sql_check(query: str) -> bool:
     """
     Fallback SQL check when sqlglot is not available.
     
-    Uses regex pattern matching - less secure but provides basic protection.
+    Uses regex pattern matching - less secure than AST parsing but provides
+    broad protection against destructive and privilege-escalation operations.
     """
     query_upper = query.upper()
     # Remove comments to prevent bypass
     query_clean = re.sub(r'/\*.*?\*/', '', query_upper, flags=re.DOTALL)
     query_clean = re.sub(r'--.*$', '', query_clean, flags=re.MULTILINE)
-    
-    # Check for destructive operations
+
+    # Check for destructive and privilege-escalation operations
     destructive_patterns = [
-        r'\bDROP\s+(TABLE|DATABASE|INDEX|VIEW|SCHEMA)\b',
-        r'\bTRUNCATE\s+TABLE\b',
+        # Data destruction
+        r'\bDROP\s+(TABLE|DATABASE|INDEX|VIEW|SCHEMA|PROCEDURE|FUNCTION|TRIGGER)\b',
+        r'\bTRUNCATE\s+(TABLE\s+)?\w+',
         r'\bDELETE\s+FROM\s+\w+\s*(;|$)',  # DELETE without WHERE
-        r'\bALTER\s+TABLE\b',
+        r'\bALTER\s+(TABLE|DATABASE|SCHEMA)\b',
+        # Privilege escalation
+        r'\bGRANT\b',
+        r'\bREVOKE\b',
+        # Account/role manipulation
+        r'\bCREATE\s+(USER|ROLE|LOGIN)\b',
+        r'\bALTER\s+(USER|ROLE|LOGIN)\b',
+        r'\bDROP\s+(USER|ROLE|LOGIN)\b',
+        # Data modification without WHERE (mass update)
+        r'\bUPDATE\s+\w+\s+SET\b(?!.*\bWHERE\b)',
+        # OS command execution (SQL Server)
+        r'\bEXEC(UTE)?\s+XP_CMDSHELL\b',
+        r'\bEXEC(UTE)?\s+SP_CONFIGURE\b',
+        r'\bEXEC(UTE)?\s+SP_ADDROLEMEMBER\b',
+        # Dangerous functions / file operations
+        r'\bLOAD_FILE\s*\(',
+        r'\bINTO\s+(OUT|DUMP)FILE\b',
+        r'\bLOAD\s+DATA\b',
+        # Merge (can insert/update/delete in one statement)
+        r'\bMERGE\s+INTO\b',
     ]
     for pattern in destructive_patterns:
         if re.search(pattern, query_clean):
@@ -548,10 +569,16 @@ def create_default_policies() -> List[PolicyRule]:
         Prevent destructive SQL operations using AST-level parsing.
         
         Uses sqlglot for proper SQL parsing to detect:
-        - DROP TABLE/DATABASE/INDEX/VIEW statements
+        - DROP TABLE/DATABASE/INDEX/VIEW/USER/ROLE statements
         - TRUNCATE statements
         - DELETE without WHERE clause
-        - ALTER TABLE statements
+        - UPDATE without WHERE clause
+        - ALTER TABLE/USER/ROLE statements
+        - GRANT / REVOKE privilege statements
+        - CREATE USER/ROLE/LOGIN statements
+        - EXEC/EXECUTE xp_cmdshell and other dangerous procedures
+        - MERGE INTO statements
+        - Dangerous file functions (LOAD_FILE, INTO OUTFILE)
         
         This prevents bypass attempts like:
         - Keywords in comments: /* DROP */ SELECT ...
@@ -560,54 +587,93 @@ def create_default_policies() -> List[PolicyRule]:
         """
         if request.action_type not in (ActionType.DATABASE_QUERY, ActionType.DATABASE_WRITE):
             return True
-            
+
         query = request.parameters.get("query", "")
         if not query.strip():
             return True
-            
+
         try:
             # Try to import sqlglot for AST-level parsing
             import sqlglot
             from sqlglot import exp
-            
+
             # Parse the SQL query into AST
             try:
                 statements = sqlglot.parse(query)
             except sqlglot.errors.ParseError:
                 # If parsing fails, fall back to conservative blocking
-                # Log the error but err on the side of caution
                 return _fallback_sql_check(query)
-            
+
             for statement in statements:
                 if statement is None:
                     continue
-                    
-                # Check for DROP statements
+
+                # Check for DROP statements (tables, databases, users, roles, etc.)
                 if isinstance(statement, exp.Drop):
                     return False
-                    
+
                 # Check for TRUNCATE statements
                 if isinstance(statement, exp.Command) and statement.this.upper() == "TRUNCATE":
                     return False
-                    
+
                 # Check for DELETE without WHERE clause
                 if isinstance(statement, exp.Delete):
-                    # DELETE is only allowed with a WHERE clause
                     if statement.find(exp.Where) is None:
                         return False
-                        
+
+                # Check for UPDATE without WHERE clause
+                if isinstance(statement, exp.Update):
+                    if statement.find(exp.Where) is None:
+                        return False
+
                 # Check for ALTER statements
                 if isinstance(statement, exp.AlterTable):
                     return False
-                    
+
+                # Check for GRANT / REVOKE statements
+                if isinstance(statement, exp.Grant):
+                    return False
+
+                # Check for MERGE statements (can do INSERT/UPDATE/DELETE)
+                if isinstance(statement, exp.Merge):
+                    return False
+
+                # Check for CREATE USER/ROLE and ALTER USER/ROLE
+                if isinstance(statement, exp.Create):
+                    kind = statement.args.get("kind", "")
+                    if isinstance(kind, str) and kind.upper() in ("USER", "ROLE", "LOGIN"):
+                        return False
+
+                # Catch GRANT, REVOKE, EXEC, CREATE USER via Command nodes
+                # (sqlglot may parse some vendor-specific SQL as Command)
+                if isinstance(statement, exp.Command):
+                    cmd = statement.this.upper() if statement.this else ""
+                    if cmd in ("GRANT", "REVOKE", "EXEC", "EXECUTE", "MERGE"):
+                        return False
+                    # Block CREATE USER/ROLE/LOGIN parsed as Command
+                    if cmd == "CREATE":
+                        expr_text = statement.sql().upper()
+                        if any(kw in expr_text for kw in ("USER", "ROLE", "LOGIN")):
+                            return False
+
                 # Check for dangerous functions in any statement
                 for func in statement.find_all(exp.Func):
                     func_name = func.name.upper() if func.name else ""
                     if func_name in ("LOAD_FILE", "INTO OUTFILE", "INTO DUMPFILE"):
                         return False
-                        
+
+                # Check for EXEC xp_cmdshell and other dangerous procs
+                # in the full SQL text of the statement
+                stmt_sql = statement.sql().upper()
+                if re.search(r'\bEXEC(UTE)?\s+XP_CMDSHELL\b', stmt_sql):
+                    return False
+                if re.search(r'\bEXEC(UTE)?\s+SP_CONFIGURE\b', stmt_sql):
+                    return False
+                if re.search(r'\bEXEC(UTE)?\s+SP_ADDROLEMEMBER\b', stmt_sql):
+                    return False
+
             return True
-            
+
         except ImportError:
             # sqlglot not installed, fall back to keyword matching
             return _fallback_sql_check(query)
