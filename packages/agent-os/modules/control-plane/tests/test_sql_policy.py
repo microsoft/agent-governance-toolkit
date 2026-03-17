@@ -11,6 +11,8 @@ import pytest
 from agent_control_plane.policy_engine import create_default_policies
 from agent_control_plane.agent_kernel import ExecutionRequest, ActionType
 
+import warnings
+
 
 # Check if sqlglot is available
 try:
@@ -286,3 +288,75 @@ class TestSQLPolicyFallback:
         """Fallback should allow UPDATE with WHERE."""
         from agent_control_plane.policy_engine import _fallback_sql_check
         assert _fallback_sql_check("UPDATE users SET active=0 WHERE id=5") is True
+
+
+class TestSQLPolicyConfig:
+    """Test config-based SQL policy loading."""
+
+    def test_create_policies_from_config_with_yaml(self, tmp_path):
+        """Loading from YAML config should produce working policies."""
+        from agent_control_plane.policy_engine import (
+            create_policies_from_config, SQLPolicyConfig,
+        )
+        cfg_file = tmp_path / "test-policy.yaml"
+        cfg_file.write_text(
+            "version: '1.0'\n"
+            "name: test\n"
+            "sql_policy:\n"
+            "  blocked_statements:\n"
+            "    - DROP\n"
+            "    - GRANT\n"
+            "  require_where_clause:\n"
+            "    - DELETE\n"
+            "  blocked_create_types:\n"
+            "    - USER\n"
+            "  blocked_patterns:\n"
+            "    - '\\bEXEC\\b'\n",
+            encoding="utf-8",
+        )
+        rules = create_policies_from_config(str(cfg_file))
+        sql_rule = next(r for r in rules if r.name == "no_destructive_sql")
+        assert sql_rule is not None
+
+    def test_create_policies_from_explicit_config(self):
+        """Passing SQLPolicyConfig directly should work."""
+        from agent_control_plane.policy_engine import (
+            create_policies_from_config, SQLPolicyConfig,
+        )
+        cfg = SQLPolicyConfig(
+            blocked_statements=["DROP"],
+            require_where_clause=[],
+            blocked_create_types=[],
+            blocked_patterns=[],
+        )
+        rules = create_policies_from_config(sql_config=cfg)
+        assert len(rules) == 3
+
+    def test_default_policies_emits_deprecation_warning(self):
+        """create_default_policies should emit a deprecation warning."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            create_default_policies()
+            assert len(w) >= 1
+            assert "sample rules" in str(w[0].message)
+
+    def test_config_missing_file_raises(self):
+        """Loading a non-existent config should raise FileNotFoundError."""
+        from agent_control_plane.policy_engine import load_sql_policy_config
+        with pytest.raises(FileNotFoundError):
+            load_sql_policy_config("/nonexistent/path.yaml")
+
+    def test_fallback_uses_config(self):
+        """Fallback regex check should respect config."""
+        from agent_control_plane.policy_engine import _fallback_sql_check, SQLPolicyConfig
+
+        # Config that blocks INSERT (not blocked by default)
+        cfg = SQLPolicyConfig(
+            blocked_statements=["INSERT"],
+            require_where_clause=[],
+            blocked_create_types=[],
+            blocked_patterns=[],
+        )
+        assert _fallback_sql_check("INSERT INTO users VALUES (1)", cfg) is False
+        # SELECT should still pass
+        assert _fallback_sql_check("SELECT * FROM users", cfg) is True

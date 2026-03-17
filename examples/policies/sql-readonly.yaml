@@ -1,0 +1,59 @@
+# SQL Read-Only Policy
+#
+# ⚠️  IMPORTANT: This is a SAMPLE policy provided as a starting point.
+# You MUST review and customize these rules for your specific use case.
+#
+# This policy allows ONLY SELECT queries. Everything else is blocked.
+# Ideal for reporting agents, analytics dashboards, or read-only API agents.
+
+version: "1.0"
+name: sql-readonly
+description: >
+  Read-only SQL policy. Only SELECT queries are allowed.
+  All modifications, DDL, and administrative operations are blocked.
+
+disclaimer: >
+  This is a sample read-only policy. It blocks all known write operations
+  but may not cover all vendor-specific extensions. Review for your platform.
+
+sql_policy:
+  # Block everything except SELECT
+  blocked_statements:
+    - DROP
+    - TRUNCATE
+    - ALTER
+    - GRANT
+    - REVOKE
+    - MERGE
+    - INSERT
+    - UPDATE
+    - DELETE
+
+  require_where_clause: []
+
+  blocked_create_types:
+    - USER
+    - ROLE
+    - LOGIN
+    - TABLE
+    - INDEX
+    - VIEW
+    - DATABASE
+    - SCHEMA
+    - PROCEDURE
+    - FUNCTION
+    - TRIGGER
+
+  blocked_patterns:
+    - '\bEXEC(UTE)?\b'
+    - '\bXP_\w+'
+    - '\bSP_\w+'
+    - '\bLOAD_FILE\s*\('
+    - '\bINTO\s+(OUT|DUMP)FILE\b'
+    - '\bLOAD\s+DATA\b'
+    - '\bCOPY\s+'
+    - '\bSET\s+(GLOBAL|ROLE)\b'
+    - '\bBULK\s+INSERT\b'
+
+  allowed_statements:
+    - SELECT

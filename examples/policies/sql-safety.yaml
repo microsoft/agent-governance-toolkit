@@ -1,0 +1,92 @@
+# SQL Safety Policy — Sample Configuration
+#
+# ⚠️  IMPORTANT: This is a SAMPLE policy provided as a starting point.
+# You MUST review, customize, and extend these rules for your specific
+# use case before deploying to production. Microsoft does not guarantee
+# that these rules are comprehensive or sufficient for your security
+# requirements.
+#
+# This policy defines patterns that the no_destructive_sql rule uses
+# to block dangerous SQL operations. Patterns are matched against
+# incoming SQL queries.
+#
+# Usage:
+#   from agent_control_plane.policy_engine import create_sql_policy_from_config
+#   rules = create_sql_policy_from_config("path/to/sql-safety.yaml")
+#
+# See also:
+#   - sql-strict.yaml — Comprehensive deny-list for high-security environments
+#   - sql-readonly.yaml — Read-only policy that blocks all write operations
+
+version: "1.0"
+name: sql-safety
+description: >
+  Sample SQL safety policy — blocks common destructive and privilege-escalation
+  operations. Review and extend for your environment before production use.
+
+# Disclaimer shown in audit logs when this policy is loaded
+disclaimer: >
+  This is a sample policy configuration. It is NOT exhaustive and should be
+  customized for your specific database platform and security requirements.
+  The authors accept no liability for SQL operations not covered by these rules.
+
+sql_policy:
+  # ---------------------------------------------------------------
+  # Blocked statement types (AST-level, when sqlglot is available)
+  # These are checked via SQL parsing for accurate detection.
+  # ---------------------------------------------------------------
+  blocked_statements:
+    - DROP        # DROP TABLE, DATABASE, INDEX, VIEW, etc.
+    - TRUNCATE    # TRUNCATE TABLE
+    - ALTER       # ALTER TABLE, ALTER USER, etc.
+    - GRANT       # Privilege escalation
+    - REVOKE      # Privilege removal
+    - MERGE       # Combined INSERT/UPDATE/DELETE
+
+  # ---------------------------------------------------------------
+  # Blocked when missing a WHERE clause (prevents mass operations)
+  # ---------------------------------------------------------------
+  require_where_clause:
+    - DELETE
+    - UPDATE
+
+  # ---------------------------------------------------------------
+  # Blocked CREATE subtypes (CREATE TABLE is allowed by default)
+  # ---------------------------------------------------------------
+  blocked_create_types:
+    - USER
+    - ROLE
+    - LOGIN
+
+  # ---------------------------------------------------------------
+  # Regex patterns for operations that may not parse as standard SQL
+  # (e.g., vendor-specific stored procedures, file operations).
+  # Applied to the full query text after comment stripping.
+  # Patterns are case-insensitive.
+  # ---------------------------------------------------------------
+  blocked_patterns:
+    # SQL Server dangerous stored procedures
+    - '\bEXEC(UTE)?\s+XP_CMDSHELL\b'
+    - '\bEXEC(UTE)?\s+SP_CONFIGURE\b'
+    - '\bEXEC(UTE)?\s+SP_ADDROLEMEMBER\b'
+    - '\bEXEC(UTE)?\s+SP_ADDSRVROLEMEMBER\b'
+    # File operations
+    - '\bLOAD_FILE\s*\('
+    - '\bINTO\s+(OUT|DUMP)FILE\b'
+    - '\bLOAD\s+DATA\b'
+    # PostgreSQL-specific
+    - '\bCOPY\s+.*\bTO\b'
+    - '\bCOPY\s+.*\bFROM\b.*\bPROGRAM\b'
+
+  # ---------------------------------------------------------------
+  # Safe operations — always allowed regardless of other rules.
+  # These serve as documentation; the engine allows anything not blocked.
+  # ---------------------------------------------------------------
+  allowed_statements:
+    - SELECT
+    - INSERT          # INSERT is allowed (add to blocked_statements to deny)
+    - "UPDATE + WHERE"  # UPDATE with WHERE clause is allowed
+    - "DELETE + WHERE"  # DELETE with WHERE clause is allowed
+    - CREATE TABLE
+    - CREATE INDEX
+    - CREATE VIEW

@@ -1,0 +1,74 @@
+# SQL Strict Policy — Comprehensive Deny-List
+#
+# ⚠️  IMPORTANT: This is a SAMPLE policy provided as a starting point.
+# You MUST review and customize these rules for your specific use case.
+#
+# This policy is designed for HIGH-SECURITY environments where only
+# SELECT queries should be allowed. All write, DDL, DCL, and
+# administrative operations are blocked.
+#
+# Use this as a base and selectively enable operations your agents need.
+
+version: "1.0"
+name: sql-strict
+description: >
+  Strict SQL policy for high-security environments. Blocks all write
+  operations, DDL, DCL, and administrative commands. Only SELECT is allowed.
+
+disclaimer: >
+  This is a sample strict policy. Review and adjust for your specific
+  database platform. Additional vendor-specific commands may need to be added.
+
+sql_policy:
+  blocked_statements:
+    - DROP
+    - TRUNCATE
+    - ALTER
+    - GRANT
+    - REVOKE
+    - MERGE
+    - INSERT      # Block all inserts
+    - UPDATE      # Block all updates (even with WHERE)
+    - DELETE      # Block all deletes (even with WHERE)
+
+  require_where_clause: []  # Not needed — UPDATE/DELETE fully blocked above
+
+  blocked_create_types:
+    - USER
+    - ROLE
+    - LOGIN
+    - TABLE       # Block DDL entirely
+    - INDEX
+    - VIEW
+    - DATABASE
+    - SCHEMA
+    - PROCEDURE
+    - FUNCTION
+    - TRIGGER
+
+  blocked_patterns:
+    # SQL Server
+    - '\bEXEC(UTE)?\b'          # Block ALL EXEC calls
+    - '\bXP_\w+'                 # Block all extended stored procedures
+    - '\bSP_\w+'                 # Block all system stored procedures
+    - '\bDBCC\b'                 # Block DBCC commands
+    - '\bBULK\s+INSERT\b'
+    - '\bOPENROWSET\b'
+    - '\bOPENDATASOURCE\b'
+    - '\bOPENQUERY\b'
+    # MySQL
+    - '\bLOAD_FILE\s*\('
+    - '\bINTO\s+(OUT|DUMP)FILE\b'
+    - '\bLOAD\s+DATA\b'
+    - '\bSET\s+GLOBAL\b'
+    # PostgreSQL
+    - '\bCOPY\s+'
+    - '\bSET\s+ROLE\b'
+    - '\bRESET\s+ROLE\b'
+    - '\bCREATE\s+EXTENSION\b'
+    # General
+    - '\bSHUTDOWN\b'
+    - '\bKILL\b'
+
+  allowed_statements:
+    - SELECT
