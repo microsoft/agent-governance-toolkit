@@ -82,7 +82,7 @@ jobs:
           subject-path: packages/${{ matrix.package }}/dist/*
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@ea165f8d65b6db9a6b7e75b195db6a6b2be22da8 # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: pypi-${{ matrix.package }}
           path: packages/${{ matrix.package }}/dist/
@@ -146,7 +146,7 @@ jobs:
           subject-path: ${{ matrix.path }}/tgz-output/*.tgz
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@ea165f8d65b6db9a6b7e75b195db6a6b2be22da8 # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: npm-${{ matrix.name }}
           path: ${{ matrix.path }}/tgz-output/*.tgz
