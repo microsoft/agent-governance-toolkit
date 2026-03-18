@@ -15,11 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Demo `--include-attacks` flag for adversarial scenario testing (prompt injection, tool alias bypass, SQL bypass).
 - .NET `SagaStep.MaxAttempts` property replacing deprecated `MaxRetries`.
+- `ContentHashInterceptor` for SHA-256 tool identity verification at intercept time.
+- `ToolRegistry` content hashing — computes and verifies handler integrity at registration and execution.
+- `PolicyEngine.freeze()` method with `MappingProxyType` immutability and mutation audit log.
+- `QuorumConfig` for M-of-N approval requirements in `EscalationHandler`.
+- Escalation fatigue detection — auto-DENY when agents exceed configurable rate threshold.
+- `EscalationRequest.votes` field for per-approver vote tracking.
 
 ### Security
 - Replaced XOR placeholder encryption with AES-256-GCM in DMZ module.
 - Added Security Model & Limitations section to README.
 - Added security advisories to SECURITY.md for CostGuard and thread safety fixes.
+- Hardened against agent sandbox escape vectors (tool aliasing, runtime policy self-modification, approval fatigue).
 
 ## [2.2.0] - 2026-03-17
 

@@ -123,19 +123,19 @@ class ToolRegistry:
     def _compute_handler_hash(handler: Callable) -> str:
         """Compute a SHA-256 content hash of a callable's source code.
 
-        Falls back to hashing the bytecode if source is unavailable
-        (e.g. built-in or C-extension functions).
+        Returns an empty string if source is unavailable (e.g. built-in
+        or C-extension functions).  Callers should treat an empty hash
+        as "unverifiable" rather than silently trusting the handler.
         """
         try:
             source = textwrap.dedent(inspect.getsource(handler))
             return hashlib.sha256(source.encode("utf-8")).hexdigest()
         except (OSError, TypeError):
-            try:
-                code = getattr(handler, "__code__", None)
-                if code is not None:
-                    return hashlib.sha256(code.co_code).hexdigest()
-            except Exception:
-                pass
+            logger.warning(
+                "Cannot compute source hash for handler %r — "
+                "source unavailable (built-in or C-extension)",
+                getattr(handler, "__qualname__", handler),
+            )
         return ""
         
     def register_tool(

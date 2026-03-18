@@ -234,12 +234,29 @@ class PolicyEngine:
         ``set_agent_context()``, ``update_agent_context()``, or
         ``add_conditional_permission()`` will raise ``RuntimeError``.
 
+        In addition to the boolean guard, the underlying data structures
+        are replaced with immutable proxies (``MappingProxyType``) so that
+        direct attribute access (bypassing the setter methods) will also
+        raise ``TypeError``.
+
         This addresses the self-modification attack vector where an agent
         could call mutation methods to weaken its own policy at runtime.
         """
         self._frozen = True
+        # Replace mutable dicts with read-only proxies to harden against
+        # direct attribute manipulation (e.g. engine.state_permissions["x"] = ...)
+        self.state_permissions = MappingProxyType(
+            {k: frozenset(v) for k, v in self.state_permissions.items()}
+        )
+        self.agent_contexts = MappingProxyType(
+            {k: MappingProxyType(v) if isinstance(v, dict) else v
+             for k, v in self.agent_contexts.items()}
+        )
+        self.conditional_permissions = MappingProxyType(
+            {k: tuple(v) for k, v in self.conditional_permissions.items()}
+        )
         self._log_mutation("freeze", {})
-        logger.info("PolicyEngine frozen — further mutations will raise RuntimeError")
+        logger.info("PolicyEngine frozen — data structures converted to immutable proxies")
 
     @property
     def is_frozen(self) -> bool:

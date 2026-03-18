@@ -334,6 +334,28 @@ class TestPolicyEngineFreeze:
         assert len(blocked) == 1
         assert blocked[0]["operation"] == "add_constraint"
 
+    def test_frozen_dicts_are_immutable_proxies(self):
+        """After freeze(), direct dict mutation raises TypeError."""
+        engine = self._make_engine()
+        engine.add_constraint("finance", ["read"])
+        engine.set_agent_context("a1", {"status": "user"})
+        engine.freeze()
+        # Direct dict assignment should fail
+        with pytest.raises(TypeError):
+            engine.state_permissions["hacker"] = frozenset(["everything"])
+        with pytest.raises(TypeError):
+            engine.agent_contexts["hacker"] = {"admin": True}
+        with pytest.raises(TypeError):
+            engine.conditional_permissions["hacker"] = []
+
+    def test_frozen_permissions_are_frozensets(self):
+        engine = self._make_engine()
+        engine.add_constraint("finance", ["read", "calculate"])
+        engine.freeze()
+        perms = engine.state_permissions.get("finance")
+        assert isinstance(perms, frozenset)
+        assert perms == frozenset(["read", "calculate"])
+
 
 # ══════════════════════════════════════════════════════════════════
 # 4. QUORUM CONFIG VALIDATION
