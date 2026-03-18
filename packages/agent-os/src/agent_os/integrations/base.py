@@ -711,6 +711,77 @@ class PolicyInterceptor:
         return ToolCallResult(allowed=True)
 
 
+class ContentHashInterceptor:
+    """Interceptor that verifies tool identity via content hashing.
+
+    Instead of relying solely on tool *names* (which can be aliased),
+    this interceptor checks that the callable behind a tool name has the
+    same SHA-256 source hash that was recorded when the tool was
+    registered.  This defeats tool-wrapping and aliasing attacks
+    described in the Ona/Veto agent sandbox escape research.
+
+    Requires a ``tool_registry`` that stores content hashes (see
+    :class:`~agent_control_plane.tool_registry.ToolRegistry`).
+
+    Args:
+        tool_hashes: Mapping of tool name → expected SHA-256 hex digest.
+        strict: If ``True`` (default), block tools with no registered
+            hash.  If ``False``, allow unknown tools with a warning.
+    """
+
+    def __init__(
+        self,
+        tool_hashes: dict[str, str] | None = None,
+        strict: bool = True,
+    ) -> None:
+        self._tool_hashes: dict[str, str] = dict(tool_hashes or {})
+        self._strict = strict
+
+    def register_hash(self, tool_name: str, content_hash: str) -> None:
+        """Record the expected content hash for a tool."""
+        self._tool_hashes[tool_name] = content_hash
+
+    def intercept(self, request: ToolCallRequest) -> ToolCallResult:
+        expected = self._tool_hashes.get(request.tool_name)
+        if expected is None:
+            if self._strict:
+                return ToolCallResult(
+                    allowed=False,
+                    reason=(
+                        f"Tool '{request.tool_name}' has no registered content hash "
+                        "(possible alias or wrapper)"
+                    ),
+                )
+            logger.warning(
+                "No content hash for tool '%s' — allowing in non-strict mode",
+                request.tool_name,
+            )
+            return ToolCallResult(allowed=True)
+
+        # Verify the hash carried in request metadata (set by the framework adapter)
+        actual = request.metadata.get("content_hash", "")
+        if not actual:
+            return ToolCallResult(
+                allowed=False,
+                reason=(
+                    f"Tool '{request.tool_name}' call is missing content_hash metadata "
+                    "— cannot verify integrity"
+                ),
+            )
+
+        if actual != expected:
+            return ToolCallResult(
+                allowed=False,
+                reason=(
+                    f"Tool '{request.tool_name}' content hash mismatch: "
+                    f"expected {expected[:12]}… got {actual[:12]}… "
+                    "(possible tampering or wrapper)"
+                ),
+            )
+
+        return ToolCallResult(allowed=True)
+
+
 class CompositeInterceptor:
     """Chain multiple interceptors. All must allow for the call to proceed."""
 
