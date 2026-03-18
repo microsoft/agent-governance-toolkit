@@ -1017,7 +1017,15 @@ def print_audit_summary(audit_log: AuditLog) -> None:
 async def scenario_adversarial_attacks(
     client: Any, model: str, audit_log: AuditLog, verbose: bool
 ) -> int:
-    """Run adversarial test scenarios to verify governance blocks common attacks."""
+    """Run adversarial attack scenarios to test governance resilience.
+
+    Probes 4 attack vectors: prompt injection, tool alias bypass,
+    trust score manipulation, and SQL policy bypass. Reports whether
+    each attack was blocked by the governance middleware.
+
+    Returns:
+        Number of audit entries generated during the adversarial scenarios.
+    """
     print(_section("Adversarial Scenarios: Attack Resilience"))
 
     policy_dir = Path(__file__).resolve().parent / "policies"

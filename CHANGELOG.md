@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Demo `--include-attacks` flag for adversarial scenario testing (prompt injection, tool alias bypass, SQL bypass).
+- .NET `SagaStep.MaxAttempts` property replacing deprecated `MaxRetries`.
+
+### Security
+- Replaced XOR placeholder encryption with AES-256-GCM in DMZ module.
+- Added Security Model & Limitations section to README.
+- Added security advisories to SECURITY.md for CostGuard and thread safety fixes.
+
 ## [2.2.0] - 2026-03-17
 
 ### Added

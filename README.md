@@ -146,6 +146,16 @@ var result = kernel.EvaluateToolCall(
 if (result.Allowed) { /* proceed */ }
 ```
 
+### Run the governance demo
+
+```bash
+# Full governance demo (policy enforcement, audit, trust, cost, reliability)
+python demo/maf_governance_demo.py
+
+# Run with adversarial attack scenarios
+python demo/maf_governance_demo.py --include-attacks
+```
+
 ## More Examples & Samples
 
 - **[Framework Quickstarts](examples/quickstart/)** — One-file governed agents for LangChain, CrewAI, AutoGen, OpenAI Agents, Google ADK
