@@ -1009,6 +1009,69 @@ These components are fully implemented and tested:
 | **No tamper-proof audit** | Flight Recorder SQLite can be modified by compromised agent | Write to external sink for critical audits |
 | **Provider-coupled adapters** | Each SDK needs separate adapter | Abstract interface planned (#47) |
 
+### Security Hardening (Sandbox Escape Defenses)
+
+The following features defend against agent sandbox escape vectors
+([tool aliasing, runtime self-modification, approval fatigue](https://ona.com/stories/how-claude-code-escapes-its-own-denylist-and-sandbox)):
+
+#### Tool Content Hashing
+
+Tools registered through `ToolRegistry` are SHA-256 hashed at registration.
+`execute_tool()` verifies integrity before every call — a tampered or wrapped
+tool is blocked automatically.
+
+```python
+from agent_control_plane.tool_registry import ToolRegistry, ToolType
+
+registry = ToolRegistry()
+registry.register_tool("search", "Web search", ToolType.SEARCH, handler=my_search_fn)
+
+# Later: verify integrity (e.g., detect wrapper/alias attacks)
+result = registry.verify_tool_integrity("search")
+assert result["verified"]  # True if handler is unmodified
+```
+
+Use `ContentHashInterceptor` in the interceptor chain for call-level verification:
+
+```python
+from agent_os.integrations.base import ContentHashInterceptor, CompositeInterceptor
+
+chain = CompositeInterceptor()
+chain.add(ContentHashInterceptor(tool_hashes={"search": registry.get_tool("search").content_hash}))
+```
+
+#### PolicyEngine Freeze
+
+Call `freeze()` after initialization to make the policy engine immutable.
+This prevents agents from calling `add_constraint()` or `update_agent_context()`
+to weaken their own policies at runtime.
+
+```python
+from agent_control_plane.policy_engine import PolicyEngine
+
+engine = PolicyEngine()
+engine.add_constraint("finance", ["read", "calculate"])
+engine.freeze()  # Irreversible — all mutation methods now raise RuntimeError
+
+engine.add_constraint("finance", ["delete"])  # RuntimeError!
+engine.state_permissions["hacker"] = {"all"}  # TypeError! (MappingProxyType)
+```
+
+#### Approval Quorum & Fatigue Detection
+
+Require M-of-N approvals for high-risk operations and auto-deny when agents
+flood the escalation queue (approval fatigue attack):
+
+```python
+from agent_os.integrations.escalation import EscalationHandler, QuorumConfig
+
+handler = EscalationHandler(
+    quorum=QuorumConfig(required_approvals=2, total_approvers=3),
+    fatigue_threshold=5,          # Max 5 escalations per agent...
+    fatigue_window_seconds=60,    # ...per minute
+)
+```
+
 See [GitHub Issues](https://github.com/microsoft/agent-governance-toolkit/issues) for the full roadmap.
 
 ---
