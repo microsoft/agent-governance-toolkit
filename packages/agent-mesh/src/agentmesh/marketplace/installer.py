@@ -95,8 +95,18 @@ class PluginInstaller:
         """
         manifest = self._registry.get_plugin(name, version)
 
-        # Signature verification
-        if verify and manifest.signature and manifest.author in self._trusted_keys:
+        # Signature verification (first check)
+        if verify:
+            if not manifest.signature:
+                raise MarketplaceError(
+                    f"Plugin {name}@{manifest.version} has no signature; "
+                    "install with verify=False to bypass (not recommended)"
+                )
+            if manifest.author not in self._trusted_keys:
+                raise MarketplaceError(
+                    f"Plugin {name}@{manifest.version} signed by untrusted "
+                    f"author '{manifest.author}'"
+                )
             public_key = self._trusted_keys[manifest.author]
             verify_signature(manifest, public_key)
             logger.info("Signature verified for %s@%s", name, manifest.version)
@@ -106,8 +116,19 @@ class PluginInstaller:
             _seen = set()
         self._resolve_dependencies(manifest, _seen=_seen)
 
-        # Install to plugins directory
-        dest = self._plugins_dir / name
+        # V29: Re-verify signature after dependency resolution (TOCTOU guard)
+        if verify:
+            public_key = self._trusted_keys[manifest.author]
+            verify_signature(manifest, public_key)
+
+        # V03: Path traversal guard — ensure dest stays within plugins_dir
+        dest = (self._plugins_dir / name).resolve()
+        plugins_root = self._plugins_dir.resolve()
+        if not str(dest).startswith(str(plugins_root)):
+            raise MarketplaceError(
+                f"Plugin name '{name}' resolves outside plugins directory "
+                f"(path traversal blocked)"
+            )
         dest.mkdir(parents=True, exist_ok=True)
         manifest_file = dest / MANIFEST_FILENAME
         import yaml
@@ -180,7 +201,7 @@ class PluginInstaller:
             dest = self._plugins_dir / dep_name
             if dest.exists():
                 continue  # already installed
-            self.install(dep_name, dep_version, verify=False, _seen=_seen)
+            self.install(dep_name, dep_version, verify=True, _seen=_seen)
 
     # ------------------------------------------------------------------
     # Sandboxing

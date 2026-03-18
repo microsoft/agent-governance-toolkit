@@ -96,6 +96,7 @@ from .base import (
     BaseIntegration,
     BoundedSemaphore,
     CompositeInterceptor,
+    ContentHashInterceptor,
     DriftResult,
     GovernancePolicy,
     PolicyInterceptor,
@@ -124,6 +125,7 @@ from .escalation import (
     EscalationRequest,
     EscalationResult,
     InMemoryApprovalQueue,
+    QuorumConfig,
     WebhookApprovalBackend,
 )
 from .compat import CompatReport, check_compatibility, doctor, warn_on_import

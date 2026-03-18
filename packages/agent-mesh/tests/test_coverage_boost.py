@@ -598,10 +598,18 @@ class TestTrustMiddleware:
     """Tests for TrustMiddleware."""
 
     def test_verify_request_permissive_no_headers(self):
-        mw = TrustMiddleware()
+        cfg = TrustConfig(permissive_mode=True)
+        mw = TrustMiddleware(config=cfg)
         result, err = mw.verify_request({})
         assert result.verified is True
         assert err is None
+
+    def test_verify_request_default_strict_no_headers(self):
+        """V16: Default config is now strict (permissive_mode=False)."""
+        mw = TrustMiddleware()
+        result, err = mw.verify_request({})
+        assert result.verified is False
+        assert err is not None
 
     def test_verify_request_strict_no_headers(self):
         cfg = TrustConfig(permissive_mode=False)

@@ -1,0 +1,41 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  security-skills-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install "pyyaml>=6.0,<7.0"
+      - name: Run security skills scan
+        continue-on-error: true
+        run: |
+          python scripts/security_scan.py packages/ \
+            --exclude-tests \
+            --min-severity high \
+            --format text
+      - name: Generate JSON report
+        if: always()
+        run: |
+          python scripts/security_scan.py packages/ \
+            --exclude-tests \
+            --format json > security-scan-results.json || true
+      - name: Upload scan results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: security-scan-results
+          path: security-scan-results.json
+          retention-days: 30

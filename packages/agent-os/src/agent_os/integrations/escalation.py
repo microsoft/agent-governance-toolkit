@@ -36,7 +36,7 @@ import logging
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Optional
 
@@ -60,6 +60,32 @@ class DefaultTimeoutAction(Enum):
 
     DENY = "deny"
     ALLOW = "allow"
+
+
+@dataclass
+class QuorumConfig:
+    """Configuration for M-of-N approval quorum.
+
+    When set, an escalation requires at least ``required_approvals``
+    ALLOW votes from distinct approvers before the action is permitted.
+    A single DENY from any approver is enough to deny immediately
+    unless ``required_denials`` is set.
+
+    Attributes:
+        required_approvals: Minimum ALLOW votes needed (M).
+        total_approvers: Total approver pool size (N).  Informational.
+        required_denials: Number of DENY votes to reject (default 1).
+    """
+
+    required_approvals: int = 2
+    total_approvers: int = 3
+    required_denials: int = 1
+
+    def __post_init__(self) -> None:
+        if self.required_approvals < 1:
+            raise ValueError("required_approvals must be >= 1")
+        if self.required_denials < 1:
+            raise ValueError("required_denials must be >= 1")
 
 
 @dataclass
@@ -87,6 +113,8 @@ class EscalationRequest:
     resolved_at: Optional[datetime] = None
     decision: EscalationDecision = EscalationDecision.PENDING
     resolved_by: Optional[str] = None
+    # Quorum tracking: list of (approver, decision, timestamp) votes
+    votes: list[tuple[str, str, datetime]] = field(default_factory=list)
 
 
 class ApprovalBackend(abc.ABC):
@@ -263,6 +291,14 @@ class EscalationHandler:
         timeout_seconds: How long to wait for a human decision.
         default_action: What to do if the timeout expires.
         on_escalate: Optional callback fired when an escalation is created.
+        quorum: Optional quorum configuration for M-of-N approval.
+            When set, approvals/denials are counted against quorum
+            thresholds before a final decision is reached.
+        fatigue_window_seconds: Rolling window (in seconds) for fatigue
+            detection.  Defaults to 60 (one minute).
+        fatigue_threshold: Maximum number of escalations per agent within
+            the fatigue window.  If exceeded, new escalations are
+            auto-denied.  ``None`` disables fatigue detection.
     """
 
     def __init__(
@@ -271,11 +307,37 @@ class EscalationHandler:
         timeout_seconds: float = 300,
         default_action: DefaultTimeoutAction = DefaultTimeoutAction.DENY,
         on_escalate: Callable[[EscalationRequest], None] | None = None,
+        quorum: QuorumConfig | None = None,
+        fatigue_window_seconds: float = 60.0,
+        fatigue_threshold: int | None = None,
     ) -> None:
         self.backend = backend or InMemoryApprovalQueue()
         self.timeout_seconds = timeout_seconds
         self.default_action = default_action
         self._on_escalate = on_escalate
+        self.quorum = quorum
+        self._fatigue_window = fatigue_window_seconds
+        self._fatigue_threshold = fatigue_threshold
+        # Per-agent escalation timestamps for fatigue detection
+        self._escalation_times: dict[str, list[datetime]] = {}
+
+    def _check_fatigue(self, agent_id: str) -> bool:
+        """Return True if the agent is triggering escalations too rapidly.
+
+        When fatigue detection is enabled, auto-DENY prevents an agent
+        from overwhelming human reviewers with a flood of requests (the
+        approval-fatigue attack described in Ona/Veto research).
+        """
+        if self._fatigue_threshold is None:
+            return False
+
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(seconds=self._fatigue_window)
+        times = self._escalation_times.get(agent_id, [])
+        # Prune old timestamps
+        recent = [t for t in times if t > cutoff]
+        self._escalation_times[agent_id] = recent
+        return len(recent) >= self._fatigue_threshold
 
     def escalate(
         self,
@@ -286,9 +348,36 @@ class EscalationHandler:
     ) -> EscalationRequest:
         """Create and submit an escalation request.
 
+        If fatigue detection is enabled and the agent has exceeded the
+        threshold, the request is immediately auto-denied.
+
         Returns:
-            The ``EscalationRequest`` in PENDING state.
+            The ``EscalationRequest`` — PENDING normally, DENY if fatigued.
         """
+        # Fatigue check
+        if self._check_fatigue(agent_id):
+            logger.warning(
+                "Escalation fatigue: agent %s exceeded %d escalations in %.0fs — auto-DENY",
+                agent_id,
+                self._fatigue_threshold,
+                self._fatigue_window,
+            )
+            request = EscalationRequest(
+                agent_id=agent_id,
+                action=action,
+                reason=f"Auto-denied: escalation fatigue ({reason})",
+                context_snapshot=context_snapshot or {},
+                decision=EscalationDecision.DENY,
+                resolved_at=datetime.now(timezone.utc),
+                resolved_by="system:fatigue_detector",
+            )
+            return request
+
+        # Record timestamp for fatigue tracking
+        self._escalation_times.setdefault(agent_id, []).append(
+            datetime.now(timezone.utc)
+        )
+
         request = EscalationRequest(
             agent_id=agent_id,
             action=action,
@@ -312,6 +401,9 @@ class EscalationHandler:
         For ``InMemoryApprovalQueue``, this blocks up to ``timeout_seconds``.
         For other backends, this polls once and returns the current state.
 
+        When quorum is configured, the decision is evaluated against
+        quorum thresholds instead of accepting a single vote.
+
         Returns:
             The final decision. If the timeout expires, applies the
             ``default_action`` and returns that.
@@ -323,6 +415,20 @@ class EscalationHandler:
         else:
             req = self.backend.get_decision(request_id)
             decision = req.decision if req else EscalationDecision.PENDING
+
+        # Quorum evaluation
+        if self.quorum and decision != EscalationDecision.PENDING:
+            req = self.backend.get_decision(request_id)
+            if req:
+                approvals = sum(1 for _, v, _ in req.votes if v == "ALLOW")
+                denials = sum(1 for _, v, _ in req.votes if v == "DENY")
+
+                if denials >= self.quorum.required_denials:
+                    return EscalationDecision.DENY
+                if approvals >= self.quorum.required_approvals:
+                    return EscalationDecision.ALLOW
+                # Not enough votes yet — treat as pending/timeout
+                decision = EscalationDecision.PENDING
 
         if decision == EscalationDecision.PENDING:
             # Timeout — apply default

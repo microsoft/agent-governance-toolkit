@@ -92,7 +92,14 @@ class TrustCondition(BaseModel):
         elif operator == ConditionOperator.not_in:
             return actual not in expected
         elif operator == ConditionOperator.matches:
-            return bool(re.search(str(expected), str(actual)))
+            pattern = str(expected)
+            # V31: Reject overly complex regex patterns to prevent ReDoS
+            if len(pattern) > 200 or any(c in pattern for c in ['{', '(+', '(.*)*', '(.+)+']):
+                return False
+            try:
+                return bool(re.search(pattern, str(actual), flags=re.DOTALL))
+            except re.error:
+                return False
         return False
 
 

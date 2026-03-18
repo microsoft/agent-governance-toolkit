@@ -31,6 +31,7 @@ Example:
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Awaitable
@@ -115,6 +116,17 @@ class TrustGatedMCPServer:
         self._call_history: List[MCPToolCall] = []
         self._verified_clients: Dict[str, datetime] = {}
         self._verification_ttl = timedelta(minutes=10)
+        self._max_verified_clients = 10_000
+
+        # P10: Circuit breaker — track consecutive failures per tool
+        self._tool_failures: Dict[str, int] = {}
+        self._circuit_breaker_threshold = 5  # open circuit after 5 consecutive failures
+        self._circuit_breaker_reset = timedelta(minutes=1)
+
+    # P05: Maximum tool description length to prevent prompt injection via descriptions
+    _MAX_DESCRIPTION_LENGTH = 1000
+    # P12: Maximum total size of tool arguments (bytes when serialized)
+    _MAX_ARGUMENTS_SIZE = 1_048_576  # 1 MB
 
     def register_tool(
         self,
@@ -132,15 +144,25 @@ class TrustGatedMCPServer:
         Args:
             name: Tool name
             handler: Async handler function
-            description: Tool description
+            description: Tool description (max 1000 chars, stripped of control chars)
             input_schema: JSON Schema for inputs
             required_capability: Capability needed to invoke
             min_trust_score: Minimum trust score (overrides server default)
             require_human_sponsor: Require direct human sponsor
         """
+        # P05: Sanitize tool description — truncate and strip control characters
+        import re as _re
+        clean_desc = _re.sub(r"[\x00-\x1f\x7f-\x9f]", "", description)
+        if len(clean_desc) > self._MAX_DESCRIPTION_LENGTH:
+            logger.warning(
+                "Tool '%s' description truncated from %d to %d chars",
+                name, len(clean_desc), self._MAX_DESCRIPTION_LENGTH,
+            )
+            clean_desc = clean_desc[:self._MAX_DESCRIPTION_LENGTH]
+
         self._tools[name] = MCPTool(
             name=name,
-            description=description,
+            description=clean_desc,
             handler=handler,
             input_schema=input_schema or {},
             required_capability=required_capability,
@@ -160,6 +182,12 @@ class TrustGatedMCPServer:
             cached_time = self._verified_clients[client_did]
             if datetime.utcnow() - cached_time < self._verification_ttl:
                 return True
+            # Expired — remove stale entry
+            del self._verified_clients[client_did]
+
+        # V22: Evict expired entries when cache grows too large
+        if len(self._verified_clients) >= self._max_verified_clients:
+            self._evict_expired_clients()
 
         # Use TrustBridge if available
         if self.trust_bridge:
@@ -181,6 +209,16 @@ class TrustGatedMCPServer:
 
         logger.warning(f"Client {client_did} failed trust verification")
         return False
+
+    def _evict_expired_clients(self) -> None:
+        """Remove expired entries from the verified clients cache."""
+        now = datetime.utcnow()
+        expired = [
+            did for did, ts in self._verified_clients.items()
+            if now - ts >= self._verification_ttl
+        ]
+        for did in expired:
+            del self._verified_clients[did]
 
     def _check_capability(
         self,
@@ -224,7 +262,7 @@ class TrustGatedMCPServer:
         Returns:
             MCPToolCall with result or error
         """
-        call_id = f"{tool_name}-{datetime.utcnow().timestamp()}"
+        call_id = f"{tool_name}-{uuid.uuid4().hex}"
 
         call = MCPToolCall(
             call_id=call_id,
@@ -234,6 +272,18 @@ class TrustGatedMCPServer:
             trust_score=caller_trust_score,
             capabilities_checked=caller_capabilities or [],
         )
+
+        # P12: Reject oversized arguments to prevent memory DoS
+        import json as _json
+        try:
+            args_size = len(_json.dumps(arguments))
+        except (TypeError, ValueError):
+            args_size = 0
+        if args_size > self._MAX_ARGUMENTS_SIZE:
+            call.error = f"Arguments too large: {args_size} bytes exceeds {self._MAX_ARGUMENTS_SIZE} limit"
+            call.completed_at = datetime.utcnow()
+            self._record_call(call)
+            return call
 
         # Check tool exists
         if tool_name not in self._tools:
@@ -267,17 +317,42 @@ class TrustGatedMCPServer:
 
         # Execute tool
         call.trust_verified = True
+
+        # P10: Circuit breaker — reject if tool has too many consecutive failures
+        fail_count = self._tool_failures.get(tool_name, 0)
+        if fail_count >= self._circuit_breaker_threshold:
+            call.error = f"Circuit breaker open: {tool_name} has {fail_count} consecutive failures"
+            call.completed_at = datetime.utcnow()
+            self._record_call(call)
+            return call
+
         try:
-            result = await tool.handler(**arguments)
+            # V12: Validate arguments against input_schema before dispatch
+            allowed_keys = set(tool.input_schema.get("properties", {}).keys())
+            if allowed_keys:
+                sanitized = {k: v for k, v in arguments.items() if k in allowed_keys}
+                stripped = set(arguments.keys()) - allowed_keys
+                if stripped:
+                    logger.warning(
+                        "Stripped unexpected kwargs from %s call by %s: %s",
+                        tool_name, caller_did, stripped,
+                    )
+            else:
+                sanitized = arguments
+            result = await tool.handler(**sanitized)
             call.success = True
             call.result = result
             tool.total_calls += 1
             tool.last_called = datetime.utcnow()
+            self._tool_failures.pop(tool_name, None)  # reset on success
             logger.info(f"Tool {tool_name} invoked successfully by {caller_did}")
         except Exception as e:
-            call.error = str(e)
+            # P11: Sanitize exception — don't log full message (may contain PII)
+            error_type = type(e).__name__
+            call.error = f"{error_type}: {str(e)[:200]}"
             tool.failed_calls += 1
-            logger.error(f"Tool {tool_name} failed: {e}")
+            self._tool_failures[tool_name] = self._tool_failures.get(tool_name, 0) + 1
+            logger.error("Tool %s failed with %s (caller: %s)", tool_name, error_type, caller_did)
 
         call.completed_at = datetime.utcnow()
         self._record_call(call)
@@ -336,6 +411,21 @@ class TrustGatedMCPClient:
 
     async def connect(self, server_url: str) -> bool:
         """Connect to MCP server with trust verification."""
+        # V18: Validate server URL scheme
+        from urllib.parse import urlparse
+        parsed = urlparse(server_url)
+        if parsed.scheme not in ("http", "https", "ws", "wss"):
+            logger.warning("Rejected server URL with invalid scheme: %s", server_url)
+            return False
+        if not parsed.hostname:
+            logger.warning("Rejected server URL with missing host: %s", server_url)
+            return False
+        # Block common internal/loopback targets
+        _blocked_hosts = {"localhost", "127.0.0.1", "::1", "0.0.0.0", "169.254.169.254"}
+        if parsed.hostname.lower() in _blocked_hosts:
+            logger.warning("Rejected internal/loopback server URL: %s", server_url)
+            return False
+
         # Verify server identity if TrustBridge available
         if self.trust_bridge:
             # Extract server DID from URL or discovery
@@ -364,33 +454,19 @@ class TrustGatedMCPClient:
         Invoke tool on MCP server.
 
         Automatically attaches identity credentials.
+
+        Raises:
+            NotImplementedError: HTTP transport is not yet available.
         """
         if server_url not in self._connected_servers:
             if not await self.connect(server_url):
                 return {"error": "Failed to connect to server"}
 
-        # Build request with identity
-        request = {
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "params": {
-                "name": tool_name,
-                "arguments": arguments,
-            },
-            "id": f"req-{datetime.utcnow().timestamp()}",
-            # AgentMesh identity extension
-            "x-agentmesh": {
-                "callerDid": str(self.identity.did) if hasattr(self.identity, "did") else "",
-                "trustScore": self.identity.trust_score if hasattr(self.identity, "trust_score") else 500,
-                "capabilities": list(self.identity.capabilities) if hasattr(self.identity, "capabilities") else [],
-            },
-        }
-
-        logger.debug(f"MCP request to {server_url}: {tool_name}")
-
-        # In real implementation, send HTTP request
-        # For now, return placeholder
-        return {"status": "request_prepared", "request": request}
+        raise NotImplementedError(
+            "MCP HTTP transport is not yet implemented. "
+            f"Cannot send request to {server_url} for tool '{tool_name}'. "
+            "Provide an HTTP transport backend via a subclass or plugin."
+        )
 
     def get_credentials(self) -> Dict[str, Any]:
         """Get identity credentials for MCP authentication."""

@@ -18,6 +18,7 @@
 > releases** for testing and evaluation purposes only. They are **not** official Microsoft-signed
 > releases. Official Microsoft-signed packages published via ESRP Release will be available in a
 > future release. Package names under the `@microsoft` scope have been registered proactively.
+> Verify package checksums before use in sensitive environments.
 
 Runtimegovernance for AI agents — the only toolkit covering all **10 OWASP Agentic risks** with **6,100+ tests**. Governs what agents *do*, not just what they say — deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE — **Python · TypeScript · .NET**
 
@@ -143,6 +144,16 @@ var result = kernel.EvaluateToolCall(
 );
 
 if (result.Allowed) { /* proceed */ }
+```
+
+### Run the governance demo
+
+```bash
+# Full governance demo (policy enforcement, audit, trust, cost, reliability)
+python demo/maf_governance_demo.py
+
+# Run with adversarial attack scenarios
+python demo/maf_governance_demo.py --include-attacks
 ```
 
 ## More Examples & Samples
@@ -273,6 +284,23 @@ Governance adds **< 0.1 ms per action** — roughly 10,000× faster than an LLM 
 | Concurrent throughput (50 agents) | — | 35,481 ops/sec |
 
 Full methodology and per-adapter breakdowns: **[BENCHMARKS.md](BENCHMARKS.md)**
+
+## Security Model & Limitations
+
+This toolkit provides **application-level (Python middleware) governance**, not OS kernel-level isolation. The policy engine and the agents it governs run in the **same Python process**. This is the same trust boundary used by every Python-based agent framework (LangChain, CrewAI, AutoGen, etc.).
+
+| Layer | What It Provides | What It Does NOT Provide |
+|-------|-----------------|------------------------|
+| Policy Engine | Deterministic action interception, deny-list enforcement | Hardware-level memory isolation |
+| Identity (IATP) | Ed25519 cryptographic agent credentials, trust scoring | OS-level process separation |
+| Execution Rings | Logical privilege tiers with resource limits | CPU ring-level enforcement |
+| Bootstrap Integrity | SHA-256 tamper detection of governance modules at startup | Hardware root-of-trust (TPM/Secure Boot) |
+
+**Production recommendations:**
+- Run each agent in a **separate container** for OS-level isolation
+- All security policy rules ship as **configurable sample configurations** — review and customize for your environment (see `examples/policies/`)
+- No built-in rule set should be considered exhaustive
+- For details see [Architecture — Security Model & Boundaries](docs/ARCHITECTURE.md)
 
 ## Contributor Resources
 

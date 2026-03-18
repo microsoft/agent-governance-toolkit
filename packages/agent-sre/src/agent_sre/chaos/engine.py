@@ -13,7 +13,7 @@ from typing import Any
 
 
 class FaultType(Enum):
-    """Types of faults that can be injected (Community Edition: 3 basic types)."""
+    """Types of faults that can be injected."""
 
     LATENCY_INJECTION = "latency_injection"
     ERROR_INJECTION = "error_injection"
@@ -26,6 +26,11 @@ class FaultType(Enum):
     DATA_EXFILTRATION = "data_exfiltration"
     TOOL_ABUSE = "tool_abuse"
     IDENTITY_SPOOFING = "identity_spoofing"
+
+    # Behavioral fault types
+    DEADLOCK_INJECTION = "deadlock_injection"
+    CONTRADICTORY_INSTRUCTION = "contradictory_instruction"
+    TRUST_PERTURBATION = "trust_perturbation"
 
 
 class ExperimentState(Enum):
@@ -109,33 +114,72 @@ class Fault:
 
     @staticmethod
     def tool_wrong_schema(tool: str, rate: float = 1.0) -> Fault:
-        """Not available in Community Edition."""
-        raise NotImplementedError("tool_wrong_schema is not available in Community Edition")
+        """Simulate a tool returning data with an unexpected schema."""
+        return Fault(FaultType.ERROR_INJECTION, tool, rate, {"error": "schema_mismatch"})
 
     @staticmethod
     def llm_degraded(provider: str, quality: float = 0.5, rate: float = 1.0) -> Fault:
-        """Not available in Community Edition."""
-        raise NotImplementedError("llm_degraded is not available in Community Edition")
+        """Simulate LLM quality degradation (incoherent or low-quality responses)."""
+        return Fault(FaultType.LATENCY_INJECTION, provider, rate, {"quality": quality, "degraded": True})
 
     @staticmethod
     def delegation_reject(from_agent: str, rate: float = 0.1) -> Fault:
-        """Not available in Community Edition."""
-        raise NotImplementedError("delegation_reject is not available in Community Edition")
+        """Simulate an agent refusing a delegated task."""
+        return Fault(FaultType.ERROR_INJECTION, from_agent, rate, {"error": "delegation_rejected"})
 
     @staticmethod
     def credential_expire(agent: str) -> Fault:
-        """Not available in Community Edition."""
-        raise NotImplementedError("credential_expire is not available in Community Edition")
+        """Simulate credential expiration for an agent."""
+        return Fault(FaultType.ERROR_INJECTION, agent, 1.0, {"error": "credential_expired"})
 
     @staticmethod
     def network_partition(agents: list[str]) -> Fault:
-        """Not available in Community Edition."""
-        raise NotImplementedError("network_partition is not available in Community Edition")
+        """Simulate a network partition isolating agents from each other."""
+        return Fault(
+            FaultType.ERROR_INJECTION,
+            agents[0] if agents else "*",
+            1.0,
+            {"error": "network_partition", "agents": agents},
+        )
 
     @staticmethod
     def cost_spike(tool: str, multiplier: float = 10.0) -> Fault:
-        """Not available in Community Edition."""
-        raise NotImplementedError("cost_spike is not available in Community Edition")
+        """Simulate a sudden cost spike on a tool or provider."""
+        return Fault(FaultType.ERROR_INJECTION, tool, 1.0, {"error": "cost_spike", "multiplier": multiplier})
+
+    # Behavioral fault factory methods
+
+    @staticmethod
+    def deadlock_injection(
+        agents: list[str], timeout_ms: int = 30000, rate: float = 1.0,
+    ) -> Fault:
+        """Simulate circular dependency deadlock between agents."""
+        return Fault(
+            FaultType.DEADLOCK_INJECTION,
+            agents[0] if agents else "*",
+            rate,
+            {"agents": agents, "timeout_ms": timeout_ms},
+        )
+
+    @staticmethod
+    def contradictory_instruction(
+        target: str,
+        directive_a: str = "expand",
+        directive_b: str = "summarize",
+        rate: float = 1.0,
+    ) -> Fault:
+        """Inject conflicting directives to test conflict resolution."""
+        return Fault(
+            FaultType.CONTRADICTORY_INSTRUCTION,
+            target,
+            rate,
+            {"directive_a": directive_a, "directive_b": directive_b},
+        )
+
+    @staticmethod
+    def trust_perturbation(target: str, delta: float = -200.0, rate: float = 1.0) -> Fault:
+        """Dynamically change an agent's trust score during execution."""
+        return Fault(FaultType.TRUST_PERTURBATION, target, rate, {"delta": delta})
 
     def to_dict(self) -> dict[str, Any]:
         return {

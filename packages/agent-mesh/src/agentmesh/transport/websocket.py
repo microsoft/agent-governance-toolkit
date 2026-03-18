@@ -61,7 +61,7 @@ class WebSocketTransport(Transport):
         super().__init__(config)
         self.heartbeat_interval = heartbeat_interval
         self._ws: Optional[ClientConnection] = None
-        self._receive_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self._receive_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=10_000)
         self._heartbeat_task: Optional[asyncio.Task[None]] = None
         self._listener_task: Optional[asyncio.Task[None]] = None
         self._reconnect_task: Optional[asyncio.Task[None]] = None

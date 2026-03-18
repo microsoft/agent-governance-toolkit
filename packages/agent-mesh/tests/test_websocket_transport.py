@@ -54,7 +54,7 @@ class TestTransportBase:
         cfg = TransportConfig()
         assert cfg.host == "localhost"
         assert cfg.port == 8080
-        assert cfg.use_tls is False
+        assert cfg.use_tls is True
         assert cfg.timeout_seconds == 30
 
     def test_transport_config_uri(self) -> None:

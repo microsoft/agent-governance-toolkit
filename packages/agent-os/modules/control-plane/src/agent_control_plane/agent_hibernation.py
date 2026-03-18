@@ -20,6 +20,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 import json
 import pickle
+import hmac
+import hashlib
 import os
 import logging
 from pathlib import Path
@@ -85,6 +87,13 @@ class HibernationManager:
         """
         self.config = config or HibernationConfig()
         self.logger = logging.getLogger("HibernationManager")
+        
+        # Create storage directory if it doesn't exist
+        Path(self.config.storage_path).mkdir(parents=True, exist_ok=True)
+        
+        # HMAC key for pickle integrity verification — generated per instance.
+        # In production, this should be persisted securely (e.g., Key Vault).
+        self._hmac_key = os.urandom(32)
         
         # Create storage directory if it doesn't exist
         Path(self.config.storage_path).mkdir(parents=True, exist_ok=True)
@@ -188,9 +197,13 @@ class HibernationManager:
             if self.config.format == HibernationFormat.JSON:
                 with open(file_path, 'w') as f:
                     json.dump(state, f, indent=2)
-            else:  # PICKLE
+            else:  # PICKLE — write data + HMAC signature
+                raw = pickle.dumps(state)
+                sig = hmac.new(self._hmac_key, raw, hashlib.sha256).hexdigest()
                 with open(file_path, 'wb') as f:
-                    pickle.dump(state, f)
+                    f.write(raw)
+                with open(file_path + ".sig", 'w') as f:
+                    f.write(sig)
             
             # Get file size
             state_size = os.path.getsize(file_path)
@@ -245,9 +258,24 @@ class HibernationManager:
             if metadata.format == HibernationFormat.JSON:
                 with open(metadata.state_file_path, 'r') as f:
                     state = json.load(f)
-            else:  # PICKLE
+            else:  # PICKLE — verify HMAC before deserializing
+                sig_path = metadata.state_file_path + ".sig"
+                if not os.path.exists(sig_path):
+                    raise ValueError(
+                        f"Missing HMAC signature for {metadata.state_file_path} — "
+                        "state file may have been tampered with"
+                    )
                 with open(metadata.state_file_path, 'rb') as f:
-                    state = pickle.load(f)
+                    raw = f.read()
+                with open(sig_path, 'r') as f:
+                    expected_sig = f.read().strip()
+                actual_sig = hmac.new(self._hmac_key, raw, hashlib.sha256).hexdigest()
+                if not hmac.compare_digest(actual_sig, expected_sig):
+                    raise ValueError(
+                        f"HMAC verification failed for {metadata.state_file_path} — "
+                        "state file has been tampered with"
+                    )
+                state = pickle.loads(raw)
             
             # Deserialize state
             restored_state = self.deserialize_agent_state(state)

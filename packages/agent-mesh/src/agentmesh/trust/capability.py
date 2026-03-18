@@ -113,8 +113,13 @@ class CapabilityGrant(BaseModel):
             prefix = self.capability[:-1]  # e.g. "read:" from "read:*"
             if not requested.startswith(prefix):
                 return False
-        elif requested.startswith(self.capability):
-            pass  # granted is a prefix of requested
+        elif ":" in self.capability and requested.startswith(self.capability + ":"):
+            # V30: Only allow prefix match at colon boundaries to prevent
+            # "read" matching "readwrite:secret". Require the granted
+            # capability to be a colon-delimited prefix of the requested one.
+            pass
+        elif self.capability == requested:
+            pass
         else:
             # Fall back to component matching
             req_action, req_resource, req_qualifier = self.parse_capability(requested)

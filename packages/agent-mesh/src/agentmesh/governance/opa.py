@@ -140,10 +140,24 @@ class OPAEvaluator:
     def _evaluate_remote(self, query: str, input_data: dict) -> OPADecision:
         """Query a remote OPA server via REST API."""
         import urllib.request
+        from urllib.parse import quote
+
+        # V32: Sanitise query path to prevent URL injection
+        # Only allow alphanumeric, dots, underscores, hyphens in query
+        import re as _re
+        if not _re.fullmatch(r"[a-zA-Z0-9._\-]+", query):
+            return OPADecision(
+                allowed=False,
+                query=query,
+                source="remote",
+                error=f"Invalid OPA query path: {query}",
+            )
 
         # Convert query path to URL: "data.agentmesh.allow" -> "/v1/data/agentmesh/allow"
         path_parts = query.replace("data.", "", 1).replace(".", "/") if query.startswith("data.") else query.replace(".", "/")
-        url = f"{self.opa_url}/v1/data/{path_parts}"
+        # URL-encode each segment as a safety net
+        safe_path = "/".join(quote(seg, safe="") for seg in path_parts.split("/"))
+        url = f"{self.opa_url}/v1/data/{safe_path}"
 
         payload = json.dumps({"input": input_data}).encode("utf-8")
         req = urllib.request.Request(

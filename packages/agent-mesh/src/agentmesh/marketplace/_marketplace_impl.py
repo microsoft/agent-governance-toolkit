@@ -292,7 +292,7 @@ class PluginInstaller:
             dest = self._plugins_dir / dep_name
             if dest.exists():
                 continue
-            self.install(dep_name, dep_version, verify=False, _seen=_seen)
+            self.install(dep_name, dep_version, verify=True, _seen=_seen)
 
     @staticmethod
     def check_sandbox(module_name: str) -> bool:

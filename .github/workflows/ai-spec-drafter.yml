@@ -1,0 +1,118 @@
+# AI-powered engineering spec generator for agent-governance-toolkit.
+# When an issue is labeled "needs-spec", generates an engineering specification
+# considering the monorepo structure (which package is affected?), creates a
+# branch, and opens a PR with the spec document in docs/specs/.
+name: AI Spec Drafter
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  models: read
+
+jobs:
+  draft-spec:
+    name: Generate Engineering Spec
+    runs-on: ubuntu-latest
+    if: github.event.label.name == 'needs-spec'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Generate spec
+        id: spec
+        uses: ./.github/actions/ai-agent-runner
+        with:
+          agent-type: spec-drafter
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          model: gpt-4o
+          fallback-model: gpt-4o-mini
+          max-tokens: "4000"
+          context-mode: issue
+          output-mode: none
+          custom-instructions: |
+            You are an engineering spec drafter for microsoft/agent-governance-toolkit.
+
+            This is a monorepo with packages:
+            - agent-os: Core policy engine and agent lifecycle
+            - agent-mesh: Agent discovery, routing, and trust mesh
+            - agent-hypervisor: Execution sandboxing and resource isolation
+            - agent-sre: Reliability engineering, chaos testing, SLO monitoring
+            - agent-compliance: Compliance frameworks and audit logging
+            - agent-marketplace: Agent registry and marketplace
+            - agent-lightning: High-performance inference pipeline
+            - agent-runtime: Runtime execution environment
+
+            Generate a professional engineering specification that includes:
+            1. **Title and Overview** — what this spec covers
+            2. **Background** — context from the issue
+            3. **Package(s) Affected** — which package(s) this changes
+            4. **Goals and Non-Goals**
+            5. **Proposed Design** — architecture, API changes, data flow
+            6. **API Surface** — new/changed public APIs with signatures
+            7. **Security Considerations** — threat model for this change
+            8. **Testing Strategy** — unit, integration, and edge cases
+            9. **Migration/Rollout Plan** — if breaking changes involved
+            10. **Open Questions**
+
+            Use proper markdown formatting with code blocks for API examples.
+
+      - name: Create spec branch and PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPEC_CONTENT: ${{ steps.spec.outputs.response }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          if [ -z "$SPEC_CONTENT" ]; then
+            echo "::warning::Spec generation produced no output"
+            exit 0
+          fi
+
+          # Sanitize title for branch name and filename
+          SAFE_TITLE=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' \
+            | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | head -c 50)
+          BRANCH="docs/spec-${ISSUE_NUMBER}-${SAFE_TITLE}"
+          SPEC_FILE="docs/specs/issue-${ISSUE_NUMBER}-${SAFE_TITLE}.md"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+
+          mkdir -p docs/specs
+          printf '%s' "$SPEC_CONTENT" > "$SPEC_FILE"
+
+          git add "$SPEC_FILE"
+          git commit -m "docs: add engineering spec for #${ISSUE_NUMBER}
+
+          Auto-generated from issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
+
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "📋 Spec: ${ISSUE_TITLE}" \
+            --body "## Auto-Generated Engineering Spec
+
+          This spec was auto-generated from issue #${ISSUE_NUMBER}.
+
+          **Please review and refine before approving.**
+
+          ---
+          Closes #${ISSUE_NUMBER} (spec request)" \
+            --base main \
+            --head "$BRANCH" \
+            --label "documentation,spec" \
+            || echo "::warning::Failed to create spec PR"
+
+      - name: Comment on issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} \
+            --body "🤖 An engineering spec has been drafted and a PR created. Please review the PR for the full specification." \
+            || true

@@ -47,9 +47,13 @@ class InteractionRecord:
 class InMemoryTrustStore:
     """Simple in-memory trust store for testing and development."""
 
+    # V33: Rate-limit trust updates to prevent inflation via rapid success spam
+    MAX_UPDATES_PER_MINUTE = 10
+
     def __init__(self, default_score: int = 500) -> None:
         self._scores: Dict[str, int] = {}
         self._default_score = default_score
+        self._update_times: Dict[str, list] = {}
 
     def get_trust_score(self, agent_did: str) -> int:
         return self._scores.get(agent_did, self._default_score)
@@ -58,6 +62,16 @@ class InMemoryTrustStore:
         self._scores[agent_did] = max(0, min(1000, score))
 
     def record_interaction(self, agent_did: str, *, success: bool) -> None:
+        from datetime import datetime as _dt
+        now = _dt.utcnow()
+        # V33: Enforce rate limit on score updates
+        times = self._update_times.setdefault(agent_did, [])
+        cutoff = now.timestamp() - 60
+        times[:] = [t for t in times if t > cutoff]
+        if len(times) >= self.MAX_UPDATES_PER_MINUTE:
+            return  # silently drop — rate limited
+        times.append(now.timestamp())
+
         current = self.get_trust_score(agent_did)
         delta = 5 if success else -10
         self.set_trust_score(agent_did, current + delta)

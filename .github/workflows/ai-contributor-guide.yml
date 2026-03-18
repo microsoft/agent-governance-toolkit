@@ -1,0 +1,109 @@
+# AI-powered contributor helper for the agent-governance-toolkit.
+# Welcomes first-time contributors with helpful, personalized context:
+# - For issues: analyzes the issue and suggests relevant packages/code areas
+# - For PRs: provides a friendly first-PR review with extra guidance
+# Builds OSS community by making the contribution experience welcoming.
+name: AI Contributor Guide
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  models: read
+
+jobs:
+  guide-issue:
+    name: Guide First-Time Issue Author
+    runs-on: ubuntu-latest
+    # Only trigger for first-time contributors (never seen before or first contribution)
+    if: >-
+      github.event_name == 'issues' &&
+      (github.event.issue.author_association == 'NONE' ||
+       github.event.issue.author_association == 'FIRST_TIME_CONTRIBUTOR')
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Guide contributor on issue
+        uses: ./.github/actions/ai-agent-runner
+        with:
+          agent-type: contributor-guide
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          model: gpt-4o
+          fallback-model: gpt-4o-mini
+          max-tokens: "4000"
+          context-mode: issue
+          output-mode: issue-comment
+          custom-instructions: |
+            You are a friendly OSS community helper for microsoft/agent-governance-toolkit.
+            A first-time contributor has opened an issue. Welcome them warmly!
+
+            Your response should:
+            1. **Welcome** them to the project
+            2. **Analyze** their issue and suggest which package(s) might be relevant:
+               - agent-os: Core policy engine, agent lifecycle
+               - agent-mesh: Agent discovery, routing, trust mesh
+               - agent-hypervisor: Execution sandboxing, resource isolation
+               - agent-sre: Reliability, chaos testing, SLOs
+               - agent-compliance: Compliance frameworks, audit logging
+               - agent-marketplace: Agent registry
+               - agent-lightning: High-performance inference
+               - agent-runtime: Runtime execution environment
+            3. **Point to relevant code** — suggest specific directories to look at
+            4. **Link to resources**:
+               - [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md)
+               - [QUICKSTART.md](../blob/main/QUICKSTART.md)
+               - [Code of Conduct](../blob/main/CODE_OF_CONDUCT.md)
+            5. **Offer next steps** — what they can do to help resolve this
+
+            Be encouraging and specific. Avoid generic boilerplate.
+
+  guide-pr:
+    name: Guide First-Time PR Author
+    runs-on: ubuntu-latest
+    # Only trigger for first-time contributors on PRs
+    # Uses pull_request_target for security (runs on base branch context)
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      (github.event.pull_request.author_association == 'NONE' ||
+       github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR')
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Guide PR author
+        uses: ./.github/actions/ai-agent-runner
+        with:
+          agent-type: contributor-guide
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          model: gpt-4o
+          fallback-model: gpt-4o-mini
+          max-tokens: "4000"
+          context-mode: pr-diff
+          output-mode: pr-comment
+          custom-instructions: |
+            You are a friendly OSS community helper for microsoft/agent-governance-toolkit.
+            A first-time contributor has opened a pull request. Welcome them!
+
+            Your response should:
+            1. **Welcome** them and thank them for contributing
+            2. **Review their PR** with extra kindness — explain WHY things should be
+               different, not just what to change
+            3. **Highlight what they did well** before suggesting improvements
+            4. **Explain project conventions**:
+               - We use ruff for linting (select E,F,W)
+               - Tests go in packages/{name}/tests/
+               - We follow conventional commits (feat:, fix:, docs:, etc.)
+               - Security-sensitive code gets extra scrutiny
+            5. **Link to resources**:
+               - [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md)
+               - [QUICKSTART.md](../blob/main/QUICKSTART.md)
+            6. **Explain next steps** — what happens in the review process
+
+            Be warm, specific, and constructive. First impressions matter for OSS!

@@ -1,0 +1,413 @@
+name: "AI Agent Runner"
+description: >
+  Reusable composite action for AI native agents. Fetches PR/issue context,
+  sends it to an LLM, and posts results back to GitHub as review comments,
+  issue comments, or PR bodies.
+
+inputs:
+  agent-type:
+    description: "Agent identifier (e.g., code-reviewer, security-scanner)"
+    required: true
+  github-token:
+    description: "GitHub token with required permissions"
+    required: true
+  model:
+    description: "LLM model to use (GitHub Models catalog name)"
+    required: false
+    default: "gpt-4o"
+  fallback-model:
+    description: "Fallback LLM model if primary fails"
+    required: false
+    default: "gpt-4o-mini"
+  max-tokens:
+    description: "Maximum tokens for LLM response"
+    required: false
+    default: "4000"
+  temperature:
+    description: "LLM temperature (0.0-1.0)"
+    required: false
+    default: "0.2"
+  custom-instructions:
+    description: "Agent-specific system prompt / instructions"
+    required: false
+    default: ""
+  context-mode:
+    description: "What context to fetch: pr-diff, pr-files, issue, repo-scan, custom"
+    required: false
+    default: "pr-diff"
+  output-mode:
+    description: "How to post results: pr-review, pr-comment, issue-comment, artifact, none"
+    required: false
+    default: "pr-comment"
+  extra-context:
+    description: "Additional context to include in the prompt (JSON string)"
+    required: false
+    default: ""
+
+outputs:
+  response:
+    description: "Raw LLM response text"
+    value: ${{ steps.run-agent.outputs.response }}
+  status:
+    description: "Agent execution status: success, failure, skipped"
+    value: ${{ steps.run-agent.outputs.status }}
+  tokens-used:
+    description: "Total tokens consumed"
+    value: ${{ steps.run-agent.outputs.tokens_used }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Create agent runner script
+      shell: bash
+      run: |
+        cat > "$RUNNER_TEMP/ai-agent-runner.mjs" << 'AGENT_SCRIPT'
+        import { readFileSync, writeFileSync } from "fs";
+
+        // ── Helpers ──────────────────────────────────────────────────────
+        const env = (k) => process.env[k] || "";
+        const setOutput = (k, v) => {
+          const delim = `ghadelim_${Date.now()}`;
+          const out = env("GITHUB_OUTPUT");
+          if (out) {
+            writeFileSync(out, `${k}<<${delim}\n${v}\n${delim}\n`, { flag: "a" });
+          }
+        };
+
+        async function ghApi(endpoint, opts = {}) {
+          const token = env("GITHUB_TOKEN");
+          const base = env("GITHUB_API_URL") || "https://api.github.com";
+          const url = endpoint.startsWith("http") ? endpoint : `${base}${endpoint}`;
+          const res = await fetch(url, {
+            ...opts,
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+              ...opts.headers,
+            },
+          });
+          if (!res.ok) {
+            const body = await res.text();
+            throw new Error(`GitHub API ${res.status}: ${body.slice(0, 500)}`);
+          }
+          return res.json();
+        }
+
+        // ── Fetch context based on mode ──────────────────────────────────
+        async function fetchContext(mode) {
+          const [owner, repo] = env("GITHUB_REPOSITORY").split("/");
+          const eventName = env("GITHUB_EVENT_NAME");
+          const eventPath = env("GITHUB_EVENT_PATH");
+          const event = JSON.parse(readFileSync(eventPath, "utf8"));
+
+          const context = {
+            owner,
+            repo,
+            eventName,
+            prNumber: null,
+            issueNumber: null,
+            diff: "",
+            files: [],
+            issueBody: "",
+            issueTitle: "",
+            labels: [],
+          };
+
+          if (mode === "pr-diff" || mode === "pr-files") {
+            context.prNumber =
+              event.pull_request?.number || event.number || null;
+            if (!context.prNumber) {
+              console.log("::warning::No PR number found in event payload");
+              return context;
+            }
+
+            if (mode === "pr-diff") {
+              const diffRes = await fetch(
+                `${env("GITHUB_API_URL") || "https://api.github.com"}/repos/${owner}/${repo}/pulls/${context.prNumber}`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${env("GITHUB_TOKEN")}`,
+                    Accept: "application/vnd.github.v3.diff",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                  },
+                }
+              );
+              context.diff = await diffRes.text();
+              // Truncate diffs to stay within GitHub Models token limits
+              // (~4 chars per token, keep under ~6000 tokens for diff)
+              if (context.diff.length > 24000) {
+                context.diff =
+                  context.diff.slice(0, 24000) +
+                  "\n\n... [diff truncated — showing first 24k chars of full diff] ...";
+              }
+            }
+
+            if (mode === "pr-files") {
+              context.files = await ghApi(
+                `/repos/${owner}/${repo}/pulls/${context.prNumber}/files?per_page=100`
+              );
+            }
+
+            // Always fetch PR metadata
+            const pr = await ghApi(
+              `/repos/${owner}/${repo}/pulls/${context.prNumber}`
+            );
+            context.issueTitle = pr.title;
+            context.issueBody = pr.body || "";
+            context.labels = (pr.labels || []).map((l) => l.name);
+          }
+
+          if (mode === "issue") {
+            context.issueNumber =
+              event.issue?.number || event.number || null;
+            if (context.issueNumber) {
+              const issue = await ghApi(
+                `/repos/${owner}/${repo}/issues/${context.issueNumber}`
+              );
+              context.issueTitle = issue.title;
+              context.issueBody = issue.body || "";
+              context.labels = (issue.labels || []).map((l) => l.name);
+            }
+          }
+
+          if (mode === "repo-scan") {
+            // Lightweight: just list recent changed files for scanning
+            const commits = await ghApi(
+              `/repos/${owner}/${repo}/commits?per_page=10`
+            );
+            context.files = commits.map((c) => ({
+              sha: c.sha,
+              message: c.commit?.message?.split("\n")[0],
+            }));
+          }
+
+          return context;
+        }
+
+        // ── Call LLM ─────────────────────────────────────────────────────
+        async function callLLM(systemPrompt, userPrompt, model, maxTokens, temperature) {
+          // Use GitHub Models API (models.github.ai) — available to GitHub Actions
+          // with a GITHUB_TOKEN that has models:read permission, or use an API key
+          const modelsToken = env("AI_MODEL_API_KEY") || env("GITHUB_TOKEN");
+          const modelsEndpoint =
+            env("AI_MODEL_ENDPOINT") ||
+            "https://models.inference.ai.azure.com/chat/completions";
+
+          const body = {
+            model,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            max_tokens: parseInt(maxTokens, 10),
+            temperature: parseFloat(temperature),
+          };
+
+          let res = await fetch(modelsEndpoint, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${modelsToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+          });
+
+          // Fallback to secondary model
+          if (!res.ok && env("INPUT_FALLBACK_MODEL")) {
+            console.log(
+              `::warning::Primary model failed (${res.status}), trying fallback: ${env("INPUT_FALLBACK_MODEL")}`
+            );
+            body.model = env("INPUT_FALLBACK_MODEL");
+            res = await fetch(modelsEndpoint, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${modelsToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(body),
+            });
+          }
+
+          if (!res.ok) {
+            const errBody = await res.text();
+            throw new Error(`LLM API ${res.status}: ${errBody.slice(0, 500)}`);
+          }
+
+          const data = await res.json();
+          const content = data.choices?.[0]?.message?.content || "";
+          const tokensUsed =
+            (data.usage?.prompt_tokens || 0) +
+            (data.usage?.completion_tokens || 0);
+
+          return { content, tokensUsed };
+        }
+
+        // ── Post results ─────────────────────────────────────────────────
+        async function postResults(outputMode, context, response) {
+          const [owner, repo] = env("GITHUB_REPOSITORY").split("/");
+
+          if (outputMode === "pr-comment" && context.prNumber) {
+            await ghApi(`/repos/${owner}/${repo}/issues/${context.prNumber}/comments`, {
+              method: "POST",
+              body: JSON.stringify({
+                body: `## 🤖 AI Agent: ${env("INPUT_AGENT_TYPE")}\n\n${response}`,
+              }),
+            });
+          }
+
+          if (outputMode === "pr-review" && context.prNumber) {
+            await ghApi(`/repos/${owner}/${repo}/pulls/${context.prNumber}/reviews`, {
+              method: "POST",
+              body: JSON.stringify({
+                event: "COMMENT",
+                body: `## 🤖 AI Agent: ${env("INPUT_AGENT_TYPE")}\n\n${response}`,
+              }),
+            });
+          }
+
+          if (outputMode === "issue-comment" && context.issueNumber) {
+            await ghApi(
+              `/repos/${owner}/${repo}/issues/${context.issueNumber}/comments`,
+              {
+                method: "POST",
+                body: JSON.stringify({
+                  body: `## 🤖 AI Agent: ${env("INPUT_AGENT_TYPE")}\n\n${response}`,
+                }),
+              }
+            );
+          }
+
+          if (outputMode === "artifact") {
+            const artifactPath = `${env("RUNNER_TEMP")}/ai-agent-output.md`;
+            writeFileSync(artifactPath, response);
+            console.log(`::notice::Agent output saved to ${artifactPath}`);
+          }
+        }
+
+        // ── Main ─────────────────────────────────────────────────────────
+        async function main() {
+          const agentType = env("INPUT_AGENT_TYPE");
+          const model = env("INPUT_MODEL");
+          const fallbackModel = env("INPUT_FALLBACK_MODEL");
+          const maxTokens = env("INPUT_MAX_TOKENS");
+          const temperature = env("INPUT_TEMPERATURE");
+          const customInstructions = env("INPUT_CUSTOM_INSTRUCTIONS");
+          const contextMode = env("INPUT_CONTEXT_MODE");
+          const outputMode = env("INPUT_OUTPUT_MODE");
+          const extraContext = env("INPUT_EXTRA_CONTEXT");
+
+          console.log(`🤖 AI Agent: ${agentType}`);
+          console.log(`   Model: ${model} (fallback: ${fallbackModel})`);
+          console.log(`   Context: ${contextMode} → Output: ${outputMode}`);
+
+          try {
+            // 1. Fetch context
+            const context = await fetchContext(contextMode);
+
+            // 2. Build prompts
+            const systemPrompt = [
+              `You are an AI agent named "${agentType}" integrated into a GitHub Actions CI/CD pipeline.`,
+              `You are reviewing the repository ${env("GITHUB_REPOSITORY")}.`,
+              customInstructions,
+            ]
+              .filter(Boolean)
+              .join("\n\n");
+
+            let userPrompt = "";
+            if (contextMode === "pr-diff") {
+              userPrompt = [
+                `## Pull Request: ${context.issueTitle}`,
+                context.issueBody
+                  ? `### Description\n${context.issueBody}`
+                  : "",
+                context.labels.length
+                  ? `### Labels: ${context.labels.join(", ")}`
+                  : "",
+                `### Diff\n\`\`\`diff\n${context.diff}\n\`\`\``,
+                extraContext
+                  ? `### Additional Context\n${extraContext}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join("\n\n");
+            } else if (contextMode === "issue") {
+              userPrompt = [
+                `## Issue: ${context.issueTitle}`,
+                context.issueBody,
+                context.labels.length
+                  ? `### Labels: ${context.labels.join(", ")}`
+                  : "",
+                extraContext
+                  ? `### Additional Context\n${extraContext}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join("\n\n");
+            } else if (contextMode === "repo-scan") {
+              userPrompt = [
+                `## Repository Scan: ${env("GITHUB_REPOSITORY")}`,
+                `### Recent commits:\n${JSON.stringify(context.files, null, 2)}`,
+                extraContext
+                  ? `### Additional Context\n${extraContext}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join("\n\n");
+            } else {
+              userPrompt = extraContext || "Analyze the repository.";
+            }
+
+            // 3. Call LLM
+            const { content: response, tokensUsed } = await callLLM(
+              systemPrompt,
+              userPrompt,
+              model,
+              maxTokens,
+              temperature
+            );
+
+            console.log(`   Tokens used: ${tokensUsed}`);
+
+            // 4. Post results
+            if (outputMode !== "none") {
+              await postResults(outputMode, context, response);
+              console.log(`   Results posted via: ${outputMode}`);
+            }
+
+            // 5. Set outputs
+            setOutput("response", response);
+            setOutput("status", "success");
+            setOutput("tokens_used", String(tokensUsed));
+          } catch (err) {
+            console.error(`::error::Agent ${agentType} failed: ${err.message}`);
+            setOutput("response", "");
+            setOutput("status", "failure");
+            setOutput("tokens_used", "0");
+            process.exitCode = 1;
+          }
+        }
+
+        main();
+        AGENT_SCRIPT
+
+    - name: Run AI agent
+      id: run-agent
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_AGENT_TYPE: ${{ inputs.agent-type }}
+        INPUT_MODEL: ${{ inputs.model }}
+        INPUT_FALLBACK_MODEL: ${{ inputs.fallback-model }}
+        INPUT_MAX_TOKENS: ${{ inputs.max-tokens }}
+        INPUT_TEMPERATURE: ${{ inputs.temperature }}
+        INPUT_CUSTOM_INSTRUCTIONS: ${{ inputs.custom-instructions }}
+        INPUT_CONTEXT_MODE: ${{ inputs.context-mode }}
+        INPUT_OUTPUT_MODE: ${{ inputs.output-mode }}
+        INPUT_EXTRA_CONTEXT: ${{ inputs.extra-context }}
+      run: node "$RUNNER_TEMP/ai-agent-runner.mjs"

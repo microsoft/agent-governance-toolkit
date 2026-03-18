@@ -48,9 +48,13 @@ __all__ = [
     "PluginInstaller",
     "PluginManifest",
     "PluginRegistry",
+    "PluginSandbox",
+    "PluginSandboxError",
     "PluginSigner",
     "PluginType",
     "load_manifest",
     "save_manifest",
     "verify_signature",
 ]
+
+from agentmesh.marketplace.sandbox import PluginSandbox, PluginSandboxError  # noqa: E402, F401

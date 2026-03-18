@@ -15,6 +15,7 @@ Usage:
 
 import asyncio
 import json
+import os
 import sys
 from datetime import datetime
 from typing import Any, Dict, Optional, List
@@ -28,6 +29,14 @@ from agentmesh import PolicyEngine, AuditLog, RewardEngine
 from agentmesh.identity import AgentIdentity
 
 logger = logging.getLogger(__name__)
+
+# Allowlist of binaries the proxy may spawn as MCP targets.
+# Extend via AGENTMESH_PROXY_ALLOWED_TARGETS env var (comma-separated).
+_DEFAULT_ALLOWED_TARGETS = frozenset({
+    "npx", "node", "python", "python3", "uvx", "uv",
+    "npx.cmd", "node.exe", "python.exe", "python3.exe",
+    "echo", "cat", "test",  # Common for testing
+})
 
 
 class MCPProxy:
@@ -58,6 +67,9 @@ class MCPProxy:
         self.policy_level = policy
         self.enable_footer = enable_footer
 
+        # V11: Validate target command against allowlist
+        self._validate_target_command(target_command)
+
         # Create proxy identity
         logger.info("Initializing AgentMesh proxy identity...")
         self.identity = AgentIdentity.create(
@@ -79,6 +91,23 @@ class MCPProxy:
         self.target_process: Optional[subprocess.Popen] = None
 
         logger.info("Proxy initialized with trust score: %d/1000", self.trust_score)
+
+    @staticmethod
+    def _validate_target_command(target_command: List[str]) -> None:
+        """Validate target command binary against the allowlist (V11)."""
+        if not target_command:
+            raise ValueError("target_command must not be empty")
+        binary = os.path.basename(target_command[0])
+        env_extra = os.environ.get("AGENTMESH_PROXY_ALLOWED_TARGETS", "")
+        allowed = _DEFAULT_ALLOWED_TARGETS | frozenset(
+            t.strip() for t in env_extra.split(",") if t.strip()
+        )
+        if binary not in allowed:
+            raise ValueError(
+                f"Target binary '{binary}' is not in the allowed list: "
+                f"{sorted(allowed)}. Set AGENTMESH_PROXY_ALLOWED_TARGETS "
+                f"to extend the allowlist."
+            )
 
     def _load_default_policies(self):
         """Load default policies based on policy level."""
@@ -195,13 +224,17 @@ rules: []
                 try:
                     message = json.loads(line.strip())
                 except json.JSONDecodeError:
-                    # Not a JSON message, pass through
-                    self._write_to_target(line)
+                    # V14: Drop non-JSON messages — never forward unvalidated content
+                    logger.warning("Dropping non-JSON client message (potential smuggling)")
                     continue
 
                 # Intercept tool calls
                 if message.get("method") == "tools/call":
                     message = await self._handle_tool_call(message)
+
+                # V15: Don't forward blocked tool calls to target
+                if isinstance(message, dict) and message.get("_agentmesh_blocked"):
+                    continue
 
                 # Forward to target
                 self._write_to_target(json.dumps(message) + "\n")
@@ -354,9 +387,9 @@ rules: []
         decision: Any
     ):
         """Log tool call to audit trail."""
-        {
+        entry = {
             "timestamp": datetime.utcnow().isoformat() + "Z",
-            "agent": self.identity.did,
+            "agent": str(self.identity.did),
             "action": "mcp_tool_call",
             "tool": tool_name,
             "arguments": arguments,
@@ -367,8 +400,14 @@ rules: []
             "trust_score": self.trust_score,
         }
 
-        # In production, would write to persistent audit log
-        # For now, just track in memory
+        # V13: Actually persist to audit log
+        self.audit_log.log(
+            event_type="mcp_tool_call",
+            agent_did=str(self.identity.did),
+            action=tool_name,
+            data=entry,
+            outcome="allowed" if decision.allowed else "denied",
+        )
         logger.debug("Audit: %s - %s", tool_name, decision.action)
 
     def _update_trust_score(self, tool_name: str, allowed: bool):

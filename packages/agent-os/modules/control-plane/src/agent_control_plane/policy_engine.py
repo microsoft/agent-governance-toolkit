@@ -22,11 +22,15 @@ See docs/RESEARCH_FOUNDATION.md for complete references.
 from typing import Dict, List, Optional, Callable, Any, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from types import MappingProxyType  # noqa: F401 — reserved for future immutable dict enforcement
 from .agent_kernel import ExecutionRequest, ActionType, PolicyRule
+import logging
 import uuid
 import os
 import re
 import warnings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -218,6 +222,79 @@ class PolicyEngine:
             "C:\\Windows\\System32",
         ]
 
+        # Immutability controls — call freeze() after initial configuration
+        self._frozen: bool = False
+        self._mutation_log: List[Dict[str, Any]] = []
+
+    # ── Immutability ────────────────────────────────────────────
+
+    def freeze(self) -> None:
+        """Freeze the policy engine, preventing further mutations.
+
+        After calling ``freeze()``, any attempt to call ``add_constraint()``,
+        ``set_agent_context()``, ``update_agent_context()``, or
+        ``add_conditional_permission()`` will raise ``RuntimeError``.
+
+        In addition to the boolean guard, the underlying data structures
+        are replaced with immutable proxies (``MappingProxyType``) so that
+        direct attribute access (bypassing the setter methods) will also
+        raise ``TypeError``.
+
+        This addresses the self-modification attack vector where an agent
+        could call mutation methods to weaken its own policy at runtime.
+        """
+        self._frozen = True
+        # Replace mutable dicts with read-only proxies to harden against
+        # direct attribute manipulation (e.g. engine.state_permissions["x"] = ...)
+        self.state_permissions = MappingProxyType(
+            {k: frozenset(v) for k, v in self.state_permissions.items()}
+        )
+        self.agent_contexts = MappingProxyType(
+            {k: MappingProxyType(v) if isinstance(v, dict) else v
+             for k, v in self.agent_contexts.items()}
+        )
+        self.conditional_permissions = MappingProxyType(
+            {k: tuple(v) for k, v in self.conditional_permissions.items()}
+        )
+        self._log_mutation("freeze", {})
+        logger.info("PolicyEngine frozen — data structures converted to immutable proxies")
+
+    @property
+    def is_frozen(self) -> bool:
+        """Whether the policy engine is currently frozen."""
+        return self._frozen
+
+    @property
+    def mutation_log(self) -> List[Dict[str, Any]]:
+        """Read-only copy of the mutation audit trail."""
+        return list(self._mutation_log)
+
+    def _assert_mutable(self, operation: str) -> None:
+        """Raise RuntimeError if the engine is frozen."""
+        if self._frozen:
+            violation = {
+                "operation": operation,
+                "timestamp": datetime.now().isoformat(),
+                "blocked": True,
+            }
+            self._mutation_log.append(violation)
+            logger.warning(
+                "Blocked mutation '%s' on frozen PolicyEngine", operation
+            )
+            raise RuntimeError(
+                f"PolicyEngine is frozen — cannot perform '{operation}'. "
+                "Call freeze() is irreversible to prevent runtime self-modification."
+            )
+
+    def _log_mutation(self, operation: str, details: Dict[str, Any]) -> None:
+        """Record a mutation in the audit log."""
+        self._mutation_log.append({
+            "operation": operation,
+            "details": details,
+            "timestamp": datetime.now().isoformat(),
+            "blocked": False,
+        })
+
     def set_quota(self, agent_id: str, quota: ResourceQuota):
         """Set resource quota for an agent"""
         self.quotas[agent_id] = quota
@@ -241,8 +318,13 @@ class PolicyEngine:
         Args:
             role: The agent role/ID
             allowed_tools: List of tool names this role can use
+
+        Raises:
+            RuntimeError: If the engine has been frozen.
         """
+        self._assert_mutable("add_constraint")
         self.state_permissions[role] = set(allowed_tools)
+        self._log_mutation("add_constraint", {"role": role, "tools": allowed_tools})
 
     def add_conditional_permission(self, agent_role: str, permission: ConditionalPermission):
         """
@@ -254,7 +336,12 @@ class PolicyEngine:
         Args:
             agent_role: The agent role/ID
             permission: The conditional permission to add
+
+        Raises:
+            RuntimeError: If the engine has been frozen.
         """
+        self._assert_mutable("add_conditional_permission")
+
         if agent_role not in self.conditional_permissions:
             self.conditional_permissions[agent_role] = []
 
@@ -265,6 +352,10 @@ class PolicyEngine:
         if agent_role not in self.state_permissions:
             self.state_permissions[agent_role] = set()
         self.state_permissions[agent_role].add(permission.tool_name)
+        self._log_mutation(
+            "add_conditional_permission",
+            {"role": agent_role, "tool": permission.tool_name},
+        )
 
     def set_agent_context(self, agent_role: str, context: Dict[str, Any]):
         """
@@ -273,8 +364,13 @@ class PolicyEngine:
         Args:
             agent_role: The agent role/ID
             context: Dictionary of context attributes (e.g., {"user_status": "verified", "time_of_day": "business_hours"})
+
+        Raises:
+            RuntimeError: If the engine has been frozen.
         """
+        self._assert_mutable("set_agent_context")
         self.agent_contexts[agent_role] = context
+        self._log_mutation("set_agent_context", {"role": agent_role})
 
     def update_agent_context(self, agent_role: str, updates: Dict[str, Any]):
         """
@@ -283,11 +379,20 @@ class PolicyEngine:
         Args:
             agent_role: The agent role/ID
             updates: Dictionary of attributes to update
+
+        Raises:
+            RuntimeError: If the engine has been frozen.
         """
+        self._assert_mutable("update_agent_context")
+
         if agent_role not in self.agent_contexts:
             self.agent_contexts[agent_role] = {}
 
         self.agent_contexts[agent_role].update(updates)
+        self._log_mutation(
+            "update_agent_context",
+            {"role": agent_role, "keys": list(updates.keys())},
+        )
 
     def is_shadow_mode(self, agent_role: str) -> bool:
         """

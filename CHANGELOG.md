@@ -12,6 +12,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Demo `--include-attacks` flag for adversarial scenario testing (prompt injection, tool alias bypass, SQL bypass).
+- .NET `SagaStep.MaxAttempts` property replacing deprecated `MaxRetries`.
+- `ContentHashInterceptor` for SHA-256 tool identity verification at intercept time.
+- `ToolRegistry` content hashing — computes and verifies handler integrity at registration and execution.
+- `PolicyEngine.freeze()` method with `MappingProxyType` immutability and mutation audit log.
+- `QuorumConfig` for M-of-N approval requirements in `EscalationHandler`.
+- Escalation fatigue detection — auto-DENY when agents exceed configurable rate threshold.
+- `EscalationRequest.votes` field for per-approver vote tracking.
+
+### Security
+- Replaced XOR placeholder encryption with AES-256-GCM in DMZ module.
+- Added Security Model & Limitations section to README.
+- Added security advisories to SECURITY.md for CostGuard and thread safety fixes.
+- Hardened against agent sandbox escape vectors (tool aliasing, runtime policy self-modification, approval fatigue).
+
 ## [2.2.0] - 2026-03-17
 
 ### Added
@@ -70,18 +86,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **CostGuard input validation** — NaN/Inf/negative guards on all budget parameters, `_org_killed` flag prevents bypass after org threshold breach (#272).
-- **CostGuard thread safety** — bound breach history + Lock for concurrent access (#253).
+- Demo fixed: legacy `agent-hypervisor` path → `agent-runtime`.
+- BENCHMARKS.md: fixed stale "VADP version" reference.
 - **.NET bug sweep** — thread safety, error surfacing, caching, disposal fixes (#252).
 - **Behavioral anomaly detection** implemented in RingBreachDetector.
-- **ErrorBudget._events** bounded with `deque(maxlen=N)` (#172).
-- **VectorClock thread safety** + integrity type hints (#243).
 - **CLI edge case tests** and input validation for agent-compliance (#234).
 - **Cross-package import errors** breaking CI resolved (#222).
 - **OWASP-COMPLIANCE.md** broken link fix + Copilot extension server hardening (#270).
 
 ### Security
 
+- **CostGuard org kill switch bypass** — crafted IEEE 754 inputs (NaN/Inf/negative) could bypass organization-level kill switch. Fixed with input validation + persistent `_org_killed` flag (#272).
+- **CostGuard thread safety** — bound breach history + Lock for concurrent access (#253).
+- **ErrorBudget._events** bounded with `deque(maxlen=N)` to prevent unbounded growth (#172).
+- **VectorClock thread safety** + integrity type hints (#243).
 - Block `importlib` dynamic imports in sandbox (#189).
 - Centralize hardcoded ring thresholds and constants (#188).
 

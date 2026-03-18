@@ -67,7 +67,7 @@ class ChaosLibrary:
         self._load_builtin()
 
     def _load_builtin(self) -> None:
-        """Load built-in experiment templates (3 basic fault types)."""
+        """Load built-in experiment templates."""
         builtins = [
             ExperimentTemplate(
                 template_id="timeout-injection",
@@ -138,6 +138,63 @@ class ChaosLibrary:
                 duration_seconds=900,
                 blast_radius=0.2,
                 tags=["adversarial", "exfiltration", "data-loss"],
+            ),
+            # Behavioral fault templates
+            ExperimentTemplate(
+                template_id="deadlock-injection",
+                name="Deadlock Injection",
+                description="Simulates circular dependency deadlocks between agents to test timeout and recovery.",
+                category="agent",
+                severity="high",
+                faults=[Fault.deadlock_injection(["agent-a", "agent-b"], timeout_ms=30000)],
+                abort_conditions=[AbortCondition("task_success_rate", 0.3, "lte")],
+                duration_seconds=600,
+                tags=["agent", "deadlock", "behavioral"],
+            ),
+            ExperimentTemplate(
+                template_id="contradictory-instruction",
+                name="Contradictory Instruction Injection",
+                description="Injects conflicting directives to test agent conflict resolution behavior.",
+                category="agent",
+                severity="medium",
+                faults=[Fault.contradictory_instruction("target-agent", "expand", "summarize")],
+                abort_conditions=[AbortCondition("task_success_rate", 0.5, "lte")],
+                duration_seconds=900,
+                tags=["agent", "conflict", "behavioral"],
+            ),
+            ExperimentTemplate(
+                template_id="trust-perturbation",
+                name="Dynamic Trust Perturbation",
+                description="Changes trust scores mid-execution to test governance trust boundary handling.",
+                category="agent",
+                severity="high",
+                faults=[Fault.trust_perturbation("target-agent", delta=-200.0)],
+                abort_conditions=[AbortCondition("bypass_rate", 0.2, "gte")],
+                duration_seconds=900,
+                tags=["trust", "behavioral", "governance"],
+            ),
+            # Enterprise fault templates
+            ExperimentTemplate(
+                template_id="delegation-reject",
+                name="Delegation Rejection",
+                description="Simulates agents randomly refusing delegated tasks.",
+                category="agent",
+                severity="medium",
+                faults=[Fault.delegation_reject("target-agent", rate=0.3)],
+                abort_conditions=[AbortCondition("task_success_rate", 0.4, "lte")],
+                duration_seconds=1800,
+                tags=["agent", "delegation", "enterprise"],
+            ),
+            ExperimentTemplate(
+                template_id="credential-expiry",
+                name="Credential Expiry",
+                description="Simulates credential expiration to test re-authentication handling.",
+                category="agent",
+                severity="high",
+                faults=[Fault.credential_expire("target-agent")],
+                abort_conditions=[AbortCondition("task_success_rate", 0.3, "lte")],
+                duration_seconds=900,
+                tags=["agent", "credential", "enterprise"],
             ),
         ]
         for template in builtins:

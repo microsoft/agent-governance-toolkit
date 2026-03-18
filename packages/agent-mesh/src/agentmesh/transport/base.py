@@ -37,7 +37,7 @@ class TransportConfig:
 
     host: str = "localhost"
     port: int = 8080
-    use_tls: bool = False
+    use_tls: bool = True
     timeout_seconds: int = 30
     max_retries: int = 5
     retry_delay_seconds: float = 1.0

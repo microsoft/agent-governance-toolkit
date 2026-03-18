@@ -86,23 +86,40 @@ class PolicyRule(BaseModel):
             # In production, would use a proper expression parser
             return self._eval_expression(self.condition, context)
         except Exception:
-            logger.debug("Policy rule evaluation failed for '%s'", self.name, exc_info=True)
-            return False
+            # V27: Fail-closed — treat evaluation errors as a match so
+            # the rule's action (typically "deny") takes effect. This
+            # prevents attackers from crafting inputs that trigger
+            # exceptions to bypass policy rules.
+            logger.warning(
+                "Policy rule evaluation error for '%s' — treating as MATCH (fail-closed)",
+                self.name,
+                exc_info=True,
+            )
+            return True
 
-    def _eval_expression(self, expr: str, context: dict) -> bool:
+    # Maximum recursion depth for compound expressions to prevent DoS
+    _MAX_EXPRESSION_DEPTH = 20
+
+    def _eval_expression(self, expr: str, context: dict, _depth: int = 0) -> bool:
         """Evaluate a simple expression."""
+        if _depth > self._MAX_EXPRESSION_DEPTH:
+            return False  # fail-closed on excessive nesting
+
+        if len(expr) > 2000:
+            return False  # reject oversized expressions
+
         # Handle compound conditions first (AND/OR)
         # This must be checked before individual conditions
 
         # OR conditions
         if " or " in expr:
             parts = expr.split(" or ")
-            return any(self._eval_expression(p.strip(), context) for p in parts)
+            return any(self._eval_expression(p.strip(), context, _depth + 1) for p in parts)
 
         # AND conditions
         if " and " in expr:
             parts = expr.split(" and ")
-            return all(self._eval_expression(p.strip(), context) for p in parts)
+            return all(self._eval_expression(p.strip(), context, _depth + 1) for p in parts)
 
         # Now handle atomic conditions
 
@@ -779,13 +796,15 @@ class PolicyEngine:
         if applicable:
             default = applicable[0].default_action
         else:
-            default = "allow"  # No policies = default allow
+            # V26: Fail-closed — no policies loaded means deny by default.
+            # Operators must explicitly load an allow policy.
+            default = "deny"
 
         elapsed = (datetime.utcnow() - start).total_seconds() * 1000
         return PolicyDecision(
             allowed=(default == "allow"),
             action=default,
-            reason="No matching rules, using default",
+            reason="No matching rules, using default" if applicable else "No policies loaded (deny by default)",
             evaluated_at=start,
             evaluation_ms=elapsed,
         )

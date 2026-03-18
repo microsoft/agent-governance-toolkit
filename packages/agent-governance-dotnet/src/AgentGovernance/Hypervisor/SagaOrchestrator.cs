@@ -50,6 +50,8 @@ public enum StepState
 /// </summary>
 public sealed class SagaStep
 {
+    private int _maxAttempts = 3;
+
     /// <summary>Unique identifier for this saga step action.</summary>
     public required string ActionId { get; init; }
     /// <summary>DID of the agent executing this step.</summary>
@@ -58,8 +60,21 @@ public sealed class SagaStep
     public StepState State { get; internal set; } = StepState.Pending;
     /// <summary>Error message if the step failed or compensation failed.</summary>
     public string? Error { get; internal set; }
-    /// <summary>Maximum retry attempts before marking the step as failed.</summary>
-    public int MaxRetries { get; init; } = 1;
+
+    /// <summary>
+    /// Maximum number of execution attempts (including the initial attempt).
+    /// For example, <c>MaxAttempts = 3</c> means 1 initial try + up to 2 retries.
+    /// Default is 3.
+    /// </summary>
+    public int MaxAttempts { get => _maxAttempts; init => _maxAttempts = value; }
+
+    /// <summary>
+    /// Obsolete: use <see cref="MaxAttempts"/> instead. This property controlled total
+    /// attempts (not retry count), which was confusing. It now maps to <see cref="MaxAttempts"/>.
+    /// </summary>
+    [Obsolete("Use MaxAttempts instead. MaxRetries controlled total attempts, not retry count.")]
+    public int MaxRetries { get => _maxAttempts; init => _maxAttempts = value; }
+
     /// <summary>Timeout for executing this step before it is cancelled.</summary>
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(30);
 
@@ -173,7 +188,7 @@ public sealed class SagaOrchestrator
 
     private async Task<bool> ExecuteStepAsync(Saga saga, SagaStep step, CancellationToken cancellationToken)
     {
-        for (int attempt = 0; attempt < step.MaxRetries; attempt++)
+        for (int attempt = 0; attempt < step.MaxAttempts; attempt++)
         {
             lock (saga.SyncRoot) { step.State = StepState.Executing; step.Error = null; }
 
@@ -195,7 +210,11 @@ public sealed class SagaOrchestrator
                 lock (saga.SyncRoot) { step.Error = $"Step '{step.ActionId}' failed: {ex.Message}"; }
             }
 
-            if (attempt + 1 < step.MaxRetries)
+            // Stop retrying if the caller cancelled the operation
+            if (cancellationToken.IsCancellationRequested)
+                break;
+
+            if (attempt + 1 < step.MaxAttempts)
             {
                 var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);

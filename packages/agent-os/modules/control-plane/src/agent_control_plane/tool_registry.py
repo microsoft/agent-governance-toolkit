@@ -20,8 +20,13 @@ from typing import Any, Dict, List, Optional, Callable, Set
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
-import uuid
+import hashlib
 import inspect
+import logging
+import textwrap
+import uuid
+
+logger = logging.getLogger(__name__)
 
 
 class ToolType(Enum):
@@ -61,6 +66,8 @@ class Tool:
         parameter_schema: JSON schema for parameters
         requires_approval: Whether tool execution requires human approval
         risk_level: Risk score (0.0-1.0, higher = more risky)
+        content_hash: SHA-256 hash of the tool handler's source code at
+            registration time.  Used to detect tampering or aliasing.
         metadata: Additional tool metadata
     """
     tool_id: str
@@ -71,6 +78,7 @@ class Tool:
     parameter_schema: ToolSchema
     requires_approval: bool = False
     risk_level: float = 0.0
+    content_hash: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
 
@@ -109,6 +117,26 @@ class ToolRegistry:
         self._tools: Dict[str, Tool] = {}
         self._tools_by_type: Dict[ToolType, Set[str]] = {}
         self._tools_by_name: Dict[str, str] = {}  # name -> tool_id mapping
+        self._integrity_violations: List[Dict[str, Any]] = []
+
+    @staticmethod
+    def _compute_handler_hash(handler: Callable) -> str:
+        """Compute a SHA-256 content hash of a callable's source code.
+
+        Returns an empty string if source is unavailable (e.g. built-in
+        or C-extension functions).  Callers should treat an empty hash
+        as "unverifiable" rather than silently trusting the handler.
+        """
+        try:
+            source = textwrap.dedent(inspect.getsource(handler))
+            return hashlib.sha256(source.encode("utf-8")).hexdigest()
+        except (OSError, TypeError):
+            logger.warning(
+                "Cannot compute source hash for handler %r — "
+                "source unavailable (built-in or C-extension)",
+                getattr(handler, "__qualname__", handler),
+            )
+        return ""
         
     def register_tool(
         self,
@@ -149,6 +177,9 @@ class ToolRegistry:
         if parameter_schema is None:
             parameter_schema = self._generate_schema_from_handler(handler)
         
+        # Compute content hash for integrity verification
+        content_hash = self._compute_handler_hash(handler)
+        
         tool = Tool(
             tool_id=tool_id,
             name=name,
@@ -158,6 +189,7 @@ class ToolRegistry:
             parameter_schema=parameter_schema,
             requires_approval=requires_approval,
             risk_level=risk_level,
+            content_hash=content_hash,
             metadata=metadata or {}
         )
         
@@ -228,6 +260,27 @@ class ToolRegistry:
             return {
                 "success": False,
                 "error": f"Tool '{tool_id_or_name}' not found"
+            }
+        
+        # Verify tool integrity before execution
+        integrity = self.verify_tool_integrity(tool.tool_id)
+        if not integrity["verified"]:
+            logger.warning(
+                "Tool integrity check FAILED for '%s': %s",
+                tool.name,
+                integrity["reason"],
+            )
+            self._integrity_violations.append({
+                "tool_id": tool.tool_id,
+                "tool_name": tool.name,
+                "reason": integrity["reason"],
+                "timestamp": datetime.now().isoformat(),
+            })
+            return {
+                "success": False,
+                "error": f"Tool integrity verification failed: {integrity['reason']}",
+                "tool_id": tool.tool_id,
+                "tool_name": tool.name,
             }
         
         # Validate parameters against schema
@@ -304,6 +357,53 @@ class ToolRegistry:
                 matches.append(tool)
         
         return matches
+    
+    def verify_tool_integrity(self, tool_id_or_name: str) -> Dict[str, Any]:
+        """Verify that a tool's handler has not been modified since registration.
+
+        Compares the current SHA-256 hash of the handler's source code
+        against the hash recorded at registration time.
+
+        Returns:
+            {"verified": bool, "reason": str, "registered_hash": str, "current_hash": str}
+        """
+        tool = self.get_tool(tool_id_or_name)
+        if not tool:
+            return {
+                "verified": False,
+                "reason": "Tool not found",
+                "registered_hash": "",
+                "current_hash": "",
+            }
+
+        if not tool.content_hash:
+            return {
+                "verified": False,
+                "reason": "No content hash recorded at registration (built-in or C-extension)",
+                "registered_hash": "",
+                "current_hash": "",
+            }
+
+        current_hash = self._compute_handler_hash(tool.handler)
+        if not current_hash:
+            return {
+                "verified": False,
+                "reason": "Cannot compute current hash — source unavailable",
+                "registered_hash": tool.content_hash,
+                "current_hash": "",
+            }
+
+        verified = current_hash == tool.content_hash
+        return {
+            "verified": verified,
+            "reason": "" if verified else "Handler source has been modified since registration",
+            "registered_hash": tool.content_hash,
+            "current_hash": current_hash,
+        }
+
+    def get_integrity_violations(self) -> List[Dict[str, Any]]:
+        """Return all recorded integrity violations."""
+        return list(self._integrity_violations)
     
     def _resolve_tool_id(self, tool_id_or_name: str) -> Optional[str]:
         """Resolve a tool name to its ID, or return ID if already an ID"""

@@ -8,7 +8,7 @@ Identity persists across restarts; revocation propagates in ≤5s.
 """
 
 from datetime import datetime
-from typing import Optional, Literal
+from typing import ClassVar, Optional, Literal
 from pydantic import BaseModel, Field, field_validator
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
@@ -210,9 +210,15 @@ class AgentIdentity(BaseModel):
             signature_bytes = base64.b64decode(signature)
             public_key.verify(signature_bytes, data)
             return True
-        except Exception:
-            logger.debug("Signature verification failed", exc_info=True)
+        except (ValueError, TypeError) as exc:
+            logger.debug("Malformed key or signature data: %s", exc)
             return False
+        except Exception as exc:
+            logger.warning("Signature verification failed: %s", exc)
+            return False
+
+    # Maximum delegation depth to prevent Sybil attacks via infinite chains.
+    MAX_DELEGATION_DEPTH: ClassVar[int] = 10
 
     def delegate(
         self,
@@ -239,7 +245,25 @@ class AgentIdentity(BaseModel):
             description: Optional description.
             max_initial_trust_score: Upper bound on the child's initial trust
                 score. Typically set to the parent's current trust score.
+
+        Raises:
+            ValueError: If capabilities are not a subset, delegation depth
+                exceeds MAX_DELEGATION_DEPTH, or wildcard is propagated.
         """
+        # V01: Enforce maximum delegation depth
+        if self.delegation_depth >= self.MAX_DELEGATION_DEPTH:
+            raise ValueError(
+                f"Maximum delegation depth ({self.MAX_DELEGATION_DEPTH}) exceeded. "
+                f"Current depth: {self.delegation_depth}"
+            )
+
+        # V02: Block wildcard capability propagation
+        if "*" in capabilities:
+            raise ValueError(
+                "Cannot delegate wildcard capability '*'. "
+                "Explicitly list the capabilities to delegate."
+            )
+
         # Validate capabilities are a subset
         for cap in capabilities:
             if cap not in self.capabilities:
@@ -275,10 +299,25 @@ class AgentIdentity(BaseModel):
         self.revocation_reason = reason
         self.updated_at = datetime.utcnow()
 
-    def reactivate(self) -> None:
-        """Reactivate a suspended identity."""
+    def reactivate(self, *, override_reason: bool = False) -> None:
+        """Reactivate a suspended identity.
+
+        Args:
+            override_reason: If True, bypass the security-suspension guard.
+                Must be explicitly set when reactivating an identity that was
+                suspended for security reasons.
+        """
         if self.status == "revoked":
             raise ValueError("Cannot reactivate a revoked identity")
+        if self.status != "suspended":
+            raise ValueError(f"Cannot reactivate identity in '{self.status}' state")
+        # Guard against blind reactivation of security suspensions
+        if self.revocation_reason and "security" in self.revocation_reason.lower():
+            if not override_reason:
+                raise ValueError(
+                    "Identity was suspended for security reasons — "
+                    "pass override_reason=True to force reactivation"
+                )
         self.status = "active"
         self.revocation_reason = None
         self.updated_at = datetime.utcnow()
@@ -293,14 +332,13 @@ class AgentIdentity(BaseModel):
 
     def has_capability(self, capability: str) -> bool:
         """Check if this agent has a specific capability."""
-        # Support wildcard matching
         for cap in self.capabilities:
             if cap == "*":
                 return True
             if cap == capability:
                 return True
-            # Support prefix matching (e.g., "read:*" matches "read:data")
-            if cap.endswith(":*"):
+            # Prefix matching: "read:*" matches "read:data" but ":*" is rejected
+            if cap.endswith(":*") and len(cap) > 2:
                 prefix = cap[:-2]
                 if capability.startswith(prefix + ":"):
                     return True

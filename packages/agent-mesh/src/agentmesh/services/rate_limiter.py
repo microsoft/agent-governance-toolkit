@@ -108,6 +108,7 @@ class RateLimiter:
         per_agent_rate: float = 10,
         per_agent_capacity: int = 20,
         backpressure_threshold: float = 0.8,
+        max_agent_buckets: int = 100_000,
     ) -> None:
         self._global_bucket = TokenBucket(rate=global_rate, capacity=global_capacity)
         self._per_agent_rate = per_agent_rate
@@ -117,11 +118,16 @@ class RateLimiter:
         self._global_capacity = global_capacity
         self._per_agent_capacity_val = per_agent_capacity
         self._backpressure_threshold = backpressure_threshold
+        self._max_agent_buckets = max_agent_buckets
 
     def _get_agent_bucket(self, agent_did: str) -> TokenBucket:
         """Get or create a per-agent token bucket."""
         with self._lock:
             if agent_did not in self._agent_buckets:
+                # V23: Evict oldest buckets when limit reached
+                if len(self._agent_buckets) >= self._max_agent_buckets:
+                    oldest_key = next(iter(self._agent_buckets))
+                    del self._agent_buckets[oldest_key]
                 self._agent_buckets[agent_did] = TokenBucket(
                     rate=self._per_agent_rate,
                     capacity=self._per_agent_capacity,

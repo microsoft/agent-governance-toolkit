@@ -31,7 +31,8 @@ class TrustConfig:
 
     required_trust_score: float = 0.5
     required_capabilities: List[str] = field(default_factory=list)
-    permissive_mode: bool = True  # allow requests without trust headers
+    # V16: Default to strict mode — require explicit opt-in for permissive
+    permissive_mode: bool = False
 
 
 @dataclass

@@ -200,6 +200,8 @@ class TrustHandshake:
         self._pending_challenges: dict[str, HandshakeChallenge] = {}
         self._verified_peers: dict[str, tuple[HandshakeResult, datetime]] = {}
         self._cache_ttl = timedelta(seconds=cache_ttl_seconds)
+        # V10: Limit pending challenges to prevent DoS accumulation
+        self._max_pending_challenges = 1000
 
     def _get_cached_result(self, peer_did: str) -> Optional[HandshakeResult]:
         """Get cached verification result if still valid."""
@@ -213,6 +215,15 @@ class TrustHandshake:
     def _cache_result(self, peer_did: str, result: HandshakeResult) -> None:
         """Cache a verification result with timestamp."""
         self._verified_peers[peer_did] = (result, datetime.utcnow())
+
+    def _purge_expired_challenges(self) -> None:
+        """Remove expired challenges to prevent unbounded growth."""
+        expired = [
+            cid for cid, ch in self._pending_challenges.items()
+            if ch.is_expired()
+        ]
+        for cid in expired:
+            del self._pending_challenges[cid]
 
     def clear_cache(self) -> None:
         """Clear all cached peer verification results."""
@@ -263,6 +274,13 @@ class TrustHandshake:
         """Execute the core handshake: generate nonce, verify it comes back."""
         challenge: Optional[HandshakeChallenge] = None
         try:
+            # V10: Purge expired challenges and enforce limit
+            self._purge_expired_challenges()
+            if len(self._pending_challenges) >= self._max_pending_challenges:
+                return HandshakeResult.failure(
+                    peer_did, "Too many pending challenges — try again later", start
+                )
+
             # Generate nonce challenge
             challenge = HandshakeChallenge.generate()
             self._pending_challenges[challenge.challenge_id] = challenge
@@ -291,7 +309,7 @@ class TrustHandshake:
 
             result = HandshakeResult.success(
                 peer_did=peer_did,
-                trust_score=response.trust_score,
+                trust_score=verification.get("registry_trust_score", response.trust_score),
                 capabilities=response.capabilities,
                 started=start,
                 user_context=response_user_ctx,
@@ -444,6 +462,11 @@ class TrustHandshake:
                 "reason": f"Trust score {response.trust_score} below required {required_score}"
             }
 
+        # V06: Prefer registry trust score over self-reported value
+        registry_trust_score = response.trust_score
+        if self.registry and hasattr(peer_identity, "trust_score"):
+            registry_trust_score = getattr(peer_identity, "trust_score", response.trust_score)
+
         if required_capabilities:
             missing = set(required_capabilities) - set(response.capabilities)
             if missing:
@@ -452,7 +475,7 @@ class TrustHandshake:
                     "reason": f"Missing capabilities: {missing}"
                 }
 
-        return {"valid": True, "reason": None}
+        return {"valid": True, "reason": None, "registry_trust_score": registry_trust_score}
 
     def create_challenge(self) -> HandshakeChallenge:
         """Create and register a new challenge."""

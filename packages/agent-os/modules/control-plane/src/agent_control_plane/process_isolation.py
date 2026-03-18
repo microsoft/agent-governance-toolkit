@@ -39,6 +39,8 @@ See Also:
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 import json
 import logging
 import multiprocessing
@@ -141,10 +143,21 @@ def _agent_worker(
 
 
 # Bootstrap script executed inside a ``subprocess.Popen`` child.
+# The parent sends: base64(hmac_key + b"|" + hmac_sig + b"|" + pickle_payload)
+# The child verifies the HMAC before deserializing.
 _SUBPROCESS_BOOTSTRAP = """\
-import base64, json, pickle, sys, time
-payload = base64.b64decode(sys.stdin.buffer.read())
-target, args, kwargs = pickle.loads(payload)
+import base64, hashlib, hmac, json, pickle, sys, time
+raw = base64.b64decode(sys.stdin.buffer.read())
+parts = raw.split(b"|", 2)
+if len(parts) != 3:
+    json.dump({"state": "failed", "error": "Invalid bootstrap payload format", "exit_code": 1, "duration": 0}, sys.stdout)
+    sys.exit(1)
+_key, _expected_sig, _payload = parts
+_actual_sig = hmac.new(_key, _payload, hashlib.sha256).digest()
+if not hmac.compare_digest(_actual_sig, _expected_sig):
+    json.dump({"state": "failed", "error": "HMAC verification failed — payload tampered", "exit_code": 1, "duration": 0}, sys.stdout)
+    sys.exit(1)
+target, args, kwargs = pickle.loads(_payload)
 _start = time.monotonic()
 try:
     _rv = target(*args, **kwargs)
@@ -661,7 +674,10 @@ class ProcessIsolationManager:
         kwargs: Optional[dict],
     ) -> AgentProcessHandle:
         payload = pickle.dumps((target, args, kwargs or {}))
-        encoded = base64.b64encode(payload)
+        # Sign payload with HMAC to prevent tampering
+        hmac_key = os.urandom(32)
+        sig = hmac.new(hmac_key, payload, hashlib.sha256).digest()
+        encoded = base64.b64encode(hmac_key + b"|" + sig + b"|" + payload)
         proc = subprocess.Popen(
             [sys.executable, "-c", _SUBPROCESS_BOOTSTRAP],
             stdin=subprocess.PIPE,

@@ -122,7 +122,7 @@ class TrustVerifiedTool(BaseTool):  # type: ignore[misc]
             description="Performs arithmetic",
             agent_did="did:mesh:abc123",
             min_trust_score=500,
-            inner_fn=lambda q: eval(q),
+            inner_fn=lambda q: str(eval(q, {"__builtins__": {}}, {})),  # noqa: S307 — example only; use ast.literal_eval in production
         )
         result = tool.run("2 + 2")
     """

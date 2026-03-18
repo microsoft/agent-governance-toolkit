@@ -101,22 +101,68 @@ class TestAgentTrustMiddleware:
         assert "Missing agent DID" in body["error"]
 
     def test_valid_did_with_signature_passes(self):
-        mw = _make_middleware()
-        request = _get("/api/data/", did="did:mesh:abc123", sig="sig_valid")
-        response = mw(request)
-        assert response.status_code == 200
-        assert request.agent_did == "did:mesh:abc123"  # type: ignore[attr-defined]
-        assert request.agent_trust_score == 750  # type: ignore[attr-defined]
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+        import base64
 
-    def test_did_without_signature_below_default_threshold(self):
-        """DID-only requests get score 400, which is below the 500 default."""
+        # Create agent keypair and sign the DID
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        public_key = private_key.public_key()
+        agent_did = "did:mesh:abc123"
+        sig = base64.b64encode(private_key.sign(agent_did.encode("utf-8"))).decode()
+
+        settings.AGENTMESH_AGENT_KEYS = {agent_did: public_key}
+        try:
+            mw = _make_middleware()
+            request = _get("/api/data/", did=agent_did, sig=sig)
+            response = mw(request)
+            assert response.status_code == 200
+            assert request.agent_did == agent_did  # type: ignore[attr-defined]
+            assert request.agent_trust_score == 750  # type: ignore[attr-defined]
+        finally:
+            del settings.AGENTMESH_AGENT_KEYS
+
+    def test_did_without_signature_rejected(self):
+        """DID-only requests (no signature) get score 0, below 500 default."""
         mw = _make_middleware()
         request = _get("/api/data/", did="did:mesh:low")
         response = mw(request)
         assert response.status_code == 403
         body = json.loads(response.content)
-        assert body["trust_score"] == 400
-        assert body["required_score"] == 500
+        assert body["error"] == "Trust verification failed"
+        # V24: response must NOT leak trust_score or required_score
+        assert "trust_score" not in body
+        assert "required_score" not in body
+
+    def test_invalid_signature_rejected(self):
+        """A fabricated signature string is rejected."""
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        public_key = private_key.public_key()
+        agent_did = "did:mesh:badactor"
+
+        settings.AGENTMESH_AGENT_KEYS = {agent_did: public_key}
+        try:
+            mw = _make_middleware()
+            request = _get("/api/data/", did=agent_did, sig="totally-not-a-valid-sig")
+            response = mw(request)
+            assert response.status_code == 403
+            body = json.loads(response.content)
+            assert body["error"] == "Trust verification failed"
+            assert "trust_score" not in body
+        finally:
+            del settings.AGENTMESH_AGENT_KEYS
+
+    def test_unregistered_agent_rejected(self):
+        """Agent DID not in AGENTMESH_AGENT_KEYS gets score 0."""
+        settings.AGENTMESH_AGENT_KEYS = {}
+        try:
+            mw = _make_middleware()
+            request = _get("/api/data/", did="did:mesh:unknown", sig="some_sig")
+            response = mw(request)
+            assert response.status_code == 403
+        finally:
+            del settings.AGENTMESH_AGENT_KEYS
 
     def test_exempt_path_bypasses_verification(self):
         """Paths listed in AGENTMESH_EXEMPT_PATHS skip trust checks."""
@@ -131,42 +177,79 @@ class TestAgentTrustMiddleware:
 
     def test_settings_override_defaults(self):
         """Custom settings override the built-in defaults."""
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+        import base64
+
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        public_key = private_key.public_key()
+        agent_did = "did:mesh:low_ok"
+        sig = base64.b64encode(private_key.sign(agent_did.encode("utf-8"))).decode()
+
         settings.AGENTMESH_MIN_TRUST_SCORE = 300
+        settings.AGENTMESH_AGENT_KEYS = {agent_did: public_key}
         try:
             mw = _make_middleware()
-            request = _get("/api/data/", did="did:mesh:low_ok")
+            request = _get("/api/data/", did=agent_did, sig=sig)
             response = mw(request)
-            # score 400 >= new threshold 300 → should pass
+            # score 750 >= new threshold 300 → should pass
             assert response.status_code == 200
         finally:
             del settings.AGENTMESH_MIN_TRUST_SCORE
+            del settings.AGENTMESH_AGENT_KEYS
 
     def test_custom_did_header(self):
         """AGENTMESH_DID_HEADER changes which header is read."""
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+        import base64
+
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        public_key = private_key.public_key()
+        agent_did = "did:mesh:custom"
+        sig = base64.b64encode(private_key.sign(agent_did.encode("utf-8"))).decode()
+
         settings.AGENTMESH_DID_HEADER = "X-Custom-DID"
+        settings.AGENTMESH_AGENT_KEYS = {agent_did: public_key}
         try:
             mw = _make_middleware()
             factory = RequestFactory()
-            request = factory.get("/api/data/", HTTP_X_CUSTOM_DID="did:mesh:custom", HTTP_X_AGENT_SIGNATURE="sig")
+            request = factory.get(
+                "/api/data/",
+                HTTP_X_CUSTOM_DID=agent_did,
+                HTTP_X_AGENT_SIGNATURE=sig,
+            )
             response = mw(request)
             assert response.status_code == 200
-            assert request.agent_did == "did:mesh:custom"  # type: ignore[attr-defined]
+            assert request.agent_did == agent_did  # type: ignore[attr-defined]
         finally:
             del settings.AGENTMESH_DID_HEADER
+            del settings.AGENTMESH_AGENT_KEYS
 
 
 class TestTrustRequiredDecorator:
     """Tests for @trust_required decorator."""
 
     def test_per_view_threshold_enforced(self):
-        """@trust_required(min_score=800) rejects score 750."""
-        mw = _make_middleware(get_response=_high_trust_view)
-        request = _get("/api/high/", did="did:mesh:abc", sig="sig_valid")
-        response = mw(request)
-        # score 750 < per-view 800 → 403
-        assert response.status_code == 403
-        body = json.loads(response.content)
-        assert body["required_score"] == 800
+        """@trust_required(min_score=800) rejects score 750 even with valid sig."""
+        from cryptography.hazmat.primitives.asymmetric import ed25519
+        import base64
+
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        public_key = private_key.public_key()
+        agent_did = "did:mesh:abc"
+        sig = base64.b64encode(private_key.sign(agent_did.encode("utf-8"))).decode()
+
+        settings.AGENTMESH_AGENT_KEYS = {agent_did: public_key}
+        try:
+            mw = _make_middleware(get_response=_high_trust_view)
+            request = _get("/api/high/", did=agent_did, sig=sig)
+            response = mw(request)
+            # score 750 < per-view 800 → 403
+            assert response.status_code == 403
+            body = json.loads(response.content)
+            assert body["error"] == "Trust verification failed"
+            assert "required_score" not in body
+        finally:
+            del settings.AGENTMESH_AGENT_KEYS
 
     def test_decorator_preserves_function_name(self):
         assert _high_trust_view.__name__ == "_high_trust_view"

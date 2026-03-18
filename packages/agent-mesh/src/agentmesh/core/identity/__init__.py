@@ -10,10 +10,12 @@ from .ca import (
     CertificateAuthority,
     RegistrationRequest,
     RegistrationResponse,
+    SponsorRegistry,
 )
 
 __all__ = [
     "CertificateAuthority",
     "RegistrationRequest",
     "RegistrationResponse",
+    "SponsorRegistry",
 ]

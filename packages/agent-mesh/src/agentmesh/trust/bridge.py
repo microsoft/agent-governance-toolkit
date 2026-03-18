@@ -10,8 +10,14 @@ Maintains the same API surface for compatibility.
 from datetime import datetime
 from typing import Optional, Any
 from pydantic import BaseModel, Field
+import hashlib
+import hmac
+import logging
+import os
 
 from .handshake import TrustHandshake, HandshakeResult
+
+logger = logging.getLogger(__name__)
 
 # Import IATP from agent-os (the source of truth for trust protocol)
 try:
@@ -94,6 +100,25 @@ class TrustBridge(BaseModel):
             identity=identity,
             registry=registry,
         )
+        # P06: HMAC key for peer record integrity
+        self._peer_hmac_key = os.urandom(32)
+        self._peer_signatures: dict[str, str] = {}
+
+    def _sign_peer(self, peer: PeerInfo) -> str:
+        """Compute HMAC over peer's critical fields."""
+        payload = f"{peer.peer_did}:{peer.trust_score}:{peer.trust_verified}:{','.join(peer.capabilities)}"
+        return hmac.new(self._peer_hmac_key, payload.encode(), hashlib.sha256).hexdigest()
+
+    def _verify_peer_integrity(self, peer_did: str) -> bool:
+        """Verify that a stored peer record has not been tampered with."""
+        peer = self.peers.get(peer_did)
+        if not peer:
+            return False
+        expected = self._peer_signatures.get(peer_did)
+        if not expected:
+            return False
+        actual = self._sign_peer(peer)
+        return hmac.compare_digest(actual, expected)
 
     async def verify_peer(
         self,
@@ -115,7 +140,7 @@ class TrustBridge(BaseModel):
         )
 
         if result.verified:
-            self.peers[peer_did] = PeerInfo(
+            peer = PeerInfo(
                 peer_did=peer_did,
                 peer_name=result.peer_name,
                 protocol=protocol,
@@ -124,6 +149,8 @@ class TrustBridge(BaseModel):
                 last_verified=datetime.utcnow(),
                 capabilities=result.capabilities,
             )
+            self.peers[peer_did] = peer
+            self._peer_signatures[peer_did] = self._sign_peer(peer)
 
         return result
 
@@ -135,6 +162,13 @@ class TrustBridge(BaseModel):
         """Check whether a previously verified peer meets the trust threshold."""
         peer = self.peers.get(peer_did)
         if not peer or not peer.trust_verified:
+            return False
+
+        # P06: Verify record integrity before trusting cached score
+        if not self._verify_peer_integrity(peer_did):
+            logger.warning("Peer %s record integrity check failed — rejecting", peer_did)
+            del self.peers[peer_did]
+            self._peer_signatures.pop(peer_did, None)
             return False
 
         threshold = required_score or self.default_trust_threshold

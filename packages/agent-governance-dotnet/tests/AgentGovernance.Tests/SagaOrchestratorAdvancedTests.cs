@@ -18,7 +18,7 @@ public class SagaOrchestratorAdvancedTests
         {
             ActionId = "flaky",
             AgentDid = "did:mesh:a",
-            MaxRetries = 2,
+            MaxAttempts = 2,
             Execute = async ct =>
             {
                 attempts++;
@@ -43,13 +43,13 @@ public class SagaOrchestratorAdvancedTests
         {
             ActionId = "always-fails",
             AgentDid = "did:mesh:a",
-            MaxRetries = 2,
+            MaxAttempts = 2,
             Execute = ct => { attempts++; throw new Exception("fail"); }
         });
 
         var result = await orchestrator.ExecuteAsync(saga);
         Assert.False(result);
-        Assert.Equal(2, attempts); // 2 attempts total (MaxRetries=2)
+        Assert.Equal(2, attempts); // MaxAttempts=2 means 2 total attempts
     }
 
     [Fact]

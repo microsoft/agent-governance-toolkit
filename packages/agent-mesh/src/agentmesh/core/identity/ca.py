@@ -8,12 +8,13 @@ This is the root of trust for the AgentMesh.
 
 Features:
 - Issues short-lived SVID certificates (15-min default TTL)
-- Validates human sponsor signatures
+- Validates human sponsor signatures via Ed25519 verification
 - Generates agent DIDs
-- Handles credential rotation
+- Handles credential rotation with token validation
 """
 
 import hashlib
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -24,6 +25,34 @@ from cryptography.x509.oid import NameOID
 from pydantic import BaseModel, Field
 
 from ...identity import AgentDID
+
+logger = logging.getLogger(__name__)
+
+
+class SponsorRegistry:
+    """Registry of authorized sponsors and their Ed25519 public keys.
+
+    Must be populated before agent registration so the CA can verify
+    that the sponsor signature on each ``RegistrationRequest`` is
+    authentic.
+    """
+
+    def __init__(self) -> None:
+        self._sponsors: dict[str, ed25519.Ed25519PublicKey] = {}
+
+    def register_sponsor(
+        self, email: str, public_key: ed25519.Ed25519PublicKey
+    ) -> None:
+        self._sponsors[email] = public_key
+
+    def remove_sponsor(self, email: str) -> None:
+        self._sponsors.pop(email, None)
+
+    def get_public_key(self, email: str) -> ed25519.Ed25519PublicKey | None:
+        return self._sponsors.get(email)
+
+    def is_registered(self, email: str) -> bool:
+        return email in self._sponsors
 
 
 class RegistrationRequest(BaseModel):
@@ -91,6 +120,7 @@ class CertificateAuthority:
     Certificate Authority for AgentMesh.
 
     Issues SPIFFE/SVID certificates for agent identities.
+    Requires a ``SponsorRegistry`` to verify sponsor signatures.
     """
 
     def __init__(
@@ -98,6 +128,7 @@ class CertificateAuthority:
         ca_private_key: ed25519.Ed25519PrivateKey | None = None,
         ca_certificate: x509.Certificate | None = None,
         default_ttl_minutes: int = 15,
+        sponsor_registry: SponsorRegistry | None = None,
     ):
         """
         Initialize the Certificate Authority.
@@ -106,8 +137,13 @@ class CertificateAuthority:
             ca_private_key: CA's private key (generates new if None)
             ca_certificate: CA's certificate (self-signs if None)
             default_ttl_minutes: Default TTL for issued certificates
+            sponsor_registry: Registry of authorized sponsors
         """
         self.default_ttl_minutes = default_ttl_minutes
+        self.sponsor_registry = sponsor_registry or SponsorRegistry()
+
+        # Track issued refresh tokens: {token_hash: (agent_did, expires_at)}
+        self._issued_refresh_tokens: dict[str, tuple[str, datetime]] = {}
 
         if ca_private_key is None:
             ca_private_key = ed25519.Ed25519PrivateKey.generate()
@@ -162,13 +198,36 @@ class CertificateAuthority:
         request: RegistrationRequest,
     ) -> bool:
         """
-        Validate the sponsor's signature.
+        Validate the sponsor's Ed25519 signature.
 
         The sponsor signs over: agent_name + sponsor_email + capabilities
+        (concatenated with ':' separator).
+
+        Returns:
+            True if the signature is valid, False otherwise.
         """
-        # In production, this would verify against a registered sponsor's public key
-        # For now, we accept all signatures
-        return True
+        sponsor_key = self.sponsor_registry.get_public_key(request.sponsor_email)
+        if sponsor_key is None:
+            logger.warning(
+                "Sponsor %s is not registered in the sponsor registry",
+                request.sponsor_email,
+            )
+            return False
+
+        # Reconstruct the signed payload
+        capabilities_str = ",".join(sorted(request.capabilities))
+        payload = f"{request.agent_name}:{request.sponsor_email}:{capabilities_str}"
+
+        try:
+            sponsor_key.verify(request.sponsor_signature, payload.encode("utf-8"))
+            return True
+        except Exception:
+            logger.warning(
+                "Sponsor signature verification failed for %s (sponsor=%s)",
+                request.agent_name,
+                request.sponsor_email,
+            )
+            return False
 
     def _generate_access_token(self, agent_did: str) -> str:
         """Generate an access token for the agent."""
@@ -177,10 +236,49 @@ class CertificateAuthority:
         return token
 
     def _generate_refresh_token(self, agent_did: str) -> str:
-        """Generate a refresh token for credential rotation."""
+        """Generate a refresh token for credential rotation and track it."""
         token_id = secrets.token_urlsafe(32)
         token = f"agentmesh_refresh_{agent_did.split(':')[-1][:16]}_{token_id[:16]}"
+
+        # Store hash of token for later validation
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            minutes=self.default_ttl_minutes * 2
+        )
+        self._issued_refresh_tokens[token_hash] = (agent_did, expires_at)
+
         return token
+
+    def _validate_refresh_token(self, agent_did: str, refresh_token: str) -> bool:
+        """Validate a refresh token against issued tokens.
+
+        Returns:
+            True if the token is valid and bound to the given DID.
+        """
+        token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+        entry = self._issued_refresh_tokens.get(token_hash)
+        if entry is None:
+            logger.warning("Refresh token not found for %s", agent_did)
+            return False
+
+        stored_did, expires_at = entry
+        if stored_did != agent_did:
+            logger.warning(
+                "Refresh token DID mismatch: expected %s, got %s",
+                stored_did,
+                agent_did,
+            )
+            return False
+
+        if datetime.now(timezone.utc) > expires_at:
+            # Clean up expired token
+            del self._issued_refresh_tokens[token_hash]
+            logger.warning("Refresh token expired for %s", agent_did)
+            return False
+
+        # Consume the token (one-time use)
+        del self._issued_refresh_tokens[token_hash]
+        return True
 
     def _issue_svid_certificate(
         self,
@@ -338,14 +436,20 @@ class CertificateAuthority:
 
         Args:
             agent_did: Agent's DID
-            refresh_token: Valid refresh token
+            refresh_token: Valid refresh token (must match an issued token)
             new_public_key: Optional new public key for key rotation
 
         Returns:
             New credentials
+
+        Raises:
+            ValueError: If refresh token is invalid or new public key is missing.
         """
-        # In production, validate the refresh token
-        # For now, we trust it
+        # Validate the refresh token against issued tokens
+        if not self._validate_refresh_token(agent_did, refresh_token):
+            raise ValueError(
+                "Invalid or expired refresh token for credential rotation"
+            )
 
         # If no new key provided, we can't issue a new cert
         # In production, we'd retrieve the existing public key

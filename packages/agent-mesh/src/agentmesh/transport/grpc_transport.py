@@ -211,7 +211,7 @@ class GRPCTransport(Transport):
         super().__init__(config)
         self._channel: Any = None
         self._server: Any = None
-        self._receive_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self._receive_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=10_000)
         self._handlers: dict[str, Any] = {}
 
     # -- Connection lifecycle --------------------------------------------------
