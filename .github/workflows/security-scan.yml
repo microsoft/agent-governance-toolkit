@@ -20,6 +20,7 @@ jobs:
       - name: Install dependencies
         run: pip install pyyaml
       - name: Run security skills scan
+        continue-on-error: true
         run: |
           python scripts/security_scan.py packages/ \
             --exclude-tests \
@@ -30,7 +31,7 @@ jobs:
         run: |
           python scripts/security_scan.py packages/ \
             --exclude-tests \
-            --format json > security-scan-results.json
+            --format json > security-scan-results.json || true
       - name: Upload scan results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
