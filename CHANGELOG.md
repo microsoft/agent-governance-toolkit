@@ -70,18 +70,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **CostGuard input validation** — NaN/Inf/negative guards on all budget parameters, `_org_killed` flag prevents bypass after org threshold breach (#272).
-- **CostGuard thread safety** — bound breach history + Lock for concurrent access (#253).
+- Demo fixed: legacy `agent-hypervisor` path → `agent-runtime`.
+- BENCHMARKS.md: fixed stale "VADP version" reference.
 - **.NET bug sweep** — thread safety, error surfacing, caching, disposal fixes (#252).
 - **Behavioral anomaly detection** implemented in RingBreachDetector.
-- **ErrorBudget._events** bounded with `deque(maxlen=N)` (#172).
-- **VectorClock thread safety** + integrity type hints (#243).
 - **CLI edge case tests** and input validation for agent-compliance (#234).
 - **Cross-package import errors** breaking CI resolved (#222).
 - **OWASP-COMPLIANCE.md** broken link fix + Copilot extension server hardening (#270).
 
 ### Security
 
+- **CostGuard org kill switch bypass** — crafted IEEE 754 inputs (NaN/Inf/negative) could bypass organization-level kill switch. Fixed with input validation + persistent `_org_killed` flag (#272).
+- **CostGuard thread safety** — bound breach history + Lock for concurrent access (#253).
+- **ErrorBudget._events** bounded with `deque(maxlen=N)` to prevent unbounded growth (#172).
+- **VectorClock thread safety** + integrity type hints (#243).
 - Block `importlib` dynamic imports in sandbox (#189).
 - Centralize hardcoded ring thresholds and constants (#188).
 
