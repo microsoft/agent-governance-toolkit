@@ -408,12 +408,37 @@ class DMZProtocol:
         return key in self._signed_policies
     
     def _encrypt_data(self, data: bytes, key: bytes) -> bytes:
-        """Encrypt data with AES-256-GCM (placeholder)."""
-        # In production, would use cryptography library
-        # For now, just XOR with key (NOT SECURE - placeholder only)
-        return bytes(d ^ key[i % len(key)] for i, d in enumerate(data))
-    
+        """Encrypt data with AES-256-GCM.
+
+        Requires the ``cryptography`` package (``pip install cryptography``).
+        Falls back to a clearly-marked no-op if not installed.
+        """
+        try:
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        except ImportError:
+            raise ImportError(
+                "DMZ encryption requires the 'cryptography' package. "
+                "Install with: pip install cryptography"
+            )
+
+        # Derive a 256-bit key via SHA-256 to ensure correct length
+        derived = hashlib.sha256(key).digest()
+        nonce = hashlib.sha256(data[:16] + key).digest()[:12]  # 96-bit nonce
+        aesgcm = AESGCM(derived)
+        return nonce + aesgcm.encrypt(nonce, data, None)
+
     def _decrypt_data(self, encrypted: bytes, key: bytes) -> bytes:
-        """Decrypt data (placeholder)."""
-        # XOR is symmetric
-        return self._encrypt_data(encrypted, key)
+        """Decrypt data encrypted with AES-256-GCM."""
+        try:
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        except ImportError:
+            raise ImportError(
+                "DMZ decryption requires the 'cryptography' package. "
+                "Install with: pip install cryptography"
+            )
+
+        derived = hashlib.sha256(key).digest()
+        nonce = encrypted[:12]
+        ciphertext = encrypted[12:]
+        aesgcm = AESGCM(derived)
+        return aesgcm.decrypt(nonce, ciphertext, None)
