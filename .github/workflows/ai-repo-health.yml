@@ -1,0 +1,116 @@
+# AI-powered OSS repository health dashboard for agent-governance-toolkit.
+# Runs weekly on Monday at 9:00 UTC. Collects metrics on contributor activity,
+# issue response times, PR review velocity, stale issues, and unanswered
+# community questions. Posts a health report as a GitHub issue.
+name: AI Repo Health Dashboard
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Monday 9:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  models: read
+
+jobs:
+  health-report:
+    name: Generate Health Report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Collect repository metrics
+        id: metrics
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Collecting repository metrics..."
+
+          # Open issues and PRs
+          OPEN_ISSUES=$(gh issue list --state open --json number --jq 'length')
+          OPEN_PRS=$(gh pr list --state open --json number --jq 'length')
+
+          # Stale issues (no activity in 30 days)
+          STALE=$(gh issue list --state open --json number,updatedAt \
+            --jq '[.[] | select(.updatedAt < (now - 2592000 | todate))] | length' 2>/dev/null || echo "0")
+
+          # Unanswered issues (open, 0 comments)
+          UNANSWERED=$(gh issue list --state open --json number,comments \
+            --jq '[.[] | select(.comments == 0)] | length' 2>/dev/null || echo "0")
+
+          # Recent PRs (last 7 days)
+          RECENT_PRS=$(gh pr list --state all \
+            --json number,title,state,createdAt,mergedAt,author --limit 50 2>/dev/null || echo "[]")
+
+          # Recent issues (last 7 days)
+          RECENT_ISSUES=$(gh issue list --state all \
+            --json number,title,state,createdAt,author,comments --limit 50 2>/dev/null || echo "[]")
+
+          # Build metrics summary
+          METRICS=$(cat <<METRICSEOF
+          ## Raw Metrics ($(date +%Y-%m-%d))
+          - Open issues: $OPEN_ISSUES
+          - Open PRs: $OPEN_PRS
+          - Stale issues (>30 days): $STALE
+          - Unanswered issues (0 comments): $UNANSWERED
+
+          ### Recent PRs
+          $RECENT_PRS
+
+          ### Recent Issues
+          $RECENT_ISSUES
+          METRICSEOF
+          )
+
+          echo "data<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$METRICS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "Metrics collected."
+
+      - name: Generate health report
+        id: report
+        uses: ./.github/actions/ai-agent-runner
+        with:
+          agent-type: repo-health-analyst
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          model: gpt-4o
+          fallback-model: gpt-4o-mini
+          max-tokens: "4000"
+          context-mode: custom
+          output-mode: none
+          custom-instructions: |
+            You are an OSS repository health analyst for microsoft/agent-governance-toolkit.
+            This is a public Microsoft OSS project with 280+ stars.
+
+            Generate a health dashboard covering:
+            1. **📊 Key Metrics** — open issues, open PRs, stale count
+            2. **👥 Contributor Activity** — new vs returning contributors this week
+            3. **⏱️ Response Times** — average time to first response on issues
+            4. **🔄 PR Velocity** — PRs opened, merged, average review time
+            5. **🏚️ Stale Issues** — list stale issues needing attention
+            6. **❓ Unanswered Questions** — community issues with no response
+            7. **💡 Recommendations** — actionable items to improve repo health
+
+            Use emoji indicators: ✅ healthy, ⚠️ needs attention, 🔴 critical
+
+            Format as a markdown report suitable for a GitHub issue.
+          extra-context: |
+            ${{ steps.metrics.outputs.data }}
+
+      - name: Create health report issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT: ${{ steps.report.outputs.response }}
+        run: |
+          if [ -z "$REPORT" ]; then
+            REPORT="Health report generation produced no output. Check workflow logs."
+          fi
+          printf '%s' "$REPORT" > "$RUNNER_TEMP/health-body.md"
+          gh issue create \
+            --title "📊 OSS Repo Health Dashboard — $(date +%Y-%m-%d)" \
+            --body-file "$RUNNER_TEMP/health-body.md" \
+            --label "repo-health" \
+            || echo "::warning::Failed to create health report issue"

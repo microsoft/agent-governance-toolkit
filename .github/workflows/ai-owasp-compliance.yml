@@ -1,0 +1,116 @@
+# OWASP Agentic Top 10 compliance audit for agent-governance-toolkit.
+# This toolkit claims coverage for 10/10 OWASP Agentic Top 10 risks — this
+# workflow validates that each risk has implementation code AND tests.
+# Runs weekly and on manual dispatch. Posts a compliance matrix as an issue.
+#
+# The 10 risks: Prompt Injection, Improper Output Handling, Tool Poisoning,
+# Unsafe Code Execution, Excessive Agency, Data Leakage, Misaligned Goals,
+# Inadequate Sandboxing, Insufficient Logging, Supply Chain Vulnerabilities.
+name: AI OWASP Agentic Compliance
+
+on:
+  schedule:
+    - cron: "0 10 * * 1" # Monday 10:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  models: read
+
+jobs:
+  owasp-audit:
+    name: OWASP Agentic Top 10 Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Collect package structure
+        id: structure
+        run: |
+          echo "Collecting package structure for OWASP analysis..."
+          STRUCTURE=""
+          for pkg in packages/*/; do
+            if [ -d "$pkg/src" ]; then
+              PKG_NAME=$(basename "$pkg")
+              FILES=$(find "$pkg/src" -name "*.py" -type f | head -50 | sort)
+              TESTS=$(find "$pkg/tests" -name "*.py" -type f 2>/dev/null | head -50 | sort)
+              STRUCTURE="${STRUCTURE}
+          === ${PKG_NAME} ===
+          Source files:
+          ${FILES}
+          Test files:
+          ${TESTS}
+          "
+            fi
+          done
+          echo "structure<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$STRUCTURE" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "Package structure collected."
+
+      - name: Run OWASP compliance audit
+        id: audit
+        uses: ./.github/actions/ai-agent-runner
+        with:
+          agent-type: owasp-compliance-auditor
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          model: gpt-4o
+          fallback-model: gpt-4o-mini
+          max-tokens: "4000"
+          context-mode: custom
+          output-mode: none
+          custom-instructions: |
+            You are an OWASP Agentic Top 10 compliance auditor for microsoft/agent-governance-toolkit.
+            This toolkit claims to cover 10/10 OWASP Agentic Top 10 risks.
+
+            For EACH of the 10 risks, evaluate:
+            1. Is there implementation code addressing this risk?
+            2. Are there tests validating the mitigation?
+            3. What is the coverage quality? (Full / Partial / Missing)
+
+            The 10 OWASP Agentic risks:
+            1. **Prompt Injection** — defense against direct/indirect prompt injection
+            2. **Improper Output Handling** — sanitization of agent outputs
+            3. **Tool Poisoning** — validation of tool integrity and inputs
+            4. **Unsafe Code Execution** — sandboxed execution environments
+            5. **Excessive Agency** — least-privilege, action scoping
+            6. **Data Leakage** — PII/secret detection, output filtering
+            7. **Misaligned Goals** — goal verification, constraint enforcement
+            8. **Inadequate Sandboxing** — process/container isolation
+            9. **Insufficient Logging** — audit trails, observability
+            10. **Supply Chain Vulnerabilities** — dependency validation, SBOM
+
+            Format as a compliance matrix:
+
+            ## 🛡️ OWASP Agentic Top 10 — Compliance Matrix
+
+            | # | Risk | Implementation | Tests | Coverage | Notes |
+            |---|------|---------------|-------|----------|-------|
+            | 1 | Prompt Injection | `agent_os/policy/...` | `test_prompt_...` | ✅ Full | ... |
+
+            ### Detailed Findings
+            (for each risk, 2-3 sentences on what exists and what's missing)
+
+            ### Recommendations
+            (prioritized list of gaps to address)
+          extra-context: |
+            Repository structure:
+            ${{ steps.structure.outputs.structure }}
+
+      - name: Create compliance issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AUDIT_RESULT: ${{ steps.audit.outputs.response }}
+        run: |
+          if [ -z "$AUDIT_RESULT" ]; then
+            AUDIT_RESULT="OWASP compliance audit produced no output. Check workflow logs."
+          fi
+          printf '%s' "$AUDIT_RESULT" > "$RUNNER_TEMP/owasp-body.md"
+          gh issue create \
+            --title "🛡️ OWASP Agentic Top 10 Compliance — $(date +%Y-%m-%d)" \
+            --body-file "$RUNNER_TEMP/owasp-body.md" \
+            --label "security,owasp,compliance" \
+            || echo "::warning::Failed to create OWASP compliance issue"

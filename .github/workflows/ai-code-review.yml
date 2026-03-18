@@ -1,0 +1,60 @@
+# AI-powered deep code review for the agent-governance-toolkit.
+# Analyzes PR diffs for security issues, policy engine correctness,
+# trust/identity flaws, sandbox escape vectors, and API compatibility.
+# Uses GitHub Models API (gpt-4o) via the ai-agent-runner composite action.
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  models: read
+
+jobs:
+  ai-review:
+    name: Deep AI Code Review
+    runs-on: ubuntu-latest
+    # Skip bots, draft PRs, and fork PRs (security: don't run on untrusted code)
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.actor != 'dependabot[bot]' &&
+      github.actor != 'github-actions[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Run AI code review
+        id: review
+        uses: ./.github/actions/ai-agent-runner
+        with:
+          agent-type: code-reviewer
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          model: gpt-4o
+          fallback-model: gpt-4o-mini
+          max-tokens: "4000"
+          context-mode: pr-diff
+          output-mode: pr-review
+          custom-instructions: |
+            You are reviewing the microsoft/agent-governance-toolkit — a security-focused Python library.
+
+            Stack: Python 3.9-3.12, monorepo with 8 packages under packages/, pytest, ruff.
+
+            Focus areas:
+            - Policy engine correctness (false negatives = security bypass)
+            - Trust/identity: cryptographic operations, credential handling, SPIFFE/SVID
+            - Sandbox escape vectors
+            - Thread safety in concurrent agent execution
+            - OWASP Agentic Top 10 compliance
+            - Type safety and Pydantic model validation
+            - Backward compatibility (public API changes)
+
+            Provide actionable feedback. Flag security issues as 🔴 CRITICAL.
+            Flag potential breaking changes as 🟡 WARNING.
+            Suggest improvements as 💡 SUGGESTION.

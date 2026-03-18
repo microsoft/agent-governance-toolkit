@@ -1,0 +1,75 @@
+# AI-powered documentation freshness check for agent-governance-toolkit.
+# When a PR touches package source code, verifies that corresponding
+# documentation is updated — flags missing docstrings, stale READMEs,
+# and changed behavior without CHANGELOG entries.
+name: AI Docs Sync Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - "packages/*/src/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+  models: read
+
+jobs:
+  docs-freshness:
+    name: Documentation Freshness Check
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.actor != 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Check documentation freshness
+        uses: ./.github/actions/ai-agent-runner
+        with:
+          agent-type: docs-sync-checker
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          model: gpt-4o
+          fallback-model: gpt-4o-mini
+          max-tokens: "4000"
+          context-mode: pr-diff
+          output-mode: pr-comment
+          custom-instructions: |
+            You are a documentation freshness checker for microsoft/agent-governance-toolkit.
+
+            Analyze the PR diff and check:
+            1. **New public APIs without docstrings** — all public functions, classes, and
+               methods should have docstrings explaining purpose, parameters, return values,
+               and exceptions
+            2. **README sections out of date** — if behavior changes, does the package README
+               reflect it?
+            3. **CHANGELOG missing entries** — behavioral changes should have a CHANGELOG.md entry
+            4. **Example code outdated** — if API signatures change, examples/ should be updated
+            5. **Type hints** — new public APIs should have complete type annotations
+
+            Monorepo structure:
+            - packages/{name}/src/ — source code
+            - packages/{name}/README.md — package documentation
+            - packages/{name}/tests/ — test files
+            - docs/ — project-level documentation
+            - CHANGELOG.md — project changelog
+
+            Format:
+            ## 📝 Documentation Sync Report
+
+            ### Issues Found
+            - ❌ `function_name()` in `package/module.py` — missing docstring
+            - ⚠️ `package/README.md` — section X may need update for new behavior
+            - ⚠️ CHANGELOG.md — no entry for this change
+
+            ### Suggestions
+            - 💡 Add docstring for `function_name(param1: str, param2: int) -> bool`
+            - 💡 Update README section "Configuration" to mention new option
+
+            If everything looks good, say ✅ Documentation is in sync.

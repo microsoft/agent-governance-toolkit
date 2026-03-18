@@ -1,0 +1,89 @@
+# AI-powered test coverage advisor for the agent-governance-toolkit.
+# When a PR touches package source code, identifies files without test coverage
+# and suggests domain-specific test cases — especially edge cases for policy
+# evaluation, trust scoring, chaos experiments, and concurrency.
+name: AI Test Generator
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - "packages/*/src/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+  models: read
+
+jobs:
+  suggest-tests:
+    name: Test Coverage Advisor
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.actor != 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Identify changed source files
+        id: changes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FILES=$(gh pr diff ${{ github.event.pull_request.number }} --name-only \
+            | grep -E '^packages/[^/]+/src/.*\.py$' || true)
+          if [ -z "$FILES" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No Python source files changed in packages/*/src/"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "files<<EOF" >> "$GITHUB_OUTPUT"
+            echo "$FILES" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "Changed files:"
+            echo "$FILES"
+          fi
+
+      - name: Run AI test advisor
+        if: steps.changes.outputs.skip != 'true'
+        uses: ./.github/actions/ai-agent-runner
+        with:
+          agent-type: test-generator
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          model: gpt-4o
+          fallback-model: gpt-4o-mini
+          max-tokens: "4000"
+          context-mode: pr-diff
+          output-mode: pr-comment
+          custom-instructions: |
+            You are a test coverage advisor for microsoft/agent-governance-toolkit.
+
+            The changed source files are:
+            ${{ steps.changes.outputs.files }}
+
+            For each changed file, analyze:
+            1. Does a corresponding test file exist in tests/?
+            2. Are the changed code paths covered by existing tests?
+            3. What NEW test cases would improve coverage?
+
+            Focus on domain-specific edge cases:
+            - **Policy evaluation**: boundary conditions, conflicting policies, policy bypass attempts
+            - **Trust scoring**: edge scores (0.0, 1.0), expired certificates, revoked trust
+            - **Chaos experiments**: timeout handling, partial failures, cascading failures
+            - **Concurrency**: race conditions in shared state, deadlock scenarios
+            - **Input validation**: malformed inputs, injection attempts, oversized payloads
+
+            Format output as:
+            ## 🧪 Test Coverage Analysis
+
+            ### `filename.py`
+            - ✅ Existing coverage: (what's covered)
+            - ❌ Missing coverage: (what's not)
+            - 💡 Suggested test cases:
+              1. `test_xxx` — description
+              2. `test_yyy` — description

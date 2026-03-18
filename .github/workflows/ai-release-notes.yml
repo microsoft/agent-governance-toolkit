@@ -1,0 +1,125 @@
+# AI-powered changelog generator for the agent-governance-toolkit monorepo.
+# Collects merged PRs since the last release, categorizes by conventional
+# commit type AND by package affected, and generates structured release notes.
+# Highlights breaking changes prominently (critical for published PyPI packages).
+name: AI Release Notes
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to generate notes for (e.g., v2.3.0)"
+        required: false
+
+permissions:
+  contents: write
+  models: read
+
+jobs:
+  generate-notes:
+    name: Generate Release Notes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Collect merged PRs
+        id: prs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "")
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          # Find the previous tag
+          PREV_TAG=""
+          if [ -n "$TAG" ]; then
+            PREV_TAG=$(git tag --sort=-version:refname | grep -A1 "^${TAG}$" | tail -1 || echo "")
+            if [ "$PREV_TAG" = "$TAG" ] || [ -z "$PREV_TAG" ]; then
+              PREV_TAG=$(git tag --sort=-version:refname | sed -n '2p' || echo "")
+            fi
+          fi
+          echo "prev_tag=$PREV_TAG" >> "$GITHUB_OUTPUT"
+
+          # Get merged PRs since previous tag
+          SINCE=""
+          if [ -n "$PREV_TAG" ]; then
+            SINCE=$(git log -1 --format=%aI "$PREV_TAG" 2>/dev/null || echo "2024-01-01")
+          else
+            SINCE="2024-01-01"
+          fi
+
+          PRS=$(gh pr list --state merged --base main \
+            --search "merged:>=${SINCE}" \
+            --json number,title,labels,author,files --limit 100 2>/dev/null || echo "[]")
+          echo "prs<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$PRS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        id: notes
+        uses: ./.github/actions/ai-agent-runner
+        with:
+          agent-type: release-notes-generator
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          model: gpt-4o
+          fallback-model: gpt-4o-mini
+          max-tokens: "4000"
+          context-mode: custom
+          output-mode: none
+          custom-instructions: |
+            You are generating release notes for microsoft/agent-governance-toolkit.
+            This is a monorepo with packages: agent-os, agent-mesh, agent-hypervisor,
+            agent-sre, agent-compliance, agent-marketplace, agent-lightning, agent-runtime.
+
+            Categorize changes by:
+            1. Package affected (based on file paths in the PR)
+            2. Conventional commit type (feat, fix, docs, perf, refactor, test, chore)
+
+            Format:
+            # Release Notes
+
+            ## ⚠️ Breaking Changes
+            (list any breaking changes prominently — critical for PyPI consumers)
+
+            ## 🚀 Features
+            ### agent-os
+            - description (#PR)
+            ### agent-mesh
+            - description (#PR)
+            ...
+
+            ## 🐛 Bug Fixes
+            (grouped by package)
+
+            ## 📦 Other Changes
+            (docs, refactors, tests, chores)
+
+            ## 👥 Contributors
+            @author1, @author2, ...
+
+            If no PRs are found, note that and suggest checking the tag range.
+          extra-context: |
+            Release: ${{ steps.prs.outputs.tag }}
+            Previous: ${{ steps.prs.outputs.prev_tag }}
+            Merged PRs: ${{ steps.prs.outputs.prs }}
+
+      - name: Update release body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: ${{ steps.notes.outputs.response }}
+          TAG: ${{ steps.prs.outputs.tag }}
+        run: |
+          if [ -n "$RELEASE_NOTES" ] && [ -n "$TAG" ]; then
+            printf '%s' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
+            gh release edit "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md" \
+              || echo "::warning::Failed to update release notes"
+          else
+            echo "::warning::No release notes generated or no tag found"
+          fi
