@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PUBLISHING.md` guide covering PyPI, npm, and NuGet publishing requirements
 - `agent-runtime` re-export wrapper package (`src/agent_runtime/__init__.py`)
 - `RELEASE_NOTES_v2.2.0.md`
+- `create_policies_from_config()` API — load security policies from YAML config files
+- `SQLPolicyConfig` dataclass and `load_sql_policy_config()` for structured policy loading
+- 10 sample policy configs in `examples/policies/` (sql-safety, sql-strict, sql-readonly, sandbox-safety, prompt-injection-safety, mcp-security, semantic-policy, pii-detection, conversation-guardian, cli-security-rules)
+- Configurable security rules across 7 modules: sandbox, prompt injection, MCP security, semantic policy, PII detection, conversation guardian, CLI checker
 
 ### Changed
 - GitHub Actions `publish.yml` no longer publishes to PyPI (build + attest only)
@@ -46,6 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - npm package author set to `Microsoft Corporation` (all 9 packages)
 - All package descriptions prefixed with `Community Edition`
 - License corrected to MIT where mismatched (agent-mesh classifier, 2 npm packages)
+
+### Deprecated
+- `create_default_policies()` — emits runtime warning directing users to `create_policies_from_config()` with explicit YAML configs
+
+### Security
+- Expanded SQL policy deny-list to block GRANT, REVOKE, CREATE USER, EXEC xp_cmdshell, UPDATE without WHERE, MERGE INTO
+- Externalized all hardcoded security rules to YAML configuration across 7 modules
 
 ### Fixed
 - `agent-runtime` build failure (invalid parent-directory hatch reference)
