@@ -115,6 +115,7 @@ dev = [
     "aiohttp>=3.13.3",
     "structlog>=24.1.0",
     "redis>=4.0.0",
+    "cryptography>=44.0.0",
     "eval_type_backport>=0.2.0; python_version < '3.10'",
 ]
 
