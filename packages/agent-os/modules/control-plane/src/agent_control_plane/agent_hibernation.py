@@ -19,7 +19,6 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
 from enum import Enum
 import json
-import pickle
 import hmac
 import hashlib
 import os
@@ -197,12 +196,12 @@ class HibernationManager:
             if self.config.format == HibernationFormat.JSON:
                 with open(file_path, 'w') as f:
                     json.dump(state, f, indent=2)
-            else:  # PICKLE — write data + HMAC signature
-                raw = pickle.dumps(state)
+            else:  # PICKLE format — now uses JSON internally + HMAC signature
+                raw = json.dumps(state).encode('utf-8')
                 sig = hmac.new(self._hmac_key, raw, hashlib.sha256).hexdigest()
                 with open(file_path, 'wb') as f:
                     f.write(raw)
-                with open(file_path + ".sig", 'w') as f:
+                with open(file_path + ".sig", 'w', encoding='utf-8') as f:
                     f.write(sig)
             
             # Get file size
@@ -258,7 +257,7 @@ class HibernationManager:
             if metadata.format == HibernationFormat.JSON:
                 with open(metadata.state_file_path, 'r') as f:
                     state = json.load(f)
-            else:  # PICKLE — verify HMAC before deserializing
+            else:  # PICKLE format — now uses JSON internally; verify HMAC before deserializing
                 sig_path = metadata.state_file_path + ".sig"
                 if not os.path.exists(sig_path):
                     raise ValueError(
@@ -267,7 +266,7 @@ class HibernationManager:
                     )
                 with open(metadata.state_file_path, 'rb') as f:
                     raw = f.read()
-                with open(sig_path, 'r') as f:
+                with open(sig_path, 'r', encoding='utf-8') as f:
                     expected_sig = f.read().strip()
                 actual_sig = hmac.new(self._hmac_key, raw, hashlib.sha256).hexdigest()
                 if not hmac.compare_digest(actual_sig, expected_sig):
@@ -275,7 +274,7 @@ class HibernationManager:
                         f"HMAC verification failed for {metadata.state_file_path} — "
                         "state file has been tampered with"
                     )
-                state = pickle.loads(raw)
+                state = json.loads(raw.decode('utf-8'))
             
             # Deserialize state
             restored_state = self.deserialize_agent_state(state)

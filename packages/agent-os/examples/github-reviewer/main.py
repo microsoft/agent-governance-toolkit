@@ -213,7 +213,7 @@ class SecretScanner:
             for name, pattern in self._compiled.items():
                 if pattern.search(line):
                     findings.append(Finding(
-                        id=f"secret-{name}-{hashlib.md5(line.encode()).hexdigest()[:8]}",
+                        id=f"secret-{name}-{hashlib.sha256(line.encode()).hexdigest()[:8]}",
                         severity=self.patterns[name]["severity"],
                         category="secret",
                         file=filename,
@@ -482,16 +482,16 @@ def delete_all():
 ''',
         "src/api.py": '''
 import yaml
-import pickle
+import json
 import requests
 
 def load_config(path):
     with open(path) as f:
-        return yaml.load(f)  # Unsafe!
+        return yaml.safe_load(f)
 
 def load_data(path):
-    with open(path, 'rb') as f:
-        return pickle.load(f)  # Unsafe deserialization
+    with open(path, 'r') as f:
+        return json.load(f)
 
 def fetch_data(url):
     return requests.get(url, verify=False)  # SSL disabled!

@@ -15,18 +15,26 @@ Usage:
 """
 
 import argparse
+import glob as _glob
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 
 def run_command(cmd, description, check=True):
-    """Run a shell command and handle errors"""
+    """Run a command and handle errors.
+
+    Args:
+        cmd: Command as a list of arguments (shell=False for safety).
+        description: Human-readable description for output.
+        check: If True, exit on non-zero return code.
+    """
     print(f"\n{'='*60}")
     print(f"📋 {description}")
     print(f"{'='*60}")
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)
     
     if result.stdout:
         print(result.stdout)
@@ -102,7 +110,7 @@ def main():
     if not args.skip_tests:
         print("\nStep 2: Running tests...")
         run_command(
-            "python -m unittest discover -s tests -p 'test_*.py' -v",
+            [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"],
             "Running test suite"
         )
     else:
@@ -111,20 +119,26 @@ def main():
     # Run linting
     print("\nStep 3: Running linting...")
     run_command(
-        "flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics",
+        ["flake8", "src/", "--count", "--select=E9,F63,F7,F82", "--show-source", "--statistics"],
         "Linting code for critical errors",
         check=False  # Don't fail on linting errors
     )
     
     # Clean previous builds
     print("\nStep 4: Cleaning previous builds...")
-    run_command("rm -rf dist/ build/ *.egg-info", "Cleaning build artifacts")
+    for _d in [Path("dist"), Path("build")]:
+        if _d.exists():
+            shutil.rmtree(_d)
+    for _p in Path(".").glob("*.egg-info"):
+        shutil.rmtree(_p)
+    print("✅ Completed: Cleaning build artifacts")
     
     # Build package
     print("\nStep 5: Building package...")
-    run_command("pip install --upgrade build twine", "Installing build tools")
-    run_command("python -m build", "Building distribution packages")
-    run_command("twine check dist/*", "Checking package metadata")
+    run_command([sys.executable, "-m", "pip", "install", "--upgrade", "build", "twine"], "Installing build tools")
+    run_command([sys.executable, "-m", "build"], "Building distribution packages")
+    dist_files = _glob.glob("dist/*")
+    run_command(["twine", "check"] + dist_files, "Checking package metadata")
     
     # Create git tag
     if not args.dry_run:
@@ -133,8 +147,7 @@ def main():
         
         # Check if tag already exists
         result = subprocess.run(
-            f"git tag -l {tag_name}",
-            shell=True,
+            ["git", "tag", "-l", tag_name],
             capture_output=True,
             text=True
         )
@@ -143,7 +156,7 @@ def main():
             print(f"⚠️  Tag {tag_name} already exists. Skipping tag creation.")
         else:
             run_command(
-                f'git tag -a {tag_name} -m "Release version {version}"',
+                ["git", "tag", "-a", tag_name, "-m", f"Release version {version}"],
                 f"Creating git tag {tag_name}"
             )
             print(f"\n📌 Tag {tag_name} created successfully!")

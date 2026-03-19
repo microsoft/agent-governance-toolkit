@@ -95,6 +95,14 @@ public sealed class AgentIdentity
     /// <exception cref="InvalidOperationException">
     /// Thrown when this identity does not have a private key (verification-only).
     /// </exception>
+    /// <remarks>
+    /// ⚠️ <b>SECURITY WARNING (CWE-327):</b> This method uses HMAC-SHA256 as a compatibility
+    /// fallback. HMAC-SHA256 is a symmetric scheme — both signing and verification require the
+    /// private key, which is unsuitable for cross-agent trust scenarios. Prefer Ed25519 (available
+    /// natively in .NET 9+) for production deployments. This fallback exists only for backward
+    /// compatibility with .NET 8.0 environments and should be considered deprecated.
+    /// </remarks>
+    [Obsolete("HMAC-SHA256 signing is a compatibility fallback. Migrate to Ed25519 on .NET 9+ for proper asymmetric signing.")]
     public byte[] Sign(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -105,6 +113,10 @@ public sealed class AgentIdentity
                 "Cannot sign data: this identity does not have a private key.");
         }
 
+        System.Diagnostics.Trace.TraceWarning(
+            "[AgentIdentity] Using HMAC-SHA256 fallback for signing. " +
+            "This is deprecated — migrate to Ed25519 on .NET 9+ for proper asymmetric cryptography.");
+
         using var hmac = new HMACSHA256(PrivateKey);
         return hmac.ComputeHash(data);
     }
@@ -114,6 +126,8 @@ public sealed class AgentIdentity
     /// </summary>
     /// <param name="message">The message to sign.</param>
     /// <returns>A 32-byte HMAC-SHA256 signature.</returns>
+    /// <inheritdoc cref="Sign(byte[])" path="/remarks"/>
+    [Obsolete("HMAC-SHA256 signing is a compatibility fallback. Migrate to Ed25519 on .NET 9+ for proper asymmetric signing.")]
     public byte[] Sign(string message)
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -131,6 +145,11 @@ public sealed class AgentIdentity
     /// verification requires the signing key. For public-key verification,
     /// migrate to Ed25519 on .NET 9+.
     /// </exception>
+    /// <remarks>
+    /// ⚠️ <b>SECURITY WARNING (CWE-327):</b> HMAC-SHA256 verification requires the private key,
+    /// making it unsuitable for public-key-only verification. Migrate to Ed25519 on .NET 9+.
+    /// </remarks>
+    [Obsolete("HMAC-SHA256 verification is a compatibility fallback. Migrate to Ed25519 on .NET 9+ for public-key verification.")]
     public bool Verify(byte[] data, byte[] signature)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -143,7 +162,9 @@ public sealed class AgentIdentity
                 "For cross-agent verification with only a public key, migrate to Ed25519 (.NET 9+).");
         }
 
+#pragma warning disable CS0618 // Intentional use of deprecated Sign() for HMAC fallback path
         var expected = Sign(data);
+#pragma warning restore CS0618
         return CryptographicOperations.FixedTimeEquals(expected, signature);
     }
 
@@ -163,6 +184,12 @@ public sealed class AgentIdentity
     /// Thrown when <paramref name="privateKey"/> is <c>null</c> because HMAC-SHA256
     /// cannot verify without the signing key.
     /// </exception>
+    /// <remarks>
+    /// ⚠️ <b>SECURITY WARNING (CWE-327):</b> This static overload uses HMAC-SHA256, which
+    /// requires the private key for verification — defeating the purpose of public-key
+    /// cryptography. Migrate to Ed25519 on .NET 9+ where only the public key is needed.
+    /// </remarks>
+    [Obsolete("HMAC-SHA256 verification is a compatibility fallback. Migrate to Ed25519 on .NET 9+ for public-key verification.")]
     public static bool VerifySignature(byte[] publicKey, byte[] data, byte[] signature, byte[]? privateKey = null)
     {
         ArgumentNullException.ThrowIfNull(publicKey);

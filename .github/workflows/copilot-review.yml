@@ -11,6 +11,8 @@ jobs:
   copilot-review:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    # SECURITY: pull_request_target — no checkout, API-only. Permissions scoped
+    # to pull-requests:write (minimum needed to request a reviewer).
     steps:
       - name: Request Copilot Review
         env:

@@ -93,7 +93,7 @@ langchain = [
     "langchain-core>=1.2.11",
 ]
 django = [
-    "django>=3.2",
+    "django>=4.2,<6.0",
 ]
 websocket = [
     "websockets>=12.0",

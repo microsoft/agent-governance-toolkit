@@ -9,6 +9,8 @@ permissions:
 jobs:
   size-label:
     runs-on: ubuntu-latest
+    # SECURITY: pull_request_target — uses pr-size-labeler which only reads PR
+    # metadata via API. No checkout of PR head code. Permissions minimal.
     steps:
       - uses: codelytv/pr-size-labeler@4ec67706cd878fbc1c8db0a5dcd28b6bb412e85a # v1.10.3
         with:

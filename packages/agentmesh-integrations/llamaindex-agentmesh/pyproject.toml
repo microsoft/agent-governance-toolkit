@@ -17,7 +17,7 @@ authors = [{name = "AgentMesh Contributors"}]
 requires-python = ">=3.9,<4.0"
 readme = "README.md"
 license = "MIT"
-dependencies = ["llama-index-core>=0.13.0,<0.15.0", "cryptography>=41.0.0"]
+dependencies = ["llama-index-core>=0.13.0,<0.15.0", "cryptography>=44.0.0,<47.0"]
 
 [tool.hatch.build.targets.sdist]
 include = ["llama_index/"]

@@ -11,6 +11,8 @@ permissions:
 jobs:
   welcome:
     runs-on: ubuntu-latest
+    # SECURITY: pull_request_target — uses actions/first-interaction which only
+    # reads contributor history via API. No checkout of PR head code.
     steps:
       - uses: actions/first-interaction@a1db7729b356323c7988c20ed6f0d33fe31297be # v1.3.0
         with:

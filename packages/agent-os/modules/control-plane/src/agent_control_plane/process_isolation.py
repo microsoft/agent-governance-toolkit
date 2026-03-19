@@ -45,7 +45,6 @@ import json
 import logging
 import multiprocessing
 import os
-import pickle
 import signal as _signal
 import subprocess
 import sys
@@ -143,10 +142,12 @@ def _agent_worker(
 
 
 # Bootstrap script executed inside a ``subprocess.Popen`` child.
-# The parent sends: base64(hmac_key + b"|" + hmac_sig + b"|" + pickle_payload)
+# The parent sends: base64(hmac_key + b"|" + hmac_sig + b"|" + json_payload)
 # The child verifies the HMAC before deserializing.
+# The JSON payload contains {"module": "...", "qualname": "...", "args": [...], "kwargs": {...}}
+# and the target function is resolved via importlib, avoiding pickle deserialization.
 _SUBPROCESS_BOOTSTRAP = """\
-import base64, hashlib, hmac, json, pickle, sys, time
+import base64, hashlib, hmac, importlib, json, sys, time
 raw = base64.b64decode(sys.stdin.buffer.read())
 parts = raw.split(b"|", 2)
 if len(parts) != 3:
@@ -157,7 +158,14 @@ _actual_sig = hmac.new(_key, _payload, hashlib.sha256).digest()
 if not hmac.compare_digest(_actual_sig, _expected_sig):
     json.dump({"state": "failed", "error": "HMAC verification failed — payload tampered", "exit_code": 1, "duration": 0}, sys.stdout)
     sys.exit(1)
-target, args, kwargs = pickle.loads(_payload)
+_data = json.loads(_payload)
+_mod = importlib.import_module(_data["module"])
+_obj = _mod
+for _attr in _data["qualname"].split("."):
+    _obj = getattr(_obj, _attr)
+target = _obj
+args = tuple(_data.get("args", ()))
+kwargs = _data.get("kwargs", {})
 _start = time.monotonic()
 try:
     _rv = target(*args, **kwargs)
@@ -673,7 +681,19 @@ class ProcessIsolationManager:
         args: tuple,
         kwargs: Optional[dict],
     ) -> AgentProcessHandle:
-        payload = pickle.dumps((target, args, kwargs or {}))
+        # Validate target is an importable function (not a lambda/closure)
+        if not hasattr(target, '__module__') or not hasattr(target, '__qualname__'):
+            raise ValueError(
+                f"Target callable {target!r} must be a module-level function "
+                "with __module__ and __qualname__ for subprocess isolation"
+            )
+        # Serialize as JSON with function reference instead of pickling callables
+        payload = json.dumps({
+            "module": target.__module__,
+            "qualname": target.__qualname__,
+            "args": list(args),
+            "kwargs": kwargs or {},
+        }).encode('utf-8')
         # Sign payload with HMAC to prevent tampering
         hmac_key = os.urandom(32)
         sig = hmac.new(hmac_key, payload, hashlib.sha256).digest()

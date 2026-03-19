@@ -57,9 +57,9 @@ jobs:
 
       - name: Install build tools
         run: |
+          # Require hash verification — no fallback to unverified install (CWE-295)
           pip install --no-cache-dir --require-hashes \
-            build==1.2.1 --hash=sha256:75e10f767a433d9a86e50d83f418e83efc18ede923ee5ff7df93b6cb0306c5d4 \
-            2>/dev/null || pip install --no-cache-dir build==1.2.1
+            build==1.2.1 --hash=sha256:75e10f767a433d9a86e50d83f418e83efc18ede923ee5ff7df93b6cb0306c5d4
 
       - name: Build ${{ matrix.package }}
         working-directory: packages/${{ matrix.package }}
@@ -165,7 +165,12 @@ jobs:
 
       - name: Install NuGet CLI
         run: |
-          curl -o /usr/local/bin/nuget.exe https://dist.nuget.org/win-x86-commandline/latest/nuget.exe
+          # Pin to specific version with SHA-256 verification (CWE-494)
+          NUGET_VERSION="v6.12.2"
+          NUGET_URL="https://dist.nuget.org/win-x86-commandline/${NUGET_VERSION}/nuget.exe"
+          NUGET_SHA256="64f467376f2ee364ba389461df4a29a8f8dd9aa38120d29046e70b9c82045d97"
+          curl -fsSL -o /usr/local/bin/nuget.exe "$NUGET_URL"
+          echo "${NUGET_SHA256}  /usr/local/bin/nuget.exe" | sha256sum -c -
           echo 'alias nuget="mono /usr/local/bin/nuget.exe"' >> ~/.bashrc
 
       - name: Build .NET SDK

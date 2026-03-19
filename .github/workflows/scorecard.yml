@@ -6,7 +6,12 @@ on:
   schedule:
     - cron: "15 7 * * 1"
 
-permissions: read-all
+# Minimum permissions required by OpenSSF Scorecard
+permissions:
+  security-events: write
+  id-token: write
+  contents: read
+  actions: read
 
 jobs:
   analysis:

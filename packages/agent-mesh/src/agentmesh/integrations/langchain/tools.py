@@ -115,16 +115,17 @@ class TrustVerifiedTool(BaseTool):  # type: ignore[misc]
 
     Example::
 
+        import ast
         from agentmesh.integrations.langchain import TrustVerifiedTool
 
         tool = TrustVerifiedTool(
             name="calculator",
-            description="Performs arithmetic",
+            description="Evaluates a numeric literal safely",
             agent_did="did:mesh:abc123",
             min_trust_score=500,
-            inner_fn=lambda q: str(eval(q, {"__builtins__": {}}, {})),  # noqa: S307 — example only; use ast.literal_eval in production
+            inner_fn=lambda q: str(ast.literal_eval(q)),  # safe: only evaluates Python literal values
         )
-        result = tool.run("2 + 2")
+        result = tool.run("42")
     """
 
     # Instance attributes (not Pydantic fields for compatibility)

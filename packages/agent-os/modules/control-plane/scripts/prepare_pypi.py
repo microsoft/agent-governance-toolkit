@@ -5,7 +5,7 @@
 Setup script for PyPI package preparation
 
 This script prepares the Agent Control Plane package for PyPI release.
-"""pip 
+"""
 
 import subprocess
 import sys
@@ -18,7 +18,6 @@ def run_command(cmd, description):
     try:
         result = subprocess.run(
             cmd,
-            shell=True,
             check=True,
             capture_output=True,
             text=True

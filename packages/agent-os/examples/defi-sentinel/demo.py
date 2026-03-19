@@ -18,6 +18,7 @@ Usage:
 import asyncio
 import hashlib
 import random
+import secrets
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -163,9 +164,9 @@ class Mempool:
     def generate_legitimate_tx(self) -> Transaction:
         """Generate a normal transaction"""
         return Transaction(
-            from_addr="0x" + format(random.randint(0, 2**160-1), '040x'),
-            to_addr="0x" + format(random.randint(0, 2**160-1), '040x'),
-            value_wei=random.randint(10**16, 10**18),
+            from_addr="0x" + secrets.token_hex(20),
+            to_addr="0x" + secrets.token_hex(20),
+            value_wei=10**16 + secrets.randbelow(10**18 - 10**16 + 1),
             data="0x",
             gas_limit=21000,
             gas_price_gwei=random.uniform(20, 100),

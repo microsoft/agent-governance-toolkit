@@ -217,7 +217,8 @@ class TestPostgresStorageProvider:
             postgres_port=5432,
             postgres_database="agentmesh_test",
             postgres_user="agentmesh",
-            postgres_password="agentmesh",
+            # Test-only password — not for production use
+            postgres_password="test-only-not-for-production",
         )
         provider = PostgresStorageProvider(config)
         await provider.connect()

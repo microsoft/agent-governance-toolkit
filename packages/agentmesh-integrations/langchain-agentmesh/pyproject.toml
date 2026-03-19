@@ -35,7 +35,7 @@ classifiers = [
 ]
 dependencies = [
     "langchain-core>=0.2.0",
-    "cryptography>=41.0.0",
+    "cryptography>=44.0.0,<47.0",
 ]
 
 [project.optional-dependencies]

@@ -74,8 +74,10 @@ jobs:
             exit 0
           fi
 
-          # Sanitize title for branch name and filename
-          SAFE_TITLE=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' \
+          # Sanitize title for branch name and filename — use printf to
+          # prevent interpretation of backslash escapes and special chars
+          # (CWE-77: ISSUE_TITLE is untrusted user input)
+          SAFE_TITLE=$(printf '%s' "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' \
             | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | head -c 50)
           BRANCH="docs/spec-${ISSUE_NUMBER}-${SAFE_TITLE}"
           SPEC_FILE="docs/specs/issue-${ISSUE_NUMBER}-${SAFE_TITLE}.md"
@@ -88,22 +90,29 @@ jobs:
           printf '%s' "$SPEC_CONTENT" > "$SPEC_FILE"
 
           git add "$SPEC_FILE"
-          git commit -m "docs: add engineering spec for #${ISSUE_NUMBER}
-
-          Auto-generated from issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
+          # Use printf for commit message to safely handle untrusted title
+          printf -v COMMIT_MSG 'docs: add engineering spec for #%s\n\nAuto-generated from issue #%s' \
+            "$ISSUE_NUMBER" "$ISSUE_NUMBER"
+          git commit -m "$COMMIT_MSG"
 
           git push origin "$BRANCH"
 
-          gh pr create \
-            --title "📋 Spec: ${ISSUE_TITLE}" \
-            --body "## Auto-Generated Engineering Spec
+          # Use --body-file to avoid shell interpretation of untrusted title
+          PR_BODY="## Auto-Generated Engineering Spec
 
           This spec was auto-generated from issue #${ISSUE_NUMBER}.
 
           **Please review and refine before approving.**
 
           ---
-          Closes #${ISSUE_NUMBER} (spec request)" \
+          Closes #${ISSUE_NUMBER} (spec request)"
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
+
+          # Safely pass untrusted ISSUE_TITLE via printf to avoid injection
+          PR_TITLE=$(printf '📋 Spec: %s' "$ISSUE_TITLE")
+          gh pr create \
+            --title "$PR_TITLE" \
+            --body-file "$RUNNER_TEMP/pr-body.md" \
             --base main \
             --head "$BRANCH" \
             --label "documentation,spec" \

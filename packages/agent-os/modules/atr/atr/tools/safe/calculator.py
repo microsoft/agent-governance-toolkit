@@ -10,6 +10,7 @@ Provides safe mathematical operations with:
 - Timeout for complex calculations
 """
 
+import ast
 import math
 import operator
 import re
@@ -113,6 +114,80 @@ class CalculatorTool:
         self.max_value = max_value
         self.allow_complex = allow_complex
     
+    # AST operator mapping for safe evaluation
+    _AST_OPS = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.FloorDiv: operator.floordiv,
+        ast.Mod: operator.mod,
+        ast.Pow: operator.pow,
+    }
+    
+    _AST_UNARY_OPS = {
+        ast.USub: operator.neg,
+        ast.UAdd: operator.pos,
+    }
+    
+    def _safe_eval_node(
+        self,
+        node: ast.AST,
+        namespace: Dict[str, Any],
+    ) -> Any:
+        """Recursively evaluate an AST node using only safe operations.
+        
+        No eval()/compile() — walks the AST tree and computes results
+        using whitelisted operators and functions only.
+        """
+        if isinstance(node, ast.Expression):
+            return self._safe_eval_node(node.body, namespace)
+        
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, (int, float)):
+                return node.value
+            raise ValueError(f"Unsupported constant type: {type(node.value).__name__}")
+        
+        if isinstance(node, ast.Name):
+            if node.id in namespace:
+                return namespace[node.id]
+            raise ValueError(f"Unknown variable: {node.id}")
+        
+        if isinstance(node, ast.BinOp):
+            left = self._safe_eval_node(node.left, namespace)
+            right = self._safe_eval_node(node.right, namespace)
+            op_func = self._AST_OPS.get(type(node.op))
+            if op_func is None:
+                raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
+            return op_func(left, right)
+        
+        if isinstance(node, ast.UnaryOp):
+            operand = self._safe_eval_node(node.operand, namespace)
+            op_func = self._AST_UNARY_OPS.get(type(node.op))
+            if op_func is None:
+                raise ValueError(f"Unsupported unary operator: {type(node.op).__name__}")
+            return op_func(operand)
+        
+        if isinstance(node, ast.Call):
+            if not isinstance(node.func, ast.Name):
+                raise ValueError("Only direct function calls are allowed (no attribute access)")
+            func_name = node.func.id
+            if func_name not in self.FUNCTIONS:
+                raise ValueError(f"Function not allowed: {func_name}")
+            func = self.FUNCTIONS[func_name]
+            args = [self._safe_eval_node(arg, namespace) for arg in node.args]
+            if node.keywords:
+                raise ValueError("Keyword arguments are not supported in function calls")
+            return func(*args)
+        
+        if isinstance(node, ast.Tuple):
+            return tuple(self._safe_eval_node(elt, namespace) for elt in node.elts)
+        
+        if isinstance(node, ast.List):
+            return [self._safe_eval_node(elt, namespace) for elt in node.elts]
+        
+        raise ValueError(f"Unsupported expression type: {type(node).__name__}")
+    
     def _check_value(self, value: Union[int, float]) -> Union[int, float]:
         """Check value is within bounds."""
         if isinstance(value, complex) and not self.allow_complex:
@@ -174,8 +249,7 @@ class CalculatorTool:
             namespace.update(self.FUNCTIONS)
             namespace.update(variables)
             
-            # Parse and evaluate using ast (safe)
-            import ast
+            # Parse and evaluate using safe AST walker
             
             # Replace ^ with ** for power
             clean_expr = clean_expr.replace('^', '**')
@@ -193,6 +267,12 @@ class CalculatorTool:
                                 "error": f"Function not allowed: {node.func.id}",
                                 "result": None
                             }
+                    else:
+                        return {
+                            "success": False,
+                            "error": "Only direct function calls are allowed (no attribute access)",
+                            "result": None
+                        }
                 elif isinstance(node, ast.Name):
                     if node.id not in namespace:
                         return {
@@ -200,10 +280,15 @@ class CalculatorTool:
                             "error": f"Unknown variable: {node.id}",
                             "result": None
                         }
+                elif isinstance(node, ast.Attribute):
+                    return {
+                        "success": False,
+                        "error": "Attribute access is not allowed",
+                        "result": None
+                    }
             
-            # Compile and evaluate
-            code = compile(tree, '<expression>', 'eval')
-            result = eval(code, {"__builtins__": {}}, namespace)
+            # Evaluate using safe AST walker (no eval/compile)
+            result = self._safe_eval_node(tree.body, namespace)
             
             # Check result
             result = self._check_value(result)

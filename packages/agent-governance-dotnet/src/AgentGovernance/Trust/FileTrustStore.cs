@@ -42,7 +42,18 @@ public sealed class FileTrustStore : IDisposable
     public FileTrustStore(string filePath, double defaultScore = 500.0, double decayRate = 10.0, Action<Exception, string>? loadErrorHandler = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
-        _filePath = filePath;
+
+        // CWE-22: Validate path to prevent directory traversal attacks.
+        // Resolve the full path and reject any path containing ".." segments.
+        var resolvedPath = Path.GetFullPath(filePath);
+        if (filePath.Contains("..", StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"Path traversal detected: trust store path must not contain '..' segments. Resolved: {resolvedPath}",
+                nameof(filePath));
+        }
+
+        _filePath = resolvedPath;
         _defaultScore = Math.Clamp(defaultScore, 0, 1000);
         _decayRate = Math.Max(0, decayRate);
         _loadErrorHandler = loadErrorHandler;

@@ -210,34 +210,76 @@ class AgentOSPanel {
     this.renderMessages();
   }
   
+  // Utility: escape HTML to prevent XSS (CWE-79)
+  escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    const text = String(str);
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   renderMessages() {
     const container = document.getElementById('messageList');
     
     if (this.messages.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="icon">📭</div>
-          <p>No messages captured yet</p>
-          <p>Agent OS messages will appear here</p>
-        </div>
-      `;
+      container.innerHTML = '';
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'empty-state';
+      const icon = document.createElement('div');
+      icon.className = 'icon';
+      icon.textContent = '📭';
+      const p1 = document.createElement('p');
+      p1.textContent = 'No messages captured yet';
+      const p2 = document.createElement('p');
+      p2.textContent = 'Agent OS messages will appear here';
+      emptyDiv.appendChild(icon);
+      emptyDiv.appendChild(p1);
+      emptyDiv.appendChild(p2);
+      container.appendChild(emptyDiv);
       return;
     }
     
-    container.innerHTML = this.messages.map(msg => `
-      <div class="message-item" data-id="${msg.id}">
-        <div class="message-header">
-          <span class="message-type">${msg.type}</span>
-          <span class="message-time">${this.formatTime(msg.timestamp)}</span>
-        </div>
-        <div class="message-body">${JSON.stringify(msg.content, null, 2)}</div>
-        <div class="message-meta">
-          <span>From: ${msg.sender || 'unknown'}</span>
-          <span>To: ${msg.recipient || 'broadcast'}</span>
-          ${msg.signature ? `<span>✓ Signed</span>` : ''}
-        </div>
-      </div>
-    `).join('');
+    container.innerHTML = '';
+    this.messages.forEach(msg => {
+      const item = document.createElement('div');
+      item.className = 'message-item';
+      item.dataset.id = msg.id;
+      
+      const header = document.createElement('div');
+      header.className = 'message-header';
+      const typeSpan = document.createElement('span');
+      typeSpan.className = 'message-type';
+      typeSpan.textContent = msg.type;
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'message-time';
+      timeSpan.textContent = this.formatTime(msg.timestamp);
+      header.appendChild(typeSpan);
+      header.appendChild(timeSpan);
+      
+      const body = document.createElement('div');
+      body.className = 'message-body';
+      body.textContent = JSON.stringify(msg.content, null, 2);
+      
+      const meta = document.createElement('div');
+      meta.className = 'message-meta';
+      const fromSpan = document.createElement('span');
+      fromSpan.textContent = `From: ${msg.sender || 'unknown'}`;
+      const toSpan = document.createElement('span');
+      toSpan.textContent = `To: ${msg.recipient || 'broadcast'}`;
+      meta.appendChild(fromSpan);
+      meta.appendChild(toSpan);
+      if (msg.signature) {
+        const sigSpan = document.createElement('span');
+        sigSpan.textContent = '✓ Signed';
+        meta.appendChild(sigSpan);
+      }
+      
+      item.appendChild(header);
+      item.appendChild(body);
+      item.appendChild(meta);
+      container.appendChild(item);
+    });
   }
   
   filterMessages(query) {
@@ -310,23 +352,48 @@ class AgentOSPanel {
     const tbody = document.getElementById('trustTableBody');
     
     if (this.agents.size === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No agents registered</td></tr>';
+      tbody.innerHTML = '';
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 5;
+      td.className = 'empty-state';
+      td.textContent = 'No agents registered';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
       return;
     }
     
-    tbody.innerHTML = Array.from(this.agents.values()).map(agent => `
-      <tr>
-        <td>${agent.id}</td>
-        <td>${agent.name}</td>
-        <td>
-          <span class="trust-level ${agent.trustLevel.toLowerCase()}">
-            ${agent.trustLevel}
-          </span>
-        </td>
-        <td><code>${agent.publicKey || 'N/A'}</code></td>
-        <td>${agent.lastVerified ? this.formatTime(agent.lastVerified) : 'Never'}</td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = '';
+    Array.from(this.agents.values()).forEach(agent => {
+      const tr = document.createElement('tr');
+      
+      const tdId = document.createElement('td');
+      tdId.textContent = agent.id;
+      
+      const tdName = document.createElement('td');
+      tdName.textContent = agent.name;
+      
+      const tdTrust = document.createElement('td');
+      const trustSpan = document.createElement('span');
+      trustSpan.className = `trust-level ${agent.trustLevel.toLowerCase()}`;
+      trustSpan.textContent = agent.trustLevel;
+      tdTrust.appendChild(trustSpan);
+      
+      const tdKey = document.createElement('td');
+      const code = document.createElement('code');
+      code.textContent = agent.publicKey || 'N/A';
+      tdKey.appendChild(code);
+      
+      const tdVerified = document.createElement('td');
+      tdVerified.textContent = agent.lastVerified ? this.formatTime(agent.lastVerified) : 'Never';
+      
+      tr.appendChild(tdId);
+      tr.appendChild(tdName);
+      tr.appendChild(tdTrust);
+      tr.appendChild(tdKey);
+      tr.appendChild(tdVerified);
+      tbody.appendChild(tr);
+    });
   }
   
   filterTrust(query) {
