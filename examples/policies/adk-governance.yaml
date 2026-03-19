@@ -1,0 +1,42 @@
+# ADK Governance Policy — Sample Configuration
+#
+# ⚠️  IMPORTANT: This is a SAMPLE policy for Google ADK agents.
+# Review and customize before production use.
+
+version: "1.0"
+name: adk-governance
+description: >
+  Sample governance policy for Google ADK agents. Configures tool
+  restrictions, rate limits, and delegation controls.
+
+disclaimer: >
+  This is a sample configuration. Customize for your environment.
+
+adk_governance:
+  # Tools that are always blocked
+  blocked_tools:
+    - execute_shell
+    - run_command
+    - delete_database
+    - drop_table
+
+  # Maximum tool calls per agent per session
+  max_tool_calls: 100
+
+  # Tools requiring human approval before execution
+  require_approval_for:
+    - send_email
+    - publish_document
+    - deploy_service
+    - transfer_funds
+
+  # Delegation controls
+  delegation:
+    max_depth: 3
+    require_scope_narrowing: true
+
+  # Audit settings
+  audit:
+    log_all_tool_calls: true
+    log_delegations: true
+    include_tool_args: false  # Set true only in dev (may contain PII)
