@@ -99,3 +99,84 @@ pytest tests/ -x -q
 ## Licensing
 
 By contributing to this project, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+
+## Integration Author Guide
+
+This guide walks you through creating a new framework integration for Agent Governance Toolkit — from scaffolding to testing to publishing.
+
+### Integration Package Structure
+
+Each integration is a standalone package under `packages/agentmesh-integrations/`:
+
+```
+packages/agentmesh-integrations/your-integration/
+├── pyproject.toml          # Package metadata and dependencies
+├── README.md               # Documentation with quick start
+├── LICENSE                 # MIT License
+├── your_integration/       # Source code
+│   ├── __init__.py
+│   └── ...
+└── tests/                  # Test suite
+    ├── __init__.py
+    └── test_your_integration.py
+```
+
+### Key Interfaces to Implement
+
+1. **VerificationIdentity**: Cryptographic identity for agents
+2. **TrustGatedTool**: Wrap tools with trust requirements
+3. **TrustedToolExecutor**: Execute tools with verification
+4. **TrustCallbackHandler**: Monitor trust events
+
+See `packages/agentmesh-integrations/langchain-agentmesh/` for the best reference implementation.
+
+### Writing Tests
+
+- Mock external API calls and I/O operations
+- Use existing fixtures from `conftest.py` if available
+- Cover primary use cases and edge cases
+- Include integration tests for trust verification flows
+
+Example test pattern:
+
+```python
+def test_trust_gated_tool():
+    identity = VerificationIdentity.generate('test-agent')
+    tool = TrustGatedTool(mock_tool, required_capabilities=['test'])
+    executor = TrustedToolExecutor(identity=identity)
+    result = executor.invoke(tool, 'input')
+    assert result is not None
+```
+
+### Optional Dependency Pattern
+
+Implement graceful fallback when dependencies are not installed:
+
+```python
+try:
+    import langchain_core
+except ImportError:
+    raise ImportError(
+        "langchain-core is required. Install with: "
+        "pip install your-integration[langchain]"
+    )
+```
+
+### PR Readiness Checklist
+
+Before submitting your integration PR:
+
+- [ ] Package follows the structure outlined above
+- [ ] `pyproject.toml` includes proper metadata (name, version, description, author)
+- [ ] README.md includes installation instructions and quick start
+- [ ] All public APIs have docstrings
+- [ ] Tests pass: `pytest packages/your-integration/tests/`
+- [ ] Code follows PEP 8 and uses type hints
+- [ ] No *s or credentials committed
+- [ ] Dependencies are pinned to specific versions
+
+### Questions?
+
+- Review existing integrations in `packages/agentmesh-integrations/`
+- Open a [discussion](https://github.com/microsoft/agent-governance-toolkit/discussions) for design questions
+- Tag `@microsoft/agent-governance-team` for integration review
