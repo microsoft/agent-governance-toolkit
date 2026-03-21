@@ -345,6 +345,106 @@ def gen_rollout_data() -> dict:
     }
 
 
+POLICIES = [
+    "content-safety",
+    "rate-limit",
+    "cost-budget",
+    "pii-filter",
+    "tool-access",
+    "hallucination-guard",
+    "auth-scope",
+    "output-filter",
+]
+
+
+def gen_policy_heatmap_data(
+    view: str = "agent_x_time",
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Return (eval_heatmap_df, violation_heatmap_df, summary_df) for policy heatmap widget.
+
+    ``view`` is either ``'agent_x_time'`` (agents × time buckets) or
+    ``'policy_x_time'`` (policies × time buckets).
+    Data is sourced from governance metrics via OpenTelemetry conventions;
+    here we generate realistic simulated values in the same shape the OTel
+    exporter would produce.
+    """
+    hours = HOURS[time_range]
+    # Bucket width: 1 h buckets for short ranges, 4 h or day buckets for long.
+    if hours <= 6:
+        n_buckets = hours
+        bucket_label = "hour"
+    elif hours <= 48:
+        n_buckets = hours
+        bucket_label = "hour"
+    else:
+        n_buckets = hours // 4
+        bucket_label = "4-hour"
+
+    n_buckets = min(n_buckets, 48)  # cap display columns
+
+    end = dt.datetime.now(tz=dt.timezone.utc).replace(minute=0, second=0, microsecond=0)
+    buckets = [end - dt.timedelta(hours=(n_buckets - 1 - i)) for i in range(n_buckets)]
+    bucket_labels = [b.strftime("%m/%d %H:%M") for b in buckets]
+
+    if view == "agent_x_time":
+        rows_eval: list[dict] = []
+        rows_viol: list[dict] = []
+        for agent in selected_agents:
+            # Each agent has a characteristic baseline rate and occasional spikes
+            base_eval = rng.uniform(20, 200)
+            base_viol = rng.uniform(0.01, 0.12)  # violation fraction
+            spike_at = rng.integers(0, max(1, n_buckets - 1))
+            for i, label in enumerate(bucket_labels):
+                spike = 4.0 if i == spike_at else 1.0
+                eval_count = int(base_eval * spike * rng.uniform(0.7, 1.3))
+                viol_count = int(eval_count * base_viol * spike * rng.uniform(0.5, 1.5))
+                rows_eval.append({"y": agent, "x": label, "z": eval_count})
+                rows_viol.append({"y": agent, "x": label, "z": viol_count})
+        eval_df = pd.DataFrame(rows_eval)
+        viol_df = pd.DataFrame(rows_viol)
+        y_label = "Agent"
+    else:
+        rows_eval = []
+        rows_viol = []
+        for policy in POLICIES:
+            base_eval = rng.uniform(10, 300)
+            base_viol = rng.uniform(0.005, 0.20)
+            spike_at = rng.integers(0, max(1, n_buckets - 1))
+            for i, label in enumerate(bucket_labels):
+                spike = 5.0 if i == spike_at else 1.0
+                eval_count = int(base_eval * spike * rng.uniform(0.6, 1.4))
+                viol_count = int(eval_count * base_viol * spike * rng.uniform(0.5, 2.0))
+                rows_eval.append({"y": policy, "x": label, "z": eval_count})
+                rows_viol.append({"y": policy, "x": label, "z": viol_count})
+        eval_df = pd.DataFrame(rows_eval)
+        viol_df = pd.DataFrame(rows_viol)
+        y_label = "Policy"
+
+    # Summary table
+    if view == "agent_x_time":
+        entities = selected_agents
+    else:
+        entities = POLICIES
+
+    summary_rows = []
+    for entity in entities:
+        evals = eval_df[eval_df["y"] == entity]["z"].sum()
+        viols = viol_df[viol_df["y"] == entity]["z"].sum()
+        peak_bucket = eval_df[eval_df["y"] == entity].nlargest(1, "z")["x"].values
+        summary_rows.append(
+            {
+                y_label: entity,
+                "Total Evaluations": int(evals),
+                "Total Violations": int(viols),
+                "Violation Rate": f"{viols / max(evals, 1):.2%}",
+                "Peak Bucket": peak_bucket[0] if len(peak_bucket) else "—",
+            }
+        )
+    summary_df = pd.DataFrame(summary_rows).sort_values("Total Violations", ascending=False)
+
+    return eval_df, viol_df, summary_df
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -401,8 +501,8 @@ def _gauge(value: float, title: str, thresholds: tuple[float, float] = (2.0, 6.0
 # ---------------------------------------------------------------------------
 # TABS
 # ---------------------------------------------------------------------------
-tab_slo, tab_cost, tab_chaos, tab_inc, tab_delivery = st.tabs(
-    ["📊 SLO Health", "💰 Cost Management", "🧪 Chaos Engineering", "🚨 Incidents", "🚀 Progressive Delivery"]
+tab_slo, tab_cost, tab_chaos, tab_inc, tab_delivery, tab_policy = st.tabs(
+    ["📊 SLO Health", "💰 Cost Management", "🧪 Chaos Engineering", "🚨 Incidents", "🚀 Progressive Delivery", "🔥 Policy Heatmap"]
 )
 
 # ========================== TAB 1: SLO Health ==============================
@@ -820,6 +920,158 @@ with tab_delivery:
         {"time": (now - dt.timedelta(minutes=18)).strftime("%H:%M"), "event": "Canary 25% started", "step": 2},
     ]
     st.dataframe(pd.DataFrame(events), use_container_width=True, hide_index=True)
+
+# ========================== TAB 6: Policy Heatmap ==========================
+with tab_policy:
+    st.subheader("🔥 Policy Evaluation Heatmap")
+    st.caption(
+        "Visualises governance metric density from the OpenTelemetry pipeline. "
+        "Color intensity reflects evaluation count or violation count per time bucket. "
+        "Use the controls below to switch between views."
+    )
+
+    ctrl_left, ctrl_right = st.columns([2, 3])
+    with ctrl_left:
+        heatmap_view = st.radio(
+            "Heatmap axes",
+            ["agent_x_time", "policy_x_time"],
+            format_func=lambda v: "Agent × Time" if v == "agent_x_time" else "Policy × Time",
+            horizontal=True,
+        )
+    with ctrl_right:
+        heatmap_metric = st.radio(
+            "Color metric",
+            ["evaluations", "violations"],
+            format_func=lambda v: "Evaluation Count" if v == "evaluations" else "Violation Count",
+            horizontal=True,
+        )
+
+    eval_df, viol_df, summary_df = gen_policy_heatmap_data(view=heatmap_view)
+    plot_df = eval_df if heatmap_metric == "evaluations" else viol_df
+    color_label = "Evaluations" if heatmap_metric == "evaluations" else "Violations"
+    color_scale = "Blues" if heatmap_metric == "evaluations" else "Reds"
+    y_axis_label = "Agent" if heatmap_view == "agent_x_time" else "Policy"
+
+    # Pivot to matrix form for imshow
+    pivot = plot_df.pivot(index="y", columns="x", values="z").fillna(0)
+
+    fig_heatmap = go.Figure(
+        go.Heatmap(
+            z=pivot.values,
+            x=list(pivot.columns),
+            y=list(pivot.index),
+            colorscale=color_scale,
+            hoverongaps=False,
+            hovertemplate=(
+                f"<b>{y_axis_label}:</b> %{{y}}<br>"
+                "<b>Time:</b> %{x}<br>"
+                f"<b>{color_label}:</b> %{{z:,}}<extra></extra>"
+            ),
+            colorbar=dict(
+                title=dict(text=color_label, side="right"),
+                thickness=14,
+            ),
+        )
+    )
+    fig_heatmap.update_layout(
+        template=PLOTLY_TEMPLATE,
+        height=max(300, len(pivot) * 38 + 80),
+        margin=dict(l=20, r=20, t=30, b=80),
+        xaxis=dict(
+            title="Time bucket",
+            tickangle=-45,
+            tickfont=dict(size=10),
+            side="bottom",
+        ),
+        yaxis=dict(title=y_axis_label, autorange="reversed"),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
+    st.plotly_chart(fig_heatmap, use_container_width=True)
+
+    # KPI strip
+    total_evals = int(eval_df["z"].sum())
+    total_viols = int(viol_df["z"].sum())
+    overall_viol_rate = total_viols / max(total_evals, 1)
+    peak_row = eval_df.loc[eval_df["z"].idxmax()]
+    peak_entity = peak_row["y"]
+    peak_time = peak_row["x"]
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Total Evaluations", f"{total_evals:,}")
+    k2.metric(
+        "Total Violations",
+        f"{total_viols:,}",
+        delta=f"{overall_viol_rate:.2%} rate",
+        delta_color="inverse",
+    )
+    k3.metric(
+        "Peak Activity",
+        peak_entity,
+        delta=peak_time,
+        help="Entity with the highest single-bucket evaluation count",
+    )
+    k4.metric(
+        "Violation Rate",
+        f"{overall_viol_rate:.2%}",
+        delta=f"{(overall_viol_rate - 0.05):.2%} vs 5% baseline",
+        delta_color="inverse",
+    )
+
+    st.divider()
+
+    # Side-by-side: eval vs violation distribution
+    left_col, right_col = st.columns(2)
+
+    with left_col:
+        st.subheader("Evaluation Distribution")
+        agg_eval = eval_df.groupby("y")["z"].sum().reset_index().sort_values("z", ascending=True)
+        fig_eval_bar = go.Figure(
+            go.Bar(
+                y=agg_eval["y"],
+                x=agg_eval["z"],
+                orientation="h",
+                marker_color=COLOR_INFO,
+                hovertemplate=f"<b>%{{y}}</b><br>Evaluations: %{{x:,}}<extra></extra>",
+            )
+        )
+        fig_eval_bar.update_layout(
+            template=PLOTLY_TEMPLATE,
+            height=max(220, len(agg_eval) * 32),
+            margin=dict(l=10, r=20, t=10, b=30),
+            xaxis_title="Evaluations",
+            yaxis_title=y_axis_label,
+        )
+        st.plotly_chart(fig_eval_bar, use_container_width=True)
+
+    with right_col:
+        st.subheader("Violation Distribution")
+        agg_viol = viol_df.groupby("y")["z"].sum().reset_index().sort_values("z", ascending=True)
+        fig_viol_bar = go.Figure(
+            go.Bar(
+                y=agg_viol["y"],
+                x=agg_viol["z"],
+                orientation="h",
+                marker_color=COLOR_CRITICAL,
+                hovertemplate=f"<b>%{{y}}</b><br>Violations: %{{x:,}}<extra></extra>",
+            )
+        )
+        fig_viol_bar.update_layout(
+            template=PLOTLY_TEMPLATE,
+            height=max(220, len(agg_viol) * 32),
+            margin=dict(l=10, r=20, t=10, b=30),
+            xaxis_title="Violations",
+            yaxis_title=y_axis_label,
+        )
+        st.plotly_chart(fig_viol_bar, use_container_width=True)
+
+    st.subheader("Summary Table")
+    st.caption(
+        "Sorted by total violations. 'Peak Bucket' shows the time window with the "
+        "highest evaluation count — useful for spotting recurring patterns (e.g. "
+        "every Tuesday at 3 PM)."
+    )
+    st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
 # ---------------------------------------------------------------------------
 # Auto-refresh
