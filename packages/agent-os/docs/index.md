@@ -59,7 +59,7 @@ Learn by doing with our Jupyter notebooks:
 
 ```bash
 # Core package
-pip install agent-os
+pip install agent-os-kernel
 
 # With all features
 pip install agent-os-kernel[full]

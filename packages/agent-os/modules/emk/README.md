@@ -12,7 +12,7 @@ emk provides a simple append-only store for recording agent experiences. Episode
 ## Installation
 
 ```bash
-pip install emk
+pip install agent-os-kernel[full]  # emk is included as a submodule
 ```
 
 ## Quick Start

@@ -82,7 +82,7 @@ Each middleware works independently. Use any combination based on your requireme
 pip install agent-governance-toolkit[full]
 
 # Or install individual packages
-pip install agent-os agentmesh agent-sre
+pip install agent-os-kernel agentmesh-platform agent-sre
 ```
 
 ---

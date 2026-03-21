@@ -61,7 +61,7 @@ jobs:
           python-version: '3.11'
           
       - name: Install Agent OS
-        run: pip install agent-os
+        run: pip install agent-os-kernel
         
       - name: Run Policy Validation
         run: |
@@ -89,7 +89,7 @@ agent-os-check:
   stage: security
   image: python:3.11
   before_script:
-    - pip install agent-os
+    - pip install agent-os-kernel
   script:
     - agentos check --format json --output agent-os-report.json
     - agentos check --fail-on-violation
@@ -119,7 +119,7 @@ steps:
       versionSpec: '3.11'
       
   - script: |
-      pip install agent-os
+      pip install agent-os-kernel
     displayName: 'Install Agent OS'
     
   - script: |
@@ -147,7 +147,7 @@ steps:
     stages {
         stage('Setup') {
             steps {
-                sh 'pip install agent-os'
+                sh 'pip install agent-os-kernel'
             }
         }
         
@@ -189,7 +189,7 @@ jobs:
       - checkout
       - run:
           name: Install Agent OS
-          command: pip install agent-os
+          command: pip install agent-os-kernel
       - run:
           name: Run Security Check
           command: |

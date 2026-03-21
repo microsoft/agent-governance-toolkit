@@ -43,7 +43,7 @@ Common issues and solutions for Agent OS.
 
 2. **Install in the correct environment:**
    ```bash
-   python -m pip install agent-os
+   python -m pip install agent-os-kernel
    ```
 
 ### Import errors with optional dependencies

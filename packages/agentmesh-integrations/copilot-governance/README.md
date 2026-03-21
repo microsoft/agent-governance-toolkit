@@ -197,7 +197,7 @@ npm install @agentmesh/mastra
 
 **Python agents:**
 ```bash
-pip install agent-os
+pip install agent-os-kernel
 ```
 
 See the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit) for the full documentation.

@@ -509,7 +509,7 @@ jobs:
           python-version: '3.11'
       
       - name: Install AgentOS
-        run: pip install agent-os
+        run: pip install agent-os-kernel
       
       - name: Run Policy Validation
         run: agent-os validate --policy policies/ --strict

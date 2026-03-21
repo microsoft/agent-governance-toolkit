@@ -687,7 +687,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install agent-os
+          pip install agent-os-kernel
           pip install -r requirements.txt
       
       - name: Run Agent

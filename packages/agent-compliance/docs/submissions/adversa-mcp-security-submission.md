@@ -88,7 +88,7 @@ Identifies malicious schema patterns:
 
 ```bash
 # Install
-pip install agent-os
+pip install agent-os-kernel
 
 # Scan an MCP configuration file
 mcp-scan scan mcp-config.json

@@ -7,7 +7,7 @@ This module provides functions to push and pull episode data and experiment
 results to/from the Hugging Face Hub for sharing and reproducibility.
 
 Requirements:
-    pip install emk[huggingface]
+    pip install agent-os-kernel[full]  # includes emk with huggingface support
 
 Example:
     >>> from emk.hf_utils import upload_episodes_to_hub
@@ -52,7 +52,7 @@ def _check_hf_hub() -> None:
     if not _HF_HUB_AVAILABLE:
         raise ImportError(
             "huggingface_hub is required for this functionality. "
-            "Install it with: pip install emk[huggingface]"
+            "Install it with: pip install agent-os-kernel[full]"
         )
 
 

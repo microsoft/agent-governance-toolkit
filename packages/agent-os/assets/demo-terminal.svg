@@ -43,7 +43,7 @@
   <g class="terminal" transform="translate(20, 55)">
     <!-- Line 1: pip install -->
     <g class="line1">
-      <text y="0"><tspan class="prompt">$ </tspan><tspan class="command">pip install agent-os</tspan></text>
+      <text y="0"><tspan class="prompt">$ </tspan><tspan class="command">pip install agent-os-kernel</tspan></text>
     </g>
     
     <!-- Line 2: install output -->

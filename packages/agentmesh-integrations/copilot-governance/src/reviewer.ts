@@ -563,7 +563,7 @@ export function formatReviewResult(result: ReviewResult): string {
   lines.push(
     "> 📦 Add governance to your agent in minutes: " +
       "`npm install @agentmesh/mastra` (TypeScript) or " +
-      "`pip install agent-os` (Python)."
+      "`pip install agent-os-kernel` (Python)."
   );
 
   return lines.join("\n");

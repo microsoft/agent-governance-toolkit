@@ -15,7 +15,7 @@ What happens:
 4. Your data stays safe ✓
 
 Run:
-    pip install agent-os crewai
+    pip install agent-os-kernel crewai
     python crewai_safe_mode.py
 
 Perfect for recording a 15-second GIF showing "Access Denied"!

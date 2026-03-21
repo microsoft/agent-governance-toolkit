@@ -15,7 +15,7 @@ What happens:
 4. Your data stays safe ✓
 
 Run:
-    pip install agent-os langchain
+    pip install agent-os-kernel langchain
     python langchain_safe_mode.py
 
 For PyPI package: pip install langchain-agent-os

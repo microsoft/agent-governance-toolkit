@@ -55,7 +55,7 @@ layers of defense:
 
 - Python ≥ 3.11
 - `pip install agent-runtime` (v2.0.2+)
-- For capability guards: `pip install agent-os`
+- For capability guards: `pip install agent-os-kernel`
 
 ---
 

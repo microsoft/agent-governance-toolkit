@@ -12,7 +12,7 @@ The simplest possible Agent OS example.
 
 ```bash
 # Install
-pip install agent-os
+pip install agent-os-kernel
 
 # Run
 python agent.py

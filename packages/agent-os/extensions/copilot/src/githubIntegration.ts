@@ -199,7 +199,7 @@ jobs:
       
       - name: Install Agent OS
         run: |
-          pip install agent-os
+          pip install agent-os-kernel
           pip install -r requirements.txt || true
       
       - name: Validate policies
@@ -270,7 +270,7 @@ jobs:
           python-version: '3.11'
       - name: Run tests
         run: |
-          pip install agent-os pytest
+          pip install agent-os-kernel pytest
           pytest tests/test_${this.toSnakeCase(spec.name)}.py -v
 
   security-scan:
@@ -279,7 +279,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Security scan
         run: |
-          pip install agent-os
+          pip install agent-os-kernel
           agentos check agents/${this.toSnakeCase(spec.name)}.py --security
 
   deploy-staging:
@@ -465,7 +465,7 @@ gh workflow run ${this.toKebabCase(spec.name)}.yml
 ### Local Development
 \`\`\`bash
 # Install dependencies
-pip install agent-os
+pip install agent-os-kernel
 
 # Run locally
 python agents/${this.toSnakeCase(spec.name)}.py

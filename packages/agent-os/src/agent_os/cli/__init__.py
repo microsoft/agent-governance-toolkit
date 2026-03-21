@@ -202,7 +202,7 @@ def handle_invalid_policy(name: str) -> str:
 
 def handle_missing_dependency(package: str, extra: str = "") -> str:
     """Error message when an optional dependency is missing."""
-    install_cmd = f"pip install agent-os[{extra}]" if extra else f"pip install {package}"
+    install_cmd = f"pip install agent-os-kernel[{extra}]" if extra else f"pip install {package}"
     return format_error(
         f"Required package not installed: {package}",
         suggestion=f"Install with: {install_cmd}",

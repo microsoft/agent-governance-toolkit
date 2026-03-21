@@ -336,7 +336,7 @@ spec:
 ### Step 1: Start with Agent OS
 
 ```bash
-pip install agent-os
+pip install agent-os-kernel
 ```
 
 ```python

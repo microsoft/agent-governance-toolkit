@@ -7,7 +7,7 @@ Demonstrates how Agent OS adds governance (policy enforcement, signals,
 audit trails) to every major agent framework with a unified API.
 
 Usage:
-    pip install agent-os
+    pip install agent-os-kernel
     python governance_quickstart.py
 """
 

@@ -10,7 +10,7 @@
 ## Step 1: Install (30 seconds)
 
 ```bash
-pip install agent-os
+pip install agent-os-kernel
 ```
 
 ## Step 2: Create Your First Agent (2 minutes)

@@ -524,7 +524,7 @@ class TestErrorFormatting:
         from agent_os.cli import handle_missing_dependency
 
         msg = handle_missing_dependency("redis", extra="redis")
-        assert "pip install agent-os[redis]" in msg
+        assert "pip install agent-os-kernel[redis]" in msg
 
     def test_handle_connection_error(self):
         """Test connection-error helper includes host:port."""
