@@ -9,8 +9,10 @@ openai>=1.0.0
 anthropic>=0.18.0
 
 # Ticket systems
-zendesk-sdk>=1.0.0
-freshdesk-sdk>=2.0.0
+# zendesk-sdk is NOT on PyPI — use 'zenpy' for the Zendesk API client
+zenpy>=2.0.0
+# freshdesk-sdk is NOT on PyPI — use 'freshdesk' for the Freshdesk API client
+freshdesk>=0.1.0
 
 # Knowledge base
 pinecone-client>=3.0.0
