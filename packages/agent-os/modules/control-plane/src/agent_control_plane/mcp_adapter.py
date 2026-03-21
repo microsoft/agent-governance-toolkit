@@ -45,7 +45,26 @@ from .control_plane import AgentControlPlane
 
 
 class MCPMessageType(Enum):
-    """MCP protocol message types"""
+    """MCP protocol message types.
+
+    Enumerates the JSON-RPC methods defined by the Model Context Protocol
+    specification. Each value corresponds to a method string sent in the
+    ``"method"`` field of an MCP JSON-RPC 2.0 request.
+
+    Attributes:
+        TOOLS_LIST: List available tools on the server.
+        TOOLS_CALL: Invoke a registered tool by name.
+        RESOURCES_LIST: List available resources (files, databases, etc.).
+        RESOURCES_READ: Read the contents of a specific resource URI.
+        PROMPTS_LIST: List available prompt templates.
+        PROMPTS_GET: Retrieve a specific prompt template by name.
+        COMPLETION: Request a completion (reserved for future use).
+
+    Example:
+        >>> msg_type = MCPMessageType.TOOLS_CALL
+        >>> msg_type.value
+        'tools/call'
+    """
     TOOLS_LIST = "tools/list"
     TOOLS_CALL = "tools/call"
     RESOURCES_LIST = "resources/list"
@@ -75,19 +94,60 @@ DEFAULT_MCP_MAPPING = {
 
 
 class MCPAdapter:
-    """
-    MCP Protocol Adapter with Agent Control Plane Governance.
-    
-    This adapter intercepts MCP protocol messages and applies governance
-    rules before forwarding to the actual MCP server or client.
-    
-    MCP uses JSON-RPC 2.0 for communication, with specific methods like:
-    - tools/list: List available tools
-    - tools/call: Execute a tool
-    - resources/list: List available resources
-    - resources/read: Read a resource
-    
-    The adapter ensures all operations respect agent permissions.
+    """MCP Protocol Adapter with Agent Control Plane Governance.
+
+    Intercepts MCP protocol messages and applies governance rules before
+    forwarding to the actual MCP server or client. MCP uses JSON-RPC 2.0
+    for communication, with specific methods like:
+
+    - ``tools/list``: List available tools
+    - ``tools/call``: Execute a tool
+    - ``resources/list``: List available resources
+    - ``resources/read``: Read a resource
+
+    The adapter ensures all operations respect agent permissions and
+    policies defined in the control plane. Unknown tools are denied by
+    default (secure-by-default).
+
+    Args:
+        control_plane: The ``AgentControlPlane`` instance for governance.
+        agent_context: The ``AgentContext`` for the agent using this adapter.
+        mcp_handler: Optional upstream MCP message handler to delegate to
+            after governance checks pass.
+        tool_mapping: Optional custom mapping from tool names to
+            ``ActionType`` values. Merged with ``DEFAULT_MCP_MAPPING``.
+        on_block: Optional callback invoked when an action is blocked.
+            Receives ``(tool_name, arguments, check_result)``.
+        logger: Optional logger instance.
+
+    Attributes:
+        registered_tools: Dictionary of tool name to tool metadata.
+        registered_resources: Dictionary of URI pattern to resource metadata.
+        tool_mapping: Combined mapping of tool/operation names to
+            ``ActionType`` values used for governance decisions.
+
+    Example:
+        >>> from agent_control_plane import AgentControlPlane
+        >>> from agent_control_plane.mcp_adapter import MCPAdapter
+        >>>
+        >>> cp = AgentControlPlane()
+        >>> ctx = cp.create_agent("my-agent")
+        >>> adapter = MCPAdapter(control_plane=cp, agent_context=ctx)
+        >>>
+        >>> # Register a tool
+        >>> adapter.register_tool("read_file", {
+        ...     "name": "read_file",
+        ...     "description": "Read a file from disk",
+        ...     "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}}
+        ... })
+        >>>
+        >>> # Handle an MCP request — governance is applied automatically
+        >>> response = adapter.handle_message({
+        ...     "jsonrpc": "2.0",
+        ...     "id": 1,
+        ...     "method": "tools/call",
+        ...     "params": {"name": "read_file", "arguments": {"path": "/tmp/data.txt"}}
+        ... })
     """
     
     def __init__(
@@ -130,17 +190,24 @@ class MCPAdapter:
         )
     
     def handle_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Handle an MCP protocol message with governance.
-        
+        """Handle an MCP protocol message with governance.
+
         This is the main entry point for MCP messages. It parses the
-        JSON-RPC message, applies governance, and returns the result.
-        
+        JSON-RPC message, applies governance checks via the control plane,
+        and returns the result.
+
         Args:
-            message: MCP JSON-RPC 2.0 message
-            
+            message: MCP JSON-RPC 2.0 message containing ``jsonrpc``,
+                ``method``, ``params``, and ``id`` fields.
+
         Returns:
-            JSON-RPC 2.0 response
+            A JSON-RPC 2.0 response dict. On success, contains a
+            ``"result"`` key. On failure (governance block or error),
+            contains an ``"error"`` key with ``"code"`` and ``"message"``.
+
+        Raises:
+            PermissionError: Internally raised when governance blocks an
+                action; caught and converted to a JSON-RPC error response.
         """
         # Parse the JSON-RPC message
         jsonrpc = message.get("jsonrpc", "2.0")
@@ -198,7 +265,22 @@ class MCPAdapter:
         return {"tools": allowed_tools}
     
     def _handle_tools_call(self, params: Dict) -> Dict:
-        """Handle tools/call - execute a tool with governance."""
+        """Handle tools/call — execute a tool with governance.
+
+        Maps the tool name to an ``ActionType``, checks permissions via
+        the control plane, and either delegates to the registered handler
+        or returns the control plane result.
+
+        Args:
+            params: JSON-RPC params containing ``"name"`` and ``"arguments"``.
+
+        Returns:
+            Tool execution result dict with MCP ``content`` format.
+
+        Raises:
+            PermissionError: If the tool is unknown or governance denies
+                the action.
+        """
         tool_name = params.get("name", "")
         arguments = params.get("arguments", {})
         
@@ -259,7 +341,20 @@ class MCPAdapter:
         return {"resources": allowed_resources}
     
     def _handle_resources_read(self, params: Dict) -> Dict:
-        """Handle resources/read - read a resource with governance."""
+        """Handle resources/read — read a resource with governance.
+
+        Determines the ``ActionType`` from the URI scheme and checks
+        permissions before returning resource contents.
+
+        Args:
+            params: JSON-RPC params containing ``"uri"``.
+
+        Returns:
+            Resource contents dict with MCP ``contents`` format.
+
+        Raises:
+            PermissionError: If governance denies the resource read.
+        """
         uri = params.get("uri", "")
         
         self.logger.info(f"Resource read request: {uri}")
@@ -321,7 +416,21 @@ class MCPAdapter:
         }
     
     def _map_tool_to_action(self, tool_name: str) -> Optional[ActionType]:
-        """Map an MCP tool name to an ActionType."""
+        """Map an MCP tool name to an ``ActionType``.
+
+        Resolution order:
+        1. Exact match in ``self.tool_mapping`` (case-insensitive).
+        2. Pattern-based heuristics (e.g. names containing ``"read"``
+           and ``"file"`` map to ``FILE_READ``).
+        3. Returns ``None`` for unrecognized tools (deny-by-default).
+
+        Args:
+            tool_name: The MCP tool name to resolve.
+
+        Returns:
+            The corresponding ``ActionType``, or ``None`` if the tool
+            cannot be mapped (triggering a denial).
+        """
         tool_name_lower = tool_name.lower()
         
         # Check exact match
@@ -411,11 +520,36 @@ class MCPAdapter:
 
 
 class MCPServer:
-    """
-    Simplified MCP Server with built-in governance.
-    
-    This class provides a simple way to create an MCP-compliant server
-    with Agent Control Plane governance built in.
+    """Simplified MCP Server with built-in governance.
+
+    Provides a high-level API for creating an MCP-compliant server with
+    Agent Control Plane governance built in. Wraps an ``MCPAdapter``
+    internally and exposes convenience methods for tool and resource
+    registration.
+
+    Args:
+        server_name: Human-readable name for this MCP server.
+        control_plane: ``AgentControlPlane`` instance for governance.
+        agent_context: ``AgentContext`` representing the server's agent.
+        transport: Transport method — ``"stdio"`` (default) or ``"sse"``.
+        logger: Optional logger instance.
+
+    Attributes:
+        adapter: The underlying ``MCPAdapter`` that handles governance.
+        server_name: Name of this server.
+        transport: Active transport method.
+
+    Example:
+        >>> from agent_control_plane import AgentControlPlane
+        >>> from agent_control_plane.mcp_adapter import MCPServer
+        >>>
+        >>> cp = AgentControlPlane()
+        >>> ctx = cp.create_agent("file-agent")
+        >>> server = MCPServer("file-server", cp, ctx, transport="stdio")
+        >>>
+        >>> server.register_tool("read_file", handle_read, "Read a file")
+        >>> server.register_resource("file://", handle_resource, "File resources")
+        >>> server.start()  # All calls are now governed
     """
     
     def __init__(
