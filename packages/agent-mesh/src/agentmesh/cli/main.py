@@ -258,7 +258,11 @@ def register(agent_dir: str, name: str = None):
     console.print(f"\n[bold blue]📝 Registering agent: {agent_name}[/bold blue]\n")
 
     # Simulate registration
-    from agentmesh.identity import AgentIdentity
+    try:
+        from agentmesh.identity import AgentIdentity
+    except ImportError:
+        console.print("[red]Error: agentmesh is not installed. Run: pip install agentmesh[/red]")
+        return
     identity = AgentIdentity.create(agent_name)
 
     console.print(f"  [green]✓[/green] Generated identity: {identity.did}")
@@ -356,8 +360,12 @@ def policy(policy_file: str, validate: bool):
 
         console.print(f"\n[green]Successfully loaded {len(policies)} policies[/green]")
 
+    except FileNotFoundError:
+        console.print(f"[red]Error: Policy file not found: {policy_file}[/red]")
+    except (json.JSONDecodeError, yaml.YAMLError) as e:
+        console.print(f"[red]Error: Failed to parse {policy_file} — {e}[/red]")
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        console.print(f"[red]Error loading policy: {e}[/red]")
 
 
 @app.command()
