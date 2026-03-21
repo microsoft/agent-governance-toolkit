@@ -1,0 +1,26 @@
+# Checks all Markdown files for broken links (internal and external).
+# Uses lychee (https://github.com/lycheeverse/lychee) with configuration
+# from .lychee.toml at the repository root.
+
+name: Link Check
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  link-check:
+    name: Check Markdown links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
+        with:
+          args: >-
+            --no-progress
+            '**/*.md'
+          fail: true

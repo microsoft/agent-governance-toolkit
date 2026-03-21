@@ -1,0 +1,41 @@
+# Configuration for lychee link checker
+# https://lychee.cli.rs/configuration/
+
+# General settings
+max_concurrency = 32
+timeout = 30
+max_retries = 3
+retry_wait = 5
+
+# Accept these HTTP status codes as valid
+accept = [200, 429]
+
+# Exclude patterns for known false positives
+exclude = [
+    # Placeholder / example URLs
+    "example\\.com",
+    "example\\.org",
+    "example\\.net",
+
+    # Localhost and private networks
+    "localhost",
+    "127\\.0\\.0\\.1",
+    "0\\.0\\.0\\.0",
+
+    # npm registry (frequently rate-limits CI)
+    "npmjs\\.com",
+
+    # PyPI (frequently rate-limits CI)
+    "pypi\\.org/project",
+
+    # Microsoft login / auth endpoints (require authentication)
+    "login\\.microsoftonline\\.com",
+    "portal\\.azure\\.com",
+
+    # GitHub special URLs that require authentication or don't resolve in CI
+    "github\\.com/.*/compare/",
+    "github\\.com/.*/releases/new",
+]
+
+# Exclude email addresses from checking
+exclude_mail = true
