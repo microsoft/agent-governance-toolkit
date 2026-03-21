@@ -29,7 +29,8 @@ structlog>=24.1.0
 python-json-logger>=2.0.0
 
 # Compliance
-hashlib-compat>=1.0.0
+# hashlib-compat is NOT a real package — hashlib is part of Python's standard library
+# and requires no installation. Remove this line.
 
 # Monitoring
 prometheus-client>=0.19.0
