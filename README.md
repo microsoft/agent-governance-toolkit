@@ -271,6 +271,18 @@ Works with **12+ agent frameworks** including:
 | Human-Agent Trust Deficit | ASI-09 | ✅ Full audit trails + flight recorder |
 | Rogue Agents | ASI-10 | ✅ Kill switch + ring isolation + behavioral anomaly detection |
 
+Full mapping with implementation details and test evidence: **[OWASP-COMPLIANCE.md](docs/OWASP-COMPLIANCE.md)**
+
+### Regulatory Alignment
+
+| Regulation | Deadline | AGT Coverage |
+|------------|----------|-------------|
+| EU AI Act — High-Risk AI (Annex III) | August 2, 2026 | Audit trails (Art. 12), risk management (Art. 9), human oversight (Art. 14) |
+| Colorado AI Act (SB 24-205) | June 30, 2026 | Risk assessments, human oversight mechanisms, consumer disclosures |
+| EU AI Act — GPAI Obligations | Active | Transparency, copyright policies, systemic risk assessment |
+
+AGT provides **runtime governance** — what agents are allowed to do. For **data governance** and regulator-facing evidence export, see [Microsoft Purview DSPM for AI](https://learn.microsoft.com/purview/ai-microsoft-purview) as a complementary layer.
+
 ## Performance
 
 Governance adds **< 0.1 ms per action** — roughly 10,000× faster than an LLM API call.
