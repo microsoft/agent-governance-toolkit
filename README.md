@@ -244,17 +244,17 @@ Works with **12+ agent frameworks** including:
 
 | Framework | Stars | Integration |
 |-----------|-------|-------------|
-| [**Microsoft Agent Framework**](https://github.com/microsoft/agent-framework) | 7.6K+ ⭐ | **Native Middleware** |
-| [**Semantic Kernel**](https://github.com/microsoft/semantic-kernel) | 24K+ ⭐ | **Native (.NET + Python)** |
-| [Dify](https://github.com/langgenius/dify) | 65K+ ⭐ | Plugin |
+| [**Microsoft Agent Framework**](https://github.com/microsoft/agent-framework) | 8K+ ⭐ | **Native Middleware** |
+| [**Semantic Kernel**](https://github.com/microsoft/semantic-kernel) | 27K+ ⭐ | **Native (.NET + Python)** |
+| [Dify](https://github.com/langgenius/dify) | 133K+ ⭐ | Plugin |
+| [Microsoft AutoGen](https://github.com/microsoft/autogen) | 55K+ ⭐ | Adapter |
 | [LlamaIndex](https://github.com/run-llama/llama_index) | 47K+ ⭐ | Middleware |
-| [LangGraph](https://github.com/langchain-ai/langgraph) | 24K+ ⭐ | Adapter |
-| [Microsoft AutoGen](https://github.com/microsoft/autogen) | 42K+ ⭐ | Adapter |
-| [CrewAI](https://github.com/crewAIInc/crewAI) | 28K+ ⭐ | Adapter |
+| [CrewAI](https://github.com/crewAIInc/crewAI) | 46K+ ⭐ | Adapter |
+| [LangGraph](https://github.com/langchain-ai/langgraph) | 27K+ ⭐ | Adapter |
+| [Haystack](https://github.com/deepset-ai/haystack) | 24K+ ⭐ | Pipeline |
+| [OpenAI Agents SDK](https://github.com/openai/openai-agents-python) | 20K+ ⭐ | Middleware |
+| [Google ADK](https://github.com/google/adk-python) | 18K+ ⭐ | Adapter |
 | [Azure AI Foundry](https://learn.microsoft.com/azure/ai-studio/) | — | Deployment Guide |
-| [OpenAI Agents SDK](https://github.com/openai/openai-agents-python) | — | Middleware |
-| [Google ADK](https://github.com/google/adk-python) | — | Adapter |
-| [Haystack](https://github.com/deepset-ai/haystack) | 22K+ ⭐ | Pipeline |
 
 ## OWASP Agentic Top 10 Coverage
 
