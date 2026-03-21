@@ -6,12 +6,9 @@ on:
   schedule:
     - cron: "15 7 * * 1"
 
-# Minimum permissions required by OpenSSF Scorecard
-permissions:
-  security-events: write
-  id-token: write
-  contents: read
-  actions: read
+# Workflow-level permissions must be read-only for Scorecard verification.
+# Write permissions are scoped to the job level below.
+permissions: read-all
 
 jobs:
   analysis:
