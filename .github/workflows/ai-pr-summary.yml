@@ -1,0 +1,197 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# AI PR Summary — Consolidates all AI agent feedback into one clean verdict
+# ──────────────────────────────────────────────────────────────────────────────
+# Triggered after each AI agent workflow completes. Fetches all agent comments
+# on the PR, parses verdicts, and posts/updates a single summary table.
+# Uses an HTML marker (<!-- ai-pr-summary -->) for idempotent upserts.
+# ──────────────────────────────────────────────────────────────────────────────
+name: AI PR Summary
+
+on:
+  workflow_run:
+    workflows:
+      - "AI Code Review"
+      - "AI Security Scan"
+      - "AI Breaking Change Detector"
+      - "AI Docs Sync Check"
+      - "AI Test Generator"
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  summarize:
+    name: Post unified summary
+    runs-on: ubuntu-latest
+    # Only run when the triggering workflow was for a PR
+    if: >-
+      github.event.workflow_run.event == 'pull_request' ||
+      github.event.workflow_run.event == 'pull_request_target'
+    steps:
+      - name: Get PR number from triggering workflow
+        id: pr
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // The workflow_run event contains the head SHA; find the PR for it
+            const runId = context.payload.workflow_run.id;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const headSha = context.payload.workflow_run.head_sha;
+            const headBranch = context.payload.workflow_run.head_branch;
+
+            // Try to find PR by head branch
+            const { data: prs } = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              head: `${owner}:${headBranch}`,
+              per_page: 5,
+            });
+
+            let prNumber = null;
+            if (prs.length > 0) {
+              prNumber = prs[0].number;
+            } else {
+              // Fallback: search by commit SHA
+              const { data: searchPrs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner,
+                repo,
+                commit_sha: headSha,
+              });
+              const openPr = searchPrs.find(p => p.state === 'open');
+              if (openPr) prNumber = openPr.number;
+            }
+
+            if (!prNumber) {
+              core.info('No open PR found for this workflow run — skipping summary.');
+              core.setOutput('found', 'false');
+              return;
+            }
+
+            core.info(`Found PR #${prNumber}`);
+            core.setOutput('found', 'true');
+            core.setOutput('number', String(prNumber));
+
+      - name: Collect agent comments and post summary
+        if: steps.pr.outputs.found == 'true'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prNumber = parseInt('${{ steps.pr.outputs.number }}', 10);
+            const SUMMARY_MARKER = '<!-- ai-pr-summary -->';
+
+            // ── Agent registry ──────────────────────────────────────────
+            // Maps agent-type marker to display info
+            const AGENTS = [
+              { marker: '<!-- ai-agent:code-reviewer -->',    icon: '🔍', label: 'Code Review' },
+              { marker: '<!-- ai-agent:security-scanner -->',  icon: '🛡️', label: 'Security Scan' },
+              { marker: '<!-- ai-agent:breaking-change -->',   icon: '🔄', label: 'Breaking Changes' },
+              { marker: '<!-- ai-agent:docs-sync -->',         icon: '📝', label: 'Docs Sync' },
+              { marker: '<!-- ai-agent:test-generator -->',    icon: '🧪', label: 'Test Coverage' },
+            ];
+
+            // ── Fetch all comments on the PR ────────────────────────────
+            let allComments = [];
+            let page = 1;
+            while (true) {
+              const { data: batch } = await github.rest.issues.listComments({
+                owner, repo, issue_number: prNumber, per_page: 100, page,
+              });
+              if (!batch.length) break;
+              allComments = allComments.concat(batch);
+              if (batch.length < 100) break;
+              page++;
+            }
+
+            // ── Parse each agent's verdict ──────────────────────────────
+            function parseVerdict(body) {
+              if (!body) return { status: '⏳', statusLabel: 'Pending', detail: 'Awaiting results' };
+              const lower = body.toLowerCase();
+
+              // Check for critical / error first
+              if (/critical|error|vulnerabilit(y|ies)\s+found|high\s+severity/i.test(body)) {
+                // Try to extract a useful detail line
+                const detailMatch = body.match(/^###\s+(.+)$/m) || body.match(/^.*(?:critical|error|vulnerab).*$/mi);
+                return { status: '❌', statusLabel: 'Failed', detail: detailMatch ? detailMatch[1] || detailMatch[0] : 'Issues detected' };
+              }
+
+              // Warnings
+              if (/warning|⚠️|potential|breaking\s+change|minor/i.test(body)) {
+                const warnMatch = body.match(/(\d+)\s*warning/i);
+                const detailMatch = body.match(/^###\s+(.+)$/m) || body.match(/^.*(?:warning|⚠️|potential|breaking).*$/mi);
+                const count = warnMatch ? warnMatch[1] : '';
+                const label = count ? `${count} Warning${count === '1' ? '' : 's'}` : 'Warning';
+                return { status: '⚠️', statusLabel: label, detail: detailMatch ? (detailMatch[1] || detailMatch[0]).replace(/^#+\s*/, '').trim() : 'See details' };
+              }
+
+              // Suggestions / info
+              if (/suggest|consider|recommend|ℹ️|info/i.test(body)) {
+                const detailMatch = body.match(/^###\s+(.+)$/m) || body.match(/^.*(?:suggest|consider|recommend).*$/mi);
+                return { status: 'ℹ️', statusLabel: 'Suggestion', detail: detailMatch ? (detailMatch[1] || detailMatch[0]).replace(/^#+\s*/, '').trim() : 'See suggestions' };
+              }
+
+              // Passed / clean
+              if (/no issues|pass(ed)?|clean|no vulnerabilit|up.to.date|no breaking|all good|looks good|lgtm/i.test(body)) {
+                const detailMatch = body.match(/^.*(?:no issues|pass|clean|no vulnerab|up.to.date|no breaking|all good|looks good).*$/mi);
+                return { status: '✅', statusLabel: 'Passed', detail: detailMatch ? detailMatch[0].replace(/^#+\s*/, '').trim().slice(0, 80) : 'No issues found' };
+              }
+
+              // Default: completed but unclear verdict
+              return { status: '✅', statusLabel: 'Completed', detail: 'Analysis complete' };
+            }
+
+            // Build rows
+            const rows = AGENTS.map(agent => {
+              const comment = allComments.find(c => c.body && c.body.includes(agent.marker));
+              const verdict = comment ? parseVerdict(comment.body) : { status: '⏳', statusLabel: 'Pending', detail: 'Awaiting results' };
+              return `| ${agent.icon} ${agent.label} | ${verdict.status} ${verdict.statusLabel} | ${verdict.detail} |`;
+            });
+
+            // ── Determine overall verdict ───────────────────────────────
+            const allVerdicts = rows.join('\n');
+            let overallVerdict;
+            if (allVerdicts.includes('❌')) {
+              overallVerdict = '**Verdict: ❌ Changes needed — see failures above**';
+            } else if (allVerdicts.includes('⚠️')) {
+              overallVerdict = '**Verdict: ⚠️ Ready for human review — see warnings above**';
+            } else if (allVerdicts.includes('⏳')) {
+              overallVerdict = '**Verdict: ⏳ Still running — some checks have not completed yet**';
+            } else {
+              overallVerdict = '**Verdict: ✅ Ready for human review**';
+            }
+
+            // ── Build summary body ──────────────────────────────────────
+            const summaryBody = [
+              SUMMARY_MARKER,
+              '## ✅ PR Review Summary',
+              '',
+              '| Check | Status | Details |',
+              '|-------|--------|---------|',
+              ...rows,
+              '',
+              overallVerdict,
+              '',
+              '> 💡 Individual agent reports are collapsed below for reference.',
+            ].join('\n');
+
+            // ── Upsert summary comment ──────────────────────────────────
+            const existing = allComments.find(c => c.body && c.body.includes(SUMMARY_MARKER));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body: summaryBody,
+              });
+              core.info(`Updated existing summary comment ${existing.id}`);
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: prNumber, body: summaryBody,
+              });
+              core.info('Created new summary comment');
+            }

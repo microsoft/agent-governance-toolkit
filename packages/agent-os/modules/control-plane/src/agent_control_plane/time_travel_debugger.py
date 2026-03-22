@@ -265,16 +265,16 @@ class TimeTravelDebugger:
             if tool_args and isinstance(tool_args, str):
                 try:
                     tool_args = json.loads(tool_args)
-                except:
-                    pass
+                except (json.JSONDecodeError, ValueError) as e:
+                    self.logger.debug("Could not parse tool_args as JSON: %s", e)
             
             # Parse result if it's JSON string
             result = audit_entry.get("result")
             if result and isinstance(result, str):
                 try:
                     result = json.loads(result)
-                except:
-                    pass
+                except (json.JSONDecodeError, ValueError) as e:
+                    self.logger.debug("Could not parse result as JSON: %s", e)
             
             return ReplayEvent(
                 event_id=audit_entry.get("trace_id", str(id(audit_entry))),
