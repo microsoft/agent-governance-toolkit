@@ -248,39 +248,87 @@ runs:
           return { content, tokensUsed };
         }
 
+        // ── Helpers for comment upsert & collapsing ─────────────────────
+        function extractOneLiner(text) {
+          // Try to find a ### heading line first
+          const headingMatch = text.match(/^###\s+(.+)$/m);
+          if (headingMatch) return headingMatch[1].trim();
+          // Then look for a line containing "Summary"
+          const summaryMatch = text.match(/^.*Summary.*$/mi);
+          if (summaryMatch) return summaryMatch[0].replace(/^#+\s*/, "").trim();
+          // Fallback
+          return "View details";
+        }
+
+        async function findExistingComment(owner, repo, issueNumber, marker) {
+          // Paginate through comments to find one matching our marker
+          let page = 1;
+          while (true) {
+            const comments = await ghApi(
+              `/repos/${owner}/${repo}/issues/${issueNumber}/comments?per_page=100&page=${page}`
+            );
+            if (!comments.length) break;
+            const found = comments.find((c) => c.body && c.body.includes(marker));
+            if (found) return found;
+            if (comments.length < 100) break;
+            page++;
+          }
+          return null;
+        }
+
+        async function upsertComment(owner, repo, issueNumber, marker, body) {
+          const existing = await findExistingComment(owner, repo, issueNumber, marker);
+          if (existing) {
+            // Update (PATCH) the existing comment
+            await ghApi(`/repos/${owner}/${repo}/issues/comments/${existing.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({ body }),
+            });
+            console.log(`   Updated existing comment ${existing.id}`);
+          } else {
+            // Create a new comment
+            await ghApi(`/repos/${owner}/${repo}/issues/${issueNumber}/comments`, {
+              method: "POST",
+              body: JSON.stringify({ body }),
+            });
+            console.log(`   Created new comment`);
+          }
+        }
+
         // ── Post results ─────────────────────────────────────────────────
         async function postResults(outputMode, context, response) {
           const [owner, repo] = env("GITHUB_REPOSITORY").split("/");
+          const agentType = env("INPUT_AGENT_TYPE");
+          const marker = `<!-- ai-agent:${agentType} -->`;
 
           if (outputMode === "pr-comment" && context.prNumber) {
-            await ghApi(`/repos/${owner}/${repo}/issues/${context.prNumber}/comments`, {
-              method: "POST",
-              body: JSON.stringify({
-                body: `## 🤖 AI Agent: ${env("INPUT_AGENT_TYPE")}\n\n${response}`,
-              }),
-            });
+            const oneLiner = extractOneLiner(response);
+            const body = [
+              marker,
+              `<details>`,
+              `<summary>🤖 AI Agent: ${agentType} — ${oneLiner}</summary>`,
+              ``,
+              response,
+              ``,
+              `</details>`,
+            ].join("\n");
+            await upsertComment(owner, repo, context.prNumber, marker, body);
           }
 
           if (outputMode === "pr-review" && context.prNumber) {
+            // Reviews cannot be collapsed or updated — post as-is
             await ghApi(`/repos/${owner}/${repo}/pulls/${context.prNumber}/reviews`, {
               method: "POST",
               body: JSON.stringify({
                 event: "COMMENT",
-                body: `## 🤖 AI Agent: ${env("INPUT_AGENT_TYPE")}\n\n${response}`,
+                body: `## 🤖 AI Agent: ${agentType}\n\n${response}`,
               }),
             });
           }
 
           if (outputMode === "issue-comment" && context.issueNumber) {
-            await ghApi(
-              `/repos/${owner}/${repo}/issues/${context.issueNumber}/comments`,
-              {
-                method: "POST",
-                body: JSON.stringify({
-                  body: `## 🤖 AI Agent: ${env("INPUT_AGENT_TYPE")}\n\n${response}`,
-                }),
-              }
-            );
+            const body = `${marker}\n## 🤖 AI Agent: ${agentType}\n\n${response}`;
+            await upsertComment(owner, repo, context.issueNumber, marker, body);
           }
 
           if (outputMode === "artifact") {
