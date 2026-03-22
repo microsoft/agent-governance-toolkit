@@ -97,6 +97,20 @@ async def main():
 asyncio.run(main())
 ```
 
+### Compliance Grading
+
+Check your governance coverage with a compliance grade:
+
+```python
+from agent_compliance.verify import GovernanceVerifier
+
+verifier = GovernanceVerifier()
+attestation = verifier.verify()
+print(f"Grade: {attestation.compliance_grade()}")  # A, B, C, D, or F
+print(f"Coverage: {attestation.coverage_pct()}%")
+print(attestation.badge_markdown())
+```
+
 Install only what you need:
 
 ```bash

@@ -131,6 +131,24 @@ class GovernanceAttestation:
             return 0
         return int(self.controls_passed / self.controls_total * 100)
 
+    def compliance_grade(self) -> str:
+        """Return a letter grade based on coverage percentage.
+
+        Returns:
+            A letter grade (A, B, C, D, F) based on the percentage
+            of OWASP ASI controls that are covered.
+        """
+        pct = self.coverage_pct()
+        if pct >= 90:
+            return "A"
+        elif pct >= 80:
+            return "B"
+        elif pct >= 70:
+            return "C"
+        elif pct >= 60:
+            return "D"
+        return "F"
+
     def badge_url(self) -> str:
         """Shields.io badge URL for README embedding."""
         pct = self.coverage_pct()
