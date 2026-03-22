@@ -28,6 +28,12 @@ exclude = [
     # PyPI (frequently rate-limits CI)
     "pypi\\.org/project",
 
+    # NuGet (package not yet published)
+    "nuget\\.org/packages/Microsoft\\.AgentGovernance",
+
+    # NIST (intermittent 404s from CI runners)
+    "nist\\.gov",
+
     # Microsoft login / auth endpoints (require authentication)
     "login\\.microsoftonline\\.com",
     "portal\\.azure\\.com",
@@ -35,6 +41,11 @@ exclude = [
     # GitHub special URLs that require authentication or don't resolve in CI
     "github\\.com/.*/compare/",
     "github\\.com/.*/releases/new",
+    "github\\.com/.*/stargazers",
+
+    # Internal docs not yet created
+    "singapore-mgf-mapping\\.md",
+    "csa-atf-mapping\\.md",
 ]
 
 # Exclude email addresses from checking

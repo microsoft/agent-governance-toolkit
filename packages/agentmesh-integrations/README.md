@@ -9,7 +9,7 @@
 
 *Dify · LangChain · LangGraph · LlamaIndex · OpenAI Agents · OpenClaw · Nostr WoT · Moltbook*
 
-[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit/tree/main/packages/agentmesh-integrations?style=social)](https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agentmesh-integrations/stargazers)
+[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![AgentMesh](https://img.shields.io/badge/agentmesh-compatible-green.svg)](https://github.com/microsoft/agent-governance-toolkit)
@@ -125,8 +125,8 @@ agentmesh (core library)              agentmesh-integrations (this repo)
 
 | Type | Location | Example |
 |---|---|---|
-| **Framework adapters** (wrap agent frameworks with governance) | [Agent OS `integrations/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/src/agent_os/integrations) | LangChainKernel, CrewAIKernel |
-| **Ecosystem bridges** (connect sibling projects) | [Agent SRE `integrations/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/src/agent_sre/integrations) | Agent OS bridge, AgentMesh bridge |
+| **Framework adapters** (wrap agent frameworks with governance) | [Agent OS `integrations/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agent-os/src/agent_os/integrations) | LangChainKernel, CrewAIKernel |
+| **Ecosystem bridges** (connect sibling projects) | [Agent SRE `integrations/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agent-sre/src/agent_sre/integrations) | Agent OS bridge, AgentMesh bridge |
 | **Platform plugins & trust providers** | **This repo** | Dify plugin, Nostr WoT, Moltbook |
 
 ---
