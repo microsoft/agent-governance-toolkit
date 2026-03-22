@@ -8,7 +8,6 @@ Run with: python -m pytest tests/ -v --tb=short
 """
 
 import json
-import time
 
 import pytest
 

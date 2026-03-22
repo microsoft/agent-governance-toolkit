@@ -12,10 +12,9 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
-from a2a_agentmesh.agent_card import AgentCard
-from a2a_agentmesh.task import TaskEnvelope, TaskState
+from a2a_agentmesh.task import TaskEnvelope
 
 
 @dataclass
