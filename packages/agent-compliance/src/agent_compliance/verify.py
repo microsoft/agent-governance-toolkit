@@ -22,11 +22,14 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
+import logging
 import platform
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 # OWASP Agentic Security Initiative 2026 controls

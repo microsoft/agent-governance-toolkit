@@ -53,7 +53,7 @@ def make_request(url: str, method: str = "GET", data: Optional[dict] = None, hea
         print("\nResponse Body:")
         try:
             print_json(response.json())
-        except:
+        except ValueError:
             print(response.text)
             
         return response
