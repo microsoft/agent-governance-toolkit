@@ -21,6 +21,15 @@ try:
     CRYPTO_AVAILABLE = True
 except ImportError:
     CRYPTO_AVAILABLE = False
+    import warnings
+
+    warnings.warn(
+        "cryptography package not installed — using INSECURE simulation mode. "
+        "Signatures are NOT cryptographically verified. Install cryptography: "
+        "pip install 'langchain-agentmesh[crypto]' or pip install cryptography>=44.0.0",
+        SecurityWarning,
+        stacklevel=2,
+    )
 
 
 @dataclass
@@ -157,7 +166,8 @@ class VerificationIdentity:
             signature_bytes = private_key_obj.sign(data.encode("utf-8"))
             signature_b64 = base64.b64encode(signature_bytes).decode("ascii")
         else:
-            # Fallback simulation
+            # SECURITY WARNING: Fallback simulation — NOT cryptographically secure.
+            # Only for demo/development when cryptography package is unavailable.
             sig_input = f"{data}:{self.private_key}"
             signature_b64 = base64.b64encode(
                 hashlib.sha256(sig_input.encode()).digest()
@@ -193,7 +203,8 @@ class VerificationIdentity:
             except (InvalidSignature, ValueError):
                 return False
         else:
-            # Fallback verification (less secure, for demo only)
+            # SECURITY WARNING: Fallback verification — NOT cryptographically secure.
+            # Accepts any non-empty signature. Only for demo/development.
             return len(signature.signature) > 0
 
     def to_dict(self) -> Dict[str, Any]:
