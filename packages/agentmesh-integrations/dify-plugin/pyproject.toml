@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Security :: Cryptography",
 ]
 dependencies = [
-    "cryptography>=44.0.0,<47.0",
+    "cryptography>=45.0.3,<47.0",
     "dify-plugin>=0.0.1",
 ]
 
