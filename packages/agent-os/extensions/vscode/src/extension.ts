@@ -26,6 +26,31 @@ import { MetricsDashboardPanel } from './webviews/metricsDashboard/MetricsDashbo
 import { OnboardingPanel } from './webviews/onboarding/OnboardingPanel';
 import { AgentOSCompletionProvider, AgentOSHoverProvider } from './language/completionProvider';
 import { AgentOSDiagnosticProvider } from './language/diagnosticProvider';
+import { GovernanceDiagnosticProvider } from './language/governanceDiagnosticProvider';
+
+// Governance Visualization (Issue #39)
+import { SLODashboardProvider } from './views/sloDashboardView';
+import { AgentTopologyProvider, createMockTopologyProvider } from './views/agentTopologyView';
+import { GovernanceStatusBar } from './governanceStatusBar';
+
+// Governance Webview Panels (Issue #39 - Rich Visualization)
+import { SLODashboardPanel } from './webviews/sloDashboard/SLODashboardPanel';
+import { TopologyGraphPanel } from './webviews/agentTopology/TopologyGraphPanel';
+
+// Governance Hub (Issue #39 - Unified Dashboard)
+import { GovernanceHubPanel } from './webviews/governanceHub/GovernanceHubPanel';
+import { GovernanceHubViewProvider } from './webviews/governanceHub/GovernanceHubViewProvider';
+
+// Governance Server (Issue #39 - Browser Experience)
+import { GovernanceServer } from './server/GovernanceServer';
+
+// Export & Observability (Issue #39 - Shareable Reports)
+import { ReportGenerator, LocalStorageProvider, CredentialError } from './export';
+import { MetricsExporter } from './observability';
+
+// Mock Backend Services (replace with real bridges in production)
+import { createMockSLOBackend } from './mockBackend/MockSLOBackend';
+import { createMockTopologyBackend } from './mockBackend/MockTopologyBackend';
 
 // Enterprise Features
 import { EnterpriseAuthProvider } from './enterprise/auth/ssoProvider';
@@ -42,39 +67,76 @@ let rbacManager: RBACManager;
 let cicdIntegration: CICDIntegration;
 let complianceManager: ComplianceManager;
 let diagnosticProvider: AgentOSDiagnosticProvider;
+let governanceDiagnosticProvider: GovernanceDiagnosticProvider;
+let governanceStatusBar: GovernanceStatusBar;
+let governanceServer: GovernanceServer | undefined;
+let governanceHubViewProvider: GovernanceHubViewProvider | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Agent OS extension activating...');
 
-    // Initialize core components
-    policyEngine = new PolicyEngine();
-    cmvkClient = new CMVKClient();
-    auditLogger = new AuditLogger(context);
-    statusBar = new StatusBarManager();
+    try {
+        // Initialize core components
+        console.log('Initializing core components...');
+        policyEngine = new PolicyEngine();
+        cmvkClient = new CMVKClient();
+        auditLogger = new AuditLogger(context);
+        statusBar = new StatusBarManager();
 
-    // Initialize enterprise components
-    authProvider = new EnterpriseAuthProvider(context);
-    rbacManager = new RBACManager(authProvider);
-    cicdIntegration = new CICDIntegration();
-    complianceManager = new ComplianceManager();
-    diagnosticProvider = new AgentOSDiagnosticProvider();
+        // Initialize enterprise components
+        console.log('Initializing enterprise components...');
+        authProvider = new EnterpriseAuthProvider(context);
+        rbacManager = new RBACManager(authProvider);
+        cicdIntegration = new CICDIntegration();
+        complianceManager = new ComplianceManager();
+        diagnosticProvider = new AgentOSDiagnosticProvider();
+        governanceDiagnosticProvider = new GovernanceDiagnosticProvider();
+        governanceStatusBar = new GovernanceStatusBar();
 
-    // Log RBAC initialization
-    console.log(`RBAC initialized with ${rbacManager.getAllRoles().length} roles`);
+        // Log RBAC initialization
+        console.log(`RBAC initialized with ${rbacManager.getAllRoles().length} roles`);
 
-    // Create tree data providers
-    const auditLogProvider = new AuditLogProvider(auditLogger);
-    const policiesProvider = new PoliciesProvider(policyEngine);
-    const statsProvider = new StatsProvider(auditLogger);
-    const kernelDebuggerProvider = new KernelDebuggerProvider();
-    const memoryBrowserProvider = new MemoryBrowserProvider();
+        // Create tree data providers
+        console.log('Creating tree data providers...');
+        const auditLogProvider = new AuditLogProvider(auditLogger);
+        const policiesProvider = new PoliciesProvider(policyEngine);
+        const statsProvider = new StatsProvider(auditLogger);
+        const kernelDebuggerProvider = new KernelDebuggerProvider();
+        const memoryBrowserProvider = new MemoryBrowserProvider();
 
-    // Register tree views
-    vscode.window.registerTreeDataProvider('agent-os.auditLog', auditLogProvider);
-    vscode.window.registerTreeDataProvider('agent-os.policies', policiesProvider);
-    vscode.window.registerTreeDataProvider('agent-os.stats', statsProvider);
-    vscode.window.registerTreeDataProvider('agent-os.kernelDebugger', kernelDebuggerProvider);
-    vscode.window.registerTreeDataProvider('agent-os.memoryBrowser', memoryBrowserProvider);
+        // Register tree views
+        console.log('Registering tree views...');
+        vscode.window.registerTreeDataProvider('agent-os.auditLog', auditLogProvider);
+        vscode.window.registerTreeDataProvider('agent-os.policies', policiesProvider);
+        vscode.window.registerTreeDataProvider('agent-os.stats', statsProvider);
+        vscode.window.registerTreeDataProvider('agent-os.kernelDebugger', kernelDebuggerProvider);
+        vscode.window.registerTreeDataProvider('agent-os.memoryBrowser', memoryBrowserProvider);
+
+        // Register governance visualization (Issue #39)
+        // Mock backends simulate live data feeds through legitimate provider interfaces.
+        // Replace with real AgentSRE/AgentMesh bridges in production.
+        console.log('Registering governance visualization...');
+        const sloDataProvider = createMockSLOBackend();
+        const sloDashboardProvider = new SLODashboardProvider(sloDataProvider);
+        const agentTopologyDataProvider = createMockTopologyBackend();
+        const agentTopologyProvider = new AgentTopologyProvider(agentTopologyDataProvider);
+
+    vscode.window.registerTreeDataProvider('agent-os.sloDashboard', sloDashboardProvider);
+    vscode.window.registerTreeDataProvider('agent-os.agentTopology', agentTopologyProvider);
+
+    // Register Governance Hub sidebar webview (Issue #39 - Unified Dashboard)
+    governanceHubViewProvider = new GovernanceHubViewProvider(
+        context.extensionUri,
+        sloDataProvider,
+        agentTopologyDataProvider,
+        auditLogger
+    );
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(
+            'agent-os.governanceHub',
+            governanceHubViewProvider
+        )
+    );
 
     // Register completion and hover providers for IntelliSense
     const completionProvider = new AgentOSCompletionProvider();
@@ -103,8 +165,16 @@ export function activate(context: vscode.ExtensionContext) {
         )
     );
 
-    // Activate diagnostic provider
+    // Activate diagnostic providers
     diagnosticProvider.activate(context);
+    governanceDiagnosticProvider.activate(context);
+
+    // Initialize governance status bar with defaults
+    const mode = vscode.workspace.getConfiguration('agentOS').get<string>('mode', 'basic');
+    governanceStatusBar.updateGovernanceMode(
+        mode === 'enterprise' ? 'strict' : mode === 'enhanced' ? 'permissive' : 'audit-only',
+        0
+    );
 
     // Register inline completion interceptor
     const completionInterceptor = vscode.languages.registerInlineCompletionItemProvider(
@@ -285,6 +355,165 @@ safe_query = "SELECT * FROM users WHERE id = ?"
     });
 
     // ========================================
+    // Register Governance Visualization Commands (Issue #39)
+    // ========================================
+
+    const showSLODashboardCmd = vscode.commands.registerCommand('agent-os.showSLODashboard', () => {
+        vscode.commands.executeCommand('agent-os.sloDashboard.focus');
+    });
+
+    const showAgentTopologyCmd = vscode.commands.registerCommand('agent-os.showAgentTopology', () => {
+        vscode.commands.executeCommand('agent-os.agentTopology.focus');
+    });
+
+    const refreshSLOCmd = vscode.commands.registerCommand('agent-os.refreshSLO', () => {
+        sloDashboardProvider.refresh();
+    });
+
+    const refreshTopologyCmd = vscode.commands.registerCommand('agent-os.refreshTopology', () => {
+        agentTopologyProvider.refresh();
+    });
+
+    // Governance Webview Panels (Issue #39 - Rich Visualization)
+    const showSLOWebviewCmd = vscode.commands.registerCommand('agent-os.showSLOWebview', () => {
+        SLODashboardPanel.createOrShow(context.extensionUri, sloDataProvider);
+    });
+
+    const showTopologyGraphCmd = vscode.commands.registerCommand('agent-os.showTopologyGraph', () => {
+        TopologyGraphPanel.createOrShow(context.extensionUri, agentTopologyDataProvider);
+    });
+
+    // Governance Hub Panel (Issue #39 - Unified Dashboard)
+    const showGovernanceHubCmd = vscode.commands.registerCommand('agent-os.showGovernanceHub', () => {
+        GovernanceHubPanel.createOrShow(
+            context.extensionUri,
+            sloDataProvider,
+            agentTopologyDataProvider,
+            auditLogger
+        );
+    });
+
+    // Browser Experience Commands (Issue #39 - Local Dev Server)
+    const openGovernanceInBrowserCmd = vscode.commands.registerCommand(
+        'agent-os.openGovernanceInBrowser',
+        async () => {
+            governanceServer = GovernanceServer.getInstance(
+                sloDataProvider,
+                agentTopologyDataProvider,
+                auditLogger
+            );
+            const port = await governanceServer.start();
+            const url = `http://localhost:${port}`;
+            vscode.env.openExternal(vscode.Uri.parse(url));
+        }
+    );
+
+    const openSLOInBrowserCmd = vscode.commands.registerCommand(
+        'agent-os.openSLOInBrowser',
+        async () => {
+            governanceServer = GovernanceServer.getInstance(
+                sloDataProvider,
+                agentTopologyDataProvider,
+                auditLogger
+            );
+            const port = await governanceServer.start();
+            const url = `http://localhost:${port}/#slo`;
+            vscode.env.openExternal(vscode.Uri.parse(url));
+        }
+    );
+
+    const openTopologyInBrowserCmd = vscode.commands.registerCommand(
+        'agent-os.openTopologyInBrowser',
+        async () => {
+            governanceServer = GovernanceServer.getInstance(
+                sloDataProvider,
+                agentTopologyDataProvider,
+                auditLogger
+            );
+            const port = await governanceServer.start();
+            const url = `http://localhost:${port}/#topology`;
+            vscode.env.openExternal(vscode.Uri.parse(url));
+        }
+    );
+
+    // Export Report Command (Issue #39 - Shareable Reports)
+    const exportReportCmd = vscode.commands.registerCommand(
+        'agent-os.exportReport',
+        async () => {
+            const config = vscode.workspace.getConfiguration('agentOS.export');
+            const providerType = config.get<string>('storageProvider', 'local');
+
+            // Get configured storage provider
+            let provider: LocalStorageProvider;
+            if (providerType === 'local') {
+                const localPath = config.get<string>('localPath', '');
+                const outputDir = localPath || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+                provider = new LocalStorageProvider(outputDir);
+            } else {
+                vscode.window.showWarningMessage(
+                    `Storage provider "${providerType}" not yet implemented. Using local storage.`
+                );
+                const outputDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+                provider = new LocalStorageProvider(outputDir);
+            }
+
+            // Zero-trust: validate on every export
+            try {
+                await provider.validateCredentials();
+            } catch (e) {
+                if (e instanceof CredentialError) {
+                    const action = await vscode.window.showErrorMessage(
+                        `Storage credentials ${e.reason}: ${e.message}`,
+                        'Configure'
+                    );
+                    if (action === 'Configure') {
+                        vscode.commands.executeCommand(
+                            'workbench.action.openSettings',
+                            `agentOS.export.${e.provider}`
+                        );
+                    }
+                    return;
+                }
+                throw e;
+            }
+
+            // Generate report
+            const reportGenerator = new ReportGenerator();
+            const sloSnapshot = await sloDataProvider.getSnapshot();
+            const agents = agentTopologyDataProvider.getAgents();
+            const bridges = agentTopologyDataProvider.getBridges();
+            const delegations = agentTopologyDataProvider.getDelegations();
+            const auditEntries = auditLogger.getAll().map(e => ({
+                timestamp: new Date(),
+                type: 'audit',
+                details: e as unknown as Record<string, unknown>
+            }));
+
+            const report = reportGenerator.generate({
+                sloSnapshot,
+                agents,
+                bridges,
+                delegations,
+                auditEvents: auditEntries,
+                timeRange: { start: new Date(Date.now() - 86400000), end: new Date() }
+            });
+
+            const result = await provider.upload(
+                report,
+                `governance-report-${Date.now()}.html`
+            );
+
+            const action = await vscode.window.showInformationMessage(
+                `Report saved: ${result.url}`,
+                'Open'
+            );
+            if (action === 'Open') {
+                vscode.env.openExternal(vscode.Uri.parse(result.url));
+            }
+        }
+    );
+
+    // ========================================
     // Register Enterprise Commands
     // ========================================
 
@@ -342,6 +571,21 @@ safe_query = "SELECT * FROM users WHERE id = ?"
         createFirstAgentCmd,
         runSafetyTestCmd,
         openDocsCmd,
+        // Governance Visualization
+        showSLOWebviewCmd,
+        showTopologyGraphCmd,
+        showSLODashboardCmd,
+        showAgentTopologyCmd,
+        refreshSLOCmd,
+        refreshTopologyCmd,
+        sloDashboardProvider,
+        governanceStatusBar,
+        // Governance Hub & Browser Experience
+        showGovernanceHubCmd,
+        openGovernanceInBrowserCmd,
+        openSLOInBrowserCmd,
+        openTopologyInBrowserCmd,
+        exportReportCmd,
         // Enterprise Features
         signInCmd,
         signOutCmd,
@@ -367,10 +611,24 @@ safe_query = "SELECT * FROM users WHERE id = ?"
     }
 
     console.log('Agent OS extension activated - GA Release v1.0.0');
+    } catch (error) {
+        console.error('Agent OS extension activation failed:', error);
+        vscode.window.showErrorMessage(`Agent OS failed to activate: ${error}`);
+    }
 }
 
-export function deactivate() {
-    console.log('Agent OS extension deactivated');
+export async function deactivate() {
+    // Clean up governance server if running
+    if (governanceServer) {
+        await governanceServer.stop();
+        governanceServer = undefined;
+    }
+
+    // Clean up sidebar provider
+    if (governanceHubViewProvider) {
+        governanceHubViewProvider.dispose();
+        governanceHubViewProvider = undefined;
+    }
 }
 
 // Helper functions

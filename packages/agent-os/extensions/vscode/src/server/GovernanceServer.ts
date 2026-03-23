@@ -1,0 +1,236 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+/**
+ * Governance Server
+ *
+ * Local development server for browser-based governance dashboard viewing.
+ * Uses Node's built-in http module and ws package for WebSocket support.
+ * Broadcasts SLO, topology, and audit updates to all connected clients.
+ */
+
+import * as http from 'http';
+import { SLODataProvider } from '../views/sloTypes';
+import { AgentTopologyDataProvider } from '../views/topologyTypes';
+import { AuditLogger } from '../auditLogger';
+import { ServerState, ClientConnection, ServerMessage } from './serverTypes';
+import { renderBrowserDashboard } from './browserTemplate';
+import {
+    DEFAULT_HOST,
+    DEFAULT_PORT,
+    findAvailablePort,
+    generateClientId,
+    WebSocketLike,
+    WebSocketServerLike
+} from './serverHelpers';
+
+/**
+ * Local development server for governance dashboard visualization.
+ *
+ * Serves an HTML dashboard accessible via browser and pushes real-time
+ * updates to connected WebSocket clients. Uses singleton pattern to
+ * ensure only one server instance runs at a time.
+ */
+export class GovernanceServer {
+
+    private static _instance: GovernanceServer | undefined;
+
+    private _httpServer: http.Server | undefined;
+    private _wsServer: WebSocketServerLike | undefined;
+    private _clients: Map<string, ClientConnection> = new Map();
+    private _port: number = 0;
+    private _refreshInterval: ReturnType<typeof setInterval> | undefined;
+
+    private constructor(
+        private readonly _sloProvider: SLODataProvider,
+        private readonly _topologyProvider: AgentTopologyDataProvider,
+        private readonly _auditLogger: AuditLogger
+    ) {}
+
+    /** Get or create the singleton server instance. */
+    public static getInstance(
+        sloProvider: SLODataProvider,
+        topologyProvider: AgentTopologyDataProvider,
+        auditLogger: AuditLogger
+    ): GovernanceServer {
+        if (!GovernanceServer._instance) {
+            GovernanceServer._instance = new GovernanceServer(
+                sloProvider,
+                topologyProvider,
+                auditLogger
+            );
+        }
+        return GovernanceServer._instance;
+    }
+
+    /**
+     * Start the server on the specified or default port.
+     * Automatically finds an available port if the default is occupied.
+     */
+    public async start(port?: number): Promise<number> {
+        if (this._httpServer) {
+            return this._port;
+        }
+        this._port = await findAvailablePort(port ?? DEFAULT_PORT, DEFAULT_HOST);
+        await this._createHttpServer();
+        await this._createWebSocketServer();
+        this._startAutoRefresh();
+        return this._port;
+    }
+
+    /** Stop the server and clean up resources. */
+    public async stop(): Promise<void> {
+        this._stopAutoRefresh();
+        await this._closeWebSocketServer();
+        await this._closeHttpServer();
+        GovernanceServer._instance = undefined;
+    }
+
+    /** Get the URL for accessing the dashboard. */
+    public getUrl(): string {
+        return `http://${DEFAULT_HOST}:${this._port}`;
+    }
+
+    /** Get the current server state. */
+    public getState(): ServerState {
+        return {
+            port: this._port,
+            url: this.getUrl(),
+            clients: Array.from(this._clients.values())
+        };
+    }
+
+    /** Broadcast a message to all connected WebSocket clients. */
+    public broadcast(type: string, data: unknown): void {
+        const message: ServerMessage = {
+            type: type as ServerMessage['type'],
+            data,
+            timestamp: new Date().toISOString()
+        };
+        const payload = JSON.stringify(message);
+        this._wsServer?.clients?.forEach((client: WebSocketLike) => {
+            if (client.readyState === 1) {
+                client.send(payload);
+            }
+        });
+    }
+
+    /** Create and start the HTTP server. */
+    private _createHttpServer(): Promise<void> {
+        return new Promise((resolve, reject) => {
+            this._httpServer = http.createServer((req, res) => {
+                this._handleRequest(req, res);
+            });
+            this._httpServer.once('error', reject);
+            this._httpServer.listen(this._port, DEFAULT_HOST, () => resolve());
+        });
+    }
+
+    /** Handle incoming HTTP requests. */
+    private _handleRequest(
+        req: http.IncomingMessage,
+        res: http.ServerResponse
+    ): void {
+        if (req.url === '/' || req.url === '/index.html') {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(renderBrowserDashboard(this._port));
+            return;
+        }
+        res.writeHead(404);
+        res.end('Not Found');
+    }
+
+    /** Create the WebSocket server. */
+    private async _createWebSocketServer(): Promise<void> {
+        try {
+            // Dynamic import to avoid hard dependency on ws
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const WebSocketModule = await import('ws').catch(() => null);
+            if (!WebSocketModule) {
+                return; // ws not available, server works without WebSocket
+            }
+            this._wsServer = new WebSocketModule.WebSocketServer({
+                server: this._httpServer,
+                path: '/'
+            }) as WebSocketServerLike;
+
+            this._wsServer.on('connection', (ws: WebSocketLike) => {
+                const id = generateClientId();
+                this._clients.set(id, { id, connectedAt: new Date() });
+                ws.on('close', () => this._clients.delete(id));
+                this._sendInitialData(ws);
+            });
+        } catch {
+            // ws package not available - server works without WebSocket
+        }
+    }
+
+    /** Send initial data snapshot to a newly connected client. */
+    private async _sendInitialData(ws: WebSocketLike): Promise<void> {
+        try {
+            const slo = await this._sloProvider.getSnapshot();
+            const topology = {
+                agents: this._topologyProvider.getAgents(),
+                bridges: this._topologyProvider.getBridges(),
+                delegations: this._topologyProvider.getDelegations()
+            };
+            const audit = this._auditLogger.getRecent(50);
+            ws.send(JSON.stringify({ type: 'sloUpdate', data: slo }));
+            ws.send(JSON.stringify({ type: 'topologyUpdate', data: topology }));
+            ws.send(JSON.stringify({ type: 'auditUpdate', data: audit }));
+        } catch {
+            // Silent failure for initial data
+        }
+    }
+
+    /** Start the auto-refresh interval (10 seconds). */
+    private _startAutoRefresh(): void {
+        this._refreshInterval = setInterval(() => this._broadcastUpdates(), 10_000);
+    }
+
+    /** Stop the auto-refresh interval. */
+    private _stopAutoRefresh(): void {
+        if (this._refreshInterval) {
+            clearInterval(this._refreshInterval);
+            this._refreshInterval = undefined;
+        }
+    }
+
+    /** Broadcast current data to all clients. */
+    private async _broadcastUpdates(): Promise<void> {
+        try {
+            const slo = await this._sloProvider.getSnapshot();
+            this.broadcast('sloUpdate', slo);
+        } catch {
+            // Silent failure
+        }
+    }
+
+    /** Close WebSocket server. */
+    private _closeWebSocketServer(): Promise<void> {
+        return new Promise((resolve) => {
+            if (!this._wsServer) {
+                resolve();
+                return;
+            }
+            this._wsServer.close(() => {
+                this._wsServer = undefined;
+                this._clients.clear();
+                resolve();
+            });
+        });
+    }
+
+    /** Close HTTP server. */
+    private _closeHttpServer(): Promise<void> {
+        return new Promise((resolve) => {
+            if (!this._httpServer) {
+                resolve();
+                return;
+            }
+            this._httpServer.close(() => {
+                this._httpServer = undefined;
+                resolve();
+            });
+        });
+    }
+}

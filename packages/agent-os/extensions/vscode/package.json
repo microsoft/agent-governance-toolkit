@@ -120,6 +120,36 @@
         "title": "Agent OS: Open Documentation"
       },
       {
+        "command": "agent-os.showSLODashboard",
+        "title": "Agent OS: Show SLO Dashboard (Tree)",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "agent-os.showAgentTopology",
+        "title": "Agent OS: Show Agent Topology (Tree)",
+        "icon": "$(organization)"
+      },
+      {
+        "command": "agent-os.showSLOWebview",
+        "title": "Agent OS: SLO Dashboard (Visual)",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "agent-os.showTopologyGraph",
+        "title": "Agent OS: Agent Topology Graph",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "agent-os.refreshSLO",
+        "title": "Agent OS: Refresh SLO Data",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agent-os.refreshTopology",
+        "title": "Agent OS: Refresh Agent Topology",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "agent-os.signIn",
         "title": "Agent OS: Sign In (Enterprise)"
       },
@@ -138,6 +168,31 @@
       {
         "command": "agent-os.checkCompliance",
         "title": "Agent OS: Check Compliance"
+      },
+      {
+        "command": "agent-os.showGovernanceHub",
+        "title": "Agent OS: Open Governance Hub",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "agent-os.openSLOInBrowser",
+        "title": "Agent OS: Open SLO Dashboard in Browser",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "agent-os.openTopologyInBrowser",
+        "title": "Agent OS: Open Topology Graph in Browser",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "agent-os.openGovernanceInBrowser",
+        "title": "Agent OS: Open Governance Hub in Browser",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "agent-os.exportReport",
+        "title": "Agent OS: Export Governance Report",
+        "icon": "$(export)"
       }
     ],
     "menus": {
@@ -146,6 +201,43 @@
           "command": "agent-os.reviewCode",
           "group": "agent-os@1",
           "when": "editorHasSelection"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "agent-os.showSLOWebview",
+          "when": "view == agent-os.sloDashboard",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agent-os.openSLOInBrowser",
+          "when": "view == agent-os.sloDashboard",
+          "group": "navigation@2"
+        },
+        {
+          "command": "agent-os.refreshSLO",
+          "when": "view == agent-os.sloDashboard",
+          "group": "navigation@3"
+        },
+        {
+          "command": "agent-os.showTopologyGraph",
+          "when": "view == agent-os.agentTopology",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agent-os.openTopologyInBrowser",
+          "when": "view == agent-os.agentTopology",
+          "group": "navigation@2"
+        },
+        {
+          "command": "agent-os.refreshTopology",
+          "when": "view == agent-os.agentTopology",
+          "group": "navigation@3"
+        },
+        {
+          "command": "agent-os.showGovernanceHub",
+          "when": "view == agent-os.kernelDebugger",
+          "group": "navigation"
         }
       ],
       "commandPalette": [
@@ -167,12 +259,28 @@
     "views": {
       "agent-os-sidebar": [
         {
+          "id": "agent-os.governanceHub",
+          "name": "Governance Hub",
+          "type": "webview",
+          "visibility": "visible"
+        },
+        {
           "id": "agent-os.kernelDebugger",
           "name": "Kernel Debugger"
         },
         {
           "id": "agent-os.memoryBrowser",
           "name": "Agent Memory (VFS)"
+        },
+        {
+          "id": "agent-os.sloDashboard",
+          "name": "SLO Dashboard",
+          "visibility": "visible"
+        },
+        {
+          "id": "agent-os.agentTopology",
+          "name": "Agent Topology",
+          "visibility": "visible"
         },
         {
           "id": "agent-os.auditLog",
@@ -188,6 +296,24 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "agent-os.sloDashboard",
+        "contents": "View real-time SLO metrics with interactive gauges and charts.\n[Open Visual Dashboard](command:agent-os.showSLOWebview)\n[Open in Browser](command:agent-os.openSLOInBrowser)"
+      },
+      {
+        "view": "agent-os.agentTopology",
+        "contents": "Explore the agent mesh with an interactive force-directed graph.\n[Open Topology Graph](command:agent-os.showTopologyGraph)\n[Open in Browser](command:agent-os.openTopologyInBrowser)"
+      },
+      {
+        "view": "agent-os.kernelDebugger",
+        "contents": "Monitor kernel state, active agents, and time-travel debugging.\n[Open Governance Hub](command:agent-os.showGovernanceHub)"
+      },
+      {
+        "view": "agent-os.auditLog",
+        "contents": "No audit events recorded yet.\nAgent OS logs all policy decisions and blocked operations here.\n[Run Safety Test](command:agent-os.runSafetyTest)"
+      }
+    ],
     "configuration": {
       "title": "Agent OS",
       "properties": {
@@ -316,6 +442,52 @@
           ],
           "default": "warning",
           "description": "Minimum severity level for diagnostics"
+        },
+        "agentOS.governanceHub.tabs": {
+          "type": "array",
+          "default": ["slo", "topology", "audit"],
+          "items": {
+            "type": "string",
+            "enum": ["slo", "topology", "audit", "policies"]
+          },
+          "description": "Tabs to display in the Governance Hub"
+        },
+        "agentOS.export.storageProvider": {
+          "type": "string",
+          "enum": ["local", "s3", "azure"],
+          "default": "local",
+          "description": "Storage provider for exported reports"
+        },
+        "agentOS.export.localPath": {
+          "type": "string",
+          "default": "",
+          "description": "Local directory for exported reports (defaults to workspace)"
+        },
+        "agentOS.export.s3.bucket": {
+          "type": "string",
+          "default": "",
+          "description": "S3 bucket name for report exports"
+        },
+        "agentOS.export.s3.region": {
+          "type": "string",
+          "default": "us-east-1",
+          "description": "AWS region for S3 bucket"
+        },
+        "agentOS.export.azure.container": {
+          "type": "string",
+          "default": "",
+          "description": "Azure Blob container name for report exports"
+        },
+        "agentOS.observability.endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "URL endpoint to push governance metrics (OpenTelemetry compatible)"
+        },
+        "agentOS.observability.pushIntervalMs": {
+          "type": "number",
+          "default": 60000,
+          "minimum": 10000,
+          "description": "Interval in milliseconds between metrics pushes"
         }
       }
     },
@@ -390,15 +562,22 @@
     "publish": "vsce publish"
   },
   "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.0",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.5.10",
+    "glob": "^10.3.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "@vscode/test-electron": "^2.3.0",
     "@vscode/vsce": "^2.22.0",
     "eslint": "^8.0.0",
+    "mocha": "^10.0.0",
     "typescript": "^5.3.0"
   },
   "dependencies": {
-    "axios": "^1.6.0"
+    "axios": "^1.6.0",
+    "ws": "^8.16.0"
   }
 }
