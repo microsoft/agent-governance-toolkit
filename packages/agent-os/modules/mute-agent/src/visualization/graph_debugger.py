@@ -17,7 +17,10 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Any
 from enum import Enum
 from datetime import datetime
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 try:
     import networkx as nx
@@ -269,7 +272,8 @@ class GraphDebugger:
         # Use hierarchical layout
         try:
             pos = nx.spring_layout(G, k=2, iterations=50)
-        except:
+        except (ValueError, RuntimeError) as e:
+            logger.debug("spring_layout failed, falling back to shell_layout: %s", e)
             pos = nx.shell_layout(G)
         
         # Draw nodes with colors based on state
@@ -461,7 +465,8 @@ class GraphDebugger:
             # Layout
             try:
                 pos = nx.spring_layout(G, k=1.5, iterations=50)
-            except:
+            except (ValueError, RuntimeError) as e:
+                logger.debug("spring_layout failed, falling back to shell_layout: %s", e)
                 pos = nx.shell_layout(G)
             
             # Draw nodes
