@@ -143,10 +143,14 @@ policyServer:
     metricsPort: 9091
   resources:
     requests:
+      # -- Minimum CPU allocation (string, Kubernetes resource quantity)
       cpu: 100m
+      # -- Minimum memory allocation (string, Kubernetes resource quantity)
       memory: 256Mi
     limits:
+      # -- Maximum CPU allocation (string, Kubernetes resource quantity)
       cpu: 500m
+      # -- Maximum memory allocation (string, Kubernetes resource quantity)
       memory: 512Mi
   # -- Mount path for YAML policy files inside the container (string, absolute path)
   policyMountPath: /etc/agentmesh/policies
@@ -154,20 +158,31 @@ policyServer:
     httpGet:
       path: /healthz
       port: http
+    # -- Seconds to wait before the first liveness check (int)
     initialDelaySeconds: 30
+    # -- Interval between liveness checks (int, seconds)
     periodSeconds: 10
+    # -- Timeout for each liveness check (int, seconds)
     timeoutSeconds: 5
+    # -- Consecutive failures before restarting the pod (int)
     failureThreshold: 3
   readinessProbe:
     httpGet:
       path: /readyz
       port: http
+    # -- Seconds to wait before the first readiness check (int)
     initialDelaySeconds: 10
+    # -- Interval between readiness checks (int, seconds)
     periodSeconds: 5
+    # -- Timeout for each readiness check (int, seconds)
     timeoutSeconds: 3
+    # -- Consecutive failures before marking pod unready (int)
     failureThreshold: 3
+  # -- Node labels for pod scheduling (map)
   nodeSelector: {}
+  # -- Tolerations for pod scheduling (list)
   tolerations: []
+  # -- Affinity rules for pod scheduling (map)
   affinity: {}
 
 # ---------------------------------------------------------------------------
@@ -177,10 +192,14 @@ auditCollector:
   # -- Number of Audit Collector replicas (int, >= 1)
   replicas: 1
   image:
+    # -- Container image repository (string)
     repository: agentmesh/audit-collector
+    # -- Image tag; defaults to global.imageTag when empty (string)
     tag: ""
+    # -- Image pull policy: Always, IfNotPresent, or Never (string)
     pullPolicy: IfNotPresent
   service:
+    # -- Service type: ClusterIP, NodePort, or LoadBalancer (string)
     type: ClusterIP
     # -- Primary service port (int, 1-65535)
     port: 8445
@@ -188,10 +207,14 @@ auditCollector:
     metricsPort: 9092
   resources:
     requests:
+      # -- Minimum CPU allocation (string, Kubernetes resource quantity)
       cpu: 100m
+      # -- Minimum memory allocation (string, Kubernetes resource quantity)
       memory: 256Mi
     limits:
+      # -- Maximum CPU allocation (string, Kubernetes resource quantity)
       cpu: 500m
+      # -- Maximum memory allocation (string, Kubernetes resource quantity)
       memory: 512Mi
   persistence:
     # -- Enable persistent storage for audit logs (bool)
@@ -209,20 +232,31 @@ auditCollector:
     httpGet:
       path: /healthz
       port: http
+    # -- Seconds to wait before the first liveness check (int)
     initialDelaySeconds: 30
+    # -- Interval between liveness checks (int, seconds)
     periodSeconds: 10
+    # -- Timeout for each liveness check (int, seconds)
     timeoutSeconds: 5
+    # -- Consecutive failures before restarting the pod (int)
     failureThreshold: 3
   readinessProbe:
     httpGet:
       path: /readyz
       port: http
+    # -- Seconds to wait before the first readiness check (int)
     initialDelaySeconds: 10
+    # -- Interval between readiness checks (int, seconds)
     periodSeconds: 5
+    # -- Timeout for each readiness check (int, seconds)
     timeoutSeconds: 3
+    # -- Consecutive failures before marking pod unready (int)
     failureThreshold: 3
+  # -- Node labels for pod scheduling (map)
   nodeSelector: {}
+  # -- Tolerations for pod scheduling (list)
   tolerations: []
+  # -- Affinity rules for pod scheduling (map)
   affinity: {}
 
 # ---------------------------------------------------------------------------
@@ -232,8 +266,11 @@ apiGateway:
   # -- Number of API Gateway replicas (int, >= 1)
   replicas: 2
   image:
+    # -- Container image repository (string)
     repository: agentmesh/api-gateway
+    # -- Image tag; defaults to global.imageTag when empty (string)
     tag: ""
+    # -- Image pull policy: Always, IfNotPresent, or Never (string)
     pullPolicy: IfNotPresent
   service:
     # -- Service type; LoadBalancer exposes the gateway externally (string)
@@ -244,10 +281,14 @@ apiGateway:
     metricsPort: 9093
   resources:
     requests:
+      # -- Minimum CPU allocation (string, Kubernetes resource quantity)
       cpu: 100m
+      # -- Minimum memory allocation (string, Kubernetes resource quantity)
       memory: 256Mi
     limits:
+      # -- Maximum CPU allocation (string, Kubernetes resource quantity)
       cpu: 500m
+      # -- Maximum memory allocation (string, Kubernetes resource quantity)
       memory: 512Mi
   # -- Maximum API requests per minute per client before throttling (int)
   rateLimitPerMinute: 1000
@@ -255,20 +296,31 @@ apiGateway:
     httpGet:
       path: /healthz
       port: http
+    # -- Seconds to wait before the first liveness check (int)
     initialDelaySeconds: 30
+    # -- Interval between liveness checks (int, seconds)
     periodSeconds: 10
+    # -- Timeout for each liveness check (int, seconds)
     timeoutSeconds: 5
+    # -- Consecutive failures before restarting the pod (int)
     failureThreshold: 3
   readinessProbe:
     httpGet:
       path: /readyz
       port: http
+    # -- Seconds to wait before the first readiness check (int)
     initialDelaySeconds: 10
+    # -- Interval between readiness checks (int, seconds)
     periodSeconds: 5
+    # -- Timeout for each readiness check (int, seconds)
     timeoutSeconds: 3
+    # -- Consecutive failures before marking pod unready (int)
     failureThreshold: 3
+  # -- Node labels for pod scheduling (map)
   nodeSelector: {}
+  # -- Tolerations for pod scheduling (list)
   tolerations: []
+  # -- Affinity rules for pod scheduling (map)
   affinity: {}
 
 # ---------------------------------------------------------------------------
