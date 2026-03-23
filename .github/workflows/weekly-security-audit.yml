@@ -1,0 +1,112 @@
+name: Weekly Security Audit
+
+on:
+  schedule:
+    - cron: "0 8 * * 1" # Monday 8:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  dependency-confusion-check:
+    name: Dependency Confusion Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+
+      - name: Scan for unregistered pip install targets
+        id: dep-check
+        run: |
+          # Find all pip install commands and check package names
+          python scripts/check_dependency_confusion.py \
+            $(find . -name "*.md" -o -name "*.py" -o -name "*.ts" -o -name "*.txt" -o -name "*.yaml" -o -name "*.svg" -o -name "*.ipynb" \
+              | grep -v node_modules | grep -v .git | grep -v __pycache__ | grep -v .venv) \
+            > dep-confusion-report.txt 2>&1 || true
+          if [ -s dep-confusion-report.txt ]; then
+            echo "has-findings=true" >> "$GITHUB_OUTPUT"
+            echo "### ⚠️ Dependency Confusion Findings" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat dep-confusion-report.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "has-findings=false" >> "$GITHUB_OUTPUT"
+            echo "### ✅ No dependency confusion findings" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  security-skills-scan:
+    name: Security Skills Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Run security skills scan
+        continue-on-error: true
+        run: |
+          python scripts/security_scan.py packages/ \
+            --exclude-tests \
+            --min-severity high \
+            --format text | tee security-report.txt
+
+      - name: Generate JSON report
+        if: always()
+        run: |
+          python scripts/security_scan.py packages/ \
+            --exclude-tests \
+            --format json > weekly-security-report.json || true
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6db9a6b7e75b195db6a6b2be22da8 # v4.6.2
+        with:
+          name: weekly-security-audit
+          path: |
+            weekly-security-report.json
+            dep-confusion-report.txt
+          retention-days: 90
+
+  weak-crypto-check:
+    name: Weak Cryptography Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Check for MD5/SHA1 in non-test code
+        run: |
+          echo "### Weak Cryptography Check" >> "$GITHUB_STEP_SUMMARY"
+          FINDINGS=$(grep -rn "hashlib\.md5\|hashlib\.sha1" --include="*.py" packages/ \
+            | grep -v "test_" | grep -v "text_tool" | grep -v "security_skills" \
+            | grep -v "example" | grep -v "benchmark" | grep -v "red_team" || true)
+          if [ -n "$FINDINGS" ]; then
+            echo "⚠️ MD5/SHA1 found in production code:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$FINDINGS" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No weak cryptography in production code" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Check for pickle in non-test code
+        run: |
+          FINDINGS=$(grep -rn "pickle\.load" --include="*.py" packages/ \
+            | grep -v "test_" | grep -v "security_skills" | grep -v "# " || true)
+          if [ -n "$FINDINGS" ]; then
+            echo "⚠️ pickle usage found:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$FINDINGS" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No pickle deserialization in production code" >> "$GITHUB_STEP_SUMMARY"
+          fi
