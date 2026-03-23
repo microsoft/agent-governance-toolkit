@@ -42,7 +42,7 @@ if ($InRepo) {
     Write-Host ""
     Write-Host "[*] Installing Agent OS from PyPI..." -ForegroundColor Yellow
     
-    pip install agent-os 2>&1 | Out-Null
+    pip install agent-os-kernel 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Agent OS is not yet published to PyPI." -ForegroundColor Red
         Write-Host ""

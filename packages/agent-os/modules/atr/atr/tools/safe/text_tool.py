@@ -9,11 +9,14 @@ Provides safe text operations with:
 - Safe string operations only
 """
 
+import logging
 import re
 import hashlib
 from typing import Any, Dict, List, Optional
 
 from atr.decorator import tool
+
+logger = logging.getLogger(__name__)
 
 
 class TextTool:
@@ -431,6 +434,12 @@ class TextTool:
                 "sha512": hashlib.sha512
             }
             
+            if algorithm in ("md5", "sha1"):
+                logger.warning(
+                    "Algorithm '%s' is deprecated due to CWE-328. Use 'sha256' or 'sha512'.",
+                    algorithm,
+                )
+
             if algorithm not in algorithms:
                 return {
                     "success": False,
