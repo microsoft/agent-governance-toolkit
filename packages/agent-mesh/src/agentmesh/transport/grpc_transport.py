@@ -8,7 +8,7 @@ required).
 
 Requires the ``grpcio`` and ``grpcio-tools`` libraries::
 
-    pip install agentmesh[grpc]
+    pip install agentmesh-platform[grpc]
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def _require_grpc() -> None:
     if not HAS_GRPC:
         raise ImportError(
             "The 'grpcio' package is required for gRPC transport. "
-            "Install it with: pip install agentmesh[grpc]"
+            "Install it with: pip install agentmesh-platform[grpc]"
         )
 
 

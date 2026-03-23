@@ -73,7 +73,7 @@ Install the toolkit as an [OpenClaw skill](../packages/agentmesh-integrations/op
 
 ```bash
 # Inside the sandbox
-pip install agentmesh
+pip install agentmesh-platform
 
 # Use the skill scripts
 scripts/check-policy.sh --action "web_search" --tokens 1500 --policy policy.yaml

@@ -30,7 +30,7 @@ score trust, and maintain tamper-evident audit logs — all from your agent's co
 Install the AgentMesh governance CLI:
 
 ```bash
-pip install agentmesh-governance
+pip install agent-governance-toolkit
 ```
 
 > If `agentmesh-governance` is not yet on PyPI, install directly from source:

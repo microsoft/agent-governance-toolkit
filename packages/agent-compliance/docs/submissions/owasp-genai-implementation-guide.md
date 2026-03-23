@@ -12,7 +12,7 @@ The stack consists of four components:
 | Component | Role | Install |
 |---|---|---|
 | **Agent OS** | Governance kernel — policy, sandbox, memory, MCP security | `pip install agent-os-kernel` |
-| **AgentMesh** | Identity & trust — DIDs, SPIFFE, handshake, reputation | `pip install agentmesh` |
+| **AgentMesh** | Identity & trust — DIDs, SPIFFE, handshake, reputation | `pip install agentmesh-platform` |
 | **Agent SRE** | Observability — SLOs, anomaly detection, chaos, OpenTelemetry | `pip install agent-sre` |
 | **Agent Runtime** | Runtime control — kill switch, execution rings, saga rollback | `pip install agent-runtime` |
 

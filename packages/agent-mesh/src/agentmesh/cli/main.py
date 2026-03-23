@@ -261,7 +261,7 @@ def register(agent_dir: str, name: str = None):
     try:
         from agentmesh.identity import AgentIdentity
     except ImportError:
-        console.print("[red]Error: agentmesh is not installed. Run: pip install agentmesh[/red]")
+        console.print("[red]Error: agentmesh is not installed. Run: pip install agentmesh-platform[/red]")
         return
     identity = AgentIdentity.create(agent_name)
 

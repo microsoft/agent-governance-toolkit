@@ -2427,11 +2427,11 @@ class HotReloadManager:
             module = sys.modules.get(module_name)
             if module and hasattr(module, '__file__') and module.__file__:
                 with open(module.__file__, 'rb') as f:
-                    return hashlib.md5(f.read()).hexdigest()
+                    return hashlib.sha256(f.read()).hexdigest()
         except Exception as e:
             logger.warning(f"Could not compute version for {module_name}: {e}")
         
-        return hashlib.md5(module_name.encode()).hexdigest()
+        return hashlib.sha256(module_name.encode()).hexdigest()
     
     async def check_for_changes(self, agent_id: str) -> bool:
         """Check if an agent's code has changed"""

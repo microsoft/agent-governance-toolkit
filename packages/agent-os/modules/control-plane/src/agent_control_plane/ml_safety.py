@@ -82,7 +82,7 @@ class EmbeddingVector:
         """Create a simplified embedding from text"""
         # In production, would call actual embedding model
         # This is a simplified hash-based approach for demonstration
-        vector_hash = hashlib.md5(text.lower().encode()).hexdigest()
+        vector_hash = hashlib.sha256(text.lower().encode()).hexdigest()
         return EmbeddingVector(text=text, vector_hash=vector_hash)
 
 

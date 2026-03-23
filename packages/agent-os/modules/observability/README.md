@@ -20,7 +20,7 @@ This package provides metrics, tracing, and dashboards for monitoring Agent OS d
 ### Install Package
 
 ```bash
-pip install agent-os-observability
+pip install agent-os-kernel[observability]
 ```
 
 ### Basic Usage

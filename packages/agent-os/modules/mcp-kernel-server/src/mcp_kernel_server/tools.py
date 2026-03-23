@@ -335,7 +335,7 @@ class CMVKVerifyTool:
         # responses = [await call_model(m, claim) for m in models]
         
         # For demo: Generate deterministic mock responses
-        claim_hash = int(hashlib.md5(claim.encode()).hexdigest()[:8], 16)
+        claim_hash = int(hashlib.sha256(claim.encode()).hexdigest()[:8], 16)
         
         # Simulate model responses (in production, actual API calls)
         responses = []
