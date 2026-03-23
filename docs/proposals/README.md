@@ -2,7 +2,7 @@
 
 Master index of all external proposals, PRs, and issues submitted by the Agent Governance Toolkit project.
 
-Last updated: March 4, 2026
+Last updated: March 21, 2026
 
 ---
 
@@ -55,6 +55,8 @@ Last updated: March 4, 2026
 | **MetaGPT** | [FoundationAgents/MetaGPT#1936](https://github.com/FoundationAgents/MetaGPT/pull/1936) | Trust Layer | Open | [METAGPT-INTEGRATION-PROPOSAL.md](./METAGPT-INTEGRATION-PROPOSAL.md) |
 | **Dify** | [langgenius/dify-plugins#2060](https://github.com/langgenius/dify-plugins/pull/2060) | Trust Layer Plugin | ✅ Merged | [DIFY-INTEGRATION-PROPOSAL.md](./DIFY-INTEGRATION-PROPOSAL.md) |
 | **OpenLit** | [openlit/openlit#1037](https://github.com/openlit/openlit/pull/1037) | SRE Instrumentation | Open | [OPENLIT-INTEGRATION-PROPOSAL.md](./OPENLIT-INTEGRATION-PROPOSAL.md) |
+| **Haystack** | [deepset-ai/haystack#10769](https://github.com/deepset-ai/haystack/issues/10769) | Governance SuperComponents | ✅ Shipped | [HAYSTACK-INTEGRATION-PROPOSAL.md](./HAYSTACK-INTEGRATION-PROPOSAL.md) |
+| **Oracle Agent Spec** | [oracle/agent-spec#125](https://github.com/oracle/agent-spec/issues/125) | Controls Mapping | 🔄 Active | [ORACLE-AGENTSPEC-PROPOSAL.md](./ORACLE-AGENTSPEC-PROPOSAL.md) |
 
 ## MCP Ecosystem
 

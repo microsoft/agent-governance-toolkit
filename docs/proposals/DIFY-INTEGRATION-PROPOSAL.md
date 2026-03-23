@@ -1,7 +1,7 @@
 # Dify — AgentMesh Trust Layer Plugin
 
 **Submission:** [langgenius/dify-plugins#2060](https://github.com/langgenius/dify-plugins/pull/2060)
-**Status:** ✅ Merged
+**Status:** ✅ Shipped — Plugin merged (PR #2060), live on Dify Marketplace
 **Type:** Plugin submission (Dify Marketplace)
 **Date Submitted:** March 2, 2026
 

@@ -1,7 +1,7 @@
 # Microsoft Agent Framework — Governance Middleware Integration
 
 **Submission:** [microsoft/agent-framework#4440](https://github.com/microsoft/agent-framework/issues/4440)
-**Status:** Open — awaiting MAF team response
+**Status:** ✅ Implemented (Level 1) — Middleware adapter with 18 passing tests. Awaiting MAF team for Level 2/3.
 **Type:** Feature proposal (3-level integration)
 **Sponsor:** Patrick Chanezon (VP DevRel) — "+@ShawnHenry to integrate with MAF before you ship this."
 **Date Submitted:** March 3, 2026

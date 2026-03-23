@@ -4,6 +4,7 @@
 - [github/awesome-copilot#755](https://github.com/github/awesome-copilot/pull/755) — Agent governance skill ✅ Merged
 - [github/awesome-copilot#756](https://github.com/github/awesome-copilot/pull/756) — Governance audit hook ✅ Merged
 - [github/awesome-copilot#757](https://github.com/github/awesome-copilot/pull/757) — Safety instructions + reviewer agent ✅ Merged
+**Status:** ✅ Shipped — All 3 PRs merged into awesome-copilot
 **Date Submitted:** March 2, 2026
 
 ---

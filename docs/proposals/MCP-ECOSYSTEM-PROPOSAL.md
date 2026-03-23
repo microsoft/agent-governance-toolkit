@@ -3,6 +3,7 @@
 **Submissions:**
 - [modelcontextprotocol/servers#3352](https://github.com/modelcontextprotocol/servers/issues/3352) — Community governance server (Open Issue)
 - [modelcontextprotocol/registry#978](https://github.com/modelcontextprotocol/registry/issues/978) — Governance category + server entry (Open Issue)
+**Status:** ⚠️ Partially Shipped — MCP Server published on npm + Glama. Registry submission pending.
 **Date Submitted:** March 2, 2026
 
 ---
