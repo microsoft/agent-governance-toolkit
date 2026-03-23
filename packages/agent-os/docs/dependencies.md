@@ -25,7 +25,7 @@ Agent OS follows "Scale by Subtraction" - minimal dependencies for a lean kernel
 |---------|------------|
 | fastapi | REST API endpoints |
 | uvicorn | ASGI server |
-| PyPDF2 | Document parsing |
+| pypdf | Document parsing |
 | numpy | Vector operations |
 | scikit-learn | ML-based context ranking |
 
