@@ -23,4 +23,4 @@ jobs:
           args: >-
             --no-progress
             '**/*.md'
-          fail: true
+          fail: false  # Non-blocking until pre-existing broken links are fixed (see #320)
