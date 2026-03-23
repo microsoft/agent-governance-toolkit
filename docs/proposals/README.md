@@ -65,6 +65,14 @@ Last updated: March 21, 2026
 | **MCP Servers** | [modelcontextprotocol/servers#3352](https://github.com/modelcontextprotocol/servers/issues/3352) | Governance Server | Open | [MCP-ECOSYSTEM-PROPOSAL.md](./MCP-ECOSYSTEM-PROPOSAL.md) |
 | **MCP Registry** | [modelcontextprotocol/registry#978](https://github.com/modelcontextprotocol/registry/issues/978) | Security Category | Open | [MCP-ECOSYSTEM-PROPOSAL.md](./MCP-ECOSYSTEM-PROPOSAL.md) |
 
+## Agent Infrastructure & Protocols
+
+| Target | Submission | Type | Status | Document |
+|--------|-----------|------|--------|----------|
+| **Nexus Trust Exchange** | Internal (pre-alpha) | Agent Discovery & Trust Exchange | ✅ Pre-Alpha | [NEXUS-TRUST-EXCHANGE-PROPOSAL.md](./NEXUS-TRUST-EXCHANGE-PROPOSAL.md) |
+| **A2A Trust Extensions** | AAIF contribution (proposed) | Trust & Payment Extensions | ✅ Adapter Shipped | [A2A-TRUST-EXTENSIONS-PROPOSAL.md](./A2A-TRUST-EXTENSIONS-PROPOSAL.md) |
+| **Stripe MPP** | Planned | Governed Agent Payments | 📋 Planned | [STRIPE-MPP-PROPOSAL.md](./STRIPE-MPP-PROPOSAL.md) |
+
 ## Awesome Lists (Open PRs)
 
 | Repository | PR | Stars |
@@ -110,8 +118,9 @@ Last updated: March 21, 2026
 | Google Ecosystem | 2 | 0 | 2 | 0 |
 | OpenAI Ecosystem | 2 | 0 | 1 | 1 |
 | Anthropic Ecosystem | 3 | 0 | 3 | 0 |
-| Framework Integrations | 5 | 1 | 4 | 0 |
+| Framework Integrations | 7 | 1 | 5 | 0 |
 | MCP Ecosystem | 2 | 0 | 2 | 0 |
+| Agent Infrastructure | 3 | 0 | 3 | 0 |
 | Awesome Lists | 18 | 0 | 18 | 0 |
 | Other Integrations | 6 | 0 | 6 | 0 |
-| **Total** | **46** | **4** | **42** | **2** |
+| **Total** | **51** | **4** | **46** | **2** |
