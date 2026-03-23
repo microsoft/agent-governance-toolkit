@@ -4,6 +4,9 @@
 # - For PRs: provides a friendly first-PR review with extra guidance
 # Builds OSS community by making the contribution experience welcoming.
 name: AI Contributor Guide
+# SECURITY: Uses pull_request_target for write access to post PR comments.
+# All checkouts pin to BASE ref (never HEAD) to prevent RCE via modified
+# composite actions in fork PRs. See MSRC Case 111178.
 
 on:
   issues:
@@ -32,6 +35,9 @@ jobs:
     # is fetched via GitHub API. Permissions are scoped to minimum needed.
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          persist-credentials: false
 
       - name: Guide contributor on issue
         uses: ./.github/actions/ai-agent-runner
@@ -81,7 +87,14 @@ jobs:
     # Permissions scoped to minimum: contents:read for base checkout, pr:write
     # for posting the welcome comment.
     steps:
+      - name: Fork safety check
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: echo "::notice::Running on fork PR — composite action resolved from base branch (safe)"
+
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
 
       - name: Guide PR author
         uses: ./.github/actions/ai-agent-runner

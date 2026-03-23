@@ -3,6 +3,9 @@
 # changed function signatures, modified exports in __init__.py, and changed
 # exception types. Posts findings as a PR comment with severity ratings.
 name: AI Breaking Change Detector
+# SECURITY: Uses pull_request_target for write access to post PR comments.
+# All checkouts pin to BASE ref (never HEAD) to prevent RCE via modified
+# composite actions in fork PRs. See MSRC Case 111178.
 
 on:
   pull_request_target:
@@ -25,12 +28,14 @@ jobs:
       github.actor != 'dependabot[bot]'
     continue-on-error: true
     steps:
+      - name: Fork safety check
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: echo "::notice::Running on fork PR — composite action resolved from base branch (safe)"
+
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          # SECURITY: pull_request_target — checkout base branch (default), NOT
-          # the PR head. The composite action fetches the diff via GitHub API,
-          # so checking out HEAD is unnecessary and would let a malicious PR
-          # modify .github/actions/ code that runs with elevated GITHUB_TOKEN.
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Run breaking change analysis
