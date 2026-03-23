@@ -50,7 +50,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install pyyaml
+        run: pip install --no-cache-dir pyyaml==6.0.2
 
       - name: Run security skills scan
         continue-on-error: true

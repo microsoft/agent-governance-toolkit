@@ -34,7 +34,8 @@ jobs:
 
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          # SECURITY: pull_request_target defaults to base branch checkout (safe).
+          # Do NOT add ref: head.sha — see MSRC Case 111178.
           persist-credentials: false
           fetch-depth: 0
 

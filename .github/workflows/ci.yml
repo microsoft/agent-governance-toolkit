@@ -46,7 +46,7 @@ jobs:
         working-directory: packages/${{ matrix.package }}
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .
-          pip install --no-cache-dir pytest>=8.0 pytest-asyncio>=0.23 2>/dev/null || true
+          pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==0.26.0 2>/dev/null || true
       - name: Test ${{ matrix.package }}
         working-directory: packages/${{ matrix.package }}
         run: pytest tests/ -q --tb=short
@@ -130,7 +130,7 @@ jobs:
         working-directory: packages/agentmesh-integrations/${{ matrix.package }}
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .
-          pip install --no-cache-dir pytest pytest-asyncio 2>/dev/null || true
+          pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==0.26.0 2>/dev/null || true
       - name: Validate Python syntax
         working-directory: packages/agentmesh-integrations/${{ matrix.package }}
         run: |

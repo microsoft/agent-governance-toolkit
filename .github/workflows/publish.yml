@@ -76,6 +76,11 @@ jobs:
             exit 1
           fi
 
+      - name: Sign release artifacts with sigstore
+        uses: sigstore/gh-action-sigstore-python@f514d46b907ebcd5bedc05145c03b69c1edd8b46 # v3.0.0
+        with:
+          inputs: packages/${{ matrix.package }}/dist/*
+
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:

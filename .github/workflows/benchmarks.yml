@@ -19,11 +19,11 @@ jobs:
 
       - name: Install agent-os dependencies
         working-directory: packages/agent-os
-        run: pip install -e ".[dev]" --quiet
+        run: pip install --no-cache-dir -e ".[dev]" --quiet
 
       - name: Install agent-sre dependencies
         working-directory: packages/agent-sre
-        run: pip install -e ".[dev]" --quiet
+        run: pip install --no-cache-dir -e ".[dev]" --quiet
 
       - name: Run policy benchmarks
         working-directory: packages/agent-os
