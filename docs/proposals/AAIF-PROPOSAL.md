@@ -6,6 +6,7 @@
 **Requested Level:** Sandbox → Incubation
 **License:** MIT
 **Primary Contact:** Imran Siddique (agt@microsoft.com)
+**Status:** ⏸️ Paused — Will re-submit after public release. A2A trust provider shipped. 6,100+ tests passing.
 
 ---
 

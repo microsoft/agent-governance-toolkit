@@ -1,7 +1,7 @@
 # Google ADK — GovernancePlugin Proposal
 
 **Submission:** [google/adk-python#4543](https://github.com/google/adk-python/issues/4543)
-**Status:** Open — under Google team review
+**Status:** ✅ Implemented — ADK GovernanceAdapter shipped (packages/agentmesh-integrations/adk-agentmesh/). PolicyEvaluator aligned with ADK protocol. Issue #4543 open on google/adk-python.
 **Type:** Feature request (BasePlugin implementation)
 **Date Submitted:** March 2, 2026
 

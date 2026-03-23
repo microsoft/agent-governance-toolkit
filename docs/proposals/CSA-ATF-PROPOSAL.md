@@ -1,6 +1,6 @@
 # Proposal: CSA Agentic Trust Framework (ATF) Integration
 
-**Status:** Draft  
+**Status:** 🔄 Active — ATF author (Josh Woodruff) engaged. Conformance spec published. Async assessment in progress. All 15 requirements mapped.  
 **Author:** Imran Siddique (Microsoft)  
 **Created:** 2026-03-04  
 **Target:** Cloud Security Alliance (CSA) Agentic Trust Framework Working Group
@@ -48,3 +48,12 @@ See [docs/compliance/csa-atf-mapping.md](compliance/csa-atf-mapping.md) for the 
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
 - [Full ATF Compliance Mapping](compliance/csa-atf-mapping.md)
 - [OWASP Compliance Mapping](OWASP-COMPLIANCE.md)
+
+## Progress
+
+- 2026-03-04: Proposal created with full 5-pillar compliance mapping
+- 2026-03-08: Published to microsoft/agent-governance-toolkit
+- 2026-03-19: ATF author Josh Woodruff reached out (Discussion #301)
+- 2026-03-20: Confirmed alignment on 3 spec additions (delegation chains, AI-BOM, trust scoring)
+- 2026-03-23: ATF Conformance Specification published — reviewing for implementer feedback
+- Next: Async conformance assessment document

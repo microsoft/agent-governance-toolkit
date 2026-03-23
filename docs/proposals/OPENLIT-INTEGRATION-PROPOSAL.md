@@ -2,7 +2,7 @@
 
 **Issue:** [openlit/openlit#1003](https://github.com/openlit/openlit/issues/1003)
 **PR:** [openlit/openlit#1037](https://github.com/openlit/openlit/pull/1037)
-**Status:** PR open — awaiting review (invited by @amanagarwal042)
+**Status:** ✅ Implemented — Auto-instrumentation complete. Upstream PR #1062 under review. Integration docs PR in progress.
 **Type:** New instrumentation (auto-instrumentation via `openlit.init()`)
 **Date Submitted:** March 2, 2026
 
