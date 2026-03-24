@@ -14,7 +14,7 @@ Zero-trust governance skill for OpenClaw agents, enabling policy enforcement, id
 Register this skill with your OpenClaw agent:
 
 ```bash
-pip install agentmesh-governance
+pip install agent-governance-toolkit
 ```
 
 Then use the scripts in `scripts/` to enforce governance from your agent:

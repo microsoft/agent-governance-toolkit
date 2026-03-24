@@ -36,6 +36,7 @@ classifiers = [
 dependencies = [
     "agent-os-kernel>=1.0.0",
     "agentmesh-platform>=1.0.0",
+    "pydantic>=2.4.0",
 ]
 
 [project.optional-dependencies]
