@@ -1,0 +1,8 @@
+site_name: AI Agent Governance Toolkit
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Governance: packages/agent-compliance/README.md
+  - Identity: packages/agent-mesh/README.md
+theme:
+  name: material
