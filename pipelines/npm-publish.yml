@@ -51,16 +51,17 @@ parameters:
     default: false
 
 # -------------------------------------------------------
-# ESRP Configuration — Replace placeholders during onboarding
+# ESRP Configuration
+# TODO: Update Key Vault name and cert names once PRSS certs are generated (week of March 24)
 # -------------------------------------------------------
 variables:
-  esrpServiceConnection: 'YOUR_ESRP_SERVICE_CONNECTION'
-  esrpKeyVaultName: 'YOUR_KEYVAULT_NAME'
-  esrpSignCertName: 'YOUR_SIGN_CERT_NAME'
-  esrpClientId: 'YOUR_CLIENT_ID'
+  esrpServiceConnection: 'agt-esrp-release'
+  esrpKeyVaultName: 'agt-esrp-kv'  # TODO: replace with actual KV name
+  esrpSignCertName: 'esrp-sign'  # TODO: replace with actual cert name
+  esrpClientId: 'a458522c-0359-4e92-9887-5fee1607c0c7'
   esrpDomainTenantId: '975f013f-7f24-47e8-a7d3-abc4752bf346'
-  esrpOwners: 'YOUR_OWNERS@microsoft.com'
-  esrpApprovers: 'YOUR_APPROVERS@microsoft.com'
+  esrpOwners: 'agt@microsoft.com'
+  esrpApprovers: 'agt@microsoft.com'
 
 pool:
   vmImage: ubuntu-latest
