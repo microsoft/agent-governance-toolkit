@@ -6,8 +6,10 @@
 
 *Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)*
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
+[![PyPI](https://img.shields.io/pypi/v/agent-marketplace)](https://pypi.org/project/agent-marketplace/)
 
 </div>
 

@@ -8,21 +8,10 @@
 
 *Identity · Trust · Reward · Governance*
 
-[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤️-ff69b4)](https://github.com/microsoft/agent-governance-toolkit)
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-SDK-3178C6?logo=typescript&logoColor=white)](sdks/typescript/)
-[![Go](https://img.shields.io/badge/Go-SDK-00ADD8?logo=go&logoColor=white)](sdks/go/)
 [![PyPI](https://img.shields.io/pypi/v/agentmesh-platform)](https://pypi.org/project/agentmesh-platform/)
-[![Downloads](https://img.shields.io/pypi/dm/agentmesh-platform)](https://pypi.org/project/agentmesh-platform/)
-[![Downloads](https://static.pepy.tech/badge/agentmesh-platform)](https://pepy.tech/project/agentmesh-platform)
-[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-ASI--03,_07,_10-brightgreen)](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
-[![Agent-OS Compatible](https://img.shields.io/badge/agent--os-compatible-green.svg)](https://github.com/microsoft/agent-governance-toolkit)
-[![Featured in awesome-llm-apps](https://img.shields.io/badge/Featured%20in-awesome--llm--apps-orange)](https://github.com/Shubhamsaboo/awesome-llm-apps)
-[![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
-[![Integrated in LlamaIndex](https://img.shields.io/badge/LlamaIndex-integrated-purple?logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiPjx0ZXh0IHg9IjQiIHk9IjE4IiBmb250LXNpemU9IjE2Ij7wn6aZPC90ZXh0Pjwvc3ZnPg==)](https://github.com/run-llama/llama_index/pull/20644)
 [![awesome-AI-Agents](https://img.shields.io/badge/Awesome--AI--Agents-listed-orange)](https://github.com/Jenqyang/Awesome-AI-Agents/pull/45)
 [![awesome-copilot](https://img.shields.io/badge/awesome--copilot-listed-orange)](https://github.com/github/awesome-copilot/pull/755)
 [![awesome-opentelemetry](https://img.shields.io/badge/awesome--opentelemetry-listed-orange)](https://github.com/magsther/awesome-opentelemetry/pull/24)

@@ -9,10 +9,10 @@
 
 *Dify · LangChain · LangGraph · LlamaIndex · OpenAI Agents · OpenClaw · Nostr WoT · Moltbook*
 
-[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![AgentMesh](https://img.shields.io/badge/agentmesh-compatible-green.svg)](https://github.com/microsoft/agent-governance-toolkit)
+[![PyPI](https://img.shields.io/badge/PyPI-multiple%20packages-lightgrey)](https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agentmesh-integrations)
 
 > ⭐ **If this project helps you, please star it!** It helps others discover AgentMesh integrations.
 

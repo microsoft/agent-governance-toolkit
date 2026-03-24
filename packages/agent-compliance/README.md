@@ -6,12 +6,10 @@
 
 *One install for the complete governance stack — kernel · trust mesh · runtime supervisor · reliability engineering*
 
-[![PyPI](https://img.shields.io/badge/pypi-agent--governance-blue.svg)](https://pypi.org/project/agent-governance/)
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤️-ff69b4)](https://github.com/microsoft/agent-governance-toolkit)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/agent-governance-toolkit)](https://pypi.org/project/agent-governance-toolkit/)
 
 > [!IMPORTANT]
 > **Community Preview** — The `agent-governance-toolkit` package on PyPI is a community preview

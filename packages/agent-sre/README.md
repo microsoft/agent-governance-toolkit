@@ -6,20 +6,10 @@
 
 *SLOs · Error Budgets · Chaos Testing · Progressive Delivery · Cost Guardrails*
 
-[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤️-ff69b4)](https://github.com/microsoft/agent-governance-toolkit)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agent-sre)](https://pypi.org/project/agent-sre/)
-[![Downloads](https://img.shields.io/pypi/dm/agent-sre)](https://pypi.org/project/agent-sre/)
-[![Downloads](https://static.pepy.tech/badge/agent-sre)](https://pepy.tech/project/agent-sre)
-[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-ASI--08-brightgreen)](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
-[![Agent-OS Compatible](https://img.shields.io/badge/agent--os-compatible-green.svg)](https://github.com/microsoft/agent-governance-toolkit)
-[![AgentMesh Compatible](https://img.shields.io/badge/agentmesh-compatible-green.svg)](https://github.com/microsoft/agent-governance-toolkit)
-[![Part of Agent Governance Ecosystem](https://img.shields.io/badge/ecosystem-Agent_Governance-blueviolet)](https://github.com/microsoft/agent-governance-toolkit)
-[![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
-[![awesome-opentelemetry](https://img.shields.io/badge/awesome--opentelemetry-listed-orange)](https://github.com/magsther/awesome-opentelemetry/pull/24)
 
 > [!IMPORTANT]
 > **Community Preview** — The `agent-sre` package on PyPI is a community preview release

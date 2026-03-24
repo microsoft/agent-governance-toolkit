@@ -14,15 +14,10 @@
 
 *Just as a supervisor isolates processes, Agent Runtime isolates AI agent sessions<br/>and enforces governance boundaries with a kill switch, blast radius containment, and accountability.*
 
-[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
-[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4%EF%B8%8F-ff69b4)](https://github.com/microsoft/agent-governance-toolkit)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agent-hypervisor)](https://pypi.org/project/agent-hypervisor/)
-[![Downloads](https://img.shields.io/pypi/dm/agent-hypervisor)](https://pypi.org/project/agent-hypervisor/)
-[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-ASI--05,_10-brightgreen)](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
-[![Tests](https://img.shields.io/badge/tests-644%20passing-brightgreen)](https://github.com/microsoft/agent-governance-toolkit)
 [![Benchmark](https://img.shields.io/badge/latency-268%CE%BCs%20pipeline-orange)](benchmarks/)
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 

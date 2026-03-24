@@ -4,25 +4,10 @@
 
 **A kernel architecture for governing autonomous AI agents**
 
-[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
-[![Sponsor](https://img.shields.io/badge/sponsor-❤️-ff69b4)](https://github.com/microsoft/agent-governance-toolkit)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agent-os-kernel)](https://pypi.org/project/agent-os-kernel/)
-[![Downloads](https://img.shields.io/pypi/dm/agent-os-kernel)](https://pypi.org/project/agent-os-kernel/)
-[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-10/10_Covered-brightgreen)](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
-[![Glama](https://glama.ai/mcp/servers/@microsoft/agentos-mcp-server/badge?features=false&install=false)](https://glama.ai/mcp/servers/@microsoft/agentos-mcp-server)
-[![VS Code Extension](https://img.shields.io/badge/VS%20Code-Extension-007ACC?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=agent-os.agent-os-vscode)
-[![Documentation](https://img.shields.io/badge/docs-microsoft.github.io-blue)](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs)
-[![Featured in awesome-llm-apps](https://img.shields.io/badge/Featured%20in-awesome--llm--apps-orange)](https://github.com/Shubhamsaboo/awesome-llm-apps)
-[![awesome-mcp-servers](https://img.shields.io/badge/awesome--mcp--servers-listed-blue)](https://github.com/punkpeye/awesome-mcp-servers)
-[![Integrated in agent-lightning](https://img.shields.io/badge/Microsoft-agent--lightning-purple?logo=microsoft)](https://github.com/microsoft/agent-lightning/tree/main/contrib/recipes/agentos)
-[![Integrated in LlamaIndex](https://img.shields.io/badge/LlamaIndex-integrated-purple)](https://github.com/run-llama/llama_index/pull/20644)
-[![awesome-AI-Agents](https://img.shields.io/badge/Awesome--AI--Agents-listed-orange)](https://github.com/Jenqyang/Awesome-AI-Agents/pull/45)
-[![awesome-agent-skills](https://img.shields.io/badge/awesome--agent--skills-listed-orange)](https://github.com/heilcheng/awesome-agent-skills/pull/34)
-[![awesome-devops-mcp](https://img.shields.io/badge/awesome--devops--mcp-listed-orange)](https://github.com/rohitg00/awesome-devops-mcp-servers/pull/27)
-[![Downloads](https://static.pepy.tech/badge/agent-os-kernel)](https://pepy.tech/project/agent-os-kernel)
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 
 > [!IMPORTANT]
