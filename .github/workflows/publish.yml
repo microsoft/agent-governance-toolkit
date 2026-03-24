@@ -192,38 +192,35 @@ jobs:
 
       # ----------------------------------------------------------------
       # ESRP Signing — Authenticode sign DLLs + NuGet package signing
-      # Requires ESRP onboarding (https://aka.ms/esrp-onboarding)
       # Key code CP-401405 is the Microsoft NuGet signing certificate.
+      # Client ID: a458522c-0359-4e92-9887-5fee1607c0c7
+      # Key Vault: learncopilot
+      # TODO: Activate once PRSS certs are generated and uploaded to KV
       # ----------------------------------------------------------------
       - name: Authenticode sign assemblies (ESRP)
         if: ${{ env.ESRP_AAD_ID != '' }}
         env:
           ESRP_AAD_ID: ${{ secrets.ESRP_AAD_ID }}
-          ESRP_AAD_SECRET: ${{ secrets.ESRP_AAD_SECRET }}
         run: |
           echo "Submitting DLLs for Authenticode signing via ESRP..."
-          # Sign all packable DLLs before NuGet packing
-          # This step uses ESRP client or Azure Trusted Signing
-          # See: https://aka.ms/esrp-onboarding for setup
+          echo "Client ID: a458522c-0359-4e92-9887-5fee1607c0c7"
+          echo "Key Vault: learncopilot"
           find packages/agent-governance-dotnet -name '*.dll' -path '*/Release/*' | head -20
-          echo "::warning::ESRP Authenticode signing must be configured. See https://aka.ms/esrp-onboarding"
+          echo "::warning::ESRP Authenticode signing pending — PRSS certs not yet generated. See https://aka.ms/esrp-onboarding"
 
       - name: Sign NuGet package (ESRP)
         if: ${{ env.ESRP_AAD_ID != '' }}
         env:
           ESRP_AAD_ID: ${{ secrets.ESRP_AAD_ID }}
-          ESRP_AAD_SECRET: ${{ secrets.ESRP_AAD_SECRET }}
         run: |
           echo "Submitting NuGet packages for signing via ESRP..."
-          # ESRP NuGet signing uses:
+          echo "KeyCode: CP-401405 | Operations: NuGetSign + NuGetVerify"
+          echo "Client ID: a458522c-0359-4e92-9887-5fee1607c0c7"
+          echo "Key Vault: learncopilot"
+          # TODO: Replace with actual ESRP signing call once certs are ready:
           #   KeyCode: CP-401405
           #   OperationCode: NuGetSign + NuGetVerify
-          # Alternatively, use dotnet nuget sign with Azure Trusted Signing:
-          #   dotnet nuget sign ./nupkg/*.nupkg \
-          #     --certificate-store-name My \
-          #     --certificate-fingerprint "$CERT_FINGERPRINT" \
-          #     --timestamper http://timestamp.digicert.com
-          echo "::warning::ESRP NuGet signing must be configured. See https://aka.ms/esrp-onboarding"
+          echo "::warning::ESRP NuGet signing pending — PRSS certs not yet generated. See https://aka.ms/esrp-onboarding"
 
       - name: Validate NuGet package metadata
         working-directory: packages/agent-governance-dotnet
