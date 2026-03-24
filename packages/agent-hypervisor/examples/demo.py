@@ -13,7 +13,7 @@ Demonstrates the full lifecycle of the Agent Hypervisor:
 
 Run:
     cd modules/hypervisor
-    pip install -e .
+    pip install -r examples/requirements.txt
     python examples/demo.py
 """
 

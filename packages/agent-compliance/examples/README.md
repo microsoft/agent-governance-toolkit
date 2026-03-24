@@ -12,7 +12,7 @@ Runnable examples showing the unified governance stack in action.
 ## Prerequisites
 
 ```bash
-pip install agent-governance-toolkit[full]
+pip install -r requirements.txt
 ```
 
 ## Running

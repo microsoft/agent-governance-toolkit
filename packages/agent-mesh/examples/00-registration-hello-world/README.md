@@ -42,7 +42,7 @@ This example simulates an agent registering with AgentMesh for the first time:
 ## Prerequisites
 
 ```bash
-pip install agentmesh-platform
+pip install -r requirements.txt
 ```
 
 ## Running the Example
