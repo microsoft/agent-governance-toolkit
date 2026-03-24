@@ -96,6 +96,29 @@ pytest tests/ -x -q
 - Use `--no-cache-dir` for pip installs in Dockerfiles.
 - Pin dependencies to specific versions in `pyproject.toml`.
 
+### Merge Policy
+
+> **All PRs from external contributors MUST be approved by a maintainer before merge.**
+> AI-only approvals and bot approvals do NOT satisfy this requirement.
+
+This policy is enforced by:
+1. **CODEOWNERS** — every file requires review from `@imran-siddique`
+2. **`require-maintainer-approval.yml`** — CI check that blocks merge without human maintainer approval
+3. **Branch protection** — CODEOWNERS review required on `main`
+
+**Why this policy exists:** PRs #357 and #362 were auto-merged without maintainer review and reintroduced a command injection vulnerability (`subprocess.run(shell=True)`) that had been fixed for MSRC Case 111178 just days earlier. AI code review agents did not catch the security regression.
+
+**What counts as maintainer approval:**
+- ✅ A GitHub "Approve" review from a listed CODEOWNER
+- ❌ AI/bot approval (Copilot, Sourcery, etc.) — does not count
+- ❌ Author self-approval — does not count
+- ❌ Admin bypass — should not be used for external PRs
+
+**Security-sensitive paths** (extra scrutiny required):
+- `.github/workflows/` and `.github/actions/` — CI/CD configuration
+- Any file containing `subprocess`, `eval`, `exec`, `pickle`, `shell=True`
+- Trust, identity, and cryptography modules
+
 ## Licensing
 
 By contributing to this project, you agree that your contributions will be licensed under the [MIT License](LICENSE).
