@@ -66,8 +66,9 @@ public class GovernanceMetricsTests : IDisposable
             if (instrument.Name == "agent_governance.tool_calls_blocked") blockedAfter += measurement;
         });
         listener.Start();
+        listener.RecordObservableInstruments();
 
-        // Capture baseline (measurements from other test instances)
+        // Capture baseline AFTER listener processes any existing measurements
         blockedBefore = blockedAfter;
 
         _metrics.RecordDecision(allowed: false, "did:mesh:test", "shell_exec", 0.02);
