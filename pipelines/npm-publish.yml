@@ -51,17 +51,19 @@ parameters:
     default: false
 
 # -------------------------------------------------------
-# ESRP Configuration
-# TODO: Update Key Vault name and cert names once PRSS certs are generated (week of March 24)
+# ESRP Configuration — All values sourced from pipeline variables/secrets
+# Configure these in ADO pipeline variables (mark sensitive ones as secret):
+#   ESRP_SERVICE_CONNECTION, ESRP_KEYVAULT_NAME, ESRP_SIGN_CERT_NAME,
+#   ESRP_CLIENT_ID, ESRP_DOMAIN_TENANT_ID, ESRP_OWNERS, ESRP_APPROVERS
 # -------------------------------------------------------
 variables:
-  esrpServiceConnection: 'agt-esrp-release'
-  esrpKeyVaultName: 'learncopilot'
-  esrpSignCertName: 'esrp-sign'  # TODO: replace with actual cert name
-  esrpClientId: 'a458522c-0359-4e92-9887-5fee1607c0c7'
-  esrpDomainTenantId: '975f013f-7f24-47e8-a7d3-abc4752bf346'
-  esrpOwners: 'agt@microsoft.com'
-  esrpApprovers: 'agt@microsoft.com'
+  esrpServiceConnection: $(ESRP_SERVICE_CONNECTION)
+  esrpKeyVaultName: $(ESRP_KEYVAULT_NAME)
+  esrpSignCertName: $(ESRP_SIGN_CERT_NAME)
+  esrpClientId: $(ESRP_CLIENT_ID)
+  esrpDomainTenantId: $(ESRP_DOMAIN_TENANT_ID)
+  esrpOwners: $(ESRP_OWNERS)
+  esrpApprovers: $(ESRP_APPROVERS)
 
 pool:
   vmImage: ubuntu-latest

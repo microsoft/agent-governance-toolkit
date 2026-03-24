@@ -51,23 +51,19 @@ parameters:
     default: false
 
 # -------------------------------------------------------
-# ESRP Configuration
-# TODO: Update Key Vault name and cert names once PRSS certs are generated (week of March 24)
+# ESRP Configuration — All values sourced from GitHub Secrets
+# Configure these secrets in the ADO pipeline or GitHub repo:
+#   ESRP_SERVICE_CONNECTION, ESRP_KEYVAULT_NAME, ESRP_SIGN_CERT_NAME,
+#   ESRP_CLIENT_ID, ESRP_DOMAIN_TENANT_ID, ESRP_OWNERS, ESRP_APPROVERS
 # -------------------------------------------------------
 variables:
-  # Azure service connection for ESRP Release
-  esrpServiceConnection: 'agt-esrp-release'
-  # Azure Key Vault containing PRSS auth + sign certificates
-  esrpKeyVaultName: 'learncopilot'
-  # Code-signing certificate name in Key Vault
-  esrpSignCertName: 'esrp-sign'  # TODO: replace with actual cert name
-  # AAD App Registration client ID (AME tenant)
-  esrpClientId: 'a458522c-0359-4e92-9887-5fee1607c0c7'
-  # ESRP domain tenant ID (Microsoft standard)
-  esrpDomainTenantId: '975f013f-7f24-47e8-a7d3-abc4752bf346'
-  # Package owners and approvers (must be Microsoft FTEs)
-  esrpOwners: 'agt@microsoft.com'
-  esrpApprovers: 'agt@microsoft.com'
+  esrpServiceConnection: $(ESRP_SERVICE_CONNECTION)
+  esrpKeyVaultName: $(ESRP_KEYVAULT_NAME)
+  esrpSignCertName: $(ESRP_SIGN_CERT_NAME)
+  esrpClientId: $(ESRP_CLIENT_ID)
+  esrpDomainTenantId: $(ESRP_DOMAIN_TENANT_ID)
+  esrpOwners: $(ESRP_OWNERS)
+  esrpApprovers: $(ESRP_APPROVERS)
 
 pool:
   vmImage: ubuntu-latest

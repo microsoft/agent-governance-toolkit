@@ -192,35 +192,32 @@ jobs:
 
       # ----------------------------------------------------------------
       # ESRP Signing — Authenticode sign DLLs + NuGet package signing
+      # All config sourced from GitHub Secrets:
+      #   ESRP_AAD_ID, ESRP_KEYVAULT_NAME, ESRP_SIGN_CERT_NAME
       # Key code CP-401405 is the Microsoft NuGet signing certificate.
-      # Client ID: a458522c-0359-4e92-9887-5fee1607c0c7
-      # Key Vault: learncopilot
       # TODO: Activate once PRSS certs are generated and uploaded to KV
       # ----------------------------------------------------------------
       - name: Authenticode sign assemblies (ESRP)
         if: ${{ env.ESRP_AAD_ID != '' }}
         env:
           ESRP_AAD_ID: ${{ secrets.ESRP_AAD_ID }}
+          ESRP_KEYVAULT_NAME: ${{ secrets.ESRP_KEYVAULT_NAME }}
         run: |
           echo "Submitting DLLs for Authenticode signing via ESRP..."
-          echo "Client ID: a458522c-0359-4e92-9887-5fee1607c0c7"
-          echo "Key Vault: learncopilot"
           find packages/agent-governance-dotnet -name '*.dll' -path '*/Release/*' | head -20
-          echo "::warning::ESRP Authenticode signing pending — PRSS certs not yet generated. See https://aka.ms/esrp-onboarding"
+          echo "::warning::ESRP Authenticode signing pending — PRSS certs not yet generated."
 
       - name: Sign NuGet package (ESRP)
         if: ${{ env.ESRP_AAD_ID != '' }}
         env:
           ESRP_AAD_ID: ${{ secrets.ESRP_AAD_ID }}
+          ESRP_KEYVAULT_NAME: ${{ secrets.ESRP_KEYVAULT_NAME }}
         run: |
           echo "Submitting NuGet packages for signing via ESRP..."
-          echo "KeyCode: CP-401405 | Operations: NuGetSign + NuGetVerify"
-          echo "Client ID: a458522c-0359-4e92-9887-5fee1607c0c7"
-          echo "Key Vault: learncopilot"
           # TODO: Replace with actual ESRP signing call once certs are ready:
           #   KeyCode: CP-401405
           #   OperationCode: NuGetSign + NuGetVerify
-          echo "::warning::ESRP NuGet signing pending — PRSS certs not yet generated. See https://aka.ms/esrp-onboarding"
+          echo "::warning::ESRP NuGet signing pending — PRSS certs not yet generated."
 
       - name: Validate NuGet package metadata
         working-directory: packages/agent-governance-dotnet
