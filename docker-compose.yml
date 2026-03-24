@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  dev:
+    build:
+      context: .
+      target: dev
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+  test:
+    build:
+      context: .
+      target: test
