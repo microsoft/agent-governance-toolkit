@@ -164,6 +164,7 @@ class TestEnforcePolicyDefer:
         assert "deny" in result.error.lower()
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_defer_timeout(self, agent):
         async def _slow(action, params):
             await asyncio.sleep(10)
@@ -175,6 +176,7 @@ class TestEnforcePolicyDefer:
         assert result.signal == "DEFER_TIMEOUT"
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_defer_custom_timeout(self):
         agent = _StubAgent(
             AgentConfig(agent_id="custom-timeout"), defer_timeout=0.1

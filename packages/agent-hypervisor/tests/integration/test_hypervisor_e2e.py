@@ -32,6 +32,7 @@ from hypervisor.models import ActionDescriptor
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 class TestFullLifecycle:
     """End-to-end session lifecycle: create → join → activate → terminate."""
 
@@ -113,6 +114,7 @@ class TestFullLifecycle:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 class TestRingEnforcementIntegration:
     """Test ring assignment with real sessions and sponsorship."""
 
@@ -168,6 +170,7 @@ class TestRingEnforcementIntegration:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 class TestVouchingSlashingIntegration:
     """Test sponsorship with exposure limits and penalty cascades."""
 
@@ -229,6 +232,7 @@ class TestVouchingSlashingIntegration:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 class TestSagaIntegration:
     """Test saga orchestration with real timeout and retry behavior."""
 
@@ -382,6 +386,7 @@ class TestSagaIntegration:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 class TestAuditTrailIntegration:
     """Test delta audit engine in context of full sessions."""
 
@@ -455,6 +460,7 @@ class TestAuditTrailIntegration:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 class TestGCIntegration:
     """Test garbage collection with real VFS and delta engines."""
 
@@ -499,6 +505,7 @@ class TestGCIntegration:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 class TestEdgeCases:
     """Edge cases and security boundaries."""
 

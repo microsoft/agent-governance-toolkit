@@ -211,6 +211,8 @@ asyncio_mode = "auto"
 addopts = "-v --tb=short"
 markers = [
     "benchmark: performance benchmark tests",
+    "slow: long-running tests (skip with -m 'not slow')",
+    "integration: end-to-end integration tests",
 ]
 
 # ============================================================================

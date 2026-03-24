@@ -103,6 +103,7 @@ class TestCredentialCreation:
 # ===================================================================
 
 
+@pytest.mark.slow
 class TestTTLExpiry:
     """Verify credentials expire after their time-to-live window."""
 
@@ -418,6 +419,7 @@ class TestChainOfTrust:
 # ===================================================================
 
 
+@pytest.mark.slow
 class TestExpiredCleanup:
     """Verify expired credential garbage collection."""
 

@@ -33,6 +33,7 @@ class TestRevocationEntry:
         assert entry.expires_at is not None
 
 
+@pytest.mark.slow
 class TestRevocationList:
     def test_revoke_and_check(self):
         rl = RevocationList()

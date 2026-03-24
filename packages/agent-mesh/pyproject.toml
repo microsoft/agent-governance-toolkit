@@ -165,4 +165,5 @@ markers = [
     "fuzz: fuzzing tests with malformed inputs",
     "benchmark: crypto operation benchmarks",
     "slow: long-running load tests (skip with -m 'not slow')",
+    "integration: end-to-end integration tests",
 ]

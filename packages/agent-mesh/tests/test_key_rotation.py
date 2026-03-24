@@ -29,6 +29,7 @@ def _create_identity() -> AgentIdentity:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 class TestKeyRotationManager:
     """Tests for KeyRotationManager."""
 

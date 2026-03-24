@@ -90,6 +90,10 @@ packages = ["src/hypervisor"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-v --tb=short"
+markers = [
+    "slow: long-running tests (skip with -m 'not slow')",
+    "integration: end-to-end integration tests",
+]
 
 [tool.ruff]
 target-version = "py311"

@@ -15,7 +15,9 @@ These tests verify that the major subsystems work together correctly:
 import contextlib
 import time
 
+import pytest
 
+@pytest.mark.integration
 class TestSLOPipeline:
     """SLI recording → SLO evaluation → Error Budget → Dashboard."""
 
@@ -111,6 +113,7 @@ class TestSLOPipeline:
         assert len(snapshots) == 3
 
 
+@pytest.mark.integration
 class TestIncidentFlow:
     """Incident detection → Circuit breaker → Postmortem."""
 
@@ -193,6 +196,7 @@ class TestIncidentFlow:
             assert gen is not None
 
 
+@pytest.mark.integration
 class TestCostPipeline:
     """Cost recording → Anomaly detection → Budget guard."""
 
@@ -236,6 +240,7 @@ class TestCostPipeline:
         assert isinstance(allowed, bool)
 
 
+@pytest.mark.integration
 class TestDeliveryPipeline:
     """Rollout → SLO evaluation → Decision."""
 
@@ -261,6 +266,7 @@ class TestDeliveryPipeline:
             rollout.start()
 
 
+@pytest.mark.integration
 class TestEvalsSLIPipeline:
     """Evaluation engine → SLI feed → SLO tracking."""
 
@@ -306,6 +312,7 @@ class TestEvalsSLIPipeline:
         assert engine.pass_rate() >= 0.0
 
 
+@pytest.mark.integration
 class TestObservabilityIntegrations:
     """OTEL, Langfuse, Arize all feeding into SLIs."""
 
@@ -368,6 +375,7 @@ class TestObservabilityIntegrations:
         assert len(exporter.observations) == 2
 
 
+@pytest.mark.integration
 class TestReplayFlow:
     """Trace capture → Replay → Diff analysis."""
 
@@ -398,6 +406,7 @@ class TestReplayFlow:
         assert trace.task_output == "done"
 
 
+@pytest.mark.integration
 class TestChaosExperiment:
     """Chaos experiment lifecycle."""
 
@@ -436,6 +445,7 @@ class TestChaosExperiment:
         assert experiment.state == ExperimentState.COMPLETED
 
 
+@pytest.mark.integration
 class TestSLIRegistry:
     """SLI type registration and discovery."""
 
