@@ -58,7 +58,7 @@ variables:
   # Azure service connection for ESRP Release
   esrpServiceConnection: 'agt-esrp-release'
   # Azure Key Vault containing PRSS auth + sign certificates
-  esrpKeyVaultName: 'agt-esrp-kv'  # TODO: replace with actual KV name
+  esrpKeyVaultName: 'learncopilot'
   # Code-signing certificate name in Key Vault
   esrpSignCertName: 'esrp-sign'  # TODO: replace with actual cert name
   # AAD App Registration client ID (AME tenant)

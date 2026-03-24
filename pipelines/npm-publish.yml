@@ -56,7 +56,7 @@ parameters:
 # -------------------------------------------------------
 variables:
   esrpServiceConnection: 'agt-esrp-release'
-  esrpKeyVaultName: 'agt-esrp-kv'  # TODO: replace with actual KV name
+  esrpKeyVaultName: 'learncopilot'
   esrpSignCertName: 'esrp-sign'  # TODO: replace with actual cert name
   esrpClientId: 'a458522c-0359-4e92-9887-5fee1607c0c7'
   esrpDomainTenantId: '975f013f-7f24-47e8-a7d3-abc4752bf346'
