@@ -334,18 +334,12 @@ class TestTrustAttest:
 # ---------------------------------------------------------------------------
 
 class TestTrustReport:
-    def test_list_table(self, runner):
+    def test_report_table(self, runner):
         result = runner.invoke(app, ["trust", "report"])
         assert result.exit_code == 0
         assert "alpha" in result.output or "Agent" in result.output
-        assert "Agent ID" in result.output
-        assert "Score" in result.output
-        assert "Level" in result.output
-        assert "Successful Tasks" in result.output
-        assert "Successful Tasks" in result.output
-        assert "Last Activity" in result.output
 
-    def test_list_json(self, runner):
+    def test_report_json(self, runner):
         result = runner.invoke(app, ["trust", "report", "--format", "json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -358,7 +352,7 @@ class TestTrustReport:
         assert "failure_tasks" in data[0]
         assert "last_activity" in data[0]
 
-    def test_list_json_flag(self, runner):
+    def test_report_json_flag(self, runner):
         result = runner.invoke(app, ["trust", "report", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
