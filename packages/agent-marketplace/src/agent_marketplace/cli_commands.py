@@ -31,6 +31,12 @@ from agent_marketplace import (
     PluginType,
     load_manifest,
 )
+from agent_marketplace.schema_adapters import (
+    adapt_to_canonical,
+    detect_manifest_format,
+    extract_capabilities,
+    extract_mcp_servers,
+)
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -125,17 +131,82 @@ def search_plugins(query: str) -> None:
 
 @plugin.command("verify")
 @click.argument("path", type=click.Path(exists=True))
-def verify_plugin(path: str) -> None:
-    """Verify a plugin's signature."""
+@click.option(
+    "--format",
+    "manifest_format",
+    type=click.Choice(["auto", "copilot-plugin", "claude-plugin", "generic"]),
+    default="auto",
+    help="Manifest format (auto-detected by default)",
+)
+def verify_plugin(path: str, manifest_format: str) -> None:
+    """Verify a plugin manifest, with optional format detection for Copilot/Claude plugins."""
+    import json
+
+    import yaml
+
+    plugin_path = Path(path)
+
     try:
-        manifest = load_manifest(Path(path))
-        if not manifest.signature:
-            console.print("[yellow]Plugin has no signature.[/yellow]")
+        # For non-auto generic format or YAML files, use the existing loader
+        if manifest_format == "generic":
+            manifest = load_manifest(plugin_path)
+            _print_verify_result(manifest)
             return
-        console.print(f"[green]✓[/green] Manifest loaded: {manifest.name}@{manifest.version}")
-        console.print("[yellow]Provide a public key to complete verification.[/yellow]")
+
+        # Load raw data for format-aware validation
+        target = plugin_path
+        if target.is_dir():
+            # Try plugin.json first, then fall back to agent-plugin.yaml
+            json_path = target / "plugin.json"
+            yaml_path = target / "agent-plugin.yaml"
+            if json_path.exists():
+                target = json_path
+            elif yaml_path.exists():
+                target = yaml_path
+            else:
+                raise MarketplaceError(f"No manifest found in {target}")
+
+        text = target.read_text(encoding="utf-8")
+        if target.suffix == ".json":
+            data = json.loads(text)
+        else:
+            data = yaml.safe_load(text)
+
+        # Determine format
+        if manifest_format == "auto":
+            fmt = detect_manifest_format(data)
+        elif manifest_format == "copilot-plugin":
+            fmt = "copilot"
+        elif manifest_format == "claude-plugin":
+            fmt = "claude"
+        else:
+            fmt = "generic"
+
+        if fmt == "generic":
+            manifest = load_manifest(plugin_path)
+        else:
+            manifest = adapt_to_canonical(data, fmt)
+
+        console.print(f"[dim]Detected format:[/dim] {fmt}")
+        _print_verify_result(manifest)
+
+        servers = extract_mcp_servers(data)
+        if servers:
+            console.print(f"[dim]MCP servers:[/dim] {', '.join(servers)}")
+
     except MarketplaceError as exc:
         console.print(f"[red]Error:[/red] {exc}")
+
+
+def _print_verify_result(manifest: "PluginManifest") -> None:
+    """Print verification summary for a loaded manifest."""
+    console.print(f"[green]✓[/green] Manifest loaded: {manifest.name}@{manifest.version}")
+    if manifest.capabilities:
+        console.print(f"[dim]Capabilities:[/dim] {', '.join(manifest.capabilities)}")
+    if manifest.signature:
+        console.print("[yellow]Provide a public key to complete verification.[/yellow]")
+    else:
+        console.print("[yellow]Plugin has no signature.[/yellow]")
 
 
 @plugin.command("publish")
@@ -151,3 +222,13 @@ def publish_plugin(path: str) -> None:
         )
     except MarketplaceError as exc:
         console.print(f"[red]Error:[/red] {exc}")
+
+
+# Register batch evaluation command
+try:
+    from agent_marketplace.batch import evaluate_batch_command
+
+    plugin.add_command(evaluate_batch_command)
+except ImportError:
+    pass
+
