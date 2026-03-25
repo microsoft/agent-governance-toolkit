@@ -569,3 +569,78 @@ def attest(agent_id: str, note: str, score_boost: int, fmt: str, json_flag: bool
     console.print(f"  New Level:      [{style}]{level}[/{style}]")
     console.print(f"  Attested At:    {attestation_info['attested_at']}")
     console.print()
+
+
+@trust.command("report")
+@click.option(
+    "--format", "fmt",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format (table or json).",
+)
+@click.option("--json", "json_flag", is_flag=True, help="Output as JSON (shorthand for --format json).")
+def report_agents(fmt: str, json_flag: bool):
+    """Report trust score summary for registered agents"""
+    if json_flag:
+        fmt = "json"
+
+    peers = _get_demo_peers()
+    filtered: list[PeerInfo] = list(peers.values())
+    
+    if fmt == "json":
+        data = []
+        for p in filtered:
+            history = _get_demo_history(p.peer_did)
+            successful_tasks = []
+            failure_tasks = []
+            for h in history:
+                if h["delta"] >= 0:
+                    successful_tasks.append(h["event"])
+                elif h["delta"] < 0:
+                    failure_tasks.append(h["event"])
+            
+            data.append({
+                "agent_id": p.peer_did,
+                "trust_score": p.trust_score,
+                "trust_level": _trust_level_label(p.trust_score),
+                "successful_tasks": successful_tasks,
+                "failure_tasks": failure_tasks,
+                "last_activity": history[-1]["timestamp"] if history else "N/A"
+            })
+        if fmt == "json":
+            _output_json(data)
+        return
+
+    # Table output
+    console.print("\n[bold blue]🛡️  Trust Network — Agent Report[/bold blue]\n")
+    table = Table(box=box.ROUNDED)
+    table.add_column("Agent ID", style="cyan", no_wrap=True)
+    table.add_column("Score", justify="right")
+    table.add_column("Level")
+    table.add_column("Successful Tasks")
+    table.add_column("Failure Tasks")
+    table.add_column("Last Activity", style="dim")
+
+    for p in filtered:
+        history = _get_demo_history(p.peer_did)
+        successful_tasks = []
+        failure_tasks = []
+        for h in history:
+            if h["delta"] >= 0:
+                successful_tasks.append(h["event"])
+            elif h["delta"] < 0:
+                failure_tasks.append(h["event"])
+        
+        level = _trust_level_label(p.trust_score)
+        style = _trust_level_style(level)
+        table.add_row(
+            p.peer_did,
+            str(p.trust_score),
+            f"[{style}]{level}[/{style}]",
+            ", ".join(successful_tasks) if successful_tasks else "N/A",
+            ", ".join(failure_tasks) if failure_tasks else "N/A",
+            history[-1]["timestamp"] if history else "N/A",
+        )
+
+    console.print(table)
+    console.print(f"\n  Total agents: {len(peers)}\n")

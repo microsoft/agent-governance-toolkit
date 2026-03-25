@@ -329,6 +329,35 @@ class TestTrustAttest:
         data = json.loads(result.output)
         assert data["note"] == "Passed security audit"
 
+# ---------------------------------------------------------------------------
+# trust report
+# ---------------------------------------------------------------------------
+
+class TestTrustReport:
+    def test_list_table(self, runner):
+        result = runner.invoke(app, ["trust", "report"])
+        assert result.exit_code == 0
+        assert "alpha" in result.output or "Agent" in result.output
+
+    def test_list_json(self, runner):
+        result = runner.invoke(app, ["trust", "report", "--format", "json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert isinstance(data, list)
+        assert len(data) >= 3
+        assert "agent_id" in data[0]
+        assert "trust_score" in data[0]
+        assert "trust_level" in data[0]
+        assert "successful_tasks" in data[0]
+        assert "failure_tasks" in data[0]
+        assert "last_activity" in data[0]
+
+    def test_list_json_flag(self, runner):
+        result = runner.invoke(app, ["trust", "report", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert isinstance(data, list)
+
 
 # ---------------------------------------------------------------------------
 # trust help
@@ -341,6 +370,6 @@ class TestTrustHelp:
         assert "trust" in result.output.lower()
 
     def test_subcommand_help(self, runner):
-        for cmd in ("list", "inspect", "history", "graph", "revoke", "attest"):
+        for cmd in ("list", "inspect", "history", "graph", "revoke", "attest", "report"):
             result = runner.invoke(app, ["trust", cmd, "--help"])
             assert result.exit_code == 0, f"Help for 'trust {cmd}' failed"
