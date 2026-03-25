@@ -17,9 +17,19 @@ from agent_marketplace.manifest import (
     save_manifest,
 )
 from agent_marketplace.registry import PluginRegistry
+from agent_marketplace.schema_adapters import (
+    ClaudePluginManifest,
+    CopilotPluginManifest,
+    adapt_to_canonical,
+    detect_manifest_format,
+    extract_capabilities,
+    extract_mcp_servers,
+)
 from agent_marketplace.signing import PluginSigner, verify_signature
 
 __all__ = [
+    "ClaudePluginManifest",
+    "CopilotPluginManifest",
     "MANIFEST_FILENAME",
     "MarketplaceError",
     "PluginInstaller",
@@ -27,6 +37,10 @@ __all__ = [
     "PluginRegistry",
     "PluginSigner",
     "PluginType",
+    "adapt_to_canonical",
+    "detect_manifest_format",
+    "extract_capabilities",
+    "extract_mcp_servers",
     "load_manifest",
     "save_manifest",
     "verify_signature",
