@@ -191,9 +191,12 @@ stages:
           - script: |
               echo "=== Verifying packages on npm registry ==="
               sleep 15
-              ${{ each pkg in parameters.packages }}:
-              PKG_NAME=$(node -e "console.log(require('./${{ pkg.path }}/package.json').name)")
-              PKG_VER=$(node -e "console.log(require('./${{ pkg.path }}/package.json').version)")
-              echo -n "Checking $PKG_NAME@$PKG_VER... "
-              npm view "$PKG_NAME@$PKG_VER" version 2>/dev/null && echo "✅" || echo "⚠️  not yet indexed"
-            displayName: 'Verify npm availability'
+            displayName: 'Wait for npm index'
+
+          - ${{ each pkg in parameters.packages }}:
+            - script: |
+                PKG_NAME=$(node -e "console.log(require('./${{ pkg.path }}/package.json').name)")
+                PKG_VER=$(node -e "console.log(require('./${{ pkg.path }}/package.json').version)")
+                echo -n "Checking $PKG_NAME@$PKG_VER... "
+                npm view "$PKG_NAME@$PKG_VER" version 2>/dev/null && echo "✅" || echo "⚠️  not yet indexed"
+              displayName: 'Verify ${{ pkg.name }} on npm'

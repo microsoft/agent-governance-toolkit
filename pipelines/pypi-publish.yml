@@ -182,7 +182,10 @@ stages:
           - script: |
               echo "=== Verifying packages are available on PyPI ==="
               sleep 30  # Allow PyPI index to update
-              ${{ each pkg in parameters.packages }}:
-              echo "Checking ${{ pkg.name }}..."
-              pip install --dry-run --no-deps ${{ pkg.name }} 2>&1 | head -5 || echo "⚠️  ${{ pkg.name }} not yet indexed (may take a few minutes)"
-            displayName: 'Verify PyPI availability'
+            displayName: 'Wait for PyPI index'
+
+          - ${{ each pkg in parameters.packages }}:
+            - script: |
+                echo "Checking ${{ pkg.name }}..."
+                pip install --dry-run --no-deps ${{ pkg.name }} 2>&1 | head -5 || echo "⚠️  ${{ pkg.name }} not yet indexed (may take a few minutes)"
+              displayName: 'Verify ${{ pkg.name }} on PyPI'
