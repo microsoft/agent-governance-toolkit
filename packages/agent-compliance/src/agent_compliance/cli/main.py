@@ -5,8 +5,9 @@
 Agent Governance Toolkit CLI.
 
 Commands:
-    verify      Run OWASP ASI 2026 governance verification
-    integrity   Verify or generate module integrity manifest
+    verify       Run OWASP ASI 2026 governance verification
+    integrity    Verify or generate module integrity manifest
+    lint-policy  Lint YAML policy files for common mistakes
 """
 
 from __future__ import annotations
@@ -76,6 +77,32 @@ def cmd_integrity(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_lint_policy(args: argparse.Namespace) -> int:
+    """Lint YAML policy files for common mistakes."""
+    from agent_compliance.lint_policy import lint_path
+
+    try:
+        result = lint_path(args.path)
+
+        if args.json:
+            import json
+
+            print(json.dumps(result.to_dict(), indent=2))
+        else:
+            for msg in result.messages:
+                print(msg)
+            if result.messages:
+                print()
+            print(result.summary())
+
+        if args.strict and result.warnings:
+            return 1
+        return 0 if result.passed else 1
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+
 def main() -> int:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -114,12 +141,31 @@ def main() -> int:
         "--json", action="store_true", help="Output JSON report"
     )
 
+    # lint-policy command
+    lint_parser = subparsers.add_parser(
+        "lint-policy",
+        help="Lint YAML policy files for common mistakes",
+    )
+    lint_parser.add_argument(
+        "path", type=str, help="Path to a YAML policy file or directory"
+    )
+    lint_parser.add_argument(
+        "--json", action="store_true", help="Output JSON report"
+    )
+    lint_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Treat warnings as errors (exit 1 if any warnings)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "verify":
         return cmd_verify(args)
     elif args.command == "integrity":
         return cmd_integrity(args)
+    elif args.command == "lint-policy":
+        return cmd_lint_policy(args)
     else:
         parser.print_help()
         return 0
