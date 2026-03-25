@@ -7,7 +7,7 @@ name = "agent-governance-toolkit"
 version = "2.2.0"
 description = "Community Edition — Unified installer and runtime policy enforcement for the Agent Governance Toolkit"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.9"
 authors = [
     {name = "Microsoft Corporation", email = "agt@microsoft.com"},
@@ -23,7 +23,6 @@ keywords = [
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
