@@ -136,6 +136,11 @@ def _get_demo_history(agent_id: str) -> list[dict]:
         })
     return history
 
+def _categorize_tasks(history):
+    successful = [h['event'] for h in history if h['delta'] > 0]
+    failed = [h['event'] for h in history if h['delta'] < 0]
+    return successful, failed
+
 
 def _output_json(data: object) -> None:
     """Print data as JSON to stdout."""
@@ -591,8 +596,7 @@ def report_agents(fmt: str, json_flag: bool):
         data = []
         for p in filtered:
             history = _get_demo_history(p.peer_did)
-            successful_tasks = []
-            failure_tasks = []
+            successful_tasks, failure_tasks = _categorize_tasks(history);
             for h in history:
                 if h["delta"] >= 0:
                     successful_tasks.append(h["event"])
@@ -607,8 +611,7 @@ def report_agents(fmt: str, json_flag: bool):
                 "failure_tasks": failure_tasks,
                 "last_activity": history[-1]["timestamp"] if history else "N/A"
             })
-        if fmt == "json":
-            _output_json(data)
+        _output_json(data)
         return
 
     # Table output
@@ -623,8 +626,7 @@ def report_agents(fmt: str, json_flag: bool):
 
     for p in filtered:
         history = _get_demo_history(p.peer_did)
-        successful_tasks = []
-        failure_tasks = []
+        successful_tasks, failure_tasks = _categorize_tasks(history);
         for h in history:
             if h["delta"] >= 0:
                 successful_tasks.append(h["event"])
