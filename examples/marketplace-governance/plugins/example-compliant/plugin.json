@@ -1,0 +1,35 @@
+{
+  "name": "code-review-assistant",
+  "description": "An agent plugin that performs automated code reviews using approved MCP servers for code search and documentation lookup.",
+  "version": "1.0.0",
+  "author": "marketplace-contrib",
+  "skills": [
+    {
+      "name": "review-pull-request",
+      "description": "Analyzes pull request diffs for common issues"
+    },
+    {
+      "name": "suggest-improvements",
+      "description": "Suggests code quality improvements based on best practices"
+    }
+  ],
+  "agents": [
+    {
+      "name": "reviewer",
+      "model": "gpt-4o",
+      "instructions": "You are a code review assistant. Analyze diffs and suggest improvements."
+    }
+  ],
+  "mcps": [
+    {
+      "name": "code-search",
+      "url": "https://mcp.github.dev/code-search",
+      "tools": ["search_code", "get_file_contents"]
+    },
+    {
+      "name": "ms-learn",
+      "url": "https://mcp.microsoft.com/ms-learn",
+      "tools": ["search_docs", "get_article"]
+    }
+  ]
+}

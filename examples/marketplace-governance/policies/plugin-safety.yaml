@@ -1,0 +1,77 @@
+# Plugin Safety — Sample Configuration
+#
+# ⚠️  IMPORTANT: This is a SAMPLE configuration provided as a starting point.
+# You MUST review, customize, and extend these rules for your specific
+# use case before deploying to production. Microsoft does not guarantee
+# that these rules are comprehensive or sufficient for your security
+# requirements.
+#
+# Agent-OS policy format for tool-level safety enforcement.
+# Used by: agent_marketplace.batch.evaluate_batch
+# Docs:    docs/tutorials/07-mcp-security-gateway.md
+
+version: "1.0"
+name: plugin-safety
+description: >
+  Sample plugin safety policy — defines tool restrictions, audit rules,
+  and token budgets for marketplace plugins. Evaluated during batch
+  policy checks in CI and at plugin installation time.
+
+disclaimer: >
+  This is a sample configuration. It is NOT exhaustive and should be
+  customized for your specific security requirements.
+
+rules:
+  # -------------------------------------------------------------------
+  # Block dangerous tools
+  # -------------------------------------------------------------------
+  # These tools are unconditionally denied for all marketplace plugins.
+
+  - name: block-shell-execution
+    pattern: '\b(shell_exec|os_system|subprocess_run|exec|eval)\b'
+    message: "Dangerous tool blocked — shell execution or eval is not permitted"
+    severity: critical
+    suggestion: "Use a sandboxed MCP server instead of direct shell access"
+
+  - name: block-file-destructive
+    pattern: '\b(file_delete|file_write_root|rmtree|rm_rf)\b'
+    message: "Destructive file operation blocked"
+    severity: critical
+    suggestion: "Use scoped file access through an approved MCP server"
+
+  - name: block-network-unrestricted
+    pattern: '\b(raw_socket|tcp_connect|udp_send)\b'
+    message: "Unrestricted network access blocked"
+    severity: high
+    suggestion: "Use the web-fetch MCP server for outbound HTTP requests"
+
+  # -------------------------------------------------------------------
+  # Audit sensitive operations
+  # -------------------------------------------------------------------
+  # These actions are allowed but logged for compliance review.
+
+  - name: audit-file-read
+    pattern: '\b(file_read|read_file|get_file_contents)\b'
+    message: "File read operation — logged for audit"
+    severity: low
+    suggestion: "Ensure file paths are scoped to the plugin workspace"
+
+  - name: audit-external-api
+    pattern: '\b(http_post|api_call|webhook_send)\b'
+    message: "External API call — logged for audit"
+    severity: medium
+    suggestion: "Verify the endpoint is on the approved external services list"
+
+  # -------------------------------------------------------------------
+  # Token budget enforcement
+  # -------------------------------------------------------------------
+  # Caps the maximum tokens per tool invocation to prevent runaway costs.
+
+  require_capabilities: true
+  min_description_length: 10
+  max_dependencies: 10
+
+  # Additional runtime constraints (enforced by Agent OS policy engine)
+  # max_tokens_per_call: 4096
+  # max_calls_per_minute: 60
+  # require_human_approval_above: 8192
