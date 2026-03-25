@@ -193,7 +193,7 @@ jobs:
       # ----------------------------------------------------------------
       # ESRP Signing — Authenticode sign DLLs + NuGet package signing
       # All config sourced from GitHub Secrets:
-      #   ESRP_AAD_ID, ESRP_KEYVAULT_NAME, ESRP_SIGN_CERT_NAME
+      #   ESRP_AAD_ID, ESRP_KEYVAULT_NAME, ESRP_CERT_IDENTIFIER
       # Key code CP-401405 is the Microsoft NuGet signing certificate.
       # TODO: Activate once PRSS certs are generated and uploaded to KV
       # ----------------------------------------------------------------

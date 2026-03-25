@@ -53,13 +53,13 @@ parameters:
 # -------------------------------------------------------
 # ESRP Configuration — All values sourced from GitHub Secrets
 # Configure these secrets in the ADO pipeline or GitHub repo:
-#   ESRP_SERVICE_CONNECTION, ESRP_KEYVAULT_NAME, ESRP_SIGN_CERT_NAME,
+#   ESRP_SERVICE_CONNECTION, ESRP_KEYVAULT_NAME, ESRP_CERT_IDENTIFIER,
 #   ESRP_CLIENT_ID, ESRP_DOMAIN_TENANT_ID, ESRP_OWNERS, ESRP_APPROVERS
 # -------------------------------------------------------
 variables:
   esrpServiceConnection: $(ESRP_SERVICE_CONNECTION)
   esrpKeyVaultName: $(ESRP_KEYVAULT_NAME)
-  esrpSignCertName: $(ESRP_SIGN_CERT_NAME)
+  esrpSignCertName: $(ESRP_CERT_IDENTIFIER)
   esrpClientId: $(ESRP_CLIENT_ID)
   esrpDomainTenantId: $(ESRP_DOMAIN_TENANT_ID)
   esrpOwners: $(ESRP_OWNERS)
