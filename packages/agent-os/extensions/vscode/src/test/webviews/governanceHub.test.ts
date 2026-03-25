@@ -114,5 +114,60 @@ suite('Governance Hub', () => {
 
             assert.ok(script.includes('localStorage'));
         });
+
+        test('includes esc() function for HTML entity escaping', () => {
+            const script = governanceHubScript(nonce);
+
+            assert.ok(
+                script.includes('function esc(s)'),
+                'Script should define an esc() HTML escaping function'
+            );
+            assert.ok(
+                script.includes('d.textContent = String(s)'),
+                'esc() should use textContent for safe encoding'
+            );
+        });
+
+        test('escapes agent DID in topology rendering', () => {
+            const script = governanceHubScript(nonce);
+
+            // The topology renderer should use esc() on agent DIDs
+            assert.ok(
+                script.includes("esc(a.did)"),
+                'Agent DIDs should be escaped with esc()'
+            );
+            // Should NOT use inline onclick with string interpolation
+            assert.ok(
+                !script.includes("onclick=\"selectAgent"),
+                'Should not use inline onclick handlers'
+            );
+            // Should use data-attribute delegation instead
+            assert.ok(
+                script.includes('data-agent-did'),
+                'Should use data-agent-did attribute for click delegation'
+            );
+        });
+
+        test('escapes policy rule fields', () => {
+            const script = governanceHubScript(nonce);
+
+            assert.ok(script.includes('esc(r.name)'), 'Rule name should be escaped');
+            assert.ok(script.includes('esc(r.description)'), 'Rule description should be escaped');
+            assert.ok(script.includes('esc(r.action)'), 'Rule action should be escaped');
+            assert.ok(script.includes('esc(r.scope)'), 'Rule scope should be escaped');
+        });
+
+        test('escapes violation data', () => {
+            const script = governanceHubScript(nonce);
+
+            assert.ok(script.includes('esc(v.ruleName)'), 'Violation rule name should be escaped');
+            assert.ok(script.includes('esc(loc)'), 'Violation location should be escaped');
+        });
+
+        test('escapes audit entry fields', () => {
+            const script = governanceHubScript(nonce);
+
+            assert.ok(script.includes('esc(e.type)'), 'Audit type should be escaped');
+        });
     });
 });

@@ -8,9 +8,10 @@
  */
 
 import * as http from 'http';
+import { randomBytes } from 'crypto';
 
-/** Default host for the governance server. */
-export const DEFAULT_HOST = 'localhost';
+/** Default host for the governance server — bound to loopback only. */
+export const DEFAULT_HOST = '127.0.0.1';
 
 /** Default port to attempt binding. */
 export const DEFAULT_PORT = 9845;
@@ -61,7 +62,7 @@ export async function findAvailablePort(
  * @returns Unique string identifier for a client
  */
 export function generateClientId(): string {
-    return `client_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    return `client_${Date.now()}_${randomBytes(4).toString('hex')}`;
 }
 
 /** Minimal WebSocket interface for type safety without importing ws types. */

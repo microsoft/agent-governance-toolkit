@@ -2,7 +2,7 @@
   "name": "@microsoft/agent-os-vscode",
   "displayName": "Agent OS - AI Safety for Code",
   "description": "Kernel-level safety for AI coding assistants. Block destructive operations, verify with multi-model review, and audit all AI suggestions.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "publisher": "agent-os",
   "author": "Microsoft Corporation",
   "license": "MIT",
@@ -452,31 +452,10 @@
           },
           "description": "Tabs to display in the Governance Hub"
         },
-        "agentOS.export.storageProvider": {
-          "type": "string",
-          "enum": ["local", "s3", "azure"],
-          "default": "local",
-          "description": "Storage provider for exported reports"
-        },
         "agentOS.export.localPath": {
           "type": "string",
           "default": "",
           "description": "Local directory for exported reports (defaults to workspace)"
-        },
-        "agentOS.export.s3.bucket": {
-          "type": "string",
-          "default": "",
-          "description": "S3 bucket name for report exports"
-        },
-        "agentOS.export.s3.region": {
-          "type": "string",
-          "default": "us-east-1",
-          "description": "AWS region for S3 bucket"
-        },
-        "agentOS.export.azure.container": {
-          "type": "string",
-          "default": "",
-          "description": "Azure Blob container name for report exports"
         },
         "agentOS.observability.endpoint": {
           "type": "string",
@@ -488,6 +467,17 @@
           "default": 60000,
           "minimum": 10000,
           "description": "Interval in milliseconds between metrics pushes"
+        },
+        "agent-os.backend.mode": {
+          "type": "string",
+          "enum": ["mock", "local"],
+          "default": "mock",
+          "description": "Data source for governance dashboards: mock (simulated) or local (Python Agent OS services)"
+        },
+        "agent-os.backend.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "Path to Python interpreter with agent-os-kernel installed"
         }
       }
     },

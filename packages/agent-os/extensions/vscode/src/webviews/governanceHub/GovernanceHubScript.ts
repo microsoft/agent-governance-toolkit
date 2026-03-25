@@ -4,8 +4,13 @@
  * Governance Hub Script
  *
  * Client-side JavaScript for the Governance Hub webview.
- * Handles tab switching, message passing, and UI interactions.
+ * Composes formatter modules and provides tab switching,
+ * message passing, and UI initialization.
  */
+
+import { hubSLOFormatterScript } from './hubSLOFormatter';
+import { hubTopologyFormatterScript } from './hubTopologyFormatter';
+import { hubAuditFormatterScript, hubPolicyFormatterScript } from './hubAuditFormatter';
 
 /**
  * Returns the complete script block for the Governance Hub.
@@ -16,6 +21,14 @@ export function governanceHubScript(nonce: string): string {
     return `<script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const STORAGE_KEY = 'governanceHub.activeTab';
+    let auditData = [];
+
+    /** Escape HTML entities to prevent XSS. */
+    function esc(s) {
+        var d = document.createElement('div');
+        d.textContent = String(s);
+        return d.innerHTML;
+    }
 
     /** Initialize tab state from localStorage or default. */
     function initTabs() {
@@ -29,10 +42,8 @@ export function governanceHubScript(nonce: string): string {
     function activateTab(tabId) {
         const tabs = document.querySelectorAll('.tab');
         const panels = document.querySelectorAll('.tab-content');
-
         tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
         panels.forEach(p => p.classList.toggle('active', p.id === tabId + '-panel'));
-
         localStorage.setItem(STORAGE_KEY, tabId);
         vscode.postMessage({ type: 'tabChange', activeTab: tabId });
     }
@@ -46,63 +57,57 @@ export function governanceHubScript(nonce: string): string {
 
     /** Bind action button handlers. */
     function bindActions() {
-        const refreshBtn = document.getElementById('refresh-btn');
-        const browserBtn = document.getElementById('browser-btn');
-        const exportBtn = document.getElementById('export-btn');
-
-        if (refreshBtn) {
-            refreshBtn.addEventListener('click', () => {
-                vscode.postMessage({ type: 'refresh' });
-            });
-        }
-        if (browserBtn) {
-            browserBtn.addEventListener('click', () => {
-                vscode.postMessage({ type: 'openInBrowser' });
-            });
-        }
-        if (exportBtn) {
-            exportBtn.addEventListener('click', () => {
-                vscode.postMessage({ type: 'export' });
-            });
-        }
+        var refreshBtn = document.getElementById('refresh-btn');
+        var browserBtn = document.getElementById('browser-btn');
+        var exportBtn = document.getElementById('export-btn');
+        if (refreshBtn) { refreshBtn.addEventListener('click', function() { vscode.postMessage({ type: 'refresh' }); }); }
+        if (browserBtn) { browserBtn.addEventListener('click', function() { vscode.postMessage({ type: 'openInBrowser' }); }); }
+        if (exportBtn) { exportBtn.addEventListener('click', function() { vscode.postMessage({ type: 'export' }); }); }
     }
 
     /** Handle incoming messages from the extension. */
-    window.addEventListener('message', event => {
-        const msg = event.data;
+    window.addEventListener('message', function(event) {
+        var msg = event.data;
         if (msg.type === 'sloUpdate') { updateSLOPanel(msg.payload); }
         if (msg.type === 'topologyUpdate') { updateTopologyPanel(msg.payload); }
         if (msg.type === 'auditUpdate') { updateAuditPanel(msg.payload); }
+        if (msg.type === 'policyUpdate') { updatePoliciesPanel(msg.payload); }
         if (msg.type === 'configUpdate') { applyConfig(msg.payload); }
     });
 
     function updateSLOPanel(data) {
-        const el = document.getElementById('slo-content');
+        var el = document.getElementById('slo-content');
         if (el && data) { el.innerHTML = formatSLOContent(data); }
     }
-
     function updateTopologyPanel(data) {
-        const el = document.getElementById('topology-content');
+        var el = document.getElementById('topology-content');
         if (el && data) { el.innerHTML = formatTopologyContent(data); }
     }
-
     function updateAuditPanel(data) {
-        const el = document.getElementById('audit-content');
+        var el = document.getElementById('audit-content');
         if (el && data) { el.innerHTML = formatAuditContent(data); }
     }
-
+    function updatePoliciesPanel(data) {
+        var el = document.getElementById('policies-content');
+        if (el && data) { el.innerHTML = formatPoliciesContent(data); }
+    }
     function applyConfig(config) {
-        if (config?.defaultTab) { activateTab(config.defaultTab); }
+        if (config && config.defaultTab) { activateTab(config.defaultTab); }
     }
 
-    function formatSLOContent(d) { return '<div class="slo-panel">SLO data loaded</div>'; }
-    function formatTopologyContent(d) { return '<div class="topology-panel">Topology loaded</div>'; }
-    function formatAuditContent(d) { return '<div class="audit-panel">Audit loaded</div>'; }
+    ${hubSLOFormatterScript()}
+    ${hubTopologyFormatterScript()}
+    ${hubAuditFormatterScript()}
+    ${hubPolicyFormatterScript()}
 
-    document.addEventListener('DOMContentLoaded', () => {
+    (function init() {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+            return;
+        }
         initTabs();
         bindTabClicks();
         bindActions();
-    });
+    })();
     </script>`;
 }

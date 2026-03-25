@@ -14,6 +14,10 @@ This guide walks you through all features of the AgentOS VS Code Extension, the 
 8. [Enterprise Features](#enterprise-features)
 9. [CI/CD Integration](#cicd-integration)
 10. [Troubleshooting](#troubleshooting)
+11. [Governance Hub](#governance-hub)
+12. [SLO Dashboard](#slo-dashboard)
+13. [Agent Topology](#agent-topology)
+14. [Connecting to Live Backend](#connecting-to-live-backend)
 
 ---
 
@@ -374,7 +378,7 @@ Intelligent code completion and pre-built templates for faster development.
 When working with AgentOS APIs, you get automatic suggestions:
 
 ```python
-from agentos import Agent, Policy, Kernel, CMVKClient
+from agent_os import Agent, Policy, Kernel, CMVKClient
 #                   ↑ Autocomplete shows all available imports
 
 agent = Agent(
@@ -575,7 +579,124 @@ If the extension feels slow:
 
 - **Documentation**: [github.com/microsoft/agent-governance-toolkit/docs](https://github.com/microsoft/agent-governance-toolkit/docs)
 - **Issues**: [github.com/microsoft/agent-governance-toolkit/issues](https://github.com/microsoft/agent-governance-toolkit/issues)
-- **Discord**: Join our community for real-time help
+
+---
+
+## Governance Hub
+
+The Governance Hub provides a unified view of governance state across SLOs, agent topology, and audit events.
+
+### Opening the Governance Hub
+
+```
+Ctrl+Shift+P -> "Agent OS: Open Governance Hub"
+```
+
+The hub opens as a full-window panel with three tabs: **SLO**, **Topology**, and **Audit**. A compact version is also available in the sidebar under the Agent OS activity bar icon.
+
+### Tab Navigation
+
+| Tab | Content |
+|-----|---------|
+| **SLO** | Availability, latency percentiles, compliance rate, trust scores |
+| **Topology** | Agent mesh graph with trust rings and bridge connections |
+| **Audit** | Filterable event stream with severity, timestamp, and agent details |
+
+Switch tabs by clicking the tab header. Both the sidebar and panel views share the same data source and update in real time.
+
+---
+
+## SLO Dashboard
+
+The SLO Dashboard displays key reliability and compliance metrics for your governed agents.
+
+### Reading Metrics
+
+- **Availability** -- Percentage of successful governance evaluations over the selected time window. Target is typically 99.9% or higher.
+- **Latency (P50 / P95 / P99)** -- Policy evaluation latency at the 50th, 95th, and 99th percentiles. Values above 100ms at P99 may indicate policy engine overload.
+- **Policy Compliance** -- Ratio of actions that passed policy evaluation without denial or escalation.
+- **Trust Score** -- Aggregate trust score (0-1000 scale) across all registered agents in the mesh.
+
+### Error Budgets and Burn Rates
+
+The dashboard shows remaining error budget as a percentage and a burn rate indicator:
+
+- **Green** -- Burn rate is sustainable; error budget will last the full window.
+- **Yellow** -- Elevated burn rate; budget may exhaust before window end.
+- **Red** -- Budget exhausted or burning faster than 2x the sustainable rate.
+
+Error budgets reset at the start of each SLO window (configurable, default 30 days).
+
+---
+
+## Agent Topology
+
+The topology view renders a force-directed graph of all agents in the mesh.
+
+### Trust Rings
+
+Agents are grouped into four concentric rings corresponding to execution privilege levels:
+
+| Ring | Label | Description |
+|------|-------|-------------|
+| Ring 0 | Root | Kernel-level agents with full privilege |
+| Ring 1 | Supervisor | Elevated privilege, can manage Ring 2-3 agents |
+| Ring 2 | Standard | Normal operational agents |
+| Ring 3 | Sandbox | Restricted agents in isolation |
+
+### Bridge Health Indicators
+
+Lines between agents indicate active trust bridges. Color coding:
+
+- **Solid green** -- Healthy bidirectional trust
+- **Dashed yellow** -- Degraded (one-way trust or elevated latency)
+- **Red** -- Bridge down or trust score below threshold
+
+### Delegation Chains
+
+Arrows show delegation relationships where one agent acts on behalf of another. Hover over a delegation edge to see the delegated capability set and expiration time.
+
+---
+
+## Connecting to Live Backend
+
+By default, the extension runs in mock mode with sample data. To connect to a real Agent OS backend:
+
+### Configuration
+
+1. Open VS Code Settings (`Ctrl+,`)
+2. Search for `agent-os.backend.mode`
+3. Set the value to `"local"`
+
+Or add to your `settings.json`:
+
+```json
+{
+  "agent-os.backend.mode": "local"
+}
+```
+
+### Requirements
+
+- Python 3.11+ available on your PATH (or configure `agent-os.backend.pythonPath`)
+- Agent OS packages installed: `pip install agent-os-kernel agent-sre agentmesh-platform`
+
+### Verifying Connection
+
+After switching to local mode:
+1. Check the status bar -- it should show "Agent OS: Local" instead of "Agent OS: Mock"
+2. Open the Output panel (`View` -> `Output`) and select "Agent OS" to see bridge communication logs
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Status bar shows "Mock" despite local setting | Python not found | Verify `python --version` in terminal; set `agent-os.backend.pythonPath` if needed |
+| "Bridge timeout" in Output panel | Packages not installed | Run `pip install agent-os-kernel agent-sre agentmesh-platform` |
+| Stale data in dashboard | Cache not refreshed | Close and reopen the Governance Hub panel |
+| "Module not found" errors | Wrong Python environment | Activate the correct virtualenv before launching VS Code |
+
+The extension falls back to mock data automatically if the live backend is unavailable, so switching modes is always safe.
 
 ---
 

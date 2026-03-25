@@ -130,6 +130,7 @@ export class GovernanceServer {
         req: http.IncomingMessage,
         res: http.ServerResponse
     ): void {
+        this._setSecurityHeaders(res);
         if (req.url === '/' || req.url === '/index.html') {
             res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(renderBrowserDashboard(this._port));
@@ -137,6 +138,15 @@ export class GovernanceServer {
         }
         res.writeHead(404);
         res.end('Not Found');
+    }
+
+    /** Apply security headers to all HTTP responses. */
+    private _setSecurityHeaders(res: http.ServerResponse): void {
+        res.setHeader('Content-Security-Policy',
+            "default-src 'self'; " +
+            "script-src 'self' https://d3js.org https://cdn.jsdelivr.net; " +
+            "style-src 'self' 'unsafe-inline'");
+        res.setHeader('X-Content-Type-Options', 'nosniff');
     }
 
     /** Create the WebSocket server. */

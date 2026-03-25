@@ -98,14 +98,19 @@ function buildAuditTab(): string {
  * @returns Full HTML document string
  */
 export function renderBrowserDashboard(wsPort: number): string {
+    // TODO: Compute SRI hashes from pinned CDN versions before release
+    const d3Sri = 'sha384-PLACEHOLDER_D3_SRI_HASH';
+    const chartSri = 'sha384-PLACEHOLDER_CHARTJS_SRI_HASH';
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://d3js.org https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'">
     <title>Agent OS Governance Dashboard</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js" integrity="${d3Sri}" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" integrity="${chartSri}" crossorigin="anonymous"></script>
     <style>${buildBrowserStyles()}</style>
 </head>
 <body>

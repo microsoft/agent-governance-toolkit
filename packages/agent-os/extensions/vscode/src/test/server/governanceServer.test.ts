@@ -7,7 +7,8 @@
  */
 
 import * as assert from 'assert';
-import { findAvailablePort, isPortAvailable, generateClientId } from '../../server/serverHelpers';
+import { findAvailablePort, isPortAvailable, generateClientId, DEFAULT_HOST } from '../../server/serverHelpers';
+import { renderBrowserDashboard } from '../../server/browserTemplate';
 
 suite('GovernanceServer Helpers', () => {
     suite('isPortAvailable', () => {
@@ -78,5 +79,44 @@ suite('Server State', () => {
 
         assert.ok(connection.id);
         assert.ok(connection.connectedAt instanceof Date);
+    });
+});
+
+suite('Server Security', () => {
+    test('DEFAULT_HOST binds to 127.0.0.1', () => {
+        assert.strictEqual(DEFAULT_HOST, '127.0.0.1');
+    });
+
+    test('browser template includes CSP meta tag', () => {
+        const html = renderBrowserDashboard(9845);
+        assert.ok(
+            html.includes('http-equiv="Content-Security-Policy"'),
+            'CSP meta tag should be present in the HTML head'
+        );
+        assert.ok(
+            html.includes("default-src 'self'"),
+            'CSP should contain default-src directive'
+        );
+    });
+
+    test('browser template includes SRI integrity attributes', () => {
+        const html = renderBrowserDashboard(9845);
+        assert.ok(
+            html.includes('integrity="sha384-'),
+            'CDN scripts should have SRI integrity attributes'
+        );
+        assert.ok(
+            html.includes('crossorigin="anonymous"'),
+            'CDN scripts should have crossorigin attribute'
+        );
+    });
+
+    test('generateClientId uses crypto-strength randomness', () => {
+        const id = generateClientId();
+        // crypto.randomBytes(4) produces 8 hex chars
+        const parts = id.split('_');
+        const random = parts[2];
+        assert.strictEqual(random.length, 8, 'random segment should be 8 hex chars');
+        assert.ok(/^[0-9a-f]{8}$/.test(random), 'random segment should be hex');
     });
 });

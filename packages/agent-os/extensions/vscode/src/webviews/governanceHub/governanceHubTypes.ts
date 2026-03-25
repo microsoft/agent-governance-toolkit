@@ -21,12 +21,13 @@ export interface HubConfig {
 
 /** Message types sent from webview to extension. */
 export interface HubOutboundMessage {
-    type: 'refresh' | 'openInBrowser' | 'export' | 'tabChange';
+    type: 'refresh' | 'openInBrowser' | 'export' | 'tabChange' | 'agentSelected' | 'exportAudit' | 'openFullDashboard';
     activeTab?: HubTabId;
+    did?: string;
 }
 
 /** Message types sent from extension to webview. */
 export interface HubInboundMessage {
-    type: 'sloUpdate' | 'topologyUpdate' | 'auditUpdate' | 'configUpdate';
+    type: 'sloUpdate' | 'topologyUpdate' | 'auditUpdate' | 'policyUpdate' | 'configUpdate';
     payload?: unknown;
 }

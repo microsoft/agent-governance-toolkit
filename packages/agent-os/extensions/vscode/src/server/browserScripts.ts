@@ -9,6 +9,13 @@
 /** Build the WebSocket client script. */
 export function buildClientScript(wsPort: number): string {
     return `
+    /** Escape HTML entities to prevent XSS. */
+    function esc(s) {
+        var d = document.createElement('div');
+        d.textContent = String(s);
+        return d.innerHTML;
+    }
+
     let ws;
     let reconnectTimer;
     const statusDot = document.getElementById('status-dot');
@@ -60,8 +67,8 @@ export function buildClientScript(wsPort: number): string {
         const time = new Date(entry.timestamp).toLocaleTimeString();
         const cls = entry.type === 'blocked' ? 'health-breach' : 'health-ok';
         return '<div class="audit-item"><span class="audit-type ' + cls + '">' +
-            entry.type + '</span><span class="audit-time">' + time +
-            '</span><span>' + (entry.reason || entry.violation || '-') + '</span></div>';
+            esc(entry.type) + '</span><span class="audit-time">' + esc(time) +
+            '</span><span>' + esc(entry.reason || entry.violation || '-') + '</span></div>';
     }
 
     function handleRoute() {

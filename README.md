@@ -326,6 +326,14 @@ This toolkit provides **application-level (Python middleware) governance**, not 
 - No built-in rule set should be considered exhaustive
 - For details see [Architecture — Security Model & Boundaries](docs/ARCHITECTURE.md)
 
+## VS Code Extension
+
+Real-time governance visualization and policy enforcement for AI coding assistants. The extension provides a Governance Hub with SLO dashboards, agent topology graphs, audit streams, and policy diagnostics -- all integrated into the VS Code sidebar and editor. See [extension documentation](packages/agent-os/extensions/vscode/README.md) for details.
+
+```bash
+cd packages/agent-os/extensions/vscode && npm install && npm run compile
+```
+
 ## Contributor Resources
 
 - [Contributing Guide](CONTRIBUTING.md)

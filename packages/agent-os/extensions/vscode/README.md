@@ -62,6 +62,31 @@ Real-time monitoring of agent activity:
 - **CI/CD Integration**: GitHub Actions, GitLab CI, Jenkins, Azure Pipelines
 - **Compliance Frameworks**: SOC 2, GDPR, HIPAA, PCI DSS templates
 
+## What's New in v1.1.0
+
+### Governance Visualization Hub
+Unified dashboard for real-time governance monitoring:
+- **SLO Dashboard** -- Availability, latency P50/P95/P99, policy compliance, trust scores with error budgets and burn rates
+- **Agent Topology** -- Force-directed graph of agent mesh, trust rings, bridge status, delegation chains
+- **Audit Stream** -- Filterable event log with drill-down
+- **Sidebar + Panel** -- Compact sidebar view and full-window panel
+- **Browser Experience** -- Open dashboard in external browser via local server
+
+### Live Backend Connection
+- Connects to Agent OS Python backend via JSON bridge protocol
+- Dual-mode: mock data for development, real backend for production
+- Configurable via `agent-os.backend.mode` setting ("mock" | "local")
+- Graceful fallback to mock if backend unavailable
+
+### Policy Diagnostics
+- Real-time governance rule validation on Python/TypeScript/YAML files
+- Code actions: safe alternatives for flagged patterns
+- Status bar with governance mode and execution ring indicator
+
+### Report Export
+- Export governance snapshot as self-contained HTML report
+- Metrics exporter pushes dashboard data to configured observability endpoints
+
 ## Quick Start
 
 1. Install from VS Code Marketplace
@@ -155,6 +180,17 @@ Share policies via `.vscode/agent-os.json`:
 | `Agent OS: Setup CI/CD Integration` | Generate CI/CD configuration |
 | `Agent OS: Check Compliance` | Run compliance validation |
 | `Agent OS: Sign In (Enterprise)` | Enterprise SSO authentication |
+| `Agent OS: Show SLO Dashboard (Tree)` | SLO metrics in sidebar tree view |
+| `Agent OS: Show Agent Topology (Tree)` | Agent mesh in sidebar tree view |
+| `Agent OS: SLO Dashboard (Visual)` | Rich webview SLO dashboard |
+| `Agent OS: Agent Topology Graph` | Force-directed agent topology graph |
+| `Agent OS: Refresh SLO Data` | Refresh SLO metrics |
+| `Agent OS: Refresh Agent Topology` | Refresh topology data |
+| `Agent OS: Open Governance Hub` | Unified governance dashboard |
+| `Agent OS: Open SLO Dashboard in Browser` | SLO dashboard in external browser |
+| `Agent OS: Open Topology Graph in Browser` | Topology graph in external browser |
+| `Agent OS: Open Governance Hub in Browser` | Governance Hub in external browser |
+| `Agent OS: Export Governance Report` | Export HTML governance report |
 
 ## Configuration
 
@@ -170,6 +206,12 @@ Open Settings (Ctrl+,) and search for "Agent OS":
 | `agentOS.diagnostics.enabled` | true | Real-time diagnostics |
 | `agentOS.enterprise.sso.enabled` | false | Enterprise SSO |
 | `agentOS.enterprise.compliance.framework` | - | Default compliance framework |
+| `agent-os.backend.mode` | "mock" | Backend mode: "mock" or "local" |
+| `agent-os.backend.pythonPath` | "python" | Python executable path |
+| `agentOS.governanceHub.tabs` | ["slo", "topology", "audit"] | Enabled Governance Hub tabs |
+| `agentOS.export.localPath` | "" | Local directory for exported reports |
+| `agentOS.observability.endpoint` | "" | Metrics push endpoint (OTEL compatible) |
+| `agentOS.diagnostics.severity` | "warning" | Minimum diagnostic severity |
 
 ## Pricing
 

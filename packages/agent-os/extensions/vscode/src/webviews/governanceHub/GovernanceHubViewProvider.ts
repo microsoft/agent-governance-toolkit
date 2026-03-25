@@ -11,9 +11,10 @@ import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import { SLODataProvider } from '../../views/sloTypes';
 import { AgentTopologyDataProvider } from '../../views/topologyTypes';
-import { renderGovernanceHub } from './GovernanceHubTemplate';
+import { renderSidebarHub } from './SidebarHubTemplate';
 import { HubConfig, HubOutboundMessage, HubTabId } from './governanceHubTypes';
 import { AuditLoggerLike } from './GovernanceHubPanel';
+import { mapAuditEntries } from './hubAuditHelpers';
 
 /**
  * Provides a sidebar webview for the Governance Hub (compact mode).
@@ -78,7 +79,7 @@ export class GovernanceHubViewProvider implements vscode.WebviewViewProvider {
         if (!this._view) { return; }
         const nonce = crypto.randomBytes(16).toString('hex');
         const cspSource = this._view.webview.cspSource;
-        this._view.webview.html = renderGovernanceHub(nonce, cspSource, this._config);
+        this._view.webview.html = renderSidebarHub(nonce, cspSource, this._config);
     }
 
     /** Register visibility and message listeners. */
@@ -107,6 +108,9 @@ export class GovernanceHubViewProvider implements vscode.WebviewViewProvider {
                 break;
             case 'export':
                 vscode.commands.executeCommand('agent-os.exportReport');
+                break;
+            case 'openFullDashboard':
+                vscode.commands.executeCommand('agent-os.showGovernanceHub');
                 break;
         }
     }
@@ -162,7 +166,7 @@ export class GovernanceHubViewProvider implements vscode.WebviewViewProvider {
     /** Fetch and send audit log entries. */
     private _sendAuditUpdate(): void {
         if (!this._view) { return; }
-        const entries = this._auditLogger.getAll();
+        const entries = mapAuditEntries(this._auditLogger);
         this._view.webview.postMessage({ type: 'auditUpdate', payload: entries });
     }
 

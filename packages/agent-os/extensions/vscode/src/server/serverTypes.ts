@@ -34,7 +34,7 @@ export interface ServerState {
 }
 
 /** Message types sent to browser clients via WebSocket. */
-export type ServerMessageType = 'sloUpdate' | 'topologyUpdate' | 'auditUpdate';
+export type ServerMessageType = 'sloUpdate' | 'topologyUpdate' | 'auditUpdate' | 'policyUpdate';
 
 /** WebSocket message payload structure. */
 export interface ServerMessage {

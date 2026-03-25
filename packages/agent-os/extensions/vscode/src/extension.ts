@@ -51,6 +51,11 @@ import { MetricsExporter } from './observability';
 // Mock Backend Services (replace with real bridges in production)
 import { createMockSLOBackend } from './mockBackend/MockSLOBackend';
 import { createMockTopologyBackend } from './mockBackend/MockTopologyBackend';
+import { createMockPolicyBackend } from './mockBackend/MockPolicyBackend';
+import { PolicyDataProvider } from './views/policyTypes';
+
+// Provider Factory (Phase 3 - Real Backend Wiring)
+import { readBackendConfig, createProviders, Providers } from './services/providerFactory';
 
 // Enterprise Features
 import { EnterpriseAuthProvider } from './enterprise/auth/ssoProvider';
@@ -71,8 +76,9 @@ let governanceDiagnosticProvider: GovernanceDiagnosticProvider;
 let governanceStatusBar: GovernanceStatusBar;
 let governanceServer: GovernanceServer | undefined;
 let governanceHubViewProvider: GovernanceHubViewProvider | undefined;
+let activeProviders: Providers | undefined;
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
     console.log('Agent OS extension activating...');
 
     try {
@@ -113,13 +119,14 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.registerTreeDataProvider('agent-os.memoryBrowser', memoryBrowserProvider);
 
         // Register governance visualization (Issue #39)
-        // Mock backends simulate live data feeds through legitimate provider interfaces.
-        // Replace with real AgentSRE/AgentMesh bridges in production.
-        console.log('Registering governance visualization...');
-        const sloDataProvider = createMockSLOBackend();
+        // Provider factory reads agent-os.backend settings to choose mock or real backends.
+        const backendConfig = readBackendConfig();
+        activeProviders = await createProviders(backendConfig);
+        const sloDataProvider = activeProviders.slo;
         const sloDashboardProvider = new SLODashboardProvider(sloDataProvider);
-        const agentTopologyDataProvider = createMockTopologyBackend();
+        const agentTopologyDataProvider = activeProviders.topology;
         const agentTopologyProvider = new AgentTopologyProvider(agentTopologyDataProvider);
+        const policyDataProvider = activeProviders.policy;
 
     vscode.window.registerTreeDataProvider('agent-os.sloDashboard', sloDashboardProvider);
     vscode.window.registerTreeDataProvider('agent-os.agentTopology', agentTopologyProvider);
@@ -171,10 +178,12 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Initialize governance status bar with defaults
     const mode = vscode.workspace.getConfiguration('agentOS').get<string>('mode', 'basic');
-    governanceStatusBar.updateGovernanceMode(
-        mode === 'enterprise' ? 'strict' : mode === 'enhanced' ? 'permissive' : 'audit-only',
-        0
-    );
+    const GOVERNANCE_LEVEL_MAP: Record<string, 'strict' | 'permissive' | 'audit-only'> = {
+        enterprise: 'strict',
+        enhanced: 'permissive',
+    };
+    const governanceLevel = GOVERNANCE_LEVEL_MAP[mode] ?? 'audit-only';
+    governanceStatusBar.updateGovernanceMode(governanceLevel, 0);
 
     // Register inline completion interceptor
     const completionInterceptor = vscode.languages.registerInlineCompletionItemProvider(
@@ -389,9 +398,81 @@ safe_query = "SELECT * FROM users WHERE id = ?"
             context.extensionUri,
             sloDataProvider,
             agentTopologyDataProvider,
-            auditLogger
+            auditLogger,
+            policyDataProvider
         );
     });
+
+    // Agent Drill-Down Command (Dashboard Feature Completeness - Phase 2)
+    const showAgentDetailsCmd = vscode.commands.registerCommand(
+        'agent-os.showAgentDetails',
+        async (did: string) => {
+            const agents = agentTopologyDataProvider.getAgents();
+            const agent = agents.find(a => a.did === did);
+            if (!agent) {
+                vscode.window.showWarningMessage(`Agent not found: ${did}`);
+                return;
+            }
+
+            const ringLabels: Record<number, string> = {
+                0: 'Ring 0 (Root)',
+                1: 'Ring 1 (Trusted)',
+                2: 'Ring 2 (Standard)',
+                3: 'Ring 3 (Sandbox)',
+            };
+
+            const items: vscode.QuickPickItem[] = [
+                { label: '$(key) DID', description: agent.did },
+                { label: '$(shield) Trust Score', description: `${agent.trustScore} / 1000` },
+                { label: '$(layers) Execution Ring', description: ringLabels[agent.ring] || `Ring ${agent.ring}` },
+                { label: '$(clock) Registered', description: agent.registeredAt || 'Unknown' },
+                { label: '$(pulse) Last Activity', description: agent.lastActivity || 'Unknown' },
+                { label: '$(tools) Capabilities', description: agent.capabilities?.join(', ') || 'None' },
+            ];
+
+            await vscode.window.showQuickPick(items, {
+                title: `Agent: ${did.slice(0, 24)}...`,
+                placeHolder: 'Agent details',
+            });
+        }
+    );
+
+    // Audit CSV Export Command (Dashboard Feature Completeness - Phase 3)
+    const exportAuditCSVCmd = vscode.commands.registerCommand(
+        'agent-os.exportAuditCSV',
+        async () => {
+            const entries = auditLogger.getAll();
+            if (entries.length === 0) {
+                vscode.window.showInformationMessage('No audit entries to export');
+                return;
+            }
+
+            const csv = [
+                'Timestamp,Type,File,Language,Violation,Reason',
+                ...entries.map(e => {
+                    const entry = e as { timestamp: Date; type: string; file?: string; language?: string; violation?: string; reason?: string };
+                    return [
+                        entry.timestamp.toISOString(),
+                        entry.type,
+                        entry.file || '',
+                        entry.language || '',
+                        (entry.violation || '').replace(/,/g, ';'),
+                        (entry.reason || '').replace(/,/g, ';'),
+                    ].join(',');
+                })
+            ].join('\n');
+
+            const uri = await vscode.window.showSaveDialog({
+                defaultUri: vscode.Uri.file(`audit-log-${Date.now()}.csv`),
+                filters: { 'CSV': ['csv'] },
+            });
+
+            if (uri) {
+                await vscode.workspace.fs.writeFile(uri, Buffer.from(csv, 'utf-8'));
+                vscode.window.showInformationMessage(`Exported ${entries.length} entries to ${uri.fsPath}`);
+            }
+        }
+    );
 
     // Browser Experience Commands (Issue #39 - Local Dev Server)
     const openGovernanceInBrowserCmd = vscode.commands.registerCommand(
@@ -441,21 +522,9 @@ safe_query = "SELECT * FROM users WHERE id = ?"
         'agent-os.exportReport',
         async () => {
             const config = vscode.workspace.getConfiguration('agentOS.export');
-            const providerType = config.get<string>('storageProvider', 'local');
-
-            // Get configured storage provider
-            let provider: LocalStorageProvider;
-            if (providerType === 'local') {
-                const localPath = config.get<string>('localPath', '');
-                const outputDir = localPath || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
-                provider = new LocalStorageProvider(outputDir);
-            } else {
-                vscode.window.showWarningMessage(
-                    `Storage provider "${providerType}" not yet implemented. Using local storage.`
-                );
-                const outputDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
-                provider = new LocalStorageProvider(outputDir);
-            }
+            const localPath = config.get<string>('localPath', '');
+            const outputDir = localPath || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+            const provider = new LocalStorageProvider(outputDir);
 
             // Zero-trust: validate on every export
             try {
@@ -582,6 +651,8 @@ safe_query = "SELECT * FROM users WHERE id = ?"
         governanceStatusBar,
         // Governance Hub & Browser Experience
         showGovernanceHubCmd,
+        showAgentDetailsCmd,
+        exportAuditCSVCmd,
         openGovernanceInBrowserCmd,
         openSLOInBrowserCmd,
         openTopologyInBrowserCmd,

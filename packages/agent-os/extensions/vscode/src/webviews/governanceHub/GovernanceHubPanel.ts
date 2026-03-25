@@ -11,8 +11,10 @@ import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import { SLODataProvider } from '../../views/sloTypes';
 import { AgentTopologyDataProvider } from '../../views/topologyTypes';
+import { PolicyDataProvider } from '../../views/policyTypes';
 import { renderGovernanceHub } from './GovernanceHubTemplate';
 import { HubConfig, HubOutboundMessage, HubTabId } from './governanceHubTypes';
+import { mapAuditEntries } from './hubAuditHelpers';
 
 /** Audit logger interface for dependency injection. */
 export interface AuditLoggerLike {
@@ -34,6 +36,7 @@ export class GovernanceHubPanel {
     private readonly _sloProvider: SLODataProvider;
     private readonly _topologyProvider: AgentTopologyDataProvider;
     private readonly _auditLogger: AuditLoggerLike;
+    private readonly _policyProvider?: PolicyDataProvider;
     private readonly _disposables: vscode.Disposable[] = [];
     private _refreshInterval: ReturnType<typeof setInterval> | undefined;
     private _config: HubConfig;
@@ -45,7 +48,8 @@ export class GovernanceHubPanel {
         extensionUri: vscode.Uri,
         sloProvider: SLODataProvider,
         topologyProvider: AgentTopologyDataProvider,
-        auditLogger: AuditLoggerLike
+        auditLogger: AuditLoggerLike,
+        policyProvider?: PolicyDataProvider
     ): void {
         const column = vscode.window.activeTextEditor?.viewColumn;
 
@@ -62,7 +66,7 @@ export class GovernanceHubPanel {
         );
 
         GovernanceHubPanel._currentPanel = new GovernanceHubPanel(
-            panel, extensionUri, sloProvider, topologyProvider, auditLogger
+            panel, extensionUri, sloProvider, topologyProvider, auditLogger, policyProvider
         );
     }
 
@@ -76,13 +80,15 @@ export class GovernanceHubPanel {
         extensionUri: vscode.Uri,
         sloProvider: SLODataProvider,
         topologyProvider: AgentTopologyDataProvider,
-        auditLogger: AuditLoggerLike
+        auditLogger: AuditLoggerLike,
+        policyProvider?: PolicyDataProvider
     ) {
         this._panel = panel;
         this._extensionUri = extensionUri;
         this._sloProvider = sloProvider;
         this._topologyProvider = topologyProvider;
         this._auditLogger = auditLogger;
+        this._policyProvider = policyProvider;
         this._config = this._loadConfig();
 
         this._setWebviewContent();
@@ -95,7 +101,7 @@ export class GovernanceHubPanel {
     /** Load configuration with defaults. */
     private _loadConfig(): HubConfig {
         return {
-            enabledTabs: ['slo', 'topology', 'audit'] as HubTabId[],
+            enabledTabs: ['slo', 'topology', 'audit', 'policies'] as HubTabId[],
             defaultTab: 'slo',
             refreshIntervalMs: 10_000,
         };
@@ -136,6 +142,14 @@ export class GovernanceHubPanel {
             case 'export':
                 vscode.commands.executeCommand('agent-os.exportReport');
                 break;
+            case 'agentSelected':
+                if (message.did) {
+                    vscode.commands.executeCommand('agent-os.showAgentDetails', message.did);
+                }
+                break;
+            case 'exportAudit':
+                vscode.commands.executeCommand('agent-os.exportAuditCSV');
+                break;
         }
     }
 
@@ -145,6 +159,7 @@ export class GovernanceHubPanel {
             this._sendSLOUpdate(),
             this._sendTopologyUpdate(),
             this._sendAuditUpdate(),
+            this._sendPolicyUpdate(),
         ]);
         this._updateTimestamp();
     }
@@ -170,8 +185,17 @@ export class GovernanceHubPanel {
 
     /** Fetch and send audit log entries. */
     private _sendAuditUpdate(): void {
-        const entries = this._auditLogger.getAll();
+        const entries = mapAuditEntries(this._auditLogger);
         this._panel.webview.postMessage({ type: 'auditUpdate', payload: entries });
+    }
+
+    /** Fetch and send policy snapshot. */
+    private async _sendPolicyUpdate(): Promise<void> {
+        if (!this._policyProvider) { return; }
+        try {
+            const snapshot = await this._policyProvider.getSnapshot();
+            await this._panel.webview.postMessage({ type: 'policyUpdate', payload: snapshot });
+        } catch { /* Next interval will retry */ }
     }
 
     /** Update the last-updated timestamp in footer. */
