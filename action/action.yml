@@ -1,0 +1,226 @@
+name: 'Agent Governance Verify'
+description: 'Run governance verification and plugin validation from the Agent Governance Toolkit'
+author: 'Microsoft'
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  command:
+    description: >
+      Which verification to run.
+      Options: governance-verify, marketplace-verify, policy-evaluate, all
+    required: false
+    default: 'governance-verify'
+  policy-path:
+    description: 'Path to YAML policy file(s) for policy-evaluate command'
+    required: false
+    default: ''
+  manifest-path:
+    description: 'Path to plugin manifest for marketplace-verify command'
+    required: false
+    default: ''
+  context-json:
+    description: 'JSON string of evaluation context for policy-evaluate (e.g. {"tool_name": "web_search"})'
+    required: false
+    default: ''
+  output-format:
+    description: 'Output format: text, json, badge'
+    required: false
+    default: 'text'
+  fail-on-warning:
+    description: 'Fail the check if warnings are found (not just errors)'
+    required: false
+    default: 'false'
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.12'
+  toolkit-version:
+    description: 'Agent Governance Toolkit version to install (default: latest)'
+    required: false
+    default: ''
+
+outputs:
+  status:
+    description: 'Compliance status: pass or fail'
+    value: ${{ steps.run.outputs.status }}
+  controls-passed:
+    description: 'Number of governance controls passed (governance-verify only)'
+    value: ${{ steps.run.outputs.controls_passed }}
+  controls-total:
+    description: 'Total number of governance controls checked (governance-verify only)'
+    value: ${{ steps.run.outputs.controls_total }}
+  violations:
+    description: 'Number of policy violations found (policy-evaluate only)'
+    value: ${{ steps.run.outputs.violations }}
+  output:
+    description: 'Full command output (JSON when output-format is json)'
+    value: ${{ steps.run.outputs.output }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Agent Governance Toolkit
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.toolkit-version }}" ]; then
+          pip install --quiet "agent-governance-toolkit[full]==${{ inputs.toolkit-version }}"
+        else
+          pip install --quiet "agent-governance-toolkit[full]"
+        fi
+
+    - name: Run governance check
+      id: run
+      shell: bash
+      run: |
+        set +e
+        COMMAND="${{ inputs.command }}"
+        FORMAT="${{ inputs.output-format }}"
+        STATUS="pass"
+        EXIT_CODE=0
+        OUTPUT=""
+
+        case "$COMMAND" in
+          governance-verify)
+            echo "🛡️ Running governance verification..."
+            if [ "$FORMAT" = "json" ]; then
+              OUTPUT=$(python -m agent_compliance.cli.main verify --json 2>&1)
+            elif [ "$FORMAT" = "badge" ]; then
+              OUTPUT=$(python -m agent_compliance.cli.main verify --badge 2>&1)
+            else
+              OUTPUT=$(python -m agent_compliance.cli.main verify 2>&1)
+            fi
+            EXIT_CODE=$?
+
+            # Extract controls info from JSON output
+            if [ "$FORMAT" = "json" ]; then
+              PASSED=$(echo "$OUTPUT" | python -c "import sys,json; d=json.load(sys.stdin); print(d.get('controls_passed',0))" 2>/dev/null || echo "0")
+              TOTAL=$(echo "$OUTPUT" | python -c "import sys,json; d=json.load(sys.stdin); print(d.get('controls_total',0))" 2>/dev/null || echo "0")
+              echo "controls_passed=$PASSED" >> "$GITHUB_OUTPUT"
+              echo "controls_total=$TOTAL" >> "$GITHUB_OUTPUT"
+            fi
+            ;;
+
+          marketplace-verify)
+            MANIFEST="${{ inputs.manifest-path }}"
+            if [ -z "$MANIFEST" ]; then
+              echo "::error::manifest-path is required for marketplace-verify command"
+              exit 1
+            fi
+            echo "📦 Verifying plugin manifest: $MANIFEST"
+            OUTPUT=$(python -m agent_marketplace.cli_commands verify "$MANIFEST" 2>&1)
+            EXIT_CODE=$?
+            ;;
+
+          policy-evaluate)
+            POLICY="${{ inputs.policy-path }}"
+            CONTEXT='${{ inputs.context-json }}'
+            if [ -z "$POLICY" ]; then
+              echo "::error::policy-path is required for policy-evaluate command"
+              exit 1
+            fi
+            echo "📋 Evaluating policy: $POLICY"
+            OUTPUT=$(python -c "
+        import json, sys
+        from agent_os.policies import PolicyEvaluator
+
+        evaluator = PolicyEvaluator()
+        evaluator.load_policies('$POLICY')
+
+        context = json.loads('$CONTEXT') if '$CONTEXT' else {}
+        decision = evaluator.evaluate(context)
+
+        result = {
+            'allowed': decision.allowed,
+            'action': decision.action,
+            'reason': decision.reason,
+            'matched_rule': decision.matched_rule,
+        }
+        print(json.dumps(result, indent=2))
+        sys.exit(0 if decision.allowed else 1)
+        " 2>&1)
+            EXIT_CODE=$?
+            if [ $EXIT_CODE -ne 0 ]; then
+              echo "violations=1" >> "$GITHUB_OUTPUT"
+            else
+              echo "violations=0" >> "$GITHUB_OUTPUT"
+            fi
+            ;;
+
+          all)
+            echo "🛡️ Running full governance suite..."
+            RESULTS=""
+            FAIL=0
+
+            # 1. Governance verify
+            echo "--- Governance Verification ---"
+            GV_OUT=$(python -m agent_compliance.cli.main verify --json 2>&1)
+            GV_EXIT=$?
+            echo "$GV_OUT"
+            [ $GV_EXIT -ne 0 ] && FAIL=1
+
+            # 2. Marketplace verify (if manifest provided)
+            MANIFEST="${{ inputs.manifest-path }}"
+            if [ -n "$MANIFEST" ]; then
+              echo "--- Marketplace Verification ---"
+              MV_OUT=$(python -m agent_marketplace.cli_commands verify "$MANIFEST" 2>&1)
+              MV_EXIT=$?
+              echo "$MV_OUT"
+              [ $MV_EXIT -ne 0 ] && FAIL=1
+            fi
+
+            # 3. Policy evaluate (if policy provided)
+            POLICY="${{ inputs.policy-path }}"
+            if [ -n "$POLICY" ]; then
+              echo "--- Policy Evaluation ---"
+              PE_OUT=$(python -c "
+        import json, sys
+        from agent_os.policies import PolicyEvaluator
+        evaluator = PolicyEvaluator()
+        evaluator.load_policies('$POLICY')
+        context = json.loads('${{ inputs.context-json }}') if '${{ inputs.context-json }}' else {}
+        decision = evaluator.evaluate(context)
+        print(json.dumps({'allowed': decision.allowed, 'action': decision.action, 'reason': decision.reason}, indent=2))
+        sys.exit(0 if decision.allowed else 1)
+        " 2>&1)
+              PE_EXIT=$?
+              echo "$PE_OUT"
+              [ $PE_EXIT -ne 0 ] && FAIL=1
+            fi
+
+            EXIT_CODE=$FAIL
+            OUTPUT="Full suite completed. Exit: $EXIT_CODE"
+            ;;
+
+          *)
+            echo "::error::Unknown command: $COMMAND. Use: governance-verify, marketplace-verify, policy-evaluate, or all"
+            exit 1
+            ;;
+        esac
+
+        # Set outputs
+        if [ $EXIT_CODE -ne 0 ]; then
+          STATUS="fail"
+        fi
+        echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+
+        # Store output (handle multiline)
+        {
+          echo "output<<GOVEOF"
+          echo "$OUTPUT"
+          echo "GOVEOF"
+        } >> "$GITHUB_OUTPUT"
+
+        echo "$OUTPUT"
+
+        # Determine final exit
+        if [ "$STATUS" = "fail" ]; then
+          echo "::error::Governance check failed"
+          exit 1
+        fi
