@@ -51,13 +51,14 @@ parameters:
     default: false
 
 # -------------------------------------------------------
-# ESRP Configuration — All values sourced from pipeline variables/secrets
-# Configure these in ADO pipeline variables (mark sensitive ones as secret):
-#   ESRP_SERVICE_CONNECTION, ESRP_KEYVAULT_NAME, ESRP_CERT_IDENTIFIER,
+# ESRP Configuration
+# Service connection name is hardcoded (required at compile time by ADO).
+# All other values sourced from ADO pipeline variables (mark as secret):
+#   ESRP_KEYVAULT_NAME, ESRP_CERT_IDENTIFIER,
 #   ESRP_CLIENT_ID, ESRP_DOMAIN_TENANT_ID, ESRP_OWNERS, ESRP_APPROVERS
 # -------------------------------------------------------
 variables:
-  esrpServiceConnection: $(ESRP_SERVICE_CONNECTION)
+  esrpServiceConnection: 'Agent Governance Toolkit'
   esrpKeyVaultName: $(ESRP_KEYVAULT_NAME)
   esrpSignCertName: $(ESRP_CERT_IDENTIFIER)
   esrpClientId: $(ESRP_CLIENT_ID)
