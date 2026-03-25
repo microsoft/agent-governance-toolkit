@@ -16,6 +16,13 @@ from agent_marketplace.manifest import (
     load_manifest,
     save_manifest,
 )
+from agent_marketplace.marketplace_policy import (
+    ComplianceResult,
+    MCPServerPolicy,
+    MarketplacePolicy,
+    evaluate_plugin_compliance,
+    load_marketplace_policy,
+)
 from agent_marketplace.registry import PluginRegistry
 from agent_marketplace.schema_adapters import (
     ClaudePluginManifest,
@@ -26,22 +33,45 @@ from agent_marketplace.schema_adapters import (
     extract_mcp_servers,
 )
 from agent_marketplace.signing import PluginSigner, verify_signature
+from agent_marketplace.trust_tiers import (
+    DEFAULT_TIER_CONFIGS,
+    TRUST_TIERS,
+    PluginTrustConfig,
+    PluginTrustStore,
+    compute_initial_score,
+    filter_capabilities,
+    get_tier_config,
+    get_trust_tier,
+)
 
 __all__ = [
     "ClaudePluginManifest",
+    "ComplianceResult",
     "CopilotPluginManifest",
+    "DEFAULT_TIER_CONFIGS",
     "MANIFEST_FILENAME",
+    "MCPServerPolicy",
     "MarketplaceError",
+    "MarketplacePolicy",
     "PluginInstaller",
     "PluginManifest",
     "PluginRegistry",
     "PluginSigner",
+    "PluginTrustConfig",
+    "PluginTrustStore",
     "PluginType",
+    "TRUST_TIERS",
     "adapt_to_canonical",
+    "compute_initial_score",
     "detect_manifest_format",
+    "evaluate_plugin_compliance",
     "extract_capabilities",
     "extract_mcp_servers",
+    "filter_capabilities",
+    "get_tier_config",
+    "get_trust_tier",
     "load_manifest",
+    "load_marketplace_policy",
     "save_manifest",
     "verify_signature",
 ]
