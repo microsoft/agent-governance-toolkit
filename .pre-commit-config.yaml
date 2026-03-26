@@ -1,0 +1,41 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+        args:
+          - --allow-multiple-documents
+        exclude: ^(packages/(agent-mesh|agent-os|agent-sre)/(charts|deployments/helm)/|packages/agent-os/templates/policies/|examples/marketplace-governance/policies/)
+      - id: check-merge-conflict
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args:
+          - --baseline
+          - .secrets.baseline
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.7
+    hooks:
+      - id: ruff
+        args:
+          - packages/agent-runtime/src/agent_runtime
+        files: ^packages/agent-runtime/src/agent_runtime/.*\.py$
+      - id: ruff-format
+        args:
+          - packages/agent-runtime/src/agent_runtime
+          - --check
+        files: ^packages/agent-runtime/src/agent_runtime/.*\.py$
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.1
+    hooks:
+      - id: mypy
+        args:
+          - --ignore-missing-imports
+          - packages/agent-runtime/src/agent_runtime
+        pass_filenames: false
