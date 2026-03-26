@@ -39,12 +39,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-runtime = ["agent-runtime>=2.0.0"]
+runtime = ["agentmesh-runtime>=2.0.0"]
 sre = ["agent-sre>=1.0.0"]
 opa = []
 cedar = ["cedarpy>=4.0.0"]
 full = [
-    "agent-runtime>=2.0.0",
+    "agentmesh-runtime>=2.0.0",
     "agent-sre>=1.0.0",
 ]
 

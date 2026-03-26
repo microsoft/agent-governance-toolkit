@@ -25,7 +25,7 @@ REGISTERED_PACKAGES = {
     "agent-os-kernel",
     "agentmesh-platform",
     "agent-hypervisor",
-    "agent-runtime",
+    "agentmesh-runtime",
     "agent-sre",
     "agent-governance-toolkit",
     "agent-lightning",

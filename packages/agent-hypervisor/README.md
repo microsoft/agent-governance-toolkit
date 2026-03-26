@@ -1,18 +1,10 @@
 <div align="center">
 
-# ⚠️ This package has been renamed to Agent Runtime
-
-> **`agent-hypervisor` is now `agent-runtime`.** This package is maintained for backward compatibility.
-> New projects should use [`agent-runtime`](../agent-runtime/) instead.
-> All imports (`from hypervisor import ...`) continue to work unchanged.
-
----
-
-# Agent Hypervisor → Agent Runtime — Community Edition
+# Agent Hypervisor — Community Edition
 
 **Execution supervisor for AI agents — runtime isolation, execution rings, and governance for autonomous agents**
 
-*Just as a supervisor isolates processes, Agent Runtime isolates AI agent sessions<br/>and enforces governance boundaries with a kill switch, blast radius containment, and accountability.*
+*Just as a supervisor isolates processes, Agent Hypervisor isolates AI agent sessions<br/>and enforces governance boundaries with a kill switch, blast radius containment, and accountability.*
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)

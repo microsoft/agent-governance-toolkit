@@ -1,6 +1,6 @@
 <div align="center">
 
-# Agent Runtime
+# AgentMesh Runtime
 
 **Execution supervisor for multi-agent sessions — privilege rings, saga orchestration, and governance enforcement**
 
@@ -9,19 +9,21 @@
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
-[![PyPI](https://img.shields.io/pypi/v/agent-runtime)](https://pypi.org/project/agent-runtime/)
+[![PyPI](https://img.shields.io/pypi/v/agentmesh-runtime)](https://pypi.org/project/agentmesh-runtime/)
 
 </div>
 
 > [!IMPORTANT]
-> **Community Preview** — The `agent-runtime` package on PyPI is a community preview release
+> **Community Preview** — The `agentmesh-runtime` package on PyPI is a community preview release
 > for testing and evaluation only. It is **not** an official Microsoft-signed release.
 > Official signed packages will be available in a future release.
 
 ---
 
-> **Note:** This package was previously named `agent-hypervisor`. The `agent-hypervisor` package
-> is still available for backward compatibility but will redirect to `agent-runtime` in a future release.
+> **Note:** This package was renamed from `agent-runtime` to `agentmesh-runtime` to avoid a PyPI
+> name collision with the AutoGen team's package. The `agent-hypervisor` package remains the
+> canonical upstream implementation; `agentmesh-runtime` is a thin re-export wrapper for
+> incremental import migration.
 
 ## What is Agent Runtime?
 
@@ -39,7 +41,7 @@ session level:
 ## Quick Start
 
 ```bash
-pip install agent-runtime
+pip install agentmesh-runtime
 ```
 
 ```python
@@ -90,7 +92,7 @@ Agent Runtime is one of 7 packages in the Agent Governance Toolkit:
 |---------|------|
 | **Agent OS** | Policy engine — deterministic action evaluation |
 | **AgentMesh** | Trust infrastructure — identity, credentials, protocol bridges |
-| **Agent Runtime** | Execution supervisor — rings, sessions, sagas *(this package)* |
+| **AgentMesh Runtime** | Execution supervisor — rings, sessions, sagas *(this package)* |
 | **Agent SRE** | Reliability — SLOs, circuit breakers, chaos testing |
 | **Agent Compliance** | Regulatory compliance — GDPR, HIPAA, SOX frameworks |
 | **Agent Marketplace** | Plugin lifecycle — discover, install, verify, sign |

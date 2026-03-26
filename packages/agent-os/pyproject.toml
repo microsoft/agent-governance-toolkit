@@ -93,7 +93,7 @@ full = [
     "agent-os-kernel[cmvk,iatp,amb,observability,mcp,nexus]",
 ]
 hypervisor = [
-    "agent-runtime>=1.0.0",
+    "agentmesh-runtime>=1.0.0",
 ]
 
 # Development (includes all optional deps for full testing)

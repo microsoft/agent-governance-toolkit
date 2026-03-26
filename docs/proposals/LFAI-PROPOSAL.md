@@ -17,7 +17,7 @@ The ecosystem consists of 5 interoperating packages:
 |---------|---------|------|
 | **Agent OS** | Core governance kernel (policy engine, capability sandbox, VFS) | [agent-os](https://pypi.org/project/agent-os/) |
 | **Agent Mesh** | Inter-agent trust layer (DID identity, IATP protocol) | [agent-mesh](https://pypi.org/project/agent-mesh/) |
-| **Agent Runtime** | Execution isolation (ring model, kill switch) | [agent-runtime](https://pypi.org/project/agent-runtime/) |
+| **Agent Runtime** | Execution isolation (ring model, kill switch) | [agentmesh-runtime](https://pypi.org/project/agentmesh-runtime/) |
 | **Agent SRE** | Observability & reliability (circuit breakers, anomaly detection) | [agent-sre](https://pypi.org/project/agent-sre/) |
 | **Agent Governance** | Meta-framework & compliance mapping | [agent-governance](https://pypi.org/project/agent-governance/) |
 

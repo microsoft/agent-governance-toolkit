@@ -18,7 +18,7 @@ Agent Governance Toolkit to public registries.
 | Agent OS Kernel | `agent-os-kernel` | `packages/agent-os` |
 | AgentMesh Platform | `agentmesh-platform` | `packages/agent-mesh` |
 | Agent Hypervisor | `agent-hypervisor` | `packages/agent-hypervisor` |
-| Agent Runtime | `agent-runtime` | `packages/agent-runtime` |
+| Agent Runtime | `agentmesh-runtime` | `packages/agent-runtime` |
 | Agent SRE | `agent-sre` | `packages/agent-sre` |
 | Agent Governance Toolkit | `agent-governance-toolkit` | `packages/agent-compliance` |
 | Agent Lightning | `agent-lightning` | `packages/agent-lightning` |

@@ -12,7 +12,7 @@ That name is deprecated and will redirect here for 6 months.
 Components:
     - agent-os-kernel: Governance kernel with policy enforcement
     - agentmesh-platform: Zero-trust agent communication (SSL for AI Agents)
-    - agent-runtime: Runtime supervisor with execution rings
+    - agentmesh-runtime: Runtime supervisor with execution rings
     - agent-sre: Site reliability engineering for AI agents
     - agentmesh-marketplace: Plugin lifecycle management
     - agent-lightning: RL training governance

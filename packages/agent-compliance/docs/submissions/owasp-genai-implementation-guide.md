@@ -14,7 +14,7 @@ The stack consists of four components:
 | **Agent OS** | Governance kernel — policy, sandbox, memory, MCP security | `pip install agent-os-kernel` |
 | **AgentMesh** | Identity & trust — DIDs, SPIFFE, handshake, reputation | `pip install agentmesh-platform` |
 | **Agent SRE** | Observability — SLOs, anomaly detection, chaos, OpenTelemetry | `pip install agent-sre` |
-| **Agent Runtime** | Runtime control — kill switch, execution rings, saga rollback | `pip install agent-runtime` |
+| **Agent Runtime** | Runtime control — kill switch, execution rings, saga rollback | `pip install agentmesh-runtime` |
 
 ---
 
@@ -1044,7 +1044,7 @@ This implementation guide is a community contribution to the OWASP GenAI project
 To reproduce the examples, install the stack:
 
 ```bash
-pip install agent-os-kernel agentmesh-platform agent-sre agent-runtime
+pip install agent-os-kernel agentmesh-platform agent-sre agentmesh-runtime
 ```
 
 All source code is available under the MIT license. PRs and issues welcome at
