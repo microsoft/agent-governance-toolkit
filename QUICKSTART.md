@@ -34,8 +34,12 @@ pip install agent-os-kernel        # Policy enforcement + framework integrations
 pip install agentmesh-platform     # Zero-trust identity + trust cards
 pip install agent-governance-toolkit    # OWASP ASI verification + integrity CLI
 pip install agent-sre              # SLOs, error budgets, chaos testing
-pip install agent-runtime          # Execution supervisor + privilege rings
+pip install agentmesh-runtime          # Execution supervisor + privilege rings
 pip install agentmesh-marketplace    # Plugin lifecycle management
+=======
+pip install agentmesh-runtime       # Execution supervisor + privilege rings
+pip install agentmesh-marketplace      # Plugin lifecycle management
+>>>>>>> bfb3bcb (fix: rename PyPI package agentmesh-runtime to agentmesh-runtime to resolve name collision)
 pip install agent-lightning        # RL training governance
 ```
 

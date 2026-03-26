@@ -60,7 +60,7 @@ If Step 3 fails:
 ## 2. Installation
 
 ```bash
-pip install agent-runtime
+pip install agentmesh-runtime
 ```
 
 Import from either package:
@@ -82,7 +82,7 @@ from hypervisor.saga.checkpoint import CheckpointManager, SemanticCheckpoint
 from hypervisor.saga.schema import SagaSchemaValidator, SagaSchemaError
 ```
 
-**Requirements:** Python ≥ 3.11, `agent-runtime` v2.0.2+
+**Requirements:** Python ≥ 3.11, `agentmesh-runtime` v2.0.2+
 
 ---
 

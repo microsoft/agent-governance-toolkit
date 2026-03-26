@@ -57,7 +57,7 @@ This is a mono-repo with seven packages:
 |---------|-----------|-------------|
 | `agent-os-kernel` | `packages/agent-os/` | Kernel architecture for policy enforcement |
 | `agentmesh` | `packages/agent-mesh/` | Inter-agent trust and identity mesh |
-| `agent-runtime` | `packages/agent-runtime/` | Runtime sandboxing and capability isolation |
+| `agentmesh-runtime` | `packages/agent-runtime/` | Runtime sandboxing and capability isolation |
 | `agent-sre` | `packages/agent-sre/` | Observability, alerting, and reliability |
 | `agent-governance` | `packages/agent-compliance/` | Unified installer and runtime policy enforcement |
 | `agentmesh-marketplace` | `packages/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |

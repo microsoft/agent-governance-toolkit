@@ -420,7 +420,7 @@ agent-os/
 | [`mute-agent`](modules/mute-agent/) | 4 | `mute-agent` | Decoupled reasoning/execution architecture | ⚠️ No tests |
 | [`nexus`](modules/nexus/) | — | *Not published* | Trust exchange network | 🔬 Prototype |
 | [`mcp-kernel-server`](modules/mcp-kernel-server/) | Int | `mcp-kernel-server` | MCP server for Claude Desktop | ⚠️ No tests |
-| [**`runtime`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agent-runtime` | **Execution supervisor — Execution Rings, Joint Liability, Saga Orchestrator** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
+| [**`runtime`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agentmesh-runtime` | **Execution supervisor — Execution Rings, Joint Liability, Saga Orchestrator** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
 
 ---
 
@@ -428,7 +428,7 @@ agent-os/
 
 > **Execution supervisor for multi-agent collaboration** — think "VMware for AI agents."
 > 
-> **Now its own repo: [`agent-runtime`](https://github.com/microsoft/agent-governance-toolkit)** — 184 tests, 268μs full pipeline, zero dependencies beyond pydantic.
+> **Now its own repo: [`agentmesh-runtime`](https://github.com/microsoft/agent-governance-toolkit)** — 184 tests, 268μs full pipeline, zero dependencies beyond pydantic.
 
 Just as OS runtimes isolate execution environments and enforce resource boundaries, the Agent Runtime isolates AI agent sessions and enforces **governance boundaries** at sub-millisecond latency.
 
@@ -462,7 +462,7 @@ Just as OS runtimes isolate execution environments and enforce resource boundari
 ### Quick Start
 
 ```bash
-pip install agent-runtime
+pip install agentmesh-runtime
 ```
 
 ```python

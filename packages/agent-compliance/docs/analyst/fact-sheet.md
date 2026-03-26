@@ -98,7 +98,7 @@ pip install agent-governance-toolkit[full]
 # Or install individual components
 pip install agent-os-kernel          # Governance kernel only
 pip install agentmesh-platform       # Trust mesh only
-pip install agent-runtime            # Runtime isolation only
+pip install agentmesh-runtime         # Runtime isolation only
 pip install agent-sre                # Reliability engineering only
 ```
 

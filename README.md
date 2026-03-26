@@ -49,7 +49,7 @@ dotnet add package Microsoft.AgentGovernance
 ```bash
 pip install agent-os-kernel        # Policy engine
 pip install agentmesh-platform     # Trust mesh
-pip install agent-runtime          # Runtime supervisor
+pip install agentmesh-runtime       # Runtime supervisor
 pip install agent-sre              # SRE toolkit
 pip install agent-governance-toolkit    # Compliance & attestation
 pip install agentmesh-marketplace      # Plugin marketplace
@@ -232,7 +232,7 @@ Three evaluation modes per backend: **embedded engine** (cedarpy/opa CLI), **rem
 |---------|------|-------------|
 | **Agent OS** | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | Policy engine — deterministic action evaluation, capability model, audit logging, action interception, MCP gateway |
 | **AgentMesh** | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | Inter-agent trust — Ed25519 identity, SPIFFE/SVID credentials, trust scoring, A2A/MCP/IATP protocol bridges |
-| **Agent Runtime** | [`agent-runtime`](packages/agent-runtime/) | Execution supervisor — 4-tier privilege rings, saga orchestration, termination control, joint liability, append-only audit log |
+| **Agent Runtime** | [`agentmesh-runtime`](packages/agent-runtime/) | Execution supervisor — 4-tier privilege rings, saga orchestration, termination control, joint liability, append-only audit log |
 | **Agent SRE** | [`agent-sre`](https://pypi.org/project/agent-sre/) | Reliability engineering — SLOs, error budgets, replay debugging, chaos engineering, progressive delivery |
 | **Agent Compliance** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | Runtime policy enforcement — OWASP ASI 2026 controls, governance attestation, integrity verification |
 | **Agent Marketplace** | [`agentmesh-marketplace`](packages/agent-marketplace/) | Plugin lifecycle — discover, install, verify, and sign plugins |

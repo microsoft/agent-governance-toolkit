@@ -174,7 +174,7 @@ The meta-package ensures all components are version-compatible and properly inte
 agent-governance ─── The meta-package (you are here)
 ├── agent-os-kernel ─── Governance kernel
 ├── agentmesh-platform ─── Zero-trust mesh
-├── agent-runtime ─── Runtime supervisor (optional)
+├── agentmesh-runtime ─── Runtime supervisor (optional)
 └── agent-sre ─── Reliability engineering (optional)
 ```
 

@@ -64,7 +64,7 @@ Agent Governance Toolkit solves this with six composable components:
 ### Prerequisites
 
 - Python ≥ 3.11
-- `pip install agent-runtime` (v2.0.2+)
+- `pip install agentmesh-runtime` (v2.0.2+)
 
 ---
 
@@ -89,7 +89,7 @@ Install the runtime package which re-exports all liability classes from the
 hypervisor:
 
 ```bash
-pip install agent-runtime
+pip install agentmesh-runtime
 ```
 
 Verify the installation:

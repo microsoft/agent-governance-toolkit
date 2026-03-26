@@ -29,7 +29,7 @@ Without sandboxing, a misbehaving agent can:
 - **Consume resources** — spin up infinite loops that exhaust CPU and memory.
 - **Cascade failures** — a failed step in a multi-agent workflow leaves the system in a broken half-finished state.
 
-The **Agent Runtime** (`pip install agent-runtime`) solves this with four
+The **Agent Runtime** (`pip install agentmesh-runtime`) solves this with four
 layers of defense:
 
 ```
@@ -54,7 +54,7 @@ layers of defense:
 ### Prerequisites
 
 - Python ≥ 3.11
-- `pip install agent-runtime` (v2.0.2+)
+- `pip install agentmesh-runtime` (v2.0.2+)
 - For capability guards: `pip install agent-os-kernel`
 
 ---
@@ -791,7 +791,7 @@ The runtime includes a FastAPI server for HTTP-based enforcement:
 
 ```bash
 # Install with API extras
-pip install "agent-runtime[api]"
+pip install "agentmesh-runtime[api]"
 
 # Start the server
 hypervisor serve --host 0.0.0.0 --port 8000
@@ -804,7 +804,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install "agent-runtime[full,api]"
+RUN pip install "agentmesh-runtime[full,api]"
 
 EXPOSE 8000
 
