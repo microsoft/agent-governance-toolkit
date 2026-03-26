@@ -12,21 +12,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-03-26
+
 ### Added
-- Demo `--include-attacks` flag for adversarial scenario testing (prompt injection, tool alias bypass, SQL bypass).
-- .NET `SagaStep.MaxAttempts` property replacing deprecated `MaxRetries`.
-- `ContentHashInterceptor` for SHA-256 tool identity verification at intercept time.
-- `ToolRegistry` content hashing — computes and verifies handler integrity at registration and execution.
-- `PolicyEngine.freeze()` method with `MappingProxyType` immutability and mutation audit log.
-- `QuorumConfig` for M-of-N approval requirements in `EscalationHandler`.
-- Escalation fatigue detection — auto-DENY when agents exceed configurable rate threshold.
-- `EscalationRequest.votes` field for per-approver vote tracking.
+- MCP server allowlist/blocklist and plugin trust tiers (#425, #426)
+- Plugin schema adapters and batch evaluation (#424, #429)
+- Governance policy linter CLI command (#404)
+- Pre-commit hooks for plugin manifest validation (#428)
+- GitHub Actions action for governance verification (#423)
+- Event bus, task outcomes, diff policy, and sandbox provider (#398, #396, #395, #394)
+- Graceful degradation, budget policies, and audit logger (#410, #409, #400)
+- JSON schema validation for governance policies (#305, #367)
+- 14 launch-ready tutorials (07–20) covering all toolkit features
+- Tutorials landing page README with learning paths (#422)
+- Copilot instructions with PR review checklist (#413)
+- Pytest markers for slow and integration tests (#375)
+- Reference integration example for plugin marketplace governance (#427)
+
+### Changed
+- Renamed PyPI package `agent-runtime` → `agentmesh-runtime` (name collision with AutoGen) (#444)
+- Renamed PyPI package `agent-marketplace` → `agentmesh-marketplace` (#439)
+
+### Fixed
+- ESRP pipeline `each` directive syntax in Verify stages
+- ESRP pipelines updated to use `ESRP_CERT_IDENTIFIER` secret
+- Hardcoded service connection name (ADO compile-time requirement) (#421)
+- License format updated to SPDX string (setuptools deprecation) in agent-compliance and agent-lightning
+- Corrected license reference in AgentMesh README from Apache 2.0 to MIT (#436)
+- .NET GovernanceMetrics test isolation — flush listener before baseline (#417)
+- Dependency confusion + pydantic dependency fix (#412)
+- Enforced maintainer approval for all external PRs (#392)
 
 ### Security
-- Replaced XOR placeholder encryption with AES-256-GCM in DMZ module.
-- Added Security Model & Limitations section to README.
-- Added security advisories to SECURITY.md for CostGuard and thread safety fixes.
-- Hardened against agent sandbox escape vectors (tool aliasing, runtime policy self-modification, approval fatigue).
+- Moved all ESRP config to pipeline secrets (#370)
+
+### Documentation
+- Standardized package README badges (#373)
+- Added README files to example and skill integration directories (#371, #372, #390)
+- Added requirements for example directories (#372)
 
 ## [2.2.0] - 2026-03-17
 
