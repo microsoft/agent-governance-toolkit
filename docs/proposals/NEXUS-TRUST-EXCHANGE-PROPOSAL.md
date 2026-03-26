@@ -1,7 +1,7 @@
 # Proposal: Nexus Trust Exchange — The Visa Network for AI Agents
 
 **Status:** ✅ Pre-Alpha — Core architecture implemented, placeholder crypto  
-**Author:** Imran Siddique (Microsoft)  
+**Author:** Agent Governance Toolkit Team (Microsoft)  
 **Created:** 2026-03-21  
 
 ## Summary

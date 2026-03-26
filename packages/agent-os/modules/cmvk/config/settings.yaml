@@ -1,5 +1,5 @@
 # CMVK — Verification Kernel Configuration
-# Owner: Imran Siddique
+# Owner: Microsoft Corporation
 
 # API Keys (Environment variables recommended)
 api_keys:

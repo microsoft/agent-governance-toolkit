@@ -22,7 +22,7 @@ Example:
 from typing import TYPE_CHECKING, List
 
 __version__ = "0.2.0"
-__author__ = "Imran Siddique"
+__author__ = "Microsoft Corporation"
 __license__ = "MIT"
 
 # Core exports - always available

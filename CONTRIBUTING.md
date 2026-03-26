@@ -102,7 +102,7 @@ pytest tests/ -x -q
 > AI-only approvals and bot approvals do NOT satisfy this requirement.
 
 This policy is enforced by:
-1. **CODEOWNERS** — every file requires review from `@imran-siddique`
+1. **CODEOWNERS** — every file requires review from `@microsoft/agent-governance-toolkit`
 2. **`require-maintainer-approval.yml`** — CI check that blocks merge without human maintainer approval
 3. **Branch protection** — CODEOWNERS review required on `main`
 

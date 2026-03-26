@@ -10,8 +10,8 @@ A pure, logic-only library for routing context and managing context windows.
 from typing import TYPE_CHECKING
 
 __version__ = "0.3.0"
-__author__ = "Imran Siddique"
-__email__ = "agt@microsoft.com"
+__author__ = "Microsoft Corporation"
+__email__ = "agentgovtoolkit@microsoft.com"
 __license__ = "MIT"
 
 # Core data models - always available

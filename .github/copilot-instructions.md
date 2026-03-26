@@ -29,7 +29,7 @@ Before approving or merging ANY PR, verify ALL of the following:
 - Use conventional commits (feat:, fix:, docs:, etc.)
 - Run tests before committing
 - MIT license headers on all source files
-- Author: Microsoft Corporation, email: agt@microsoft.com
+- Author: Microsoft Corporation, email: agentgovtoolkit@microsoft.com
 - All packages prefixed with "Community Edition" in descriptions
 
 ## Publishing

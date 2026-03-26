@@ -35,7 +35,7 @@ pip install agent-governance-toolkit
 
 > If `agentmesh-governance` is not yet on PyPI, install directly from source:
 > ```bash
-> pip install "agentmesh @ git+https://github.com/imran-siddique/agent-mesh.git"
+> pip install "agentmesh @ git+https://github.com/microsoft/agent-governance-toolkit.git"
 > ```
 
 ## Scripts
@@ -153,7 +153,7 @@ require_human_approval: false
 
 ## Architecture
 
-This skill bridges the OpenClaw agent runtime with the [AgentMesh](https://github.com/imran-siddique/agent-mesh)
+This skill bridges the OpenClaw agent runtime with the [AgentMesh](https://github.com/microsoft/agent-governance-toolkit)
 governance engine:
 
 ```

@@ -1,7 +1,7 @@
 # RFC: AI-BOM — AI Bill of Materials for Agentic Systems
 
 **Status:** Draft v2.0  
-**Author:** Imran Siddique (Microsoft)  
+**Author:** Microsoft Corporation (Microsoft)  
 **Created:** 2026-02-03  
 **Updated:** 2026-03-04  
 **Target:** LF AI & Data Foundation, OWASP AI SBOM Initiative  

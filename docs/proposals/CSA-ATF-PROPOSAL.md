@@ -1,7 +1,7 @@
 # Proposal: CSA Agentic Trust Framework (ATF) Integration
 
 **Status:** 🔄 Active — ATF author (Josh Woodruff) engaged. Conformance spec published. Async assessment in progress. All 15 requirements mapped.  
-**Author:** Imran Siddique (Microsoft)  
+**Author:** Agent Governance Toolkit Team (Microsoft)  
 **Created:** 2026-03-04  
 **Target:** Cloud Security Alliance (CSA) Agentic Trust Framework Working Group
 

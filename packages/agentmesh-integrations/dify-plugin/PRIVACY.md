@@ -28,4 +28,4 @@ This plugin does not use any third-party services or APIs.
 
 ## Contact
 
-For privacy-related questions, please open an issue at: https://github.com/imran-siddique/agent-mesh/issues
+For privacy-related questions, please open an issue at: https://github.com/microsoft/agent-governance-toolkit/issues

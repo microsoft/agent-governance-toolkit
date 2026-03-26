@@ -26,7 +26,7 @@ pip install flowise-agentmesh
 Or install from source:
 
 ```bash
-git clone https://github.com/imran-siddique/agentmesh-integrations.git
+git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agentmesh-integrations/flowise-agentmesh
 pip install -e ".[dev]"
 ```

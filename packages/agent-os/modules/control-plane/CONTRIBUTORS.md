@@ -6,7 +6,8 @@ This project exists thanks to all the people who contribute.
 
 ## Core Team
 
-- **[imran-siddique](https://github.com/microsoft/agent-governance-toolkit)** - Creator and Lead Maintainer
+- **[imran-siddique](https://github.com/imran-siddique)** - Creator
+- **[Microsoft Corporation](https://github.com/microsoft/agent-governance-toolkit)** - Lead Maintainer
 
 ## Contributors
 

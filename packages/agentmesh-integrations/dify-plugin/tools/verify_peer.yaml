@@ -1,6 +1,6 @@
 identity:
   name: verify_peer
-  author: imran-siddique
+  author: microsoft
   label:
     en_US: Verify Peer Agent
     zh_Hans: 验证对等代理

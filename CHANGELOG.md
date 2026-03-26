@@ -250,7 +250,7 @@ pip install agent-governance-toolkit[full]
 - **Microsoft org release** — First publish from `microsoft/agent-governance-toolkit`
 - Added MIT license headers to 1,159 source files across all packages.
 - Migrated all 215 documentation URLs from personal repos to Microsoft org.
-- Replaced personal email references with team alias (`agt@microsoft.com`).
+- Replaced personal email references with team alias (`agentgovtoolkit@microsoft.com`).
 - Enhanced README with hero section, CI badge, navigation links, CLA/Code of Conduct sections.
 - Bumped all 5 package versions from 1.0.0 to 1.0.1.
 

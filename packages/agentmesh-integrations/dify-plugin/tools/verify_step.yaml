@@ -1,6 +1,6 @@
 identity:
   name: verify_step
-  author: imran-siddique
+  author: microsoft
   label:
     en_US: Verify Workflow Step
     zh_Hans: 验证工作流步骤

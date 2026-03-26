@@ -143,7 +143,7 @@ Wraps a Mastra tool with all three layers. Options: `governance`, `trust`, `audi
 
 ## Part of AgentMesh
 
-This package is part of the [AgentMesh](https://github.com/imran-siddique/agent-mesh) ecosystem — a trust layer for multi-agent systems with cryptographic identity, zero-trust verification, and runtime governance.
+This package is part of the [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) ecosystem — a trust layer for multi-agent systems with cryptographic identity, zero-trust verification, and runtime governance.
 
 ## License
 

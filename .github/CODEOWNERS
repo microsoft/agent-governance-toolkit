@@ -6,27 +6,27 @@
 # See: docs/CONTRIBUTING.md and .github/workflows/require-maintainer-approval.yml
 
 # Default owners for everything in the repo
-* @imran-siddique
+* @microsoft/agent-governance-toolkit
 
 # Package-specific ownership
-/packages/agent-os/          @imran-siddique
-/packages/agent-mesh/        @imran-siddique
-/packages/agent-hypervisor/  @imran-siddique
-/packages/agent-sre/         @imran-siddique
-/packages/agent-compliance/  @imran-siddique
-/packages/agent-marketplace/ @imran-siddique
-/packages/agent-runtime/     @imran-siddique
-/packages/agentmesh-integrations/ @imran-siddique
+/packages/agent-os/          @microsoft/agent-governance-toolkit
+/packages/agent-mesh/        @microsoft/agent-governance-toolkit
+/packages/agent-hypervisor/  @microsoft/agent-governance-toolkit
+/packages/agent-sre/         @microsoft/agent-governance-toolkit
+/packages/agent-compliance/  @microsoft/agent-governance-toolkit
+/packages/agent-marketplace/ @microsoft/agent-governance-toolkit
+/packages/agent-runtime/     @microsoft/agent-governance-toolkit
+/packages/agentmesh-integrations/ @microsoft/agent-governance-toolkit
 
 # Security-sensitive paths — require maintainer review, no exceptions
-/.github/                    @imran-siddique
-/.github/workflows/          @imran-siddique
-/.github/actions/            @imran-siddique
-/packages/*/src/**/sandbox*  @imran-siddique
-/packages/*/src/**/trust*    @imran-siddique
-/packages/*/src/**/identity* @imran-siddique
-/packages/*/src/**/crypto*   @imran-siddique
+/.github/                    @microsoft/agent-governance-toolkit
+/.github/workflows/          @microsoft/agent-governance-toolkit
+/.github/actions/            @microsoft/agent-governance-toolkit
+/packages/*/src/**/sandbox*  @microsoft/agent-governance-toolkit
+/packages/*/src/**/trust*    @microsoft/agent-governance-toolkit
+/packages/*/src/**/identity* @microsoft/agent-governance-toolkit
+/packages/*/src/**/crypto*   @microsoft/agent-governance-toolkit
 
 # Documentation
-/docs/                       @imran-siddique
-*.md                         @imran-siddique
+/docs/                       @microsoft/agent-governance-toolkit
+*.md                         @microsoft/agent-governance-toolkit

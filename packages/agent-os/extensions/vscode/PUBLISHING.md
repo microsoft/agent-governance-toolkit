@@ -55,7 +55,7 @@ vsce login agent-os
 ### Step 4: Publish the Extension
 
 ```powershell
-cd C:\Users\mosiddi\source\repos\\microsoft\\agent-governance-toolkit\\extensions\vscode
+cd <your-path>
 
 # Publish directly (recommended)
 vsce publish

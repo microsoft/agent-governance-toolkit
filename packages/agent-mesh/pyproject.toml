@@ -9,10 +9,10 @@ description = "Community Edition — The Secure Nervous System for Cloud-Native 
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Microsoft Corporation", email = "agt@microsoft.com"},
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
 maintainers = [
-    {name = "Agent Governance Toolkit Team", email = "agt@microsoft.com"},
+    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
 ]
 keywords = [
     "ai",

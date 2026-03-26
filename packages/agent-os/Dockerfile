@@ -5,7 +5,7 @@
 
 FROM python:3.11-slim@sha256:4057d02a202f69bfbfe10f65300519f612eb00fc595b8499f77d3cfe5b1b9fd4
 
-LABEL maintainer="Imran Siddique"
+LABEL maintainer="Microsoft Corporation"
 LABEL description="Agent OS - A kernel architecture for governing autonomous AI agents"
 
 # Set working directory

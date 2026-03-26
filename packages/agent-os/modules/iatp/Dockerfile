@@ -17,7 +17,7 @@
 FROM python:3.11-slim@sha256:4057d02a202f69bfbfe10f65300519f612eb00fc595b8499f77d3cfe5b1b9fd4
 
 # Set labels
-LABEL maintainer="Imran Siddique"
+LABEL maintainer="Microsoft Corporation"
 LABEL description="Inter-Agent Trust Protocol (IATP) Sidecar Proxy"
 LABEL version="0.2.0"
 

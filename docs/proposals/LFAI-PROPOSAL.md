@@ -94,7 +94,7 @@ As AI agents become increasingly autonomous, governance infrastructure is critic
 ## Project Governance
 
 - **License:** MIT
-- **Primary Maintainer:** Imran Siddique (Microsoft)
+- **Primary Maintainer:** Agent Governance Toolkit Team (Microsoft)
 - **Code of Conduct:** Contributor Covenant v2.1
 - **CI/CD:** GitHub Actions on all repos
 - **Branch Protection:** Required reviews, status checks

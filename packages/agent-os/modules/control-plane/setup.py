@@ -18,8 +18,8 @@ long_description = readme_file.read_text(encoding="utf-8") if readme_file.exists
 setup(
     name="agent-control-plane",
     version="1.2.0",
-    author="Imran Siddique",
-    author_email="agt@microsoft.com",
+    author="Microsoft Corporation",
+    author_email="agentgovtoolkit@microsoft.com",
     description="A deterministic kernel for zero-violation governance in agentic AI systems",
     long_description=long_description,
     long_description_content_type="text/markdown",

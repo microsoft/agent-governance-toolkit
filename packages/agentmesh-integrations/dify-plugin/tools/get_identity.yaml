@@ -1,6 +1,6 @@
 identity:
   name: get_identity
-  author: imran-siddique
+  author: microsoft
   label:
     en_US: Get Agent Identity
     zh_Hans: 获取代理身份

@@ -10,10 +10,10 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
 authors = [
-    {name = "Microsoft Corporation", email = "agt@microsoft.com"},
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
 maintainers = [
-    {name = "Agent Governance Toolkit Team", email = "agt@microsoft.com"},
+    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
 ]
 keywords = [
     "ai-agents", "governance", "multi-agent", "trust", "security",

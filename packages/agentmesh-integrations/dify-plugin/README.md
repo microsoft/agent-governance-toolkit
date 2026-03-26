@@ -80,4 +80,4 @@ Record successful or failed interactions to update trust scores.
 
 ## License
 
-MIT License - See [AgentMesh](https://github.com/imran-siddique/agent-mesh) for details.
+MIT License - See [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) for details.

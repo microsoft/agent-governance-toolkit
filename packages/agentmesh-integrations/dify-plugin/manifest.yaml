@@ -1,6 +1,6 @@
 version: 0.0.1
 type: plugin
-author: imran-siddique
+author: microsoft
 name: agentmesh-trust-layer
 created_at: 2026-02-06T00:00:00Z
 label:
@@ -36,7 +36,7 @@ meta:
     version: "3.12"
     entrypoint: main
 privacy: PRIVACY.md
-repo: https://github.com/imran-siddique/agent-mesh
+repo: https://github.com/microsoft/agent-governance-toolkit
 plugins:
   tools:
     - provider/agentmesh.yaml
