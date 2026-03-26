@@ -61,7 +61,7 @@ This is a mono-repo with seven packages:
 | `agent-sre` | `packages/agent-sre/` | Observability, alerting, and reliability |
 | `agent-governance` | `packages/agent-compliance/` | Unified installer and runtime policy enforcement |
 | `agentmesh-marketplace` | `packages/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
-| `agent-lightning` | `packages/agent-lightning/` | RL training governance with governed runners and policy rewards |
+| `agentmesh-lightning` | `packages/agent-lightning/` | RL training governance with governed runners and policy rewards |
 
 ### Coding Guidelines
 

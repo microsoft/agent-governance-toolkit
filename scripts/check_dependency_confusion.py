@@ -28,7 +28,7 @@ REGISTERED_PACKAGES = {
     "agentmesh-runtime",
     "agent-sre",
     "agent-governance-toolkit",
-    "agent-lightning",
+    "agentmesh-lightning",
     "agentmesh-marketplace",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",

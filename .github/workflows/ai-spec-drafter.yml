@@ -49,8 +49,8 @@ jobs:
             - agent-sre: Reliability engineering, chaos testing, SLO monitoring
             - agent-compliance: Compliance frameworks and audit logging
             - agentmesh-marketplace: Agent registry and marketplace
-            - agent-lightning: High-performance inference pipeline
-            - agent-runtime: Runtime execution environment
+            - agentmesh-lightning: High-performance inference pipeline
+            - agentmesh-runtime: Runtime execution environment
 
             Generate a professional engineering specification that includes:
             1. **Title and Overview** — what this spec covers

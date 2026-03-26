@@ -53,7 +53,7 @@ pip install agentmesh-runtime       # Runtime supervisor
 pip install agent-sre              # SRE toolkit
 pip install agent-governance-toolkit    # Compliance & attestation
 pip install agentmesh-marketplace      # Plugin marketplace
-pip install agent-lightning        # RL training governance
+pip install agentmesh-lightning        # RL training governance
 ```
 </details>
 

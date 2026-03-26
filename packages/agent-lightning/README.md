@@ -12,7 +12,7 @@ Train AI agents with RL while maintaining **0% policy violations**.
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
-[![PyPI](https://img.shields.io/pypi/v/agent-lightning)](https://pypi.org/project/agent-lightning/)
+[![PyPI](https://img.shields.io/pypi/v/agentmesh-lightning)](https://pypi.org/project/agentmesh-lightning/)
 
 ## 🎯 Overview
 
@@ -29,7 +29,7 @@ This package provides governed RL training integration:
 ## 🚀 Quick Start
 
 ```bash
-pip install agent-lightning
+pip install agentmesh-lightning
 # Optional: pip install agent-os-kernel  # for kernel integration
 ```
 

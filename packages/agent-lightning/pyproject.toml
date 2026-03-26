@@ -17,7 +17,7 @@ maintainers = [
 ]
 keywords = [
     "ai-agents", "governance", "reinforcement-learning",
-    "agent-lightning", "agent-os", "enterprise-ai"
+    "agentmesh-lightning", "agent-os", "enterprise-ai"
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

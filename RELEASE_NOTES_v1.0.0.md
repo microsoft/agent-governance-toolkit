@@ -21,11 +21,11 @@
 |---------|-------------|---------|
 | **Agent OS** | Stateless governance kernel with policy engine, VFS, and MCP proxy | `pip install agent-os-kernel` |
 | **AgentMesh** | Zero-trust identity mesh with DID, trust scoring, delegation chains | `pip install agentmesh-platform` |
-| **Agent Runtime** | Execution rings, resource limits, kill switch, saga orchestration | `pip install agent-runtime` |
+| **Agent Runtime** | Execution rings, resource limits, kill switch, saga orchestration | `pip install agentmesh-runtime` |
 | **Agent SRE** | SLOs, error budgets, circuit breakers, chaos engineering | `pip install agent-sre` |
 | **Agent Compliance** | Unified installer and runtime policy enforcement | `pip install agent-governance` |
 | **Agent Marketplace** | Plugin lifecycle management for governed agent ecosystems | `pip install agentmesh-marketplace` |
-| **Agent Lightning** | RL training governance with governed runners and policy rewards | `pip install agent-lightning` |
+| **Agent Lightning** | RL training governance with governed runners and policy rewards | `pip install agentmesh-lightning` |
 
 ## Security & Compliance
 

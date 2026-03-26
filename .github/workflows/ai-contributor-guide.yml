@@ -63,8 +63,8 @@ jobs:
                - agent-sre: Reliability, chaos testing, SLOs
                - agent-compliance: Compliance frameworks, audit logging
                - agentmesh-marketplace: Agent registry
-               - agent-lightning: High-performance inference
-               - agent-runtime: Runtime execution environment
+               - agentmesh-lightning: High-performance inference
+               - agentmesh-runtime: Runtime execution environment
             3. **Point to relevant code** — suggest specific directories to look at
             4. **Link to resources**:
                - [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md)

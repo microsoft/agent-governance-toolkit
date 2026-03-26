@@ -32,7 +32,7 @@ See also: [Tutorial 01 — Policy Engine](01-policy-engine.md) | [Tutorial 04 �
 
 ```bash
 # Core package — governed runner, policy rewards, environment, emitter
-pip install agent-lightning
+pip install agentmesh-lightning
 
 # You also need the Agent OS kernel for policy enforcement
 pip install agent-os-kernel
