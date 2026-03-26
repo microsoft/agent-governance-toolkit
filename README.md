@@ -75,6 +75,7 @@ pip install agentmesh-lightning        # RL training governance
 - **[OWASP Compliance](docs/OWASP-COMPLIANCE.md)** — Full ASI-01 through ASI-10 mapping
 - **[Threat Model](docs/THREAT_MODEL.md)** — Trust boundaries, attack surfaces, and STRIDE analysis
 - **[Architecture](docs/ARCHITECTURE.md)** — System design, security model, trust scoring
+- **[Architecture Decisions](docs/adr/README.md)** — ADR log for key identity, runtime, and policy choices
 - **[NIST RFI Mapping](docs/nist-rfi-mapping.md)** — Mapping to NIST AI Agent Security RFI (2026-00206)
 
 Still have questions? File a [GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) or see our [Community page](COMMUNITY.md).
