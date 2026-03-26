@@ -1,0 +1,155 @@
+name: 'Governance Attestation'
+description: 'Validate PR governance attestation checklist using Agent Governance Toolkit'
+author: 'Microsoft'
+branding:
+  icon: 'check-square'
+  color: 'blue'
+
+inputs:
+  pr-body:
+    description: 'PR body to validate (defaults to current PR)'
+    required: false
+    default: ''
+  required-sections:
+    description: |
+      YAML list of required section titles (one per line).
+      Defaults to standard 7-section attestation.
+    required: false
+    default: |
+      1) Security review
+      2) Privacy review
+      3) CELA review
+      4) Responsible AI review
+      5) Accessibility review
+      6) Release Readiness / Safe Deployment
+      7) Org-specific Launch Gates
+  min-body-length:
+    description: 'Minimum length for PR body to be considered valid'
+    required: false
+    default: '40'
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.12'
+  toolkit-version:
+    description: 'Agent Governance Toolkit version to install (default: latest)'
+    required: false
+    default: ''
+
+outputs:
+  status:
+    description: 'Validation status: pass or fail'
+    value: ${{ steps.validate.outputs.status }}
+  errors:
+    description: 'List of validation errors (newline-separated)'
+    value: ${{ steps.validate.outputs.errors }}
+  sections-found:
+    description: 'JSON object mapping sections to checkbox counts'
+    value: ${{ steps.validate.outputs.sections_found }}
+  message:
+    description: 'Formatted validation message'
+    value: ${{ steps.validate.outputs.message }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Agent Governance Toolkit
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.toolkit-version }}" ]; then
+          pip install --quiet "agent-governance-toolkit[governance]==${{ inputs.toolkit-version }}"
+        else
+          pip install --quiet "agent-governance-toolkit[governance]"
+        fi
+
+    - name: Validate governance attestation
+      id: validate
+      shell: bash
+      env:
+        PR_BODY: ${{ inputs.pr-body }}
+        REQUIRED_SECTIONS: ${{ inputs.required-sections }}
+        MIN_BODY_LENGTH: ${{ inputs.min-body-length }}
+      run: |
+        python3 << 'PYEOF'
+        import json
+        import os
+        import sys
+        from agent_compliance.governance import validate_attestation
+        
+        # Get PR body (from input or context)
+        pr_body = os.environ.get('PR_BODY', '')
+        if not pr_body:
+            # Try to get from GitHub context
+            import subprocess
+            try:
+                result = subprocess.run(
+                    ['gh', 'pr', 'view', '--json', 'body', '-q', '.body'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    pr_body = result.stdout
+            except:
+                pass
+        
+        # Parse required sections
+        sections_input = os.environ.get('REQUIRED_SECTIONS', '').strip()
+        if sections_input:
+            required_sections = [s.strip() for s in sections_input.split('\n') if s.strip()]
+        else:
+            required_sections = None  # Use defaults
+        
+        # Get min body length
+        min_body_length = int(os.environ.get('MIN_BODY_LENGTH', '40'))
+        
+        # Validate
+        result = validate_attestation(
+            pr_body=pr_body,
+            required_sections=required_sections,
+            min_body_length=min_body_length
+        )
+        
+        # Set outputs
+        status = 'pass' if result.valid else 'fail'
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"status={status}\n")
+            
+            # Errors (newline-separated)
+            if result.errors:
+                f.write("errors<<ERREOF\n")
+                f.write('\n'.join(result.errors))
+                f.write("\nERREOF\n")
+            else:
+                f.write("errors=\n")
+            
+            # Sections found (JSON)
+            f.write(f"sections_found={json.dumps(result.sections_found)}\n")
+            
+            # Message
+            f.write("message<<MSGEOF\n")
+            f.write(result.message)
+            f.write("\nMSGEOF\n")
+        
+        # Print message
+        print(result.message)
+        
+        # Exit with appropriate code
+        sys.exit(0 if result.valid else 1)
+        PYEOF
+        
+        EXIT_CODE=$?
+        
+        # Add GitHub annotations
+        if [ $EXIT_CODE -ne 0 ]; then
+          echo "::error::Governance attestation validation failed"
+        else
+          echo "::notice::Governance attestation validation passed"
+        fi
+        
+        exit $EXIT_CODE

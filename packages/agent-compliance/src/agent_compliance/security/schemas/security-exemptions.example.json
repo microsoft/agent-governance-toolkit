@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "exemptions": [
+    {
+      "tool": "detect-secrets",
+      "file": "tests/fixtures/mock_credentials.py",
+      "line": 12,
+      "fingerprint": "abc123def456",
+      "reason": "Test fixture with intentionally fake credentials for unit tests",
+      "approved_by": "security-team"
+    },
+    {
+      "tool": "bandit",
+      "file": "server/dev_mode.py",
+      "line": 89,
+      "rule": "B201",
+      "reason": "Flask debug mode only enabled in dev environment via FLASK_ENV environment variable check",
+      "approved_by": "plugin-author",
+      "ticket": "ADO-12345"
+    },
+    {
+      "tool": "pip-audit",
+      "package": "requests",
+      "version": "2.25.0",
+      "cve": "CVE-2023-32681",
+      "reason": "Not exploitable in our usage pattern - only internal API calls, no proxy configuration",
+      "temporary": true,
+      "expires": "2026-06-30",
+      "ticket": "ADO-67890",
+      "approved_by": "security-guardian"
+    },
+    {
+      "category": "code-pattern",
+      "file": "docs/examples/bad_patterns.md",
+      "reason": "Demonstrative examples showing insecure patterns to avoid - not executable code",
+      "approved_by": "doc-team"
+    }
+  ]
+}

@@ -92,6 +92,8 @@ pytest tests/ -x -q
 ### Security
 
 - Review the [SECURITY.md](SECURITY.md) file for vulnerability reporting procedures.
+- **Security scanning runs automatically** on all PRs — see [docs/security-scanning.md](docs/security-scanning.md) for details
+- Use `.security-exemptions.json` to suppress false positives (requires justification)
 - Never commit secrets, credentials, or tokens.
 - Use `--no-cache-dir` for pip installs in Dockerfiles.
 - Pin dependencies to specific versions in `pyproject.toml`.

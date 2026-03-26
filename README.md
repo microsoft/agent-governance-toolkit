@@ -92,6 +92,8 @@ Still have questions? File a [GitHub issue](https://github.com/microsoft/agent-g
   - [Framework quickstarts](examples/quickstart/) | [Integration proposals](docs/proposals/)
 - **Full OWASP Coverage**: 10/10 Agentic Top 10 risks addressed with dedicated controls for each ASI category
   - [OWASP Compliance](docs/OWASP-COMPLIANCE.md) | [Competitive Comparison](docs/COMPARISON.md)
+- **GitHub Actions for CI/CD**: Automated security scanning and governance attestation for PR workflows
+  - [Security Scan Action](action/security-scan/) | [Governance Attestation Action](action/governance-attestation/)
 
 ### 💬 **We want your feedback!**
 
