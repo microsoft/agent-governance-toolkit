@@ -1,0 +1,59 @@
+# Marketplace Policy — Sample Configuration
+#
+# ⚠️  IMPORTANT: This is a SAMPLE configuration provided as a starting point.
+# You MUST review, customize, and extend these rules for your specific
+# use case before deploying to production. Microsoft does not guarantee
+# that these rules are comprehensive or sufficient for your security
+# requirements.
+#
+# Schema: MarketplacePolicy (agent_marketplace.marketplace_policy)
+# Docs:   docs/tutorials/10-plugin-marketplace.md
+
+# ---------------------------------------------------------------------------
+# MCP Server Controls
+# ---------------------------------------------------------------------------
+# Defines which MCP servers plugins are allowed to reference.
+# Plugins declaring an MCP server not on this list will be rejected.
+
+mcp_servers:
+  mode: allowlist
+
+  allowed:
+    # Safe defaults — read-only or sandboxed servers
+    - code-search          # GitHub code search (read-only)
+    - ms-learn             # Microsoft Learn documentation (read-only)
+    - playwright           # Browser automation (sandboxed)
+    - web-fetch            # HTTP GET requests (read-only)
+    - azure-devops-search  # Azure DevOps work item search (read-only)
+
+  blocked:
+    # Dangerous servers — always blocked regardless of mode
+    - shell-exec           # Arbitrary shell command execution
+    - filesystem-write     # Unrestricted filesystem write access
+    - raw-network          # Unrestricted outbound network access
+    - eval-server          # Dynamic code evaluation
+
+  # Plugins must explicitly declare every MCP server they use.
+  # Un-declared servers will cause a policy violation.
+  require_declaration: true
+
+# ---------------------------------------------------------------------------
+# Plugin Type Restrictions
+# ---------------------------------------------------------------------------
+# Only accept these plugin types in the marketplace.
+# Valid types: policy_template, integration, agent, validator
+
+allowed_plugin_types:
+  - integration
+  - agent
+  - policy_template
+
+# ---------------------------------------------------------------------------
+# Signature Requirements
+# ---------------------------------------------------------------------------
+# For development/testing, signatures are not required.
+# Set to true in production to enforce Ed25519 plugin signing.
+#
+# require_signature: true    # ← enable for production
+
+require_signature: false

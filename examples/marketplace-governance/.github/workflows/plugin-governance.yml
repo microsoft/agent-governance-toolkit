@@ -1,0 +1,124 @@
+# Plugin Governance CI — validates plugins contributed via pull requests
+#
+# This workflow runs on PRs that modify files under plugins/ and enforces
+# marketplace policies before a plugin can be merged.
+#
+# Three jobs run in sequence:
+#   1. validate-manifest  — schema-checks each changed plugin.json
+#   2. evaluate-policy    — batch-evaluates all plugins against policy
+#   3. governance-verify  — full governance attestation (OWASP controls)
+
+name: Plugin Governance
+
+on:
+  pull_request:
+    paths:
+      - 'plugins/**'
+      - 'policies/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ------------------------------------------------------------------
+  # Job 1: Validate that each changed plugin has a well-formed manifest
+  # ------------------------------------------------------------------
+  validate-manifest:
+    name: Validate Plugin Manifests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect changed plugins
+        id: changes
+        run: |
+          PLUGINS=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+            | grep '^plugins/' \
+            | cut -d'/' -f1-2 \
+            | sort -u)
+          echo "plugins<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$PLUGINS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "Found changed plugin directories:"
+          echo "$PLUGINS"
+
+      - name: Validate each manifest
+        uses: microsoft/agent-governance-toolkit/action@v2
+        with:
+          command: marketplace-verify
+          manifest-path: plugins/
+          output-format: text
+
+  # ------------------------------------------------------------------
+  # Job 2: Evaluate all plugins against marketplace and safety policies
+  # ------------------------------------------------------------------
+  evaluate-policy:
+    name: Evaluate Marketplace Policy
+    runs-on: ubuntu-latest
+    needs: validate-manifest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Option A: Use the GitHub Action (recommended)
+      - name: Run governance action
+        uses: microsoft/agent-governance-toolkit/action@v2
+        with:
+          command: policy-evaluate
+          policy-path: policies/marketplace-policy.yaml
+          output-format: json
+
+      # Option B: Direct CLI usage (alternative)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install toolkit
+        run: pip install --quiet agent-governance-toolkit[full]
+
+      - name: Batch evaluate plugins
+        run: |
+          python -m agent_marketplace.batch evaluate-batch plugins/ \
+            --policy policies/plugin-safety.yaml \
+            --format markdown \
+            --output governance-report.md
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governance-report
+          path: governance-report.md
+
+  # ------------------------------------------------------------------
+  # Job 3: Full governance verification (OWASP controls attestation)
+  # ------------------------------------------------------------------
+  governance-verify:
+    name: Governance Verification
+    runs-on: ubuntu-latest
+    needs: evaluate-policy
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run governance verification
+        id: verify
+        uses: microsoft/agent-governance-toolkit/action@v2
+        with:
+          command: governance-verify
+          output-format: json
+          fail-on-warning: 'true'
+
+      - name: Report status
+        if: always()
+        run: |
+          echo "## Governance Status" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Status:** ${{ steps.verify.outputs.status }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Controls passed:** ${{ steps.verify.outputs.controls-passed }} / ${{ steps.verify.outputs.controls-total }}" >> "$GITHUB_STEP_SUMMARY"
