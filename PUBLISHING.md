@@ -21,7 +21,7 @@ Agent Governance Toolkit to public registries.
 | Agent Runtime | `agentmesh-runtime` | `packages/agent-runtime` |
 | Agent SRE | `agent-sre` | `packages/agent-sre` |
 | Agent Governance Toolkit | `agent-governance-toolkit` | `packages/agent-compliance` |
-| Agent Lightning | `agent-lightning` | `packages/agent-lightning` |
+| Agent Lightning | `agentmesh-lightning` | `packages/agent-lightning` |
 
 ### Publishing Method
 

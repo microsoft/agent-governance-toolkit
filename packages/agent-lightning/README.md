@@ -1,7 +1,7 @@
 # Agent Lightning — RL Training Governance
 
 > [!IMPORTANT]
-> **Community Preview** — The `agent-lightning` package on PyPI is a community preview release
+> **Community Preview** — The `agentmesh-lightning` package on PyPI is a community preview release
 > for testing and evaluation only. It is **not** an official Microsoft-signed release.
 > Official signed packages will be available in a future release.
 

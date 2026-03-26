@@ -215,7 +215,7 @@ Two PyPI packages have been renamed to avoid namespace collisions:
 | `agentmesh-marketplace` | 2.3.0 | Community Preview _(renamed from `agent-marketplace`)_ |
 | `agent-sre` | 2.3.0 | Community Preview |
 | `agent-governance-toolkit` | 2.3.0 | Community Preview |
-| `agent-lightning` | 2.3.0 | Community Preview |
+| `agentmesh-lightning` | 2.3.0 | Community Preview |
 
 ### npm
 

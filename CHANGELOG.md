@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Renamed PyPI package `agent-runtime` → `agentmesh-runtime` (name collision with AutoGen) (#444)
 - Renamed PyPI package `agent-marketplace` → `agentmesh-marketplace` (#439)
+- Renamed PyPI package `agent-lightning` → `agentmesh-lightning` (name collision on PyPI)
 
 ### Fixed
 - ESRP pipeline `each` directive syntax in Verify stages

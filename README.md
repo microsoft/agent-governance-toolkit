@@ -236,7 +236,7 @@ Three evaluation modes per backend: **embedded engine** (cedarpy/opa CLI), **rem
 | **Agent SRE** | [`agent-sre`](https://pypi.org/project/agent-sre/) | Reliability engineering — SLOs, error budgets, replay debugging, chaos engineering, progressive delivery |
 | **Agent Compliance** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | Runtime policy enforcement — OWASP ASI 2026 controls, governance attestation, integrity verification |
 | **Agent Marketplace** | [`agentmesh-marketplace`](packages/agent-marketplace/) | Plugin lifecycle — discover, install, verify, and sign plugins |
-| **Agent Lightning** | [`agent-lightning`](packages/agent-lightning/) | RL training governance — governed runners, policy rewards |
+| **Agent Lightning** | [`agentmesh-lightning`](packages/agent-lightning/) | RL training governance — governed runners, policy rewards |
 
 ## Framework Integrations
 
