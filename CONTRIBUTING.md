@@ -49,6 +49,18 @@ pip install -e "packages/agent-lightning[dev]"
 pytest
 ```
 
+### Pre-commit Hooks
+
+This repository uses [pre-commit](https://pre-commit.com/) to enforce code quality checks before each commit. Hooks run ruff (linting and formatting), mypy (type checking), detect-secrets (secret scanning), and general file hygiene checks.
+
+```bash
+# Install pre-commit and register the hooks
+pip install pre-commit && pre-commit install
+
+# Run all hooks manually against every file
+pre-commit run --all-files
+```
+
 ### Package Structure
 
 This is a mono-repo with seven packages:
