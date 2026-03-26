@@ -1,0 +1,133 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/agency-microsoft/playground/schemas/security-exemptions.json",
+  "title": "Security Exemptions",
+  "description": "Configuration file for suppressing security scan findings",
+  "type": "object",
+  "required": ["version", "exemptions"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version",
+      "const": "1.0"
+    },
+    "exemptions": {
+      "type": "array",
+      "description": "List of exempted security findings",
+      "items": {
+        "type": "object",
+        "required": ["reason"],
+        "properties": {
+          "tool": {
+            "type": "string",
+            "description": "Security tool that generated the finding",
+            "enum": ["detect-secrets", "pip-audit", "npm-audit", "bandit", "semgrep"]
+          },
+          "category": {
+            "type": "string",
+            "description": "Finding category",
+            "enum": ["secrets", "cve", "code-pattern", "injection", "file-operation"]
+          },
+          "file": {
+            "type": "string",
+            "description": "File path relative to plugin root"
+          },
+          "line": {
+            "type": "integer",
+            "description": "Line number of the finding",
+            "minimum": 1
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "Unique identifier for the finding (from detect-secrets)"
+          },
+          "rule": {
+            "type": "string",
+            "description": "Tool-specific rule ID (e.g., B201 for bandit)"
+          },
+          "package": {
+            "type": "string",
+            "description": "Package name (for dependency vulnerabilities)"
+          },
+          "version": {
+            "type": "string",
+            "description": "Package version (for dependency vulnerabilities)"
+          },
+          "cve": {
+            "type": "string",
+            "description": "CVE identifier",
+            "pattern": "^CVE-\\d{4}-\\d{4,}$"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Explanation for why this is exempted (required)",
+            "minLength": 10
+          },
+          "approved_by": {
+            "type": "string",
+            "description": "Who approved this exemption (required for critical/high)"
+          },
+          "ticket": {
+            "type": "string",
+            "description": "Tracking ticket for this exemption (required for critical/high)"
+          },
+          "temporary": {
+            "type": "boolean",
+            "description": "Whether this is a temporary exemption",
+            "default": false
+          },
+          "expires": {
+            "type": "string",
+            "description": "Expiration date for temporary exemptions (ISO 8601 format)",
+            "format": "date"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "temporary": {"const": true}
+              }
+            },
+            "then": {
+              "required": ["expires"]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "examples": [
+    {
+      "version": "1.0",
+      "exemptions": [
+        {
+          "tool": "detect-secrets",
+          "file": "tests/fixtures/mock_credentials.py",
+          "line": 12,
+          "fingerprint": "abc123def456",
+          "reason": "Test fixture with intentionally fake credentials for unit tests",
+          "approved_by": "security-team"
+        },
+        {
+          "tool": "bandit",
+          "file": "server/dev_mode.py",
+          "rule": "B201",
+          "reason": "Flask debug mode only enabled in dev environment via FLASK_ENV check",
+          "approved_by": "security-guardian",
+          "ticket": "ADO-12345"
+        },
+        {
+          "tool": "pip-audit",
+          "package": "requests",
+          "version": "2.25.0",
+          "cve": "CVE-2023-32681",
+          "reason": "Not exploitable in our usage - only internal API calls, no proxies",
+          "temporary": true,
+          "expires": "2026-06-30",
+          "ticket": "ADO-67890"
+        }
+      ]
+    }
+  ]
+}
