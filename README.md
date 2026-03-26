@@ -216,6 +216,50 @@ decision = engine.evaluate("did:mesh:agent-1", {"tool_name": "analyze"})
 
 Three evaluation modes per backend: **embedded engine** (cedarpy/opa CLI), **remote server**, or **built-in fallback** (zero external deps).
 
+## GitHub Actions
+
+Automated governance and security validation for your CI/CD pipelines.
+
+### Governance Attestation Action
+
+Validates PR governance attestation checklists with exactly one checkbox marked per required section.
+
+```yaml
+- uses: microsoft/agent-governance-toolkit/action/governance-attestation@v2
+  with:
+    required-sections: |
+      Security review
+      Privacy review
+      CELA review
+```
+
+**Features:**
+- ✅ Validates 7-section governance attestation by default
+- ✅ Customizable section requirements
+- ✅ Automatic PR validation on open/edit
+- ✅ Clear error messages for missing or incomplete sections
+
+📖 [Full Documentation](action/governance-attestation/README.md)
+
+### Security Scan Action
+
+Automated security scanning for secrets, CVEs, and dangerous code patterns.
+
+```yaml
+- uses: microsoft/agent-governance-toolkit/action/security-scan@v2
+  with:
+    paths: 'plugins/ src/'
+    exemptions-file: '.security-exemptions.json'
+```
+
+**Scans for:**
+- 🔴 **Hardcoded secrets** (API keys, tokens, passwords)
+- 🔴 **Dependency vulnerabilities** (CVEs in Python/Node packages)
+- 🟡 **Dangerous code patterns** (eval, command injection, unsafe operations)
+- 🟠 **Unsafe file operations** (path traversal, unrestricted writes)
+
+📖 [Full Documentation](action/security-scan/README.md) | [Security Scanning Guide](docs/security-scanning.md)
+
 ## SDKs & Packages
 
 ### Multi-Language SDKs
