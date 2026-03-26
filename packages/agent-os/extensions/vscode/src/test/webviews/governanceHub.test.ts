@@ -40,9 +40,9 @@ suite('Governance Hub', () => {
 
             const html = renderGovernanceHub(nonce, cspSource, config);
 
-            const auditIndex = html.indexOf('Audit');
-            const sloIndex = html.indexOf('SLO');
-            assert.ok(auditIndex < sloIndex, 'Audit should appear before SLO');
+            const auditIndex = html.indexOf('data-tab="audit"');
+            const sloIndex = html.indexOf('data-tab="slo"');
+            assert.ok(auditIndex < sloIndex, 'Audit tab should appear before SLO tab');
         });
 
         test('includes action buttons', () => {

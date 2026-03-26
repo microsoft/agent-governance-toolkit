@@ -57,6 +57,14 @@ export function layoutStyles(): string {
         .stale-warning { color: var(--vscode-editorWarning-foreground, #cca700); }
         .stale-error { color: var(--vscode-errorForeground, #f14c4c); }
 
+        .hub-main {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
         @keyframes pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.6; transform: scale(0.9); }

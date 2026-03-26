@@ -101,11 +101,14 @@ function createMockViolations(): PolicyViolation[] {
 export function createMockPolicyBackend(): PolicyDataProvider {
     return {
         async getSnapshot(): Promise<PolicySnapshot> {
-            const rules = MOCK_RULES.map(r => ({
-                ...r,
-                violationsToday: r.violationsToday + (Math.random() < 0.1 ? 1 : 0),
-                evaluationsToday: r.evaluationsToday + Math.floor(Math.random() * 5),
-            }));
+            const rules = MOCK_RULES.map(r => {
+                if (!r.enabled) { return { ...r }; }
+                return {
+                    ...r,
+                    violationsToday: r.violationsToday + (Math.random() < 0.1 ? 1 : 0),
+                    evaluationsToday: r.evaluationsToday + Math.floor(Math.random() * 5),
+                };
+            });
 
             const recentViolations = createMockViolations();
 

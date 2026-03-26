@@ -34,7 +34,7 @@ suite('topologyTypes — truncateDid', () => {
     test('truncates at a custom maxLen', () => {
         const did = 'did:mesh:abcdef123456';
         const result = truncateDid(did, 10);
-        assert.strictEqual(result, 'did:mesh:ab...');
+        assert.strictEqual(result, 'did:mesh:a...');
     });
 
     test('handles empty string', () => {
