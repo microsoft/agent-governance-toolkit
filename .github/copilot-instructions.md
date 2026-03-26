@@ -7,7 +7,7 @@ NEVER merge a PR without thorough code review. CI passing is NOT sufficient.
 Before approving or merging ANY PR, verify ALL of the following:
 
 1. **Read the actual diff** — don't rely on PR description alone
-2. **Dependency confusion scan** — check every `pip install`, `npm install` command in docs/code for unregistered package names. The registered names are: `agent-os-kernel`, `agentmesh-platform`, `agent-hypervisor`, `agent-runtime`, `agent-sre`, `agent-governance-toolkit`, `agent-lightning`, `agent-marketplace`
+2. **Dependency confusion scan** — check every `pip install`, `npm install` command in docs/code for unregistered package names. The registered names are: `agent-os-kernel`, `agentmesh-platform`, `agent-hypervisor`, `agent-runtime`, `agent-sre`, `agent-governance-toolkit`, `agent-lightning`, `agentmesh-marketplace`
 3. **New Python modules** — verify `__init__.py` exists in any new package directory
 4. **Dependencies declared** — any new `import` must have the package in `pyproject.toml` dependencies (not just transitive)
 5. **No hardcoded secrets** — no API keys, tokens, passwords, connection strings in code or docs

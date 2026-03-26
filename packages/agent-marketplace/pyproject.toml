@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent-marketplace"
+name = "agentmesh-marketplace"
 version = "2.1.0"
 description = "Plugin marketplace for the Agent Governance Toolkit — discover, install, verify, and manage plugins"
 readme = "README.md"

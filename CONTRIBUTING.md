@@ -42,7 +42,7 @@ pip install -e "packages/agent-mesh[dev]"
 pip install -e "packages/agent-runtime[dev]"
 pip install -e "packages/agent-sre[dev]"
 pip install -e "packages/agent-compliance[dev]"
-pip install -e "packages/agent-marketplace[dev]"
+pip install -e "packages/agent-marketplace[dev]"  # installs agentmesh-marketplace
 pip install -e "packages/agent-lightning[dev]"
 
 # Run tests
@@ -60,7 +60,7 @@ This is a mono-repo with seven packages:
 | `agent-runtime` | `packages/agent-runtime/` | Runtime sandboxing and capability isolation |
 | `agent-sre` | `packages/agent-sre/` | Observability, alerting, and reliability |
 | `agent-governance` | `packages/agent-compliance/` | Unified installer and runtime policy enforcement |
-| `agent-marketplace` | `packages/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
+| `agentmesh-marketplace` | `packages/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
 | `agent-lightning` | `packages/agent-lightning/` | RL training governance with governed runners and policy rewards |
 
 ### Coding Guidelines

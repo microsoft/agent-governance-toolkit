@@ -52,7 +52,7 @@ pip install agentmesh-platform     # Trust mesh
 pip install agent-runtime          # Runtime supervisor
 pip install agent-sre              # SRE toolkit
 pip install agent-governance-toolkit    # Compliance & attestation
-pip install agent-marketplace      # Plugin marketplace
+pip install agentmesh-marketplace      # Plugin marketplace
 pip install agent-lightning        # RL training governance
 ```
 </details>
@@ -235,7 +235,7 @@ Three evaluation modes per backend: **embedded engine** (cedarpy/opa CLI), **rem
 | **Agent Runtime** | [`agent-runtime`](packages/agent-runtime/) | Execution supervisor — 4-tier privilege rings, saga orchestration, termination control, joint liability, append-only audit log |
 | **Agent SRE** | [`agent-sre`](https://pypi.org/project/agent-sre/) | Reliability engineering — SLOs, error budgets, replay debugging, chaos engineering, progressive delivery |
 | **Agent Compliance** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | Runtime policy enforcement — OWASP ASI 2026 controls, governance attestation, integrity verification |
-| **Agent Marketplace** | [`agent-marketplace`](packages/agent-marketplace/) | Plugin lifecycle — discover, install, verify, and sign plugins |
+| **Agent Marketplace** | [`agentmesh-marketplace`](packages/agent-marketplace/) | Plugin lifecycle — discover, install, verify, and sign plugins |
 | **Agent Lightning** | [`agent-lightning`](packages/agent-lightning/) | RL training governance — governed runners, policy rewards |
 
 ## Framework Integrations

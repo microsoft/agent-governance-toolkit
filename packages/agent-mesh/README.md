@@ -579,7 +579,7 @@ report = compliance.generate_report(
 | Quarter | Milestone |
 |---------|-----------|
 | **Q1 2026** | ✅ Core trust layer, identity, governance engine, 6 framework integrations |
-| **Q2 2026** | TypeScript SDK, Go SDK, Dashboard UI. Marketplace is now a standalone `agent-marketplace` package. |
+| **Q2 2026** | TypeScript SDK, Go SDK, Dashboard UI. Marketplace is now a standalone `agentmesh-marketplace` package. |
 | **Q3 2026** | AI Card spec contribution, CNCF Sandbox application |
 | **Q4 2026** | Managed cloud service (AgentMesh Cloud), SOC2 Type II |
 
@@ -649,7 +649,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-Apache 2.0 — See [LICENSE](LICENSE) for details.
+MIT — See [LICENSE](LICENSE) for details.
 
 ---
 

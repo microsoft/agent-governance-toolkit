@@ -9,7 +9,7 @@
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
-[![PyPI](https://img.shields.io/pypi/v/agent-marketplace)](https://pypi.org/project/agent-marketplace/)
+[![PyPI](https://img.shields.io/pypi/v/agentmesh-marketplace)](https://pypi.org/project/agentmesh-marketplace/)
 
 </div>
 
@@ -31,7 +31,7 @@ Agent Marketplace provides **governed plugin lifecycle management** for AI agent
 ## Quick Start
 
 ```bash
-pip install agent-marketplace
+pip install agentmesh-marketplace
 ```
 
 ```python
@@ -58,16 +58,16 @@ result = installer.install("web-search")
 
 ```bash
 # List available plugins
-agent-marketplace list
+agentmesh-marketplace list
 
 # Install a plugin
-agent-marketplace install web-search
+agentmesh-marketplace install web-search
 
 # Verify plugin integrity
-agent-marketplace verify web-search
+agentmesh-marketplace verify web-search
 
 # Sign a plugin manifest
-agent-marketplace sign manifest.yaml --key signing-key.pem
+agentmesh-marketplace sign manifest.yaml --key signing-key.pem
 ```
 
 ## Ecosystem

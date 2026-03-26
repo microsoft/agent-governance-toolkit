@@ -62,7 +62,7 @@ jobs:
                - agent-hypervisor: Execution sandboxing, resource isolation
                - agent-sre: Reliability, chaos testing, SLOs
                - agent-compliance: Compliance frameworks, audit logging
-               - agent-marketplace: Agent registry
+               - agentmesh-marketplace: Agent registry
                - agent-lightning: High-performance inference
                - agent-runtime: Runtime execution environment
             3. **Point to relevant code** — suggest specific directories to look at

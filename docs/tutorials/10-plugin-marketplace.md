@@ -33,8 +33,8 @@ import time.
 ## Installation
 
 ```bash
-pip install agent-marketplace                  # core marketplace package
-pip install agent-marketplace[cli]             # adds Click + Rich CLI commands
+pip install agentmesh-marketplace                  # core marketplace package
+pip install agentmesh-marketplace[cli]             # adds Click + Rich CLI commands
 pip install agentmesh-platform                 # AgentMesh integration (sandbox, trust)
 ```
 
@@ -615,7 +615,7 @@ except PluginSandboxError as e:
 ## CLI Reference
 
 The `agentmesh plugin` command group provides a terminal interface for all
-marketplace operations.  Requires `pip install agent-marketplace[cli]`.
+marketplace operations.  Requires `pip install agentmesh-marketplace[cli]`.
 
 ### `agentmesh plugin install`
 

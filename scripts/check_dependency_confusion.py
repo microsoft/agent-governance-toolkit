@@ -29,7 +29,7 @@ REGISTERED_PACKAGES = {
     "agent-sre",
     "agent-governance-toolkit",
     "agent-lightning",
-    "agent-marketplace",
+    "agentmesh-marketplace",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
     "fastapi", "uvicorn", "structlog", "click", "rich", "numpy", "scipy",

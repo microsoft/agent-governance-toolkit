@@ -78,7 +78,7 @@ jobs:
           custom-instructions: |
             You are generating release notes for microsoft/agent-governance-toolkit.
             This is a monorepo with packages: agent-os, agent-mesh, agent-hypervisor,
-            agent-sre, agent-compliance, agent-marketplace, agent-lightning, agent-runtime.
+            agent-sre, agent-compliance, agentmesh-marketplace, agent-lightning, agent-runtime.
 
             Categorize changes by:
             1. Package affected (based on file paths in the PR)

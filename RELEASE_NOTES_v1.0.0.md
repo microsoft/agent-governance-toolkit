@@ -24,7 +24,7 @@
 | **Agent Runtime** | Execution rings, resource limits, kill switch, saga orchestration | `pip install agent-runtime` |
 | **Agent SRE** | SLOs, error budgets, circuit breakers, chaos engineering | `pip install agent-sre` |
 | **Agent Compliance** | Unified installer and runtime policy enforcement | `pip install agent-governance` |
-| **Agent Marketplace** | Plugin lifecycle management for governed agent ecosystems | `pip install agent-marketplace` |
+| **Agent Marketplace** | Plugin lifecycle management for governed agent ecosystems | `pip install agentmesh-marketplace` |
 | **Agent Lightning** | RL training governance with governed runners and policy rewards | `pip install agent-lightning` |
 
 ## Security & Compliance
