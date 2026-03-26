@@ -467,17 +467,6 @@
           "default": 60000,
           "minimum": 10000,
           "description": "Interval in milliseconds between metrics pushes"
-        },
-        "agent-os.backend.mode": {
-          "type": "string",
-          "enum": ["mock", "local"],
-          "default": "mock",
-          "description": "Data source for governance dashboards: mock (simulated) or local (Python Agent OS services)"
-        },
-        "agent-os.backend.pythonPath": {
-          "type": "string",
-          "default": "python",
-          "description": "Path to Python interpreter with agent-os-kernel installed"
         }
       }
     },

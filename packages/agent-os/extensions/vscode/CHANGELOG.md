@@ -4,19 +4,26 @@ All notable changes to the Agent OS VS Code extension will be documented in this
 
 ## [1.1.0] - 2026-03-25
 
+### Security
+- Rate limiting added to GovernanceServer (100 requests/minute per client)
+- Session token authentication for WebSocket connections
+- SRI hashes for external CDN scripts (D3.js v7.8.5)
+- Removed Chart.js CDN dependency (unused)
+
+### Removed
+- `S3StorageProvider` - Cloud export to AWS S3 (planned for v1.2.0 as optional dependency)
+- `AzureBlobStorageProvider` - Cloud export to Azure Blob Storage (planned for v1.2.0)
+- Backend service layer (out of scope for this release)
+
 ### Added
 - Governance Hub: Unified sidebar webview with SLO, topology, and audit tabs
 - SLO Dashboard: Rich webview panel with availability, latency, compliance, and trust score metrics
 - Agent Topology: Force-directed graph panel showing agent mesh, trust rings, and bridges
 - Browser experience: Local dev server serves governance dashboard in external browser
-- Python bridge module: `agent_os.extensions.vscode_bridge` connects to live Agent OS backend
-- Dual-mode provider factory: mock (default) or local Python backend with auto-fallback
-- Service layer: SubprocessTransport, SLO/Topology/Policy clients with stale-while-revalidate caching
 - Governance status bar: Mode indicator, execution ring, connection status
 - Policy diagnostics: Real-time governance rule validation with code actions
 - Local report export: Self-contained HTML governance report
 - Metrics exporter: Push dashboard metrics to observability endpoints
-- 26 test suites covering services, mock backends, views, webviews, and language features
 
 ## [1.0.1] - 2026-01-29
 

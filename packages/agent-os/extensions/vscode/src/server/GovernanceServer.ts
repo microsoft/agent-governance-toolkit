@@ -12,13 +12,18 @@ import * as http from 'http';
 import { SLODataProvider } from '../views/sloTypes';
 import { AgentTopologyDataProvider } from '../views/topologyTypes';
 import { AuditLogger } from '../auditLogger';
-import { ServerState, ClientConnection, ServerMessage } from './serverTypes';
+import { ServerState, ClientConnection, ServerMessage, ServerMessageType } from './serverTypes';
 import { renderBrowserDashboard } from './browserTemplate';
 import {
     DEFAULT_HOST,
     DEFAULT_PORT,
     findAvailablePort,
     generateClientId,
+    generateSessionToken,
+    generateNonce,
+    checkRateLimit,
+    validateWebSocketToken,
+    RateLimitRecord,
     WebSocketLike,
     WebSocketServerLike
 } from './serverHelpers';
@@ -39,6 +44,8 @@ export class GovernanceServer {
     private _clients: Map<string, ClientConnection> = new Map();
     private _port: number = 0;
     private _refreshInterval: ReturnType<typeof setInterval> | undefined;
+    private _sessionToken: string = '';
+    private _requestCounts: Map<string, RateLimitRecord> = new Map();
 
     private constructor(
         private readonly _sloProvider: SLODataProvider,
@@ -71,23 +78,38 @@ export class GovernanceServer {
             return this._port;
         }
         this._port = await findAvailablePort(port ?? DEFAULT_PORT, DEFAULT_HOST);
+        this._sessionToken = generateSessionToken();
         await this._createHttpServer();
         await this._createWebSocketServer();
-        this._startAutoRefresh();
+        this._refreshInterval = setInterval(() => this._broadcastUpdates(), 10_000);
         return this._port;
     }
 
-    /** Stop the server and clean up resources. */
+    /** Stop the server and clean up all resources. */
     public async stop(): Promise<void> {
-        this._stopAutoRefresh();
-        await this._closeWebSocketServer();
-        await this._closeHttpServer();
+        if (this._refreshInterval) {
+            clearInterval(this._refreshInterval);
+            this._refreshInterval = undefined;
+        }
+        this._requestCounts.clear();
+        await this._closeServer(this._wsServer, () => {
+            this._wsServer = undefined;
+            this._clients.clear();
+        });
+        await this._closeServer(this._httpServer, () => {
+            this._httpServer = undefined;
+        });
         GovernanceServer._instance = undefined;
     }
 
     /** Get the URL for accessing the dashboard. */
     public getUrl(): string {
         return `http://${DEFAULT_HOST}:${this._port}`;
+    }
+
+    /** Get the session token for WebSocket authentication. */
+    public getSessionToken(): string {
+        return this._sessionToken;
     }
 
     /** Get the current server state. */
@@ -100,9 +122,9 @@ export class GovernanceServer {
     }
 
     /** Broadcast a message to all connected WebSocket clients. */
-    public broadcast(type: string, data: unknown): void {
+    public broadcast(type: ServerMessageType, data: unknown): void {
         const message: ServerMessage = {
-            type: type as ServerMessage['type'],
+            type,
             data,
             timestamp: new Date().toISOString()
         };
@@ -130,10 +152,17 @@ export class GovernanceServer {
         req: http.IncomingMessage,
         res: http.ServerResponse
     ): void {
-        this._setSecurityHeaders(res);
+        const ip = req.socket.remoteAddress || 'unknown';
+        if (!checkRateLimit(ip, this._requestCounts)) {
+            res.writeHead(429, { 'Retry-After': '60' });
+            res.end('Rate limit exceeded');
+            return;
+        }
+        const nonce = generateNonce();
+        this._setSecurityHeaders(res, nonce);
         if (req.url === '/' || req.url === '/index.html') {
             res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(renderBrowserDashboard(this._port));
+            res.end(renderBrowserDashboard(this._port, this._sessionToken, nonce));
             return;
         }
         res.writeHead(404);
@@ -141,11 +170,12 @@ export class GovernanceServer {
     }
 
     /** Apply security headers to all HTTP responses. */
-    private _setSecurityHeaders(res: http.ServerResponse): void {
+    private _setSecurityHeaders(res: http.ServerResponse, nonce: string): void {
         res.setHeader('Content-Security-Policy',
             "default-src 'self'; " +
-            "script-src 'self' https://d3js.org https://cdn.jsdelivr.net; " +
-            "style-src 'self' 'unsafe-inline'");
+            `script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; ` +
+            "style-src 'self' 'unsafe-inline'; " +
+            "connect-src 'self'");
         res.setHeader('X-Content-Type-Options', 'nosniff');
     }
 
@@ -163,7 +193,11 @@ export class GovernanceServer {
                 path: '/'
             }) as WebSocketServerLike;
 
-            this._wsServer.on('connection', (ws: WebSocketLike) => {
+            this._wsServer.on('connection', (ws: WebSocketLike, req: unknown) => {
+                if (!validateWebSocketToken(req, this._sessionToken, this._port)) {
+                    ws.close(4001, 'Invalid session token');
+                    return;
+                }
                 const id = generateClientId();
                 this._clients.set(id, { id, connectedAt: new Date() });
                 ws.on('close', () => this._clients.delete(id));
@@ -188,20 +222,7 @@ export class GovernanceServer {
             ws.send(JSON.stringify({ type: 'topologyUpdate', data: topology }));
             ws.send(JSON.stringify({ type: 'auditUpdate', data: audit }));
         } catch {
-            // Silent failure for initial data
-        }
-    }
-
-    /** Start the auto-refresh interval (10 seconds). */
-    private _startAutoRefresh(): void {
-        this._refreshInterval = setInterval(() => this._broadcastUpdates(), 10_000);
-    }
-
-    /** Stop the auto-refresh interval. */
-    private _stopAutoRefresh(): void {
-        if (this._refreshInterval) {
-            clearInterval(this._refreshInterval);
-            this._refreshInterval = undefined;
+            // Provider may not be ready yet; client will receive data on next broadcast cycle
         }
     }
 
@@ -211,36 +232,18 @@ export class GovernanceServer {
             const slo = await this._sloProvider.getSnapshot();
             this.broadcast('sloUpdate', slo);
         } catch {
-            // Silent failure
+            // Non-critical: broadcast failure retries automatically on next 10s interval
         }
     }
 
-    /** Close WebSocket server. */
-    private _closeWebSocketServer(): Promise<void> {
+    /** Close a server instance and run cleanup callback. */
+    private _closeServer(
+        server: { close(cb?: () => void): void } | undefined,
+        cleanup: () => void
+    ): Promise<void> {
+        if (!server) { return Promise.resolve(); }
         return new Promise((resolve) => {
-            if (!this._wsServer) {
-                resolve();
-                return;
-            }
-            this._wsServer.close(() => {
-                this._wsServer = undefined;
-                this._clients.clear();
-                resolve();
-            });
-        });
-    }
-
-    /** Close HTTP server. */
-    private _closeHttpServer(): Promise<void> {
-        return new Promise((resolve) => {
-            if (!this._httpServer) {
-                resolve();
-                return;
-            }
-            this._httpServer.close(() => {
-                this._httpServer = undefined;
-                resolve();
-            });
+            server.close(() => { cleanup(); resolve(); });
         });
     }
 }

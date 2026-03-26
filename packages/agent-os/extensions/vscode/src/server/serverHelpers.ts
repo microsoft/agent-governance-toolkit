@@ -65,14 +65,93 @@ export function generateClientId(): string {
     return `client_${Date.now()}_${randomBytes(4).toString('hex')}`;
 }
 
+/**
+ * Generate a cryptographically secure session token.
+ *
+ * @returns 32-character hex token
+ */
+export function generateSessionToken(): string {
+    return randomBytes(16).toString('hex');
+}
+
+/**
+ * Generate a random nonce for Content-Security-Policy inline script allowlisting.
+ *
+ * @returns 32-character hex nonce
+ */
+export function generateNonce(): string {
+    return randomBytes(16).toString('hex');
+}
+
+/** Rate limit record for a single IP. */
+export interface RateLimitRecord {
+    count: number;
+    resetAt: number;
+}
+
+/**
+ * Check if an IP has exceeded the rate limit (100 requests per minute).
+ *
+ * @param ip - Client IP address
+ * @param requestCounts - Map tracking per-IP request counts
+ * @returns true if the request is allowed
+ */
+export function checkRateLimit(
+    ip: string,
+    requestCounts: Map<string, RateLimitRecord>
+): boolean {
+    const now = Date.now();
+    const windowMs = 60_000;
+    const maxRequests = 100;
+
+    const record = requestCounts.get(ip);
+    if (!record || now > record.resetAt) {
+        requestCounts.set(ip, { count: 1, resetAt: now + windowMs });
+        return true;
+    }
+    if (record.count >= maxRequests) {
+        return false;
+    }
+    record.count++;
+    return true;
+}
+
+/**
+ * Validate a session token from a WebSocket upgrade request URL.
+ *
+ * @param req - Incoming HTTP request (from ws connection event)
+ * @param expectedToken - The expected session token
+ * @param port - Server port for URL parsing
+ * @returns true if the token matches
+ */
+export function validateWebSocketToken(
+    req: unknown,
+    expectedToken: string,
+    port: number
+): boolean {
+    try {
+        const incomingReq = req as { url?: string };
+        const url = incomingReq?.url;
+        if (!url) {
+            return false;
+        }
+        const parsed = new URL(url, `http://localhost:${port}`);
+        return parsed.searchParams.get('token') === expectedToken;
+    } catch {
+        return false; // Malformed URL in upgrade request
+    }
+}
+
 /** Minimal WebSocket interface for type safety without importing ws types. */
 export interface WebSocketLike {
     /** WebSocket ready state (1 = OPEN). */
     readyState: number;
     /** Send data to the client. */
     send(data: string): void;
+    /** Close the connection with optional code and reason. */
+    close(code?: number, reason?: string): void;
     /** Register event listener. */
-    on(event: string, listener: () => void): void;
+    on(event: string, listener: (...args: unknown[]) => void): void;
 }
 
 /** Minimal WebSocket server interface. */
@@ -80,7 +159,7 @@ export interface WebSocketServerLike {
     /** Set of connected clients. */
     clients?: Set<WebSocketLike>;
     /** Register connection event listener. */
-    on(event: string, listener: (ws: WebSocketLike) => void): void;
+    on(event: string, listener: (ws: WebSocketLike, req: unknown) => void): void;
     /** Close the server. */
     close(callback?: () => void): void;
 }

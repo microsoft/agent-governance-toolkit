@@ -48,14 +48,14 @@ import { GovernanceServer } from './server/GovernanceServer';
 import { ReportGenerator, LocalStorageProvider, CredentialError } from './export';
 import { MetricsExporter } from './observability';
 
-// Mock Backend Services (replace with real bridges in production)
+// Backend Services
 import { createMockSLOBackend } from './mockBackend/MockSLOBackend';
 import { createMockTopologyBackend } from './mockBackend/MockTopologyBackend';
 import { createMockPolicyBackend } from './mockBackend/MockPolicyBackend';
 import { PolicyDataProvider } from './views/policyTypes';
 
-// Provider Factory (Phase 3 - Real Backend Wiring)
-import { readBackendConfig, createProviders, Providers } from './services/providerFactory';
+// Provider Factory
+import { createProviders, Providers } from './services/providerFactory';
 
 // Enterprise Features
 import { EnterpriseAuthProvider } from './enterprise/auth/ssoProvider';
@@ -119,9 +119,7 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.registerTreeDataProvider('agent-os.memoryBrowser', memoryBrowserProvider);
 
         // Register governance visualization (Issue #39)
-        // Provider factory reads agent-os.backend settings to choose mock or real backends.
-        const backendConfig = readBackendConfig();
-        activeProviders = await createProviders(backendConfig);
+        activeProviders = createProviders();
         const sloDataProvider = activeProviders.slo;
         const sloDashboardProvider = new SLODashboardProvider(sloDataProvider);
         const agentTopologyDataProvider = activeProviders.topology;

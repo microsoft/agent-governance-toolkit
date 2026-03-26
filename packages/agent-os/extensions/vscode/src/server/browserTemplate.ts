@@ -4,7 +4,7 @@
  * Browser Dashboard Template
  *
  * Full HTML document for the browser-based governance dashboard.
- * Includes D3.js for topology graph, Chart.js for SLO sparklines,
+ * Includes D3.js for topology graph visualization
  * and WebSocket client for real-time updates.
  */
 
@@ -92,31 +92,42 @@ function buildAuditTab(): string {
 }
 
 /**
+ * SRI hash for D3.js v7.8.5 from cdn.jsdelivr.net (computed 2026-03-26).
+ * Verify: curl -s https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js | openssl dgst -sha384 -binary | openssl base64 -A
+ */
+const D3_SRI = 'sha384-su5kReKyYlIFrI62mbQRKXHzFobMa7BHp1cK6julLPbnYcCW9NIZKJiTODjLPeDh';
+
+/**
  * Render the complete browser dashboard HTML document.
  *
  * @param wsPort - WebSocket port for real-time updates
+ * @param sessionToken - Session token for WebSocket authentication
+ * @param nonce - CSP nonce for inline script allowlisting
  * @returns Full HTML document string
  */
-export function renderBrowserDashboard(wsPort: number): string {
-    // TODO: Compute SRI hashes from pinned CDN versions before release
-    const d3Sri = 'sha384-PLACEHOLDER_D3_SRI_HASH';
-    const chartSri = 'sha384-PLACEHOLDER_CHARTJS_SRI_HASH';
-
+export function renderBrowserDashboard(
+    wsPort: number,
+    sessionToken: string,
+    nonce: string
+): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://d3js.org https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self'">
     <title>Agent OS Governance Dashboard</title>
-    <script src="https://d3js.org/d3.v7.min.js" integrity="${d3Sri}" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js" integrity="${chartSri}" crossorigin="anonymous"></script>
+    <script nonce="${nonce}"
+            src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"
+            integrity="${D3_SRI}"
+            crossorigin="anonymous"></script>
     <style>${buildBrowserStyles()}</style>
 </head>
 <body>
     ${buildBodyContent()}
-    <script>${buildTopologyScript()}</script>
-    <script>${buildClientScript(wsPort)}</script>
+    <script nonce="${nonce}">${buildTopologyScript()}</script>
+    <script nonce="${nonce}">${buildClientScript(wsPort, sessionToken)}</script>
 </body>
 </html>`;
 }

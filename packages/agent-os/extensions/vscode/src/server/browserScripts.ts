@@ -7,7 +7,7 @@
  */
 
 /** Build the WebSocket client script. */
-export function buildClientScript(wsPort: number): string {
+export function buildClientScript(wsPort: number, sessionToken: string): string {
     return `
     /** Escape HTML entities to prevent XSS. */
     function esc(s) {
@@ -21,7 +21,8 @@ export function buildClientScript(wsPort: number): string {
     const statusDot = document.getElementById('status-dot');
 
     function connect() {
-        ws = new WebSocket('ws://localhost:${wsPort}');
+        // Intentionally ws:// (not wss://): server binds to 127.0.0.1 only, TLS unnecessary for loopback
+        ws = new WebSocket('ws://127.0.0.1:${wsPort}?token=${sessionToken}');
         ws.onopen = () => { statusDot.classList.remove('disconnected'); };
         ws.onclose = () => { statusDot.classList.add('disconnected'); scheduleReconnect(); };
         ws.onerror = () => { ws.close(); };

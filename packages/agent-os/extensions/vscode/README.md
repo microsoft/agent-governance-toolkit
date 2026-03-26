@@ -72,11 +72,15 @@ Unified dashboard for real-time governance monitoring:
 - **Sidebar + Panel** -- Compact sidebar view and full-window panel
 - **Browser Experience** -- Open dashboard in external browser via local server
 
-### Live Backend Connection
-- Connects to Agent OS Python backend via JSON bridge protocol
-- Dual-mode: mock data for development, real backend for production
-- Configurable via `agent-os.backend.mode` setting ("mock" | "local")
-- Graceful fallback to mock if backend unavailable
+### Server Security Hardening
+The Governance Server that powers the browser dashboard includes defense-in-depth security controls:
+- **Session token authentication** -- WebSocket connections require a cryptographically random token generated per server session. Connections without a valid token are rejected with close code 4001.
+- **Rate limiting** -- HTTP requests are limited to 100 per minute per client IP. Excess requests receive HTTP 429 with `Retry-After` header.
+- **Subresource Integrity (SRI)** -- All CDN-loaded scripts include integrity hashes. Tampered files are blocked by the browser.
+- **Content Security Policy (CSP)** -- Restricts script execution to `self` and `cdn.jsdelivr.net`. Blocks inline script injection and eval.
+- **Loopback-only binding** -- Server binds exclusively to `127.0.0.1`. Remote connections are structurally impossible.
+
+For the full security model, threat analysis, and accepted risks, see [SECURITY.md](SECURITY.md).
 
 ### Policy Diagnostics
 - Real-time governance rule validation on Python/TypeScript/YAML files
@@ -206,8 +210,6 @@ Open Settings (Ctrl+,) and search for "Agent OS":
 | `agentOS.diagnostics.enabled` | true | Real-time diagnostics |
 | `agentOS.enterprise.sso.enabled` | false | Enterprise SSO |
 | `agentOS.enterprise.compliance.framework` | - | Default compliance framework |
-| `agent-os.backend.mode` | "mock" | Backend mode: "mock" or "local" |
-| `agent-os.backend.pythonPath` | "python" | Python executable path |
 | `agentOS.governanceHub.tabs` | ["slo", "topology", "audit"] | Enabled Governance Hub tabs |
 | `agentOS.export.localPath` | "" | Local directory for exported reports |
 | `agentOS.observability.endpoint` | "" | Metrics push endpoint (OTEL compatible) |
@@ -221,12 +223,16 @@ Open Settings (Ctrl+,) and search for "Agent OS":
 | **Pro** | $9/mo | Unlimited CMVK, 90-day audit, priority support |
 | **Enterprise** | Custom | Self-hosted, SSO, RBAC, compliance reports |
 
-## Privacy
+## Privacy and Security
 
 - **Local-first**: Policy checks run entirely in the extension
 - **No network**: Basic mode never sends code anywhere
 - **Opt-in CMVK**: You choose when to use cloud verification
+- **Loopback server**: The browser dashboard server binds to `127.0.0.1` only and requires session token authentication
+- **No telemetry**: The Governance Server does not send data to external endpoints unless you explicitly configure an observability endpoint
 - **Open source**: Inspect the code yourself
+
+See [SECURITY.md](SECURITY.md) for the full server security model and threat analysis.
 
 ## Requirements
 
