@@ -42,6 +42,10 @@ export interface PolicySnapshot {
     recentViolations: PolicyViolation[];
     totalEvaluationsToday: number;
     totalViolationsToday: number;
+    /** OWASP ASI coverage map (from agent-failsafe). */
+    asiCoverage?: Record<string, { label: string; covered: boolean; feature: string }>;
+    /** ISO timestamp of when this data was fetched. */
+    fetchedAt?: string;
 }
 
 /** Contract for fetching policy data. */

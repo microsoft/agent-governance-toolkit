@@ -49,6 +49,14 @@ export function layoutStyles(): string {
             animation: pulse 2s infinite;
         }
 
+        .staleness {
+            font-size: 11px;
+            font-weight: 400;
+            opacity: 0.7;
+        }
+        .stale-warning { color: var(--vscode-editorWarning-foreground, #cca700); }
+        .stale-error { color: var(--vscode-errorForeground, #f14c4c); }
+
         @keyframes pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.6; transform: scale(0.9); }

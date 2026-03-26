@@ -82,6 +82,15 @@ The Governance Server that powers the browser dashboard includes defense-in-dept
 
 For the full security model, threat analysis, and accepted risks, see [SECURITY.md](SECURITY.md).
 
+### Live Governance Data
+The extension automatically detects and starts [agent-failsafe](https://pypi.org/project/agent-failsafe/) to populate dashboards with real governance data:
+- On first activation, the extension checks for `agent-failsafe` and offers to install it if missing (`pip install agent-failsafe[server]`)
+- Once installed, a local REST server starts automatically on `127.0.0.1:9377` — no manual configuration required
+- SLO dashboard, agent topology, and audit stream populate with live policy compliance, fleet health, and audit events
+- Status bar shows connection state: Live (green), Stale (yellow), Disconnected (red)
+- All REST responses validated with type checking, size caps, and string truncation
+- Advanced: override with `agentOS.governance.endpoint` to connect to an existing server
+
 ### Policy Diagnostics
 - Real-time governance rule validation on Python/TypeScript/YAML files
 - Code actions: safe alternatives for flagged patterns
@@ -214,6 +223,9 @@ Open Settings (Ctrl+,) and search for "Agent OS":
 | `agentOS.export.localPath` | "" | Local directory for exported reports |
 | `agentOS.observability.endpoint` | "" | Metrics push endpoint (OTEL compatible) |
 | `agentOS.diagnostics.severity` | "warning" | Minimum diagnostic severity |
+| `agentOS.governance.pythonPath` | "python" | Python interpreter with agent-failsafe installed |
+| `agentOS.governance.endpoint` | "" | Override: connect to existing agent-failsafe server (auto-start if empty) |
+| `agentOS.governance.refreshIntervalMs` | 10000 | Polling interval for governance data (minimum 5000ms) |
 
 ## Pricing
 

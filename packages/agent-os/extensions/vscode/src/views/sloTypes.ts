@@ -72,6 +72,8 @@ export interface SLOSnapshot {
     latency: LatencySLOData;
     policyCompliance: PolicyComplianceSLOData;
     trustScore: TrustScoreSLOData;
+    /** ISO timestamp of when this snapshot was fetched from the REST endpoint. */
+    fetchedAt?: string;
 }
 
 /**

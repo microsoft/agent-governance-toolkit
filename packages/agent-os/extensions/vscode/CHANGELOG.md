@@ -16,6 +16,11 @@ All notable changes to the Agent OS VS Code extension will be documented in this
 - Backend service layer (out of scope for this release)
 
 ### Added
+- Live governance data: auto-detects and starts agent-failsafe REST server on activation
+- Auto-install: prompts to install agent-failsafe[server] from PyPI if not found
+- Connection indicator in status bar: Live, Stale, Disconnected
+- Input validation on all REST responses with type checking, size caps, string truncation
+- Loopback enforcement: governance endpoint restricted to 127.0.0.1/localhost/::1
 - Governance Hub: Unified sidebar webview with SLO, topology, and audit tabs
 - SLO Dashboard: Rich webview panel with availability, latency, compliance, and trust score metrics
 - Agent Topology: Force-directed graph panel showing agent mesh, trust rings, and bridges

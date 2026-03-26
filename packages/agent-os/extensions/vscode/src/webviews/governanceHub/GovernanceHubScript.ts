@@ -65,13 +65,33 @@ export function governanceHubScript(nonce: string): string {
         if (exportBtn) { exportBtn.addEventListener('click', function() { vscode.postMessage({ type: 'export' }); }); }
     }
 
+    /** Format staleness as a human-readable string. Uses textContent, never innerHTML. */
+    function formatStaleness(fetchedAt) {
+        if (!fetchedAt) { return ''; }
+        var ageMs = Date.now() - new Date(fetchedAt).getTime();
+        if (isNaN(ageMs) || ageMs < 0) { return ''; }
+        var ageSec = Math.round(ageMs / 1000);
+        if (ageSec < 10) { return ''; }
+        if (ageSec < 60) { return 'Last updated: ' + ageSec + 's ago'; }
+        return 'Last updated: ' + Math.round(ageSec / 60) + 'm ago';
+    }
+
+    function updateStalenessIndicator(fetchedAt) {
+        var el = document.getElementById('staleness-indicator');
+        if (!el) { return; }
+        var text = formatStaleness(fetchedAt);
+        el.textContent = text;
+        var ageSec = fetchedAt ? Math.round((Date.now() - new Date(fetchedAt).getTime()) / 1000) : 0;
+        el.className = 'staleness' + (ageSec > 60 ? ' stale-error' : ageSec > 30 ? ' stale-warning' : '');
+    }
+
     /** Handle incoming messages from the extension. */
     window.addEventListener('message', function(event) {
         var msg = event.data;
-        if (msg.type === 'sloUpdate') { updateSLOPanel(msg.payload); }
+        if (msg.type === 'sloUpdate') { updateSLOPanel(msg.payload); updateStalenessIndicator(msg.payload && msg.payload.fetchedAt); }
         if (msg.type === 'topologyUpdate') { updateTopologyPanel(msg.payload); }
         if (msg.type === 'auditUpdate') { updateAuditPanel(msg.payload); }
-        if (msg.type === 'policyUpdate') { updatePoliciesPanel(msg.payload); }
+        if (msg.type === 'policyUpdate') { updatePoliciesPanel(msg.payload); updateStalenessIndicator(msg.payload && msg.payload.fetchedAt); }
         if (msg.type === 'configUpdate') { applyConfig(msg.payload); }
     });
 

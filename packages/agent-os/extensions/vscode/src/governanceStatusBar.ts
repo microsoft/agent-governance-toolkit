@@ -37,37 +37,25 @@ class GovernanceStatusBar implements vscode.Disposable {
     private violationCount: number = 0;
     private violationBreakdown: ViolationBreakdown = { errors: 0, warnings: 0 };
     private lastPolicyReload: Date = new Date();
+    private currentMode: GovernanceMode = 'strict';
 
     constructor() {
-        this.modeItem = vscode.window.createStatusBarItem(
-            vscode.StatusBarAlignment.Right,
-            96,
-        );
+        this.modeItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 96);
         this.modeItem.command = 'agent-os.configurePolicy';
         this.modeItem.text = `$(shield) Strict`;
         this.modeItem.tooltip = buildModeTooltip('strict', 0, this.lastPolicyReload);
         this.modeItem.show();
 
-        this.sloItem = vscode.window.createStatusBarItem(
-            vscode.StatusBarAlignment.Right,
-            95,
-        );
+        this.sloItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 95);
         this.sloItem.command = 'agent-os.showMetrics';
-        // Hidden by default until data arrives.
 
-        this.agentItem = vscode.window.createStatusBarItem(
-            vscode.StatusBarAlignment.Right,
-            94,
-        );
+        this.agentItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 94);
         this.agentItem.command = 'agent-os.showAgentTopology';
         this.agentItem.text = `$(organization) 0 agents`;
         this.agentItem.tooltip = 'No agents registered';
         this.agentItem.show();
 
-        this.violationItem = vscode.window.createStatusBarItem(
-            vscode.StatusBarAlignment.Right,
-            93,
-        );
+        this.violationItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 93);
         this.violationItem.command = 'agent-os.showAuditLog';
         this.violationItem.text = `$(check) Clean`;
         this.violationItem.tooltip = 'No violations today';
@@ -81,37 +69,16 @@ class GovernanceStatusBar implements vscode.Disposable {
      * @param activePolicies - Number of currently loaded policy documents.
      */
     updateGovernanceMode(mode: GovernanceMode, activePolicies: number): void {
+        this.currentMode = mode;
         this.lastPolicyReload = new Date();
-
         this.modeItem.text = `$(shield) ${MODE_LABELS[mode]}`;
         this.modeItem.tooltip = buildModeTooltip(mode, activePolicies, this.lastPolicyReload);
-
-        switch (mode) {
-            case 'strict':
-                this.modeItem.backgroundColor = new vscode.ThemeColor(
-                    'statusBarItem.prominentBackground',
-                );
-                this.modeItem.color = new vscode.ThemeColor(
-                    'statusBarItem.prominentForeground',
-                );
-                break;
-            case 'permissive':
-                this.modeItem.backgroundColor = new vscode.ThemeColor(
-                    'statusBarItem.warningBackground',
-                );
-                this.modeItem.color = new vscode.ThemeColor(
-                    'statusBarItem.warningForeground',
-                );
-                break;
-            case 'audit-only':
-                this.modeItem.backgroundColor = new vscode.ThemeColor(
-                    'statusBarItem.errorBackground',
-                );
-                this.modeItem.color = new vscode.ThemeColor(
-                    'statusBarItem.errorForeground',
-                );
-                break;
-        }
+        const colors: Record<GovernanceMode, string> = {
+            strict: 'statusBarItem.prominentBackground',
+            permissive: 'statusBarItem.warningBackground',
+            'audit-only': 'statusBarItem.errorBackground',
+        };
+        this.modeItem.backgroundColor = new vscode.ThemeColor(colors[mode]);
     }
 
     /**
@@ -228,15 +195,45 @@ class GovernanceStatusBar implements vscode.Disposable {
     }
 
     /**
-     * Reset all violation state. Intended to be called at the start of each day.
+     * Update the connection state indicator on the mode item.
+     *
+     * @param state - 'live' | 'stale' | 'disconnected' | 'no-endpoint'
+     * @param staleSecs - Seconds since last successful fetch (for stale state).
      */
+    updateConnectionState(
+        state: 'live' | 'stale' | 'disconnected' | 'no-endpoint',
+        staleSecs?: number,
+    ): void {
+        switch (state) {
+            case 'live':
+                this.modeItem.text = `$(shield) ${MODE_LABELS[this.currentMode]}`;
+                this.modeItem.color = new vscode.ThemeColor('testing.iconPassed');
+                this.modeItem.backgroundColor = undefined;
+                break;
+            case 'stale':
+                this.modeItem.text = `$(plug) Stale ${staleSecs ?? '?'}s`;
+                this.modeItem.color = new vscode.ThemeColor('editorWarning.foreground');
+                this.modeItem.backgroundColor = undefined;
+                break;
+            case 'disconnected':
+                this.modeItem.text = `$(plug) Disconnected`;
+                this.modeItem.color = undefined;
+                this.modeItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+                break;
+            case 'no-endpoint':
+                this.modeItem.text = `$(circle-slash) No endpoint`;
+                this.modeItem.color = new vscode.ThemeColor('disabledForeground');
+                this.modeItem.backgroundColor = undefined;
+                break;
+        }
+    }
+
+    /** Reset all violation state. Intended to be called at the start of each day. */
     resetDaily(): void {
         this.updateViolations(0);
     }
 
-    /**
-     * Dispose all status bar items.
-     */
+    /** Dispose all status bar items. */
     dispose(): void {
         this.modeItem.dispose();
         this.sloItem.dispose();

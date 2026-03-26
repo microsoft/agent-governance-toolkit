@@ -40,12 +40,23 @@ export function buildClientScript(wsPort: number, sessionToken: string): string 
         else if (msg.type === 'auditUpdate') { updateAudit(msg.data); }
     }
 
+    function updateStaleness(fetchedAt) {
+        var el = document.getElementById('staleness-badge');
+        if (!el) { return; }
+        if (!fetchedAt) { el.textContent = ''; return; }
+        var ageSec = Math.round((Date.now() - new Date(fetchedAt).getTime()) / 1000);
+        if (isNaN(ageSec) || ageSec < 0 || ageSec < 10) { el.textContent = ''; return; }
+        el.textContent = ageSec < 60 ? ageSec + 's ago' : Math.round(ageSec / 60) + 'm ago';
+        el.style.color = ageSec > 30 ? '#cca700' : '';
+    }
+
     function updateSLO(snapshot) {
         if (!snapshot) { return; }
         setMetric('avail-val', snapshot.availability?.currentPercent, '%');
         setMetric('latency-val', snapshot.latency?.p99Ms, 'ms');
         setMetric('compliance-val', snapshot.policyCompliance?.compliancePercent, '%');
         setMetric('trust-val', snapshot.trustScore?.meanScore, '');
+        updateStaleness(snapshot.fetchedAt);
     }
 
     function setMetric(id, value, suffix) {

@@ -116,6 +116,7 @@ export function renderSLODashboard(nonce: string, cspSource: string): string {
             <span class="status-dot"></span>
             SLO Dashboard
         </h1>
+        <span id="slo-staleness" style="font-size:11px;opacity:0.7"></span>
         <button class="refresh-btn" id="refresh-btn">Refresh</button>
     </div>
 

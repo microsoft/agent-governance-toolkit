@@ -36,6 +36,7 @@ function buildBodyContent(): string {
                 <div class="status-indicator">
                     <span class="status-dot disconnected" id="status-dot"></span>
                     <span>Live</span>
+                    <span id="staleness-badge" style="font-size:11px;opacity:0.7;margin-left:8px"></span>
                 </div>
             </div>
             ${buildSLOTab()}

@@ -55,7 +55,7 @@ import { createMockPolicyBackend } from './mockBackend/MockPolicyBackend';
 import { PolicyDataProvider } from './views/policyTypes';
 
 // Provider Factory
-import { createProviders, Providers } from './services/providerFactory';
+import { createProviders, ProviderConfig, Providers } from './services/providerFactory';
 
 // Enterprise Features
 import { EnterpriseAuthProvider } from './enterprise/auth/ssoProvider';
@@ -119,7 +119,13 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.registerTreeDataProvider('agent-os.memoryBrowser', memoryBrowserProvider);
 
         // Register governance visualization (Issue #39)
-        activeProviders = createProviders();
+        const govConfig = vscode.workspace.getConfiguration('agentOS.governance');
+        const providerConfig: ProviderConfig = {
+            pythonPath: govConfig.get<string>('pythonPath', 'python'),
+            endpoint: govConfig.get<string>('endpoint', ''),
+            refreshIntervalMs: govConfig.get<number>('refreshIntervalMs', 10000),
+        };
+        activeProviders = await createProviders(providerConfig);
         const sloDataProvider = activeProviders.slo;
         const sloDashboardProvider = new SLODashboardProvider(sloDataProvider);
         const agentTopologyDataProvider = activeProviders.topology;

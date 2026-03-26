@@ -42,6 +42,14 @@ export interface AgentNode {
     lastActivity: string;
     /** Capabilities this agent may exercise. */
     capabilities: string[];
+    /** Circuit breaker state (from agent-failsafe fleet data). */
+    circuitState?: 'closed' | 'open' | 'half-open';
+    /** Total tasks processed. */
+    taskCount?: number;
+    /** Average response latency in ms. */
+    avgLatencyMs?: number;
+    /** Trust stage: CBT, KBT, or IBT. */
+    trustStage?: string;
 }
 
 /** Status of a protocol bridge. */

@@ -467,6 +467,22 @@
           "default": 60000,
           "minimum": 10000,
           "description": "Interval in milliseconds between metrics pushes"
+        },
+        "agentOS.governance.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "Python interpreter with agent-failsafe[server] installed."
+        },
+        "agentOS.governance.endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "Override: connect to an existing agent-failsafe server instead of auto-starting. Leave empty for auto-start."
+        },
+        "agentOS.governance.refreshIntervalMs": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 5000,
+          "description": "Polling interval for governance data in milliseconds (minimum 5000)."
         }
       }
     },

@@ -26,6 +26,7 @@ function renderHeader(): string {
         <div class="hub-title">
             <span class="status-indicator"></span>
             <span>Governance Hub</span>
+            <span id="staleness-indicator" class="staleness"></span>
         </div>
         <div class="hub-actions">
             <button id="refresh-btn" title="Refresh all data">Refresh</button>

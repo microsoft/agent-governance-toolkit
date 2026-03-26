@@ -178,9 +178,19 @@ export function sloScript(nonce: string): string {
         el.classList.add('health-' + h);
     }
 
+    function updateStaleness(snapshot) {
+        var el = document.getElementById('slo-staleness');
+        if (!el || !snapshot || !snapshot.fetchedAt) { if (el) { el.textContent = ''; } return; }
+        var ageSec = Math.round((Date.now() - new Date(snapshot.fetchedAt).getTime()) / 1000);
+        if (isNaN(ageSec) || ageSec < 0 || ageSec < 10) { el.textContent = ''; return; }
+        el.textContent = ageSec < 60 ? ageSec + 's ago' : Math.round(ageSec / 60) + 'm ago';
+        el.style.color = ageSec > 30 ? 'var(--vscode-editorWarning-foreground)' : '';
+    }
+
     window.addEventListener('message', function(e) {
         if (e.data.type === 'sloUpdate') {
             updateDashboard(e.data.snapshot);
+            updateStaleness(e.data.snapshot);
         }
     });
 
