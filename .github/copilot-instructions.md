@@ -30,7 +30,7 @@ Before approving or merging ANY PR, verify ALL of the following:
 - Run tests before committing
 - MIT license headers on all source files
 - Author: Microsoft Corporation, email: agentgovtoolkit@microsoft.com
-- All packages prefixed with "Community Edition" in descriptions
+- All packages prefixed with "Public Preview" in descriptions
 
 ## Publishing
 

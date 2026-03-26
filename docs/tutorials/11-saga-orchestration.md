@@ -711,7 +711,7 @@ h2 = SemanticCheckpoint.compute_goal_hash("Deploy to staging", "step-deploy")
 assert h1 == h2  # Same goal + step → same hash
 ```
 
-> **Note:** In the Community Edition, `is_achieved()` returns `False` by
+> **Note:** In the Public Preview, `is_achieved()` returns `False` by
 > default and `get_replay_plan()` returns all steps unchanged. Checkpoints
 > are stored but not used for skip-ahead logic. The Enterprise Edition
 > includes full semantic checkpoint evaluation.

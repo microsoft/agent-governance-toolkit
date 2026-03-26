@@ -126,27 +126,27 @@ class TestCausalAttribution:
 
 
 class TestQuarantine:
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_quarantine_agent(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_release_quarantine(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_quarantine_escalation(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_quarantine_with_forensic_data(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_tick_expires_quarantines(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_active_quarantines_property(self):
         pass
 
@@ -210,7 +210,7 @@ class TestLiabilityLedger:
                 "a1", LedgerEntryType.SLASH_RECEIVED, f"s{i}", severity=0.9
             )
         profile = ledger.compute_risk_profile("a1")
-        # Community edition: no risk scoring, always admits
+        # Public Preview: no risk scoring, always admits
         assert profile.risk_score == 0.0
         assert profile.recommendation == "admit"
 
@@ -235,7 +235,7 @@ class TestLiabilityLedger:
             ledger.record("a1", LedgerEntryType.SLASH_RECEIVED, f"s{i}", severity=0.9)
 
         admitted, reason = ledger.should_admit("a1")
-        # Community edition: always admits
+        # Public Preview: always admits
         assert admitted
         assert reason == "admit"
 
@@ -254,7 +254,7 @@ class TestLiabilityLedger:
         ledger = LiabilityLedger()
         ledger.record("a1", LedgerEntryType.QUARANTINE_ENTERED, "s1", severity=0.5)
         profile = ledger.compute_risk_profile("a1")
-        # Community edition: no risk scoring, always admits
+        # Public Preview: no risk scoring, always admits
         assert profile.quarantine_count == 0
         assert profile.risk_score == 0.0
         assert profile.recommendation == "admit"

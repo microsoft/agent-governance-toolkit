@@ -67,7 +67,7 @@ def _make_execution(
 
 
 class TestCronMatching:
-    """Cron matching not available in Community Edition."""
+    """Cron matching not available in Public Preview."""
 
     def test_weekday_9am_matches_monday(self) -> None:
         sched = _make_schedule(cron="0 9 * * 1-5")
@@ -108,7 +108,7 @@ class TestCronMatching:
 
 
 class TestBlackoutWindows:
-    """Blackout windows not available in Community Edition."""
+    """Blackout windows not available in Public Preview."""
 
     def test_in_blackout_blocks_execution(self) -> None:
         bw = BlackoutWindow(start="00:00", end="06:00", reason="overnight")

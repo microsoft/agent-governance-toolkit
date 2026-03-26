@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Parallel Saga Fan-Out — stub implementation.
 
-Community edition: only sequential ALL_MUST_SUCCEED execution.
+Public Preview: only sequential ALL_MUST_SUCCEED execution.
 Fan-out groups execute branches one at a time.
 """
 
@@ -58,12 +58,12 @@ class FanOutGroup:
         return len(self.branches)
 
     def check_policy(self) -> bool:
-        """Community edition: only ALL_MUST_SUCCEED is enforced."""
+        """Public Preview: only ALL_MUST_SUCCEED is enforced."""
         return self.success_count == self.total_branches
 
 
 class FanOutOrchestrator:
-    """Fan-out stub (community edition: sequential execution, ALL_MUST_SUCCEED only)."""
+    """Fan-out stub (Public Preview: sequential execution, ALL_MUST_SUCCEED only)."""
 
     def __init__(self) -> None:
         self._groups: dict[str, FanOutGroup] = {}
@@ -82,7 +82,7 @@ class FanOutOrchestrator:
     async def execute(
         self, group_id: str, executors: dict[str, Callable[..., Any]], timeout_seconds: int = 300,
     ) -> FanOutGroup:
-        """Execute branches sequentially (community edition)."""
+        """Execute branches sequentially (Public Preview)."""
         group = self._get_group(group_id)
 
         for branch in group.branches:

@@ -1,4 +1,4 @@
-# CMVK — Verification Kernel — Community Edition
+# CMVK — Verification Kernel — Public Preview
 
 > **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 

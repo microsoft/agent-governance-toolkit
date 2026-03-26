@@ -173,7 +173,7 @@ class TestRogueAgentScenario:
         self.verification_backend = MockVerificationBackend()
         self.policy_check = VerificationAdapter(verifier=self.verification_backend)
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     async def test_rogue_detected_slashed_reputation_reduced(self):
         """Full rogue agent lifecycle: join → drift → penalize → nexus penalty."""
         # 1) Resolve sigma from Nexus
@@ -417,7 +417,7 @@ class TestDriftDemotionCascade:
             on_drift_detected=lambda r: self.drift_events.append(r),
         )
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_repeated_medium_drift_escalates(self):
         """Multiple MEDIUM drifts accumulate; drift rate tracks correctly."""
         agent = "did:mesh:drifty-agent"
@@ -447,7 +447,7 @@ class TestDriftDemotionCascade:
         assert self.policy_check.total_checks == 5
         assert self.policy_check.total_violations == 3
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_critical_drift_immediate_slash(self):
         """CRITICAL drift immediately signals for penalty."""
         self.verification_backend.set_drift("did:mesh:bad", 0.80)
@@ -481,7 +481,7 @@ class TestVoucherCascadeWithNexus:
         })
         self.nexus = NexusAdapter(scorer=self.nexus_engine)
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     async def test_voucher_cascade_with_nexus_penalty(self):
         """Sponsor → penalize → sponsor clipped → both reported to Nexus."""
         # Create session
@@ -566,7 +566,7 @@ class TestFullGovernancePipeline:
         self.verification_backend = MockVerificationBackend()
         self.policy_check = VerificationAdapter(verifier=self.verification_backend)
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     async def test_full_pipeline_join_to_slash_to_terminate(self):
         """Complete cross-module pipeline: manifest → join → drift → penalize → terminate."""
         agent_did = "did:mesh:agent-alpha"
@@ -765,7 +765,7 @@ class TestAdapterFallbacks:
         assert result.drift_score == 0.0
         assert result.severity == DriftSeverity.NONE
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     async def test_nexus_verify_agent_without_verifier(self):
         """verify_agent is permissive when no verifier configured."""
         nexus = NexusAdapter()
@@ -799,7 +799,7 @@ class TestAdapterFallbacks:
         assert analysis.trust_level == IATPTrustLevel.UNKNOWN
         assert analysis.ring_hint == ExecutionRing.RING_3_SANDBOX
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_nexus_cache_invalidation(self):
         """NexusAdapter cache can be invalidated."""
         engine = MockReputationEngine({"did:mesh:a": 800})
@@ -827,7 +827,7 @@ class TestAdapterFallbacks:
 class TestVerificationThresholdConfiguration:
     """Verify custom thresholds change drift severity classification."""
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_custom_strict_thresholds(self):
         """Strict thresholds: lower bars for flagging drift."""
         verifier = MockVerificationBackend()
@@ -850,7 +850,7 @@ class TestVerificationThresholdConfiguration:
         )
         assert result.severity == DriftSeverity.LOW
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_custom_relaxed_thresholds(self):
         """Relaxed thresholds: higher tolerance for drift."""
         verifier = MockVerificationBackend()
@@ -973,7 +973,7 @@ class TestWiredHypervisor:
         )
         assert ring == ExecutionRing.RING_2_STANDARD  # 0.85, not 0.95
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     async def test_verify_behavior_auto_slashes(self):
         """verify_behavior() auto-slashes on HIGH drift."""
         session = await self.hv.create_session(

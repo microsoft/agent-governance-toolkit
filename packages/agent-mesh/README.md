@@ -1,6 +1,6 @@
 <div align="center">
 
-# AgentMesh — Community Edition
+# AgentMesh — Public Preview
 
 **SSL for AI Agents**
 
@@ -17,9 +17,8 @@
 [![awesome-opentelemetry](https://img.shields.io/badge/awesome--opentelemetry-listed-orange)](https://github.com/magsther/awesome-opentelemetry/pull/24)
 
 > [!IMPORTANT]
-> **Community Preview** — The `agentmesh-platform` package on PyPI is a community preview release
-> for testing and evaluation only. It is **not** an official Microsoft-signed release.
-> Official signed packages will be available in a future release.
+> **Public Preview** — The `agentmesh-platform` package on PyPI is a Microsoft-signed
+> public preview release. APIs may change before GA.
 
 > ⭐ **If this project helps you, please star it!** It helps others discover AgentMesh.
 

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-governance-toolkit"
-version = "2.3.0"
-description = "Community Edition — Unified installer and runtime policy enforcement for the Agent Governance Toolkit"
+version = "3.0.0"
+description = "Public Preview — Unified installer and runtime policy enforcement for the Agent Governance Toolkit"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
@@ -21,7 +21,7 @@ keywords = [
     "runtime", "sre", "llm", "autonomous-agents", "enterprise-ai"
 ]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",

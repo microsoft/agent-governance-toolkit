@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentmesh-lightning"
-version = "2.3.0"
-description = "Community Edition — Agent-Lightning RL integration for the Agent Governance Toolkit: governed training with policy enforcement"
+version = "3.0.0"
+description = "Public Preview — Agent-Lightning RL integration for the Agent Governance Toolkit: governed training with policy enforcement"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"

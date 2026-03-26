@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic self-correction with retry
+# Public Preview — basic self-correction with retry
 """
 Auditor — simple null/empty check on response text.
 """

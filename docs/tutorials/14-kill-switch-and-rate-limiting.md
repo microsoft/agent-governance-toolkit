@@ -102,7 +102,7 @@ history. The rest of this tutorial covers every component in detail.
 **Source:** `packages/agent-hypervisor/src/hypervisor/security/kill_switch.py`
 
 The `KillSwitch` provides immediate, hard termination of an agent with a full
-audit trail. In the community edition, all in-flight saga steps are
+audit trail. In the public preview, all in-flight saga steps are
 automatically compensated (rolled back) — there is no handoff to substitute
 agents.
 
@@ -160,7 +160,7 @@ result: KillResult = kill_switch.kill(
 # Every in-flight step is compensated (rolled back)
 print(f"Handoffs:              {len(result.handoffs)}")           # 3
 print(f"Compensation triggered: {result.compensation_triggered}")  # True
-print(f"Handoff successes:     {result.handoff_success_count}")    # 0 (community edition)
+print(f"Handoff successes:     {result.handoff_success_count}")    # 0 (public preview)
 
 for handoff in result.handoffs:
     print(f"  Step {handoff.step_id}: {handoff.status}")
@@ -169,7 +169,7 @@ for handoff in result.handoffs:
     # Step deploy-staging: compensated
     assert handoff.status == HandoffStatus.COMPENSATED
     assert handoff.from_agent == "did:example:deploy-agent"
-    assert handoff.to_agent is None  # community edition: no handoff
+    assert handoff.to_agent is None  # public preview: no handoff
 ```
 
 ### 3.3 Handoff Status Lifecycle
@@ -183,7 +183,7 @@ Each `StepHandoff` tracks the status of a saga step during termination:
 | `FAILED` | `"failed"` | Handoff attempt failed |
 | `COMPENSATED` | `"compensated"` | Step rolled back via compensation action |
 
-In the community edition, all steps are always `COMPENSATED` — there is no
+In the public preview, all steps are always `COMPENSATED` — there is no
 substitute agent handoff. This is the safe default: roll back everything.
 
 ### 3.4 Substitute Agent Registration
@@ -200,7 +200,7 @@ kill_switch.register_substitute(
     agent_did="did:example:backup-agent",
 )
 
-# Kill the primary agent — in community edition, steps are
+# Kill the primary agent — in public preview, steps are
 # still compensated (not handed off), but the substitute is
 # unregistered as part of the kill cleanup
 result = kill_switch.kill(
@@ -235,7 +235,7 @@ print(f"Total kills: {kill_switch.total_kills}")  # 3
 for entry in history:
     print(f"  [{entry.timestamp}] {entry.agent_did} — {entry.reason}")
 
-# In community edition, handoff count is always 0
+# In public preview, handoff count is always 0
 print(f"Total handoffs: {kill_switch.total_handoffs}")  # 0
 ```
 
@@ -761,7 +761,7 @@ assert response.status_code == 200
 
 The `RingElevationManager` controls temporary ring elevation — allowing an
 agent to operate at a higher privilege level for a limited time. In the
-community edition, all elevation requests are denied by design.
+public preview, all elevation requests are denied by design.
 
 ### 7.1 The 4-Ring Model (Recap)
 
@@ -894,17 +894,17 @@ effective = manager.get_effective_ring(
     session_id="s1",
     base_ring=ExecutionRing.RING_3_SANDBOX,
 )
-# In community edition, always returns base_ring
+# In public preview, always returns base_ring
 
 # Check for active elevation
 elevation = manager.get_active_elevation("agent-1", "s1")
-# In community edition, always returns None
+# In public preview, always returns None
 
 # List all active elevations
-active = manager.active_elevations  # always [] in community edition
+active = manager.active_elevations  # always [] in public preview
 
 # Tick — expire elapsed elevations (returns revoked list)
-revoked = manager.tick()  # always [] in community edition
+revoked = manager.tick()  # always [] in public preview
 
 # Child agent ring assignment: children get demoted one ring from parent
 child_ring = manager.register_child(

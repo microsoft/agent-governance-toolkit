@@ -14,9 +14,8 @@
 </div>
 
 > [!IMPORTANT]
-> **Community Preview** — The `agentmesh-runtime` package on PyPI is a community preview release
-> for testing and evaluation only. It is **not** an official Microsoft-signed release.
-> Official signed packages will be available in a future release.
+> **Public Preview** — The `agentmesh-runtime` package on PyPI is a Microsoft-signed
+> public preview release. APIs may change before GA.
 
 ---
 

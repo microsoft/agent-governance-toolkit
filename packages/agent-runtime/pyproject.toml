@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentmesh-runtime"
-version = "2.3.0"
-description = "Community Edition — AgentMesh Runtime: Execution supervisor for multi-agent sessions with privilege rings, saga orchestration, and audit trails"
+version = "3.0.0"
+description = "Public Preview — AgentMesh Runtime: Execution supervisor for multi-agent sessions with privilege rings, saga orchestration, and audit trails"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"

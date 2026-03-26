@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "adk-agentmesh"
 version = "0.1.0"
-description = "Community Edition — Agent Governance Toolkit integration for Google ADK: policy enforcement, trust verification, and audit trails for ADK agents"
+description = "Public Preview — Agent Governance Toolkit integration for Google ADK: policy enforcement, trust verification, and audit trails for ADK agents"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"

@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Declarative Saga DSL — stub implementation.
 
-Community edition: DSL parsing is retained for basic step definitions only.
+Public Preview: DSL parsing is retained for basic step definitions only.
 Fan-out groups in DSL are ignored (sequential execution only).
 """
 
@@ -35,7 +35,7 @@ class SagaDSLStep:
 
 @dataclass
 class SagaDSLFanOut:
-    """A fan-out group (community edition: ignored during execution)."""
+    """A fan-out group (Public Preview: ignored during execution)."""
 
     policy: FanOutPolicy = FanOutPolicy.ALL_MUST_SUCCEED
     branch_step_ids: list[str] = field(default_factory=list)
@@ -62,7 +62,7 @@ class SagaDefinition:
 
     @property
     def sequential_steps(self) -> list[SagaDSLStep]:
-        """All steps are sequential in community edition."""
+        """All steps are sequential in Public Preview."""
         return list(self.steps)
 
 
@@ -70,7 +70,7 @@ class SagaDSLParser:
     """
     Parses saga definitions from dict.
 
-    Community edition: fan-out groups are parsed but ignored during execution.
+    Public Preview: fan-out groups are parsed but ignored during execution.
     """
 
     def __init__(self, *, schema_validation: bool = False) -> None:
@@ -140,7 +140,7 @@ class SagaDSLParser:
         )
 
     def _parse_fan_out(self, raw: dict, valid_step_ids: set[str]) -> SagaDSLFanOut:
-        """Parse fan-out definition (community edition: retained for API compat)."""
+        """Parse fan-out definition (Public Preview: retained for API compat)."""
         return SagaDSLFanOut(
             policy=FanOutPolicy.ALL_MUST_SUCCEED,
             branch_step_ids=raw.get("branches", []),

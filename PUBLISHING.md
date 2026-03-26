@@ -1,10 +1,9 @@
 # Publishing Guide
 
 > [!IMPORTANT]
-> **Community Preview Releases** — All packages currently published from this repository
-> are community preview releases for testing and evaluation only. They are **not** official
-> Microsoft-signed releases. The ESRP Release pipelines described below have been set up
-> proactively and will be activated when official publishing approval is obtained.
+> **Public Preview Releases** — All packages published from this repository
+> are Microsoft-signed public preview releases. Publishing is done exclusively
+> through ESRP Release ADO pipelines.
 
 This document describes the requirements for publishing packages from the
 Agent Governance Toolkit to public registries.

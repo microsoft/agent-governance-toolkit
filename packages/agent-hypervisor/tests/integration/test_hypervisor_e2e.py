@@ -186,11 +186,11 @@ class TestVouchingSlashingIntegration:
         eff_score = self.hv.vouching.compute_eff_score(
             "did:mesh:low", self.session_id, 0.4, risk_weight=0.5
         )
-        # Community edition: no sponsor boost, eff_score = vouchee_sigma
+        # Public Preview: no sponsor boost, eff_score = vouchee_sigma
         assert eff_score == 0.4
         assert eff_score <= 1.0
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_max_exposure_prevents_over_bonding(self):
         """Agent cannot bond more than max_exposure of their σ."""
         # Default max_exposure = 0.80
@@ -204,7 +204,7 @@ class TestVouchingSlashingIntegration:
             )
 
     def test_slash_cascades_to_voucher(self):
-        """Community edition: penalty logs but doesn't apply penalties."""
+        """Public Preview: penalty logs but doesn't apply penalties."""
         self.hv.vouching.vouch(
             "did:mesh:high", "did:mesh:low", self.session_id, 0.9, bond_pct=0.3
         )
@@ -212,7 +212,7 @@ class TestVouchingSlashingIntegration:
         result = self.hv.slashing.slash(
             "did:mesh:low", self.session_id, 0.5, 0.5, "policy_violation", agent_scores
         )
-        # Community edition: no penalties applied
+        # Public Preview: no penalties applied
         assert agent_scores["did:mesh:low"] == 0.5  # unchanged
         assert agent_scores["did:mesh:high"] == 0.9  # unchanged
         assert len(result.voucher_clips) == 0
@@ -414,7 +414,7 @@ class TestAuditTrailIntegration:
         assert len(session.delta_engine.deltas) == 5
 
     async def test_hash_chain_integrity(self):
-        """Community edition: no chain verification, always returns True."""
+        """Public Preview: no chain verification, always returns True."""
         session = await self.hv.create_session(
             config=SessionConfig(), creator_did="did:mesh:admin"
         )
@@ -426,7 +426,7 @@ class TestAuditTrailIntegration:
 
         assert session.delta_engine.verify_chain() is True
 
-        # Tamper with a delta — community edition doesn't detect tampering
+        # Tamper with a delta — Public Preview doesn't detect tampering
         session.delta_engine._deltas[5].agent_did = "did:mesh:tampered"
         assert session.delta_engine.verify_chain() is True
 
@@ -537,7 +537,7 @@ class TestEdgeCases:
         with pytest.raises(Exception):
             await self.hv.join_session(sid, "did:mesh:c", sigma_raw=0.6)
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     async def test_vouching_exposure_limit_across_sessions(self):
         """Max exposure protects an agent's total bonded reputation."""
         # Sponsor agent has σ=0.9, max_exposure=0.80 → limit 0.72

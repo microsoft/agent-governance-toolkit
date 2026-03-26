@@ -3,9 +3,9 @@
 """
 Provider Discovery System for AgentMesh
 
-Enables plug-and-play upgrades from Community Edition to Advanced implementations.
+Enables plug-and-play upgrades from Public Preview to Advanced implementations.
 When an advanced provider package is installed, factory functions automatically
-return the advanced implementation. Otherwise, Community Edition is used.
+return the advanced implementation. Otherwise, Public Preview is used.
 
 Usage:
     from agentmesh.providers import get_reward_engine, get_trust_bridge

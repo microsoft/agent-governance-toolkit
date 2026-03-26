@@ -1196,7 +1196,7 @@ for kill in ks.kill_history:
 
 #### `RingBreachDetector`
 
-Detects anomalous ring-boundary crossings. Community edition provides stubs;
+Detects anomalous ring-boundary crossings. Public preview provides stubs;
 full anomaly scoring available in the enterprise edition.
 
 ```python

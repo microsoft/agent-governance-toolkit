@@ -44,11 +44,11 @@ class TestVectorClock:
         assert merged.get("a1") == 3
         assert merged.get("a2") == 5
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_happens_before(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_concurrent(self):
         pass
 
@@ -70,7 +70,7 @@ class TestVectorClock:
 
 
 class TestVectorClockManager:
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_read_updates_agent_clock(self):
         pass
 
@@ -80,7 +80,7 @@ class TestVectorClockManager:
         path_clock = mgr.get_path_clock("/data/file1")
         assert path_clock.get("a1") == 1
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_causal_violation_detected(self):
         pass
 
@@ -112,15 +112,15 @@ class TestIntentLocks:
         assert l1.is_active
         assert l2.is_active
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_write_conflicts_with_read(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_write_conflicts_with_write(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_exclusive_conflicts_with_read(self):
         pass
 
@@ -157,10 +157,10 @@ class TestIntentLocks:
         mgr.acquire("a1", "s1", "/shared", LockIntent.READ)
         mgr.acquire("a2", "s1", "/shared", LockIntent.READ)
         points = mgr.contention_points
-        # Community edition: no contention detection
+        # Public Preview: no contention detection
         assert points == []
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_deadlock_detection(self):
         pass
 
@@ -178,7 +178,7 @@ class TestIntentLocks:
 class TestIsolationLevels:
     def test_snapshot_properties(self):
         level = IsolationLevel.SNAPSHOT
-        # Community edition: all isolation levels have same properties
+        # Public Preview: all isolation levels have same properties
         assert not level.requires_vector_clocks
         assert not level.requires_intent_locks
         assert level.allows_concurrent_writes
@@ -186,7 +186,7 @@ class TestIsolationLevels:
 
     def test_read_committed_properties(self):
         level = IsolationLevel.READ_COMMITTED
-        # Community edition: no enforcement, same as snapshot
+        # Public Preview: no enforcement, same as snapshot
         assert not level.requires_vector_clocks
         assert not level.requires_intent_locks
         assert level.allows_concurrent_writes
@@ -194,7 +194,7 @@ class TestIsolationLevels:
 
     def test_serializable_properties(self):
         level = IsolationLevel.SERIALIZABLE
-        # Community edition: no enforcement, same as snapshot
+        # Public Preview: no enforcement, same as snapshot
         assert not level.requires_vector_clocks
         assert not level.requires_intent_locks
         assert level.allows_concurrent_writes
@@ -276,7 +276,7 @@ class TestKillSwitch:
                 {"step_id": "step-1", "saga_id": "saga-1"},
             ],
         )
-        # Community edition: no handoff, always compensated
+        # Public Preview: no handoff, always compensated
         assert result.handoff_success_count == 0
         assert result.handoffs[0].status == HandoffStatus.COMPENSATED
         assert result.compensation_triggered
@@ -324,7 +324,7 @@ class TestKillSwitch:
         ks = KillSwitch()
         ks.register_substitute("s1", "backup")
         ks.kill("a1", "s1", KillReason.MANUAL, [{"step_id": "s1", "saga_id": "sg1"}])
-        # Community edition: no handoffs
+        # Public Preview: no handoffs
         assert ks.total_handoffs == 0
 
     def test_unregister_substitute(self):

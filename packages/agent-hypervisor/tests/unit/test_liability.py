@@ -23,27 +23,27 @@ class TestVouchingEngine:
         assert record.voucher_did == "did:mesh:high"
         assert record.vouchee_did == "did:mesh:low"
         assert record.is_active
-        assert record.bonded_sigma_pct == 0.0  # Community edition: no bonding
-        assert record.bonded_amount == 0.0  # Community edition: no bonding
+        assert record.bonded_sigma_pct == 0.0  # Public Preview: no bonding
+        assert record.bonded_amount == 0.0  # Public Preview: no bonding
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_cannot_vouch_for_self(self):
         with pytest.raises(VouchingError, match="Cannot sponsor for yourself"):
             self.engine.vouch("did:mesh:a", "did:mesh:a", self.session, 0.8)
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_low_score_cannot_vouch(self):
         with pytest.raises(VouchingError, match="below minimum"):
             self.engine.vouch("did:mesh:low", "did:mesh:other", self.session, 0.3)
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_circular_vouching_rejected(self):
         self.engine.vouch("did:mesh:a", "did:mesh:b", self.session, 0.8)
         with pytest.raises(VouchingError, match="Circular"):
             self.engine.vouch("did:mesh:b", "did:mesh:a", self.session, 0.7)
 
     def test_eff_score_formula(self):
-        """Community edition: eff_score = sponsored agent's own score (no sponsor boost)."""
+        """Public Preview: eff_score = sponsored agent's own score (no sponsor boost)."""
         self.engine.vouch("did:mesh:high", "did:mesh:low", self.session, 0.9, bond_pct=0.5)
         eff_score = self.engine.compute_eff_score(
             vouchee_did="did:mesh:low",
@@ -63,7 +63,7 @@ class TestVouchingEngine:
     def test_multiple_vouchers(self):
         self.engine.vouch("did:mesh:a", "did:mesh:low", self.session, 0.8, bond_pct=0.5)
         self.engine.vouch("did:mesh:b", "did:mesh:low", self.session, 0.6, bond_pct=0.5)
-        # Community edition: eff_score = vouchee_sigma (no boost)
+        # Public Preview: eff_score = vouchee_sigma (no boost)
         eff_score = self.engine.compute_eff_score(
             "did:mesh:low", self.session, 0.1, risk_weight=0.5
         )
@@ -80,7 +80,7 @@ class TestVouchingEngine:
         self.engine.vouch("did:mesh:a", "did:mesh:b", self.session, 0.8, bond_pct=0.3)
         self.engine.vouch("did:mesh:a", "did:mesh:c", self.session, 0.8, bond_pct=0.2)
         exposure = self.engine.get_total_exposure("did:mesh:a", self.session)
-        assert exposure == 0.0  # Community edition: no bonding
+        assert exposure == 0.0  # Public Preview: no bonding
 
 
 class TestLiabilityMatrix:

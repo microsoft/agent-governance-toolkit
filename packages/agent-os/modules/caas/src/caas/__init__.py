@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic context/memory management
+# Public Preview — basic context/memory management
 """
 CaaS Core: Layer 1 Primitive for Context Management.
 

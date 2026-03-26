@@ -28,7 +28,7 @@ class TestDeltaEngine:
             self.engine.capture("did:a", changes)
 
         deltas = self.engine.deltas
-        # Community edition: no audit loging, parent_hash is always None
+        # Public preview: no audit loging, parent_hash is always None
         assert deltas[0].parent_hash is None
         assert deltas[1].parent_hash is None
         assert deltas[2].parent_hash is None
@@ -84,7 +84,7 @@ class TestEphemeralGC:
             estimated_cache_bytes=500_000,
             estimated_delta_bytes=50_000,
         )
-        # Community edition: no actual purge, data retained
+        # Public preview: no actual purge, data retained
         assert result.purged_vfs_files == 0
         assert result.retained_deltas == 20
         # No savings since nothing is purged
@@ -95,7 +95,7 @@ class TestEphemeralGC:
         from datetime import datetime, timedelta
         gc = EphemeralGC(RetentionPolicy(delta_retention_days=30))
         old = datetime.now(UTC) - timedelta(days=31)
-        # Community edition: never expires deltas
+        # Public preview: never expires deltas
         assert not gc.should_expire_deltas(old)
         recent = datetime.now(UTC) - timedelta(days=1)
         assert not gc.should_expire_deltas(recent)

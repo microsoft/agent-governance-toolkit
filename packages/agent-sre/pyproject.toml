@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-sre"
-version = "2.3.0"
-description = "Community Edition — Reliability Engineering for AI Agent Systems"
+version = "3.0.0"
+description = "Public Preview — Reliability Engineering for AI Agent Systems"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -17,7 +17,7 @@ maintainers = [
 ]
 keywords = ["ai", "agents", "sre", "reliability", "observability", "slo"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",

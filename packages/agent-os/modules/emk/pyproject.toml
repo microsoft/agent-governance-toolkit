@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "emk"
 version = "1.0.0"
-description = "Community Edition — Episodic Memory Kernel for AI agent experience storage"
+description = "Public Preview — Episodic Memory Kernel for AI agent experience storage"
 authors = [
     { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
 ]

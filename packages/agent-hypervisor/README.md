@@ -1,6 +1,6 @@
 <div align="center">
 
-# Agent Hypervisor — Community Edition
+# Agent Hypervisor — Public Preview
 
 **Execution supervisor for AI agents — runtime isolation, execution rings, and governance for autonomous agents**
 
@@ -14,9 +14,8 @@
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 
 > [!IMPORTANT]
-> **Community Preview** — The `agent-hypervisor` package on PyPI is a community preview release
-> for testing and evaluation only. It is **not** an official Microsoft-signed release.
-> Official signed packages will be available in a future release.
+> **Public Preview** — The `agent-hypervisor` package on PyPI is a Microsoft-signed
+> public preview release. APIs may change before GA.
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent Hypervisor.
 
@@ -153,7 +152,7 @@ ring = await hv.join_session(
 
 Agents can request temporary privilege escalation with a TTL:
 
-> **Note:** Ring elevation is available in the Enterprise Edition. Community Edition includes the API surface but returns a denial response. See the architecture for how it works.
+> **Note:** Ring elevation is available in the Enterprise Edition. Public Preview includes the API surface but returns a denial response. See the architecture for how it works.
 
 ```python
 from hypervisor import RingElevationManager

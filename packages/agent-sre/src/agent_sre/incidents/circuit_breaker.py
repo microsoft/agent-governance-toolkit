@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """Circuit breaker — automatic agent isolation on failure.
 
 Basic open/closed circuit breaker. Half-open recovery is not available
-in Community Edition — use force_close() or reset() to recover.
+in Public Preview — use force_close() or reset() to recover.
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ class CircuitBreaker:
     - CLOSED: Normal operation. Track failures.
     - OPEN: Agent isolated. Reject all calls. Use force_close() or reset() to recover.
 
-    Half-open recovery is not available in Community Edition.
+    Half-open recovery is not available in Public Preview.
     """
 
     def __init__(self, agent_id: str, config: CircuitBreakerConfig | None = None) -> None:
@@ -80,7 +80,7 @@ class CircuitBreaker:
 
     @property
     def state(self) -> CircuitState:
-        """Current state — no auto-transition in Community Edition."""
+        """Current state — no auto-transition in Public Preview."""
         return self._state
 
     @property

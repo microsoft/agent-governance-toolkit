@@ -121,7 +121,7 @@ class TestKillSwitch:
         assert history is not ks._kill_history
 
     def test_total_handoffs_always_zero(self):
-        """Community edition: handoffs not supported."""
+        """Public preview: handoffs not supported."""
         ks = KillSwitch()
         ks.kill("a1", "s1", KillReason.MANUAL, in_flight_steps=[{"step_id": "s", "saga_id": "x"}])
         assert ks.total_handoffs == 0
@@ -145,7 +145,7 @@ class TestKillSwitch:
         assert "agent-1" not in ks._substitutes.get("sess-1", [])
 
     def test_find_substitute_always_none(self):
-        """Community edition: no substitute finding."""
+        """Public preview: no substitute finding."""
         ks = KillSwitch()
         ks.register_substitute("s1", "backup-agent")
         assert ks._find_substitute("s1", "agent-1") is None

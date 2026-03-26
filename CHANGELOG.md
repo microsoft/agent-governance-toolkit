@@ -6,11 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 > [!IMPORTANT]
-> All releases to date are **community preview releases** for testing and evaluation.
-> They are not official Microsoft-signed releases. Official signed packages are coming
-> in a future release.
+> All releases are currently **public preview releases**. They are Microsoft-signed
+> and production-quality but may have breaking changes before GA.
 
 ## [Unreleased]
+
+## [3.0.0] - 2026-03-26
+
+### Changed
+- **Official Microsoft-Signed Public Preview** — all packages are now published
+  via ESRP Release with Microsoft signing
+- All package descriptions updated from "Community Edition" to "Public Preview"
+- All Development Status classifiers standardized to "4 - Beta"
+- Package `agent-lightning` renamed to `agentmesh-lightning` on PyPI
+- All personal author references replaced with Microsoft Corporation
+- Contact email updated to agentgovtoolkit@microsoft.com
+
+### Fixed
+- Removed all merge conflict markers from docs
+- Updated all old PyPI package name references (agent-runtime → agentmesh-runtime,
+  agent-lightning → agentmesh-lightning) across README, QUICKSTART, tutorials,
+  workflows, and scripts
+- ESRP pipeline service connection hardcoded for ADO compile-time requirement
+- ESRP pipeline `each` directive syntax fixed in Verify stages
+- License format updated to SPDX string (setuptools deprecation fix)
 
 ## [2.3.0] - 2026-03-26
 

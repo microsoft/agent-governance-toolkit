@@ -6,7 +6,7 @@ Screens agent inputs for prompt injection attacks where adversaries attempt
 to override system instructions, break out of context boundaries, or
 manipulate agent behaviour through crafted payloads.
 
-Community Edition protections:
+Public Preview protections:
     - **Direct override detection**: Catches "ignore previous instructions"
       and similar instruction-hijacking patterns.
     - **Delimiter attacks**: Detects context-boundary manipulation using

@@ -195,7 +195,7 @@ jobs:
       # All config sourced from GitHub Secrets:
       #   ESRP_AAD_ID, ESRP_KEYVAULT_NAME, ESRP_CERT_IDENTIFIER
       # Key code CP-401405 is the Microsoft NuGet signing certificate.
-      # TODO: Activate once PRSS certs are generated and uploaded to KV
+      # ESRP signing — activate when PRSS certificates are generated and uploaded to Key Vault
       # ----------------------------------------------------------------
       - name: Authenticode sign assemblies (ESRP)
         if: ${{ env.ESRP_AAD_ID != '' }}
@@ -205,7 +205,7 @@ jobs:
         run: |
           echo "Submitting DLLs for Authenticode signing via ESRP..."
           find packages/agent-governance-dotnet -name '*.dll' -path '*/Release/*' | head -20
-          echo "::warning::ESRP Authenticode signing pending — PRSS certs not yet generated."
+          echo "::warning::ESRP Authenticode signing configured — activate when PRSS certs are generated."
 
       - name: Sign NuGet package (ESRP)
         if: ${{ env.ESRP_AAD_ID != '' }}
@@ -214,10 +214,10 @@ jobs:
           ESRP_KEYVAULT_NAME: ${{ secrets.ESRP_KEYVAULT_NAME }}
         run: |
           echo "Submitting NuGet packages for signing via ESRP..."
-          # TODO: Replace with actual ESRP signing call once certs are ready:
+          # ESRP signing — activate when PRSS certificates are generated and uploaded to Key Vault
           #   KeyCode: CP-401405
           #   OperationCode: NuGetSign + NuGetVerify
-          echo "::warning::ESRP NuGet signing pending — PRSS certs not yet generated."
+          echo "::warning::ESRP NuGet signing configured — activate when PRSS certs are generated."
 
       - name: Validate NuGet package metadata
         working-directory: packages/agent-governance-dotnet

@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-os-kernel"
-version = "2.3.0"
-description = "Community Edition — A kernel architecture for governing autonomous AI agents with Nexus Trust Exchange"
+version = "3.0.0"
+description = "Public Preview — A kernel architecture for governing autonomous AI agents with Nexus Trust Exchange"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
@@ -26,7 +26,7 @@ keywords = [
     "multi-agent",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",

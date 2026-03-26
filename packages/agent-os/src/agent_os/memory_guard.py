@@ -6,7 +6,7 @@ Guards agent memory stores (RAG, episodic, working memory) against
 poisoning attacks where adversaries inject malicious data to manipulate
 agent behaviour.
 
-Community Edition protections:
+Public Preview protections:
     - **Hash integrity**: SHA-256 hash per memory entry; detects tampering.
     - **Injection pattern detection**: Blocks prompt-injection payloads
       written into memory.

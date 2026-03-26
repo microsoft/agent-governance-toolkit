@@ -204,7 +204,7 @@ eff_score = engine.compute_eff_score(
 print(f"Effective score: {eff_score}")
 ```
 
-> **Community Edition:** In the community edition, `compute_eff_score` returns
+> **Public Preview:** In the Public Preview, `compute_eff_score` returns
 > the vouchee's own sigma directly — sponsor boost is an enterprise feature.
 > The vouching graph is still tracked for auditing and liability analysis.
 
@@ -319,7 +319,7 @@ for clip in result.voucher_clips:
     print(f"  Vouch ID: {clip.vouch_id}")
 ```
 
-> **Community Edition:** In the community edition, slashing is logged but
+> **Public Preview:** In the Public Preview, slashing is logged but
 > scores are not actually modified. The `SlashResult` records are still created
 > for auditing. Enterprise editions enforce real score deductions.
 
@@ -610,7 +610,7 @@ if active:
     print(f"Duration: {active.duration_seconds}s")
 ```
 
-> **Community Edition:** In the community edition, `is_quarantined()` always
+> **Public Preview:** In the Public Preview, `is_quarantined()` always
 > returns `False` and `active_quarantines` is always empty. Quarantine records
 > are still created for auditing. Enterprise editions enforce actual isolation.
 
@@ -767,7 +767,7 @@ print(f"Admit: {should_admit}")  # True/False
 print(f"Reason: {reason}")       # "admit" / "probation" / "deny"
 ```
 
-> **Community Edition:** `should_admit()` always returns `(True, "admit")`.
+> **Public Preview:** `should_admit()` always returns `(True, "admit")`.
 > The risk profile is still computed for visibility. Enterprise editions enforce
 > admission gates.
 

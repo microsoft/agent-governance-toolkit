@@ -1,6 +1,6 @@
 <div align="center">
 
-# Agent OS — Community Edition
+# Agent OS — Public Preview
 
 **A kernel architecture for governing autonomous AI agents**
 
@@ -11,9 +11,8 @@
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 
 > [!IMPORTANT]
-> **Community Preview** — The `agent-os-kernel` package on PyPI is a community preview release
-> for testing and evaluation only. It is **not** an official Microsoft-signed release.
-> Official signed packages will be available in a future release.
+> **Public Preview** — The `agent-os-kernel` package on PyPI is a Microsoft-signed
+> public preview release. APIs may change before GA.
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent OS.
 
