@@ -14,10 +14,20 @@
 > [!IMPORTANT]
 > **Public Preview** — All packages published from this repository are
 > **Microsoft-signed public preview releases**. They are production-quality but
-> may have breaking changes before GA. For feedback, open an issue or contact
-> agentgovtoolkit@microsoft.com.
+> may have breaking changes before GA. For feedback, please
+> [open a GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues).
+>
+> **What this toolkit is:** Runtime governance infrastructure — deterministic policy
+> enforcement, zero-trust identity, execution sandboxing, and reliability engineering
+> that sits between your agent framework and the actions agents take.
+>
+> **What this toolkit is not:** This is not a model safety or prompt guardrails tool.
+> It does not filter LLM inputs/outputs or perform content moderation. It governs
+> *agent actions* (tool calls, resource access, inter-agent communication) at the
+> application layer. For model-level safety, see
+> [Azure AI Content Safety](https://learn.microsoft.com/azure/ai-services/content-safety/).
 
-Runtimegovernance for AI agents — the only toolkit covering all **10 OWASP Agentic risks** with **6,100+ tests**. Governs what agents *do*, not just what they say — deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE — **Python · TypeScript · .NET**
+Runtimegovernance for AI agents — the only toolkit covering all **10 OWASP Agentic risks** with **9,500+ tests**. Governs what agents *do*, not just what they say — deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE — **Python · TypeScript · .NET**
 
 > **Works with any stack** — AWS Bedrock, Google ADK, Azure AI, LangChain, CrewAI, AutoGen, OpenAI Agents, LlamaIndex, and more. Pure `pip install` with zero vendor lock-in.
 
