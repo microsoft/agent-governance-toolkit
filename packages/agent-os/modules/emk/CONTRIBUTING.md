@@ -169,16 +169,16 @@ Use Google-style docstrings:
 def generate_episode_tags(episode: Episode) -> List[str]:
     """
     Generate searchable tags from an episode.
-    
+
     Args:
         episode: The episode to generate tags from.
-        
+
     Returns:
         List of tags for indexing.
-        
+
     Raises:
         ValueError: If episode content is empty.
-        
+
     Example:
         >>> episode = Episode(goal="Test", action="Run", result="Pass", reflection="Good")
         >>> tags = generate_episode_tags(episode)
@@ -241,7 +241,7 @@ def test_episode_id_is_deterministic_for_same_content():
     )
     episode2 = Episode(
         goal="Test",
-        action="Run", 
+        action="Run",
         result="Pass",
         reflection="Good",
         timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc)

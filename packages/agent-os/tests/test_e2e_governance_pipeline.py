@@ -19,17 +19,32 @@ Covers:
   8. Cross-package integration (agent-os + agent-mesh + agent-sre)
 """
 
-import asyncio
 import time
-from pathlib import Path
-from typing import Any, Awaitable, Callable
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock
 
 import pytest
 
 agentmesh = pytest.importorskip("agentmesh", reason="agentmesh not installed")
 agent_sre = pytest.importorskip("agent_sre", reason="agent_sre not installed")
 
+from agent_sre.anomaly.rogue_detector import (
+    RiskLevel,
+    RogueAgentDetector,
+    RogueDetectorConfig,
+)
+from agentmesh.governance.audit import AuditLog
+
+from agent_os.integrations.maf_adapter import (
+    AuditTrailMiddleware,
+    CapabilityGuardMiddleware,
+    GovernancePolicyMiddleware,
+    MiddlewareTermination,
+    RogueDetectionMiddleware,
+    create_governance_middleware,
+)
+from agent_os.mcp_security import MCPSecurityScanner
+from agent_os.memory_guard import MemoryGuard
+from agent_os.policies.evaluator import PolicyDecision, PolicyEvaluator
 from agent_os.policies.schema import (
     PolicyAction,
     PolicyCondition,
@@ -37,32 +52,9 @@ from agent_os.policies.schema import (
     PolicyOperator,
     PolicyRule,
 )
-from agent_os.policies.evaluator import PolicyDecision, PolicyEvaluator
 from agent_os.prompt_injection import (
-    DetectionConfig,
     PromptInjectionDetector,
-    ThreatLevel,
 )
-from agent_os.memory_guard import MemoryGuard
-from agent_os.mcp_security import MCPSecurityScanner
-from agent_os.integrations.base import GovernancePolicy, PatternType
-from agent_os.integrations.maf_adapter import (
-    AuditTrailMiddleware,
-    CapabilityGuardMiddleware,
-    GovernancePolicyMiddleware,
-    RogueDetectionMiddleware,
-    MiddlewareTermination,
-    AgentResponse,
-    Message,
-    create_governance_middleware,
-)
-from agentmesh.governance.audit import AuditLog
-from agent_sre.anomaly.rogue_detector import (
-    RogueAgentDetector,
-    RogueDetectorConfig,
-    RiskLevel,
-)
-
 
 # ============================================================================
 # Test Helpers — Mock MAF Context Objects
@@ -71,12 +63,14 @@ from agent_sre.anomaly.rogue_detector import (
 
 class MockAgent:
     """Mock MAF agent with a name."""
+
     def __init__(self, name: str = "test-agent"):
         self.name = name
 
 
 class MockAgentContext:
     """Mock MAF AgentContext for middleware testing."""
+
     def __init__(self, agent_name: str = "test-agent", messages=None):
         self.agent = MockAgent(agent_name)
         self.messages = messages or []
@@ -87,12 +81,14 @@ class MockAgentContext:
 
 class MockFunction:
     """Mock MAF function/tool."""
+
     def __init__(self, name: str = "web_search"):
         self.name = name
 
 
 class MockFunctionContext:
     """Mock MAF FunctionInvocationContext."""
+
     def __init__(self, func_name: str = "web_search"):
         self.function = MockFunction(func_name)
         self.result = None
@@ -100,6 +96,7 @@ class MockFunctionContext:
 
 class MockMessage:
     """Mock MAF Message."""
+
     def __init__(self, role: str = "user", content: str = ""):
         self.role = role
         self.contents = [content] if content else []
@@ -161,9 +158,7 @@ defaults:
         audit_log = AuditLog()
 
         # Create middleware
-        policy_mw = GovernancePolicyMiddleware(
-            evaluator=evaluator, audit_log=audit_log
-        )
+        policy_mw = GovernancePolicyMiddleware(evaluator=evaluator, audit_log=audit_log)
 
         # Create context with a denied message
         ctx = MockAgentContext(
@@ -196,9 +191,7 @@ defaults:
         evaluator = self._create_policy_evaluator(tmp_path)
         audit_log = AuditLog()
 
-        policy_mw = GovernancePolicyMiddleware(
-            evaluator=evaluator, audit_log=audit_log
-        )
+        policy_mw = GovernancePolicyMiddleware(evaluator=evaluator, audit_log=audit_log)
 
         ctx = MockAgentContext(
             agent_name="researcher",
@@ -220,9 +213,7 @@ defaults:
         evaluator = self._create_policy_evaluator(tmp_path)
         audit_log = AuditLog()
 
-        policy_mw = GovernancePolicyMiddleware(
-            evaluator=evaluator, audit_log=audit_log
-        )
+        policy_mw = GovernancePolicyMiddleware(evaluator=evaluator, audit_log=audit_log)
 
         ctx = MockAgentContext(
             agent_name="researcher",
@@ -572,23 +563,25 @@ class TestInputValidationPipeline:
     def test_clean_input_reaches_policy(self):
         """Clean input passes injection check and reaches policy evaluation."""
         detector = PromptInjectionDetector()
-        evaluator = PolicyEvaluator(policies=[
-            PolicyDocument(
-                version="1.0",
-                name="test",
-                rules=[
-                    PolicyRule(
-                        name="allow-all",
-                        condition=PolicyCondition(
-                            field="message",
-                            operator=PolicyOperator.CONTAINS,
-                            value="weather",
+        evaluator = PolicyEvaluator(
+            policies=[
+                PolicyDocument(
+                    version="1.0",
+                    name="test",
+                    rules=[
+                        PolicyRule(
+                            name="allow-all",
+                            condition=PolicyCondition(
+                                field="message",
+                                operator=PolicyOperator.CONTAINS,
+                                value="weather",
+                            ),
+                            action=PolicyAction.ALLOW,
                         ),
-                        action=PolicyAction.ALLOW,
-                    ),
-                ],
-            ),
-        ])
+                    ],
+                ),
+            ]
+        )
 
         user_input = "What is the weather in Seattle?"
         injection_result = detector.detect(user_input)
@@ -773,12 +766,8 @@ class TestCrossPackageIntegration:
         audit_log = AuditLog()
 
         evaluator = PolicyEvaluator()
-        policy_mw = GovernancePolicyMiddleware(
-            evaluator=evaluator, audit_log=audit_log
-        )
-        cap_mw = CapabilityGuardMiddleware(
-            allowed_tools=["web_search"], audit_log=audit_log
-        )
+        policy_mw = GovernancePolicyMiddleware(evaluator=evaluator, audit_log=audit_log)
+        cap_mw = CapabilityGuardMiddleware(allowed_tools=["web_search"], audit_log=audit_log)
         detector = RogueAgentDetector()
         rogue_mw = RogueDetectionMiddleware(
             detector=detector, agent_id="shared-agent", audit_log=audit_log
@@ -812,21 +801,23 @@ class TestCrossPackageIntegration:
     def test_policy_evaluator_with_mesh_audit_log(self):
         """PolicyEvaluator decisions are logged via agent-mesh AuditLog."""
         audit_log = AuditLog()
-        evaluator = PolicyEvaluator(policies=[
-            PolicyDocument(
-                version="1.0",
-                name="test",
-                rules=[
-                    PolicyRule(
-                        name="deny-admin",
-                        condition=PolicyCondition(
-                            field="role", operator=PolicyOperator.EQ, value="admin"
+        evaluator = PolicyEvaluator(
+            policies=[
+                PolicyDocument(
+                    version="1.0",
+                    name="test",
+                    rules=[
+                        PolicyRule(
+                            name="deny-admin",
+                            condition=PolicyCondition(
+                                field="role", operator=PolicyOperator.EQ, value="admin"
+                            ),
+                            action=PolicyAction.DENY,
                         ),
-                        action=PolicyAction.DENY,
-                    ),
-                ],
-            ),
-        ])
+                    ],
+                ),
+            ]
+        )
 
         decision = evaluator.evaluate({"role": "admin"})
 
@@ -855,23 +846,25 @@ class TestPipelineErrorHandling:
 
     def test_evaluator_handles_missing_field(self):
         """PolicyEvaluator handles contexts missing the referenced field."""
-        evaluator = PolicyEvaluator(policies=[
-            PolicyDocument(
-                version="1.0",
-                name="test",
-                rules=[
-                    PolicyRule(
-                        name="check-role",
-                        condition=PolicyCondition(
-                            field="role",
-                            operator=PolicyOperator.EQ,
-                            value="admin",
+        evaluator = PolicyEvaluator(
+            policies=[
+                PolicyDocument(
+                    version="1.0",
+                    name="test",
+                    rules=[
+                        PolicyRule(
+                            name="check-role",
+                            condition=PolicyCondition(
+                                field="role",
+                                operator=PolicyOperator.EQ,
+                                value="admin",
+                            ),
+                            action=PolicyAction.DENY,
                         ),
-                        action=PolicyAction.DENY,
-                    ),
-                ],
-            ),
-        ])
+                    ],
+                ),
+            ]
+        )
 
         # Context without 'role' field — should not crash
         decision = evaluator.evaluate({"message": "hello"})

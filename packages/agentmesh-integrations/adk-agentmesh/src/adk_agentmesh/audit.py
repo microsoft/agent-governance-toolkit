@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AuditEvent:
     """A structured governance audit event."""
+
     event_type: str
     agent_name: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -36,6 +37,7 @@ class AuditEvent:
 
 class AuditHandler(Protocol):
     """Protocol for audit event handlers."""
+
     def handle(self, event: AuditEvent) -> None: ...
 
 

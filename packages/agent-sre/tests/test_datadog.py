@@ -54,7 +54,8 @@ class TestDatadogExporter:
     def test_submit_metric(self, exporter):
         """Submit a metric and verify it's stored."""
         metric = exporter.submit_metric(
-            "agent.latency", 0.45,
+            "agent.latency",
+            0.45,
             tags=["agent:bot-1", "env:prod"],
             metric_type="gauge",
         )
@@ -113,7 +114,8 @@ class TestDatadogExporter:
     def test_tags(self, exporter):
         """Verify tag formatting."""
         metric = exporter.submit_metric(
-            "test.metric", 1.0,
+            "test.metric",
+            1.0,
             tags=["env:staging", "region:us-east-1"],
         )
         assert metric.tags == ["env:staging", "region:us-east-1"]

@@ -14,10 +14,10 @@ from agent_os.base_agent import (
 )
 from agent_os.stateless import ExecutionResult
 
-
 # ---------------------------------------------------------------------------
 # Concrete agent for testing
 # ---------------------------------------------------------------------------
+
 
 class _StubAgent(BaseAgent):
     """Minimal concrete agent used in tests."""
@@ -29,6 +29,7 @@ class _StubAgent(BaseAgent):
 # ---------------------------------------------------------------------------
 # PolicyDecision enum tests
 # ---------------------------------------------------------------------------
+
 
 class TestPolicyDecisionEnum:
     """Verify ESCALATE and DEFER are present on the enum."""
@@ -48,39 +49,30 @@ class TestPolicyDecisionEnum:
 # EscalationRequest tests
 # ---------------------------------------------------------------------------
 
+
 class TestEscalationRequest:
     """Verify EscalationRequest dataclass behaviour."""
 
     def test_default_status_is_pending(self):
-        req = EscalationRequest(
-            action="send_email", reason="risky", requested_by="agent-1"
-        )
+        req = EscalationRequest(action="send_email", reason="risky", requested_by="agent-1")
         assert req.status == "pending"
 
     def test_approve(self):
-        req = EscalationRequest(
-            action="delete_db", reason="destructive", requested_by="agent-1"
-        )
+        req = EscalationRequest(action="delete_db", reason="destructive", requested_by="agent-1")
         req.approve()
         assert req.status == "approved"
 
     def test_reject(self):
-        req = EscalationRequest(
-            action="delete_db", reason="destructive", requested_by="agent-1"
-        )
+        req = EscalationRequest(action="delete_db", reason="destructive", requested_by="agent-1")
         req.reject()
         assert req.status == "rejected"
 
     def test_invalid_status_raises(self):
         with pytest.raises(ValueError, match="Invalid status"):
-            EscalationRequest(
-                action="x", reason="y", requested_by="z", status="unknown"
-            )
+            EscalationRequest(action="x", reason="y", requested_by="z", status="unknown")
 
     def test_to_dict(self):
-        req = EscalationRequest(
-            action="deploy", reason="needs approval", requested_by="agent-2"
-        )
+        req = EscalationRequest(action="deploy", reason="needs approval", requested_by="agent-2")
         d = req.to_dict()
         assert d["action"] == "deploy"
         assert d["status"] == "pending"
@@ -90,6 +82,7 @@ class TestEscalationRequest:
 # ---------------------------------------------------------------------------
 # _enforce_policy — ESCALATE path
 # ---------------------------------------------------------------------------
+
 
 class TestEnforcePolicyEscalate:
     """Test _enforce_policy with ESCALATE decision."""
@@ -109,9 +102,7 @@ class TestEnforcePolicyEscalate:
 
     @pytest.mark.asyncio
     async def test_escalate_queues_request(self, agent):
-        await agent._enforce_policy(
-            PolicyDecision.ESCALATE, "deploy", {}, reason="prod deploy"
-        )
+        await agent._enforce_policy(PolicyDecision.ESCALATE, "deploy", {}, reason="prod deploy")
         queue = agent.get_escalation_queue()
         assert len(queue) == 1
         assert queue[0].action == "deploy"
@@ -121,15 +112,14 @@ class TestEnforcePolicyEscalate:
     async def test_escalate_audit_entry(self, agent):
         """Calling _enforce_policy directly doesn't create an audit entry,
         but calling _execute with a signal should."""
-        result = await agent._enforce_policy(
-            PolicyDecision.ESCALATE, "risky_action", {}
-        )
+        result = await agent._enforce_policy(PolicyDecision.ESCALATE, "risky_action", {})
         assert result.data["requested_by"] == "test-agent"
 
 
 # ---------------------------------------------------------------------------
 # _enforce_policy — DEFER path
 # ---------------------------------------------------------------------------
+
 
 class TestEnforcePolicyDefer:
     """Test _enforce_policy with DEFER decision."""
@@ -178,9 +168,7 @@ class TestEnforcePolicyDefer:
     @pytest.mark.asyncio
     @pytest.mark.slow
     async def test_defer_custom_timeout(self):
-        agent = _StubAgent(
-            AgentConfig(agent_id="custom-timeout"), defer_timeout=0.1
-        )
+        agent = _StubAgent(AgentConfig(agent_id="custom-timeout"), defer_timeout=0.1)
 
         async def _slow(action, params):
             await asyncio.sleep(5)
@@ -194,6 +182,7 @@ class TestEnforcePolicyDefer:
 # ---------------------------------------------------------------------------
 # _enforce_policy — ALLOW / DENY passthrough
 # ---------------------------------------------------------------------------
+
 
 class TestEnforcePolicyPassthrough:
     """ALLOW and DENY still work through _enforce_policy."""
@@ -209,8 +198,6 @@ class TestEnforcePolicyPassthrough:
 
     @pytest.mark.asyncio
     async def test_deny(self, agent):
-        result = await agent._enforce_policy(
-            PolicyDecision.DENY, "write", {}, reason="blocked"
-        )
+        result = await agent._enforce_policy(PolicyDecision.DENY, "write", {}, reason="blocked")
         assert result.success is False
         assert result.signal == "SIGKILL"

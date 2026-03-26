@@ -292,9 +292,7 @@ class PromotionChecker:
             defaults are used.
     """
 
-    def __init__(
-        self, gates: Optional[list[PromotionGate]] = None
-    ) -> None:
+    def __init__(self, gates: Optional[list[PromotionGate]] = None) -> None:
         self._gates: list[PromotionGate] = (
             list(gates) if gates is not None else list(_DEFAULT_GATES)
         )
@@ -343,9 +341,7 @@ class PromotionChecker:
             try:
                 passed, reason = gate.check_fn(context)
             except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "Gate %s raised an exception: %s", gate.name, exc
-                )
+                logger.warning("Gate %s raised an exception: %s", gate.name, exc)
                 passed = False
                 reason = f"Gate raised exception: {exc}"
 
@@ -383,25 +379,19 @@ class PromotionChecker:
     # ── helpers ──────────────────────────────────────────────
 
     @staticmethod
-    def _validate_transition(
-        current: MaturityLevel, target: MaturityLevel
-    ) -> None:
+    def _validate_transition(current: MaturityLevel, target: MaturityLevel) -> None:
         """Raise if the transition is invalid."""
         if target == MaturityLevel.DEPRECATED:
             return  # anything can be deprecated
 
         if current == target:
-            raise ValueError(
-                f"Current and target levels are the same: {current.value}"
-            )
+            raise ValueError(f"Current and target levels are the same: {current.value}")
 
         try:
             cur_idx = _PROGRESSION.index(current)
             tgt_idx = _PROGRESSION.index(target)
         except ValueError as exc:
-            raise ValueError(
-                f"Invalid level in progression: {exc}"
-            ) from exc
+            raise ValueError(f"Invalid level in progression: {exc}") from exc
 
         if tgt_idx <= cur_idx:
             raise ValueError(

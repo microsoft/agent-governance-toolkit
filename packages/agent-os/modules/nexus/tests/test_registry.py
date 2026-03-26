@@ -4,7 +4,6 @@
 
 import os
 import sys
-from datetime import datetime, timedelta
 
 import pytest
 
@@ -12,17 +11,17 @@ _nexus_parent = os.path.join(os.path.dirname(__file__), "..", "..")
 if _nexus_parent not in sys.path:
     sys.path.insert(0, _nexus_parent)
 
-from nexus.registry import AgentRegistry, RegistrationResult, PeerVerification
-from nexus.reputation import ReputationEngine, ReputationHistory
-from nexus.schemas.manifest import AgentManifest, AgentIdentity, AgentCapabilities, AgentPrivacy
+from tests.conftest import make_manifest
+
 from nexus.exceptions import (
     AgentAlreadyRegisteredError,
     AgentNotFoundError,
-    InvalidManifestError,
-    IATPUnverifiedPeerException,
     IATPInsufficientTrustException,
+    IATPUnverifiedPeerException,
+    InvalidManifestError,
 )
-from tests.conftest import make_manifest
+from nexus.registry import AgentRegistry
+from nexus.schemas.manifest import AgentIdentity, AgentManifest
 
 
 @pytest.fixture
@@ -167,7 +166,8 @@ class TestVerifyPeer:
     async def test_missing_capabilities_not_verified(self, registry, sample_manifest):
         await registry.register(sample_manifest, signature="sig_test")
         result = await registry.verify_peer(
-            "did:nexus:test-agent-v1", min_score=1,
+            "did:nexus:test-agent-v1",
+            min_score=1,
             required_capabilities=["nonexistent-domain"],
         )
         assert result.verified is False

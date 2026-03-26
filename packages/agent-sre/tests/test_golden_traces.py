@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_trace(task_input: str = "hello", task_output: str = "world") -> Trace:
     """Create a minimal Trace for testing."""
     trace = Trace(agent_id="test-agent", task_input=task_input)
@@ -63,8 +64,11 @@ class TestMarkGolden:
         mgr = GoldenTraceManager()
         trace = _make_trace()
         golden = mgr.mark_golden(
-            trace, name="labeled", expected_output="world",
-            labels=["smoke", "fast"], source=TraceSource.SYNTHETIC,
+            trace,
+            name="labeled",
+            expected_output="world",
+            labels=["smoke", "fast"],
+            source=TraceSource.SYNTHETIC,
         )
         assert golden.labels == ["smoke", "fast"]
         assert golden.source == TraceSource.SYNTHETIC
@@ -138,7 +142,9 @@ class TestCIPassThreshold:
         gt_fail = mgr.mark_golden(_make_trace("c", "C"), "f1", expected_output="C")
 
         suite = GoldenTraceSuite(
-            name="threshold", traces=[gt_pass1, gt_pass2, gt_fail], pass_threshold=0.5,
+            name="threshold",
+            traces=[gt_pass1, gt_pass2, gt_fail],
+            pass_threshold=0.5,
         )
 
         def mixed_agent(trace_dict: dict[str, Any]) -> str:
@@ -162,13 +168,15 @@ class TestCuration:
         mgr = GoldenTraceManager()
         pool = [
             mgr.mark_golden(_make_trace(), f"t{i}", expected_output="world", labels=labels)
-            for i, labels in enumerate([
-                ["smoke"],
-                ["smoke"],
-                ["regression"],
-                ["regression"],
-                ["perf"],
-            ])
+            for i, labels in enumerate(
+                [
+                    ["smoke"],
+                    ["smoke"],
+                    ["regression"],
+                    ["regression"],
+                    ["perf"],
+                ]
+            )
         ]
         selected = mgr.curate(pool, max_count=3, strategy="diverse")
         assert len(selected) == 3

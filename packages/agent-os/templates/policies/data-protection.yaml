@@ -28,19 +28,19 @@ policies:
           # Social Security Numbers (US)
           - '\b\d{3}-\d{2}-\d{4}\b'
           - '\b\d{9}\b'  # SSN without dashes
-          
+
           # Credit Card Numbers
           - '\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\b'
-          
+
           # Email addresses (in sensitive contexts)
           - '(?i)(email|e-mail)\s*[:=]\s*["\']?[\w.+-]+@[\w-]+\.[\w.-]+["\']?'
-          
+
           # Phone numbers
           - '\b\d{3}[-.]?\d{3}[-.]?\d{4}\b'
-          
+
           # Passport numbers
           - '(?i)passport\s*[:=]?\s*[A-Z0-9]{6,9}'
-          
+
           # Driver's license
           - '(?i)driver.*license\s*[:=]?\s*[A-Z0-9]{5,15}'
     action: SIGKILL
@@ -56,10 +56,10 @@ policies:
       - patterns:
           # Bank account numbers
           - '(?i)(account|acct)\s*(?:number|#|no)?\s*[:=]?\s*\d{8,17}'
-          
+
           # Routing numbers
           - '(?i)routing\s*(?:number|#)?\s*[:=]?\s*\d{9}'
-          
+
           # CVV/CVC
           - '(?i)(cvv|cvc|cv2)\s*[:=]?\s*\d{3,4}'
     action: SIGKILL
@@ -75,10 +75,10 @@ policies:
       - patterns:
           # Medical Record Numbers
           - '(?i)(mrn|medical\s*record)\s*[:=]?\s*[A-Z0-9]{6,12}'
-          
+
           # Health Insurance IDs
           - '(?i)(insurance|member)\s*id\s*[:=]?\s*[A-Z0-9]{8,15}'
-          
+
           # Diagnosis codes
           - '(?i)diagnosis\s*[:=]?\s*[A-Z]\d{2}\.\d{1,2}'
     action: SIGKILL
@@ -97,7 +97,7 @@ policies:
           - '(?i)console\.log.*password'
           - '(?i)print.*password'
           - '(?i)logger\..*password'
-          
+
           # Logging tokens/keys
           - '(?i)log.*(?:token|api[_-]?key|secret)'
           - '(?i)console\.log.*(?:token|api[_-]?key)'
@@ -145,7 +145,7 @@ policies:
       - patterns:
           # Storing sensitive data in plain text
           - '(?i)(password|secret|key)\s*=\s*["\'][^"\']+["\']'
-          
+
           # Weak hashing
           - '(?i)md5\s*\('
           - '(?i)sha1\s*\('

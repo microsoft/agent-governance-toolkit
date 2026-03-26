@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 # Concurrency statistics
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ConcurrencyStats:
     """Tracks concurrency-related metrics for the async trust evaluator.
@@ -73,6 +74,7 @@ class ConcurrencyStats:
 # Read-write lock helpers
 # ---------------------------------------------------------------------------
 
+
 class _ReadWriteLock:
     """Simple readers-writer lock built on :class:`threading.RLock`.
 
@@ -107,6 +109,7 @@ class _ReadWriteLock:
 # ---------------------------------------------------------------------------
 # Async-safe trust policy evaluator
 # ---------------------------------------------------------------------------
+
 
 class AsyncTrustPolicyEvaluator:
     """Thread-safe and asyncio-safe trust policy evaluator.
@@ -180,9 +183,7 @@ class AsyncTrustPolicyEvaluator:
         """
         return self._evaluate_with_read_lock(context)
 
-    async def evaluate_batch(
-        self, contexts: list[dict[str, Any]]
-    ) -> list[TrustPolicyDecision]:
+    async def evaluate_batch(self, contexts: list[dict[str, Any]]) -> list[TrustPolicyDecision]:
         """Evaluate multiple contexts concurrently.
 
         Each context is evaluated in its own asyncio task.  All tasks
@@ -196,9 +197,7 @@ class AsyncTrustPolicyEvaluator:
         list[TrustPolicyDecision]
             One decision per input context, in the same order.
         """
-        tasks = [
-            asyncio.ensure_future(self.evaluate(ctx)) for ctx in contexts
-        ]
+        tasks = [asyncio.ensure_future(self.evaluate(ctx)) for ctx in contexts]
         return list(await asyncio.gather(*tasks))
 
     async def reload_policies(self, policies: list[TrustPolicy]) -> None:
@@ -229,9 +228,7 @@ class AsyncTrustPolicyEvaluator:
 
     # -- internal helpers --------------------------------------------------
 
-    def _evaluate_with_read_lock(
-        self, context: dict[str, Any]
-    ) -> TrustPolicyDecision:
+    def _evaluate_with_read_lock(self, context: dict[str, Any]) -> TrustPolicyDecision:
         """Run the trust evaluator under the read side of the RW lock."""
         self._rw_lock.acquire_read()
         try:
@@ -258,9 +255,7 @@ class AsyncTrustPolicyEvaluator:
         finally:
             self._rw_lock.release_read()
 
-    def _reload_with_write_lock(
-        self, policies: list[TrustPolicy]
-    ) -> None:
+    def _reload_with_write_lock(self, policies: list[TrustPolicy]) -> None:
         """Replace policies under the exclusive write lock."""
         self._rw_lock.acquire_write()
         try:

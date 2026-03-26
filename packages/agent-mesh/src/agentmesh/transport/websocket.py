@@ -16,7 +16,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 from .base import Transport, TransportConfig, TransportState
 
@@ -60,11 +60,11 @@ class WebSocketTransport(Transport):
         _require_websockets()
         super().__init__(config)
         self.heartbeat_interval = heartbeat_interval
-        self._ws: Optional[ClientConnection] = None
+        self._ws: ClientConnection | None = None
         self._receive_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=10_000)
-        self._heartbeat_task: Optional[asyncio.Task[None]] = None
-        self._listener_task: Optional[asyncio.Task[None]] = None
-        self._reconnect_task: Optional[asyncio.Task[None]] = None
+        self._heartbeat_task: asyncio.Task[None] | None = None
+        self._listener_task: asyncio.Task[None] | None = None
+        self._reconnect_task: asyncio.Task[None] | None = None
         self._should_reconnect = True
         self._last_pong: float = 0.0
         # Trust-specific subscriptions: agent_did -> [callbacks]
@@ -119,7 +119,7 @@ class WebSocketTransport(Transport):
         message = json.dumps({"topic": topic, "payload": payload})
         await self._ws.send(message)
 
-    async def receive(self, timeout: Optional[float] = None) -> dict[str, Any]:
+    async def receive(self, timeout: float | None = None) -> dict[str, Any]:
         """Receive the next message from the queue.
 
         Args:
@@ -132,14 +132,12 @@ class WebSocketTransport(Transport):
             raise ConnectionError("WebSocket is not connected")
         try:
             return await asyncio.wait_for(self._receive_queue.get(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise TimeoutError("No message received within timeout")
 
     # -- Trust-specific subscriptions ------------------------------------------
 
-    async def subscribe_trust_updates(
-        self, agent_did: str, callback: Any
-    ) -> None:
+    async def subscribe_trust_updates(self, agent_did: str, callback: Any) -> None:
         """Subscribe to real-time trust score updates for an agent.
 
         Args:
@@ -153,9 +151,7 @@ class WebSocketTransport(Transport):
         if self.is_connected:
             await self.send("trust.subscribe", {"agent_did": agent_did})
 
-    async def unsubscribe_trust_updates(
-        self, agent_did: str, callback: Any
-    ) -> None:
+    async def unsubscribe_trust_updates(self, agent_did: str, callback: Any) -> None:
         """Unsubscribe from trust score updates for an agent.
 
         Args:

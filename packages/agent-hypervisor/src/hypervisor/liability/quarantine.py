@@ -91,9 +91,7 @@ class QuarantineManager:
         """Always False in community edition."""
         return False
 
-    def get_active_quarantine(
-        self, agent_did: str, session_id: str
-    ) -> QuarantineRecord | None:
+    def get_active_quarantine(self, agent_did: str, session_id: str) -> QuarantineRecord | None:
         return None
 
     def tick(self) -> list[QuarantineRecord]:

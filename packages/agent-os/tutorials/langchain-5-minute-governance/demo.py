@@ -15,16 +15,15 @@ This demo:
   5. Shows audit logging
 """
 
-import sys
 import os
+import sys
 
 # Add project root to path so we can import agent_os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from agent_os.integrations import LangChainKernel, GovernancePolicy
+from agent_os.integrations import GovernancePolicy, LangChainKernel
 from agent_os.integrations.base import GovernanceEventType
 from agent_os.integrations.langchain_adapter import PolicyViolationError
-
 
 # ── ANSI colors ──────────────────────────────────────────────────
 GREEN = "\033[92m"
@@ -61,6 +60,7 @@ def info(text):
 # ── Mock LangChain Agent ─────────────────────────────────────────
 # Simulates a LangChain Runnable -- no API keys needed.
 
+
 class MockLangChainAgent:
     """A mock LangChain agent that echoes queries as if it were an LLM."""
 
@@ -79,6 +79,7 @@ class MockLangChainAgent:
 
 # ── The Demo ─────────────────────────────────────────────────────
 
+
 def main():
     header("Agent OS + LangChain -- Governance in 5 Minutes")
 
@@ -90,10 +91,10 @@ def main():
     agent = MockLangChainAgent()
 
     test_queries = [
-        "What are our top customers?",                # Safe
-        "Run: DROP TABLE users;",                     # Dangerous!
-        "Show me the password for admin",             # Data leak!
-        "Execute rm -rf / on the server",             # Catastrophic!
+        "What are our top customers?",  # Safe
+        "Run: DROP TABLE users;",  # Dangerous!
+        "Show me the password for admin",  # Data leak!
+        "Execute rm -rf / on the server",  # Catastrophic!
     ]
 
     for query in test_queries:
@@ -177,9 +178,11 @@ def main():
     if os.path.exists(yaml_path):
         loaded_policy = GovernancePolicy.load(yaml_path)
         ok(f"Loaded policy from {os.path.basename(yaml_path)}")
-        info(f"  max_tokens={loaded_policy.max_tokens}, "
-             f"max_tool_calls={loaded_policy.max_tool_calls}, "
-             f"blocked_patterns={loaded_policy.blocked_patterns}")
+        info(
+            f"  max_tokens={loaded_policy.max_tokens}, "
+            f"max_tool_calls={loaded_policy.max_tool_calls}, "
+            f"blocked_patterns={loaded_policy.blocked_patterns}"
+        )
     else:
         info(f"(policies.yaml not found at {yaml_path})")
 
@@ -192,9 +195,9 @@ def main():
     print(f"  {GREEN}+{RESET} Policy loaded from YAML file")
     print()
     print(f"  {BOLD}Next steps:{RESET}")
-    print(f"  * Edit policies.yaml to customize rules")
-    print(f"  * Replace MockLangChainAgent with your real agent")
-    print(f"  * See docs: https://github.com/microsoft/agent-governance-toolkit")
+    print("  * Edit policies.yaml to customize rules")
+    print("  * Replace MockLangChainAgent with your real agent")
+    print("  * See docs: https://github.com/microsoft/agent-governance-toolkit")
     print()
 
 

@@ -68,7 +68,9 @@ class FanOutOrchestrator:
     def __init__(self) -> None:
         self._groups: dict[str, FanOutGroup] = {}
 
-    def create_group(self, saga_id: str, policy: FanOutPolicy = FanOutPolicy.ALL_MUST_SUCCEED) -> FanOutGroup:
+    def create_group(
+        self, saga_id: str, policy: FanOutPolicy = FanOutPolicy.ALL_MUST_SUCCEED
+    ) -> FanOutGroup:
         group = FanOutGroup(saga_id=saga_id, policy=FanOutPolicy.ALL_MUST_SUCCEED)
         self._groups[group.group_id] = group
         return group
@@ -80,7 +82,10 @@ class FanOutOrchestrator:
         return branch
 
     async def execute(
-        self, group_id: str, executors: dict[str, Callable[..., Any]], timeout_seconds: int = 300,
+        self,
+        group_id: str,
+        executors: dict[str, Callable[..., Any]],
+        timeout_seconds: int = 300,
     ) -> FanOutGroup:
         """Execute branches sequentially (community edition)."""
         group = self._get_group(group_id)
@@ -109,7 +114,9 @@ class FanOutOrchestrator:
         group.policy_satisfied = group.check_policy()
         group.resolved = True
         if not group.policy_satisfied:
-            group.compensation_needed = [b.step.step_id for b in group.branches if b.succeeded and b.step]
+            group.compensation_needed = [
+                b.step.step_id for b in group.branches if b.succeeded and b.step
+            ]
         return group
 
     def get_group(self, group_id: str) -> FanOutGroup | None:

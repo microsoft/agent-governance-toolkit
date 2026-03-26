@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * CMVK Client for Agent OS Copilot Extension
- * 
+ *
  * Multi-model code verification client.
  */
 
@@ -31,7 +31,7 @@ export class CMVKClient {
 
     constructor() {
         this.apiEndpoint = process.env.CMVK_API_ENDPOINT || 'https://api.agent-os.dev/cmvk';
-        
+
         this.client = axios.create({
             baseURL: this.apiEndpoint,
             timeout: 60000,
@@ -46,7 +46,7 @@ export class CMVKClient {
      * Review code using multiple AI models
      */
     async reviewCode(
-        code: string, 
+        code: string,
         language: string,
         models: string[] = ['gpt-4', 'claude-sonnet-4', 'gemini-pro']
     ): Promise<CMVKResult> {
@@ -71,7 +71,7 @@ export class CMVKClient {
     }
 
     private shouldUseMock(): boolean {
-        return !process.env.CMVK_API_KEY || 
+        return !process.env.CMVK_API_KEY ||
                this.apiEndpoint.includes('api.agent-os.dev');
     }
 
@@ -87,7 +87,7 @@ export class CMVKClient {
             modelResults.push({
                 model,
                 passed,
-                summary: passed 
+                summary: passed
                     ? 'No significant issues detected'
                     : `Found ${modelIssues.length} potential issue(s)`,
                 issues: modelIssues,

@@ -101,7 +101,9 @@ class TestAlertDeduplicator:
         assert d.should_send(a) is True
         d.record(a)
         resolved = Alert(
-            title="Breach", message="ok", agent_id="a1",
+            title="Breach",
+            message="ok",
+            agent_id="a1",
             severity=AlertSeverity.RESOLVED,
         )
         assert d.should_send(resolved) is True
@@ -111,7 +113,9 @@ class TestAlertDeduplicator:
         a = Alert(title="Breach", message="x", agent_id="a1")
         d.record(a)
         resolved = Alert(
-            title="Breach", message="ok", agent_id="a1",
+            title="Breach",
+            message="ok",
+            agent_id="a1",
             severity=AlertSeverity.RESOLVED,
         )
         d.should_send(resolved)
@@ -170,8 +174,7 @@ class TestAlertDeduplicator:
                 results.append(agent_id)
 
         threads = [
-            threading.Thread(target=check_and_record, args=(f"agent-{i}",))
-            for i in range(20)
+            threading.Thread(target=check_and_record, args=(f"agent-{i}",)) for i in range(20)
         ]
         for t in threads:
             t.start()
@@ -291,11 +294,13 @@ class TestDeduplicatorWithManager:
         received = []
         dedup = AlertDeduplicator(window_seconds=60)
         manager = AlertManager()
-        manager.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-            callback=lambda a: received.append(a),
-        ))
+        manager.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+                callback=lambda a: received.append(a),
+            )
+        )
 
         alert = Alert(title="Breach", message="x", agent_id="a1")
         # First send
@@ -315,11 +320,13 @@ class TestDeduplicatorWithManager:
         received = []
         batcher = AlertBatcher(max_batch_size=3)
         manager = AlertManager()
-        manager.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-            callback=lambda a: received.append(a),
-        ))
+        manager.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+                callback=lambda a: received.append(a),
+            )
+        )
 
         for i in range(3):
             batcher.add(Alert(title=f"Alert-{i}", message="x"))
@@ -335,11 +342,13 @@ class TestDeduplicatorWithManager:
         dedup = AlertDeduplicator(window_seconds=60)
         batcher = AlertBatcher(max_batch_size=10)
         manager = AlertManager()
-        manager.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-            callback=lambda a: received.append(a),
-        ))
+        manager.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+                callback=lambda a: received.append(a),
+            )
+        )
 
         alerts = [
             Alert(title="Breach", message="x", agent_id="a1"),

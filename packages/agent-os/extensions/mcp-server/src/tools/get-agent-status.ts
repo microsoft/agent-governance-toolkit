@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * get_agent_status Tool
- * 
+ *
  * Gets the current status and metrics for an agent.
  */
 
@@ -39,23 +39,23 @@ Returns:
       required: ['agentId'],
     },
   },
-  
+
   async execute(args: unknown, context: ServiceContext): Promise<string> {
     const input = GetAgentStatusInputSchema.parse(args);
-    
+
     context.logger.info('Getting agent status', { agentId: input.agentId });
-    
+
     // Get agent
     const agent = await context.agentManager.getAgent(input.agentId);
     if (!agent) {
       throw new Error(`Agent not found: ${input.agentId}`);
     }
-    
+
     // Get audit summary for metrics
-    const auditSummary = input.includeMetrics 
+    const auditSummary = input.includeMetrics
       ? await context.auditLogger.getSummary(input.agentId, 30)
       : null;
-    
+
     // Get recent logs if requested
     const recentLogs = input.includeLogs
       ? await context.auditLogger.query({
@@ -63,10 +63,10 @@ Returns:
           limit: 10,
         })
       : [];
-    
+
     // Get pending approvals
     const pendingApprovals = await context.approvalWorkflow.getPendingRequests(input.agentId);
-    
+
     // Format status
     const statusEmoji: Record<string, string> = {
       draft: '📝',
@@ -76,7 +76,7 @@ Returns:
       stopped: '⏹️',
       error: '❌',
     };
-    
+
     let output = `
 **Agent Status Report**
 
@@ -90,12 +90,12 @@ Updated: ${new Date(agent.config.updatedAt).toLocaleDateString()}
 **Task:**
 ${agent.config.task}
 `.trim();
-    
+
     // Add schedule info
     if (agent.config.schedule) {
       output += `\n\n**Schedule:** ${agent.config.schedule}`;
     }
-    
+
     // Add policies
     output += `\n\n**Active Policies (${agent.config.policies.length}):**\n`;
     if (agent.config.policies.length) {
@@ -106,13 +106,13 @@ ${agent.config.task}
     } else {
       output += '⚠️  No policies attached';
     }
-    
+
     // Add metrics
     if (auditSummary) {
       const successRate = auditSummary.totalActions > 0
         ? Math.round((auditSummary.successCount / auditSummary.totalActions) * 100)
         : 0;
-      
+
       output += `
 
 **Metrics (Last 30 Days):**
@@ -125,17 +125,17 @@ ${agent.config.task}
 **Top Actions:**
 ${auditSummary.topActions.slice(0, 5).map(a => `- ${a.action}: ${a.count} times`).join('\n') || 'No activity'}`;
     }
-    
+
     // Add pending approvals
     if (pendingApprovals.length) {
       output += `
 
 **Pending Approvals (${pendingApprovals.length}):**
-${pendingApprovals.map(a => 
+${pendingApprovals.map(a =>
   `⏳ ${a.action} - ${a.description} (expires: ${new Date(a.expiresAt).toLocaleString()})`
 ).join('\n')}`;
     }
-    
+
     // Add recent logs
     if (recentLogs.length) {
       output += `
@@ -147,7 +147,7 @@ ${recentLogs.map(l => {
   return `${emoji} [${time}] ${l.action}`;
 }).join('\n')}`;
     }
-    
+
     return output;
   },
 };

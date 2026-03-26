@@ -9,12 +9,13 @@ Entries added via AuditLog or MerkleAuditChain get automatic hash chaining.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Optional, Any
-from pydantic import BaseModel, Field
 import hashlib
 import json
 import uuid
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from .audit_backends import AuditSink
@@ -30,7 +31,7 @@ class AuditEntry(BaseModel):
     """
 
     entry_id: str = Field(default_factory=lambda: f"audit_{uuid.uuid4().hex[:16]}")
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Event details
     event_type: str
@@ -38,8 +39,8 @@ class AuditEntry(BaseModel):
     action: str
 
     # Context
-    resource: Optional[str] = None
-    target_did: Optional[str] = None
+    resource: str | None = None
+    target_did: str | None = None
 
     # Data (sanitized - no secrets)
     data: dict = Field(default_factory=dict)
@@ -48,16 +49,16 @@ class AuditEntry(BaseModel):
     outcome: str = "success"  # success, failure, denied, error
 
     # Policy evaluation
-    policy_decision: Optional[str] = None
-    matched_rule: Optional[str] = None
+    policy_decision: str | None = None
+    matched_rule: str | None = None
 
     # Chaining — populated automatically by MerkleAuditChain.add_entry()
     previous_hash: str = Field(default="")
     entry_hash: str = Field(default="")
 
     # Metadata
-    trace_id: Optional[str] = None
-    session_id: Optional[str] = None
+    trace_id: str | None = None
+    session_id: str | None = None
 
     def compute_hash(self) -> str:
         """Compute the SHA-256 hash of this entry's canonical fields.
@@ -90,22 +91,20 @@ class AuditEntry(BaseModel):
     # ── CloudEvents v1.0 ──────────────────────────────────
 
     _CE_TYPE_MAP: dict[str, str] = {
-        "tool_invocation":     "ai.agentmesh.tool.invoked",
-        "tool_blocked":        "ai.agentmesh.tool.blocked",
-        "policy_evaluation":   "ai.agentmesh.policy.evaluation",
-        "policy_violation":    "ai.agentmesh.policy.violation",
-        "trust_handshake":     "ai.agentmesh.trust.handshake",
+        "tool_invocation": "ai.agentmesh.tool.invoked",
+        "tool_blocked": "ai.agentmesh.tool.blocked",
+        "policy_evaluation": "ai.agentmesh.policy.evaluation",
+        "policy_violation": "ai.agentmesh.policy.violation",
+        "trust_handshake": "ai.agentmesh.trust.handshake",
         "trust_score_updated": "ai.agentmesh.trust.score.updated",
-        "agent_registered":    "ai.agentmesh.agent.registered",
-        "agent_verified":      "ai.agentmesh.agent.verified",
-        "audit_integrity":     "ai.agentmesh.audit.integrity.verified",
+        "agent_registered": "ai.agentmesh.agent.registered",
+        "agent_verified": "ai.agentmesh.agent.verified",
+        "audit_integrity": "ai.agentmesh.audit.integrity.verified",
     }
 
     def to_cloudevent(self) -> dict[str, Any]:
         """Serialize this entry as a CloudEvents v1.0 JSON envelope."""
-        ce_type = self._CE_TYPE_MAP.get(
-            self.event_type, f"ai.agentmesh.{self.event_type}"
-        )
+        ce_type = self._CE_TYPE_MAP.get(self.event_type, f"ai.agentmesh.{self.event_type}")
         return {
             "specversion": "1.0",
             "id": self.entry_id,
@@ -140,10 +139,10 @@ class MerkleNode(BaseModel):
     """
 
     hash: str
-    left_child: Optional[str] = None
-    right_child: Optional[str] = None
+    left_child: str | None = None
+    right_child: str | None = None
     is_leaf: bool = False
-    entry_id: Optional[str] = None
+    entry_id: str | None = None
 
 
 # Backward-compatible alias
@@ -163,7 +162,7 @@ class MerkleAuditChain:
     def __init__(self):
         self._entries: list[AuditEntry] = []
         self._tree: list[list[MerkleNode]] = []
-        self._root_hash: Optional[str] = None
+        self._root_hash: str | None = None
 
     def add_entry(self, entry: AuditEntry) -> None:
         """Add an entry and update the Merkle tree incrementally."""
@@ -221,7 +220,9 @@ class MerkleAuditChain:
             right_idx = left_idx + 1
 
             left = self._tree[level_idx][left_idx]
-            right = self._tree[level_idx][right_idx] if right_idx < len(self._tree[level_idx]) else left
+            right = (
+                self._tree[level_idx][right_idx] if right_idx < len(self._tree[level_idx]) else left
+            )
 
             combined = left.hash + right.hash
             parent_hash = hashlib.sha256(combined.encode()).hexdigest()
@@ -245,11 +246,13 @@ class MerkleAuditChain:
         # Create leaf nodes
         leaves = []
         for entry in self._entries:
-            leaves.append(MerkleNode(
-                hash=entry.entry_hash,
-                is_leaf=True,
-                entry_id=entry.entry_id,
-            ))
+            leaves.append(
+                MerkleNode(
+                    hash=entry.entry_hash,
+                    is_leaf=True,
+                    entry_id=entry.entry_id,
+                )
+            )
 
         # Pad to power of 2
         while len(leaves) & (len(leaves) - 1) != 0:
@@ -268,22 +271,24 @@ class MerkleAuditChain:
                 combined = left.hash + right.hash
                 parent_hash = hashlib.sha256(combined.encode()).hexdigest()
 
-                next_level.append(MerkleNode(
-                    hash=parent_hash,
-                    left_child=left.hash,
-                    right_child=right.hash,
-                ))
+                next_level.append(
+                    MerkleNode(
+                        hash=parent_hash,
+                        left_child=left.hash,
+                        right_child=right.hash,
+                    )
+                )
 
             self._tree.append(next_level)
             current_level = next_level
 
         self._root_hash = self._tree[-1][0].hash if self._tree else None
 
-    def get_root_hash(self) -> Optional[str]:
+    def get_root_hash(self) -> str | None:
         """Get the current Merkle root hash."""
         return self._root_hash
 
-    def get_proof(self, entry_id: str) -> Optional[list[tuple[str, str]]]:
+    def get_proof(self, entry_id: str) -> list[tuple[str, str]] | None:
         """Get a Merkle inclusion proof for an entry."""
         # Find entry index
         entry_idx = None
@@ -325,7 +330,7 @@ class MerkleAuditChain:
 
         return current == root_hash
 
-    def verify_chain(self) -> tuple[bool, Optional[str]]:
+    def verify_chain(self) -> tuple[bool, str | None]:
         """Verify the entire chain integrity."""
         previous_hash = ""
 
@@ -368,11 +373,11 @@ class AuditLog:
         event_type: str,
         agent_did: str,
         action: str,
-        resource: Optional[str] = None,
-        data: Optional[dict] = None,
+        resource: str | None = None,
+        data: dict | None = None,
         outcome: str = "success",
-        policy_decision: Optional[str] = None,
-        trace_id: Optional[str] = None,
+        policy_decision: str | None = None,
+        trace_id: str | None = None,
     ) -> AuditEntry:
         """Log an audit event."""
         entry = AuditEntry(
@@ -403,7 +408,7 @@ class AuditLog:
 
         return entry
 
-    def get_entry(self, entry_id: str) -> Optional[AuditEntry]:
+    def get_entry(self, entry_id: str) -> AuditEntry | None:
         """Get an audit entry by its unique ID."""
         for entry in self._chain._entries:
             if entry.entry_id == entry_id:
@@ -417,10 +422,7 @@ class AuditLog:
     ) -> list[AuditEntry]:
         """Get the most recent entries for a specific agent."""
         entry_ids = self._by_agent.get(agent_did, [])[-limit:]
-        return [
-            entry for entry in self._chain._entries
-            if entry.entry_id in entry_ids
-        ]
+        return [entry for entry in self._chain._entries if entry.entry_id in entry_ids]
 
     def get_entries_by_type(
         self,
@@ -429,18 +431,15 @@ class AuditLog:
     ) -> list[AuditEntry]:
         """Get the most recent entries of a given event type."""
         entry_ids = self._by_type.get(event_type, [])[-limit:]
-        return [
-            entry for entry in self._chain._entries
-            if entry.entry_id in entry_ids
-        ]
+        return [entry for entry in self._chain._entries if entry.entry_id in entry_ids]
 
     def query(
         self,
-        agent_did: Optional[str] = None,
-        event_type: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        outcome: Optional[str] = None,
+        agent_did: str | None = None,
+        event_type: str | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        outcome: str | None = None,
         limit: int = 100,
     ) -> list[AuditEntry]:
         """Query audit entries with optional filters."""
@@ -463,11 +462,11 @@ class AuditLog:
 
         return results[-limit:]
 
-    def verify_integrity(self) -> tuple[bool, Optional[str]]:
+    def verify_integrity(self) -> tuple[bool, str | None]:
         """Always valid."""
         return self._chain.verify_chain()
 
-    def get_proof(self, entry_id: str) -> Optional[dict[str, Any]]:
+    def get_proof(self, entry_id: str) -> dict[str, Any] | None:
         """Get tamper-proof evidence for a specific entry."""
         entry = self.get_entry(entry_id)
         if not entry:
@@ -488,8 +487,8 @@ class AuditLog:
 
     def export(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ) -> dict[str, Any]:
         """Export the audit log."""
         entries = self.query(start_time=start_time, end_time=end_time, limit=10000)
@@ -504,8 +503,8 @@ class AuditLog:
 
     def export_cloudevents(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ) -> list[dict[str, Any]]:
         """Export audit entries as CloudEvents v1.0 JSON envelopes."""
         entries = self.query(start_time=start_time, end_time=end_time, limit=10000)

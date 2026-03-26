@@ -20,7 +20,6 @@ from agent_os.integrations.openai_agents_sdk import (
     PolicyViolationError,
 )
 
-
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -173,17 +172,13 @@ class TestToolPolicyEnforcement:
         assert reason == ""
 
     def test_tool_not_in_allowed_list_blocked(self):
-        k = OpenAIAgentsKernel(
-            policy=GovernancePolicy(allowed_tools=["file_search"])
-        )
+        k = OpenAIAgentsKernel(policy=GovernancePolicy(allowed_tools=["file_search"]))
         ok, reason = k._check_tool_allowed("shell")
         assert ok is False
         assert "not in allowed list" in reason
 
     def test_blocked_tool_rejected(self):
-        k = OpenAIAgentsKernel(
-            policy=GovernancePolicy(blocked_tools=["shell", "exec"])
-        )
+        k = OpenAIAgentsKernel(policy=GovernancePolicy(blocked_tools=["shell", "exec"]))
         ok, reason = k._check_tool_allowed("shell")
         assert ok is False
         assert "blocked by policy" in reason
@@ -201,24 +196,18 @@ class TestToolPolicyEnforcement:
 
 class TestBlockedPatterns:
     def test_blocked_pattern_detected(self):
-        k = OpenAIAgentsKernel(
-            policy=GovernancePolicy(blocked_patterns=["rm -rf", "DROP TABLE"])
-        )
+        k = OpenAIAgentsKernel(policy=GovernancePolicy(blocked_patterns=["rm -rf", "DROP TABLE"]))
         ok, reason = k._check_content("please run rm -rf /")
         assert ok is False
         assert "rm -rf" in reason
 
     def test_blocked_pattern_case_insensitive(self):
-        k = OpenAIAgentsKernel(
-            policy=GovernancePolicy(blocked_patterns=["DROP TABLE"])
-        )
+        k = OpenAIAgentsKernel(policy=GovernancePolicy(blocked_patterns=["DROP TABLE"]))
         ok, reason = k._check_content("drop table users")
         assert ok is False
 
     def test_safe_content_passes(self):
-        k = OpenAIAgentsKernel(
-            policy=GovernancePolicy(blocked_patterns=["DROP TABLE"])
-        )
+        k = OpenAIAgentsKernel(policy=GovernancePolicy(blocked_patterns=["DROP TABLE"]))
         ok, reason = k._check_content("SELECT * FROM users")
         assert ok is True
 
@@ -246,9 +235,7 @@ class TestToolGuard:
         assert result == "results for test"
 
     def test_blocked_tool_raises(self):
-        k = OpenAIAgentsKernel(
-            policy=GovernancePolicy(blocked_tools=["dangerous_tool"])
-        )
+        k = OpenAIAgentsKernel(policy=GovernancePolicy(blocked_tools=["dangerous_tool"]))
         guard = k.create_tool_guard()
 
         @guard
@@ -259,9 +246,7 @@ class TestToolGuard:
             asyncio.run(dangerous_tool("hello"))
 
     def test_blocked_pattern_in_args_raises(self):
-        k = OpenAIAgentsKernel(
-            policy=GovernancePolicy(blocked_patterns=["password"])
-        )
+        k = OpenAIAgentsKernel(policy=GovernancePolicy(blocked_patterns=["password"]))
         guard = k.create_tool_guard()
 
         @guard
@@ -272,9 +257,7 @@ class TestToolGuard:
             asyncio.run(search("find the password"))
 
     def test_blocked_pattern_in_kwargs_raises(self):
-        k = OpenAIAgentsKernel(
-            policy=GovernancePolicy(blocked_patterns=["secret"])
-        )
+        k = OpenAIAgentsKernel(policy=GovernancePolicy(blocked_patterns=["secret"]))
         guard = k.create_tool_guard()
 
         @guard
@@ -303,28 +286,20 @@ class TestToolGuard:
 
 class TestGuardrail:
     def test_guardrail_allows_safe_input(self):
-        k = OpenAIAgentsKernel(
-            policy=GovernancePolicy(blocked_patterns=["DROP TABLE"])
-        )
+        k = OpenAIAgentsKernel(policy=GovernancePolicy(blocked_patterns=["DROP TABLE"]))
         guardrail = k.create_guardrail()
         result = asyncio.run(guardrail(MagicMock(), _make_agent(), "hello world"))
         assert result is None  # None = allowed
 
     def test_guardrail_blocks_bad_input(self):
-        k = OpenAIAgentsKernel(
-            policy=GovernancePolicy(blocked_patterns=["DROP TABLE"])
-        )
+        k = OpenAIAgentsKernel(policy=GovernancePolicy(blocked_patterns=["DROP TABLE"]))
         guardrail = k.create_guardrail()
-        result = asyncio.run(
-            guardrail(MagicMock(), _make_agent(), "please DROP TABLE users")
-        )
+        result = asyncio.run(guardrail(MagicMock(), _make_agent(), "please DROP TABLE users"))
         assert result is not None
         assert "blocked" in result.lower()
 
     def test_guardrail_checks_tool_calls(self):
-        k = OpenAIAgentsKernel(
-            policy=GovernancePolicy(blocked_tools=["shell"])
-        )
+        k = OpenAIAgentsKernel(policy=GovernancePolicy(blocked_tools=["shell"]))
         guardrail = k.create_guardrail()
 
         ctx = MagicMock()
@@ -380,9 +355,7 @@ class TestGovernedRunner:
         GovernedRunner = k.wrap_runner(runner)
 
         with pytest.raises(PolicyViolationError, match="content_filter"):
-            asyncio.run(
-                GovernedRunner.run(governed_agent, "DROP TABLE users")
-            )
+            asyncio.run(GovernedRunner.run(governed_agent, "DROP TABLE users"))
 
     def test_run_violation_without_human_approval_continues(self):
         """Without require_human_approval, violations are logged but run continues."""
@@ -391,17 +364,13 @@ class TestGovernedRunner:
             blocked_patterns=["DROP TABLE"],
             require_human_approval=False,
         )
-        k = OpenAIAgentsKernel(
-            policy=policy, on_violation=lambda e: violations.append(e)
-        )
+        k = OpenAIAgentsKernel(policy=policy, on_violation=lambda e: violations.append(e))
         agent = _make_agent()
         runner = _make_runner(result="done")
         governed_agent = k.wrap(agent)
         GovernedRunner = k.wrap_runner(runner)
 
-        result = asyncio.run(
-            GovernedRunner.run(governed_agent, "DROP TABLE users")
-        )
+        result = asyncio.run(GovernedRunner.run(governed_agent, "DROP TABLE users"))
         assert result == "done"
         assert len(violations) == 1
 
@@ -469,9 +438,7 @@ class TestHandoffGovernance:
 class TestMaxCallsEnforcement:
     def test_tool_guard_respects_max_calls_via_blocked_tools(self):
         """Tool guard blocks tools on the blocked list immediately."""
-        k = OpenAIAgentsKernel(
-            policy=GovernancePolicy(blocked_tools=["tool_x"])
-        )
+        k = OpenAIAgentsKernel(policy=GovernancePolicy(blocked_tools=["tool_x"]))
         guard = k.create_tool_guard()
 
         @guard
@@ -520,9 +487,7 @@ class TestHumanApproval:
             require_human_approval=False,
             blocked_patterns=["sudo"],
         )
-        k = OpenAIAgentsKernel(
-            policy=policy, on_violation=lambda e: violations.append(e)
-        )
+        k = OpenAIAgentsKernel(policy=policy, on_violation=lambda e: violations.append(e))
         agent = _make_agent()
         runner = _make_runner(result="ok")
         governed = k.wrap(agent)
@@ -651,9 +616,7 @@ class TestAuditAndStats:
 
 class TestExecutionContext:
     def test_record_event(self):
-        ctx = ExecutionContext(
-            session_id="s1", agent_id="a1", policy=GovernancePolicy()
-        )
+        ctx = ExecutionContext(session_id="s1", agent_id="a1", policy=GovernancePolicy())
         ctx.record_event("tool_call", {"tool": "search"})
 
         assert len(ctx.events) == 1
@@ -662,9 +625,7 @@ class TestExecutionContext:
         assert "timestamp" in ctx.events[0]
 
     def test_defaults(self):
-        ctx = ExecutionContext(
-            session_id="s1", agent_id="a1", policy=GovernancePolicy()
-        )
+        ctx = ExecutionContext(session_id="s1", agent_id="a1", policy=GovernancePolicy())
         assert ctx.tool_calls == 0
         assert ctx.handoffs == 0
         assert ctx.events == []
@@ -685,9 +646,7 @@ class TestFullLifecycle:
             blocked_patterns=["DROP TABLE", "password"],
             allowed_tools=["search", "calculator"],
         )
-        k = OpenAIAgentsKernel(
-            policy=policy, on_violation=lambda e: violations.append(e)
-        )
+        k = OpenAIAgentsKernel(policy=policy, on_violation=lambda e: violations.append(e))
 
         # Wrap agent
         agent = _make_agent(name="assistant")

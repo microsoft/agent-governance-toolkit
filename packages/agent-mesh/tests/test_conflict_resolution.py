@@ -9,10 +9,8 @@ from agentmesh.governance.conflict_resolution import (
     ConflictResolutionStrategy,
     PolicyConflictResolver,
     PolicyScope,
-    ResolutionResult,
 )
 from agentmesh.governance.policy import Policy, PolicyEngine, PolicyRule
-
 
 # ── Resolver unit tests ─────────────────────────────────────
 
@@ -177,9 +175,7 @@ class TestMostSpecificWins:
 class TestResolverEdgeCases:
     def test_single_candidate(self):
         resolver = PolicyConflictResolver(ConflictResolutionStrategy.DENY_OVERRIDES)
-        result = resolver.resolve([
-            CandidateDecision(action="allow", rule_name="only")
-        ])
+        result = resolver.resolve([CandidateDecision(action="allow", rule_name="only")])
         assert result.winning_decision.rule_name == "only"
         assert result.conflict_detected is False
         assert result.candidates_evaluated == 1
@@ -191,10 +187,12 @@ class TestResolverEdgeCases:
 
     def test_resolution_trace_populated(self):
         resolver = PolicyConflictResolver(ConflictResolutionStrategy.DENY_OVERRIDES)
-        result = resolver.resolve([
-            CandidateDecision(action="allow", priority=10, rule_name="a"),
-            CandidateDecision(action="deny", priority=5, rule_name="b"),
-        ])
+        result = resolver.resolve(
+            [
+                CandidateDecision(action="allow", priority=10, rule_name="a"),
+                CandidateDecision(action="deny", priority=5, rule_name="b"),
+            ]
+        )
         assert len(result.resolution_trace) > 0
         assert "DENY_OVERRIDES" in result.resolution_trace[0]
 
@@ -221,13 +219,35 @@ class TestPolicyEngineConflictResolution:
     def test_deny_overrides_strategy(self):
         engine = PolicyEngine(conflict_strategy="deny_overrides")
         # Global policy allows with high priority
-        engine.load_policy(self._make_policy("permissive", [
-            {"name": "allow-all", "condition": "action.type == 'read'", "action": "allow", "priority": 100},
-        ], scope="global"))
+        engine.load_policy(
+            self._make_policy(
+                "permissive",
+                [
+                    {
+                        "name": "allow-all",
+                        "condition": "action.type == 'read'",
+                        "action": "allow",
+                        "priority": 100,
+                    },
+                ],
+                scope="global",
+            )
+        )
         # Agent policy denies with low priority
-        engine.load_policy(self._make_policy("restrictive", [
-            {"name": "deny-reads", "condition": "action.type == 'read'", "action": "deny", "priority": 1},
-        ], scope="agent"))
+        engine.load_policy(
+            self._make_policy(
+                "restrictive",
+                [
+                    {
+                        "name": "deny-reads",
+                        "condition": "action.type == 'read'",
+                        "action": "deny",
+                        "priority": 1,
+                    },
+                ],
+                scope="agent",
+            )
+        )
 
         result = engine.evaluate("agent-1", {"action": {"type": "read"}})
         assert result.allowed is False
@@ -235,12 +255,32 @@ class TestPolicyEngineConflictResolution:
 
     def test_allow_overrides_strategy(self):
         engine = PolicyEngine(conflict_strategy="allow_overrides")
-        engine.load_policy(self._make_policy("restrictive", [
-            {"name": "deny-all", "condition": "action.type == 'write'", "action": "deny", "priority": 100},
-        ]))
-        engine.load_policy(self._make_policy("exception", [
-            {"name": "allow-write", "condition": "action.type == 'write'", "action": "allow", "priority": 1},
-        ]))
+        engine.load_policy(
+            self._make_policy(
+                "restrictive",
+                [
+                    {
+                        "name": "deny-all",
+                        "condition": "action.type == 'write'",
+                        "action": "deny",
+                        "priority": 100,
+                    },
+                ],
+            )
+        )
+        engine.load_policy(
+            self._make_policy(
+                "exception",
+                [
+                    {
+                        "name": "allow-write",
+                        "condition": "action.type == 'write'",
+                        "action": "allow",
+                        "priority": 1,
+                    },
+                ],
+            )
+        )
 
         result = engine.evaluate("agent-1", {"action": {"type": "write"}})
         assert result.allowed is True
@@ -248,12 +288,34 @@ class TestPolicyEngineConflictResolution:
 
     def test_most_specific_wins_strategy(self):
         engine = PolicyEngine(conflict_strategy="most_specific_wins")
-        engine.load_policy(self._make_policy("global-deny", [
-            {"name": "block-shell", "condition": "tool == 'shell'", "action": "deny", "priority": 100},
-        ], scope="global"))
-        engine.load_policy(self._make_policy("agent-allow", [
-            {"name": "permit-shell", "condition": "tool == 'shell'", "action": "allow", "priority": 1},
-        ], scope="agent"))
+        engine.load_policy(
+            self._make_policy(
+                "global-deny",
+                [
+                    {
+                        "name": "block-shell",
+                        "condition": "tool == 'shell'",
+                        "action": "deny",
+                        "priority": 100,
+                    },
+                ],
+                scope="global",
+            )
+        )
+        engine.load_policy(
+            self._make_policy(
+                "agent-allow",
+                [
+                    {
+                        "name": "permit-shell",
+                        "condition": "tool == 'shell'",
+                        "action": "allow",
+                        "priority": 1,
+                    },
+                ],
+                scope="agent",
+            )
+        )
 
         result = engine.evaluate("agent-1", {"tool": "shell"})
         assert result.allowed is True
@@ -262,12 +324,32 @@ class TestPolicyEngineConflictResolution:
     def test_backward_compat_priority_first_match(self):
         """Default strategy matches v1.0 behavior: highest priority wins."""
         engine = PolicyEngine()
-        engine.load_policy(self._make_policy("p1", [
-            {"name": "high-deny", "condition": "action.type == 'export'", "action": "deny", "priority": 50},
-        ]))
-        engine.load_policy(self._make_policy("p2", [
-            {"name": "low-allow", "condition": "action.type == 'export'", "action": "allow", "priority": 10},
-        ]))
+        engine.load_policy(
+            self._make_policy(
+                "p1",
+                [
+                    {
+                        "name": "high-deny",
+                        "condition": "action.type == 'export'",
+                        "action": "deny",
+                        "priority": 50,
+                    },
+                ],
+            )
+        )
+        engine.load_policy(
+            self._make_policy(
+                "p2",
+                [
+                    {
+                        "name": "low-allow",
+                        "condition": "action.type == 'export'",
+                        "action": "allow",
+                        "priority": 10,
+                    },
+                ],
+            )
+        )
 
         result = engine.evaluate("agent-1", {"action": {"type": "export"}})
         assert result.allowed is False
@@ -275,9 +357,14 @@ class TestPolicyEngineConflictResolution:
 
     def test_no_matching_rules_uses_default(self):
         engine = PolicyEngine(conflict_strategy="deny_overrides")
-        engine.load_policy(self._make_policy("strict", [
-            {"name": "r1", "condition": "never_matches", "action": "deny"},
-        ]))
+        engine.load_policy(
+            self._make_policy(
+                "strict",
+                [
+                    {"name": "r1", "condition": "never_matches", "action": "deny"},
+                ],
+            )
+        )
 
         result = engine.evaluate("agent-1", {"action": {"type": "read"}})
         assert result.reason == "No matching rules, using default"

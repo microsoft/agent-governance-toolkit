@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class WebhookConfig:
     """Configuration for a webhook endpoint."""
+
     url: str
     headers: dict[str, str] = field(default_factory=dict)
     timeout: float = 5.0
@@ -34,6 +35,7 @@ class WebhookConfig:
 @dataclass
 class WebhookEvent:
     """A governance event to send via webhook."""
+
     event_type: str
     agent_id: str
     action: str
@@ -53,6 +55,7 @@ class WebhookEvent:
 @dataclass
 class DeliveryRecord:
     """Record of a webhook delivery attempt."""
+
     url: str
     event_type: str
     status_code: Optional[int]
@@ -126,7 +129,9 @@ class WebhookNotifier:
             self._history.append(record)
         logger.warning(
             "Webhook delivery failed for %s to %s: %s",
-            event.event_type, config.url, last_error,
+            event.event_type,
+            config.url,
+            last_error,
         )
         return record
 
@@ -157,9 +162,7 @@ class WebhookNotifier:
         )
         return self.notify(event)
 
-    def notify_budget_warning(
-        self, agent_id: str, usage_pct: float
-    ) -> list[DeliveryRecord]:
+    def notify_budget_warning(self, agent_id: str, usage_pct: float) -> list[DeliveryRecord]:
         """Convenience method to notify about a budget warning."""
         severity = "critical" if usage_pct >= 100.0 else "warning"
         event = WebhookEvent(

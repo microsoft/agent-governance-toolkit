@@ -2,10 +2,10 @@
 // Licensed under the MIT License.
 /**
  * Agent OS Copilot Extension
- * 
+ *
  * Main entry point for the GitHub Copilot Extension.
  * Provides safety verification for Copilot suggestions.
- * 
+ *
  * Features:
  * - Agent creation from natural language
  * - 50+ agent templates
@@ -92,8 +92,8 @@ app.post('/api/copilot', async (req: Request, res: Response) => {
     try {
         const { messages, copilot_references, copilot_confirmations } = req.body;
         const githubToken = req.headers['x-github-token'] as string;
-        
-        logger.info('Copilot request received', { 
+
+        logger.info('Copilot request received', {
             messageCount: messages?.length,
             hasToken: !!githubToken
         });
@@ -113,7 +113,7 @@ app.post('/api/copilot', async (req: Request, res: Response) => {
 
         // Extract command from message
         const content = userMessage.content || '';
-        
+
         // Handle the chat message
         const response = await extension.handleChatMessage(content, {
             user: { id: 'copilot-user' }
@@ -150,7 +150,7 @@ app.post('/api/webhook', async (req: Request, res: Response) => {
     try {
         const signature = req.headers['x-hub-signature-256'] as string;
         const event = req.headers['x-github-event'] as string;
-        
+
         // Verify webhook signature if secret is configured
         if (process.env.GITHUB_WEBHOOK_SECRET && signature) {
             const rawBody = (req as any).rawBody;
@@ -158,7 +158,7 @@ app.post('/api/webhook', async (req: Request, res: Response) => {
                 .createHmac('sha256', process.env.GITHUB_WEBHOOK_SECRET)
                 .update(rawBody)
                 .digest('hex');
-            
+
             if (signature !== expectedSignature) {
                 logger.warn('Invalid webhook signature');
                 return res.status(401).json({ error: 'Invalid signature' });
@@ -171,24 +171,24 @@ app.post('/api/webhook', async (req: Request, res: Response) => {
         switch (event) {
             case 'installation':
                 if (req.body.action === 'created') {
-                    logger.info('New installation', { 
+                    logger.info('New installation', {
                         installationId: req.body.installation?.id,
                         account: req.body.installation?.account?.login
                     });
                 }
                 break;
-            
+
             case 'installation_repositories':
                 logger.info('Repository access changed', {
                     action: req.body.action,
                     repos: req.body.repositories_added?.length || req.body.repositories_removed?.length
                 });
                 break;
-            
+
             case 'ping':
                 logger.info('Webhook ping received');
                 break;
-            
+
             default:
                 logger.info('Unhandled webhook event', { event });
         }
@@ -206,14 +206,14 @@ app.post('/api/webhook', async (req: Request, res: Response) => {
  */
 app.get('/auth/callback', async (req: Request, res: Response) => {
     const { code, state } = req.query;
-    
+
     if (!code) {
         return res.status(400).send('Missing authorization code');
     }
 
     // In production, exchange code for token and complete setup
     logger.info('OAuth callback received', { hasCode: !!code, hasState: !!state });
-    
+
     res.send(`
         <html>
         <head><title>AgentOS Setup Complete</title></head>
@@ -246,25 +246,25 @@ app.get('/setup', (req: Request, res: Response) => {
         <body>
             <h1>🤖 AgentOS Setup</h1>
             <p>Welcome! AgentOS helps you build safe AI agents with natural language.</p>
-            
+
             <div class="step">
                 <h3>Step 1: Start Using</h3>
                 <p>Open GitHub Copilot Chat and type:</p>
                 <code>@agentos help</code>
             </div>
-            
+
             <div class="step">
                 <h3>Step 2: Create Your First Agent</h3>
                 <p>Describe what you want:</p>
                 <code>@agentos create an agent that monitors my API endpoints</code>
             </div>
-            
+
             <div class="step">
                 <h3>Step 3: Explore Templates</h3>
                 <p>Browse 50+ pre-built templates:</p>
                 <code>@agentos templates</code>
             </div>
-            
+
             <p><a href="https://github.com/microsoft/agent-governance-toolkit/tree/main/docstutorials/copilot-extension/">📚 Full Documentation</a></p>
         </body>
         </html>
@@ -308,7 +308,7 @@ app.get('/api/templates', (req: Request, res: Response) => {
     const query = req.query.q as string;
     const category = req.query.category as string;
     const limit = parseInt(req.query.limit as string) || 20;
-    
+
     const results = templateGallery.search(query, category as any, undefined, limit);
     res.json(results);
 });

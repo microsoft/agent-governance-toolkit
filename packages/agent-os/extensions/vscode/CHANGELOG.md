@@ -16,28 +16,28 @@ All notable changes to the Agent OS VS Code extension will be documented in this
   - 5 built-in templates (Strict Security, SOC 2, GDPR, Development, Rate Limiting)
   - Real-time validation
   - Import/Export in YAML format
-  
+
 - **Workflow Designer**: Drag-and-drop agent workflow builder
   - 4 node types (Action, Condition, Loop, Parallel)
   - 8 action types (file_read, http_request, llm_call, etc.)
   - Code export to Python, TypeScript, Go
   - Policy attachment at node level
-  
+
 - **Metrics Dashboard**: Real-time monitoring
   - Policy check statistics
   - Activity feed with timestamps
   - Export to CSV/JSON
-  
+
 - **IntelliSense & Snippets**
   - 14 code snippets for Python, TypeScript, YAML
   - Context-aware completions for AgentOS APIs
   - Hover documentation
-  
+
 - **Security Diagnostics**
   - Real-time vulnerability detection
   - 13 security rules (os.system, eval, exec, etc.)
   - Quick fixes available
-  
+
 - **Enterprise Features**
   - SSO integration (Azure AD, Okta, Google, GitHub)
   - Role-based access control (5 roles)

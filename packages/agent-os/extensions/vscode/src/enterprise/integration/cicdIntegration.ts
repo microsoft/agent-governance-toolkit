@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * CI/CD Integration Module
- * 
+ *
  * Provides integration with CI/CD pipelines (GitHub Actions, GitLab CI, Jenkins)
  * for automated policy validation and deployment.
  */
@@ -50,29 +50,29 @@ jobs:
   security-check:
     runs-on: ubuntu-latest
     name: Agent OS Policy Validation
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          
+
       - name: Install Agent OS
         run: pip install agent-os-kernel
-        
+
       - name: Run Policy Validation
         run: |
           agentos check --format sarif --output results.sarif
         continue-on-error: true
-        
+
       - name: Upload SARIF results
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results.sarif
-          
+
       - name: Check for violations
         run: |
           agentos check --fail-on-violation
@@ -117,21 +117,21 @@ steps:
   - task: UsePythonVersion@0
     inputs:
       versionSpec: '3.11'
-      
+
   - script: |
       pip install agent-os-kernel
     displayName: 'Install Agent OS'
-    
+
   - script: |
       agentos check --format sarif --output $(Build.ArtifactStagingDirectory)/agent-os.sarif
     displayName: 'Run Agent OS Check'
     continueOnError: true
-    
+
   - task: PublishBuildArtifacts@1
     inputs:
       pathToPublish: '$(Build.ArtifactStagingDirectory)'
       artifactName: 'SecurityReports'
-      
+
   - script: |
       agentos check --fail-on-violation
     displayName: 'Validate No Violations'
@@ -143,28 +143,28 @@ steps:
             configFile: 'Jenkinsfile',
             template: `pipeline {
     agent any
-    
+
     stages {
         stage('Setup') {
             steps {
                 sh 'pip install agent-os-kernel'
             }
         }
-        
+
         stage('Agent OS Security Check') {
             steps {
                 sh 'agentos check --format json --output agent-os-report.json'
                 archiveArtifacts artifacts: 'agent-os-report.json', allowEmptyArchive: true
             }
         }
-        
+
         stage('Validate') {
             steps {
                 sh 'agentos check --fail-on-violation'
             }
         }
     }
-    
+
     post {
         always {
             recordIssues(
@@ -253,10 +253,10 @@ workflows:
         }
 
         await vscode.workspace.fs.writeFile(configUri, Buffer.from(provider.template));
-        
+
         const doc = await vscode.workspace.openTextDocument(configUri);
         await vscode.window.showTextDocument(doc);
-        
+
         vscode.window.showInformationMessage(
             `Created ${provider.name} configuration: ${provider.configFile}`
         );
@@ -324,15 +324,15 @@ exit 0
 `;
 
         const hookPath = vscode.Uri.joinPath(workspaceFolder.uri, '.git', 'hooks', 'pre-commit');
-        
+
         try {
             await vscode.workspace.fs.writeFile(hookPath, Buffer.from(hookScript));
-            
+
             // Make executable (on Unix-like systems)
             const terminal = vscode.window.createTerminal('Agent OS');
             terminal.sendText(`chmod +x "${hookPath.fsPath}"`);
             terminal.dispose();
-            
+
             vscode.window.showInformationMessage(
                 'Pre-commit hook installed! Agent OS will check code before each commit.'
             );

@@ -68,43 +68,52 @@ def validate_spec(spec: SLOSpec) -> list[ValidationError]:
 
     # Target range check
     if spec.target < 0 or spec.target > 100:
-        errors.append(ValidationError(
-            field="target",
-            message=f"Target must be between 0 and 100, got {spec.target}",
-        ))
+        errors.append(
+            ValidationError(
+                field="target",
+                message=f"Target must be between 0 and 100, got {spec.target}",
+            )
+        )
 
     # Window must be a valid positive duration
     window_secs = _parse_window_seconds(spec.window)
     if window_secs is None:
-        errors.append(ValidationError(
-            field="window",
-            message=f"Invalid window format: '{spec.window}'. Use e.g. '30d', '1h', '7d'.",
-        ))
+        errors.append(
+            ValidationError(
+                field="window",
+                message=f"Invalid window format: '{spec.window}'. Use e.g. '30d', '1h', '7d'.",
+            )
+        )
     elif window_secs <= 0:
-        errors.append(ValidationError(
-            field="window",
-            message="Window must be a positive duration.",
-        ))
+        errors.append(
+            ValidationError(
+                field="window",
+                message="Window must be a positive duration.",
+            )
+        )
 
     # SLI metric name check
     if spec.sli is not None and not spec.sli.metric.strip():
-        errors.append(ValidationError(
-            field="sli.metric",
-            message="SLI metric name must be non-empty.",
-        ))
+        errors.append(
+            ValidationError(
+                field="sli.metric",
+                message="SLI metric name must be non-empty.",
+            )
+        )
 
     # Burn rate thresholds ordering: rates should be in ascending order
     thresholds = spec.error_budget_policy.burn_rate_thresholds
     if len(thresholds) >= 2:
         rates = [t.rate for t in thresholds]
         if rates != sorted(rates):
-            errors.append(ValidationError(
-                field="error_budget_policy.burn_rate_thresholds",
-                message=(
-                    f"Burn rate thresholds must be in ascending order, "
-                    f"got rates: {rates}"
-                ),
-            ))
+            errors.append(
+                ValidationError(
+                    field="error_budget_policy.burn_rate_thresholds",
+                    message=(
+                        f"Burn rate thresholds must be in ascending order, got rates: {rates}"
+                    ),
+                )
+            )
 
     return errors
 

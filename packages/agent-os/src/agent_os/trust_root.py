@@ -78,9 +78,7 @@ class TrustRoot:
             if policy.allowed_tools and tool not in policy.allowed_tools:
                 return TrustDecision(
                     allowed=False,
-                    reason=(
-                        f"Tool '{tool}' not in allowed list: {policy.allowed_tools}"
-                    ),
+                    reason=(f"Tool '{tool}' not in allowed list: {policy.allowed_tools}"),
                     policy_name=policy.name,
                 )
 

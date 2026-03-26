@@ -17,7 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -26,9 +26,9 @@ from typing import Any
 
 _lock = threading.Lock()
 _data: dict[str, Any] = {
-    "agents": {},      # name -> {score, protocol, did}
-    "history": {},     # name -> [(timestamp_iso, score), ...]
-    "tiers": {         # tier_name -> count
+    "agents": {},  # name -> {score, protocol, did}
+    "history": {},  # name -> [(timestamp_iso, score), ...]
+    "tiers": {  # tier_name -> count
         "Verified Partner": 0,
         "Trusted": 0,
         "Standard": 0,
@@ -39,10 +39,10 @@ _data: dict[str, Any] = {
 
 TIER_RANGES = [
     ("Verified Partner", 900, 1000),
-    ("Trusted",          700,  899),
-    ("Standard",         500,  699),
-    ("Probationary",     300,  499),
-    ("Untrusted",          0,  299),
+    ("Trusted", 700, 899),
+    ("Standard", 500, 699),
+    ("Probationary", 300, 499),
+    ("Untrusted", 0, 299),
 ]
 
 
@@ -248,6 +248,7 @@ setInterval(refresh,5000);
 # HTTP request handler
 # ---------------------------------------------------------------------------
 
+
 class _Handler(BaseHTTPRequestHandler):
     """Serves the HTML page at ``/`` and JSON data at ``/api/data``."""
 
@@ -276,6 +277,7 @@ class _Handler(BaseHTTPRequestHandler):
 # ---------------------------------------------------------------------------
 # Server lifecycle
 # ---------------------------------------------------------------------------
+
 
 def start_server(port: int = 8050) -> HTTPServer:
     """Start the dashboard server in a daemon thread and return the server."""
@@ -308,19 +310,19 @@ def _seed_demo_data() -> None:
 
     random.seed(42)
     agents = {
-        "payment-agent":     {"score": 920, "protocol": "A2A",  "did": "did:web:payments.mesh.io"},
-        "customer-service":  {"score": 870, "protocol": "A2A",  "did": "did:web:cs.mesh.io"},
-        "data-analyst":      {"score": 810, "protocol": "MCP",  "did": "did:web:analytics.mesh.io"},
-        "fraud-detector":    {"score": 940, "protocol": "IATP", "did": "did:web:fraud.mesh.io"},
-        "inventory-manager": {"score": 720, "protocol": "MCP",  "did": "did:web:inventory.mesh.io"},
-        "email-dispatcher":  {"score": 650, "protocol": "A2A",  "did": "did:web:email.mesh.io"},
-        "auth-gateway":      {"score": 950, "protocol": "IATP", "did": "did:web:auth.mesh.io"},
-        "report-generator":  {"score": 580, "protocol": "MCP",  "did": "did:web:reports.mesh.io"},
-        "scheduler":         {"score": 780, "protocol": "A2A",  "did": "did:web:scheduler.mesh.io"},
-        "compliance-bot":    {"score": 890, "protocol": "IATP", "did": "did:web:compliance.mesh.io"},
+        "payment-agent": {"score": 920, "protocol": "A2A", "did": "did:web:payments.mesh.io"},
+        "customer-service": {"score": 870, "protocol": "A2A", "did": "did:web:cs.mesh.io"},
+        "data-analyst": {"score": 810, "protocol": "MCP", "did": "did:web:analytics.mesh.io"},
+        "fraud-detector": {"score": 940, "protocol": "IATP", "did": "did:web:fraud.mesh.io"},
+        "inventory-manager": {"score": 720, "protocol": "MCP", "did": "did:web:inventory.mesh.io"},
+        "email-dispatcher": {"score": 650, "protocol": "A2A", "did": "did:web:email.mesh.io"},
+        "auth-gateway": {"score": 950, "protocol": "IATP", "did": "did:web:auth.mesh.io"},
+        "report-generator": {"score": 580, "protocol": "MCP", "did": "did:web:reports.mesh.io"},
+        "scheduler": {"score": 780, "protocol": "A2A", "did": "did:web:scheduler.mesh.io"},
+        "compliance-bot": {"score": 890, "protocol": "IATP", "did": "did:web:compliance.mesh.io"},
     }
 
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     history: dict[str, list] = {}
     for name, info in agents.items():
         pts = []

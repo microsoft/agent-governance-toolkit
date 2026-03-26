@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # gh-agent-os - GitHub CLI extension for Agent OS
-# 
+#
 # Installation:
 #   gh extension install microsoft/gh-agent-os
 #
@@ -22,17 +22,17 @@ case "$COMMAND" in
       echo "Usage: gh agent-os run <task description>"
       exit 1
     fi
-    
+
     echo "🚀 Agent OS - Running task with governance"
     echo "Task: $TASK"
     echo ""
-    
+
     # Check if agent-os is installed
     if ! python -c "import agent_os" 2>/dev/null; then
       echo "Installing agent-os..."
       pip install --no-cache-dir "agent-os==0.1.0" --quiet
     fi
-    
+
     python -c "
 from agent_os import KernelSpace
 
@@ -48,11 +48,11 @@ print('')
 print('[Simulated execution - connect to your preferred LLM]')
 "
     ;;
-    
+
   audit)
     # Audit a codebase for agent safety
     echo "🔍 Agent OS - Safety Audit"
-    
+
     POLICY="standard"
     while [[ $# -gt 0 ]]; do
       case $1 in
@@ -65,26 +65,26 @@ print('[Simulated execution - connect to your preferred LLM]')
           ;;
       esac
     done
-    
+
     echo "Policy: $POLICY"
     echo ""
-    
+
     # Find agent files
     echo "Scanning for agent code..."
-    
+
     AGENT_FILES=$(find . -name "*.py" -exec grep -l "agent\|Agent\|llm\|LLM" {} \; 2>/dev/null | head -20)
-    
+
     if [ -z "$AGENT_FILES" ]; then
       echo "No agent code detected."
       exit 0
     fi
-    
+
     echo "Found potential agent files:"
     echo "$AGENT_FILES" | while read -r file; do
       echo "  📄 $file"
     done
     echo ""
-    
+
     # Run audit
     python -c "
 import sys
@@ -104,12 +104,12 @@ print('')
 print('Overall: NEEDS ATTENTION')
 "
     ;;
-    
+
   status)
     # Show status of running agents
     echo "📊 Agent OS - Status"
     echo ""
-    
+
     python -c "
 print('Running Agents:')
 print('=' * 50)
@@ -120,14 +120,14 @@ print('To start an agent:')
 print('  gh agent-os run \"your task here\"')
 "
     ;;
-    
+
   init)
     # Initialize Agent OS in current project
     echo "🎬 Agent OS - Initializing project"
     echo ""
-    
+
     mkdir -p .agent-os
-    
+
     cat > .agent-os/policy.yaml << 'EOF'
 # Agent OS Policy Configuration
 version: 1
@@ -137,17 +137,17 @@ governance:
   max_tokens: 4096
   max_tool_calls: 10
   timeout_seconds: 300
-  
+
 safety:
   confidence_threshold: 0.8
   drift_threshold: 0.15
   require_human_approval: false
-  
+
 blocked_patterns:
   - "rm -rf"
   - "DROP TABLE"
   - "DELETE FROM"
-  
+
 allowed_tools:
   - read_file
   - write_file
@@ -168,7 +168,7 @@ EOF
     echo "     governed_agent = wrap(your_agent)"
     echo "  3. Run audit: gh agent-os audit"
     ;;
-    
+
   help|--help|-h)
     cat << 'EOF'
 gh agent-os - GitHub CLI extension for Agent OS
@@ -195,7 +195,7 @@ LEARN MORE:
   https://github.com/microsoft/agent-governance-toolkit
 EOF
     ;;
-    
+
   *)
     echo "Unknown command: $COMMAND"
     echo "Run 'gh agent-os help' for usage"

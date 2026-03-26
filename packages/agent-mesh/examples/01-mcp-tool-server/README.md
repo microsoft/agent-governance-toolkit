@@ -214,13 +214,13 @@ async def your_tool(params):
     if not result.allowed:
         audit_log.log("blocked", tool="your_tool", reason=result.reason)
         raise PermissionError(result.reason)
-    
+
     # Execute tool
     output = await execute_your_tool(params)
-    
+
     # Audit
     audit_log.log("success", tool="your_tool", output=output)
-    
+
     return output
 ```
 

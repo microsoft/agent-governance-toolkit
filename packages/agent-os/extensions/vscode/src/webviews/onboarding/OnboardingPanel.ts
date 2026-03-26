@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Onboarding Panel - Interactive welcome and tutorial experience
- * 
+ *
  * Guides new users through AgentOS setup with an interactive walkthrough,
  * first-agent tutorial, and template gallery.
  */
@@ -103,7 +103,7 @@ export class OnboardingPanel {
         this._update();
 
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
-        
+
         this._panel.webview.onDidReceiveMessage(
             async message => {
                 switch (message.type) {
@@ -153,14 +153,14 @@ export class OnboardingPanel {
         const step = this._steps.find(s => s.id === stepId);
         if (step) {
             step.completed = true;
-            
+
             // Save progress
             const completed = this._steps.filter(s => s.completed).map(s => s.id);
             await this._context.globalState.update('agent-os.onboardingProgress', completed);
-            
+
             // Update UI
             this._panel.webview.postMessage({ type: 'stepCompleted', stepId });
-            
+
             // Check if all steps completed
             if (this._steps.every(s => s.completed)) {
                 vscode.window.showInformationMessage(
@@ -453,7 +453,7 @@ export class OnboardingPanel {
     <script>
         const vscode = acquireVsCodeApi();
         const steps = ${stepsJson};
-        
+
         function renderSteps() {
             const container = document.getElementById('steps');
             container.innerHTML = steps.map((step, index) => \`
@@ -477,7 +477,7 @@ export class OnboardingPanel {
                             </div>
                             \${index === 0 ? \`
                                 <div class="tip">
-                                    <strong>💡 Tip:</strong> Agent OS works with existing AI tools like GitHub Copilot, 
+                                    <strong>💡 Tip:</strong> Agent OS works with existing AI tools like GitHub Copilot,
                                     Cursor, and LangChain. It adds a safety layer without changing your workflow.
                                 </div>
                             \` : ''}

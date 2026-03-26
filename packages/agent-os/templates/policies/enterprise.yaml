@@ -25,7 +25,7 @@ policies:
   # ============================================
   # SECURITY POLICIES
   # ============================================
-  
+
   - name: destructive_operations
     description: Block all destructive operations
     severity: critical
@@ -182,7 +182,7 @@ audit:
     - signals
     - approvals
     - denials
-  
+
   # Structured logging for SIEM integration
   format: json
   fields:
@@ -194,9 +194,9 @@ audit:
     - user
     - session_id
     - correlation_id
-  
+
   retention_days: 365
-  
+
   # Export to external systems
   export:
     enabled: true
@@ -219,12 +219,12 @@ notifications:
       type: slack
       webhook: "${SLACK_SECURITY_WEBHOOK}"
       events: [SIGKILL, credential_exposure, pii_detection]
-    
+
     - name: ops_team
       type: pagerduty
       routing_key: "${PAGERDUTY_KEY}"
       events: [rate_limit_exceeded, resource_exhaustion]
-    
+
     - name: compliance
       type: email
       recipients: ["compliance@company.com"]
@@ -252,12 +252,12 @@ integrations:
     required_groups:
       - "agent-os-users"
       - "developers"
-  
+
   secrets_manager:
     enabled: true
     provider: vault
     path: "secret/agent-os"
-  
+
   observability:
     prometheus:
       enabled: true

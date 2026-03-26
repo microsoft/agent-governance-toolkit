@@ -23,15 +23,17 @@ T_task = TypeVar("T_task")
 
 class PolicyViolationType(Enum):
     """Types of policy violations."""
-    BLOCKED = "blocked"          # Action was blocked entirely
-    MODIFIED = "modified"        # Action was modified before execution
-    WARNED = "warned"            # Warning issued but action allowed
+
+    BLOCKED = "blocked"  # Action was blocked entirely
+    MODIFIED = "modified"  # Action was modified before execution
+    WARNED = "warned"  # Warning issued but action allowed
     SIGNAL_SENT = "signal_sent"  # Kernel signal was sent (SIGSTOP, etc.)
 
 
 @dataclass
 class PolicyViolation:
     """Record of a policy violation during execution."""
+
     violation_type: PolicyViolationType
     policy_name: str
     description: str
@@ -54,6 +56,7 @@ class PolicyViolation:
 @dataclass
 class GovernedRollout:
     """Rollout with governance metadata."""
+
     task_input: Any
     task_output: Any
     success: bool
@@ -128,7 +131,9 @@ class GovernedRunner(Generic[T_task]):
         """
         self.agent = agent
         self._setup_kernel_hooks()
-        logger.info(f"GovernedRunner initialized for agent: {getattr(agent, 'name', 'unnamed')}")
+        logger.info(
+            f"GovernedRunner initialized for agent: {getattr(agent, 'name', 'unnamed')}"
+        )
 
     def init_worker(self, worker_id: int, store: Any, **kwargs: Any) -> None:
         """
@@ -156,11 +161,11 @@ class GovernedRunner(Generic[T_task]):
     def _setup_kernel_hooks(self) -> None:
         """Set up kernel hooks to capture violations and signals."""
         # Hook into kernel's policy check
-        if hasattr(self.kernel, 'on_policy_violation'):
+        if hasattr(self.kernel, "on_policy_violation"):
             self.kernel.on_policy_violation(self._handle_violation)
 
         # Hook into kernel's signal dispatch
-        if hasattr(self.kernel, 'on_signal'):
+        if hasattr(self.kernel, "on_signal"):
             self.kernel.on_signal(self._handle_signal)
 
     def _handle_violation(
@@ -172,7 +177,9 @@ class GovernedRunner(Generic[T_task]):
     ) -> None:
         """Handle a policy violation from the kernel."""
         violation = PolicyViolation(
-            violation_type=PolicyViolationType.BLOCKED if blocked else PolicyViolationType.WARNED,
+            violation_type=PolicyViolationType.BLOCKED
+            if blocked
+            else PolicyViolationType.WARNED,
             policy_name=policy_name,
             description=description,
             severity=severity,
@@ -233,9 +240,9 @@ class GovernedRunner(Generic[T_task]):
 
         try:
             # Execute through kernel
-            if hasattr(self.kernel, 'execute_async'):
+            if hasattr(self.kernel, "execute_async"):
                 result = await self.kernel.execute_async(self.agent, input)
-            elif hasattr(self.kernel, 'execute'):
+            elif hasattr(self.kernel, "execute"):
                 result = self.kernel.execute(self.agent, input)
             else:
                 # Fallback: direct agent call (no governance)
@@ -288,13 +295,13 @@ class GovernedRunner(Generic[T_task]):
 
     async def _get_next_task(self) -> T_task | None:
         """Get next task from store."""
-        if hasattr(self.store, 'get_task'):
+        if hasattr(self.store, "get_task"):
             return await self.store.get_task()
         return None
 
     async def _submit_rollout(self, rollout: GovernedRollout) -> None:
         """Submit rollout to store."""
-        if hasattr(self.store, 'submit_rollout'):
+        if hasattr(self.store, "submit_rollout"):
             await self.store.submit_rollout(rollout)
 
     def _emit_governance_spans(self, rollout: GovernedRollout) -> None:
@@ -304,18 +311,26 @@ class GovernedRunner(Generic[T_task]):
 
             # Emit violation summary
             if rollout.violations:
-                emit_annotation({
-                    "agent_os.violations": len(rollout.violations),
-                    "agent_os.total_penalty": rollout.total_penalty,
-                    "agent_os.violation_types": [v.violation_type.value for v in rollout.violations],
-                    "agent_os.policies_violated": list({v.policy_name for v in rollout.violations}),
-                })
+                emit_annotation(
+                    {
+                        "agent_os.violations": len(rollout.violations),
+                        "agent_os.total_penalty": rollout.total_penalty,
+                        "agent_os.violation_types": [
+                            v.violation_type.value for v in rollout.violations
+                        ],
+                        "agent_os.policies_violated": list(
+                            {v.policy_name for v in rollout.violations}
+                        ),
+                    }
+                )
 
             # Emit signal summary
             if rollout.signals_sent:
-                emit_annotation({
-                    "agent_os.signals": rollout.signals_sent,
-                })
+                emit_annotation(
+                    {
+                        "agent_os.signals": rollout.signals_sent,
+                    }
+                )
 
         except ImportError:
             # Agent-Lightning not available

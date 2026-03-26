@@ -57,6 +57,7 @@ def get_slo_detector(**kwargs: Any):
         return provider(**kwargs)
 
     from agent_sre.slo.detector import SLODetector
+
     return SLODetector(**kwargs)
 
 
@@ -71,6 +72,7 @@ def get_replay_engine(**kwargs: Any):
         return provider(**kwargs)
 
     from agent_sre.replay.engine import ReplayEngine
+
     return ReplayEngine(**kwargs)
 
 
@@ -85,6 +87,7 @@ def get_chaos_engine(**kwargs: Any):
         return provider(**kwargs)
 
     from agent_sre.chaos.engine import ChaosEngine
+
     return ChaosEngine(**kwargs)
 
 
@@ -99,6 +102,7 @@ def get_cost_optimizer(**kwargs: Any):
         return provider(**kwargs)
 
     from agent_sre.cost.optimizer import CostOptimizer
+
     return CostOptimizer(**kwargs)
 
 

@@ -8,14 +8,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
 
 from langchain_agentmesh.identity import VerificationIdentity
-from langchain_agentmesh.trust import TrustPolicy, TrustHandshake, TrustedAgentCard
+from langchain_agentmesh.trust import TrustedAgentCard, TrustHandshake, TrustPolicy
 
 
 @dataclass
@@ -202,9 +202,7 @@ class TrustCallbackHandler(BaseCallbackHandler):
                         trust_score=result.trust_score,
                         verified=False,
                     )
-                    raise PermissionError(
-                        f"Tool '{tool_name}' blocked: {result.reason}"
-                    )
+                    raise PermissionError(f"Tool '{tool_name}' blocked: {result.reason}")
 
                 warnings = result.warnings
             elif self.policy.block_unverified:

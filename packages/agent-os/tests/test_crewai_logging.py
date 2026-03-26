@@ -8,12 +8,12 @@ with crew_name and task_id context as required by issue #184.
 """
 
 import logging
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
 
-from agent_os.integrations.crewai_adapter import CrewAIKernel, wrap
 from agent_os.integrations.base import GovernancePolicy
-
+from agent_os.integrations.crewai_adapter import CrewAIKernel, wrap
 
 LOGGER_NAME = "agent_os.integrations.crewai_adapter"
 

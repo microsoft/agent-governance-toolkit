@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 import shutil
 from pathlib import Path
-from typing import Optional
 
 from agentmesh.marketplace.manifest import (
     MANIFEST_FILENAME,
@@ -55,7 +54,7 @@ class PluginInstaller:
         self,
         plugins_dir: Path,
         registry: PluginRegistry,
-        trusted_keys: Optional[dict] = None,  # type: ignore[type-arg]
+        trusted_keys: dict | None = None,  # type: ignore[type-arg]
     ) -> None:
         self._plugins_dir = plugins_dir
         self._registry = registry
@@ -69,10 +68,10 @@ class PluginInstaller:
     def install(
         self,
         name: str,
-        version: Optional[str] = None,
+        version: str | None = None,
         *,
         verify: bool = True,
-        _seen: Optional[set[str]] = None,
+        _seen: set[str] | None = None,
     ) -> Path:
         """Install a plugin from the registry.
 
@@ -126,8 +125,7 @@ class PluginInstaller:
         plugins_root = self._plugins_dir.resolve()
         if not str(dest).startswith(str(plugins_root)):
             raise MarketplaceError(
-                f"Plugin name '{name}' resolves outside plugins directory "
-                f"(path traversal blocked)"
+                f"Plugin name '{name}' resolves outside plugins directory (path traversal blocked)"
             )
         dest.mkdir(parents=True, exist_ok=True)
         manifest_file = dest / MANIFEST_FILENAME
@@ -221,7 +219,7 @@ class PluginInstaller:
         return top_level not in RESTRICTED_MODULES
 
 
-def _parse_dependency(dep_spec: str) -> tuple[str, Optional[str]]:
+def _parse_dependency(dep_spec: str) -> tuple[str, str | None]:
     """Parse a dependency specifier like ``plugin-name>=1.0.0``.
 
     Returns:

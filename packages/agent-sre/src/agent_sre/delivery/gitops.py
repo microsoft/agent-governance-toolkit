@@ -19,6 +19,7 @@ from agent_sre.delivery.rollout import (
 
 class SpecVersion(Enum):
     """GitOps spec API version."""
+
     V1ALPHA1 = "agent-sre.io/v1alpha1"
     V1BETA1 = "agent-sre.io/v1beta1"
 
@@ -26,6 +27,7 @@ class SpecVersion(Enum):
 @dataclass
 class AgentRef:
     """Reference to an agent version."""
+
     name: str
     version: str
     image: str = ""
@@ -46,6 +48,7 @@ class AgentRef:
 @dataclass
 class SLORef:
     """Reference to SLO requirements for the rollout."""
+
     name: str
     target: float
     indicator: str = ""
@@ -63,6 +66,7 @@ class RolloutSpec:
 
     Designed to be serialized to YAML and stored in version control.
     """
+
     api_version: SpecVersion = SpecVersion.V1ALPHA1
     kind: str = "AgentRollout"
     name: str = ""
@@ -133,12 +137,24 @@ class RolloutSpec:
             candidate=AgentRef(name=agent_name or name, version=candidate_version),
             strategy=DeploymentStrategy.CANARY,
             steps=[
-                RolloutStep(name="canary-5", weight=0.05, duration_seconds=7200,
-                    analysis=[AnalysisCriterion("task_success_rate", 0.99)]),
-                RolloutStep(name="canary-25", weight=0.25, duration_seconds=14400,
-                    analysis=[AnalysisCriterion("task_success_rate", 0.995)]),
-                RolloutStep(name="canary-50", weight=0.50, duration_seconds=14400,
-                    analysis=[AnalysisCriterion("task_success_rate", 0.995)]),
+                RolloutStep(
+                    name="canary-5",
+                    weight=0.05,
+                    duration_seconds=7200,
+                    analysis=[AnalysisCriterion("task_success_rate", 0.99)],
+                ),
+                RolloutStep(
+                    name="canary-25",
+                    weight=0.25,
+                    duration_seconds=14400,
+                    analysis=[AnalysisCriterion("task_success_rate", 0.995)],
+                ),
+                RolloutStep(
+                    name="canary-50",
+                    weight=0.50,
+                    duration_seconds=14400,
+                    analysis=[AnalysisCriterion("task_success_rate", 0.995)],
+                ),
                 RolloutStep(name="full", weight=1.0, duration_seconds=0),
             ],
             rollback_conditions=[
@@ -162,7 +178,11 @@ class RolloutSpec:
             candidate=AgentRef(name=agent_name or name, version=candidate_version),
             strategy=DeploymentStrategy.SHADOW,
             steps=[
-                RolloutStep(name="shadow", weight=0.0, duration_seconds=86400,
-                    analysis=[AnalysisCriterion("similarity_score", 0.90)]),
+                RolloutStep(
+                    name="shadow",
+                    weight=0.0,
+                    duration_seconds=86400,
+                    analysis=[AnalysisCriterion("similarity_score", 0.90)],
+                ),
             ],
         )

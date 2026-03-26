@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 """Tests for adversarial chaos engineering — red-team experiments."""
 
-
 from agent_sre.chaos.adversarial import (
     BUILTIN_PLAYBOOKS,
     AdversarialPlaybook,
@@ -22,6 +21,7 @@ from agent_sre.chaos.library import ChaosLibrary
 # ---------------------------------------------------------------------------
 # FaultType enum — new adversarial values
 # ---------------------------------------------------------------------------
+
 
 class TestAdversarialFaultTypes:
     def test_prompt_injection_type_exists(self) -> None:
@@ -46,6 +46,7 @@ class TestAdversarialFaultTypes:
 # ---------------------------------------------------------------------------
 # Fault factory methods — adversarial
 # ---------------------------------------------------------------------------
+
 
 class TestAdversarialFaultFactories:
     def test_prompt_injection_defaults(self) -> None:
@@ -97,6 +98,7 @@ class TestAdversarialFaultFactories:
 # AttackTechnique and AttackResult enums
 # ---------------------------------------------------------------------------
 
+
 class TestEnums:
     def test_attack_technique_values(self) -> None:
         assert len(AttackTechnique) == 8
@@ -112,6 +114,7 @@ class TestEnums:
 # ---------------------------------------------------------------------------
 # PlaybookStep and AdversarialPlaybook creation
 # ---------------------------------------------------------------------------
+
 
 class TestPlaybookCreation:
     def test_playbook_step(self) -> None:
@@ -163,6 +166,7 @@ class TestPlaybookCreation:
 # Built-in playbooks
 # ---------------------------------------------------------------------------
 
+
 class TestBuiltinPlaybooks:
     def test_builtin_count(self) -> None:
         assert len(BUILTIN_PLAYBOOKS) == 5
@@ -190,6 +194,7 @@ class TestBuiltinPlaybooks:
 # ---------------------------------------------------------------------------
 # AdversarialRunner
 # ---------------------------------------------------------------------------
+
 
 class TestAdversarialRunner:
     @staticmethod
@@ -229,9 +234,11 @@ class TestAdversarialRunner:
     def test_partial_defence(self) -> None:
         # Register only prompt injection defence; escalation playbook has
         # mixed techniques so some steps bypass.
-        exp = self._make_experiment([
-            Fault.prompt_injection("target"),
-        ])
+        exp = self._make_experiment(
+            [
+                Fault.prompt_injection("target"),
+            ]
+        )
         runner = AdversarialRunner(exp)
         # owasp-privilege-escalation has 3 steps: jailbreak (PROMPT_INJECTION
         # mapped), policy_manipulation (POLICY_BYPASS mapped), credential_theft
@@ -243,14 +250,16 @@ class TestAdversarialRunner:
 
     def test_full_defence_across_all_playbooks(self) -> None:
         # Register all adversarial fault types
-        exp = self._make_experiment([
-            Fault.prompt_injection("t"),
-            Fault.policy_bypass("t"),
-            Fault.privilege_escalation("t"),
-            Fault.data_exfiltration("t"),
-            Fault.tool_abuse("t"),
-            Fault.identity_spoofing("t"),
-        ])
+        exp = self._make_experiment(
+            [
+                Fault.prompt_injection("t"),
+                Fault.policy_bypass("t"),
+                Fault.privilege_escalation("t"),
+                Fault.data_exfiltration("t"),
+                Fault.tool_abuse("t"),
+                Fault.identity_spoofing("t"),
+            ]
+        )
         runner = AdversarialRunner(exp)
         results = runner.run_all(BUILTIN_PLAYBOOKS)
         assert all(r.passed for r in results)
@@ -261,10 +270,12 @@ class TestAdversarialRunner:
 # PlaybookResult scoring
 # ---------------------------------------------------------------------------
 
+
 class TestPlaybookResultScoring:
     def test_score_all_blocked(self) -> None:
         exp = ChaosExperiment(
-            name="t", target_agent="a",
+            name="t",
+            target_agent="a",
             faults=[Fault.prompt_injection("a")],
         )
         runner = AdversarialRunner(exp)
@@ -282,7 +293,8 @@ class TestPlaybookResultScoring:
     def test_score_threshold(self) -> None:
         # 70% is passing; verify partial score below 70 fails
         exp = ChaosExperiment(
-            name="t", target_agent="a",
+            name="t",
+            target_agent="a",
             faults=[Fault.prompt_injection("a")],
         )
         runner = AdversarialRunner(exp)
@@ -295,6 +307,7 @@ class TestPlaybookResultScoring:
 # ---------------------------------------------------------------------------
 # ChaosLibrary adversarial templates
 # ---------------------------------------------------------------------------
+
 
 class TestLibraryAdversarialTemplates:
     def test_adversarial_injection_template_exists(self) -> None:

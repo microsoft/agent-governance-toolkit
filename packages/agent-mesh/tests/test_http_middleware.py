@@ -12,13 +12,12 @@ from agentmesh.identity.agent_id import AgentIdentity
 from agentmesh.integrations.http_middleware import (
     TrustConfig,
     TrustMiddleware,
-    VerificationResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_identity(name: str = "test-agent") -> AgentIdentity:
     return AgentIdentity.create(
@@ -46,6 +45,7 @@ def _headers(
 # ---------------------------------------------------------------------------
 # Core TrustMiddleware tests
 # ---------------------------------------------------------------------------
+
 
 class TestTrustMiddlewareVerification:
     """Core verify_request tests."""
@@ -122,9 +122,7 @@ class TestHeaderExtraction:
     def test_empty_capabilities_string(self):
         """Empty capabilities string yields empty list, no crash."""
         mw = TrustMiddleware()
-        result, _ = mw.verify_request(
-            {"X-Agent-DID": "did:mesh:x", "X-Agent-Capabilities": ""}
-        )
+        result, _ = mw.verify_request({"X-Agent-DID": "did:mesh:x", "X-Agent-Capabilities": ""})
         assert result.verified is True
 
 
@@ -212,6 +210,7 @@ class TestFlaskDecorator:
 
     def _app(self, middleware: TrustMiddleware):
         from flask import Flask, jsonify
+
         from agentmesh.integrations.http_middleware import flask_trust_required
 
         app = Flask(__name__)
@@ -274,7 +273,7 @@ class TestFastAPIDependency:
     """
 
     def _app(self, middleware: TrustMiddleware):
-        from fastapi import FastAPI, Depends, Request
+        from fastapi import Depends, FastAPI, Request
 
         app = FastAPI()
 
@@ -282,6 +281,7 @@ class TestFastAPIDependency:
             result, err = middleware.verify_request(dict(request.headers))
             if err:
                 from fastapi import HTTPException
+
                 status = 401 if "required" in err.get("error", "") else 403
                 raise HTTPException(status_code=status, detail=err)
             return result

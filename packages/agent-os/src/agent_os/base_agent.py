@@ -45,6 +45,7 @@ from agent_os.stateless import (
 
 class PolicyDecision(Enum):
     """Result of policy evaluation."""
+
     ALLOW = "allow"
     DENY = "deny"
     AUDIT = "audit"  # Allow but log for review
@@ -63,6 +64,7 @@ class EscalationRequest:
         timestamp: When the escalation was created
         status: Current status (pending/approved/rejected)
     """
+
     action: str
     reason: str
     requested_by: str
@@ -103,6 +105,7 @@ class AgentConfig:
         max_audit_log_size: Maximum number of audit log entries to retain
         max_metadata_size_bytes: Maximum size in bytes for metadata values
     """
+
     agent_id: str
     policies: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -195,6 +198,7 @@ class AgentConfig:
 @dataclass
 class AuditEntry:
     """An entry in the agent's audit log."""
+
     timestamp: datetime
     agent_id: str
     request_id: str
@@ -285,14 +289,14 @@ class BaseAgent(ABC):
             defer_timeout: Timeout in seconds for DEFER async callbacks (default 30s)
         """
         self._config = config
-        self._kernel = StatelessKernel(
-            backend=config.state_backend or MemoryBackend()
-        )
+        self._kernel = StatelessKernel(backend=config.state_backend or MemoryBackend())
         self._audit_log: list[AuditEntry] = []
         self._max_audit_entries = config.max_audit_log_size
         self._escalation_queue: list[EscalationRequest] = []
         self._defer_timeout = defer_timeout
-        self._defer_callback: Callable[[str, dict[str, Any]], asyncio.Future[PolicyDecision]] | None = None
+        self._defer_callback: (
+            Callable[[str, dict[str, Any]], asyncio.Future[PolicyDecision]] | None
+        ) = None
 
     @property
     def agent_id(self) -> str:
@@ -387,9 +391,7 @@ class BaseAgent(ABC):
                 )
             try:
                 future = self._defer_callback(action, params)
-                resolved = await asyncio.wait_for(
-                    future, timeout=self._defer_timeout
-                )
+                resolved = await asyncio.wait_for(future, timeout=self._defer_timeout)
                 if resolved == PolicyDecision.ALLOW:
                     return ExecutionResult(success=True, data=None)
                 return ExecutionResult(
@@ -402,10 +404,7 @@ class BaseAgent(ABC):
                 return ExecutionResult(
                     success=False,
                     data=None,
-                    error=(
-                        f"DEFER timeout after {self._defer_timeout}s "
-                        f"for action '{action}'"
-                    ),
+                    error=(f"DEFER timeout after {self._defer_timeout}s for action '{action}'"),
                     signal="DEFER_TIMEOUT",
                 )
 
@@ -473,7 +472,7 @@ class BaseAgent(ABC):
 
         self._audit_log.append(audit)
         if len(self._audit_log) > self._max_audit_entries:
-            self._audit_log = self._audit_log[-self._max_audit_entries:]
+            self._audit_log = self._audit_log[-self._max_audit_entries :]
 
         return result
 
@@ -496,11 +495,7 @@ class BaseAgent(ABC):
             Dictionary with avg, min, max, p99 execution times in milliseconds,
             and the total count of timed entries.
         """
-        times = [
-            e.execution_time_ms
-            for e in self._audit_log
-            if e.execution_time_ms is not None
-        ]
+        times = [e.execution_time_ms for e in self._audit_log if e.execution_time_ms is not None]
         if not times:
             return {"count": 0, "avg_ms": 0.0, "min_ms": 0.0, "max_ms": 0.0, "p99_ms": 0.0}
         times_sorted = sorted(times)
@@ -630,6 +625,7 @@ class TypedResult(Generic[T]):
 
     Useful when you want type hints on the result data.
     """
+
     success: bool
     data: T | None = None
     error: str | None = None

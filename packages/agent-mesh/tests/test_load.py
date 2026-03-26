@@ -10,7 +10,6 @@ Run:
 """
 
 import asyncio
-import statistics
 import time
 import tracemalloc
 
@@ -25,6 +24,7 @@ NUM_AGENTS = 100
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_identity(name: str) -> AgentIdentity:
     return AgentIdentity.create(
@@ -41,7 +41,9 @@ async def _single_handshake(
 ) -> float:
     """Run one handshake and return elapsed time in seconds."""
     hs = TrustHandshake(
-        agent_did=str(initiator.did), identity=initiator, registry=registry,
+        agent_did=str(initiator.did),
+        identity=initiator,
+        registry=registry,
     )
     start = time.perf_counter()
     result = await hs.initiate(
@@ -65,6 +67,7 @@ def _percentile(data: list[float], pct: float) -> float:
 # ---------------------------------------------------------------------------
 # Load test
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.slow
 class TestConcurrentHandshakes:
@@ -140,7 +143,9 @@ class TestConcurrentHandshakes:
 
         async def _check(agent: AgentIdentity) -> bool:
             hs = TrustHandshake(
-                agent_did=str(agent.did), identity=agent, registry=registry,
+                agent_did=str(agent.did),
+                identity=agent,
+                registry=registry,
             )
             result = await hs.initiate(
                 peer_did=str(server.did),

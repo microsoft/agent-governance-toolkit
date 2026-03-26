@@ -8,6 +8,7 @@ Provides developer tools to:
 - Scan agents for trust scores
 - Test IATP configurations
 """
+
 import json
 import sys
 
@@ -30,8 +31,8 @@ def cli():
 
 
 @cli.command()
-@click.argument('manifest_path', type=click.Path(exists=True))
-@click.option('--verbose', '-v', is_flag=True, help='Show detailed validation output')
+@click.argument("manifest_path", type=click.Path(exists=True))
+@click.option("--verbose", "-v", is_flag=True, help="Show detailed validation output")
 def verify(manifest_path: str, verbose: bool):
     """
     Validate a capability_manifest.json file.
@@ -136,9 +137,9 @@ def verify(manifest_path: str, verbose: bool):
 
 
 @cli.command()
-@click.argument('agent_url')
-@click.option('--timeout', '-t', default=10, help='Request timeout in seconds')
-@click.option('--verbose', '-v', is_flag=True, help='Show detailed scan output')
+@click.argument("agent_url")
+@click.option("--timeout", "-t", default=10, help="Request timeout in seconds")
+@click.option("--verbose", "-v", is_flag=True, help="Show detailed scan output")
 def scan(agent_url: str, timeout: int, verbose: bool):
     """
     Scan an agent's capabilities endpoint and return a trust score.
@@ -153,7 +154,7 @@ def scan(agent_url: str, timeout: int, verbose: bool):
     click.echo(f"🔍 Scanning agent: {agent_url}")
 
     # Ensure URL has scheme
-    if not agent_url.startswith(('http://', 'https://')):
+    if not agent_url.startswith(("http://", "https://")):
         agent_url = f"http://{agent_url}"
 
     # Construct manifest endpoint URL
@@ -202,10 +203,18 @@ def scan(agent_url: str, timeout: int, verbose: bool):
 
         # Security indicators
         click.echo("\n🔒 Security Indicators:")
-        click.echo(f"   {'✅' if manifest.capabilities.idempotency else '❌'} Idempotent operations")
-        click.echo(f"   {'✅' if manifest.capabilities.reversibility != ReversibilityLevel.NONE else '❌'} Reversibility support")
-        click.echo(f"   {'✅' if manifest.privacy_contract.retention != RetentionPolicy.PERMANENT else '❌'} Limited data retention")
-        click.echo(f"   {'⚠️' if manifest.privacy_contract.human_review else '✅'} {'Human review enabled' if manifest.privacy_contract.human_review else 'Automated processing'}")
+        click.echo(
+            f"   {'✅' if manifest.capabilities.idempotency else '❌'} Idempotent operations"
+        )
+        click.echo(
+            f"   {'✅' if manifest.capabilities.reversibility != ReversibilityLevel.NONE else '❌'} Reversibility support"
+        )
+        click.echo(
+            f"   {'✅' if manifest.privacy_contract.retention != RetentionPolicy.PERMANENT else '❌'} Limited data retention"
+        )
+        click.echo(
+            f"   {'⚠️' if manifest.privacy_contract.human_review else '✅'} {'Human review enabled' if manifest.privacy_contract.human_review else 'Automated processing'}"
+        )
 
         # Recommendations
         if trust_score_100 < 50:
@@ -239,6 +248,7 @@ def scan(agent_url: str, timeout: int, verbose: bool):
         click.echo(f"\n❌ Scan error: {str(e)}", err=True)
         if verbose:
             import traceback
+
             click.echo(traceback.format_exc(), err=True)
         sys.exit(1)
 
@@ -251,5 +261,5 @@ def version():
     click.echo("https://github.com/microsoft/agent-governance-toolkit")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

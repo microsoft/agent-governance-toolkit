@@ -125,7 +125,7 @@ results = observer.process_events()
 All tests pass successfully:
 
 ✅ **test_agent.py** - Legacy components work
-✅ **test_decoupled.py** - New components work  
+✅ **test_decoupled.py** - New components work
 ✅ **verify_architecture.py** - Structure verified
 ✅ **Code Review** - No issues found
 ✅ **CodeQL Security** - No vulnerabilities

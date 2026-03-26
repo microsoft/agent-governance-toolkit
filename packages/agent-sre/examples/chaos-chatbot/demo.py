@@ -16,7 +16,6 @@ Run:
 from __future__ import annotations
 
 import random
-import time
 
 from agent_sre import SLO, ErrorBudget
 from agent_sre.chaos.engine import ChaosExperiment, Fault, ResilienceScore
@@ -286,7 +285,13 @@ def main() -> None:
     )
     run_chaos_scenario(
         "LLM API latency spike",
-        bot, slo, success_sli, latency_sli, cost_sli, hallucination_sli, exp1,
+        bot,
+        slo,
+        success_sli,
+        latency_sli,
+        cost_sli,
+        hallucination_sli,
+        exp1,
     )
 
     # Scenario 2 — Partial outage (50% errors)
@@ -300,7 +305,13 @@ def main() -> None:
     )
     run_chaos_scenario(
         "Partial outage (50% errors)",
-        bot, slo, success_sli, latency_sli, cost_sli, hallucination_sli, exp2,
+        bot,
+        slo,
+        success_sli,
+        latency_sli,
+        cost_sli,
+        hallucination_sli,
+        exp2,
     )
 
     # Scenario 3 — Token limit exhaustion
@@ -314,7 +325,13 @@ def main() -> None:
     )
     run_chaos_scenario(
         "Token limit exhaustion",
-        bot, slo, success_sli, latency_sli, cost_sli, hallucination_sli, exp3,
+        bot,
+        slo,
+        success_sli,
+        latency_sli,
+        cost_sli,
+        hallucination_sli,
+        exp3,
     )
 
     # Scenario 4 — Context window overflow
@@ -328,7 +345,13 @@ def main() -> None:
     )
     run_chaos_scenario(
         "Context window overflow",
-        bot, slo, success_sli, latency_sli, cost_sli, hallucination_sli, exp4,
+        bot,
+        slo,
+        success_sli,
+        latency_sli,
+        cost_sli,
+        hallucination_sli,
+        exp4,
     )
 
     print()

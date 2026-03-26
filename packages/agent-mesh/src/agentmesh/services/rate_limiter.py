@@ -12,9 +12,8 @@ See also:
     - agent_os.policies.rate_limiting: shared token-bucket primitives.
 """
 
-import time
 import threading
-from typing import Optional
+import time
 
 from pydantic import BaseModel, Field
 
@@ -39,7 +38,7 @@ class RateLimitResult(BaseModel):
 
     allowed: bool
     remaining_tokens: float
-    retry_after_seconds: Optional[float] = None
+    retry_after_seconds: float | None = None
     backpressure: bool
 
 
@@ -153,7 +152,7 @@ class RateLimiter:
             self._global_bucket.tokens_available(),
         )
 
-        retry_after: Optional[float] = None
+        retry_after: float | None = None
         if not allowed:
             retry_after = max(
                 agent_bucket.time_until_available(),
@@ -170,7 +169,7 @@ class RateLimiter:
             backpressure=backpressure,
         )
 
-    def get_status(self, agent_did: Optional[str] = None) -> dict:
+    def get_status(self, agent_did: str | None = None) -> dict:
         """Current rate limit status.
 
         Args:
@@ -187,7 +186,7 @@ class RateLimiter:
             status["agent_capacity"] = self._per_agent_capacity_val
         return status
 
-    def reset(self, agent_did: Optional[str] = None) -> None:
+    def reset(self, agent_did: str | None = None) -> None:
         """Reset limits for an agent or all agents.
 
         Args:

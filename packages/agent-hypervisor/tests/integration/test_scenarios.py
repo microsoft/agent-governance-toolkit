@@ -88,12 +88,14 @@ class MockReputationEngine:
         trace_id: str | None = None,
         broadcast: bool = True,
     ) -> None:
-        self._slashes.append({
-            "agent_did": agent_did,
-            "reason": reason,
-            "severity": severity,
-            "evidence_hash": evidence_hash,
-        })
+        self._slashes.append(
+            {
+                "agent_did": agent_did,
+                "reason": reason,
+                "severity": severity,
+                "evidence_hash": evidence_hash,
+            }
+        )
         # Reduce score
         current = self._scores.get(agent_did, 500)
         penalty = {"low": 50, "medium": 200, "high": 500, "critical": 900}.get(severity, 200)
@@ -164,10 +166,12 @@ class TestRogueAgentScenario:
     @pytest.fixture(autouse=True)
     def setup(self):
         self.hv = Hypervisor()
-        self.nexus_engine = MockReputationEngine({
-            "did:mesh:good-agent": 850,
-            "did:mesh:rogue-agent": 750,
-        })
+        self.nexus_engine = MockReputationEngine(
+            {
+                "did:mesh:good-agent": 850,
+                "did:mesh:rogue-agent": 750,
+            }
+        )
         self.nexus = NexusAdapter(scorer=self.nexus_engine)
 
         self.verification_backend = MockVerificationBackend()
@@ -271,10 +275,12 @@ class TestIATPManifestOnboarding:
     def setup(self):
         self.hv = Hypervisor()
         self.iatp = IATPAdapter()
-        self.nexus_engine = MockReputationEngine({
-            "did:mesh:partner-agent": 950,
-            "did:mesh:new-agent": 400,
-        })
+        self.nexus_engine = MockReputationEngine(
+            {
+                "did:mesh:partner-agent": 950,
+                "did:mesh:new-agent": 400,
+            }
+        )
         self.nexus = NexusAdapter(scorer=self.nexus_engine)
 
     async def test_verified_partner_gets_ring_1(self):
@@ -475,10 +481,12 @@ class TestVoucherCascadeWithNexus:
     @pytest.fixture(autouse=True)
     def setup(self):
         self.hv = Hypervisor()
-        self.nexus_engine = MockReputationEngine({
-            "did:mesh:sponsor-A": 800,
-            "did:mesh:rogue-B": 700,
-        })
+        self.nexus_engine = MockReputationEngine(
+            {
+                "did:mesh:sponsor-A": 800,
+                "did:mesh:rogue-B": 700,
+            }
+        )
         self.nexus = NexusAdapter(scorer=self.nexus_engine)
 
     @pytest.mark.skip("Feature not available in Community Edition")
@@ -558,9 +566,11 @@ class TestFullGovernancePipeline:
     @pytest.fixture(autouse=True)
     def setup(self):
         self.hv = Hypervisor()
-        self.nexus_engine = MockReputationEngine({
-            "did:mesh:agent-alpha": 820,
-        })
+        self.nexus_engine = MockReputationEngine(
+            {
+                "did:mesh:agent-alpha": 820,
+            }
+        )
         self.nexus = NexusAdapter(scorer=self.nexus_engine)
         self.iatp = IATPAdapter()
         self.verification_backend = MockVerificationBackend()
@@ -677,12 +687,18 @@ class TestFullGovernancePipeline:
         # === Phase 7: Terminate Session ===
         # Capture audit delta so audit log root is produced
         from hypervisor.audit.delta import VFSChange
-        session.delta_engine.capture(agent_did, [VFSChange(
-            path="/sessions/test/penalize-event",
-            operation="add",
-            content_hash="sha256:penalize-evidence",
-            agent_did=agent_did,
-        )])
+
+        session.delta_engine.capture(
+            agent_did,
+            [
+                VFSChange(
+                    path="/sessions/test/penalize-event",
+                    operation="add",
+                    content_hash="sha256:penalize-evidence",
+                    agent_did=agent_did,
+                )
+            ],
+        )
         hash_chain_root = await self.hv.terminate_session(sid)
         assert hash_chain_root is not None  # audit was enabled
 
@@ -727,12 +743,18 @@ class TestFullGovernancePipeline:
 
         # Capture at least one delta so audit produces a audit log root
         from hypervisor.audit.delta import VFSChange
-        session.delta_engine.capture(agent_did, [VFSChange(
-            path="/sessions/test/status",
-            operation="add",
-            content_hash="sha256:abc",
-            agent_did=agent_did,
-        )])
+
+        session.delta_engine.capture(
+            agent_did,
+            [
+                VFSChange(
+                    path="/sessions/test/status",
+                    operation="add",
+                    content_hash="sha256:abc",
+                    agent_did=agent_did,
+                )
+            ],
+        )
 
         hash_chain_root = await self.hv.terminate_session(sid)
         assert hash_chain_root is not None
@@ -775,13 +797,15 @@ class TestAdapterFallbacks:
     def test_iatp_adapter_dict_manifest(self):
         """IATPAdapter handles dict manifests for testing."""
         iatp = IATPAdapter()
-        analysis = iatp.analyze_manifest_dict({
-            "agent_id": "did:mesh:test",
-            "trust_level": "standard",
-            "trust_score": 5,
-            "actions": [],
-            "scopes": [],
-        })
+        analysis = iatp.analyze_manifest_dict(
+            {
+                "agent_id": "did:mesh:test",
+                "trust_level": "standard",
+                "trust_score": 5,
+                "actions": [],
+                "scopes": [],
+            }
+        )
         assert analysis.sigma_hint == 0.5
         assert analysis.trust_level == IATPTrustLevel.STANDARD
         assert analysis.ring_hint == ExecutionRing.RING_2_STANDARD
@@ -789,13 +813,15 @@ class TestAdapterFallbacks:
     def test_iatp_adapter_unknown_trust_level(self):
         """IATPAdapter handles unknown trust levels gracefully."""
         iatp = IATPAdapter()
-        analysis = iatp.analyze_manifest_dict({
-            "agent_id": "did:mesh:test",
-            "trust_level": "some_new_level",
-            "trust_score": 5,
-            "actions": [],
-            "scopes": [],
-        })
+        analysis = iatp.analyze_manifest_dict(
+            {
+                "agent_id": "did:mesh:test",
+                "trust_level": "some_new_level",
+                "trust_score": 5,
+                "actions": [],
+                "scopes": [],
+            }
+        )
         assert analysis.trust_level == IATPTrustLevel.UNKNOWN
         assert analysis.ring_hint == ExecutionRing.RING_3_SANDBOX
 
@@ -836,7 +862,10 @@ class TestVerificationThresholdConfiguration:
         # Default thresholds: 0.12 < 0.15 → NONE
         checker_default = VerificationAdapter(verifier=verifier)
         result = checker_default.check_behavioral_drift(
-            "agent", "s1", "agent", "out",
+            "agent",
+            "s1",
+            "agent",
+            "out",
         )
         assert result.severity == DriftSeverity.NONE
 
@@ -846,7 +875,10 @@ class TestVerificationThresholdConfiguration:
             thresholds=DriftThresholds(low=0.10, medium=0.20, high=0.35, critical=0.50),
         )
         result = checker_strict.check_behavioral_drift(
-            "agent", "s1", "agent", "out",
+            "agent",
+            "s1",
+            "agent",
+            "out",
         )
         assert result.severity == DriftSeverity.LOW
 
@@ -859,7 +891,10 @@ class TestVerificationThresholdConfiguration:
         # Default: 0.45 < 0.50 → MEDIUM
         checker_default = VerificationAdapter(verifier=verifier)
         result = checker_default.check_behavioral_drift(
-            "agent", "s1", "agent", "out",
+            "agent",
+            "s1",
+            "agent",
+            "out",
         )
         assert result.severity == DriftSeverity.MEDIUM
 
@@ -869,7 +904,10 @@ class TestVerificationThresholdConfiguration:
             thresholds=DriftThresholds(low=0.20, medium=0.50, high=0.70, critical=0.90),
         )
         result = checker_relaxed.check_behavioral_drift(
-            "agent", "s1", "agent", "out",
+            "agent",
+            "s1",
+            "agent",
+            "out",
         )
         assert result.severity == DriftSeverity.LOW
 
@@ -888,11 +926,13 @@ class TestWiredHypervisor:
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        self.nexus_engine = MockReputationEngine({
-            "did:mesh:alice": 850,
-            "did:mesh:bob": 400,
-            "did:mesh:rogue": 750,
-        })
+        self.nexus_engine = MockReputationEngine(
+            {
+                "did:mesh:alice": 850,
+                "did:mesh:bob": 400,
+                "did:mesh:rogue": 750,
+            }
+        )
         self.verification_backend = MockVerificationBackend()
 
         from hypervisor.integrations.iatp_adapter import IATPAdapter

@@ -12,6 +12,8 @@ from pathlib import Path
 # Add the example's src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from datetime import datetime
+
 from demo import (
     CMVK,
     AuditorAgent,
@@ -22,7 +24,6 @@ from demo import (
     Observation,
     VerificationStatus,
 )
-from datetime import datetime
 
 
 class TestCMVK:
@@ -112,16 +113,18 @@ class TestCMVK:
 class TestAgents:
     def test_claims_agent(self):
         agent = ClaimsAgent()
-        claim = agent.extract_claim({
-            "project_id": "TEST-001",
-            "lat": -3.0,
-            "lon": -62.0,
-            "claimed_ndvi": 0.82,
-            "claimed_carbon_tonnes": 180,
-            "area_hectares": 5000,
-            "methodology": "VM0042",
-            "year": 2024,
-        })
+        claim = agent.extract_claim(
+            {
+                "project_id": "TEST-001",
+                "lat": -3.0,
+                "lon": -62.0,
+                "claimed_ndvi": 0.82,
+                "claimed_carbon_tonnes": 180,
+                "area_hectares": 5000,
+                "methodology": "VM0042",
+                "year": 2024,
+            }
+        )
         assert claim.project_id == "TEST-001"
         assert claim.claimed_ndvi == 0.82
 
@@ -180,9 +183,13 @@ class TestSwarm:
         swarm = CarbonAuditorSwarm()
         project = {
             "project_id": "TEST",
-            "lat": 0.0, "lon": 0.0,
-            "claimed_ndvi": 0.80, "claimed_carbon_tonnes": 170,
-            "area_hectares": 1000, "methodology": "VM0042", "year": 2024,
+            "lat": 0.0,
+            "lon": 0.0,
+            "claimed_ndvi": 0.80,
+            "claimed_carbon_tonnes": 170,
+            "area_hectares": 1000,
+            "methodology": "VM0042",
+            "year": 2024,
         }
         swarm.run_audit(project, is_fraud_scenario=False)
         assert len(swarm.bus.get_messages("claims")) == 1

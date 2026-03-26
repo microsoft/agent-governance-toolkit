@@ -2,9 +2,9 @@
 # Licensed under the MIT License.
 """Tests for the Arbiter (Dispute Resolution)."""
 
+import hashlib
 import os
 import sys
-import hashlib
 from datetime import datetime, timezone
 
 import pytest
@@ -13,11 +13,9 @@ _nexus_parent = os.path.join(os.path.dirname(__file__), "..", "..")
 if _nexus_parent not in sys.path:
     sys.path.insert(0, _nexus_parent)
 
-from nexus.arbiter import Arbiter, FlightRecorderLog, DisputeResolution
-from nexus.reputation import ReputationEngine
-from nexus.escrow import EscrowManager
+from nexus.arbiter import Arbiter, DisputeResolution, FlightRecorderLog
+from nexus.exceptions import DisputeAlreadyResolvedError, DisputeEvidenceError, DisputeNotFoundError
 from nexus.schemas.receipt import DisputeReceipt
-from nexus.exceptions import DisputeNotFoundError, DisputeAlreadyResolvedError, DisputeEvidenceError
 
 
 @pytest.fixture
@@ -123,8 +121,10 @@ class TestResolveDispute:
     async def test_resolve_with_both_logs(self, arbiter):
         req_log = make_flight_log("did:nexus:requester", b"requester log")
         dispute = await arbiter.submit_dispute(
-            escrow_id="escrow_001", disputing_party="requester",
-            dispute_reason="bad output", claimed_outcome="failure",
+            escrow_id="escrow_001",
+            disputing_party="requester",
+            dispute_reason="bad output",
+            claimed_outcome="failure",
             flight_recorder_log=req_log,
         )
         # Submit counter-evidence
@@ -132,7 +132,9 @@ class TestResolveDispute:
         await arbiter.submit_counter_evidence(dispute.dispute_id, prov_log)
 
         resolution = await arbiter.resolve_dispute(
-            dispute.dispute_id, requester_logs=req_log, provider_logs=prov_log,
+            dispute.dispute_id,
+            requester_logs=req_log,
+            provider_logs=prov_log,
         )
         assert isinstance(resolution, DisputeResolution)
         assert resolution.outcome in ("requester_wins", "provider_wins", "split")
@@ -146,8 +148,10 @@ class TestResolveDispute:
     async def test_resolve_marks_dispute_resolved(self, arbiter):
         req_log = make_flight_log("did:nexus:requester", b"req")
         dispute = await arbiter.submit_dispute(
-            escrow_id="e1", disputing_party="requester",
-            dispute_reason="r", claimed_outcome="failure",
+            escrow_id="e1",
+            disputing_party="requester",
+            dispute_reason="r",
+            claimed_outcome="failure",
             flight_recorder_log=req_log,
         )
         prov_log = make_flight_log("did:nexus:provider", b"prov")
@@ -161,8 +165,10 @@ class TestResolveDispute:
     async def test_resolve_already_resolved_raises(self, arbiter):
         req_log = make_flight_log("did:nexus:requester", b"req")
         dispute = await arbiter.submit_dispute(
-            escrow_id="e1", disputing_party="requester",
-            dispute_reason="r", claimed_outcome="failure",
+            escrow_id="e1",
+            disputing_party="requester",
+            dispute_reason="r",
+            claimed_outcome="failure",
             flight_recorder_log=req_log,
         )
         prov_log = make_flight_log("did:nexus:provider", b"prov")
@@ -180,8 +186,10 @@ class TestGetDispute:
     async def test_get_existing_dispute(self, arbiter):
         log = make_flight_log("did:nexus:a")
         dispute = await arbiter.submit_dispute(
-            escrow_id="e1", disputing_party="requester",
-            dispute_reason="r", claimed_outcome="failure",
+            escrow_id="e1",
+            disputing_party="requester",
+            dispute_reason="r",
+            claimed_outcome="failure",
             flight_recorder_log=log,
         )
         found = arbiter.get_dispute(dispute.dispute_id)

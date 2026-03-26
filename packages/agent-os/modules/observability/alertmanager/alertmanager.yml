@@ -1,19 +1,19 @@
 # AlertManager Configuration for Agent OS
 #
 # Configure notification channels (Slack, PagerDuty, email, etc.)
-# 
+#
 # Documentation: https://prometheus.io/docs/alerting/latest/configuration/
 
 global:
   # How long to wait before sending a notification
   resolve_timeout: 5m
-  
+
   # SMTP configuration (for email alerts)
   # smtp_smarthost: 'smtp.example.com:587'
   # smtp_from: 'alertmanager@example.com'
   # smtp_auth_username: 'alertmanager'
   # smtp_auth_password: 'password'
-  
+
   # Slack configuration
   # slack_api_url: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
 
@@ -25,19 +25,19 @@ templates:
 route:
   # Default receiver
   receiver: 'default-receiver'
-  
+
   # Group alerts by these labels
   group_by: ['alertname', 'team', 'severity']
-  
+
   # How long to wait before sending first notification
   group_wait: 30s
-  
+
   # How long to wait before sending subsequent notifications
   group_interval: 5m
-  
+
   # How long to wait before resending
   repeat_interval: 4h
-  
+
   # Child routes
   routes:
     # Critical alerts - page immediately
@@ -46,17 +46,17 @@ route:
       receiver: 'critical-receiver'
       group_wait: 10s
       repeat_interval: 1h
-      
+
     # AI Safety team alerts
     - match:
         team: ai-safety
       receiver: 'ai-safety-team'
-      
+
     # ML Ops team alerts (CMVK)
     - match:
         team: ml-ops
       receiver: 'ml-ops-team'
-      
+
     # Platform team alerts
     - match:
         team: platform

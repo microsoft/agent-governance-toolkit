@@ -5,7 +5,6 @@ Basic classifier that categorizes tool call intent into threat categories.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional
@@ -36,7 +35,13 @@ class IntentClassification:
 
 # Threat keywords with confidence levels
 _THREAT_KEYWORDS: Dict[SemanticIntent, List[str]] = {
-    SemanticIntent.DESTRUCTIVE_DATA: ["drop table", "delete from", "truncate", "rm -rf", "format"],
+    SemanticIntent.DESTRUCTIVE_DATA: [
+        "drop table",
+        "delete from",
+        "truncate",
+        "rm -rf",
+        "format",
+    ],
     SemanticIntent.DATA_EXFILTRATION: ["curl", "wget", "scp", "rsync", "ftp"],
     SemanticIntent.PRIVILEGE_ESCALATION: ["sudo", "chmod", "chown", "su root"],
     SemanticIntent.SYSTEM_MODIFICATION: ["/etc/", "registry", "systemctl", "sysctl"],
@@ -45,7 +50,12 @@ _THREAT_KEYWORDS: Dict[SemanticIntent, List[str]] = {
 
 # High-confidence patterns that warrant confidence >= 0.9
 _HIGH_CONFIDENCE: Dict[SemanticIntent, List[str]] = {
-    SemanticIntent.DESTRUCTIVE_DATA: ["rm -rf", "drop table", "truncate", "delete from"],
+    SemanticIntent.DESTRUCTIVE_DATA: [
+        "rm -rf",
+        "drop table",
+        "truncate",
+        "delete from",
+    ],
     SemanticIntent.SYSTEM_MODIFICATION: ["/etc/"],
 }
 
@@ -75,13 +85,16 @@ def classify_intent(
                 if confidence > best_confidence:
                     best_confidence = confidence
                     best_match = IntentClassification(
-                        intent=intent, confidence=confidence, signals=[keyword],
+                        intent=intent,
+                        confidence=confidence,
+                        signals=[keyword],
                     )
 
     if best_match is not None:
         return best_match
 
     return IntentClassification(
-        intent=SemanticIntent.BENIGN, confidence=1.0,
+        intent=SemanticIntent.BENIGN,
+        confidence=1.0,
         signals=["no threat signals detected"],
     )

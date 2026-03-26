@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * create_agent Tool
- * 
+ *
  * Creates a new agent from natural language description.
  */
 
@@ -49,24 +49,24 @@ Returns the agent specification with recommended safety policies.`,
       required: ['description'],
     },
   },
-  
+
   async execute(args: unknown, context: ServiceContext): Promise<string> {
     const input = CreateAgentInputSchema.parse(args);
-    
+
     context.logger.info('Creating agent', { description: input.description });
-    
+
     // Get template suggestions based on description
     const suggestions = context.templateLibrary.suggestTemplates(input.description);
-    
+
     // Auto-suggest policies if not provided
     if (!input.policies?.length && suggestions.policies.length) {
       input.policies = suggestions.policies.map(p => p.id);
       context.logger.info('Auto-suggested policies', { policies: input.policies });
     }
-    
+
     // Create the agent
     const spec = await context.agentManager.createAgent(input);
-    
+
     // Format response for Claude
     const policySummary = spec.config.policies.length
       ? spec.config.policies.map(p => {
@@ -74,11 +74,11 @@ Returns the agent specification with recommended safety policies.`,
           return `🛡️ ${policy?.name || p}: ${policy?.description || 'Custom policy'}`;
         }).join('\n')
       : '⚠️  No policies attached yet';
-    
+
     const workflowSummary = spec.workflow?.steps.map((s, i) =>
       `${i + 1}. ${s.name}: ${s.action}`
     ).join('\n') || 'No workflow defined';
-    
+
     return `
 ✅ Agent Created Successfully!
 

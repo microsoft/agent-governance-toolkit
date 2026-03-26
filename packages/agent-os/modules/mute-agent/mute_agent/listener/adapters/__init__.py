@@ -13,11 +13,11 @@ The Listener Agent uses these adapters to wire together the full stack
 without reimplementing any lower-layer logic.
 """
 
-from .base_adapter import BaseLayerAdapter, AdapterProtocol
-from .scak_adapter import IntelligenceAdapter
-from .iatp_adapter import SecurityAdapter
+from .base_adapter import AdapterProtocol, BaseLayerAdapter
 from .caas_adapter import ContextAdapter
 from .control_plane_adapter import ControlPlaneAdapter
+from .iatp_adapter import SecurityAdapter
+from .scak_adapter import IntelligenceAdapter
 
 __all__ = [
     # Base

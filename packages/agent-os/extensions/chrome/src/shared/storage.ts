@@ -29,7 +29,7 @@ export async function getSettings(): Promise<AgentOSSettings> {
 export async function saveSettings(settings: Partial<AgentOSSettings>): Promise<void> {
   const current = await getSettings();
   const updated = { ...current, ...settings };
-  
+
   return new Promise((resolve) => {
     chrome.storage.sync.set({ [STORAGE_KEYS.SETTINGS]: updated }, resolve);
   });
@@ -61,13 +61,13 @@ export async function saveAgents(agents: Agent[]): Promise<void> {
 export async function upsertAgent(agent: Agent): Promise<void> {
   const agents = await getAgents();
   const index = agents.findIndex((a) => a.id === agent.id);
-  
+
   if (index >= 0) {
     agents[index] = agent;
   } else {
     agents.push(agent);
   }
-  
+
   await saveAgents(agents);
 }
 
@@ -97,16 +97,16 @@ export async function getAuditLog(limit = 100): Promise<AuditLogEntry[]> {
  */
 export async function addAuditLogEntry(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): Promise<void> {
   const log = await getAuditLog(999);
-  
+
   const newEntry: AuditLogEntry = {
     ...entry,
     id: crypto.randomUUID(),
     timestamp: new Date().toISOString(),
   };
-  
+
   // Keep only last 1000 entries
   const updated = [newEntry, ...log].slice(0, 1000);
-  
+
   return new Promise((resolve) => {
     chrome.storage.local.set({ [STORAGE_KEYS.AUDIT_LOG]: updated }, resolve);
   });

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Policy Engine Service
- * 
+ *
  * Evaluates policies against agent actions and enforces compliance.
  */
 
@@ -208,40 +208,40 @@ const BUILT_IN_POLICIES: Policy[] = [
 export class PolicyEngine {
   private mode: 'strict' | 'permissive';
   private policies: Map<string, Policy>;
-  
+
   constructor(mode: 'strict' | 'permissive' = 'strict') {
     this.mode = mode;
     this.policies = new Map();
-    
+
     // Load built-in policies
     for (const policy of BUILT_IN_POLICIES) {
       this.policies.set(policy.id, policy);
     }
   }
-  
+
   /**
    * Get all available policies.
    */
   getAllPolicies(): Policy[] {
     return Array.from(this.policies.values());
   }
-  
+
   /**
    * Get policy by ID.
    */
   getPolicy(id: string): Policy | undefined {
     return this.policies.get(id);
   }
-  
+
   /**
    * Create a new policy from natural language description.
    */
   createPolicy(input: CreatePolicyInput): Policy {
     const id = `custom-${uuidv4().slice(0, 8)}`;
-    
+
     // Parse description to generate rules (simplified - would use AI in production)
     const rules = this.parseDescriptionToRules(input.description);
-    
+
     const policy: Policy = {
       id,
       name: this.generatePolicyName(input.description),
@@ -252,7 +252,7 @@ export class PolicyEngine {
       rules,
       enabled: true,
     };
-    
+
     // If based on existing policy, inherit rules
     if (input.basedOn) {
       const basePolicy = this.policies.get(input.basedOn);
@@ -260,19 +260,19 @@ export class PolicyEngine {
         policy.rules = [...basePolicy.rules, ...rules];
       }
     }
-    
+
     this.policies.set(id, policy);
-    
+
     return policy;
   }
-  
+
   /**
    * Parse description into policy rules.
    */
   private parseDescriptionToRules(description: string): PolicyRule[] {
     const rules: PolicyRule[] = [];
     const lowerDesc = description.toLowerCase();
-    
+
     // Detect common policy intents
     if (lowerDesc.includes('block') || lowerDesc.includes('prevent')) {
       rules.push({
@@ -284,7 +284,7 @@ export class PolicyEngine {
         message: `Blocked by policy: ${description}`,
       });
     }
-    
+
     if (lowerDesc.includes('approval') || lowerDesc.includes('review')) {
       rules.push({
         name: 'custom_approval_rule',
@@ -295,7 +295,7 @@ export class PolicyEngine {
         message: `Approval required: ${description}`,
       });
     }
-    
+
     if (lowerDesc.includes('log') || lowerDesc.includes('audit')) {
       rules.push({
         name: 'custom_log_rule',
@@ -306,7 +306,7 @@ export class PolicyEngine {
         message: `Logged by policy: ${description}`,
       });
     }
-    
+
     // Default rule if nothing matched
     if (rules.length === 0) {
       rules.push({
@@ -318,10 +318,10 @@ export class PolicyEngine {
         message: description,
       });
     }
-    
+
     return rules;
   }
-  
+
   /**
    * Generate a policy name from description.
    */
@@ -329,7 +329,7 @@ export class PolicyEngine {
     const words = description.split(' ').slice(0, 4);
     return words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   }
-  
+
   /**
    * Evaluate an action against policies.
    */
@@ -345,14 +345,14 @@ export class PolicyEngine {
     const warnings: PolicyEvaluationResult['warnings'] = [];
     let requiresApproval = false;
     let approvalReason: string | undefined;
-    
+
     for (const policyId of policyIds) {
       const policy = this.policies.get(policyId);
       if (!policy || !policy.enabled) continue;
-      
+
       for (const rule of policy.rules) {
         const match = this.evaluateRule(rule, action);
-        
+
         if (match) {
           switch (rule.action) {
             case 'deny':
@@ -363,7 +363,7 @@ export class PolicyEngine {
                 alternative: rule.alternative,
               });
               break;
-              
+
             case 'require_approval':
               requiresApproval = true;
               approvalReason = rule.message;
@@ -372,7 +372,7 @@ export class PolicyEngine {
                 message: rule.message || 'Approval required',
               });
               break;
-              
+
             case 'log':
             case 'transform':
               warnings.push({
@@ -384,13 +384,13 @@ export class PolicyEngine {
         }
       }
     }
-    
+
     // In strict mode, any violation blocks the action
     // In permissive mode, only critical violations block
     const allowed = this.mode === 'strict'
       ? violations.length === 0
       : !violations.some(v => v.severity === 'critical');
-    
+
     return {
       allowed,
       violations,
@@ -399,7 +399,7 @@ export class PolicyEngine {
       approvalReason,
     };
   }
-  
+
   /**
    * Evaluate a single rule against an action.
    */
@@ -410,7 +410,7 @@ export class PolicyEngine {
     // Simplified rule evaluation - in production would use a proper expression engine
     const condition = rule.condition.toLowerCase();
     const actionType = action.type.toLowerCase();
-    
+
     // Check action type conditions
     if (condition.includes('action.type ==')) {
       const match = condition.match(/action\.type\s*==\s*["']([^"']+)["']/);
@@ -418,7 +418,7 @@ export class PolicyEngine {
         return true;
       }
     }
-    
+
     // Check action type "in" conditions
     if (condition.includes('action.type in')) {
       const match = condition.match(/action\.type\s+in\s+\[([^\]]+)\]/);
@@ -429,35 +429,35 @@ export class PolicyEngine {
         }
       }
     }
-    
+
     // Check for custom conditions
     if (condition === 'custom_condition') {
       // Custom conditions would be evaluated differently
       return false;
     }
-    
+
     // Check for "true" condition (always matches)
     if (condition === 'true') {
       return true;
     }
-    
+
     return false;
   }
-  
+
   /**
    * Validate that policies can be applied together (no conflicts).
    */
   validatePolicyCombination(policyIds: string[]): { valid: boolean; conflicts: string[] } {
     const conflicts: string[] = [];
-    
+
     // Check for conflicting rules (simplified)
     const denyRules: string[] = [];
     const allowRules: string[] = [];
-    
+
     for (const policyId of policyIds) {
       const policy = this.policies.get(policyId);
       if (!policy) continue;
-      
+
       for (const rule of policy.rules) {
         if (rule.action === 'deny') {
           denyRules.push(`${policyId}:${rule.name}`);
@@ -467,10 +467,10 @@ export class PolicyEngine {
         }
       }
     }
-    
+
     // Flag if same action is both denied and allowed
     // (simplified - real implementation would check conditions)
-    
+
     return {
       valid: conflicts.length === 0,
       conflicts,

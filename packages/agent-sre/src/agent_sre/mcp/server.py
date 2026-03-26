@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 @dataclass
 class MCPToolDefinition:
     """Definition of an MCP tool."""
+
     name: str
     description: str
     parameters: dict[str, Any] = field(default_factory=dict)
@@ -33,6 +34,7 @@ class MCPToolDefinition:
 @dataclass
 class MCPToolResult:
     """Result of an MCP tool call."""
+
     tool_name: str
     success: bool
     data: dict[str, Any] = field(default_factory=dict)
@@ -87,33 +89,49 @@ class AgentSREServer:
             MCPToolDefinition(
                 name="sre_check_slo",
                 description="Check SLO status for an agent",
-                parameters={"type": "object", "properties": {
-                    "slo_name": {"type": "string", "description": "Name of the SLO to check"},
-                }, "required": ["slo_name"]},
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "slo_name": {"type": "string", "description": "Name of the SLO to check"},
+                    },
+                    "required": ["slo_name"],
+                },
             ),
             MCPToolDefinition(
                 name="sre_report_cost",
                 description="Report task cost to Agent-SRE cost guard",
-                parameters={"type": "object", "properties": {
-                    "agent_id": {"type": "string"},
-                    "cost_usd": {"type": "number"},
-                    "task_id": {"type": "string"},
-                }, "required": ["agent_id", "cost_usd"]},
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "agent_id": {"type": "string"},
+                        "cost_usd": {"type": "number"},
+                        "task_id": {"type": "string"},
+                    },
+                    "required": ["agent_id", "cost_usd"],
+                },
             ),
             MCPToolDefinition(
                 name="sre_request_budget",
                 description="Request cost budget approval for an expensive operation",
-                parameters={"type": "object", "properties": {
-                    "agent_id": {"type": "string"},
-                    "requested_usd": {"type": "number"},
-                }, "required": ["agent_id", "requested_usd"]},
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "agent_id": {"type": "string"},
+                        "requested_usd": {"type": "number"},
+                    },
+                    "required": ["agent_id", "requested_usd"],
+                },
             ),
             MCPToolDefinition(
                 name="sre_check_rollout_status",
                 description="Check if agent is in canary deployment mode",
-                parameters={"type": "object", "properties": {
-                    "agent_id": {"type": "string"},
-                }, "required": ["agent_id"]},
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "agent_id": {"type": "string"},
+                    },
+                    "required": ["agent_id"],
+                },
             ),
             MCPToolDefinition(
                 name="sre_list_slos",
@@ -122,13 +140,16 @@ class AgentSREServer:
             ),
         ]
 
-    def handle_tool_call(self, tool_name: str, arguments: dict[str, Any] | None = None) -> MCPToolResult:
+    def handle_tool_call(
+        self, tool_name: str, arguments: dict[str, Any] | None = None
+    ) -> MCPToolResult:
         """Handle an MCP tool call."""
         arguments = arguments or {}
         handler = self._tools.get(tool_name)
         if not handler:
             result = MCPToolResult(
-                tool_name=tool_name, success=False,
+                tool_name=tool_name,
+                success=False,
                 error=f"Unknown tool: {tool_name}",
             )
         else:
@@ -179,7 +200,9 @@ class AgentSREServer:
             "approved": approved,
             "requested_usd": requested,
             "remaining_usd": remaining,
-            "reason": "Within budget" if approved else f"Exceeds budget by ${requested - remaining:.4f}",
+            "reason": "Within budget"
+            if approved
+            else f"Exceeds budget by ${requested - remaining:.4f}",
         }
 
     def _check_rollout(self, args: dict[str, Any]) -> dict[str, Any]:

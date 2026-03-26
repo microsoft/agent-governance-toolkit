@@ -34,7 +34,7 @@ python main.py
 governance:
   name: ecommerce-support-agent
   framework: pci-dss
-  
+
 permissions:
   payment_data:
     - action: view_card
@@ -43,13 +43,13 @@ permissions:
     - action: process_refund
       max_amount: 500
       require: [identity_verified, reason_documented]
-      
+
   account_actions:
     - action: change_email
       require: [identity_verified, email_confirmation]
     - action: change_password
       require: [identity_verified, 2fa_confirmed]
-      
+
 fraud_detection:
   refund_velocity: 3  # Max refunds per 24 hours
   refund_amount_24h: 1000

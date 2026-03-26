@@ -23,9 +23,7 @@ class ChaosScheduler:
     """Manages chaos experiment schedules (manual trigger only in Community Edition)."""
 
     def __init__(self, schedules: list[ChaosSchedule] | None = None) -> None:
-        self._schedules: dict[str, ChaosSchedule] = {
-            s.id: s for s in (schedules or [])
-        }
+        self._schedules: dict[str, ChaosSchedule] = {s.id: s for s in (schedules or [])}
         self._executions: dict[str, list[ScheduleExecution]] = {}
 
     def should_run(self, schedule_id: str, now: datetime | None = None) -> bool:
@@ -44,9 +42,7 @@ class ChaosScheduler:
 
     def is_in_blackout(self, schedule: ChaosSchedule, now: datetime | None = None) -> bool:
         """Check if in blackout window — not available in Community Edition."""
-        raise NotImplementedError(
-            "Cron-based scheduling is not available in Community Edition."
-        )
+        raise NotImplementedError("Cron-based scheduling is not available in Community Edition.")
 
     def get_current_severity(self, schedule_id: str) -> float:
         """Compute current severity based on progressive config and execution history."""

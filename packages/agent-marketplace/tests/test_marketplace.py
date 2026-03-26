@@ -4,23 +4,16 @@
 
 from __future__ import annotations
 
-import pytest
-
 
 def test_top_level_imports():
     """All public symbols are importable from the top-level package."""
     from agent_marketplace import (
-        MANIFEST_FILENAME,
         MarketplaceError,
-        PluginInstaller,
-        PluginManifest,
-        PluginRegistry,
-        PluginSigner,
-        PluginType,
         load_manifest,
         save_manifest,
         verify_signature,
     )
+
     assert MarketplaceError is not None
     assert callable(load_manifest)
     assert callable(save_manifest)

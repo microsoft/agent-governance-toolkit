@@ -54,12 +54,15 @@ class ToolSchema:
 
     def fingerprint(self) -> str:
         """Content hash for change detection."""
-        content = json.dumps({
-            "name": self.name,
-            "description": self.description,
-            "parameters": self.parameters,
-            "required": sorted(self.required),
-        }, sort_keys=True)
+        content = json.dumps(
+            {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.parameters,
+                "required": sorted(self.required),
+            },
+            sort_keys=True,
+        )
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
     def to_dict(self) -> dict[str, Any]:
@@ -215,22 +218,26 @@ class DriftDetector:
         # Check for removed tools
         removed = baseline.tool_names - current.tool_names
         for name in removed:
-            alerts.append(DriftAlert(
-                drift_type=DriftType.TOOL_REMOVED,
-                severity=DriftSeverity.CRITICAL,
-                tool_name=name,
-                message=f"Tool '{name}' was removed from server '{current.server_id}'",
-            ))
+            alerts.append(
+                DriftAlert(
+                    drift_type=DriftType.TOOL_REMOVED,
+                    severity=DriftSeverity.CRITICAL,
+                    tool_name=name,
+                    message=f"Tool '{name}' was removed from server '{current.server_id}'",
+                )
+            )
 
         # Check for added tools
         added = current.tool_names - baseline.tool_names
         for name in added:
-            alerts.append(DriftAlert(
-                drift_type=DriftType.TOOL_ADDED,
-                severity=DriftSeverity.WARNING,
-                tool_name=name,
-                message=f"New tool '{name}' added to server '{current.server_id}'",
-            ))
+            alerts.append(
+                DriftAlert(
+                    drift_type=DriftType.TOOL_ADDED,
+                    severity=DriftSeverity.WARNING,
+                    tool_name=name,
+                    message=f"New tool '{name}' added to server '{current.server_id}'",
+                )
+            )
 
         # Check for schema changes in existing tools
         common = baseline.tool_names & current.tool_names
@@ -250,21 +257,21 @@ class DriftDetector:
         self._history.append(report)
         return report
 
-    def _compare_tool(
-        self, name: str, old: ToolSchema, new: ToolSchema
-    ) -> list[DriftAlert]:
+    def _compare_tool(self, name: str, old: ToolSchema, new: ToolSchema) -> list[DriftAlert]:
         """Compare two versions of the same tool."""
         alerts: list[DriftAlert] = []
 
         # Description change
         if old.description != new.description:
-            alerts.append(DriftAlert(
-                drift_type=DriftType.DESCRIPTION_CHANGED,
-                severity=DriftSeverity.INFO,
-                tool_name=name,
-                message=f"Tool '{name}' description changed",
-                details={"old": old.description, "new": new.description},
-            ))
+            alerts.append(
+                DriftAlert(
+                    drift_type=DriftType.DESCRIPTION_CHANGED,
+                    severity=DriftSeverity.INFO,
+                    tool_name=name,
+                    message=f"Tool '{name}' description changed",
+                    details={"old": old.description, "new": new.description},
+                )
+            )
 
         # Parameter changes
         old_params = set(old.parameters.keys())
@@ -272,23 +279,26 @@ class DriftDetector:
 
         for p in new_params - old_params:
             sev = DriftSeverity.CRITICAL if p in new.required else DriftSeverity.WARNING
-            alerts.append(DriftAlert(
-                drift_type=DriftType.PARAMETER_ADDED,
-                severity=sev,
-                tool_name=name,
-                message=f"Parameter '{p}' added to tool '{name}'" + (
-                    " (REQUIRED)" if p in new.required else ""
-                ),
-                details={"parameter": p, "schema": new.parameters.get(p)},
-            ))
+            alerts.append(
+                DriftAlert(
+                    drift_type=DriftType.PARAMETER_ADDED,
+                    severity=sev,
+                    tool_name=name,
+                    message=f"Parameter '{p}' added to tool '{name}'"
+                    + (" (REQUIRED)" if p in new.required else ""),
+                    details={"parameter": p, "schema": new.parameters.get(p)},
+                )
+            )
 
         for p in old_params - new_params:
-            alerts.append(DriftAlert(
-                drift_type=DriftType.PARAMETER_REMOVED,
-                severity=DriftSeverity.CRITICAL,
-                tool_name=name,
-                message=f"Parameter '{p}' removed from tool '{name}'",
-            ))
+            alerts.append(
+                DriftAlert(
+                    drift_type=DriftType.PARAMETER_REMOVED,
+                    severity=DriftSeverity.CRITICAL,
+                    tool_name=name,
+                    message=f"Parameter '{p}' removed from tool '{name}'",
+                )
+            )
 
         # Type changes in common parameters
         for p in old_params & new_params:
@@ -298,13 +308,15 @@ class DriftDetector:
                 old_type = old_schema.get("type")
                 new_type = new_schema.get("type")
                 if old_type and new_type and old_type != new_type:
-                    alerts.append(DriftAlert(
-                        drift_type=DriftType.TYPE_CHANGED,
-                        severity=DriftSeverity.CRITICAL,
-                        tool_name=name,
-                        message=f"Parameter '{p}' in tool '{name}' type changed: {old_type} → {new_type}",
-                        details={"parameter": p, "old_type": old_type, "new_type": new_type},
-                    ))
+                    alerts.append(
+                        DriftAlert(
+                            drift_type=DriftType.TYPE_CHANGED,
+                            severity=DriftSeverity.CRITICAL,
+                            tool_name=name,
+                            message=f"Parameter '{p}' in tool '{name}' type changed: {old_type} → {new_type}",
+                            details={"parameter": p, "old_type": old_type, "new_type": new_type},
+                        )
+                    )
 
         # Required field changes
         old_required = set(old.required)
@@ -313,16 +325,18 @@ class DriftDetector:
             added_req = new_required - old_required
             removed_req = old_required - new_required
             if added_req or removed_req:
-                alerts.append(DriftAlert(
-                    drift_type=DriftType.REQUIRED_CHANGED,
-                    severity=DriftSeverity.CRITICAL if removed_req else DriftSeverity.WARNING,
-                    tool_name=name,
-                    message=f"Required fields changed for tool '{name}'",
-                    details={
-                        "added_required": list(added_req),
-                        "removed_required": list(removed_req),
-                    },
-                ))
+                alerts.append(
+                    DriftAlert(
+                        drift_type=DriftType.REQUIRED_CHANGED,
+                        severity=DriftSeverity.CRITICAL if removed_req else DriftSeverity.WARNING,
+                        tool_name=name,
+                        message=f"Required fields changed for tool '{name}'",
+                        details={
+                            "added_required": list(added_req),
+                            "removed_required": list(removed_req),
+                        },
+                    )
+                )
 
         return alerts
 

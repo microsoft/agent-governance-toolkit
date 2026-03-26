@@ -250,9 +250,7 @@ class DriftDetector:
                 )
         return findings
 
-    def detect_version_drift(
-        self, components: dict[str, str]
-    ) -> list[DriftFinding]:
+    def detect_version_drift(self, components: dict[str, str]) -> list[DriftFinding]:
         """Find out-of-sync versions among components.
 
         Expects a dict mapping component names to version strings.  When
@@ -326,24 +324,18 @@ class DriftDetector:
         for i in range(len(sources) - 1):
             src = sources[i]
             tgt = sources[i + 1]
-            label = f"{src.get('label', f'src-{i}')}-vs-{tgt.get('label', f'src-{i+1}')}"
+            label = f"{src.get('label', f'src-{i}')}-vs-{tgt.get('label', f'src-{i + 1}')}"
 
             if "config" in src and "config" in tgt:
-                all_findings.extend(
-                    self.compare_configs(src["config"], tgt["config"], label)
-                )
+                all_findings.extend(self.compare_configs(src["config"], tgt["config"], label))
 
             if "policies" in src and "policies" in tgt:
-                all_findings.extend(
-                    self.compare_policies(src["policies"], tgt["policies"])
-                )
+                all_findings.extend(self.compare_policies(src["policies"], tgt["policies"]))
 
             if "trust_scores" in src and "trust_scores" in tgt:
                 tolerance = src.get("trust_tolerance", tgt.get("trust_tolerance", 0.1))
                 all_findings.extend(
-                    self.compare_trust_scores(
-                        src["trust_scores"], tgt["trust_scores"], tolerance
-                    )
+                    self.compare_trust_scores(src["trust_scores"], tgt["trust_scores"], tolerance)
                 )
 
         # Version drift across all sources that have components
@@ -404,9 +396,7 @@ class DriftDetector:
     # ── internal helpers ────────────────────────────────────
 
     @staticmethod
-    def _config_severity(
-        key: str, src_val: Any, tgt_val: Any
-    ) -> str:
+    def _config_severity(key: str, src_val: Any, tgt_val: Any) -> str:
         """Determine severity of a config difference."""
         if src_val is None or tgt_val is None:
             return "critical"

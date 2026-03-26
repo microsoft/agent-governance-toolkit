@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Audit Logger for Agent OS Cursor Extension
- * 
+ *
  * Logs all policy enforcement actions, blocked code, and CMVK reviews.
  * Supports SOC 2 compliance mode for enterprise.
  */
@@ -73,7 +73,7 @@ export class AuditLogger {
     getToday(): AuditEntry[] {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        
+
         return this.logs.filter(log => new Date(log.timestamp) >= today);
     }
 
@@ -83,7 +83,7 @@ export class AuditLogger {
     getThisWeek(): AuditEntry[] {
         const weekAgo = new Date();
         weekAgo.setDate(weekAgo.getDate() - 7);
-        
+
         return this.logs.filter(log => new Date(log.timestamp) >= weekAgo);
     }
 
@@ -141,7 +141,7 @@ export class AuditLogger {
     private cleanOldLogs(): void {
         const config = vscode.workspace.getConfiguration('agentOS');
         const retentionDays = config.get<number>('audit.retentionDays', 7);
-        
+
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - retentionDays);
 

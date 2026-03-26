@@ -9,8 +9,6 @@ Run with: python -m pytest tests/test_dry_run.py -v --tb=short
 from datetime import datetime
 from typing import Any
 
-import pytest
-
 from agent_os.integrations.base import BaseIntegration, GovernancePolicy
 from agent_os.integrations.dry_run import (
     DryRunCollector,
@@ -19,10 +17,10 @@ from agent_os.integrations.dry_run import (
     DryRunResult,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class _StubIntegration(BaseIntegration):
     """Minimal concrete integration for testing."""
@@ -37,6 +35,7 @@ class _StubIntegration(BaseIntegration):
 # ---------------------------------------------------------------------------
 # DryRunResult
 # ---------------------------------------------------------------------------
+
 
 class TestDryRunResult:
     def test_fields(self):
@@ -56,6 +55,7 @@ class TestDryRunResult:
 # ---------------------------------------------------------------------------
 # DryRunCollector
 # ---------------------------------------------------------------------------
+
 
 class TestDryRunCollector:
     def test_empty_summary(self):
@@ -96,6 +96,7 @@ class TestDryRunCollector:
 # ---------------------------------------------------------------------------
 # DryRunPolicy – evaluate
 # ---------------------------------------------------------------------------
+
 
 class TestDryRunPolicyEvaluate:
     def test_allow_action(self):
@@ -164,6 +165,7 @@ class TestDryRunPolicyEvaluate:
 # DryRunPolicy – evaluate_warn
 # ---------------------------------------------------------------------------
 
+
 class TestDryRunPolicyEvaluateWarn:
     def test_warn(self):
         integration = _StubIntegration(GovernancePolicy())
@@ -185,6 +187,7 @@ class TestDryRunPolicyEvaluateWarn:
 # ---------------------------------------------------------------------------
 # DryRunPolicy – shared collector
 # ---------------------------------------------------------------------------
+
 
 class TestSharedCollector:
     def test_multiple_policies_share_collector(self):
@@ -211,6 +214,7 @@ class TestSharedCollector:
 # DryRunPolicy – clear / summary delegation
 # ---------------------------------------------------------------------------
 
+
 class TestDryRunPolicyDelegation:
     def test_clear_resets(self):
         integration = _StubIntegration(GovernancePolicy())
@@ -227,6 +231,7 @@ class TestDryRunPolicyDelegation:
 # Imports from package __init__
 # ---------------------------------------------------------------------------
 
+
 class TestExports:
     def test_importable_from_package(self):
         from agent_os.integrations import (
@@ -235,6 +240,7 @@ class TestExports:
             DryRunPolicy,
             DryRunResult,
         )
+
         assert DryRunPolicy is not None
         assert DryRunResult is not None
         assert DryRunDecision is not None

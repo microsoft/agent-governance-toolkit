@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 """Tests for Causal Episodic Memory."""
 
-import time
 import pytest
 from emk.causal import CausalEpisode, CausalMemoryStore
 
@@ -102,15 +101,9 @@ class TestStoreBasic:
 class TestCausalGraph:
     def _build_chain(self, store: CausalMemoryStore):
         """Build: A → B → C"""
-        a = CausalEpisode(
-            action="user_request", episode_id="ep-a", timestamp=1.0
-        )
-        b = CausalEpisode(
-            action="db_query", episode_id="ep-b", caused_by="ep-a", timestamp=2.0
-        )
-        c = CausalEpisode(
-            action="report_gen", episode_id="ep-c", caused_by="ep-b", timestamp=3.0
-        )
+        a = CausalEpisode(action="user_request", episode_id="ep-a", timestamp=1.0)
+        b = CausalEpisode(action="db_query", episode_id="ep-b", caused_by="ep-a", timestamp=2.0)
+        c = CausalEpisode(action="report_gen", episode_id="ep-c", caused_by="ep-b", timestamp=3.0)
         store.record(a)
         store.record(b)
         store.record(c)
@@ -175,12 +168,14 @@ class TestCausalGraph:
         store = CausalMemoryStore()
         # Build long chain: 0 → 1 → 2 → ... → 10
         for i in range(11):
-            store.record(CausalEpisode(
-                action=f"step_{i}",
-                episode_id=f"s{i}",
-                caused_by=f"s{i-1}" if i > 0 else None,
-                timestamp=float(i),
-            ))
+            store.record(
+                CausalEpisode(
+                    action=f"step_{i}",
+                    episode_id=f"s{i}",
+                    caused_by=f"s{i - 1}" if i > 0 else None,
+                    timestamp=float(i),
+                )
+            )
         chain = store.get_causal_chain("s10", direction="backward", max_depth=3)
         assert len(chain) <= 4  # at most 4 nodes (depth 0,1,2,3)
 

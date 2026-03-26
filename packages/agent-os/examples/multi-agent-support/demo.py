@@ -18,10 +18,8 @@ Run:  python demo.py          (no dependencies beyond agent-os)
 
 from __future__ import annotations
 
-import sys
 import os
-import re
-from dataclasses import dataclass, field
+import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -34,12 +32,12 @@ sys.path.insert(0, os.path.join(_REPO_ROOT, "src"))
 from agent_os.integrations.base import (
     BaseIntegration,
     ExecutionContext,
-    GovernancePolicy,
     GovernanceEventType,
+    GovernancePolicy,
     PatternType,
+    PolicyInterceptor,
     ToolCallRequest,
     ToolCallResult,
-    PolicyInterceptor,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -51,7 +49,7 @@ from agent_os.integrations.base import (
 
 # Regex patterns that match common PII formats.
 # These are intentionally broad to catch test data in the demo.
-SSN_PATTERN = r"\b\d{3}-\d{2}-\d{4}\b"             # e.g. 123-45-6789
+SSN_PATTERN = r"\b\d{3}-\d{2}-\d{4}\b"  # e.g. 123-45-6789
 CREDIT_CARD_PATTERN = r"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b"  # 16-digit card
 
 support_policy = GovernancePolicy(
@@ -95,6 +93,7 @@ def audit_listener(event: Dict[str, Any]) -> None:
 #    A minimal concrete BaseIntegration so we can use pre_execute / emit.
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class DemoIntegration(BaseIntegration):
     """Thin integration used only to access governance helpers."""
 
@@ -110,6 +109,7 @@ class DemoIntegration(BaseIntegration):
 #    Each agent is a simple class that simulates LLM responses.  No real
 #    model calls are made — the focus is on governance, not generation.
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class RouterAgent:
     """Routes incoming messages to the right specialist agent."""
@@ -164,6 +164,7 @@ class EscalationAgent:
 #    Wraps each "tool call" through the governance layer so that policies
 #    are checked before execution.
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def governed_call(
     integration: DemoIntegration,
@@ -242,13 +243,16 @@ def governed_call(
         )
         print(f"  \u25cb CHECKPOINT created: {checkpoint_id} (after {ctx.call_count} calls)")
 
-    print(f"  \u2714 ALLOWED  | tool={tool_name} (call {ctx.call_count}/{ctx.policy.max_tool_calls})")
+    print(
+        f"  \u2714 ALLOWED  | tool={tool_name} (call {ctx.call_count}/{ctx.policy.max_tool_calls})"
+    )
     return f"mock_result_for_{tool_name}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 6. DEMO SCENARIOS
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def print_header(title: str) -> None:
     width = 64
@@ -290,7 +294,7 @@ def run_demo() -> None:
     print(f"\n  Policy: {support_policy.name} (v{support_policy.version})")
     print(f"  Max tool calls per agent: {support_policy.max_tool_calls}")
     print(f"  Allowed tools: {', '.join(support_policy.allowed_tools)}")
-    print(f"  Blocked patterns: SSN regex, credit-card regex")
+    print("  Blocked patterns: SSN regex, credit-card regex")
     print(f"  Audit logging: {'ON' if support_policy.log_all_calls else 'OFF'}")
     print(f"  Checkpoint frequency: every {support_policy.checkpoint_frequency} calls")
 
@@ -302,19 +306,24 @@ def run_demo() -> None:
     print(f'  Router  : route -> "{route}"')
 
     # SupportAgent looks up customer, searches KB, sends reply.
-    governed_call(integration, ctx_support, pi_support, "lookup_customer", {"email": "alice@example.com"})
+    governed_call(
+        integration, ctx_support, pi_support, "lookup_customer", {"email": "alice@example.com"}
+    )
     governed_call(integration, ctx_support, pi_support, "search_kb", {"query": "refund"})
     reply = support.respond(message)
     governed_call(integration, ctx_support, pi_support, "send_reply", {"message": reply})
-    print(f"  Agent   : \"{reply}\"")
+    print(f'  Agent   : "{reply}"')
 
     # ── Scenario 2: PII blocked ───────────────────────────────────────
     print_section("Scenario 2: PII redaction (SSN blocked)")
     pii_message = "My SSN is 123-45-6789, can you update my account?"
     print(f'  Customer: "{pii_message}"')
     governed_call(
-        integration, ctx_support, pi_support,
-        "lookup_customer", {"note": pii_message},
+        integration,
+        ctx_support,
+        pi_support,
+        "lookup_customer",
+        {"note": pii_message},
     )
     print("  (Governance blocked the call because it contained an SSN pattern)")
 
@@ -322,8 +331,11 @@ def run_demo() -> None:
     cc_message = "Charge card 4111-1111-1111-1111 for the order."
     print(f'  Customer: "{cc_message}"')
     governed_call(
-        integration, ctx_support, pi_support,
-        "create_ticket", {"note": cc_message},
+        integration,
+        ctx_support,
+        pi_support,
+        "create_ticket",
+        {"note": cc_message},
     )
     print("  (Governance blocked the call because it contained a credit-card pattern)")
 
@@ -332,19 +344,27 @@ def run_demo() -> None:
     urgent_msg = "This is urgent, I want to speak to a manager!"
     print(f'  Customer: "{urgent_msg}"')
     route = router.route(urgent_msg)
-    print(f"  Router  : route -> \"{route}\"")
+    print(f'  Router  : route -> "{route}"')
 
-    governed_call(integration, ctx_escalation, pi_escalation, "create_ticket", {"priority": "high", "message": urgent_msg})
+    governed_call(
+        integration,
+        ctx_escalation,
+        pi_escalation,
+        "create_ticket",
+        {"priority": "high", "message": urgent_msg},
+    )
     governed_call(integration, ctx_escalation, pi_escalation, "escalate", {"level": "supervisor"})
     reply = escalation.respond(urgent_msg)
     governed_call(integration, ctx_escalation, pi_escalation, "send_reply", {"message": reply})
-    print(f"  Agent   : \"{reply}\"")
+    print(f'  Agent   : "{reply}"')
 
     # ── Scenario 4: Rate limiting ─────────────────────────────────────
     print_section("Scenario 4: Rate limiting (max 5 calls)")
     print("  SupportAgent already used 3 calls; making 2 more to hit the limit...")
     governed_call(integration, ctx_support, pi_support, "search_kb", {"query": "shipping times"})
-    governed_call(integration, ctx_support, pi_support, "send_reply", {"message": "Shipping info sent."})
+    governed_call(
+        integration, ctx_support, pi_support, "send_reply", {"message": "Shipping info sent."}
+    )
     print("  Now attempting a 6th call (should be blocked):")
     governed_call(integration, ctx_support, pi_support, "search_kb", {"query": "return policy"})
 
@@ -374,8 +394,14 @@ def run_demo() -> None:
 
     # ── Context summaries ─────────────────────────────────────────────
     print_header("Agent Context Summaries")
-    for label, ctx in [("Router", ctx_router), ("Support", ctx_support), ("Escalation", ctx_escalation)]:
-        print(f"  {label:>12}: calls={ctx.call_count}/{ctx.policy.max_tool_calls}  checkpoints={ctx.checkpoints}")
+    for label, ctx in [
+        ("Router", ctx_router),
+        ("Support", ctx_support),
+        ("Escalation", ctx_escalation),
+    ]:
+        print(
+            f"  {label:>12}: calls={ctx.call_count}/{ctx.policy.max_tool_calls}  checkpoints={ctx.checkpoints}"
+        )
 
     print("\n  Demo complete.\n")
 

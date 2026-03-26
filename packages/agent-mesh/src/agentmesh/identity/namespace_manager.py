@@ -8,8 +8,6 @@ Default behaviour: same-namespace agents communicate freely; cross-namespace
 requires an explicit NamespaceRule that allows it.
 """
 
-from typing import Optional
-
 from agentmesh.identity.namespace import AgentNamespace, NamespaceRule
 
 
@@ -30,7 +28,7 @@ class NamespaceManager:
         self,
         name: str,
         description: str,
-        parent: Optional[str] = None,
+        parent: str | None = None,
     ) -> AgentNamespace:
         """Create a new namespace, optionally nested under *parent*.
 
@@ -105,7 +103,7 @@ class NamespaceManager:
         ns = self.get_namespace(namespace_name)
         ns.members.discard(agent_did)
 
-    def get_agent_namespace(self, agent_did: str) -> Optional[str]:
+    def get_agent_namespace(self, agent_did: str) -> str | None:
         """Return the namespace name an agent belongs to.
 
         Args:
@@ -142,13 +140,9 @@ class NamespaceManager:
 
     def _share_lineage(self, ns_a: str, ns_b: str) -> bool:
         """Return True if the two namespaces share a parent–child lineage."""
-        return (
-            ns_a == ns_b
-            or self._is_ancestor(ns_a, ns_b)
-            or self._is_ancestor(ns_b, ns_a)
-        )
+        return ns_a == ns_b or self._is_ancestor(ns_a, ns_b) or self._is_ancestor(ns_b, ns_a)
 
-    def _find_rule(self, src_ns: str, tgt_ns: str) -> Optional[NamespaceRule]:
+    def _find_rule(self, src_ns: str, tgt_ns: str) -> NamespaceRule | None:
         """Find the first matching rule for a source→target pair."""
         for rule in self._rules:
             if rule.source_namespace == src_ns and rule.target_namespace == tgt_ns:

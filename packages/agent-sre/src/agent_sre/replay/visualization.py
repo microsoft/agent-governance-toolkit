@@ -14,6 +14,7 @@ from agent_sre.replay.capture import Span, SpanKind, SpanStatus, Trace
 @dataclass
 class GraphNode:
     """A node in the execution graph."""
+
     node_id: str
     label: str
     kind: SpanKind
@@ -39,6 +40,7 @@ class GraphNode:
 @dataclass
 class GraphEdge:
     """An edge connecting two nodes in the execution graph."""
+
     source: str
     target: str
     label: str = ""
@@ -56,6 +58,7 @@ class GraphEdge:
 @dataclass
 class ExecutionGraph:
     """Directed graph representation of an agent execution trace."""
+
     trace_id: str
     agent_id: str
     nodes: list[GraphNode] = field(default_factory=list)
@@ -179,15 +182,17 @@ class TraceVisualizer:
         base_time = trace.start_time
         timeline = []
         for span in trace.spans:
-            timeline.append({
-                "span_id": span.span_id,
-                "name": span.name,
-                "kind": span.kind.value,
-                "status": span.status.value,
-                "offset_ms": (span.start_time - base_time) * 1000,
-                "duration_ms": span.duration_ms,
-                "cost_usd": span.cost_usd,
-            })
+            timeline.append(
+                {
+                    "span_id": span.span_id,
+                    "name": span.name,
+                    "kind": span.kind.value,
+                    "status": span.status.value,
+                    "offset_ms": (span.start_time - base_time) * 1000,
+                    "duration_ms": span.duration_ms,
+                    "cost_usd": span.cost_usd,
+                }
+            )
         return sorted(timeline, key=lambda x: x["offset_ms"])
 
     def build_decision_tree(self, trace: Trace) -> dict[str, Any]:

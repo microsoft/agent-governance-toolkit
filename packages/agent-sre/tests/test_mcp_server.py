@@ -46,25 +46,37 @@ class TestAgentSREServer:
 
     def test_report_cost(self):
         server = AgentSREServer()
-        result = server.handle_tool_call("sre_report_cost", {
-            "agent_id": "a1", "cost_usd": 0.05,
-        })
+        result = server.handle_tool_call(
+            "sre_report_cost",
+            {
+                "agent_id": "a1",
+                "cost_usd": 0.05,
+            },
+        )
         assert result.success
         assert result.data["cost_recorded"] == 0.05
         assert result.data["total_spent"] == 0.05
 
         # Report more cost
-        result2 = server.handle_tool_call("sre_report_cost", {
-            "agent_id": "a1", "cost_usd": 0.10,
-        })
+        result2 = server.handle_tool_call(
+            "sre_report_cost",
+            {
+                "agent_id": "a1",
+                "cost_usd": 0.10,
+            },
+        )
         assert result2.data["total_spent"] == pytest.approx(0.15)
 
     def test_request_budget_approved(self):
         server = AgentSREServer()
         server.set_cost_budget("a1", 1.0)
-        result = server.handle_tool_call("sre_request_budget", {
-            "agent_id": "a1", "requested_usd": 0.50,
-        })
+        result = server.handle_tool_call(
+            "sre_request_budget",
+            {
+                "agent_id": "a1",
+                "requested_usd": 0.50,
+            },
+        )
         assert result.success
         assert result.data["approved"] is True
 
@@ -73,17 +85,25 @@ class TestAgentSREServer:
         server.set_cost_budget("a1", 0.10)
         # Spend some first
         server.handle_tool_call("sre_report_cost", {"agent_id": "a1", "cost_usd": 0.08})
-        result = server.handle_tool_call("sre_request_budget", {
-            "agent_id": "a1", "requested_usd": 0.05,
-        })
+        result = server.handle_tool_call(
+            "sre_request_budget",
+            {
+                "agent_id": "a1",
+                "requested_usd": 0.05,
+            },
+        )
         assert result.success
         assert result.data["approved"] is False
 
     def test_request_budget_no_limit(self):
         server = AgentSREServer()
-        result = server.handle_tool_call("sre_request_budget", {
-            "agent_id": "a1", "requested_usd": 1000.0,
-        })
+        result = server.handle_tool_call(
+            "sre_request_budget",
+            {
+                "agent_id": "a1",
+                "requested_usd": 1000.0,
+            },
+        )
         assert result.success
         assert result.data["approved"] is True
         assert result.data["reason"] == "No budget limit set"

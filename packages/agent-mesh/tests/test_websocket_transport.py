@@ -4,13 +4,12 @@
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from agentmesh.transport.base import Transport, TransportConfig, TransportState
 from agentmesh.transport.websocket import WebSocketTransport
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -78,7 +77,9 @@ class TestWebSocketTransport:
         assert transport.is_connected is False
 
     @pytest.mark.asyncio
-    async def test_connect_success(self, config: TransportConfig, mock_ws_connection: AsyncMock) -> None:
+    async def test_connect_success(
+        self, config: TransportConfig, mock_ws_connection: AsyncMock
+    ) -> None:
         """Successful connect transitions to CONNECTED."""
         transport = WebSocketTransport(config, heartbeat_interval=0)
         with patch(
@@ -118,7 +119,9 @@ class TestWebSocketTransport:
             await transport.send("test", {"data": 1})
 
     @pytest.mark.asyncio
-    async def test_send_message(self, config: TransportConfig, mock_ws_connection: AsyncMock) -> None:
+    async def test_send_message(
+        self, config: TransportConfig, mock_ws_connection: AsyncMock
+    ) -> None:
         """Send serialises topic+payload as JSON."""
         transport = WebSocketTransport(config, heartbeat_interval=0)
         transport._ws = mock_ws_connection
@@ -159,7 +162,9 @@ class TestWebSocketTransport:
             await transport.receive(timeout=0.05)
 
     @pytest.mark.asyncio
-    async def test_subscribe_trust_updates(self, config: TransportConfig, mock_ws_connection: AsyncMock) -> None:
+    async def test_subscribe_trust_updates(
+        self, config: TransportConfig, mock_ws_connection: AsyncMock
+    ) -> None:
         """subscribe_trust_updates registers a callback and notifies the server."""
         transport = WebSocketTransport(config, heartbeat_interval=0)
         transport._ws = mock_ws_connection
@@ -174,7 +179,9 @@ class TestWebSocketTransport:
         mock_ws_connection.send.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_unsubscribe_trust_updates(self, config: TransportConfig, mock_ws_connection: AsyncMock) -> None:
+    async def test_unsubscribe_trust_updates(
+        self, config: TransportConfig, mock_ws_connection: AsyncMock
+    ) -> None:
         """unsubscribe_trust_updates removes the callback."""
         transport = WebSocketTransport(config, heartbeat_interval=0)
         transport._ws = mock_ws_connection

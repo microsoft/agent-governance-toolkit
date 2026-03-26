@@ -82,7 +82,7 @@ if curator.should_sample_interaction():
         agent_response="Agent answer",
         metadata={"score": 0.9, "latency_ms": 1200}
     )
-    
+
 # Human reviews sampled interactions for:
 # - Overall quality and tone
 # - Strategic alignment with goals
@@ -120,7 +120,7 @@ if curator.requires_policy_review(proposed_wisdom, critique):
         current_wisdom=current_wisdom,
         critique="Agent wants to suppress errors"
     )
-    
+
     # Wisdom update does NOT happen automatically
     # Human must approve or reject
 ```
@@ -254,16 +254,16 @@ curator = WisdomCurator(
 
 ### What Humans DO Review:
 
-✅ **Design Alignment:** Does the implementation match the architectural proposal?  
-✅ **Strategic Direction:** Does the sampled behavior align with our goals?  
+✅ **Design Alignment:** Does the implementation match the architectural proposal?
+✅ **Strategic Direction:** Does the sampled behavior align with our goals?
 ✅ **Policy Compliance:** Is this wisdom update safe and aligned with our values?
 
 ### What Humans DON'T Review:
 
-❌ Variable naming conventions  
-❌ Missing semicolons  
-❌ Code formatting  
-❌ Simple syntax errors  
+❌ Variable naming conventions
+❌ Missing semicolons
+❌ Code formatting
+❌ Simple syntax errors
 ❌ Every single interaction
 
 ## Example Workflow

@@ -6,7 +6,7 @@
     <description><![CDATA[
         <h1>Kernel-level safety for AI coding assistants</h1>
         <p>Agent OS wraps your AI assistant with a safety kernel that blocks dangerous code before it executes.</p>
-        
+
         <h2>Features</h2>
         <ul>
             <li>🛡️ Real-time policy enforcement</li>
@@ -24,44 +24,44 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <!-- Tool Window -->
-        <toolWindow id="Agent OS" 
-                    secondary="true" 
-                    anchor="right" 
+        <toolWindow id="Agent OS"
+                    secondary="true"
+                    anchor="right"
                     factoryClass="com.agentos.plugin.toolwindow.AgentOSToolWindowFactory"
                     icon="/icons/shield.svg"/>
-        
+
         <!-- Settings -->
-        <applicationConfigurable 
+        <applicationConfigurable
             parentId="tools"
             instance="com.agentos.plugin.settings.AgentOSConfigurable"
             id="com.agentos.plugin.settings"
             displayName="Agent OS"/>
-        
-        <applicationService 
+
+        <applicationService
             serviceImplementation="com.agentos.plugin.settings.AgentOSSettings"/>
-        
+
         <!-- Project-level Agent Service -->
-        <projectService 
+        <projectService
             serviceImplementation="com.agentos.plugin.agents.AgentService"/>
-        
+
         <!-- API Service -->
-        <applicationService 
+        <applicationService
             serviceImplementation="com.agentos.plugin.services.AgentOSApiService"/>
-        
+
         <!-- Run Configuration -->
-        <configurationType 
+        <configurationType
             implementation="com.agentos.plugin.runconfig.AgentRunConfigurationType"/>
-        
+
         <!-- File Type for .agentos.yml -->
-        <fileType 
+        <fileType
             name="AgentOS Config"
             implementationClass="com.intellij.openapi.fileTypes.PlainTextFileType"
             fieldName="INSTANCE"
             language="yaml"
             extensions="agentos.yml;agentos.yaml"/>
-        
+
         <!-- Code Inspections -->
-        <localInspection 
+        <localInspection
             language=""
             displayName="Agent OS: Destructive SQL"
             groupPath="Agent OS"
@@ -70,8 +70,8 @@
             enabledByDefault="true"
             level="ERROR"
             implementationClass="com.agentos.plugin.inspections.DestructiveSQLInspection"/>
-        
-        <localInspection 
+
+        <localInspection
             language=""
             displayName="Agent OS: Hardcoded Secrets"
             groupPath="Agent OS"
@@ -80,8 +80,8 @@
             enabledByDefault="true"
             level="ERROR"
             implementationClass="com.agentos.plugin.inspections.HardcodedSecretsInspection"/>
-        
-        <localInspection 
+
+        <localInspection
             language=""
             displayName="Agent OS: Dangerous File Operations"
             groupPath="Agent OS"
@@ -90,8 +90,8 @@
             enabledByDefault="true"
             level="ERROR"
             implementationClass="com.agentos.plugin.inspections.DangerousFileOpsInspection"/>
-        
-        <localInspection 
+
+        <localInspection
             language=""
             displayName="Agent OS: Privilege Escalation"
             groupPath="Agent OS"
@@ -100,17 +100,17 @@
             enabledByDefault="true"
             level="WARNING"
             implementationClass="com.agentos.plugin.inspections.PrivilegeEscalationInspection"/>
-        
+
         <!-- Notifications -->
-        <notificationGroup id="Agent OS Notifications" 
-                          displayType="BALLOON" 
+        <notificationGroup id="Agent OS Notifications"
+                          displayType="BALLOON"
                           isLogByDefault="true"/>
-        
+
         <!-- Startup Activity -->
         <postStartupActivity implementation="com.agentos.plugin.AgentOSStartupActivity"/>
-        
+
         <!-- Status Bar Widget -->
-        <statusBarWidgetFactory 
+        <statusBarWidgetFactory
             id="AgentOSStatusBar"
             implementation="com.agentos.plugin.statusbar.AgentOSStatusBarWidgetFactory"/>
     </extensions>
@@ -119,82 +119,82 @@
         <!-- Main Menu -->
         <group id="AgentOS.MainMenu" text="Agent OS" description="Agent OS actions">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
-            
-            <action id="AgentOS.CreateAgent" 
+
+            <action id="AgentOS.CreateAgent"
                     class="com.agentos.plugin.actions.CreateAgentAction"
-                    text="Create New Agent..." 
+                    text="Create New Agent..."
                     description="Create a new AgentOS agent"
                     icon="/icons/add.svg">
                 <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift N"/>
             </action>
-            
-            <action id="AgentOS.ReviewWithCMVK" 
+
+            <action id="AgentOS.ReviewWithCMVK"
                     class="com.agentos.plugin.actions.ReviewWithCMVKAction"
-                    text="Review with CMVK" 
+                    text="Review with CMVK"
                     description="Review selected code with multi-model verification"
                     icon="/icons/review.svg">
                 <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift R"/>
             </action>
-            
-            <action id="AgentOS.ToggleSafety" 
+
+            <action id="AgentOS.ToggleSafety"
                     class="com.agentos.plugin.actions.ToggleSafetyAction"
-                    text="Toggle Agent OS" 
+                    text="Toggle Agent OS"
                     description="Enable or disable Agent OS protection">
                 <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift A"/>
             </action>
-            
+
             <separator/>
-            
-            <action id="AgentOS.ShowAuditLog" 
+
+            <action id="AgentOS.ShowAuditLog"
                     class="com.agentos.plugin.actions.ShowAuditLogAction"
-                    text="Show Audit Log" 
+                    text="Show Audit Log"
                     description="Open the audit log tool window"/>
-            
-            <action id="AgentOS.ConfigurePolicies" 
+
+            <action id="AgentOS.ConfigurePolicies"
                     class="com.agentos.plugin.actions.ConfigurePoliciesAction"
-                    text="Configure Policies" 
+                    text="Configure Policies"
                     description="Open Agent OS settings"/>
-            
+
             <separator/>
-            
-            <action id="AgentOS.GenerateConfigFile" 
+
+            <action id="AgentOS.GenerateConfigFile"
                     class="com.agentos.plugin.actions.GenerateConfigFileAction"
-                    text="Generate .agentos.yml" 
+                    text="Generate .agentos.yml"
                     description="Generate a default AgentOS configuration file"/>
         </group>
-        
+
         <!-- Editor Context Menu -->
         <group id="AgentOS.EditorPopupMenu" text="AgentOS">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
             <separator/>
-            
-            <action id="AgentOS.CreateAgentFromSelection" 
+
+            <action id="AgentOS.CreateAgentFromSelection"
                     class="com.agentos.plugin.actions.CreateAgentFromSelectionAction"
-                    text="Create Agent from Selection" 
+                    text="Create Agent from Selection"
                     description="Create a new agent using the selected code"/>
-            
-            <action id="AgentOS.ConvertToSafeAgent" 
+
+            <action id="AgentOS.ConvertToSafeAgent"
                     class="com.agentos.plugin.actions.ConvertToSafeAgentAction"
-                    text="Convert to Safe Agent" 
+                    text="Convert to Safe Agent"
                     description="Add safety checks to the selected code"/>
-            
-            <action id="AgentOS.AddPolicyCheck" 
+
+            <action id="AgentOS.AddPolicyCheck"
                     class="com.agentos.plugin.actions.AddPolicyCheckAction"
-                    text="Add Policy Check Here" 
+                    text="Add Policy Check Here"
                     description="Add a policy check at the current location"/>
-            
+
             <separator/>
             <reference ref="AgentOS.ReviewWithCMVK"/>
         </group>
-        
+
         <!-- Project View Context Menu -->
         <group id="AgentOS.ProjectViewMenu">
             <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
             <separator/>
-            
-            <action id="AgentOS.DeployAsAgent" 
+
+            <action id="AgentOS.DeployAsAgent"
                     class="com.agentos.plugin.actions.DeployAsAgentAction"
-                    text="Deploy as AgentOS Agent" 
+                    text="Deploy as AgentOS Agent"
                     description="Deploy the selected file/folder as an agent"/>
         </group>
     </actions>

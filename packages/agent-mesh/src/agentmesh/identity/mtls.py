@@ -8,11 +8,10 @@ certificates derived from Ed25519 agent identities. Agent DIDs are
 embedded in certificate SANs for cryptographic identity binding.
 """
 
+import os
 import ssl
 import tempfile
-import os
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -34,9 +33,9 @@ class MTLSConfig(BaseModel):
         require_client_cert: Whether to require client certificates (server-side).
     """
 
-    cert_path: Optional[str] = Field(None, description="Path to certificate PEM file")
-    key_path: Optional[str] = Field(None, description="Path to private key PEM file")
-    ca_cert_path: Optional[str] = Field(None, description="Path to CA certificate PEM file")
+    cert_path: str | None = Field(None, description="Path to certificate PEM file")
+    key_path: str | None = Field(None, description="Path to private key PEM file")
+    ca_cert_path: str | None = Field(None, description="Path to CA certificate PEM file")
     verify_peer: bool = Field(default=True, description="Whether to verify peer certificates")
     require_client_cert: bool = Field(
         default=True, description="Whether to require client certificates"
@@ -71,13 +70,17 @@ class MTLSIdentityVerifier:
         signing_key = ec.generate_private_key(ec.SECP256R1())
 
         did_str = str(self.identity.did)
-        subject = issuer = x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, self.identity.name),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, self.identity.organization or "AgentMesh"),
-            x509.NameAttribute(NameOID.SERIAL_NUMBER, did_str),
-        ])
+        subject = issuer = x509.Name(
+            [
+                x509.NameAttribute(NameOID.COMMON_NAME, self.identity.name),
+                x509.NameAttribute(
+                    NameOID.ORGANIZATION_NAME, self.identity.organization or "AgentMesh"
+                ),
+                x509.NameAttribute(NameOID.SERIAL_NUMBER, did_str),
+            ]
+        )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cert = (
             x509.CertificateBuilder()
             .subject_name(subject)
@@ -87,9 +90,11 @@ class MTLSIdentityVerifier:
             .not_valid_before(now)
             .not_valid_after(now + timedelta(days=365))
             .add_extension(
-                x509.SubjectAlternativeName([
-                    x509.UniformResourceIdentifier(did_str),
-                ]),
+                x509.SubjectAlternativeName(
+                    [
+                        x509.UniformResourceIdentifier(did_str),
+                    ]
+                ),
                 critical=False,
             )
             .add_extension(
@@ -132,14 +137,10 @@ class MTLSIdentityVerifier:
             cert_pem, key_pem = self.create_self_signed_cert()
             cert_file = key_file = None
             try:
-                with tempfile.NamedTemporaryFile(
-                    delete=False, suffix=".pem", mode="wb"
-                ) as cf:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pem", mode="wb") as cf:
                     cf.write(cert_pem)
                     cert_file = cf.name
-                with tempfile.NamedTemporaryFile(
-                    delete=False, suffix=".pem", mode="wb"
-                ) as kf:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pem", mode="wb") as kf:
                     kf.write(key_pem)
                     key_file = kf.name
                 ctx.load_cert_chain(cert_file, key_file)
@@ -182,14 +183,12 @@ class MTLSIdentityVerifier:
         except Exception as exc:
             raise ValueError(f"Invalid certificate: {exc}") from exc
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         not_before = cert.not_valid_before_utc
         not_after = cert.not_valid_after_utc
         time_valid = not_before <= now <= not_after
 
-        subject_parts = {
-            attr.oid.dotted_string: attr.value for attr in cert.subject
-        }
+        subject_parts = {attr.oid.dotted_string: attr.value for attr in cert.subject}
         cn = subject_parts.get(NameOID.COMMON_NAME.dotted_string, "")
         org = subject_parts.get(NameOID.ORGANIZATION_NAME.dotted_string, "")
         serial = subject_parts.get(NameOID.SERIAL_NUMBER.dotted_string, "")
@@ -230,12 +229,8 @@ class MTLSIdentityVerifier:
 
         # Check SAN URIs first
         try:
-            san = cert.extensions.get_extension_for_class(
-                x509.SubjectAlternativeName
-            )
-            for uri in san.value.get_values_for_type(
-                x509.UniformResourceIdentifier
-            ):
+            san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+            for uri in san.value.get_values_for_type(x509.UniformResourceIdentifier):
                 if uri.startswith("did:mesh:"):
                     return uri
         except x509.ExtensionNotFound:
@@ -243,9 +238,7 @@ class MTLSIdentityVerifier:
 
         # Fallback: subject SERIAL_NUMBER
         for attr in cert.subject:
-            if attr.oid == NameOID.SERIAL_NUMBER and str(attr.value).startswith(
-                "did:mesh:"
-            ):
+            if attr.oid == NameOID.SERIAL_NUMBER and str(attr.value).startswith("did:mesh:"):
                 return str(attr.value)
 
         return None

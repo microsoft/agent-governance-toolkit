@@ -2,16 +2,15 @@
 # Licensed under the MIT License.
 """Tests for dashboard generation (dashboards.py)."""
 
-import sys
-import os
 import json
+import os
+import sys
 
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from agent_os_observability.dashboards import get_grafana_dashboard, export_dashboard
-
+from agent_os_observability.dashboards import export_dashboard, get_grafana_dashboard
 
 DASHBOARD_NAMES = [
     "agent-os-overview",
@@ -33,7 +32,10 @@ class TestGetGrafanaDashboard:
 
     def test_performance_dashboard(self):
         d = get_grafana_dashboard("agent-os-performance")
-        assert "Performance" in d["dashboard"]["title"] or "performance" in d["dashboard"]["title"].lower()
+        assert (
+            "Performance" in d["dashboard"]["title"]
+            or "performance" in d["dashboard"]["title"].lower()
+        )
 
     def test_amb_dashboard(self):
         d = get_grafana_dashboard("agent-os-amb")
@@ -82,8 +84,12 @@ class TestDashboardStructure:
         for panel in panels:
             if "targets" in panel:
                 for target in panel["targets"]:
-                    assert "expr" in target, f"Target missing 'expr' in panel {panel['id']} of {name}"
-                    assert "refId" in target, f"Target missing 'refId' in panel {panel['id']} of {name}"
+                    assert "expr" in target, (
+                        f"Target missing 'expr' in panel {panel['id']} of {name}"
+                    )
+                    assert "refId" in target, (
+                        f"Target missing 'refId' in panel {panel['id']} of {name}"
+                    )
 
     @pytest.mark.parametrize("name", DASHBOARD_NAMES)
     def test_promql_references_agent_os_metrics(self, name):

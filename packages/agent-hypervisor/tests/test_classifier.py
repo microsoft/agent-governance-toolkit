@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 """Tests for action risk classifier."""
 
-
 from hypervisor.models import ActionDescriptor, ExecutionRing, ReversibilityLevel
 from hypervisor.rings.classifier import ActionClassifier, ClassificationResult
 

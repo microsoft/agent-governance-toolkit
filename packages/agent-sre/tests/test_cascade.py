@@ -19,6 +19,7 @@ from agent_sre.cascade import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _succeed() -> str:
     return "ok"
 

@@ -4,6 +4,6 @@
 Tuning module initialization.
 """
 
-from caas.tuning.tuner import WeightTuner, CorpusAnalyzer
+from caas.tuning.tuner import CorpusAnalyzer, WeightTuner
 
 __all__ = ["WeightTuner", "CorpusAnalyzer"]

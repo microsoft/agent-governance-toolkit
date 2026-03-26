@@ -17,6 +17,7 @@ from typing import Callable
 
 class HealthStatus(Enum):
     """Possible health states for a component or the overall system."""
+
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
@@ -25,6 +26,7 @@ class HealthStatus(Enum):
 @dataclass(frozen=True)
 class ComponentHealth:
     """Health result for a single component."""
+
     name: str
     status: HealthStatus
     message: str = ""
@@ -34,6 +36,7 @@ class ComponentHealth:
 @dataclass
 class HealthReport:
     """Aggregate health report for all registered components."""
+
     status: HealthStatus
     components: dict[str, ComponentHealth]
     timestamp: str
@@ -82,9 +85,7 @@ class HealthChecker:
 
     # -- registration ------------------------------------------------------
 
-    def register_check(
-        self, name: str, check_fn: Callable[[], ComponentHealth]
-    ) -> None:
+    def register_check(self, name: str, check_fn: Callable[[], ComponentHealth]) -> None:
         """Register a named health check function (thread-safe)."""
         with self._lock:
             self._checks[name] = check_fn
@@ -169,9 +170,7 @@ class HealthChecker:
 
     # -- helpers -----------------------------------------------------------
 
-    def _build_report(
-        self, components: dict[str, ComponentHealth]
-    ) -> HealthReport:
+    def _build_report(self, components: dict[str, ComponentHealth]) -> HealthReport:
         status = self._aggregate_status(components)
         now = datetime.now(timezone.utc)
         uptime = (now - self._start_time).total_seconds()

@@ -4,8 +4,8 @@ This document outlines the development roadmap for Agent Control Plane in 2026 a
 
 ## Project Status (January 2026)
 
-**Current Version:** v1.1.0  
-**Status:** Early Production Ready / Competitive Open-Source Quality  
+**Current Version:** v1.1.0
+**Status:** Early Production Ready / Competitive Open-Source Quality
 **Focus:** Addressing critical gaps for enterprise adoption and research credibility
 
 ---
@@ -224,5 +224,5 @@ This roadmap is a living document and evolves based on:
 
 Have suggestions? Open an issue or discussion to share your thoughts!
 
-**Last Updated:** January 18, 2026  
+**Last Updated:** January 18, 2026
 **Next Review:** April 1, 2026

@@ -9,9 +9,9 @@ interaction recording for trust score updates.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from datetime import UTC, datetime
+from typing import Any, Protocol, runtime_checkable
 
 from agentmesh.exceptions import TrustVerificationError
 
@@ -52,14 +52,14 @@ class InteractionRecord:
     event: str
     timestamp: datetime
     success: bool
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class InMemoryTrustStore:
     """Simple in-memory trust store for testing and development."""
 
     def __init__(self, default_score: int = 500) -> None:
-        self._scores: Dict[str, int] = {}
+        self._scores: dict[str, int] = {}
         self._default_score = default_score
 
     def get_trust_score(self, agent_did: str) -> int:
@@ -101,13 +101,13 @@ class AgentMeshTrustCallback(BaseCallbackHandler):  # type: ignore[misc]
         self,
         agent_did: str,
         min_trust_score: int = 500,
-        trust_store: Optional[Any] = None,
+        trust_store: Any | None = None,
     ) -> None:
         super().__init__()
         self.agent_did = agent_did
         self.min_trust_score = min_trust_score
         self.trust_store: Any = trust_store or InMemoryTrustStore()
-        self._interactions: List[InteractionRecord] = []
+        self._interactions: list[InteractionRecord] = []
 
     def _verify_trust(self, context: str) -> int:
         """Check agent trust score against threshold.
@@ -135,7 +135,7 @@ class AgentMeshTrustCallback(BaseCallbackHandler):  # type: ignore[misc]
             InteractionRecord(
                 agent_did=self.agent_did,
                 event=event,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 success=success,
                 metadata=metadata,
             )
@@ -146,7 +146,7 @@ class AgentMeshTrustCallback(BaseCallbackHandler):  # type: ignore[misc]
 
     def on_tool_start(
         self,
-        serialized: Dict[str, Any],
+        serialized: dict[str, Any],
         input_str: str,
         **kwargs: Any,
     ) -> None:
@@ -172,8 +172,8 @@ class AgentMeshTrustCallback(BaseCallbackHandler):  # type: ignore[misc]
 
     def on_chain_start(
         self,
-        serialized: Dict[str, Any],
-        inputs: Dict[str, Any],
+        serialized: dict[str, Any],
+        inputs: dict[str, Any],
         **kwargs: Any,
     ) -> None:
         """Log chain start with agent DID."""
@@ -184,7 +184,7 @@ class AgentMeshTrustCallback(BaseCallbackHandler):  # type: ignore[misc]
             self.agent_did,
         )
 
-    def on_chain_end(self, outputs: Dict[str, Any], **kwargs: Any) -> None:
+    def on_chain_end(self, outputs: dict[str, Any], **kwargs: Any) -> None:
         """Record successful chain interaction."""
         self._record("chain_end", success=True)
 
@@ -196,8 +196,8 @@ class AgentMeshTrustCallback(BaseCallbackHandler):  # type: ignore[misc]
 
     def on_llm_start(
         self,
-        serialized: Dict[str, Any],
-        prompts: List[str],
+        serialized: dict[str, Any],
+        prompts: list[str],
         **kwargs: Any,
     ) -> None:
         """Optional trust check before LLM calls."""
@@ -212,11 +212,11 @@ class AgentMeshTrustCallback(BaseCallbackHandler):  # type: ignore[misc]
 
     # ── Inspection ──────────────────────────────────────────────────
 
-    def get_interactions(self) -> List[InteractionRecord]:
+    def get_interactions(self) -> list[InteractionRecord]:
         """Return a copy of the interaction audit log."""
         return self._interactions.copy()
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Return summary statistics for this callback."""
         successes = sum(1 for r in self._interactions if r.success)
         failures = len(self._interactions) - successes

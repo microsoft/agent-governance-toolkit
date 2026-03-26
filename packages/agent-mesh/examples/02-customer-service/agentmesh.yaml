@@ -20,13 +20,13 @@ specialists:
     capabilities:
       - "read:docs"
       - "write:tickets"
-  
+
   billing:
     name: "billing-agent"
     capabilities:
       - "read:billing"
       - "write:billing"
-  
+
   escalation:
     name: "escalation-agent"
     capabilities:

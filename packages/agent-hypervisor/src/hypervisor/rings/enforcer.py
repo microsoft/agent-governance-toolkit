@@ -74,8 +74,7 @@ class RingEnforcer:
                 agent_ring=agent_ring,
                 eff_score=eff_score,
                 reason=(
-                    f"Agent ring {agent_ring.value} insufficient for "
-                    f"required ring {required.value}"
+                    f"Agent ring {agent_ring.value} insufficient for required ring {required.value}"
                 ),
             )
 

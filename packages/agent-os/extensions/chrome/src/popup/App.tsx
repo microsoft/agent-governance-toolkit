@@ -99,24 +99,24 @@ export function App() {
   return (
     <div className="popup-container">
       <Header onSettingsClick={handleOpenSettings} />
-      
+
       <StatusBanner enabled={settings.enabled} />
-      
+
       <CurrentPage url={currentUrl} platform={currentPlatform} />
-      
+
       {currentPlatform && platformAgents.length === 0 && (
         <SuggestedAgent
           platform={currentPlatform}
           onCreateClick={handleCreateAgent}
         />
       )}
-      
+
       <AgentList
         agents={activeAgents}
         onToggle={handleToggleAgent}
         onStop={handleStopAgent}
       />
-      
+
       <Footer
         onDashboardClick={handleOpenDashboard}
         onCreateClick={handleCreateAgent}

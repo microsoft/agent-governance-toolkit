@@ -57,28 +57,30 @@ if TYPE_CHECKING:
 # Protocol types
 # ---------------------------------------------------------------------------
 
+
 class ProtocolType(Enum):
     """Supported agent communication protocols."""
 
-    A2A = "a2a"         # Google A2A (Agent-to-Agent)
-    MCP = "mcp"         # Model Context Protocol
+    A2A = "a2a"  # Google A2A (Agent-to-Agent)
+    MCP = "mcp"  # Model Context Protocol
     INTERNAL = "internal"  # In-process delegation
-    HTTP = "http"       # Generic HTTP/REST
-    GRPC = "grpc"       # gRPC
+    HTTP = "http"  # Generic HTTP/REST
+    GRPC = "grpc"  # gRPC
 
 
 class SpanRole(Enum):
     """Role of the current agent in a protocol span."""
 
-    CLIENT = "client"     # Initiator of the call
-    SERVER = "server"     # Receiver of the call
-    PRODUCER = "producer" # Async message sender
-    CONSUMER = "consumer" # Async message receiver
+    CLIENT = "client"  # Initiator of the call
+    SERVER = "server"  # Receiver of the call
+    PRODUCER = "producer"  # Async message sender
+    CONSUMER = "consumer"  # Async message receiver
 
 
 # ---------------------------------------------------------------------------
 # W3C-compatible trace context
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class TraceContext:
@@ -144,6 +146,7 @@ class TraceContext:
 # Span links (cross-trace correlation)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SpanLink:
     """Link between spans across trace boundaries.
@@ -169,6 +172,7 @@ class SpanLink:
 # ---------------------------------------------------------------------------
 # Protocol-enriched span
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ProtocolSpan:
@@ -221,21 +225,25 @@ class ProtocolSpan:
 
     def add_link(self, trace_id: str, span_id: str, relationship: str = "follows_from") -> None:
         """Add a cross-trace link."""
-        self.links.append(SpanLink(
-            trace_id=trace_id,
-            span_id=span_id,
-            relationship=relationship,
-        ))
+        self.links.append(
+            SpanLink(
+                trace_id=trace_id,
+                span_id=span_id,
+                relationship=relationship,
+            )
+        )
 
     def to_dict(self) -> dict[str, Any]:
         d = self.span.to_dict()
-        d.update({
-            "protocol": self.protocol.value,
-            "role": self.role.value,
-            "remote_agent_id": self.remote_agent_id,
-            "remote_agent_url": self.remote_agent_url,
-            "links": [lnk.to_dict() for lnk in self.links],
-        })
+        d.update(
+            {
+                "protocol": self.protocol.value,
+                "role": self.role.value,
+                "remote_agent_id": self.remote_agent_id,
+                "remote_agent_url": self.remote_agent_url,
+                "links": [lnk.to_dict() for lnk in self.links],
+            }
+        )
         if self.protocol == ProtocolType.A2A:
             d["a2a_task_id"] = self.a2a_task_id
             d["a2a_message_id"] = self.a2a_message_id
@@ -252,6 +260,7 @@ class ProtocolSpan:
 # ---------------------------------------------------------------------------
 # Protocol timeline
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ProtocolTimelineEntry:
@@ -282,6 +291,7 @@ class ProtocolTimelineEntry:
 # ---------------------------------------------------------------------------
 # Tracing report
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class TracingReport:
@@ -342,6 +352,7 @@ class TracingReport:
 # ---------------------------------------------------------------------------
 # Protocol tracer
 # ---------------------------------------------------------------------------
+
 
 class ProtocolTracer:
     """Instruments A2A and MCP calls with correlated, protocol-aware spans.
@@ -664,16 +675,18 @@ class ProtocolTracer:
         entries: list[ProtocolTimelineEntry] = []
         for ps in self._protocol_spans:
             direction = "send" if ps.role in (SpanRole.CLIENT, SpanRole.PRODUCER) else "receive"
-            entries.append(ProtocolTimelineEntry(
-                timestamp=ps.span.start_time,
-                agent_id=self._agent_id,
-                protocol=ps.protocol,
-                direction=direction,
-                peer_agent=ps.remote_agent_id,
-                span_id=ps.span.span_id,
-                label=ps.span.name,
-                duration_ms=ps.duration_ms,
-            ))
+            entries.append(
+                ProtocolTimelineEntry(
+                    timestamp=ps.span.start_time,
+                    agent_id=self._agent_id,
+                    protocol=ps.protocol,
+                    direction=direction,
+                    peer_agent=ps.remote_agent_id,
+                    span_id=ps.span.span_id,
+                    label=ps.span.name,
+                    duration_ms=ps.duration_ms,
+                )
+            )
         entries.sort(key=lambda e: e.timestamp)
         return entries
 

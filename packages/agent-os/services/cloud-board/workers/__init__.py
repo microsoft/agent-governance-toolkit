@@ -4,8 +4,10 @@
 Cloud Board Workers Package
 """
 
-from .reputation_sync import ReputationSyncWorker, get_worker as get_reputation_worker
-from .dispute_resolver import DisputeResolverWorker, get_worker as get_dispute_worker
+from .dispute_resolver import DisputeResolverWorker
+from .dispute_resolver import get_worker as get_dispute_worker
+from .reputation_sync import ReputationSyncWorker
+from .reputation_sync import get_worker as get_reputation_worker
 
 __all__ = [
     "ReputationSyncWorker",

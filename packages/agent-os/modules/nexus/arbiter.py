@@ -7,46 +7,45 @@ The "Reward Agent" - a specialized, read-only agent that resolves disputes
 between agents by replaying flight recorder logs against the Control Plane.
 """
 
-from datetime import datetime, timezone
-from typing import Optional, Literal
-from dataclasses import dataclass, field
 import hashlib
 import uuid
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Literal, Optional
 
-from .schemas.receipt import DisputeReceipt
-from .schemas.escrow import EscrowStatus, EscrowResolution
-from .reputation import ReputationEngine
 from .exceptions import (
-    DisputeNotFoundError,
     DisputeAlreadyResolvedError,
     DisputeEvidenceError,
+    DisputeNotFoundError,
 )
+from .reputation import ReputationEngine
+from .schemas.receipt import DisputeReceipt
 
 
 @dataclass
 class FlightRecorderLog:
     """
     Flight recorder log from an agent's kernel.
-    
+
     Contains all operations, tool calls, and outputs during a task.
     """
-    
+
     agent_did: str
     task_id: str
     escrow_id: str
-    
+
     # Log content (encrypted)
     encrypted_log: bytes
     log_hash: str
-    
+
     # Metadata (not encrypted)
     start_time: datetime
     end_time: datetime
     operation_count: int
-    
+
     # Signature
     agent_signature: str
-    
+
     def verify_hash(self) -> bool:
         """Verify log integrity."""
         computed = hashlib.sha256(self.encrypted_log).hexdigest()
@@ -56,36 +55,36 @@ class FlightRecorderLog:
 @dataclass
 class DisputeResolution:
     """Result of dispute resolution by the Arbiter."""
-    
+
     dispute_id: str
     escrow_id: str
-    
+
     # Parties
     requester_did: str
     provider_did: str
-    
+
     # Decision
     outcome: Literal["requester_wins", "provider_wins", "split"]
     decision_explanation: str
     confidence_score: float  # 0-1, how confident Arbiter is
-    
+
     # Evidence analysis
     requester_logs_valid: bool
     provider_logs_valid: bool
     discrepancies_found: list[str] = field(default_factory=list)
-    
+
     # Credit distribution
     credits_to_requester: int = 0
     credits_to_provider: int = 0
-    
+
     # Reputation impact
     requester_reputation_change: int = 0
     provider_reputation_change: int = 0
     liar_identified: Optional[str] = None  # DID of agent found to be lying
-    
+
     # Timestamps
     resolved_at: datetime = field(default_factory=datetime.utcnow)
-    
+
     # Nexus attestation
     arbiter_signature: str = ""
 
@@ -93,14 +92,14 @@ class DisputeResolution:
 class Arbiter:
     """
     The "Reward Agent" - resolves disputes between agents.
-    
+
     A read-only agent hosted on Nexus that:
     1. Receives flight recorder logs from both parties
     2. Replays operations against the Control Plane
     3. Determines which agent's claim is accurate
     4. Applies reputation penalties to the lying agent
     """
-    
+
     def __init__(
         self,
         reputation_engine: Optional[ReputationEngine] = None,
@@ -110,11 +109,11 @@ class Arbiter:
         self.reputation_engine = reputation_engine or ReputationEngine()
         self.escrow_manager = escrow_manager
         self.control_plane = control_plane
-        
+
         # Storage
         self._disputes: dict[str, DisputeReceipt] = {}
         self._resolutions: dict[str, DisputeResolution] = {}
-    
+
     async def submit_dispute(
         self,
         escrow_id: str,
@@ -125,7 +124,7 @@ class Arbiter:
     ) -> DisputeReceipt:
         """
         Submit a new dispute for resolution.
-        
+
         Args:
             escrow_id: ID of the disputed escrow
             disputing_party: Who is raising the dispute
@@ -134,14 +133,14 @@ class Arbiter:
             flight_recorder_log: Evidence from the disputing party
         """
         dispute_id = f"dispute_{uuid.uuid4().hex[:16]}"
-        
+
         # Verify log integrity
         if not flight_recorder_log.verify_hash():
             raise DisputeEvidenceError(dispute_id, "Log hash verification failed")
-        
+
         # Get escrow details (would fetch from EscrowManager)
         # For now, create a placeholder receipt
-        
+
         dispute = DisputeReceipt(
             dispute_id=dispute_id,
             original_receipt=None,  # Would be the signed receipt
@@ -149,16 +148,16 @@ class Arbiter:
             dispute_reason=dispute_reason,
             claimed_outcome=claimed_outcome,
         )
-        
+
         if disputing_party == "requester":
             dispute.requester_logs_hash = flight_recorder_log.log_hash
         else:
             dispute.provider_logs_hash = flight_recorder_log.log_hash
-        
+
         self._disputes[dispute_id] = dispute
-        
+
         return dispute
-    
+
     async def submit_counter_evidence(
         self,
         dispute_id: str,
@@ -167,24 +166,24 @@ class Arbiter:
         """Submit counter-evidence from the other party."""
         if dispute_id not in self._disputes:
             raise DisputeNotFoundError(dispute_id)
-        
+
         dispute = self._disputes[dispute_id]
-        
+
         if dispute.resolved:
             raise DisputeAlreadyResolvedError(dispute_id)
-        
+
         # Verify log integrity
         if not flight_recorder_log.verify_hash():
             raise DisputeEvidenceError(dispute_id, "Log hash verification failed")
-        
+
         # Add logs from other party
         if dispute.disputing_party == "requester":
             dispute.provider_logs_hash = flight_recorder_log.log_hash
         else:
             dispute.requester_logs_hash = flight_recorder_log.log_hash
-        
+
         return dispute
-    
+
     async def resolve_dispute(
         self,
         dispute_id: str,
@@ -193,7 +192,7 @@ class Arbiter:
     ) -> DisputeResolution:
         """
         Resolve a dispute by replaying logs against Control Plane.
-        
+
         Process:
         1. Parse both flight recorder logs
         2. Identify the disputed operation
@@ -204,28 +203,25 @@ class Arbiter:
         """
         if dispute_id not in self._disputes:
             raise DisputeNotFoundError(dispute_id)
-        
+
         dispute = self._disputes[dispute_id]
-        
+
         if dispute.resolved:
             raise DisputeAlreadyResolvedError(dispute_id)
-        
+
         # Verify we have evidence from both parties
         if not dispute.requester_logs_hash or not dispute.provider_logs_hash:
-            raise DisputeEvidenceError(
-                dispute_id,
-                "Evidence required from both parties"
-            )
-        
+            raise DisputeEvidenceError(dispute_id, "Evidence required from both parties")
+
         # Analyze the dispute
         resolution = await self._analyze_dispute(dispute, requester_logs, provider_logs)
-        
+
         # Mark dispute as resolved
         dispute.resolved = True
         dispute.resolution_outcome = resolution.outcome
         dispute.arbiter_decision = resolution.decision_explanation
         dispute.resolved_at = resolution.resolved_at
-        
+
         # Apply reputation changes
         if resolution.liar_identified:
             self.reputation_engine.slash_reputation(
@@ -234,12 +230,12 @@ class Arbiter:
                 severity="high",
                 evidence_hash=dispute_id,
             )
-        
+
         # Store resolution
         self._resolutions[dispute_id] = resolution
-        
+
         return resolution
-    
+
     async def _analyze_dispute(
         self,
         dispute: DisputeReceipt,
@@ -248,7 +244,7 @@ class Arbiter:
     ) -> DisputeResolution:
         """
         Analyze dispute evidence and determine outcome.
-        
+
         In production, this would:
         1. Decrypt and parse logs
         2. Replay operations against Control Plane
@@ -258,7 +254,7 @@ class Arbiter:
         discrepancies = []
         requester_valid = requester_logs.verify_hash() if requester_logs else False
         provider_valid = provider_logs.verify_hash() if provider_logs else False
-        
+
         # Determine outcome based on evidence validity
         if requester_valid and not provider_valid:
             outcome = "requester_wins"
@@ -284,11 +280,11 @@ class Arbiter:
             liar = None
             decision = "Neither party provided valid evidence"
             confidence = 0.3
-        
+
         # Calculate credit distribution
         # Would get actual credits from escrow
         total_credits = 100  # Placeholder
-        
+
         if outcome == "requester_wins":
             credits_to_requester = total_credits
             credits_to_provider = 0
@@ -304,7 +300,7 @@ class Arbiter:
             credits_to_provider = total_credits // 2
             requester_rep = -10
             provider_rep = -10
-        
+
         resolution = DisputeResolution(
             dispute_id=dispute.dispute_id,
             escrow_id="",  # Would get from dispute
@@ -323,21 +319,21 @@ class Arbiter:
             liar_identified=liar,
             arbiter_signature=self._sign_resolution(dispute.dispute_id, outcome),
         )
-        
+
         return resolution
-    
+
     def get_dispute(self, dispute_id: str) -> DisputeReceipt:
         """Get a dispute by ID."""
         if dispute_id not in self._disputes:
             raise DisputeNotFoundError(dispute_id)
         return self._disputes[dispute_id]
-    
+
     def get_resolution(self, dispute_id: str) -> DisputeResolution:
         """Get resolution for a dispute."""
         if dispute_id not in self._resolutions:
             raise DisputeNotFoundError(dispute_id)
         return self._resolutions[dispute_id]
-    
+
     def list_disputes(
         self,
         agent_did: Optional[str] = None,
@@ -345,14 +341,14 @@ class Arbiter:
     ) -> list[DisputeReceipt]:
         """List disputes with optional filtering."""
         results = list(self._disputes.values())
-        
+
         if resolved is not None:
             results = [d for d in results if d.resolved == resolved]
-        
+
         # Would filter by agent_did if we had that in the receipt
-        
+
         return results
-    
+
     def _sign_resolution(self, dispute_id: str, outcome: str) -> str:
         """Generate Arbiter signature for resolution."""
         data = f"arbiter:{dispute_id}:{outcome}:{datetime.now(timezone.utc).isoformat()}"

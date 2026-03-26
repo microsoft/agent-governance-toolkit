@@ -11,8 +11,6 @@ Run:
     python examples/canary_rollout.py
 """
 
-import random
-
 from agent_sre.delivery.rollout import (
     CanaryRollout,
     RollbackCondition,
@@ -35,6 +33,7 @@ rollout = CanaryRollout(
 )
 
 # ── Simulate golden test evaluation ────────────────────────────────────
+
 
 def evaluate_agent_version(version: str, n_tasks: int = 50) -> dict[str, float]:
     """Simulate evaluating an agent version against golden test cases."""
@@ -89,15 +88,17 @@ while rollout.current_step is not None:
     if should_rollback:
         rollout.rollback(reason="Canary metrics breached rollback thresholds")
         print()
-        print(f"  🛑 ROLLBACK triggered!")
-        print(f"     Reason: hallucination_rate {metrics['hallucination_rate']:.1%} >= 8% threshold")
+        print("  🛑 ROLLBACK triggered!")
+        print(
+            f"     Reason: hallucination_rate {metrics['hallucination_rate']:.1%} >= 8% threshold"
+        )
         break
 
     # Advance to next stage
     advanced = rollout.advance()
     if not advanced:
         break
-    print(f"  ✅ Metrics within bounds, advancing...")
+    print("  ✅ Metrics within bounds, advancing...")
     print()
 
 print()

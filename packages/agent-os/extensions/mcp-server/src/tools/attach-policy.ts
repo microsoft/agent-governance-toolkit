@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * attach_policy Tool
- * 
+ *
  * Attaches policy templates to an agent.
  */
 
@@ -56,22 +56,22 @@ Compliance frameworks:
       required: ['agentId', 'policyId'],
     },
   },
-  
+
   async execute(args: unknown, context: ServiceContext): Promise<string> {
     const input = AttachPolicyInputSchema.parse(args);
-    
+
     context.logger.info('Attaching policy', { agentId: input.agentId, policyId: input.policyId });
-    
+
     // Verify agent exists
     const agent = await context.agentManager.getAgent(input.agentId);
     if (!agent) {
       throw new Error(`Agent not found: ${input.agentId}`);
     }
-    
+
     // Verify policy exists
     const policy = context.policyEngine.getPolicy(input.policyId);
     const template = context.templateLibrary.getPolicyTemplate(input.policyId);
-    
+
     if (!policy && !template) {
       // List available policies
       const available = context.policyEngine.getAllPolicies().map(p => p.id);
@@ -79,11 +79,11 @@ Compliance frameworks:
         `Policy not found: ${input.policyId}\n\nAvailable policies:\n${available.join('\n')}`
       );
     }
-    
+
     // Check for conflicts
     const allPolicies = [...agent.config.policies, input.policyId];
     const validation = context.policyEngine.validatePolicyCombination(allPolicies);
-    
+
     if (!validation.valid) {
       return `
 ⚠️ Policy Conflict Detected
@@ -96,14 +96,14 @@ Current policies: ${agent.config.policies.join(', ') || 'None'}
 Consider removing conflicting policies first.
 `.trim();
     }
-    
+
     // Attach the policy
     const updated = await context.agentManager.attachPolicies(input.agentId, [input.policyId]);
-    
+
     // Get policy details for display
     const policyInfo = policy || template?.policy;
     const rules = policyInfo?.rules || [];
-    
+
     return `
 ✅ Policy Attached Successfully!
 
@@ -114,7 +114,7 @@ ${policyInfo?.description || ''}
 ${policyInfo?.framework ? `Framework: ${policyInfo.framework}` : ''}
 
 **Rules Enforced (${rules.length}):**
-${rules.slice(0, 5).map(r => 
+${rules.slice(0, 5).map(r =>
   `- ${r.name} [${r.severity}]: ${r.message || r.description || 'No description'}`
 ).join('\n')}
 ${rules.length > 5 ? `... and ${rules.length - 5} more rules` : ''}

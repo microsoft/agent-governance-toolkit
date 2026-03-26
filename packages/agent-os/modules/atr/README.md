@@ -14,7 +14,7 @@
 
 Most agent frameworks hardcode tools directly into their runtimes. This creates tight coupling: add a new capability, restart the entire system. Change a function signature, update dozens of agents. Scale by addition leads to fragility.
 
-**We built `atr` because tool registration should not require restarting your infrastructure.**  
+**We built `atr` because tool registration should not require restarting your infrastructure.**
 
 The Agent Tool Registry decouples tool providers from tool consumers. Agents discover capabilities at runtime through a standardized interface. We subtract the dependency between agent logic and tool implementation to add scale.
 
@@ -119,7 +119,7 @@ See `examples/sandbox_demo.py` for complete examples.
 
 `atr` sits in **Layer 2 (Infrastructure)** of the Agent OS stack.
 
-**Responsibility:** Tool registration, discovery, and schema generation.  
+**Responsibility:** Tool registration, discovery, and schema generation.
 **Not responsible for:** Tool execution (handled by the Agent Control Plane).
 
 ### Design
@@ -175,6 +175,6 @@ MIT License - See [LICENSE](LICENSE) for details.
 
 ---
 
-**Repository:** https://github.com/microsoft/agent-governance-toolkit  
-**Documentation:** https://github.com/microsoft/agent-governance-toolkit#readme  
+**Repository:** https://github.com/microsoft/agent-governance-toolkit
+**Documentation:** https://github.com/microsoft/agent-governance-toolkit#readme
 **Issues:** https://github.com/microsoft/agent-governance-toolkit/issues

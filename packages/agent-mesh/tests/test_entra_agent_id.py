@@ -3,13 +3,13 @@
 """Tests for Microsoft Entra Agent ID adapter."""
 
 import pytest
+
 from agentmesh.identity.entra import (
     EntraAgentBlueprint,
     EntraAgentIdentity,
     EntraAgentRegistry,
     EntraAgentStatus,
 )
-
 
 TENANT_ID = "contoso-tenant-001"
 SPONSOR = "alice@contoso.com"

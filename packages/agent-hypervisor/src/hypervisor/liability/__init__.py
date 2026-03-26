@@ -125,9 +125,7 @@ class LiabilityMatrix:
         if len(path) > 1:
             paths.append(list(path))
 
-    def _dfs_cycle(
-        self, node: str, visited: set[str], in_stack: set[str]
-    ) -> bool:
+    def _dfs_cycle(self, node: str, visited: set[str], in_stack: set[str]) -> bool:
         visited.add(node)
         in_stack.add(node)
         for edge in self._edges:

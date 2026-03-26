@@ -13,8 +13,8 @@ import hashlib
 import time
 from datetime import datetime
 
-from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
 
 from agentmesh.exceptions import IdentityError
 from agentmesh.identity.agent_id import AgentIdentity
@@ -78,9 +78,7 @@ class KeyRotationManager:
         new_public_key_b64 = base64.b64encode(new_public_key_bytes).decode()
 
         # Build and store rotation proof
-        proof = self._create_rotation_proof(
-            old_private_key, old_public_key_b64, new_public_key_b64
-        )
+        proof = self._create_rotation_proof(old_private_key, old_public_key_b64, new_public_key_b64)
 
         # Record old key in history
         self._key_history.append(

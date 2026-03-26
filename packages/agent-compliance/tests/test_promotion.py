@@ -17,8 +17,6 @@ from agent_compliance.promotion import (
     MaturityLevel,
     PromotionChecker,
     PromotionGate,
-    PromotionReport,
-    PromotionResult,
     _DEFAULT_GATES,
     _test_coverage_check,
     _security_scan_check,
@@ -33,6 +31,7 @@ from agent_compliance.promotion import (
 
 
 # ── Helper: a "passing" context for all built-in gates ────────
+
 
 def _full_pass_context(**overrides) -> dict:
     """Return a context dict that satisfies every built-in gate."""
@@ -68,7 +67,9 @@ class TestTestCoverageGate:
         assert "50" in reason
 
     def test_custom_threshold(self):
-        ok, _ = _test_coverage_check({"test_coverage": 90, "test_coverage_threshold": 95})
+        ok, _ = _test_coverage_check(
+            {"test_coverage": 90, "test_coverage_threshold": 95}
+        )
         assert ok is False
 
 
@@ -90,25 +91,31 @@ class TestSecurityScanGate:
 
 class TestSLOComplianceGate:
     def test_passes_when_meeting_targets(self):
-        ok, _ = _slo_compliance_check({
-            "slo_compliance_pct": 99.5,
-            "slo_compliance_days": 14,
-        })
+        ok, _ = _slo_compliance_check(
+            {
+                "slo_compliance_pct": 99.5,
+                "slo_compliance_days": 14,
+            }
+        )
         assert ok is True
 
     def test_fails_low_pct(self):
-        ok, reason = _slo_compliance_check({
-            "slo_compliance_pct": 95.0,
-            "slo_compliance_days": 14,
-        })
+        ok, reason = _slo_compliance_check(
+            {
+                "slo_compliance_pct": 95.0,
+                "slo_compliance_days": 14,
+            }
+        )
         assert ok is False
         assert "compliance" in reason
 
     def test_fails_short_window(self):
-        ok, reason = _slo_compliance_check({
-            "slo_compliance_pct": 99.5,
-            "slo_compliance_days": 3,
-        })
+        ok, reason = _slo_compliance_check(
+            {
+                "slo_compliance_pct": 99.5,
+                "slo_compliance_days": 3,
+            }
+        )
         assert ok is False
         assert "window" in reason
 

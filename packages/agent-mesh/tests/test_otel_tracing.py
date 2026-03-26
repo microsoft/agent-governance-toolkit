@@ -2,17 +2,17 @@
 # Licensed under the MIT License.
 """Tests for OpenTelemetry tracing of trust operations."""
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from agentmesh.observability.tracing import (
+    _OTEL_AVAILABLE,
     MeshTracer,
     configure_tracing,
-    inject_context,
     extract_context,
-    _OTEL_AVAILABLE,
+    inject_context,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -24,9 +24,9 @@ def _make_tracer() -> MeshTracer:
     if not _OTEL_AVAILABLE:
         pytest.skip("opentelemetry not installed")
 
+    from opentelemetry import trace
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
-    from opentelemetry import trace
 
     class _InMemoryExporter(SpanExporter):
         """Minimal in-memory exporter for testing."""
@@ -223,13 +223,18 @@ class TestContextPropagation:
         if not _OTEL_AVAILABLE:
             pytest.skip("opentelemetry not installed")
 
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
         from opentelemetry import trace
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import (
+            SimpleSpanProcessor,
+            SpanExporter,
+            SpanExportResult,
+        )
 
         class _Noop(SpanExporter):
             def export(self, spans):
                 return SpanExportResult.SUCCESS
+
             def shutdown(self):
                 pass
 

@@ -184,15 +184,15 @@ shadow = ShadowTeacher(model="o1-preview")
 
 for example in dataset["test"]:
     query = example["query"]
-    
+
     # Weak agent attempts
     agent_response = weak_agent.respond(query)
-    
+
     # Detect laziness
     if auditor.is_give_up_signal(agent_response):
         # Verify with teacher
         audit = await auditor.audit_give_up(query, agent_response, {})
-        
+
         if audit.teacher_found_data:
             print(f"Laziness detected on: {query}")
             # Apply competence patch
@@ -214,6 +214,6 @@ for example in dataset["test"]:
 
 ---
 
-**Last Updated:** 2026-01-18  
-**Version:** 1.0  
+**Last Updated:** 2026-01-18
+**Version:** 1.0
 **Contact:** agt@microsoft.com

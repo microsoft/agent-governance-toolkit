@@ -11,10 +11,9 @@ from __future__ import annotations
 
 import abc
 import logging
-from typing import Optional
 
-from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
 
 logger = logging.getLogger(__name__)
 
@@ -197,9 +196,13 @@ class SoftwareKeyStore(KeyStore):
         if agent_id not in self._keys:
             raise KeyError(f"No keypair found for agent: {agent_id}")
 
-        return self._keys[agent_id].public_key().public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw,
+        return (
+            self._keys[agent_id]
+            .public_key()
+            .public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw,
+            )
         )
 
     def delete_key(self, agent_id: str) -> None:
@@ -246,7 +249,7 @@ class PKCS11KeyStore(KeyStore):
         self,
         library_path: str,
         slot: int = 0,
-        pin: Optional[str] = None,
+        pin: str | None = None,
     ) -> None:
         try:
             import pkcs11 as _pkcs11  # type: ignore[import-untyped]

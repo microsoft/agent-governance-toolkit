@@ -126,7 +126,7 @@ class GovernedEnvironment(Generic[T_state, T_action]):
 
     def _setup_hooks(self) -> None:
         """Set up hooks to capture violations."""
-        if hasattr(self.kernel, 'on_policy_violation'):
+        if hasattr(self.kernel, "on_policy_violation"):
             self.kernel.on_policy_violation(self._handle_violation)
 
     def _handle_violation(
@@ -183,7 +183,7 @@ class GovernedEnvironment(Generic[T_state, T_action]):
         self._total_episodes += 1
 
         # Reset kernel state if configured
-        if self.config.reset_kernel_state and hasattr(self.kernel, 'reset'):
+        if self.config.reset_kernel_state and hasattr(self.kernel, "reset"):
             self.kernel.reset()
 
         # Generate initial task
@@ -218,7 +218,7 @@ class GovernedEnvironment(Generic[T_state, T_action]):
 
         # Execute action through kernel
         try:
-            if hasattr(self.kernel, 'execute'):
+            if hasattr(self.kernel, "execute"):
                 result = self.kernel.execute(action)
             else:
                 result = action  # No kernel execution, passthrough
@@ -280,10 +280,10 @@ class GovernedEnvironment(Generic[T_state, T_action]):
 
     def _get_policy_names(self) -> list[str]:
         """Get names of loaded policies."""
-        if hasattr(self.kernel, 'get_policies'):
+        if hasattr(self.kernel, "get_policies"):
             return [p.name for p in self.kernel.get_policies()]
-        if hasattr(self.kernel, 'policies'):
-            return [getattr(p, 'name', str(p)) for p in self.kernel.policies]
+        if hasattr(self.kernel, "policies"):
+            return [getattr(p, "name", str(p)) for p in self.kernel.policies]
         return []
 
     @property
@@ -299,7 +299,8 @@ class GovernedEnvironment(Generic[T_state, T_action]):
             "total_violations": self._total_violations,
             "successful_episodes": self._successful_episodes,
             "success_rate": self._successful_episodes / max(self._total_episodes, 1),
-            "violations_per_episode": self._total_violations / max(self._total_episodes, 1),
+            "violations_per_episode": self._total_violations
+            / max(self._total_episodes, 1),
             "steps_per_episode": self._total_steps / max(self._total_episodes, 1),
         }
 

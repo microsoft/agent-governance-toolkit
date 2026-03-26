@@ -2,13 +2,14 @@
 # Licensed under the MIT License.
 """Tests for MCP Kernel Server resources."""
 
-import sys
 import os
+import sys
+
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from mcp_kernel_server.resources import VFSResource, VFSResourceTemplate, ResourceContent
+from mcp_kernel_server.resources import ResourceContent, VFSResource, VFSResourceTemplate
 
 
 class TestResourceContent:
@@ -21,7 +22,9 @@ class TestResourceContent:
 
     def test_with_metadata(self):
         rc = ResourceContent(
-            uri="vfs://a/b", mime_type="text/plain", content="hello",
+            uri="vfs://a/b",
+            mime_type="text/plain",
+            content="hello",
             metadata={"agent_id": "a"},
         )
         assert rc.metadata["agent_id"] == "a"
@@ -67,9 +70,9 @@ class TestVFSResource:
         resources = self.vfs.list_resources("agent-1")
         assert len(resources) == 3
         uris = {r["uri"] for r in resources}
-        assert f"vfs://agent-1/mem/working" in uris
-        assert f"vfs://agent-1/mem/episodic" in uris
-        assert f"vfs://agent-1/policy" in uris
+        assert "vfs://agent-1/mem/working" in uris
+        assert "vfs://agent-1/mem/episodic" in uris
+        assert "vfs://agent-1/policy" in uris
 
     def test_parse_uri_full(self):
         agent_id, path = self.vfs._parse_uri("vfs://agent-1/mem/working/key")

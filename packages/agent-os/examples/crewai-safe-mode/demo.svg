@@ -13,36 +13,36 @@
     .blocked { animation: fadeIn 0.5s 3s forwards; opacity: 0; }
     .stats { animation: fadeIn 0.5s 4s forwards; opacity: 0; }
   </style>
-  
+
   <!-- Terminal Window -->
   <rect x="10" y="10" width="780" height="480" rx="8" fill="#1a1b26"/>
   <rect x="10" y="10" width="780" height="30" rx="8" fill="#24283b"/>
   <rect x="10" y="30" width="780" height="10" fill="#24283b"/>
-  
+
   <!-- Window Controls -->
   <circle cx="30" cy="25" r="6" fill="#ff5f56"/>
   <circle cx="50" cy="25" r="6" fill="#ffbd2e"/>
   <circle cx="70" cy="25" r="6" fill="#27c93f"/>
   <text x="400" y="28" fill="#a9b1d6" text-anchor="middle" class="terminal" font-size="11">Agent OS - Safe Mode Demo</text>
-  
+
   <!-- Terminal Content -->
   <g class="terminal" transform="translate(25, 60)">
     <!-- Command -->
     <text y="0" fill="#7aa2f7">$ python crewai_safe_mode.py</text>
-    
+
     <!-- Banner -->
     <text y="30" fill="#7dcfff" class="line1">╔═══════════════════════════════════════════════════════════╗</text>
     <text y="45" fill="#7dcfff" class="line1">║  🛡️  AGENT OS - Safe Mode Demo for CrewAI                 ║</text>
     <text y="60" fill="#7dcfff" class="line1">╚═══════════════════════════════════════════════════════════╝</text>
-    
+
     <!-- Kernel Init -->
     <text y="90" fill="#9ece6a" class="line2">[INFO] Kernel initialized for agent: demo-crew</text>
     <text y="105" fill="#9ece6a" class="line2">[INFO] Safety policies loaded: file_ops, commands, paths</text>
-    
+
     <!-- Agent Action -->
     <text y="135" fill="#bb9af7" class="line3">🤖 Agent 'Cleanup Bot' executing: Clean up old cache files</text>
     <text y="150" fill="#7aa2f7" class="line4">[INFO] Agent requested: rm -rf /home/user/Downloads/*</text>
-    
+
     <!-- BLOCKED Banner -->
     <g class="blocked">
       <rect y="170" width="460" height="90" fill="#f7768e" rx="4" opacity="0.15"/>
@@ -52,7 +52,7 @@
       <text y="240" fill="#f7768e">║  Reason: Destructive file operation detected              ║</text>
       <text y="255" fill="#f7768e" font-weight="bold">╚═══════════════════════════════════════════════════════════╝</text>
     </g>
-    
+
     <!-- Stats -->
     <g class="stats">
       <text y="290" fill="#7dcfff">📊 Agent OS Kernel Report</text>

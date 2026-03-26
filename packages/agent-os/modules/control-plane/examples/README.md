@@ -118,7 +118,7 @@ def example_function():
     """Demonstrates [specific functionality]"""
     # Create control plane
     control_plane = AgentControlPlane()
-    
+
     # Your example code here
     pass
 

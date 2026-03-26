@@ -86,7 +86,7 @@ class SignalNormalizer(Protocol):
     def normalize(self, raw_signal: Dict[str, Any]) -> ContextObject:
         """Convert raw signal to ContextObject."""
         ...
-    
+
     def validate(self, raw_signal: Dict[str, Any]) -> bool:
         """Validate if signal has required fields."""
         ...
@@ -289,15 +289,15 @@ from universal_signal_bus import SignalNormalizer, SignalType
 
 class MetricsSignalNormalizer:
     """Normalizer for system metrics."""
-    
+
     def normalize(self, raw_signal: Dict[str, Any]) -> ContextObject:
         cpu = raw_signal.get("cpu_percent", 0)
         memory = raw_signal.get("memory_percent", 0)
-        
+
         # Determine urgency based on metrics
         urgency = max(cpu, memory) / 100.0
         priority = "critical" if urgency > 0.9 else "high" if urgency > 0.7 else "normal"
-        
+
         return ContextObject(
             signal_type=SignalType.SYSTEM_METRICS,
             timestamp=datetime.now().isoformat(),
@@ -307,7 +307,7 @@ class MetricsSignalNormalizer:
             urgency_score=urgency,
             context={"cpu_percent": cpu, "memory_percent": memory}
         )
-    
+
     def validate(self, raw_signal: Dict[str, Any]) -> bool:
         return "cpu_percent" in raw_signal or "memory_percent" in raw_signal
 
@@ -331,14 +331,14 @@ agent = DoerAgent()
 def process_signal(raw_signal: Dict[str, Any]):
     # Normalize the signal
     context = bus.ingest(raw_signal)
-    
+
     # Agent processes the context
     result = agent.run(
         query=context.query,
         user_id=context.user_id,
         # Add context metadata if needed
     )
-    
+
     return result
 
 # Process different signal types

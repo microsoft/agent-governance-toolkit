@@ -20,6 +20,8 @@ import random
 import time
 
 from agent_sre import SLO, ErrorBudget
+from agent_sre.integrations.langchain.callback import AgentSRECallback
+from agent_sre.slo.dashboard import SLODashboard
 from agent_sre.slo.indicators import (
     CostPerTask,
     HallucinationRate,
@@ -28,8 +30,6 @@ from agent_sre.slo.indicators import (
     ToolCallAccuracy,
 )
 from agent_sre.slo.objectives import ExhaustionAction, SLOStatus
-from agent_sre.slo.dashboard import SLODashboard
-from agent_sre.integrations.langchain.callback import AgentSRECallback
 
 # ── Step 1: Mock LangChain agent ───────────────────────────────────────
 # In production you would import from langchain and create a real agent.
@@ -167,9 +167,7 @@ for i in range(NUM_CALLS):
         tool_accuracy.record_call(correct=result["tool_correct"])
 
     slo.record_event(
-        good=result["success"]
-        and not result["hallucinated"]
-        and result.get("tool_correct", True)
+        good=result["success"] and not result["hallucinated"] and result.get("tool_correct", True)
     )
 
     # Track per-call violations
@@ -210,7 +208,9 @@ for ind in slo.indicators:
     comp = ind.compliance()
     if val is not None and comp is not None:
         ok = "✅" if comp >= ind.target else "❌"
-        print(f"    {ok} {ind.name:<22} value={val:.3f}  target={ind.target}  compliance={comp:.1%}")
+        print(
+            f"    {ok} {ind.name:<22} value={val:.3f}  target={ind.target}  compliance={comp:.1%}"
+        )
 print()
 
 # ── Step 6: Error budget status ───────────────────────────────────────
@@ -237,7 +237,7 @@ else:
 if status == SLOStatus.EXHAUSTED:
     print(f"\n  🚨 Error budget exhausted — action: {budget.exhaustion_action.value}")
 elif status in (SLOStatus.CRITICAL, SLOStatus.WARNING):
-    print(f"\n  ⚠️  SLO at risk — consider throttling traffic or rolling back")
+    print("\n  ⚠️  SLO at risk — consider throttling traffic or rolling back")
 print()
 
 # ── Calls that violated SLOs ──────────────────────────────────────────

@@ -115,7 +115,7 @@ def retry_with_backoff(
             if not _is_transient(exc) or attempt == max_retries:
                 raise
             last_exc = exc
-            delay = min(base_delay * (2 ** attempt) + random.uniform(0, 1), max_delay)
+            delay = min(base_delay * (2**attempt) + random.uniform(0, 1), max_delay)
             logger.warning(
                 "Retry %d/%d for %s after %s (delay=%.2fs)",
                 attempt + 1,
@@ -194,26 +194,20 @@ class OpenAIKernel(BaseIntegration):
         """
         if client is None:
             raise TypeError(
-                "OpenAIKernel.wrap() requires a 'client' argument: "
-                "kernel.wrap(assistant, client)"
+                "OpenAIKernel.wrap() requires a 'client' argument: kernel.wrap(assistant, client)"
             )
         assistant_id = agent.id
         ctx = AssistantContext(
             agent_id=assistant_id,
             session_id=f"oai-{int(time.time())}",
             policy=self.policy,
-            assistant_id=assistant_id
+            assistant_id=assistant_id,
         )
         self.contexts[assistant_id] = ctx
         self._wrapped_assistants[assistant_id] = agent
         self._clients[assistant_id] = client
 
-        return GovernedAssistant(
-            assistant=agent,
-            client=client,
-            kernel=self,
-            ctx=ctx
-        )
+        return GovernedAssistant(assistant=agent, client=client, kernel=self, ctx=ctx)
 
     def wrap_assistant(self, assistant: Any, client: Any) -> "GovernedAssistant":
         """Wrap an OpenAI Assistant with governance.
@@ -231,6 +225,7 @@ class OpenAIKernel(BaseIntegration):
             GovernedAssistant with full governance.
         """
         import warnings
+
         warnings.warn(
             "wrap_assistant() is deprecated, use wrap(assistant, client) instead.",
             DeprecationWarning,
@@ -266,12 +261,14 @@ class OpenAIKernel(BaseIntegration):
         """
         self._cancelled_runs.add(run_id)
         try:
-            client.beta.threads.runs.cancel(
-                thread_id=thread_id,
-                run_id=run_id
-            )
+            client.beta.threads.runs.cancel(thread_id=thread_id, run_id=run_id)
         except Exception:  # noqa: BLE001 — best-effort cancel, run may already be complete
-            logger.warning("Run cancel failed (may already be complete): thread=%s run=%s", thread_id, run_id, exc_info=True)
+            logger.warning(
+                "Run cancel failed (may already be complete): thread=%s run=%s",
+                thread_id,
+                run_id,
+                exc_info=True,
+            )
 
     def is_cancelled(self, run_id: str) -> bool:
         """Check whether a run has been cancelled via :meth:`cancel_run`.
@@ -315,13 +312,7 @@ class GovernedAssistant:
     All API calls are intercepted for policy enforcement.
     """
 
-    def __init__(
-        self,
-        assistant: Any,
-        client: Any,
-        kernel: OpenAIKernel,
-        ctx: AssistantContext
-    ):
+    def __init__(self, assistant: Any, client: Any, kernel: OpenAIKernel, ctx: AssistantContext):
         self._assistant = assistant
         self._client = client
         self._kernel = kernel
@@ -391,13 +382,7 @@ class GovernedAssistant:
     # Message Management
     # =========================================================================
 
-    def add_message(
-        self,
-        thread_id: str,
-        content: str,
-        role: str = "user",
-        **kwargs
-    ) -> Any:
+    def add_message(self, thread_id: str, content: str, role: str = "user", **kwargs) -> Any:
         """Add a message to a thread with pre-execution policy checks.
 
         The message content is validated against ``blocked_patterns`` before
@@ -421,10 +406,7 @@ class GovernedAssistant:
             raise PolicyViolationError(f"Message blocked: {reason}")
 
         message = self._client.beta.threads.messages.create(
-            thread_id=thread_id,
-            role=role,
-            content=content,
-            **kwargs
+            thread_id=thread_id, role=role, content=content, **kwargs
         )
         return message
 
@@ -438,10 +420,7 @@ class GovernedAssistant:
         Returns:
             A list of message objects in the thread.
         """
-        return self._client.beta.threads.messages.list(
-            thread_id=thread_id,
-            **kwargs
-        )
+        return self._client.beta.threads.messages.list(thread_id=thread_id, **kwargs)
 
     # =========================================================================
     # Run Execution (Core Governance)
@@ -453,7 +432,7 @@ class GovernedAssistant:
         instructions: Optional[str] = None,
         tools: Optional[list] = None,
         poll_interval: float = 1.0,
-        **kwargs
+        **kwargs,
     ) -> Any:
         """
         Execute a governed run.
@@ -486,11 +465,7 @@ class GovernedAssistant:
             self._validate_tools(tools)
 
         # Create run
-        run_kwargs = {
-            "thread_id": thread_id,
-            "assistant_id": self._assistant.id,
-            **kwargs
-        }
+        run_kwargs = {"thread_id": thread_id, "assistant_id": self._assistant.id, **kwargs}
         if instructions:
             run_kwargs["instructions"] = instructions
         if tools:
@@ -502,12 +477,7 @@ class GovernedAssistant:
         # Poll until complete (with governance checks)
         return self._poll_run(thread_id, run.id, poll_interval)
 
-    def run_stream(
-        self,
-        thread_id: str,
-        instructions: Optional[str] = None,
-        **kwargs
-    ) -> Generator:
+    def run_stream(self, thread_id: str, instructions: Optional[str] = None, **kwargs) -> Generator:
         """
         Stream a governed run.
 
@@ -524,23 +494,18 @@ class GovernedAssistant:
             thread_id=thread_id,
             assistant_id=self._assistant.id,
             instructions=instructions,
-            **kwargs
+            **kwargs,
         ) as stream:
             for event in stream:
                 # Check for cancellation
-                if hasattr(event, 'data') and hasattr(event.data, 'id'):
+                if hasattr(event, "data") and hasattr(event.data, "id"):
                     if self._kernel.is_cancelled(event.data.id):
                         raise RunCancelledException("Run was cancelled (SIGKILL)")
 
                 # Yield event
                 yield event
 
-    def _poll_run(
-        self,
-        thread_id: str,
-        run_id: str,
-        poll_interval: float
-    ) -> Any:
+    def _poll_run(self, thread_id: str, run_id: str, poll_interval: float) -> Any:
         """
         Poll run status with governance checks.
         """
@@ -549,13 +514,10 @@ class GovernedAssistant:
             if self._kernel.is_cancelled(run_id):
                 raise RunCancelledException("Run was cancelled (SIGKILL)")
 
-            run = self._client.beta.threads.runs.retrieve(
-                thread_id=thread_id,
-                run_id=run_id
-            )
+            run = self._client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
 
             # Update token counts
-            if hasattr(run, 'usage') and run.usage:
+            if hasattr(run, "usage") and run.usage:
                 self._ctx.prompt_tokens += run.usage.prompt_tokens or 0
                 self._ctx.completion_tokens += run.usage.completion_tokens or 0
 
@@ -598,9 +560,11 @@ class GovernedAssistant:
             call_info = {
                 "id": tool_call.id,
                 "type": tool_call.type,
-                "function": tool_call.function.name if hasattr(tool_call, 'function') else None,
-                "arguments": tool_call.function.arguments if hasattr(tool_call, 'function') else None,
-                "timestamp": datetime.now().isoformat()
+                "function": tool_call.function.name if hasattr(tool_call, "function") else None,
+                "arguments": tool_call.function.arguments
+                if hasattr(tool_call, "function")
+                else None,
+                "timestamp": datetime.now().isoformat(),
             }
             self._ctx.function_calls.append(call_info)
             self._ctx.tool_calls.append(call_info)
@@ -613,57 +577,66 @@ class GovernedAssistant:
                 )
 
             # Validate function name
-            if hasattr(tool_call, 'function'):
+            if hasattr(tool_call, "function"):
                 func_name = tool_call.function.name
                 if self._kernel.policy.allowed_tools:
                     if func_name not in self._kernel.policy.allowed_tools:
                         self._kernel.cancel_run(thread_id, run.id, self._client)
-                        raise PolicyViolationError(
-                            f"Tool not allowed: {func_name}"
-                        )
+                        raise PolicyViolationError(f"Tool not allowed: {func_name}")
 
             # Check human approval requirement
             if self._kernel.policy.require_human_approval:
-                tool_outputs.append({
-                    "tool_call_id": tool_call.id,
-                    "output": json.dumps({
-                        "status": "requires_approval",
-                        "function": func_name if hasattr(tool_call, 'function') else "unknown",
-                        "message": "Tool execution requires human approval per governance policy"
-                    })
-                })
+                tool_outputs.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "output": json.dumps(
+                            {
+                                "status": "requires_approval",
+                                "function": func_name
+                                if hasattr(tool_call, "function")
+                                else "unknown",
+                                "message": "Tool execution requires human approval per governance policy",
+                            }
+                        ),
+                    }
+                )
                 continue
 
             # Execute via tool registry if available
             output = None
-            if hasattr(self, '_tool_registry') and self._tool_registry:
-                func_name_exec = tool_call.function.name if hasattr(tool_call, 'function') else None
+            if hasattr(self, "_tool_registry") and self._tool_registry:
+                func_name_exec = tool_call.function.name if hasattr(tool_call, "function") else None
                 if func_name_exec and func_name_exec in self._tool_registry:
                     try:
-                        args = json.loads(tool_call.function.arguments) if hasattr(tool_call, 'function') else {}
+                        args = (
+                            json.loads(tool_call.function.arguments)
+                            if hasattr(tool_call, "function")
+                            else {}
+                        )
                         result = self._tool_registry[func_name_exec](**args)
                         output = json.dumps(result) if not isinstance(result, str) else result
                     except Exception as e:
-                        logger.warning("Tool execution failed for %s", func_name_exec, exc_info=True)
+                        logger.warning(
+                            "Tool execution failed for %s", func_name_exec, exc_info=True
+                        )
                         output = json.dumps({"status": "error", "message": str(e)})
 
             if output is None:
-                output = json.dumps({
-                    "status": "no_executor",
-                    "function": tool_call.function.name if hasattr(tool_call, 'function') else "unknown",
-                    "message": "No tool executor registered for this function"
-                })
+                output = json.dumps(
+                    {
+                        "status": "no_executor",
+                        "function": tool_call.function.name
+                        if hasattr(tool_call, "function")
+                        else "unknown",
+                        "message": "No tool executor registered for this function",
+                    }
+                )
 
-            tool_outputs.append({
-                "tool_call_id": tool_call.id,
-                "output": output
-            })
+            tool_outputs.append({"tool_call_id": tool_call.id, "output": output})
 
         # Submit outputs
         return self._client.beta.threads.runs.submit_tool_outputs(
-            thread_id=thread_id,
-            run_id=run.id,
-            tool_outputs=tool_outputs
+            thread_id=thread_id, run_id=run.id, tool_outputs=tool_outputs
         )
 
     def _validate_tools(self, tools: list):
@@ -737,7 +710,7 @@ class GovernedAssistant:
             "prompt_tokens": self._ctx.prompt_tokens,
             "completion_tokens": self._ctx.completion_tokens,
             "total_tokens": self._ctx.prompt_tokens + self._ctx.completion_tokens,
-            "limit": self._kernel.policy.max_tokens
+            "limit": self._kernel.policy.max_tokens,
         }
 
     def __getattr__(self, name):
@@ -773,6 +746,7 @@ class RunCancelledException(Exception):
 # Convenience Functions
 # ============================================================================
 
+
 def wrap(
     assistant: Any,
     client: Any,
@@ -789,9 +763,9 @@ def wrap(
         governed = wrap(my_assistant, openai_client)
         result = governed.run(thread_id)
     """
-    return OpenAIKernel(
-        policy, max_retries=max_retries, timeout_seconds=timeout_seconds
-    ).wrap(assistant, client)
+    return OpenAIKernel(policy, max_retries=max_retries, timeout_seconds=timeout_seconds).wrap(
+        assistant, client
+    )
 
 
 def wrap_assistant(
@@ -807,10 +781,12 @@ def wrap_assistant(
         Use :func:`wrap` instead.
     """
     import warnings
+
     warnings.warn(
         "wrap_assistant() is deprecated, use wrap() instead.",
         DeprecationWarning,
         stacklevel=2,
     )
-    return wrap(assistant, client, policy=policy, max_retries=max_retries,
-                timeout_seconds=timeout_seconds)
+    return wrap(
+        assistant, client, policy=policy, max_retries=max_retries, timeout_seconds=timeout_seconds
+    )

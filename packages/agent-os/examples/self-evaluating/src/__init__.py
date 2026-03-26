@@ -11,13 +11,7 @@ constraint engineering, evaluation engineering, and more.
 __version__ = "1.0.0"
 
 # Core agent modules
-from .agent import (
-    DoerAgent,
-    SelfEvolvingAgent,
-    MemorySystem,
-    AgentTools
-)
-
+from .agent import AgentTools, DoerAgent, MemorySystem, SelfEvolvingAgent
 from .observer import ObserverAgent
 
 # Telemetry and monitoring
@@ -26,8 +20,8 @@ from .telemetry import EventStream, TelemetryEvent
 # Advanced features - Import only what exists
 try:
     from .polymorphic_output import (
-        PolymorphicOutputEngine,
         InputContext,
+        PolymorphicOutputEngine,
     )
 except ImportError:
     pass
@@ -39,9 +33,9 @@ except ImportError:
 
 try:
     from .agent_brokerage import (
-        AgentMarketplace,
         AgentBroker,
         AgentListing,
+        AgentMarketplace,
         AgentPricing,
         PricingModel,
     )
@@ -49,10 +43,7 @@ except ImportError:
     pass
 
 try:
-    from .agent_metadata import (
-        AgentMetadata,
-        AgentMetadataManager
-    )
+    from .agent_metadata import AgentMetadata, AgentMetadataManager
 except ImportError:
     pass
 
@@ -71,28 +62,17 @@ except ImportError:
     pass
 
 try:
-    from .evaluation_engineering import (
-        EvaluationDataset,
-        ScoringRubric,
-        EvaluationRunner
-    )
+    from .evaluation_engineering import EvaluationDataset, EvaluationRunner, ScoringRubric
 except ImportError:
     pass
 
 try:
-    from .wisdom_curator import (
-        WisdomCurator,
-        DesignProposal,
-        ReviewType
-    )
+    from .wisdom_curator import DesignProposal, ReviewType, WisdomCurator
 except ImportError:
     pass
 
 try:
-    from .circuit_breaker import (
-        CircuitBreakerController,
-        CircuitBreakerConfig
-    )
+    from .circuit_breaker import CircuitBreakerConfig, CircuitBreakerController
 except ImportError:
     pass
 
@@ -102,12 +82,7 @@ except ImportError:
     pass
 
 try:
-    from .ghost_mode import (
-        GhostModeObserver,
-        ContextShadow,
-        BehaviorPattern,
-        ObservationResult
-    )
+    from .ghost_mode import BehaviorPattern, ContextShadow, GhostModeObserver, ObservationResult
 except ImportError:
     pass
 
@@ -127,12 +102,11 @@ except ImportError:
     pass
 
 __all__ = [
-    'DoerAgent',
-    'SelfEvolvingAgent',
-    'MemorySystem',
-    'AgentTools',
-    'ObserverAgent',
-    'EventStream',
-    'TelemetryEvent',
+    "DoerAgent",
+    "SelfEvolvingAgent",
+    "MemorySystem",
+    "AgentTools",
+    "ObserverAgent",
+    "EventStream",
+    "TelemetryEvent",
 ]
-

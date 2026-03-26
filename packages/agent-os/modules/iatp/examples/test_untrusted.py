@@ -3,12 +3,14 @@
 """
 Test script to demonstrate the untrusted agent scenario with warnings and override.
 """
-import httpx
+
 import json
 
-print("="*70)
+import httpx
+
+print("=" * 70)
 print("Testing IATP with UNTRUSTED agent scenario")
-print("="*70)
+print("=" * 70)
 
 # First, let's test a request WITHOUT override - should get a warning
 print("\n1. Testing request without override (should get warning)...")
@@ -17,13 +19,8 @@ print("-" * 70)
 try:
     response = httpx.post(
         "http://localhost:8002/proxy",  # We'll start an untrusted sidecar on 8002
-        json={
-            "task": "book_cheap_flight",
-            "data": {
-                "destination": "NYC"
-            }
-        },
-        timeout=10.0
+        json={"task": "book_cheap_flight", "data": {"destination": "NYC"}},
+        timeout=10.0,
     )
     print(f"Status Code: {response.status_code}")
     print(f"Response: {json.dumps(response.json(), indent=2)}")
@@ -44,17 +41,12 @@ try:
     response = httpx.post(
         "http://localhost:8002/proxy",
         headers={"X-User-Override": "true"},
-        json={
-            "task": "book_cheap_flight",
-            "data": {
-                "destination": "NYC"
-            }
-        },
-        timeout=10.0
+        json={"task": "book_cheap_flight", "data": {"destination": "NYC"}},
+        timeout=10.0,
     )
     print(f"Status Code: {response.status_code}")
     print(f"Response: {json.dumps(response.json(), indent=2)}")
-    print(f"\nResponse Headers:")
+    print("\nResponse Headers:")
     print(f"  X-Agent-Trace-ID: {response.headers.get('X-Agent-Trace-ID')}")
     print(f"  X-Agent-Trust-Score: {response.headers.get('X-Agent-Trust-Score')}")
     print(f"  X-Agent-Quarantined: {response.headers.get('X-Agent-Quarantined')}")
@@ -68,17 +60,14 @@ print("-" * 70)
 try:
     response = httpx.post(
         "http://localhost:8002/proxy",
-        json={
-            "task": "payment",
-            "card": "4532-0151-1283-0366"
-        },
-        timeout=10.0
+        json={"task": "payment", "card": "4532-0151-1283-0366"},
+        timeout=10.0,
     )
     print(f"Status Code: {response.status_code}")
     print(f"Response: {json.dumps(response.json(), indent=2)}")
 except Exception as e:
     print(f"Error: {e}")
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("Testing complete!")
-print("="*70)
+print("=" * 70)

@@ -21,7 +21,7 @@ dependencies {
 intellij {
     version.set("2024.1")
     type.set("IC") // IntelliJ IDEA Community Edition
-    
+
     plugins.set(listOf(
         // No additional plugins required for basic functionality
     ))
@@ -40,11 +40,11 @@ tasks {
     patchPluginXml {
         sinceBuild.set("241")
         untilBuild.set("251.*")
-        
+
         pluginDescription.set("""
             <h1>Agent OS - AI Safety for Code</h1>
             <p>Kernel-level safety for AI coding assistants.</p>
-            
+
             <h2>Features</h2>
             <ul>
                 <li>🛡️ <b>Real-time policy enforcement</b> - Block destructive operations</li>
@@ -55,7 +55,7 @@ tasks {
                 <li>⚙️ <b>.agentos.yml support</b> - Git-tracked configuration</li>
                 <li>▶️ <b>Run/debug agents</b> - Native IDE integration</li>
             </ul>
-            
+
             <h2>What It Blocks</h2>
             <ul>
                 <li>Destructive SQL (DROP, DELETE, TRUNCATE)</li>
@@ -63,7 +63,7 @@ tasks {
                 <li>Hardcoded secrets and API keys</li>
                 <li>Privilege escalation (sudo, chmod 777)</li>
             </ul>
-            
+
             <h2>Getting Started</h2>
             <ol>
                 <li>Open the Agent OS tool window (View → Tool Windows → Agent OS)</li>
@@ -71,7 +71,7 @@ tasks {
                 <li>Configure policies in Settings → Tools → Agent OS</li>
             </ol>
         """.trimIndent())
-        
+
         changeNotes.set("""
             <h2>1.0.0</h2>
             <ul>
@@ -84,7 +84,7 @@ tasks {
                 <li>CMVK multi-model code review</li>
                 <li>Comprehensive audit logging</li>
             </ul>
-            
+
             <h2>0.1.0</h2>
             <ul>
                 <li>Initial release</li>
@@ -102,7 +102,7 @@ tasks {
     publishPlugin {
         token.set(System.getenv("PUBLISH_TOKEN"))
     }
-    
+
     buildSearchableOptions {
         enabled = false
     }

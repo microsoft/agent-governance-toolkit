@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Audit Logger - CloudEvents format
- * 
+ *
  * Logs all tool invocations and policy decisions in CloudEvents v1.0 format.
  */
 

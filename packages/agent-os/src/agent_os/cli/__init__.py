@@ -92,9 +92,10 @@ def get_config_path(args_path: str | None = None) -> Path:
 # Terminal Colors & Formatting
 # ============================================================================
 
+
 def supports_color() -> bool:
     """Check if terminal supports colors."""
-    if os.environ.get('NO_COLOR') or os.environ.get('CI'):
+    if os.environ.get("NO_COLOR") or os.environ.get("CI"):
         return False
     return sys.stdout.isatty()
 
@@ -108,16 +109,16 @@ class Colors:
     """
 
     _DEFAULTS: dict[str, str] = {
-        'RED': '\033[91m',
-        'GREEN': '\033[92m',
-        'YELLOW': '\033[93m',
-        'BLUE': '\033[94m',
-        'MAGENTA': '\033[95m',
-        'CYAN': '\033[96m',
-        'WHITE': '\033[97m',
-        'BOLD': '\033[1m',
-        'DIM': '\033[2m',
-        'RESET': '\033[0m',
+        "RED": "\033[91m",
+        "GREEN": "\033[92m",
+        "YELLOW": "\033[93m",
+        "BLUE": "\033[94m",
+        "MAGENTA": "\033[95m",
+        "CYAN": "\033[96m",
+        "WHITE": "\033[97m",
+        "BOLD": "\033[1m",
+        "DIM": "\033[2m",
+        "RESET": "\033[0m",
     }
 
     def __init__(self, enabled: bool | None = None) -> None:
@@ -128,7 +129,7 @@ class Colors:
 
     def _apply(self, enabled: bool) -> None:
         for name, code in self._DEFAULTS.items():
-            setattr(self, name, code if enabled else '')
+            setattr(self, name, code if enabled else "")
 
     def disable(self) -> None:
         """Disable colors on *this* instance."""
@@ -166,8 +167,7 @@ def _difflib_best_match(word: str, candidates: list[str]) -> str | None:
     return matches[0] if matches else None
 
 
-def format_error(message: str, suggestion: str | None = None,
-                 docs_path: str | None = None) -> str:
+def format_error(message: str, suggestion: str | None = None, docs_path: str | None = None) -> str:
     """Return a colorized error string with an optional suggestion and docs link."""
     parts = [f"{Colors.RED}{Colors.BOLD}Error:{Colors.RESET} {message}"]
     if suggestion:
@@ -222,10 +222,19 @@ def handle_connection_error(host: str, port: int) -> str:
 # Policy Engine (Local Code Analysis)
 # ============================================================================
 
+
 class PolicyViolation:
     """Represents a policy violation found in code."""
-    def __init__(self, line: int, code: str, violation: str, policy: str,
-                 severity: str = 'high', suggestion: str | None = None) -> None:
+
+    def __init__(
+        self,
+        line: int,
+        code: str,
+        violation: str,
+        policy: str,
+        severity: str = "high",
+        suggestion: str | None = None,
+    ) -> None:
         self.line = line
         self.code = code
         self.violation = violation
@@ -252,7 +261,7 @@ def load_cli_policy_rules(path: str) -> list[dict[str, Any]]:
     if not os.path.exists(path):
         raise FileNotFoundError(f"CLI policy rules config not found: {path}")
 
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         data = yaml.safe_load(fh.read())
 
     if not isinstance(data, dict) or "rules" not in data:
@@ -287,173 +296,173 @@ class PolicyChecker:
         return [
             # Destructive SQL
             {
-                'name': 'block-destructive-sql',
-                'pattern': r'\bDROP\s+(TABLE|DATABASE|SCHEMA|INDEX)\s+',
-                'message': 'Destructive SQL: DROP operation detected',
-                'severity': 'critical',
-                'suggestion': '-- Consider using soft delete or archiving instead',
-                'languages': ['sql', 'python', 'javascript', 'typescript', 'php', 'ruby', 'java']
+                "name": "block-destructive-sql",
+                "pattern": r"\bDROP\s+(TABLE|DATABASE|SCHEMA|INDEX)\s+",
+                "message": "Destructive SQL: DROP operation detected",
+                "severity": "critical",
+                "suggestion": "-- Consider using soft delete or archiving instead",
+                "languages": ["sql", "python", "javascript", "typescript", "php", "ruby", "java"],
             },
             {
-                'name': 'block-destructive-sql',
-                'pattern': r'\bDELETE\s+FROM\s+\w+\s*(;|$|WHERE\s+1\s*=\s*1)',
-                'message': 'Destructive SQL: DELETE without proper WHERE clause',
-                'severity': 'critical',
-                'suggestion': '-- Add a specific WHERE clause to limit deletion',
-                'languages': ['sql', 'python', 'javascript', 'typescript', 'php', 'ruby', 'java']
+                "name": "block-destructive-sql",
+                "pattern": r"\bDELETE\s+FROM\s+\w+\s*(;|$|WHERE\s+1\s*=\s*1)",
+                "message": "Destructive SQL: DELETE without proper WHERE clause",
+                "severity": "critical",
+                "suggestion": "-- Add a specific WHERE clause to limit deletion",
+                "languages": ["sql", "python", "javascript", "typescript", "php", "ruby", "java"],
             },
             {
-                'name': 'block-destructive-sql',
-                'pattern': r'\bTRUNCATE\s+TABLE\s+',
-                'message': 'Destructive SQL: TRUNCATE operation detected',
-                'severity': 'critical',
-                'suggestion': '-- Consider archiving data before truncating',
-                'languages': ['sql', 'python', 'javascript', 'typescript', 'php', 'ruby', 'java']
+                "name": "block-destructive-sql",
+                "pattern": r"\bTRUNCATE\s+TABLE\s+",
+                "message": "Destructive SQL: TRUNCATE operation detected",
+                "severity": "critical",
+                "suggestion": "-- Consider archiving data before truncating",
+                "languages": ["sql", "python", "javascript", "typescript", "php", "ruby", "java"],
             },
             # File deletion
             {
-                'name': 'block-file-deletes',
-                'pattern': r'\brm\s+(-rf|-fr|--recursive\s+--force)\s+',
-                'message': 'Destructive operation: Recursive force delete (rm -rf)',
-                'severity': 'critical',
-                'suggestion': '# Use safer alternatives like trash-cli or move to backup',
-                'languages': ['bash', 'shell', 'sh', 'zsh']
+                "name": "block-file-deletes",
+                "pattern": r"\brm\s+(-rf|-fr|--recursive\s+--force)\s+",
+                "message": "Destructive operation: Recursive force delete (rm -rf)",
+                "severity": "critical",
+                "suggestion": "# Use safer alternatives like trash-cli or move to backup",
+                "languages": ["bash", "shell", "sh", "zsh"],
             },
             {
-                'name': 'block-file-deletes',
-                'pattern': r'\bshutil\s*\.\s*rmtree\s*\(',
-                'message': 'Recursive directory deletion (shutil.rmtree)',
-                'severity': 'high',
-                'suggestion': '# Consider using send2trash for safer deletion',
-                'languages': ['python']
+                "name": "block-file-deletes",
+                "pattern": r"\bshutil\s*\.\s*rmtree\s*\(",
+                "message": "Recursive directory deletion (shutil.rmtree)",
+                "severity": "high",
+                "suggestion": "# Consider using send2trash for safer deletion",
+                "languages": ["python"],
             },
             {
-                'name': 'block-file-deletes',
-                'pattern': r'\bos\s*\.\s*(remove|unlink|rmdir)\s*\(',
-                'message': 'File/directory deletion operation detected',
-                'severity': 'medium',
-                'languages': ['python']
+                "name": "block-file-deletes",
+                "pattern": r"\bos\s*\.\s*(remove|unlink|rmdir)\s*\(",
+                "message": "File/directory deletion operation detected",
+                "severity": "medium",
+                "languages": ["python"],
             },
             # Secret exposure
             {
-                'name': 'block-secret-exposure',
-                'pattern': r'(api[_-]?key|apikey|api[_-]?secret)\s*[=:]\s*["\'][a-zA-Z0-9_-]{20,}["\']',
-                'message': 'Hardcoded API key detected',
-                'severity': 'critical',
-                'suggestion': '# Use environment variables: os.environ["API_KEY"]',
-                'languages': None  # All languages
+                "name": "block-secret-exposure",
+                "pattern": r'(api[_-]?key|apikey|api[_-]?secret)\s*[=:]\s*["\'][a-zA-Z0-9_-]{20,}["\']',
+                "message": "Hardcoded API key detected",
+                "severity": "critical",
+                "suggestion": '# Use environment variables: os.environ["API_KEY"]',
+                "languages": None,  # All languages
             },
             {
-                'name': 'block-secret-exposure',
-                'pattern': r'(password|passwd|pwd)\s*[=:]\s*["\'][^"\']+["\']',
-                'message': 'Hardcoded password detected',
-                'severity': 'critical',
-                'suggestion': '# Use environment variables or a secrets manager',
-                'languages': None
+                "name": "block-secret-exposure",
+                "pattern": r'(password|passwd|pwd)\s*[=:]\s*["\'][^"\']+["\']',
+                "message": "Hardcoded password detected",
+                "severity": "critical",
+                "suggestion": "# Use environment variables or a secrets manager",
+                "languages": None,
             },
             {
-                'name': 'block-secret-exposure',
-                'pattern': r'AKIA[0-9A-Z]{16}',
-                'message': 'AWS Access Key ID detected in code',
-                'severity': 'critical',
-                'languages': None
+                "name": "block-secret-exposure",
+                "pattern": r"AKIA[0-9A-Z]{16}",
+                "message": "AWS Access Key ID detected in code",
+                "severity": "critical",
+                "languages": None,
             },
             {
-                'name': 'block-secret-exposure',
-                'pattern': r'-----BEGIN\s+(RSA|DSA|EC|OPENSSH)\s+PRIVATE\s+KEY-----',
-                'message': 'Private key detected in code',
-                'severity': 'critical',
-                'languages': None
+                "name": "block-secret-exposure",
+                "pattern": r"-----BEGIN\s+(RSA|DSA|EC|OPENSSH)\s+PRIVATE\s+KEY-----",
+                "message": "Private key detected in code",
+                "severity": "critical",
+                "languages": None,
             },
             {
-                'name': 'block-secret-exposure',
-                'pattern': r'gh[pousr]_[A-Za-z0-9_]{36,}',
-                'message': 'GitHub token detected in code',
-                'severity': 'critical',
-                'languages': None
+                "name": "block-secret-exposure",
+                "pattern": r"gh[pousr]_[A-Za-z0-9_]{36,}",
+                "message": "GitHub token detected in code",
+                "severity": "critical",
+                "languages": None,
             },
             # Privilege escalation
             {
-                'name': 'block-privilege-escalation',
-                'pattern': r'\bsudo\s+',
-                'message': 'Privilege escalation: sudo command detected',
-                'severity': 'high',
-                'suggestion': '# Avoid sudo in scripts - run with appropriate permissions',
-                'languages': ['bash', 'shell', 'sh', 'zsh']
+                "name": "block-privilege-escalation",
+                "pattern": r"\bsudo\s+",
+                "message": "Privilege escalation: sudo command detected",
+                "severity": "high",
+                "suggestion": "# Avoid sudo in scripts - run with appropriate permissions",
+                "languages": ["bash", "shell", "sh", "zsh"],
             },
             {
-                'name': 'block-privilege-escalation',
-                'pattern': r'\bchmod\s+777\s+',
-                'message': 'Insecure permissions: chmod 777 detected',
-                'severity': 'high',
-                'suggestion': '# Use more restrictive permissions: chmod 755 or chmod 644',
-                'languages': ['bash', 'shell', 'sh', 'zsh']
+                "name": "block-privilege-escalation",
+                "pattern": r"\bchmod\s+777\s+",
+                "message": "Insecure permissions: chmod 777 detected",
+                "severity": "high",
+                "suggestion": "# Use more restrictive permissions: chmod 755 or chmod 644",
+                "languages": ["bash", "shell", "sh", "zsh"],
             },
             # Code injection
             {
-                'name': 'block-arbitrary-exec',
-                'pattern': r'\beval\s*\(',
-                'message': 'Code injection risk: eval() usage detected',
-                'severity': 'high',
-                'suggestion': '# Remove eval() and use safer alternatives',
-                'languages': ['python', 'javascript', 'typescript', 'php', 'ruby']
+                "name": "block-arbitrary-exec",
+                "pattern": r"\beval\s*\(",
+                "message": "Code injection risk: eval() usage detected",
+                "severity": "high",
+                "suggestion": "# Remove eval() and use safer alternatives",
+                "languages": ["python", "javascript", "typescript", "php", "ruby"],
             },
             {
-                'name': 'block-arbitrary-exec',
-                'pattern': r'\bos\s*\.\s*system\s*\([^)]*(\+|%|\.format|f["\'])',
-                'message': 'Command injection risk: os.system with dynamic input',
-                'severity': 'critical',
-                'suggestion': '# Use subprocess with shell=False and proper argument handling',
-                'languages': ['python']
+                "name": "block-arbitrary-exec",
+                "pattern": r'\bos\s*\.\s*system\s*\([^)]*(\+|%|\.format|f["\'])',
+                "message": "Command injection risk: os.system with dynamic input",
+                "severity": "critical",
+                "suggestion": "# Use subprocess with shell=False and proper argument handling",
+                "languages": ["python"],
             },
             {
-                'name': 'block-arbitrary-exec',
-                'pattern': r'\bexec\s*\(',
-                'message': 'Code injection risk: exec() usage detected',
-                'severity': 'high',
-                'suggestion': '# Remove exec() and use safer alternatives',
-                'languages': ['python']
+                "name": "block-arbitrary-exec",
+                "pattern": r"\bexec\s*\(",
+                "message": "Code injection risk: exec() usage detected",
+                "severity": "high",
+                "suggestion": "# Remove exec() and use safer alternatives",
+                "languages": ["python"],
             },
             # SQL injection
             {
-                'name': 'block-sql-injection',
-                'pattern': r'["\']\s*\+\s*[^"\']+\s*\+\s*["\'].*(?:SELECT|INSERT|UPDATE|DELETE)',
-                'message': 'SQL injection risk: String concatenation in SQL query',
-                'severity': 'high',
-                'suggestion': '# Use parameterized queries instead',
-                'languages': ['python', 'javascript', 'typescript', 'php', 'ruby', 'java']
+                "name": "block-sql-injection",
+                "pattern": r'["\']\s*\+\s*[^"\']+\s*\+\s*["\'].*(?:SELECT|INSERT|UPDATE|DELETE)',
+                "message": "SQL injection risk: String concatenation in SQL query",
+                "severity": "high",
+                "suggestion": "# Use parameterized queries instead",
+                "languages": ["python", "javascript", "typescript", "php", "ruby", "java"],
             },
             # XSS
             {
-                'name': 'block-xss',
-                'pattern': r'\.innerHTML\s*=',
-                'message': 'XSS risk: innerHTML assignment detected',
-                'severity': 'medium',
-                'suggestion': '// Use textContent or a sanitization library',
-                'languages': ['javascript', 'typescript']
+                "name": "block-xss",
+                "pattern": r"\.innerHTML\s*=",
+                "message": "XSS risk: innerHTML assignment detected",
+                "severity": "medium",
+                "suggestion": "// Use textContent or a sanitization library",
+                "languages": ["javascript", "typescript"],
             },
         ]
 
     def _get_language(self, filepath: str) -> str:
         """Detect language from file extension."""
         ext_map = {
-            '.py': 'python',
-            '.js': 'javascript',
-            '.ts': 'typescript',
-            '.jsx': 'javascript',
-            '.tsx': 'typescript',
-            '.sql': 'sql',
-            '.sh': 'shell',
-            '.bash': 'bash',
-            '.zsh': 'zsh',
-            '.php': 'php',
-            '.rb': 'ruby',
-            '.java': 'java',
-            '.cs': 'csharp',
-            '.go': 'go',
+            ".py": "python",
+            ".js": "javascript",
+            ".ts": "typescript",
+            ".jsx": "javascript",
+            ".tsx": "typescript",
+            ".sql": "sql",
+            ".sh": "shell",
+            ".bash": "bash",
+            ".zsh": "zsh",
+            ".php": "php",
+            ".rb": "ruby",
+            ".java": "java",
+            ".cs": "csharp",
+            ".go": "go",
         }
         ext = Path(filepath).suffix.lower()
-        return ext_map.get(ext, 'unknown')
+        return ext_map.get(ext, "unknown")
 
     def check_file(self, filepath: str) -> list[PolicyViolation]:
         """Check a file for policy violations."""
@@ -462,28 +471,30 @@ class PolicyChecker:
             raise FileNotFoundError(f"File not found: {filepath}")
 
         language = self._get_language(filepath)
-        content = path.read_text(encoding='utf-8', errors='ignore')
-        lines = content.split('\n')
+        content = path.read_text(encoding="utf-8", errors="ignore")
+        lines = content.split("\n")
 
         violations = []
 
         for rule in self.rules:
             # Check language filter
-            if rule['languages'] and language not in rule['languages']:
+            if rule["languages"] and language not in rule["languages"]:
                 continue
 
-            pattern = re.compile(rule['pattern'], re.IGNORECASE)
+            pattern = re.compile(rule["pattern"], re.IGNORECASE)
 
             for i, line in enumerate(lines, 1):
                 if pattern.search(line):
-                    violations.append(PolicyViolation(
-                        line=i,
-                        code=line.strip(),
-                        violation=rule['message'],
-                        policy=rule['name'],
-                        severity=rule['severity'],
-                        suggestion=rule.get('suggestion')
-                    ))
+                    violations.append(
+                        PolicyViolation(
+                            line=i,
+                            code=line.strip(),
+                            violation=rule["message"],
+                            policy=rule["name"],
+                            severity=rule["severity"],
+                            suggestion=rule.get("suggestion"),
+                        )
+                    )
 
         return violations
 
@@ -491,10 +502,12 @@ class PolicyChecker:
         """Check all staged git files for violations."""
         try:
             result = subprocess.run(
-                ['git', 'diff', '--cached', '--name-only'],
-                capture_output=True, text=True, check=True
+                ["git", "diff", "--cached", "--name-only"],
+                capture_output=True,
+                text=True,
+                check=True,
             )
-            files = [f for f in result.stdout.strip().split('\n') if f]
+            files = [f for f in result.stdout.strip().split("\n") if f]
         except subprocess.CalledProcessError:
             return {}
 
@@ -514,11 +527,13 @@ def cmd_init(args: argparse.Namespace) -> int:
     agents_dir = root / ".agents"
 
     if agents_dir.exists() and not args.force:
-        print(format_error(
-            f"{agents_dir} already exists",
-            suggestion="Use --force to overwrite: agentos init --force",
-            docs_path="getting-started.md",
-        ))
+        print(
+            format_error(
+                f"{agents_dir} already exists",
+                suggestion="Use --force to overwrite: agentos init --force",
+                docs_path="getting-started.md",
+            )
+        )
         return 1
 
     agents_dir.mkdir(parents=True, exist_ok=True)
@@ -562,22 +577,22 @@ For more information: https://github.com/microsoft/agent-governance-toolkit
                 {"action": "file_write", "requires_approval": True},
                 {"action": "api_call", "rate_limit": "100/hour"},
                 {"action": "send_email", "requires_approval": True},
-            ]
+            ],
         },
         "permissive": {
             "mode": "permissive",
             "signals": ["SIGSTOP", "SIGKILL"],
             "rules": [
                 {"action": "*", "effect": "allow"},
-            ]
+            ],
         },
         "audit": {
             "mode": "audit",
             "signals": ["SIGSTOP"],
             "rules": [
                 {"action": "*", "effect": "allow", "log": True},
-            ]
-        }
+            ],
+        },
     }
 
     policy = policies.get(policy_template, policies["strict"])
@@ -595,15 +610,15 @@ signals:
 
     security_content += "\npolicies:\n"
     for r in policy["rules"]:
-        security_content += f'  - action: {r["action"]}\n'
+        security_content += f"  - action: {r['action']}\n"
         if "mode" in r:
-            security_content += f'    mode: {r["mode"]}\n'
+            security_content += f"    mode: {r['mode']}\n"
         if r.get("requires_approval"):
-            security_content += '    requires_approval: true\n'
+            security_content += "    requires_approval: true\n"
         if "rate_limit" in r:
             security_content += f'    rate_limit: "{r["rate_limit"]}"\n'
         if "effect" in r:
-            security_content += f'    effect: {r["effect"]}\n'
+            security_content += f"    effect: {r['effect']}\n"
 
     security_content += """
 observability:
@@ -641,11 +656,13 @@ def cmd_secure(args: argparse.Namespace) -> int:
 
     security_md = agents_dir / "security.md"
     if not security_md.exists():
-        print(format_error(
-            "No security.md found in .agents/ directory",
-            suggestion="Run: agentos init && agentos secure",
-            docs_path="security-spec.md",
-        ))
+        print(
+            format_error(
+                "No security.md found in .agents/ directory",
+                suggestion="Run: agentos init && agentos secure",
+                docs_path="security-spec.md",
+            )
+        )
         return 1
 
     print(f"Securing agents in {root}...")
@@ -723,11 +740,14 @@ def cmd_audit(args: argparse.Namespace) -> int:
         required = ["kernel:", "signals:", "policies:"]
         for section in required:
             if section not in content:
-                findings.append({"severity": "error", "message": f"Missing required section: {section}"})
+                findings.append(
+                    {"severity": "error", "message": f"Missing required section: {section}"}
+                )
 
-    passed = all(f["severity"] != "error" for f in findings) and len(
-        [f for f in findings if f["severity"] == "error"]
-    ) == 0
+    passed = (
+        all(f["severity"] != "error" for f in findings)
+        and len([f for f in findings if f["severity"] == "error"]) == 0
+    )
 
     # CSV export
     export_format = getattr(args, "export", None)
@@ -784,12 +804,14 @@ def _export_audit_csv(
         writer = csv.writer(f)
         writer.writerow(["type", "name", "severity", "message"])
         for name, exists in file_status.items():
-            writer.writerow([
-                "file",
-                name,
-                "ok" if exists else "error",
-                "Present" if exists else "Missing",
-            ])
+            writer.writerow(
+                [
+                    "file",
+                    name,
+                    "ok" if exists else "error",
+                    "Present" if exists else "Missing",
+                ]
+            )
         for finding in findings:
             writer.writerow(["finding", "", finding["severity"], finding["message"]])
 
@@ -797,6 +819,7 @@ def _export_audit_csv(
 # ============================================================================
 # New Commands: check, review, install-hooks
 # ============================================================================
+
 
 def cmd_check(args: argparse.Namespace) -> int:
     """Check file(s) for safety violations."""
@@ -843,7 +866,9 @@ def cmd_check(args: argparse.Namespace) -> int:
                 continue
 
             if output_format != "json":
-                print(f"{Colors.RED}✗{Colors.RESET} {len(violations)} violation(s) found in {filepath}:")
+                print(
+                    f"{Colors.RED}✗{Colors.RESET} {len(violations)} violation(s) found in {filepath}:"
+                )
                 print()
                 _print_violations(violations, args)
             exit_code = 1
@@ -864,13 +889,15 @@ def _print_violations(violations: list[PolicyViolation], args: argparse.Namespac
     """Print violations in formatted output."""
     for v in violations:
         severity_color = {
-            'critical': Colors.RED,
-            'high': Colors.RED,
-            'medium': Colors.YELLOW,
-            'low': Colors.CYAN,
+            "critical": Colors.RED,
+            "high": Colors.RED,
+            "medium": Colors.YELLOW,
+            "low": Colors.CYAN,
         }.get(v.severity, Colors.WHITE)
 
-        print(f"  {Colors.DIM}Line {v.line}:{Colors.RESET} {v.code[:60]}{'...' if len(v.code) > 60 else ''}")
+        print(
+            f"  {Colors.DIM}Line {v.line}:{Colors.RESET} {v.code[:60]}{'...' if len(v.code) > 60 else ''}"
+        )
         print(f"    {severity_color}✗ Violation:{Colors.RESET} {v.violation}")
         print(f"    {Colors.DIM}Policy:{Colors.RESET} {v.policy}")
         if v.suggestion and not getattr(args, "ci", False):
@@ -886,14 +913,16 @@ def _output_json_from_violations(all_violations: dict[str, list[PolicyViolation]
     }
     for filepath, violations in all_violations.items():
         for v in violations:
-            results["violations"].append({
-                "file": filepath,
-                "line": v.line,
-                "code": v.code,
-                "violation": v.violation,
-                "policy": v.policy,
-                "severity": v.severity,
-            })
+            results["violations"].append(
+                {
+                    "file": filepath,
+                    "line": v.line,
+                    "code": v.code,
+                    "violation": v.violation,
+                    "policy": v.policy,
+                    "severity": v.severity,
+                }
+            )
             results["summary"]["total"] += 1
             results["summary"][v.severity] = results["summary"].get(v.severity, 0) + 1
     print(json.dumps(results, indent=2))
@@ -902,30 +931,32 @@ def _output_json_from_violations(all_violations: dict[str, list[PolicyViolation]
 def _output_json(files: list[str], checker: PolicyChecker) -> None:
     """Output violations as JSON."""
     results = {
-        'violations': [],
-        'summary': {
-            'total': 0,
-            'critical': 0,
-            'high': 0,
-            'medium': 0,
-            'low': 0,
-        }
+        "violations": [],
+        "summary": {
+            "total": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+        },
     }
 
     for filepath in files:
         try:
             violations = checker.check_file(filepath)
             for v in violations:
-                results['violations'].append({
-                    'file': filepath,
-                    'line': v.line,
-                    'code': v.code,
-                    'violation': v.violation,
-                    'policy': v.policy,
-                    'severity': v.severity,
-                })
-                results['summary']['total'] += 1
-                results['summary'][v.severity] += 1
+                results["violations"].append(
+                    {
+                        "file": filepath,
+                        "line": v.line,
+                        "code": v.code,
+                        "violation": v.violation,
+                        "policy": v.policy,
+                        "severity": v.severity,
+                    }
+                )
+                results["summary"]["total"] += 1
+                results["summary"][v.severity] += 1
         except FileNotFoundError:
             pass
 
@@ -958,20 +989,22 @@ def cmd_review(args: argparse.Namespace) -> int:
 
     # CMVK multi-model review (simulated for now)
     if args.cmvk:
-        models = args.models.split(',') if args.models else ['gpt-4', 'claude-sonnet-4', 'gemini-pro']
+        models = (
+            args.models.split(",") if args.models else ["gpt-4", "claude-sonnet-4", "gemini-pro"]
+        )
 
         print(f"{Colors.BLUE}Multi-Model Review ({len(models)} models):{Colors.RESET}")
         print()
 
         # Read file content for analysis
-        content = Path(filepath).read_text(encoding='utf-8', errors='ignore')
+        content = Path(filepath).read_text(encoding="utf-8", errors="ignore")
 
         # Simulate model responses based on content analysis
         model_results = _simulate_cmvk_review(content, models)
 
         passed = 0
         for model, result in model_results.items():
-            if result['passed']:
+            if result["passed"]:
                 print(f"  {Colors.GREEN}✅{Colors.RESET} {model}: {result['summary']}")
                 passed += 1
             else:
@@ -979,13 +1012,15 @@ def cmd_review(args: argparse.Namespace) -> int:
 
         print()
         consensus = (passed / len(models)) * 100
-        consensus_color = Colors.GREEN if consensus >= 80 else Colors.YELLOW if consensus >= 50 else Colors.RED
+        consensus_color = (
+            Colors.GREEN if consensus >= 80 else Colors.YELLOW if consensus >= 50 else Colors.RED
+        )
         print(f"Consensus: {consensus_color}{consensus:.0f}%{Colors.RESET}")
 
         if model_results:
             issues = []
             for _m, r in model_results.items():
-                issues.extend(r.get('issues', []))
+                issues.extend(r.get("issues", []))
 
             if issues:
                 print()
@@ -995,13 +1030,18 @@ def cmd_review(args: argparse.Namespace) -> int:
 
         print()
 
-        if args.format == 'json':
-            print(json.dumps({
-                'file': filepath,
-                'consensus': consensus / 100,
-                'model_results': model_results,
-                'local_violations': len(violations)
-            }, indent=2))
+        if args.format == "json":
+            print(
+                json.dumps(
+                    {
+                        "file": filepath,
+                        "consensus": consensus / 100,
+                        "model_results": model_results,
+                        "local_violations": len(violations),
+                    },
+                    indent=2,
+                )
+            )
 
         return 0 if consensus >= 80 else 1
 
@@ -1015,18 +1055,18 @@ def _simulate_cmvk_review(content: str, models: list[str]) -> dict[str, Any]:
     # Detect potential issues
     issues = []
 
-    if 'await' in content and 'try' not in content:
-        issues.append('Missing error handling for async operations')
+    if "await" in content and "try" not in content:
+        issues.append("Missing error handling for async operations")
 
     if re.search(r'["\']\s*\+\s*\w+\s*\+\s*["\']', content):
-        issues.append('String concatenation in potential SQL/command')
+        issues.append("String concatenation in potential SQL/command")
 
-    if 'req.body' in content or 'req.params' in content:
-        if 'validate' not in content.lower() and 'sanitize' not in content.lower():
-            issues.append('User input without validation')
+    if "req.body" in content or "req.params" in content:
+        if "validate" not in content.lower() and "sanitize" not in content.lower():
+            issues.append("User input without validation")
 
-    if 'Sync(' in content:
-        issues.append('Synchronous file operations detected')
+    if "Sync(" in content:
+        issues.append("Synchronous file operations detected")
 
     results = {}
     for model in models:
@@ -1035,10 +1075,10 @@ def _simulate_cmvk_review(content: str, models: list[str]) -> dict[str, Any]:
         passed = len(model_issues) == 0
 
         results[model] = {
-            'passed': passed,
-            'summary': 'No issues' if passed else f'{len(model_issues)} potential issue(s)',
-            'issues': model_issues,
-            'confidence': 0.85 + random.random() * 0.1 if passed else 0.6 + random.random() * 0.2
+            "passed": passed,
+            "summary": "No issues" if passed else f"{len(model_issues)} potential issue(s)",
+            "issues": model_issues,
+            "confidence": 0.85 + random.random() * 0.1 if passed else 0.6 + random.random() * 0.2,
         }
 
     return results
@@ -1046,17 +1086,17 @@ def _simulate_cmvk_review(content: str, models: list[str]) -> dict[str, Any]:
 
 def cmd_install_hooks(args: argparse.Namespace) -> int:
     """Install git pre-commit hooks for Agent OS."""
-    git_dir = Path('.git')
+    git_dir = Path(".git")
 
     if not git_dir.exists():
         print(f"{Colors.RED}Error:{Colors.RESET} Not a git repository. Run 'git init' first.")
         print(f"  {Colors.DIM}Hint: git init && agentos install-hooks{Colors.RESET}")
         return 1
 
-    hooks_dir = git_dir / 'hooks'
+    hooks_dir = git_dir / "hooks"
     hooks_dir.mkdir(exist_ok=True)
 
-    pre_commit = hooks_dir / 'pre-commit'
+    pre_commit = hooks_dir / "pre-commit"
 
     # Check if hook already exists
     if pre_commit.exists() and not args.force:
@@ -1066,11 +1106,11 @@ def cmd_install_hooks(args: argparse.Namespace) -> int:
         if args.append:
             # Append to existing hook
             existing = pre_commit.read_text()
-            if 'agentos check' in existing:
+            if "agentos check" in existing:
                 print(f"{Colors.GREEN}✓{Colors.RESET} Agent OS check already in pre-commit hook")
                 return 0
 
-            new_content = existing.rstrip() + '\n\n' + _get_hook_content()
+            new_content = existing.rstrip() + "\n\n" + _get_hook_content()
             pre_commit.write_text(new_content)
             print(f"{Colors.GREEN}✓{Colors.RESET} Appended Agent OS check to pre-commit hook")
             return 0
@@ -1088,7 +1128,7 @@ def cmd_install_hooks(args: argparse.Namespace) -> int:
     pre_commit.write_text(hook_content)
 
     # Make executable (Unix)
-    if os.name != 'nt':
+    if os.name != "nt":
         os.chmod(pre_commit, 0o755)
 
     print(f"{Colors.GREEN}✓{Colors.RESET} Installed pre-commit hook: {pre_commit}")
@@ -1133,6 +1173,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     installed = False
     try:
         import agent_os
+
         version_str = agent_os.__version__
         installed = True
     except ImportError:
@@ -1145,6 +1186,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     packages: dict[str, bool] = {}
     try:
         from agent_os import AVAILABLE_PACKAGES
+
         packages = dict(AVAILABLE_PACKAGES)
     except Exception:
         pass
@@ -1232,9 +1274,16 @@ def cmd_validate(args: argparse.Namespace) -> int:
             return 0
 
     # Required fields for policy files
-    REQUIRED_FIELDS = ['version', 'name']
-    OPTIONAL_FIELDS = ['description', 'rules', 'constraints', 'signals', 'allowed_actions', 'blocked_actions']
-    VALID_RULE_TYPES = ['allow', 'deny', 'audit', 'require']
+    REQUIRED_FIELDS = ["version", "name"]
+    OPTIONAL_FIELDS = [
+        "description",
+        "rules",
+        "constraints",
+        "signals",
+        "allowed_actions",
+        "blocked_actions",
+    ]
+    VALID_RULE_TYPES = ["allow", "deny", "audit", "require"]
 
     errors = []
     warnings = []
@@ -1265,22 +1314,22 @@ def cmd_validate(args: argparse.Namespace) -> int:
                     file_errors.append(f"Missing required field: '{field}'")
 
             # Validate version format
-            if 'version' in content:
-                version = str(content['version'])
-                if not re.match(r'^\d+(\.\d+)*$', version):
+            if "version" in content:
+                version = str(content["version"])
+                if not re.match(r"^\d+(\.\d+)*$", version):
                     file_warnings.append(f"Version '{version}' should be numeric (e.g., '1.0')")
 
             # Validate rules if present
-            if 'rules' in content:
-                rules = content['rules']
+            if "rules" in content:
+                rules = content["rules"]
                 if not isinstance(rules, list):
                     file_errors.append("'rules' must be a list")
                 else:
                     for i, rule in enumerate(rules):
                         if not isinstance(rule, dict):
-                            file_errors.append(f"Rule {i+1}: must be a dict")
-                        elif 'type' in rule and rule['type'] not in VALID_RULE_TYPES:
-                            file_warnings.append(f"Rule {i+1}: unknown type '{rule['type']}'")
+                            file_errors.append(f"Rule {i + 1}: must be a dict")
+                        elif "type" in rule and rule["type"] not in VALID_RULE_TYPES:
+                            file_warnings.append(f"Rule {i + 1}: unknown type '{rule['type']}'")
 
             # Strict mode: warn about unknown fields
             if args.strict:
@@ -1321,7 +1370,9 @@ def cmd_validate(args: argparse.Namespace) -> int:
         for e in errors:
             print(f"  ❌ {e}")
         print()
-        print(f"{Colors.RED}Validation failed.{Colors.RESET} {valid_count}/{len(files_to_check)} files valid.")
+        print(
+            f"{Colors.RED}Validation failed.{Colors.RESET} {valid_count}/{len(files_to_check)} files valid."
+        )
         return 1
 
     print(f"{Colors.GREEN}✓ All {valid_count} policy file(s) valid.{Colors.RESET}")
@@ -1374,12 +1425,14 @@ class AgentOSRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"status": "ok", "version": __version__})
         elif self.path == "/status":
             state = _get_kernel_state()
-            self._send_json({
-                "active_agents": state["active_agents"],
-                "policy_count": state["policy_checks"],
-                "uptime_seconds": state["uptime_seconds"],
-                "packages": state["packages"],
-            })
+            self._send_json(
+                {
+                    "active_agents": state["active_agents"],
+                    "policy_count": state["policy_checks"],
+                    "uptime_seconds": state["uptime_seconds"],
+                    "packages": state["packages"],
+                }
+            )
         elif self.path == "/agents":
             self._send_json({"agents": list(_registered_agents.values())})
         else:
@@ -1408,11 +1461,13 @@ class AgentOSRequestHandler(BaseHTTPRequestHandler):
             return
 
         _kernel_operations["execute"] += 1
-        self._send_json({
-            "agent_id": agent_id,
-            "action": payload.get("action", "default"),
-            "status": "executed",
-        })
+        self._send_json(
+            {
+                "agent_id": agent_id,
+                "action": payload.get("action", "default"),
+                "status": "executed",
+            }
+        )
 
     def log_message(self, format: str, *args: object) -> None:
         """Suppress default stderr logging."""
@@ -1503,8 +1558,10 @@ def cmd_health(args: argparse.Namespace) -> int:
         print(json.dumps(report.to_dict(), indent=2))
     else:
         status_color = (
-            Colors.GREEN if report.is_healthy()
-            else Colors.YELLOW if report.is_ready()
+            Colors.GREEN
+            if report.is_healthy()
+            else Colors.YELLOW
+            if report.is_ready()
             else Colors.RED
         )
         print(
@@ -1547,13 +1604,9 @@ Environment variables:
   AGENTOS_REDIS_URL   Redis connection URL
 
 Documentation: https://github.com/microsoft/agent-governance-toolkit
-"""
+""",
     )
-    parser.add_argument(
-        "--version", "-v",
-        action="store_true",
-        help="Show version"
-    )
+    parser.add_argument("--version", "-v", action="store_true", help="Show version")
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
@@ -1562,20 +1615,27 @@ Documentation: https://github.com/microsoft/agent-governance-toolkit
         "init",
         help="Initialize .agents/ directory with policy templates",
         description="Create the .agents/ directory with default safety policies. "
-                    "Choose a template: 'strict' blocks destructive operations, "
-                    "'permissive' allows with logging, 'audit' logs everything.",
+        "Choose a template: 'strict' blocks destructive operations, "
+        "'permissive' allows with logging, 'audit' logs everything.",
     )
     init_parser.add_argument("--path", "-p", help="Path to initialize (default: current directory)")
-    init_parser.add_argument("--template", "-t", choices=["strict", "permissive", "audit"],
-                            default="strict", help="Policy template (default: strict)")
-    init_parser.add_argument("--force", "-f", action="store_true", help="Overwrite existing .agents/ directory")
+    init_parser.add_argument(
+        "--template",
+        "-t",
+        choices=["strict", "permissive", "audit"],
+        default="strict",
+        help="Policy template (default: strict)",
+    )
+    init_parser.add_argument(
+        "--force", "-f", action="store_true", help="Overwrite existing .agents/ directory"
+    )
 
     # secure command
     secure_parser = subparsers.add_parser(
         "secure",
         help="Enable kernel governance on an existing project",
         description="Add governance configuration (security.md, policies) to a project. "
-                    "Use --verify to check if governance is already enabled.",
+        "Use --verify to check if governance is already enabled.",
     )
     secure_parser.add_argument("--path", "-p", help="Path to secure (default: current directory)")
     secure_parser.add_argument("--verify", action="store_true", help="Only verify, don't modify")
@@ -1585,78 +1645,107 @@ Documentation: https://github.com/microsoft/agent-governance-toolkit
         "audit",
         help="Audit agent security configuration and policies",
         description="Analyze .agents/ directory for missing policies, weak rules, "
-                    "and configuration issues. Use --format json for CI pipelines.",
+        "and configuration issues. Use --format json for CI pipelines.",
     )
     audit_parser.add_argument("--path", "-p", help="Path to audit (default: current directory)")
-    audit_parser.add_argument("--format", "-f", choices=["text", "json"], default="text",
-                             help="Output format: text (human-readable) or json (machine-readable)")
-    audit_parser.add_argument("--export", choices=["csv"], default=None,
-                             help="Export audit results (csv)")
-    audit_parser.add_argument("--output", "-o", default=None,
-                             help="Output file path for export (default: audit.csv)")
+    audit_parser.add_argument(
+        "--format",
+        "-f",
+        choices=["text", "json"],
+        default="text",
+        help="Output format: text (human-readable) or json (machine-readable)",
+    )
+    audit_parser.add_argument(
+        "--export", choices=["csv"], default=None, help="Export audit results (csv)"
+    )
+    audit_parser.add_argument(
+        "--output", "-o", default=None, help="Output file path for export (default: audit.csv)"
+    )
 
     # status command
     status_parser = subparsers.add_parser(
         "status",
         help="Show kernel status, loaded policies, and agent health",
         description="Display the current kernel state including active policies, "
-                    "registered agents, and recent activity summary.",
+        "registered agents, and recent activity summary.",
     )
-    status_parser.add_argument("--format", choices=["text", "json"], default="text",
-                              help="Output format: text (human-readable) or json (machine-readable)")
+    status_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format: text (human-readable) or json (machine-readable)",
+    )
 
     # check command
     check_parser = subparsers.add_parser(
         "check",
         help="Check file(s) for safety violations (SQL injection, secrets, etc.)",
         description="Scan source files for policy violations including destructive SQL, "
-                    "hardcoded secrets, privilege escalation, and unsafe operations. "
-                    "Use --staged to check only git-staged files (ideal for pre-commit hooks).",
+        "hardcoded secrets, privilege escalation, and unsafe operations. "
+        "Use --staged to check only git-staged files (ideal for pre-commit hooks).",
     )
     check_parser.add_argument("files", nargs="*", help="Files to check (omit to check all)")
     check_parser.add_argument("--staged", action="store_true", help="Check only git-staged files")
-    check_parser.add_argument("--ci", action="store_true", help="CI mode (no colors, exit code 1 on violations)")
-    check_parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
+    check_parser.add_argument(
+        "--ci", action="store_true", help="CI mode (no colors, exit code 1 on violations)"
+    )
+    check_parser.add_argument(
+        "--format", choices=["text", "json"], default="text", help="Output format"
+    )
 
     # review command
     review_parser = subparsers.add_parser(
         "review",
         help="Multi-model code review with CMVK consensus",
         description="Review a file using one or more AI models. With --cmvk, the "
-                    "Consensus Multi-model Verification Kernel sends the code to multiple "
-                    "models and returns issues agreed upon by majority vote.",
+        "Consensus Multi-model Verification Kernel sends the code to multiple "
+        "models and returns issues agreed upon by majority vote.",
     )
     review_parser.add_argument("file", help="File to review")
-    review_parser.add_argument("--cmvk", action="store_true", help="Use CMVK multi-model consensus review")
-    review_parser.add_argument("--models", help="Comma-separated models (default: gpt-4,claude-sonnet-4,gemini-pro)")
-    review_parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
+    review_parser.add_argument(
+        "--cmvk", action="store_true", help="Use CMVK multi-model consensus review"
+    )
+    review_parser.add_argument(
+        "--models", help="Comma-separated models (default: gpt-4,claude-sonnet-4,gemini-pro)"
+    )
+    review_parser.add_argument(
+        "--format", choices=["text", "json"], default="text", help="Output format"
+    )
 
     # install-hooks command
     hooks_parser = subparsers.add_parser(
         "install-hooks",
         help="Install git pre-commit hooks for automatic safety checks",
         description="Add a pre-commit hook that runs 'agentos check --staged' before "
-                    "every commit. Blocks commits containing policy violations.",
+        "every commit. Blocks commits containing policy violations.",
     )
-    hooks_parser.add_argument("--force", action="store_true", help="Overwrite existing pre-commit hook")
-    hooks_parser.add_argument("--append", action="store_true", help="Append to existing pre-commit hook")
+    hooks_parser.add_argument(
+        "--force", action="store_true", help="Overwrite existing pre-commit hook"
+    )
+    hooks_parser.add_argument(
+        "--append", action="store_true", help="Append to existing pre-commit hook"
+    )
 
     # validate command
     validate_parser = subparsers.add_parser(
         "validate",
         help="Validate policy YAML files for syntax and schema errors",
         description="Check policy YAML files for valid syntax, required fields, "
-                    "and correct rule structure. Catches errors before deployment.",
+        "and correct rule structure. Catches errors before deployment.",
     )
-    validate_parser.add_argument("files", nargs="*", help="Policy files to validate (default: .agents/*.yaml)")
-    validate_parser.add_argument("--strict", action="store_true", help="Strict mode: treat warnings as errors")
+    validate_parser.add_argument(
+        "files", nargs="*", help="Policy files to validate (default: .agents/*.yaml)"
+    )
+    validate_parser.add_argument(
+        "--strict", action="store_true", help="Strict mode: treat warnings as errors"
+    )
 
     # serve command
     serve_parser = subparsers.add_parser(
         "serve",
         help="Start the HTTP API server for Agent OS",
         description="Launch an HTTP server exposing health, status, agents, and "
-                    "execution endpoints for programmatic access to the kernel.",
+        "execution endpoints for programmatic access to the kernel.",
     )
     serve_parser.add_argument(
         "--port", type=int, default=8080, help="Port to listen on (default: 8080)"
@@ -1670,7 +1759,7 @@ Documentation: https://github.com/microsoft/agent-governance-toolkit
         "metrics",
         help="Output Prometheus-style metrics to stdout",
         description="Print kernel metrics in Prometheus exposition text format "
-                    "for scraping by monitoring systems.",
+        "for scraping by monitoring systems.",
     )
 
     # health command
@@ -1678,22 +1767,25 @@ Documentation: https://github.com/microsoft/agent-governance-toolkit
         "health",
         help="Run system health checks and report status",
         description="Execute registered health checks (kernel, policy engine, "
-                    "audit backend) and print a JSON report.",
+        "audit backend) and print a JSON report.",
     )
     health_parser.add_argument(
-        "--format", choices=["text", "json"], default="text",
+        "--format",
+        choices=["text", "json"],
+        default="text",
         help="Output format (default: text)",
     )
 
     args = parser.parse_args()
 
     # Handle CI mode
-    if hasattr(args, 'ci') and args.ci:
+    if hasattr(args, "ci") and args.ci:
         Colors.disable()
 
     if args.version:
         try:
             from agent_os import __version__
+
             print(f"agentos {__version__}")
         except Exception:
             print("agentos (version unknown)")
@@ -1729,10 +1821,12 @@ Documentation: https://github.com/microsoft/agent-governance-toolkit
         print(handle_missing_dependency(pkg, extra=extra))
         return 1
     except ConnectionError as exc:
-        print(format_error(
-            str(exc),
-            suggestion="Check that the service is running and reachable",
-        ))
+        print(
+            format_error(
+                str(exc),
+                suggestion="Check that the service is running and reachable",
+            )
+        )
         return 1
     except KeyboardInterrupt:
         print(f"\n{Colors.DIM}Interrupted.{Colors.RESET}")

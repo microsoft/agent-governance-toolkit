@@ -7,13 +7,12 @@ API endpoints for compliance auditing and reporting.
 Supports SOC2, HIPAA, and other regulatory frameworks.
 """
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from typing import Optional, Literal
-from datetime import datetime, timedelta, timezone
 import json
-import io
+from datetime import datetime, timezone
+from typing import Literal, Optional
+
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -65,7 +64,7 @@ def _record_event(event_type: str, **kwargs):
         "event_id": f"evt_{datetime.now(timezone.utc).timestamp()}",
         "event_type": event_type,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        **kwargs
+        **kwargs,
     }
     _compliance_events.append(event)
     return event
@@ -102,26 +101,27 @@ async def list_compliance_events(
 ):
     """List compliance events with filtering."""
     results = _compliance_events
-    
+
     if organization_id:
         results = [e for e in results if e.get("organization_id") == organization_id]
-    
+
     if agent_did:
         results = [
-            e for e in results 
+            e
+            for e in results
             if e.get("requester_did") == agent_did or e.get("provider_did") == agent_did
         ]
-    
+
     if event_type:
         results = [e for e in results if e.get("event_type") == event_type]
-    
+
     if start_date:
         results = [e for e in results if e.get("timestamp", "") >= start_date]
-    
+
     if end_date:
         results = [e for e in results if e.get("timestamp", "") <= end_date]
-    
-    return [ComplianceEventResponse(**e) for e in results[offset:offset+limit]]
+
+    return [ComplianceEventResponse(**e) for e in results[offset : offset + limit]]
 
 
 @router.get("/stats", response_model=ComplianceStatsResponse)
@@ -132,16 +132,16 @@ async def get_compliance_stats(
 ):
     """Get aggregated compliance statistics."""
     events = _compliance_events
-    
+
     if organization_id:
         events = [e for e in events if e.get("organization_id") == organization_id]
-    
+
     if start_date:
         events = [e for e in events if e.get("timestamp", "") >= start_date]
-    
+
     if end_date:
         events = [e for e in events if e.get("timestamp", "") <= end_date]
-    
+
     # Calculate stats
     events_by_type = {}
     events_by_outcome = {}
@@ -152,19 +152,19 @@ async def get_compliance_stats(
     successful_escrows = 0
     disputed = 0
     slashes = 0
-    
+
     for event in events:
         event_type = event.get("event_type", "unknown")
         events_by_type[event_type] = events_by_type.get(event_type, 0) + 1
-        
+
         outcome = event.get("outcome", "unknown")
         events_by_outcome[outcome] = events_by_outcome.get(outcome, 0) + 1
-        
+
         if event.get("requester_did"):
             unique_agents.add(event["requester_did"])
         if event.get("provider_did"):
             unique_agents.add(event["provider_did"])
-        
+
         if event_type == "iatp_handshake":
             handshakes += 1
         elif event_type == "iatp_rejected":
@@ -177,7 +177,7 @@ async def get_compliance_stats(
             disputed += 1
         elif event_type == "reputation_slashed":
             slashes += 1
-    
+
     return ComplianceStatsResponse(
         total_events=len(events),
         events_by_type=events_by_type,
@@ -200,29 +200,30 @@ async def get_compliance_stats(
 async def export_compliance_report(request: ComplianceReportRequest):
     """
     Export compliance audit report for SOC2/HIPAA auditors.
-    
+
     Returns a comprehensive report of all inter-agent communications,
     data handling policy signatures, reputation changes, and dispute resolutions.
     """
     # Filter events for the organization and date range
     events = _compliance_events
-    
+
     if request.organization_id:
         events = [e for e in events if e.get("organization_id") == request.organization_id]
-    
+
     events = [
-        e for e in events 
-        if e.get("timestamp", "") >= request.start_date 
+        e
+        for e in events
+        if e.get("timestamp", "") >= request.start_date
         and e.get("timestamp", "") <= request.end_date
     ]
-    
+
     # Get stats
     stats = await get_compliance_stats(
         organization_id=request.organization_id,
         start_date=request.start_date,
         end_date=request.end_date,
     )
-    
+
     # Build report
     report = {
         "report_id": f"report_{datetime.now(timezone.utc).timestamp()}",
@@ -238,15 +239,16 @@ async def export_compliance_report(request: ComplianceReportRequest):
         "warnings": _find_warnings(events),
         "recommendations": _generate_recommendations(stats),
     }
-    
+
     # Calculate report hash
     import hashlib
+
     report_hash = hashlib.sha256(
         json.dumps(report, sort_keys=True, default=str).encode()
     ).hexdigest()
     report["report_hash"] = report_hash
     report["nexus_signature"] = f"nexus_report_{report_hash[:32]}"
-    
+
     return report
 
 
@@ -264,14 +266,11 @@ async def download_compliance_report(
 async def get_data_handling_audit(transfer_id: str):
     """Get audit record for a specific data handling transaction."""
     # Find events related to this transfer
-    events = [
-        e for e in _compliance_events
-        if e.get("transfer_id") == transfer_id
-    ]
-    
+    events = [e for e in _compliance_events if e.get("transfer_id") == transfer_id]
+
     if not events:
         raise HTTPException(status_code=404, detail="Transfer not found")
-    
+
     return {
         "transfer_id": transfer_id,
         "events": events,
@@ -297,68 +296,72 @@ Key Findings:
 
 The system maintained full audit trail compliance throughout the period.
 """.strip()
-    
+
     return summary
 
 
 def _find_violations(events: list[dict]) -> list[dict]:
     """Find compliance violations in events."""
     violations = []
-    
+
     for event in events:
         # Check for PII handling violations
         if event.get("data_classification") == "pii":
             if event.get("retention_policy") != "ephemeral":
-                violations.append({
-                    "event_id": event["event_id"],
-                    "violation_type": "PII_RETENTION",
-                    "description": "PII data with non-ephemeral retention policy",
-                    "severity": "high",
-                })
-    
+                violations.append(
+                    {
+                        "event_id": event["event_id"],
+                        "violation_type": "PII_RETENTION",
+                        "description": "PII data with non-ephemeral retention policy",
+                        "severity": "high",
+                    }
+                )
+
     return violations
 
 
 def _find_warnings(events: list[dict]) -> list[dict]:
     """Find compliance warnings in events."""
     warnings = []
-    
+
     # Check for high rejection rates
     handshakes = [e for e in events if e.get("event_type") == "iatp_handshake"]
     rejected = [e for e in events if e.get("event_type") == "iatp_rejected"]
-    
+
     if len(handshakes) > 0:
         rejection_rate = len(rejected) / (len(handshakes) + len(rejected))
         if rejection_rate > 0.2:
-            warnings.append({
-                "warning_type": "HIGH_REJECTION_RATE",
-                "description": f"Rejection rate ({rejection_rate:.1%}) exceeds 20% threshold",
-                "recommendation": "Review agent verification requirements",
-            })
-    
+            warnings.append(
+                {
+                    "warning_type": "HIGH_REJECTION_RATE",
+                    "description": f"Rejection rate ({rejection_rate:.1%}) exceeds 20% threshold",
+                    "recommendation": "Review agent verification requirements",
+                }
+            )
+
     return warnings
 
 
 def _generate_recommendations(stats: ComplianceStatsResponse) -> list[str]:
     """Generate recommendations based on stats."""
     recommendations = []
-    
+
     if stats.dispute_rate > 0.05:
         recommendations.append(
             "Consider implementing stricter SCAK validation thresholds to reduce disputes"
         )
-    
+
     if stats.reputation_slashes > 10:
         recommendations.append(
             "Review agent onboarding process - high number of reputation slashes detected"
         )
-    
+
     if stats.rejection_rate > 0.3:
         recommendations.append(
             "High rejection rate may indicate trust threshold is too restrictive"
         )
-    
+
     if not recommendations:
         recommendations.append("No immediate compliance concerns identified")
-    
+
     return recommendations

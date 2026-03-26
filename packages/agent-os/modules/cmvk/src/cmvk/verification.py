@@ -524,7 +524,7 @@ def _generate_interpretation(
     if len(top_contributors) > 1 and top_contributors[0][1] > 0.5:
         return (
             f"Drift primarily driven by {dim_name} "
-            f"({top_contributors[0][1]*100:.1f}% of total drift). "
+            f"({top_contributors[0][1] * 100:.1f}% of total drift). "
             f"Value changed from {vec_a[idx]:.4f} to {vec_b[idx]:.4f} "
             f"({pct_diff:.1f}% difference)."
         )

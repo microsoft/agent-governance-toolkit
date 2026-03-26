@@ -13,6 +13,7 @@ The sidecar acts as a gateway that:
 4. Enforces privacy and security policies
 5. Records all events in the Flight Recorder for distributed tracing
 """
+
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -38,8 +39,7 @@ from iatp.telemetry import FlightRecorder, TraceIDGenerator
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("iatp.sidecar")
 
@@ -60,6 +60,7 @@ security_validator = SecurityValidator()
 privacy_scrubber = PrivacyScrubber()
 flight_recorder = FlightRecorder()
 
+
 # Build the manifest from environment
 def get_manifest() -> CapabilityManifest:
     """Create capability manifest from environment configuration."""
@@ -72,15 +73,16 @@ def get_manifest() -> CapabilityManifest:
             idempotency=True,
             undo_window="24h",
             sla_latency="2000ms",
-            rate_limit=100
+            rate_limit=100,
         ),
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy(RETENTION),
             human_review=HUMAN_IN_LOOP,
             encryption_at_rest=True,
-            encryption_in_transit=True
-        )
+            encryption_in_transit=True,
+        ),
     )
+
 
 manifest = get_manifest()
 
@@ -106,7 +108,7 @@ app = FastAPI(
     title="IATP Sidecar Proxy",
     description="Inter-Agent Trust Protocol Sidecar - The Envoy for AI Agents",
     version="0.2.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # Add CORS middleware
@@ -123,6 +125,7 @@ app.add_middleware(
 # ENDPOINTS
 # =============================================================================
 
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -130,7 +133,7 @@ async def health_check():
         "status": "healthy",
         "component": "sidecar",
         "agent_id": AGENT_ID,
-        "upstream": UPSTREAM_AGENT_URL
+        "upstream": UPSTREAM_AGENT_URL,
     }
 
 
@@ -152,7 +155,7 @@ async def get_capabilities():
 async def proxy_task(
     request: Request,
     x_user_override: Optional[str] = Header(None),
-    x_agent_trace_id: Optional[str] = Header(None)
+    x_agent_trace_id: Optional[str] = Header(None),
 ):
     """
     The Main Gateway - Intercepts and validates all requests.
@@ -179,11 +182,7 @@ async def proxy_task(
     except Exception as e:
         logger.warning(f"[{trace_id}] Invalid JSON payload: {e}")
         return JSONResponse(
-            status_code=400,
-            content={
-                "error": "Invalid JSON payload",
-                "trace_id": trace_id
-            }
+            status_code=400, content={"error": "Invalid JSON payload", "trace_id": trace_id}
         )
 
     # 3. POLICY ENGINE CHECK
@@ -196,7 +195,7 @@ async def proxy_task(
             agent_id=AGENT_ID,
             payload=payload,
             reason=f"Policy Engine: {policy_error}",
-            manifest=manifest
+            manifest=manifest,
         )
         return JSONResponse(
             status_code=403,
@@ -204,8 +203,8 @@ async def proxy_task(
                 "error": policy_error,
                 "trace_id": trace_id,
                 "blocked": True,
-                "blocked_by": "policy_engine"
-            }
+                "blocked_by": "policy_engine",
+            },
         )
 
     # 4. SECURITY VALIDATOR CHECK
@@ -218,7 +217,7 @@ async def proxy_task(
             agent_id=AGENT_ID,
             payload=payload,
             reason=error_message or "Security policy violation",
-            manifest=manifest
+            manifest=manifest,
         )
         return JSONResponse(
             status_code=403,
@@ -226,8 +225,8 @@ async def proxy_task(
                 "error": error_message,
                 "trace_id": trace_id,
                 "blocked": True,
-                "blocked_by": "security_validator"
-            }
+                "blocked_by": "security_validator",
+            },
         )
 
     # 5. CHECK IF WARNING/OVERRIDE NEEDED
@@ -248,8 +247,8 @@ async def proxy_task(
                 "message": (
                     "This request requires user confirmation. "
                     "Retry with header 'X-User-Override: true'"
-                )
-            }
+                ),
+            },
         )
 
     # Log the request
@@ -258,11 +257,12 @@ async def proxy_task(
         agent_id=AGENT_ID,
         payload=payload,
         manifest=manifest,
-        quarantined=security_validator.should_quarantine(manifest)
+        quarantined=security_validator.should_quarantine(manifest),
     )
 
     # 6. FORWARD TO UPSTREAM AGENT
     import time
+
     start_time = time.time()
 
     try:
@@ -270,11 +270,8 @@ async def proxy_task(
             response = await client.post(
                 f"{UPSTREAM_AGENT_URL}/process",
                 json=payload,
-                headers={
-                    "X-Agent-Trace-ID": trace_id,
-                    "Content-Type": "application/json"
-                },
-                timeout=30.0
+                headers={"X-Agent-Trace-ID": trace_id, "Content-Type": "application/json"},
+                timeout=30.0,
             )
 
             latency_ms = (time.time() - start_time) * 1000
@@ -291,10 +288,12 @@ async def proxy_task(
                 agent_id=AGENT_ID,
                 response=response_data,
                 status_code=response.status_code,
-                latency_ms=latency_ms
+                latency_ms=latency_ms,
             )
 
-            logger.info(f"[{trace_id}] Proxied request. Status: {response.status_code}, Latency: {latency_ms:.2f}ms")
+            logger.info(
+                f"[{trace_id}] Proxied request. Status: {response.status_code}, Latency: {latency_ms:.2f}ms"
+            )
 
             # Return with tracing headers
             return JSONResponse(
@@ -303,8 +302,8 @@ async def proxy_task(
                 headers={
                     "X-Agent-Trace-ID": trace_id,
                     "X-Agent-Latency-Ms": str(int(latency_ms)),
-                    "X-Agent-Trust-Score": str(manifest.calculate_trust_score())
-                }
+                    "X-Agent-Trust-Score": str(manifest.calculate_trust_score()),
+                },
             )
 
     except httpx.TimeoutException as e:
@@ -314,14 +313,11 @@ async def proxy_task(
             trace_id=trace_id,
             agent_id=AGENT_ID,
             error="Request timeout",
-            details={"timeout_seconds": 30, "upstream": UPSTREAM_AGENT_URL}
+            details={"timeout_seconds": 30, "upstream": UPSTREAM_AGENT_URL},
         )
 
         recovery_result = await recovery_engine.handle_failure(
-            trace_id=trace_id,
-            error=e,
-            manifest=manifest,
-            payload=payload
+            trace_id=trace_id, error=e, manifest=manifest, payload=payload
         )
 
         return JSONResponse(
@@ -329,8 +325,8 @@ async def proxy_task(
             content={
                 "error": "Upstream agent timeout",
                 "trace_id": trace_id,
-                "recovery": recovery_result
-            }
+                "recovery": recovery_result,
+            },
         )
 
     except Exception as e:
@@ -340,24 +336,17 @@ async def proxy_task(
             trace_id=trace_id,
             agent_id=AGENT_ID,
             error=str(e),
-            details={"exception_type": type(e).__name__, "upstream": UPSTREAM_AGENT_URL}
+            details={"exception_type": type(e).__name__, "upstream": UPSTREAM_AGENT_URL},
         )
 
         recovery_result = await recovery_engine.handle_failure(
-            trace_id=trace_id,
-            error=e,
-            manifest=manifest,
-            payload=payload
+            trace_id=trace_id, error=e, manifest=manifest, payload=payload
         )
 
         if recovery_result.get("success"):
             return JSONResponse(
                 status_code=200,
-                content={
-                    "status": "recovered",
-                    "trace_id": trace_id,
-                    "recovery": recovery_result
-                }
+                content={"status": "recovered", "trace_id": trace_id, "recovery": recovery_result},
             )
 
         return JSONResponse(
@@ -365,8 +354,8 @@ async def proxy_task(
             content={
                 "error": "Upstream agent error",
                 "trace_id": trace_id,
-                "recovery": recovery_result
-            }
+                "recovery": recovery_result,
+            },
         )
 
 
@@ -393,7 +382,7 @@ async def get_metrics():
         "upstream": UPSTREAM_AGENT_URL,
         "trust_level": TRUST_LEVEL,
         "trust_score": manifest.calculate_trust_score(),
-        "manifest": manifest.model_dump()
+        "manifest": manifest.model_dump(),
     }
 
 
@@ -403,10 +392,5 @@ async def get_metrics():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "iatp.main:app",
-        host="0.0.0.0",
-        port=SIDECAR_PORT,
-        reload=True,
-        log_level="info"
-    )
+
+    uvicorn.run("iatp.main:app", host="0.0.0.0", port=SIDECAR_PORT, reload=True, log_level="info")

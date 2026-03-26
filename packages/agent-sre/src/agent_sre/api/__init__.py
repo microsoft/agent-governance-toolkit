@@ -68,6 +68,7 @@ def create_app() -> Any:
 # API state — shared data container
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CostSnapshot:
     """Point-in-time cost summary."""
@@ -213,6 +214,7 @@ class APIState:
 # HTTP request handler
 # ---------------------------------------------------------------------------
 
+
 def _json_response(handler: _APIHandler, status: int, data: Any) -> None:
     """Send a JSON response."""
     body = json.dumps(data, indent=2, default=str).encode("utf-8")
@@ -270,10 +272,14 @@ class _APIHandler(BaseHTTPRequestHandler):
     # -- Route handlers --
 
     def _handle_health(self) -> None:
-        _json_response(self, 200, {
-            "status": "ok",
-            "uptime_seconds": round(self.state.uptime_seconds, 1),
-        })
+        _json_response(
+            self,
+            200,
+            {
+                "status": "ok",
+                "uptime_seconds": round(self.state.uptime_seconds, 1),
+            },
+        )
 
     def _handle_status(self) -> None:
         _json_response(self, 200, self.state.system_status())
@@ -303,15 +309,20 @@ class _APIHandler(BaseHTTPRequestHandler):
         _json_response(self, 200, self.state.cost.to_dict())
 
     def _handle_traces(self) -> None:
-        _json_response(self, 200, {
-            "traces": self.state.trace_reports,
-            "count": len(self.state.trace_reports),
-        })
+        _json_response(
+            self,
+            200,
+            {
+                "traces": self.state.trace_reports,
+                "count": len(self.state.trace_reports),
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
 # Server
 # ---------------------------------------------------------------------------
+
 
 class AgentSREServer:
     """Minimal HTTP server exposing Agent-SRE data as a REST API.

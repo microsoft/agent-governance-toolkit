@@ -4,6 +4,6 @@
 Storage module initialization.
 """
 
-from caas.storage.store import DocumentStore, ContextExtractor
+from caas.storage.store import ContextExtractor, DocumentStore
 
 __all__ = ["DocumentStore", "ContextExtractor"]

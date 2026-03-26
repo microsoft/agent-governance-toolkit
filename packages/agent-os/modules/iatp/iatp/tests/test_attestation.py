@@ -3,6 +3,7 @@
 """
 Unit tests for IATP attestation and reputation system.
 """
+
 from iatp.attestation import AttestationValidator, ReputationManager
 from iatp.models import (
     AttestationRecord,
@@ -22,7 +23,7 @@ def test_attestation_record_creation():
         signature="base64_signature",
         signing_key_id="control-plane-key-1",
         timestamp="2026-01-25T10:00:00Z",
-        expires_at="2026-01-26T10:00:00Z"
+        expires_at="2026-01-26T10:00:00Z",
     )
 
     assert attestation.agent_id == "test-agent"
@@ -52,7 +53,7 @@ def test_attestation_validation_expired():
         signature="sig",
         signing_key_id="key-1",
         timestamp="2026-01-20T10:00:00Z",
-        expires_at="2026-01-21T10:00:00Z"  # Already expired
+        expires_at="2026-01-21T10:00:00Z",  # Already expired
     )
 
     is_valid, error = validator.validate_attestation(attestation, verify_signature=False)
@@ -71,7 +72,7 @@ def test_attestation_validation_unknown_key():
         signature="sig",
         signing_key_id="unknown-key",
         timestamp=_get_utc_timestamp(),
-        expires_at=None
+        expires_at=None,
     )
 
     is_valid, error = validator.validate_attestation(attestation, verify_signature=False)
@@ -91,7 +92,7 @@ def test_attestation_validation_success():
         signature="sig",
         signing_key_id="key-1",
         timestamp=_get_utc_timestamp(),
-        expires_at=None
+        expires_at=None,
     )
 
     is_valid, error = validator.validate_attestation(attestation, verify_signature=False)
@@ -109,7 +110,7 @@ def test_attestation_create():
         codebase_hash="abc123",
         config_hash="def456",
         signing_key_id="key-1",
-        expires_in_hours=24
+        expires_in_hours=24,
     )
 
     assert attestation.agent_id == "test-agent"
@@ -134,10 +135,7 @@ def test_compute_codebase_hash():
 def test_reputation_score_creation():
     """Test creating a reputation score."""
     score = ReputationScore(
-        agent_id="test-agent",
-        score=5.0,
-        initial_score=5.0,
-        last_updated=_get_utc_timestamp()
+        agent_id="test-agent", score=5.0, initial_score=5.0, last_updated=_get_utc_timestamp()
     )
 
     assert score.agent_id == "test-agent"
@@ -148,10 +146,7 @@ def test_reputation_score_creation():
 def test_reputation_event_application():
     """Test applying reputation events."""
     score = ReputationScore(
-        agent_id="test-agent",
-        score=5.0,
-        initial_score=5.0,
-        last_updated=_get_utc_timestamp()
+        agent_id="test-agent", score=5.0, initial_score=5.0, last_updated=_get_utc_timestamp()
     )
 
     # Apply negative event
@@ -161,7 +156,7 @@ def test_reputation_event_application():
         event_type="hallucination",
         severity="high",
         score_delta=-1.0,
-        timestamp=_get_utc_timestamp()
+        timestamp=_get_utc_timestamp(),
     )
     score.apply_event(event)
 
@@ -174,10 +169,7 @@ def test_reputation_event_application():
 def test_reputation_score_clamping():
     """Test that reputation scores are clamped to 0-10."""
     score = ReputationScore(
-        agent_id="test-agent",
-        score=1.0,
-        initial_score=5.0,
-        last_updated=_get_utc_timestamp()
+        agent_id="test-agent", score=1.0, initial_score=5.0, last_updated=_get_utc_timestamp()
     )
 
     # Try to go below 0
@@ -187,7 +179,7 @@ def test_reputation_score_clamping():
         event_type="hallucination",
         severity="critical",
         score_delta=-5.0,
-        timestamp=_get_utc_timestamp()
+        timestamp=_get_utc_timestamp(),
     )
     score.apply_event(event)
 
@@ -201,7 +193,7 @@ def test_reputation_score_clamping():
             event_type="success",
             severity="low",
             score_delta=1.0,
-            timestamp=_get_utc_timestamp()
+            timestamp=_get_utc_timestamp(),
         )
         score.apply_event(event)
 
@@ -211,10 +203,7 @@ def test_reputation_score_clamping():
 def test_reputation_trust_level_mapping():
     """Test conversion from reputation score to trust level."""
     score = ReputationScore(
-        agent_id="test-agent",
-        score=9.0,
-        initial_score=5.0,
-        last_updated=_get_utc_timestamp()
+        agent_id="test-agent", score=9.0, initial_score=5.0, last_updated=_get_utc_timestamp()
     )
 
     assert score.get_trust_level() == TrustLevel.VERIFIED_PARTNER
@@ -240,7 +229,7 @@ def test_reputation_manager_hallucination():
         agent_id="bad-agent",
         severity="high",
         trace_id="trace-123",
-        details={"reason": "generated fake data"}
+        details={"reason": "generated fake data"},
     )
 
     assert score.score < 5.0  # Score should be reduced
@@ -254,10 +243,7 @@ def test_reputation_manager_success():
     """Test recording successful transaction."""
     manager = ReputationManager()
 
-    score = manager.record_success(
-        agent_id="good-agent",
-        trace_id="trace-123"
-    )
+    score = manager.record_success(agent_id="good-agent", trace_id="trace-123")
 
     assert score.score > 5.0  # Score should improve
     assert score.positive_events == 1
@@ -271,7 +257,7 @@ def test_reputation_manager_failure():
         agent_id="flaky-agent",
         failure_type="timeout",
         trace_id="trace-123",
-        details={"timeout_seconds": 30}
+        details={"timeout_seconds": 30},
     )
 
     assert score.score < 5.0  # Score should decrease
@@ -333,7 +319,7 @@ def test_reputation_import_merge():
             "positive_events": 0,
             "negative_events": 0,
             "last_updated": _get_utc_timestamp(),
-            "recent_events": []
+            "recent_events": [],
         }
     }
 
@@ -346,10 +332,7 @@ def test_reputation_import_merge():
 def test_reputation_recent_events_limit():
     """Test that recent events are limited to 100."""
     score = ReputationScore(
-        agent_id="test-agent",
-        score=5.0,
-        initial_score=5.0,
-        last_updated=_get_utc_timestamp()
+        agent_id="test-agent", score=5.0, initial_score=5.0, last_updated=_get_utc_timestamp()
     )
 
     # Add 150 events
@@ -360,7 +343,7 @@ def test_reputation_recent_events_limit():
             event_type="success",
             severity="low",
             score_delta=0.01,
-            timestamp=_get_utc_timestamp()
+            timestamp=_get_utc_timestamp(),
         )
         score.apply_event(event)
 

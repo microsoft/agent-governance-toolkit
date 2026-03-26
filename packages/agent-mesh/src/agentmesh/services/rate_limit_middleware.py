@@ -13,11 +13,11 @@ See also:
 """
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 from agentmesh.services.rate_limiter import RateLimiter
-
 
 # Header constants
 HEADER_AGENT_DID = "X-Agent-DID"
@@ -73,7 +73,7 @@ class RateLimitMiddleware:
         self,
         response: SimpleResponse,
         remaining: float,
-        retry_after: Optional[float],
+        retry_after: float | None,
         backpressure: bool,
     ) -> None:
         """Attach rate limit headers to the response."""

@@ -105,7 +105,7 @@ if status == SLOStatus.EXHAUSTED:
     print(f"  🚨 Error budget exhausted — action: {budget.exhaustion_action.value}")
 elif status in (SLOStatus.CRITICAL, SLOStatus.WARNING):
     print()
-    print(f"  ⚠️  SLO at risk — consider slowing deployments")
+    print("  ⚠️  SLO at risk — consider slowing deployments")
 
 print()
 print("─" * 60)

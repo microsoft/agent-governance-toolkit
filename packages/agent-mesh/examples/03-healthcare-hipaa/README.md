@@ -86,7 +86,7 @@ compliance:
   frameworks:
     - hipaa
     - soc2
-  
+
   controls:
     hipaa:
       - "164.312(a)(1) - Access Control"

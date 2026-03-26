@@ -54,14 +54,18 @@ class PluginManifest(BaseModel):
     description: str = Field(..., description="Short human-readable description")
     author: str = Field(..., description="Author name or email")
     plugin_type: PluginType = Field(..., description="Type of plugin")
-    capabilities: list[str] = Field(default_factory=list, description="Declared capabilities")
+    capabilities: list[str] = Field(
+        default_factory=list, description="Declared capabilities"
+    )
     dependencies: list[str] = Field(
         default_factory=list, description="Required plugins (name>=version)"
     )
     min_agentmesh_version: Optional[str] = Field(
         None, description="Minimum AgentMesh version required"
     )
-    signature: Optional[str] = Field(None, description="Base64-encoded Ed25519 signature")
+    signature: Optional[str] = Field(
+        None, description="Base64-encoded Ed25519 signature"
+    )
 
     @field_validator("name")
     @classmethod
@@ -81,7 +85,9 @@ class PluginManifest(BaseModel):
         """Validate basic semver format (MAJOR.MINOR.PATCH)."""
         parts = v.split(".")
         if len(parts) < 2 or len(parts) > 3:
-            raise MarketplaceError(f"Invalid version format: {v} (expected MAJOR.MINOR[.PATCH])")
+            raise MarketplaceError(
+                f"Invalid version format: {v} (expected MAJOR.MINOR[.PATCH])"
+            )
         for part in parts:
             if not part.isdigit():
                 raise MarketplaceError(f"Invalid version component: {part}")

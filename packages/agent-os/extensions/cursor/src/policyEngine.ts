@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Policy Engine for Agent OS Cursor Extension
- * 
+ *
  * Provides local-first code safety analysis.
  * Runs entirely in the extension without network calls.
  */
@@ -261,7 +261,7 @@ export class PolicyEngine {
         if (!workspaceFolder) return;
 
         const configPath = vscode.Uri.joinPath(workspaceFolder.uri, '.vscode', 'agent-os.json');
-        
+
         vscode.workspace.fs.readFile(configPath).then(
             (content) => {
                 try {
@@ -345,7 +345,7 @@ export class PolicyEngine {
      */
     getActivePolicies(): { name: string; enabled: boolean; severity: string }[] {
         const config = vscode.workspace.getConfiguration('agentOS');
-        
+
         return [
             { name: 'Destructive SQL', enabled: config.get('policies.blockDestructiveSQL', true), severity: 'critical' },
             { name: 'File Deletes', enabled: config.get('policies.blockFileDeletes', true), severity: 'critical' },

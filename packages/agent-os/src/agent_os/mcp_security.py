@@ -60,8 +60,10 @@ _SAMPLE_DISCLAIMER = (
 # Data models
 # ---------------------------------------------------------------------------
 
+
 class MCPThreatType(Enum):
     """Classification of an MCP-layer threat."""
+
     TOOL_POISONING = "tool_poisoning"
     RUG_PULL = "rug_pull"
     CROSS_SERVER_ATTACK = "cross_server_attack"
@@ -72,6 +74,7 @@ class MCPThreatType(Enum):
 
 class MCPSeverity(Enum):
     """Severity of an MCP threat."""
+
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
@@ -80,6 +83,7 @@ class MCPSeverity(Enum):
 @dataclass
 class MCPThreat:
     """A single threat finding from an MCP tool scan."""
+
     threat_type: MCPThreatType
     severity: MCPSeverity
     tool_name: str
@@ -92,6 +96,7 @@ class MCPThreat:
 @dataclass
 class ToolFingerprint:
     """Cryptographic fingerprint of a tool definition."""
+
     tool_name: str
     server_name: str
     description_hash: str
@@ -104,6 +109,7 @@ class ToolFingerprint:
 @dataclass
 class ScanResult:
     """Aggregate outcome of scanning one or more tools."""
+
     safe: bool
     threats: list[MCPThreat]
     tools_scanned: int
@@ -116,17 +122,17 @@ class ScanResult:
 
 # Invisible unicode characters used to hide instructions
 _INVISIBLE_UNICODE_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"[\u200b\u200c\u200d\ufeff]"),          # zero-width spaces/joiners/BOM
-    re.compile(r"[\u202a-\u202e]"),                       # bidi embedding/override
-    re.compile(r"[\u2066-\u2069]"),                       # bidi isolates
-    re.compile(r"[\u00ad]"),                               # soft hyphen
-    re.compile(r"[\u2060\u180e]"),                         # word joiner, mongolian vowel separator
+    re.compile(r"[\u200b\u200c\u200d\ufeff]"),  # zero-width spaces/joiners/BOM
+    re.compile(r"[\u202a-\u202e]"),  # bidi embedding/override
+    re.compile(r"[\u2066-\u2069]"),  # bidi isolates
+    re.compile(r"[\u00ad]"),  # soft hyphen
+    re.compile(r"[\u2060\u180e]"),  # word joiner, mongolian vowel separator
 ]
 
 # Markdown/HTML comments that hide text from users
 _HIDDEN_COMMENT_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"<!--.*?-->", re.DOTALL),                 # HTML comments
-    re.compile(r"\[//\]:\s*#\s*\(.*?\)", re.DOTALL),     # Markdown reference comments
+    re.compile(r"<!--.*?-->", re.DOTALL),  # HTML comments
+    re.compile(r"\[//\]:\s*#\s*\(.*?\)", re.DOTALL),  # Markdown reference comments
     re.compile(r"\[comment\]:\s*<>\s*\(.*?\)", re.DOTALL),  # alternative MD comment
 ]
 
@@ -144,8 +150,8 @@ _HIDDEN_INSTRUCTION_PATTERNS: list[re.Pattern[str]] = [
 
 # Encoded payload patterns
 _ENCODED_PAYLOAD_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"[A-Za-z0-9+/]{40,}={0,2}"),             # long base64 strings
-    re.compile(r"(?:\\x[0-9a-fA-F]{2}){4,}"),             # hex sequences
+    re.compile(r"[A-Za-z0-9+/]{40,}={0,2}"),  # long base64 strings
+    re.compile(r"(?:\\x[0-9a-fA-F]{2}){4,}"),  # hex sequences
 ]
 
 # Data exfiltration patterns
@@ -181,21 +187,30 @@ _ROLE_OVERRIDE_PATTERNS: list[re.Pattern[str]] = [
 ]
 
 # Content after excessive whitespace (hidden instructions at the end)
-_EXCESSIVE_WHITESPACE_PATTERN: re.Pattern[str] = re.compile(
-    r"\n{5,}.+", re.DOTALL
-)
+_EXCESSIVE_WHITESPACE_PATTERN: re.Pattern[str] = re.compile(r"\n{5,}.+", re.DOTALL)
 
 # Suspicious keywords in decoded base64
 _SUSPICIOUS_DECODED_KEYWORDS: list[str] = [
-    "ignore", "override", "system", "password", "secret",
-    "admin", "root", "exec", "eval", "import os",
-    "send", "curl", "fetch",
+    "ignore",
+    "override",
+    "system",
+    "password",
+    "secret",
+    "admin",
+    "root",
+    "exec",
+    "eval",
+    "import os",
+    "send",
+    "curl",
+    "fetch",
 ]
 
 
 # ---------------------------------------------------------------------------
 # Externalised configuration dataclass
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class MCPSecurityConfig:
@@ -214,15 +229,33 @@ class MCPSecurityConfig:
         disclaimer: Disclaimer text shown in logs.
     """
 
-    invisible_unicode_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _INVISIBLE_UNICODE_PATTERNS])
-    hidden_comment_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _HIDDEN_COMMENT_PATTERNS])
-    hidden_instruction_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _HIDDEN_INSTRUCTION_PATTERNS])
-    encoded_payload_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _ENCODED_PAYLOAD_PATTERNS])
-    exfiltration_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _EXFILTRATION_PATTERNS])
-    privilege_escalation_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _PRIVILEGE_ESCALATION_PATTERNS])
-    role_override_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _ROLE_OVERRIDE_PATTERNS])
-    excessive_whitespace_pattern: str = field(default_factory=lambda: _EXCESSIVE_WHITESPACE_PATTERN.pattern)
-    suspicious_decoded_keywords: list[str] = field(default_factory=lambda: list(_SUSPICIOUS_DECODED_KEYWORDS))
+    invisible_unicode_patterns: list[str] = field(
+        default_factory=lambda: [p.pattern for p in _INVISIBLE_UNICODE_PATTERNS]
+    )
+    hidden_comment_patterns: list[str] = field(
+        default_factory=lambda: [p.pattern for p in _HIDDEN_COMMENT_PATTERNS]
+    )
+    hidden_instruction_patterns: list[str] = field(
+        default_factory=lambda: [p.pattern for p in _HIDDEN_INSTRUCTION_PATTERNS]
+    )
+    encoded_payload_patterns: list[str] = field(
+        default_factory=lambda: [p.pattern for p in _ENCODED_PAYLOAD_PATTERNS]
+    )
+    exfiltration_patterns: list[str] = field(
+        default_factory=lambda: [p.pattern for p in _EXFILTRATION_PATTERNS]
+    )
+    privilege_escalation_patterns: list[str] = field(
+        default_factory=lambda: [p.pattern for p in _PRIVILEGE_ESCALATION_PATTERNS]
+    )
+    role_override_patterns: list[str] = field(
+        default_factory=lambda: [p.pattern for p in _ROLE_OVERRIDE_PATTERNS]
+    )
+    excessive_whitespace_pattern: str = field(
+        default_factory=lambda: _EXCESSIVE_WHITESPACE_PATTERN.pattern
+    )
+    suspicious_decoded_keywords: list[str] = field(
+        default_factory=lambda: list(_SUSPICIOUS_DECODED_KEYWORDS)
+    )
     disclaimer: str = ""
 
 
@@ -244,7 +277,7 @@ def load_mcp_security_config(path: str) -> MCPSecurityConfig:
     if not os.path.exists(path):
         raise FileNotFoundError(f"MCP security config not found: {path}")
 
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         data = yaml.safe_load(fh.read())
 
     if not isinstance(data, dict) or "detection_patterns" not in data:
@@ -252,15 +285,31 @@ def load_mcp_security_config(path: str) -> MCPSecurityConfig:
 
     dp = data["detection_patterns"]
     return MCPSecurityConfig(
-        invisible_unicode_patterns=dp.get("invisible_unicode", [p.pattern for p in _INVISIBLE_UNICODE_PATTERNS]),
-        hidden_comment_patterns=dp.get("hidden_comments", [p.pattern for p in _HIDDEN_COMMENT_PATTERNS]),
-        hidden_instruction_patterns=dp.get("hidden_instructions", [p.pattern for p in _HIDDEN_INSTRUCTION_PATTERNS]),
-        encoded_payload_patterns=dp.get("encoded_payloads", [p.pattern for p in _ENCODED_PAYLOAD_PATTERNS]),
+        invisible_unicode_patterns=dp.get(
+            "invisible_unicode", [p.pattern for p in _INVISIBLE_UNICODE_PATTERNS]
+        ),
+        hidden_comment_patterns=dp.get(
+            "hidden_comments", [p.pattern for p in _HIDDEN_COMMENT_PATTERNS]
+        ),
+        hidden_instruction_patterns=dp.get(
+            "hidden_instructions", [p.pattern for p in _HIDDEN_INSTRUCTION_PATTERNS]
+        ),
+        encoded_payload_patterns=dp.get(
+            "encoded_payloads", [p.pattern for p in _ENCODED_PAYLOAD_PATTERNS]
+        ),
         exfiltration_patterns=dp.get("exfiltration", [p.pattern for p in _EXFILTRATION_PATTERNS]),
-        privilege_escalation_patterns=dp.get("privilege_escalation", [p.pattern for p in _PRIVILEGE_ESCALATION_PATTERNS]),
-        role_override_patterns=dp.get("role_override", [p.pattern for p in _ROLE_OVERRIDE_PATTERNS]),
-        excessive_whitespace_pattern=dp.get("excessive_whitespace", _EXCESSIVE_WHITESPACE_PATTERN.pattern),
-        suspicious_decoded_keywords=data.get("suspicious_decoded_keywords", list(_SUSPICIOUS_DECODED_KEYWORDS)),
+        privilege_escalation_patterns=dp.get(
+            "privilege_escalation", [p.pattern for p in _PRIVILEGE_ESCALATION_PATTERNS]
+        ),
+        role_override_patterns=dp.get(
+            "role_override", [p.pattern for p in _ROLE_OVERRIDE_PATTERNS]
+        ),
+        excessive_whitespace_pattern=dp.get(
+            "excessive_whitespace", _EXCESSIVE_WHITESPACE_PATTERN.pattern
+        ),
+        suspicious_decoded_keywords=data.get(
+            "suspicious_decoded_keywords", list(_SUSPICIOUS_DECODED_KEYWORDS)
+        ),
         disclaimer=data.get("disclaimer", ""),
     )
 
@@ -268,6 +317,7 @@ def load_mcp_security_config(path: str) -> MCPSecurityConfig:
 # ---------------------------------------------------------------------------
 # MCPSecurityScanner
 # ---------------------------------------------------------------------------
+
 
 class MCPSecurityScanner:
     """Scans MCP tool definitions for poisoning, rug pulls, and protocol attacks.
@@ -383,8 +433,7 @@ class MCPSecurityScanner:
         now = time.time()
         desc_hash = hashlib.sha256(description.encode("utf-8")).hexdigest()
         schema_hash = hashlib.sha256(
-            json.dumps(schema, sort_keys=True, default=str).encode("utf-8")
-            if schema else b""
+            json.dumps(schema, sort_keys=True, default=str).encode("utf-8") if schema else b""
         ).hexdigest()
 
         existing = self._tool_registry.get(key)
@@ -429,8 +478,7 @@ class MCPSecurityScanner:
 
         desc_hash = hashlib.sha256(description.encode("utf-8")).hexdigest()
         schema_hash = hashlib.sha256(
-            json.dumps(schema, sort_keys=True, default=str).encode("utf-8")
-            if schema else b""
+            json.dumps(schema, sort_keys=True, default=str).encode("utf-8") if schema else b""
         ).hexdigest()
 
         changes: list[str] = []
@@ -473,30 +521,34 @@ class MCPSecurityScanner:
         for pattern in _INVISIBLE_UNICODE_PATTERNS:
             match = pattern.search(description)
             if match:
-                threats.append(MCPThreat(
-                    threat_type=MCPThreatType.HIDDEN_INSTRUCTION,
-                    severity=MCPSeverity.CRITICAL,
-                    tool_name=tool_name,
-                    server_name=server_name,
-                    message="Invisible unicode characters detected in tool description",
-                    matched_pattern=pattern.pattern,
-                    details={"char_ord": ord(match.group()[0])},
-                ))
+                threats.append(
+                    MCPThreat(
+                        threat_type=MCPThreatType.HIDDEN_INSTRUCTION,
+                        severity=MCPSeverity.CRITICAL,
+                        tool_name=tool_name,
+                        server_name=server_name,
+                        message="Invisible unicode characters detected in tool description",
+                        matched_pattern=pattern.pattern,
+                        details={"char_ord": ord(match.group()[0])},
+                    )
+                )
                 break  # one finding per category is enough
 
         # 2. Markdown/HTML comments hiding text
         for pattern in _HIDDEN_COMMENT_PATTERNS:
             match = pattern.search(description)
             if match:
-                threats.append(MCPThreat(
-                    threat_type=MCPThreatType.HIDDEN_INSTRUCTION,
-                    severity=MCPSeverity.CRITICAL,
-                    tool_name=tool_name,
-                    server_name=server_name,
-                    message="Hidden comment detected in tool description",
-                    matched_pattern=pattern.pattern,
-                    details={"comment_preview": match.group()[:80]},
-                ))
+                threats.append(
+                    MCPThreat(
+                        threat_type=MCPThreatType.HIDDEN_INSTRUCTION,
+                        severity=MCPSeverity.CRITICAL,
+                        tool_name=tool_name,
+                        server_name=server_name,
+                        message="Hidden comment detected in tool description",
+                        matched_pattern=pattern.pattern,
+                        details={"comment_preview": match.group()[:80]},
+                    )
+                )
 
         # 3. Encoded instructions (base64, hex)
         for pattern in _ENCODED_PAYLOAD_PATTERNS:
@@ -520,37 +572,43 @@ class MCPSecurityScanner:
                         is_suspicious = True
 
                 if is_suspicious or candidate.startswith("\\x"):
-                    threats.append(MCPThreat(
-                        threat_type=MCPThreatType.HIDDEN_INSTRUCTION,
-                        severity=MCPSeverity.WARNING,
-                        tool_name=tool_name,
-                        server_name=server_name,
-                        message="Encoded payload detected in tool description",
-                        matched_pattern=pattern.pattern,
-                    ))
+                    threats.append(
+                        MCPThreat(
+                            threat_type=MCPThreatType.HIDDEN_INSTRUCTION,
+                            severity=MCPSeverity.WARNING,
+                            tool_name=tool_name,
+                            server_name=server_name,
+                            message="Encoded payload detected in tool description",
+                            matched_pattern=pattern.pattern,
+                        )
+                    )
 
         # 4. Hidden instructions after excessive whitespace/newlines
         if _EXCESSIVE_WHITESPACE_PATTERN.search(description):
-            threats.append(MCPThreat(
-                threat_type=MCPThreatType.HIDDEN_INSTRUCTION,
-                severity=MCPSeverity.WARNING,
-                tool_name=tool_name,
-                server_name=server_name,
-                message="Instructions hidden after excessive whitespace",
-                matched_pattern=_EXCESSIVE_WHITESPACE_PATTERN.pattern,
-            ))
+            threats.append(
+                MCPThreat(
+                    threat_type=MCPThreatType.HIDDEN_INSTRUCTION,
+                    severity=MCPSeverity.WARNING,
+                    tool_name=tool_name,
+                    server_name=server_name,
+                    message="Instructions hidden after excessive whitespace",
+                    matched_pattern=_EXCESSIVE_WHITESPACE_PATTERN.pattern,
+                )
+            )
 
         # 5. Instruction-like patterns
         for pattern in _HIDDEN_INSTRUCTION_PATTERNS:
             if pattern.search(description):
-                threats.append(MCPThreat(
-                    threat_type=MCPThreatType.HIDDEN_INSTRUCTION,
-                    severity=MCPSeverity.CRITICAL,
-                    tool_name=tool_name,
-                    server_name=server_name,
-                    message=f"Instruction-like pattern in tool description: {pattern.pattern}",
-                    matched_pattern=pattern.pattern,
-                ))
+                threats.append(
+                    MCPThreat(
+                        threat_type=MCPThreatType.HIDDEN_INSTRUCTION,
+                        severity=MCPSeverity.CRITICAL,
+                        tool_name=tool_name,
+                        server_name=server_name,
+                        message=f"Instruction-like pattern in tool description: {pattern.pattern}",
+                        matched_pattern=pattern.pattern,
+                    )
+                )
 
         return threats
 
@@ -564,41 +622,53 @@ class MCPSecurityScanner:
         threats: list[MCPThreat] = []
 
         # Reuse prompt_injection.py detector
-        result = self._injection_detector.detect(description, source=f"mcp:{server_name}:{tool_name}")
+        result = self._injection_detector.detect(
+            description, source=f"mcp:{server_name}:{tool_name}"
+        )
         if result.is_injection:
-            threats.append(MCPThreat(
-                threat_type=MCPThreatType.DESCRIPTION_INJECTION,
-                severity=MCPSeverity.CRITICAL,
-                tool_name=tool_name,
-                server_name=server_name,
-                message=f"Prompt injection detected in description: {result.explanation}",
-                matched_pattern=result.matched_patterns[0] if result.matched_patterns else None,
-                details={"injection_type": result.injection_type.value if result.injection_type else None},
-            ))
-
-        # Role assignment patterns
-        for pattern in _ROLE_OVERRIDE_PATTERNS:
-            if pattern.search(description):
-                threats.append(MCPThreat(
-                    threat_type=MCPThreatType.DESCRIPTION_INJECTION,
-                    severity=MCPSeverity.WARNING,
-                    tool_name=tool_name,
-                    server_name=server_name,
-                    message=f"Role override pattern in description: {pattern.pattern}",
-                    matched_pattern=pattern.pattern,
-                ))
-
-        # Data exfiltration patterns
-        for pattern in _EXFILTRATION_PATTERNS:
-            if pattern.search(description):
-                threats.append(MCPThreat(
+            threats.append(
+                MCPThreat(
                     threat_type=MCPThreatType.DESCRIPTION_INJECTION,
                     severity=MCPSeverity.CRITICAL,
                     tool_name=tool_name,
                     server_name=server_name,
-                    message=f"Data exfiltration pattern in description: {pattern.pattern}",
-                    matched_pattern=pattern.pattern,
-                ))
+                    message=f"Prompt injection detected in description: {result.explanation}",
+                    matched_pattern=result.matched_patterns[0] if result.matched_patterns else None,
+                    details={
+                        "injection_type": result.injection_type.value
+                        if result.injection_type
+                        else None
+                    },
+                )
+            )
+
+        # Role assignment patterns
+        for pattern in _ROLE_OVERRIDE_PATTERNS:
+            if pattern.search(description):
+                threats.append(
+                    MCPThreat(
+                        threat_type=MCPThreatType.DESCRIPTION_INJECTION,
+                        severity=MCPSeverity.WARNING,
+                        tool_name=tool_name,
+                        server_name=server_name,
+                        message=f"Role override pattern in description: {pattern.pattern}",
+                        matched_pattern=pattern.pattern,
+                    )
+                )
+
+        # Data exfiltration patterns
+        for pattern in _EXFILTRATION_PATTERNS:
+            if pattern.search(description):
+                threats.append(
+                    MCPThreat(
+                        threat_type=MCPThreatType.DESCRIPTION_INJECTION,
+                        severity=MCPSeverity.CRITICAL,
+                        tool_name=tool_name,
+                        server_name=server_name,
+                        message=f"Data exfiltration pattern in description: {pattern.pattern}",
+                        matched_pattern=pattern.pattern,
+                    )
+                )
 
         return threats
 
@@ -614,13 +684,15 @@ class MCPSecurityScanner:
         # 1. Overly permissive: top-level type is "object" with no properties
         if schema.get("type") == "object" and not schema.get("properties"):
             if schema.get("additionalProperties") is not False:
-                threats.append(MCPThreat(
-                    threat_type=MCPThreatType.TOOL_POISONING,
-                    severity=MCPSeverity.WARNING,
-                    tool_name=tool_name,
-                    server_name=server_name,
-                    message="Overly permissive schema: object type with no defined properties",
-                ))
+                threats.append(
+                    MCPThreat(
+                        threat_type=MCPThreatType.TOOL_POISONING,
+                        severity=MCPSeverity.WARNING,
+                        tool_name=tool_name,
+                        server_name=server_name,
+                        message="Overly permissive schema: object type with no defined properties",
+                    )
+                )
 
         properties = schema.get("properties", {})
         required = schema.get("required", [])
@@ -631,35 +703,46 @@ class MCPSecurityScanner:
 
             # 2. Hidden required fields with suspicious names
             suspicious_field_names = [
-                "system_prompt", "instructions", "override", "command",
-                "exec", "eval", "callback_url", "webhook", "target_url",
+                "system_prompt",
+                "instructions",
+                "override",
+                "command",
+                "exec",
+                "eval",
+                "callback_url",
+                "webhook",
+                "target_url",
             ]
             if prop_name in required:
                 for sus_name in suspicious_field_names:
                     if sus_name in prop_name.lower():
-                        threats.append(MCPThreat(
-                            threat_type=MCPThreatType.TOOL_POISONING,
-                            severity=MCPSeverity.CRITICAL,
-                            tool_name=tool_name,
-                            server_name=server_name,
-                            message=f"Suspicious required field: '{prop_name}'",
-                            details={"field_name": prop_name},
-                        ))
+                        threats.append(
+                            MCPThreat(
+                                threat_type=MCPThreatType.TOOL_POISONING,
+                                severity=MCPSeverity.CRITICAL,
+                                tool_name=tool_name,
+                                server_name=server_name,
+                                message=f"Suspicious required field: '{prop_name}'",
+                                details={"field_name": prop_name},
+                            )
+                        )
 
             # 3. Default values containing instructions
             default_val = prop_def.get("default")
             if isinstance(default_val, str) and len(default_val) > 10:
                 for pattern in _HIDDEN_INSTRUCTION_PATTERNS:
                     if pattern.search(default_val):
-                        threats.append(MCPThreat(
-                            threat_type=MCPThreatType.TOOL_POISONING,
-                            severity=MCPSeverity.CRITICAL,
-                            tool_name=tool_name,
-                            server_name=server_name,
-                            message=f"Instruction in default value for field '{prop_name}'",
-                            matched_pattern=pattern.pattern,
-                            details={"field_name": prop_name},
-                        ))
+                        threats.append(
+                            MCPThreat(
+                                threat_type=MCPThreatType.TOOL_POISONING,
+                                severity=MCPSeverity.CRITICAL,
+                                tool_name=tool_name,
+                                server_name=server_name,
+                                message=f"Instruction in default value for field '{prop_name}'",
+                                matched_pattern=pattern.pattern,
+                                details={"field_name": prop_name},
+                            )
+                        )
                         break
 
             # 4. Hidden instructions in property descriptions
@@ -667,15 +750,17 @@ class MCPSecurityScanner:
             if isinstance(prop_desc, str):
                 for pattern in _HIDDEN_INSTRUCTION_PATTERNS:
                     if pattern.search(prop_desc):
-                        threats.append(MCPThreat(
-                            threat_type=MCPThreatType.TOOL_POISONING,
-                            severity=MCPSeverity.CRITICAL,
-                            tool_name=tool_name,
-                            server_name=server_name,
-                            message=f"Hidden instruction in property '{prop_name}' description",
-                            matched_pattern=pattern.pattern,
-                            details={"field_name": prop_name},
-                        ))
+                        threats.append(
+                            MCPThreat(
+                                threat_type=MCPThreatType.TOOL_POISONING,
+                                severity=MCPSeverity.CRITICAL,
+                                tool_name=tool_name,
+                                server_name=server_name,
+                                message=f"Hidden instruction in property '{prop_name}' description",
+                                matched_pattern=pattern.pattern,
+                                details={"field_name": prop_name},
+                            )
+                        )
                         break
 
         return threats
@@ -691,36 +776,40 @@ class MCPSecurityScanner:
         for _key, fp in self._tool_registry.items():
             # Same tool name from a different server
             if fp.tool_name == tool_name and fp.server_name != server_name:
-                threats.append(MCPThreat(
-                    threat_type=MCPThreatType.CROSS_SERVER_ATTACK,
-                    severity=MCPSeverity.CRITICAL,
-                    tool_name=tool_name,
-                    server_name=server_name,
-                    message=(
-                        f"Tool '{tool_name}' already registered from server "
-                        f"'{fp.server_name}' — potential impersonation"
-                    ),
-                    details={"original_server": fp.server_name},
-                ))
+                threats.append(
+                    MCPThreat(
+                        threat_type=MCPThreatType.CROSS_SERVER_ATTACK,
+                        severity=MCPSeverity.CRITICAL,
+                        tool_name=tool_name,
+                        server_name=server_name,
+                        message=(
+                            f"Tool '{tool_name}' already registered from server "
+                            f"'{fp.server_name}' — potential impersonation"
+                        ),
+                        details={"original_server": fp.server_name},
+                    )
+                )
 
             # Typosquatting: similar name from a different server
             if fp.server_name != server_name and fp.tool_name != tool_name:
                 if self._is_typosquat(tool_name, fp.tool_name):
-                    threats.append(MCPThreat(
-                        threat_type=MCPThreatType.CROSS_SERVER_ATTACK,
-                        severity=MCPSeverity.WARNING,
-                        tool_name=tool_name,
-                        server_name=server_name,
-                        message=(
-                            f"Tool name '{tool_name}' resembles "
-                            f"'{fp.tool_name}' from server '{fp.server_name}' "
-                            f"— potential typosquatting"
-                        ),
-                        details={
-                            "similar_tool": fp.tool_name,
-                            "similar_server": fp.server_name,
-                        },
-                    ))
+                    threats.append(
+                        MCPThreat(
+                            threat_type=MCPThreatType.CROSS_SERVER_ATTACK,
+                            severity=MCPSeverity.WARNING,
+                            tool_name=tool_name,
+                            server_name=server_name,
+                            message=(
+                                f"Tool name '{tool_name}' resembles "
+                                f"'{fp.tool_name}' from server '{fp.server_name}' "
+                                f"— potential typosquatting"
+                            ),
+                            details={
+                                "similar_tool": fp.tool_name,
+                                "similar_server": fp.server_name,
+                            },
+                        )
+                    )
 
         return threats
 
@@ -760,12 +849,15 @@ class MCPSecurityScanner:
         if threats:
             logger.warning(
                 "MCP scan found %d threat(s) | tool=%s server=%s",
-                len(threats), tool_name, server_name,
+                len(threats),
+                tool_name,
+                server_name,
             )
         else:
             logger.debug(
                 "MCP scan clean | tool=%s server=%s",
-                tool_name, server_name,
+                tool_name,
+                server_name,
             )
 
 

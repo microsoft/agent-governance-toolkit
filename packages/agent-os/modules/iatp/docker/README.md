@@ -131,7 +131,7 @@ services:
     image: my-agent:latest
     ports:
       - "8000:8000"
-  
+
   iatp-sidecar:
     image: your-username/iatp-sidecar:latest
     ports:
@@ -159,7 +159,7 @@ spec:
     image: my-agent:latest
     ports:
     - containerPort: 8000
-  
+
   - name: iatp-sidecar
     image: your-username/iatp-sidecar:latest
     ports:
@@ -183,7 +183,7 @@ services:
     image: my-agent:latest
     ports:
       - "8000:8000"
-  
+
   iatp-sidecar:
     image: your-username/iatp-sidecar:latest
     network_mode: "service:my-agent"  # Share network with agent

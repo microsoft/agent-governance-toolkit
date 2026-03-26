@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Policies Tree View Provider
- * 
+ *
  * Displays active policies in the sidebar.
  */
 
@@ -42,7 +42,7 @@ class PolicyItem extends vscode.TreeItem {
 
         this.description = enabled ? `${severity}` : 'disabled';
         this.tooltip = `${name}\nSeverity: ${severity}\nStatus: ${enabled ? 'Enabled' : 'Disabled'}`;
-        
+
         if (enabled) {
             this.iconPath = this.getSeverityIcon(severity);
         } else {

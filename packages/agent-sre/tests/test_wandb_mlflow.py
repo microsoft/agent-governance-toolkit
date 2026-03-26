@@ -11,6 +11,7 @@ from agent_sre.integrations.wandb.exporter import WandBExporter, WandBRun
 # W&B Exporter Tests
 # ---------------------------------------------------------------------------
 
+
 class TestWandBExporter:
     def test_offline_by_default(self):
         exporter = WandBExporter()
@@ -79,6 +80,7 @@ class TestWandBExporter:
 # MLflow Exporter Tests
 # ---------------------------------------------------------------------------
 
+
 class TestMLflowExporter:
     def test_offline_by_default(self):
         exporter = MLflowExporter()
@@ -90,7 +92,9 @@ class TestMLflowExporter:
 
     def test_log_run(self):
         exporter = MLflowExporter()
-        run = exporter.log_run("test-run", {"f1": 0.88}, params={"epochs": "10"}, tags={"env": "test"})
+        run = exporter.log_run(
+            "test-run", {"f1": 0.88}, params={"epochs": "10"}, tags={"env": "test"}
+        )
         assert isinstance(run, MLflowRun)
         assert run.name == "test-run"
         assert run.metrics["f1"] == 0.88

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * request_approval Tool
- * 
+ *
  * Creates an approval request for sensitive actions.
  */
 
@@ -53,24 +53,24 @@ Requests expire after the specified time (default: 24 hours).`,
       required: ['agentId', 'action', 'description', 'approvers'],
     },
   },
-  
+
   async execute(args: unknown, context: ServiceContext): Promise<string> {
     const input = RequestApprovalInputSchema.parse(args);
-    
-    context.logger.info('Creating approval request', { 
-      agentId: input.agentId, 
-      action: input.action 
+
+    context.logger.info('Creating approval request', {
+      agentId: input.agentId,
+      action: input.action
     });
-    
+
     // Verify agent exists
     const agent = await context.agentManager.getAgent(input.agentId);
     if (!agent) {
       throw new Error(`Agent not found: ${input.agentId}`);
     }
-    
+
     // Create approval request
     const request = await context.approvalWorkflow.createRequest(input);
-    
+
     // Get risk level description
     const riskDescription: Record<string, string> = {
       low: 'Minor action with limited impact',
@@ -78,7 +78,7 @@ Requests expire after the specified time (default: 24 hours).`,
       high: 'Action could significantly affect data or systems',
       critical: 'Action is irreversible or affects critical systems',
     };
-    
+
     return `
 ✅ Approval Request Created
 

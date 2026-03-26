@@ -28,13 +28,13 @@ Example:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
-import hashlib
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 from agentmesh.integrations.ai_card.schema import AICard, AICardService
 
@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 class A2ATaskState(Enum):
     """A2A Protocol task states."""
+
     SUBMITTED = "submitted"
     WORKING = "working"
     INPUT_REQUIRED = "input_required"
@@ -60,16 +61,17 @@ class A2AAgentCard:
     Cryptographic identity (DID, signing, trust scores) is delegated
     to the underlying AICard instance.
     """
+
     # Standard A2A fields
     name: str
     description: str
     url: str
     version: str = "1.0.0"
-    skills: List[Dict[str, Any]] = field(default_factory=list)
-    authentication: Dict[str, Any] = field(default_factory=dict)
+    skills: list[dict[str, Any]] = field(default_factory=list)
+    authentication: dict[str, Any] = field(default_factory=dict)
 
     # AI Card provides identity, trust, and verifiable metadata
-    ai_card: Optional[AICard] = None
+    ai_card: AICard | None = None
 
     @property
     def agent_did(self) -> str:
@@ -86,7 +88,7 @@ class A2AAgentCard:
         return 0.0
 
     @property
-    def capabilities(self) -> List[str]:
+    def capabilities(self) -> list[str]:
         """Capabilities from AI Card attestations."""
         if self.ai_card:
             return list(self.ai_card.verifiable.capability_attestations.keys())
@@ -98,8 +100,8 @@ class A2AAgentCard:
         identity: Any,
         url: str,
         description: str = "",
-        skills: Optional[List[Dict[str, Any]]] = None,
-    ) -> "A2AAgentCard":
+        skills: list[dict[str, Any]] | None = None,
+    ) -> A2AAgentCard:
         """Create an A2A Agent Card from an AgentIdentity.
 
         Identity is stored in an AICard; the A2A card references it.
@@ -140,7 +142,7 @@ class A2AAgentCard:
         agent's ``/.well-known/ai-card.json`` endpoint rather than
         embedded directly.
         """
-        data: Dict[str, Any] = {
+        data: dict[str, Any] = {
             "name": self.name,
             "description": self.description,
             "url": self.url,
@@ -161,7 +163,7 @@ class A2AAgentCard:
 
         return json.dumps(data, indent=indent)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Export as dictionary."""
         return json.loads(self.to_json())
 
@@ -175,10 +177,11 @@ class A2AAgentCard:
 @dataclass
 class A2ATask:
     """A2A Protocol task with trust metadata."""
+
     task_id: str
     session_id: str
     state: A2ATaskState
-    message: Dict[str, Any]
+    message: dict[str, Any]
 
     # Trust metadata
     requester_did: str = ""
@@ -186,8 +189,8 @@ class A2ATask:
     trust_verified: bool = False
     trust_level: str = "untrusted"
 
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class A2ATrustProvider:
@@ -206,13 +209,13 @@ class A2ATrustProvider:
         self.identity = identity
         self.trust_bridge = trust_bridge
         self.min_trust_score = min_trust_score
-        self._verified_peers: Dict[str, datetime] = {}
+        self._verified_peers: dict[str, datetime] = {}
         self._verification_cache_ttl = timedelta(minutes=15)
 
     async def verify_peer(
         self,
         peer_did: str,
-        peer_card: Optional[A2AAgentCard] = None,
+        peer_card: A2AAgentCard | None = None,
     ) -> bool:
         """Verify peer agent before task interaction.
 
@@ -225,7 +228,7 @@ class A2ATrustProvider:
         Returns:
             True if peer is trusted.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Check cache
         if peer_did in self._verified_peers:
@@ -266,9 +269,9 @@ class A2ATrustProvider:
     async def create_task(
         self,
         peer_did: str,
-        message: Dict[str, Any],
-        peer_card: Optional[A2AAgentCard] = None,
-    ) -> Optional[A2ATask]:
+        message: dict[str, Any],
+        peer_card: A2AAgentCard | None = None,
+    ) -> A2ATask | None:
         """Create A2A task with trust verification.
 
         Args:
@@ -284,7 +287,7 @@ class A2ATrustProvider:
             return None
 
         task_id = hashlib.sha256(
-            f"{self.identity.did}:{peer_did}:{datetime.now(timezone.utc).isoformat()}".encode()
+            f"{self.identity.did}:{peer_did}:{datetime.now(UTC).isoformat()}".encode()
         ).hexdigest()[:16]
 
         task = A2ATask(
@@ -301,12 +304,12 @@ class A2ATrustProvider:
         logger.info(f"Created A2A task {task_id} for peer {peer_did}")
         return task
 
-    def get_trust_footer(self) -> Dict[str, Any]:
+    def get_trust_footer(self) -> dict[str, Any]:
         """Get trust verification footer for A2A messages."""
         return {
             "trust": {
                 "verifier_did": str(self.identity.did) if hasattr(self.identity, "did") else "",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "min_trust_score": self.min_trust_score,
                 "verification_method": "ai-card",
             }

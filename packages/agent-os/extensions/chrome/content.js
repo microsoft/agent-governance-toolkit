@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Agent OS Chrome Extension - Content Script
- * 
+ *
  * Injected into pages to detect and communicate with Agent OS instances.
  * Acts as a bridge between the page context and the extension.
  */
@@ -12,14 +12,14 @@ let port = null;
 
 function connectToBackground() {
   port = chrome.runtime.connect({ name: 'content-script' });
-  
+
   port.onMessage.addListener((message) => {
     // Forward messages from DevTools to page
     if (message.type === 'devtools-connected') {
       window.postMessage({ source: 'agent-os-extension', type: 'devtools-connected' }, '*');
     }
   });
-  
+
   port.onDisconnect.addListener(() => {
     // Reconnect after a delay
     setTimeout(connectToBackground, 1000);
@@ -32,7 +32,7 @@ connectToBackground();
 window.addEventListener('message', (event) => {
   // Only accept messages from our page
   if (event.source !== window) return;
-  
+
   // Handle messages from Agent OS
   if (event.data.source === 'agent-os-page') {
     // Forward to background (and then to DevTools)
@@ -60,7 +60,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return { detected: false };
       })()
     `;
-    
+
     // Inject and execute
     const script = document.createElement('script');
     script.textContent = `
@@ -71,7 +71,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     `;
     document.documentElement.appendChild(script);
     script.remove();
-    
+
     // Listen for result
     const handler = (event) => {
       if (event.data.source === 'agent-os-check') {
@@ -80,7 +80,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     };
     window.addEventListener('message', handler);
-    
+
     return true; // Keep channel open
   }
 });

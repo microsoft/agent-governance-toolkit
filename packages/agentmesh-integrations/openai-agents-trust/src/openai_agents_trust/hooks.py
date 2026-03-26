@@ -6,7 +6,6 @@ import time
 from typing import Any, Optional
 
 from agents import Agent
-from agents.items import ModelResponse, TResponseInputItem
 from agents.lifecycle import RunHooksBase
 from agents.run_context import AgentHookContext, RunContextWrapper
 from agents.tool import Tool
@@ -98,7 +97,11 @@ class GovernanceHooks(RunHooksBase[Any, Agent]):
         )
 
     async def on_tool_end(
-        self, context: RunContextWrapper[Any], agent: Agent[Any], tool: Tool, result: str
+        self,
+        context: RunContextWrapper[Any],
+        agent: Agent[Any],
+        tool: Tool,
+        result: str,
     ) -> None:
         # Check tool output against blocked patterns
         violation = self.policy.check_content(result)
@@ -118,7 +121,10 @@ class GovernanceHooks(RunHooksBase[Any, Agent]):
             )
 
     async def on_handoff(
-        self, context: RunContextWrapper[Any], from_agent: Agent[Any], to_agent: Agent[Any]
+        self,
+        context: RunContextWrapper[Any],
+        from_agent: Agent[Any],
+        to_agent: Agent[Any],
     ) -> None:
         from_score = self.scorer.get_score(from_agent.name)
         to_score = self.scorer.get_score(to_agent.name)
@@ -146,4 +152,3 @@ class GovernanceHooks(RunHooksBase[Any, Agent]):
             "warnings": len([e for e in entries if e.decision == "warn"]),
             "chain_valid": self.audit_log.verify_chain(),
         }
-

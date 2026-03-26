@@ -18,7 +18,6 @@ from agent_os.integrations.health import (
     HealthStatus,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -176,9 +175,7 @@ class TestCheckHealth:
         )
         checker.register_check(
             "broken",
-            lambda: ComponentHealth(
-                name="broken", status=HealthStatus.UNHEALTHY, message="down"
-            ),
+            lambda: ComponentHealth(name="broken", status=HealthStatus.UNHEALTHY, message="down"),
         )
         report = checker.check_health()
         assert report.status == HealthStatus.UNHEALTHY
@@ -251,9 +248,7 @@ class TestThreadSafety:
                     name = f"comp-{start}-{i}"
                     checker.register_check(
                         name,
-                        lambda n=name: ComponentHealth(
-                            name=n, status=HealthStatus.HEALTHY
-                        ),
+                        lambda n=name: ComponentHealth(name=n, status=HealthStatus.HEALTHY),
                     )
             except Exception as exc:
                 errors.append(exc)
@@ -296,9 +291,7 @@ class TestLatency:
     def test_explicit_latency_preserved(self, checker):
         checker.register_check(
             "fast",
-            lambda: ComponentHealth(
-                name="fast", status=HealthStatus.HEALTHY, latency_ms=99.0
-            ),
+            lambda: ComponentHealth(name="fast", status=HealthStatus.HEALTHY, latency_ms=99.0),
         )
         report = checker.check_health()
         assert report.components["fast"].latency_ms == 99.0

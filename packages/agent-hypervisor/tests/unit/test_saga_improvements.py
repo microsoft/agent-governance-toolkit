@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 """Tests for saga fan-out, execution checkpoints, and declarative DSL."""
 
-
 import pytest
 
 from hypervisor.saga.checkpoint import (
@@ -169,27 +168,29 @@ class TestCheckpoints:
 class TestSagaDSL:
     def test_parse_valid_definition(self):
         parser = SagaDSLParser()
-        defn = parser.parse({
-            "name": "deploy-model",
-            "session_id": "sess-1",
-            "steps": [
-                {
-                    "id": "validate",
-                    "action_id": "model.validate",
-                    "agent": "did:mesh:validator",
-                    "execute_api": "/api/validate",
-                    "undo_api": "/api/rollback",
-                },
-                {
-                    "id": "deploy",
-                    "action_id": "model.deploy",
-                    "agent": "did:mesh:deployer",
-                    "execute_api": "/api/deploy",
-                    "timeout": 600,
-                    "retries": 2,
-                },
-            ],
-        })
+        defn = parser.parse(
+            {
+                "name": "deploy-model",
+                "session_id": "sess-1",
+                "steps": [
+                    {
+                        "id": "validate",
+                        "action_id": "model.validate",
+                        "agent": "did:mesh:validator",
+                        "execute_api": "/api/validate",
+                        "undo_api": "/api/rollback",
+                    },
+                    {
+                        "id": "deploy",
+                        "action_id": "model.deploy",
+                        "agent": "did:mesh:deployer",
+                        "execute_api": "/api/deploy",
+                        "timeout": 600,
+                        "retries": 2,
+                    },
+                ],
+            }
+        )
         assert defn.name == "deploy-model"
         assert len(defn.steps) == 2
         assert defn.steps[1].timeout == 600
@@ -202,7 +203,9 @@ class TestSagaDSL:
     def test_parse_missing_name(self):
         parser = SagaDSLParser()
         with pytest.raises(SagaDSLError, match="name"):
-            parser.parse({"session_id": "s1", "steps": [{"id": "s", "action_id": "a", "agent": "x"}]})
+            parser.parse(
+                {"session_id": "s1", "steps": [{"id": "s", "action_id": "a", "agent": "x"}]}
+            )
 
     def test_parse_missing_session_id(self):
         parser = SagaDSLParser()
@@ -217,14 +220,16 @@ class TestSagaDSL:
     def test_parse_duplicate_step_ids(self):
         parser = SagaDSLParser()
         with pytest.raises(SagaDSLError, match="Duplicate"):
-            parser.parse({
-                "name": "x",
-                "session_id": "s1",
-                "steps": [
-                    {"id": "dup", "action_id": "a1", "agent": "x"},
-                    {"id": "dup", "action_id": "a2", "agent": "y"},
-                ],
-            })
+            parser.parse(
+                {
+                    "name": "x",
+                    "session_id": "s1",
+                    "steps": [
+                        {"id": "dup", "action_id": "a1", "agent": "x"},
+                        {"id": "dup", "action_id": "a2", "agent": "y"},
+                    ],
+                }
+            )
 
     @pytest.mark.skip("Feature not available in Community Edition")
     def test_parse_invalid_fan_out_policy(self):
@@ -240,13 +245,15 @@ class TestSagaDSL:
 
     def test_to_saga_steps(self):
         parser = SagaDSLParser()
-        defn = parser.parse({
-            "name": "x",
-            "session_id": "s1",
-            "steps": [
-                {"id": "s1", "action_id": "a1", "agent": "x", "execute_api": "/run"},
-            ],
-        })
+        defn = parser.parse(
+            {
+                "name": "x",
+                "session_id": "s1",
+                "steps": [
+                    {"id": "s1", "action_id": "a1", "agent": "x", "execute_api": "/run"},
+                ],
+            }
+        )
         steps = parser.to_saga_steps(defn)
         assert len(steps) == 1
         assert steps[0].step_id == "s1"
@@ -261,24 +268,28 @@ class TestSagaDSL:
 
     def test_validate_valid(self):
         parser = SagaDSLParser()
-        errors = parser.validate({
-            "name": "x",
-            "session_id": "s1",
-            "steps": [{"id": "a", "action_id": "b", "agent": "c"}],
-        })
+        errors = parser.validate(
+            {
+                "name": "x",
+                "session_id": "s1",
+                "steps": [{"id": "a", "action_id": "b", "agent": "c"}],
+            }
+        )
         assert errors == []
 
     def test_sequential_steps(self):
         parser = SagaDSLParser()
-        defn = parser.parse({
-            "name": "x",
-            "session_id": "s1",
-            "steps": [
-                {"id": "seq1", "action_id": "a", "agent": "x"},
-                {"id": "par1", "action_id": "b", "agent": "y"},
-                {"id": "par2", "action_id": "c", "agent": "z"},
-            ],
-            "fan_out": [{"policy": "all_must_succeed", "branches": ["par1", "par2"]}],
-        })
+        defn = parser.parse(
+            {
+                "name": "x",
+                "session_id": "s1",
+                "steps": [
+                    {"id": "seq1", "action_id": "a", "agent": "x"},
+                    {"id": "par1", "action_id": "b", "agent": "y"},
+                    {"id": "par2", "action_id": "c", "agent": "z"},
+                ],
+                "fan_out": [{"policy": "all_must_succeed", "branches": ["par1", "par2"]}],
+            }
+        )
         # Community edition: all steps are sequential (fan_out ignored)
         assert len(defn.sequential_steps) == 3

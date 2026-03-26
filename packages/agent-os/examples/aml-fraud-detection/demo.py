@@ -74,9 +74,19 @@ OFAC_SDN_LIST = [
 ]
 
 # FATF high-risk jurisdictions
-FATF_HIGH_RISK = {"Iran", "North Korea", "Myanmar", "Syria", "Yemen",
-                  "Afghanistan", "Albania", "Barbados", "Burkina Faso",
-                  "Cayman Islands", "Democratic Republic of Congo"}
+FATF_HIGH_RISK = {
+    "Iran",
+    "North Korea",
+    "Myanmar",
+    "Syria",
+    "Yemen",
+    "Afghanistan",
+    "Albania",
+    "Barbados",
+    "Burkina Faso",
+    "Cayman Islands",
+    "Democratic Republic of Congo",
+}
 
 # Politically Exposed Persons (mock)
 PEP_DATABASE = {
@@ -98,13 +108,17 @@ monitor_policy = GovernancePolicy(
     require_human_approval=False,
     max_tool_calls=50,
     allowed_tools=[
-        "scan_transaction", "flag_structuring", "flag_round_trip",
-        "flag_dormant_activation", "score_geographic_risk",
+        "scan_transaction",
+        "flag_structuring",
+        "flag_round_trip",
+        "flag_dormant_activation",
+        "score_geographic_risk",
     ],
     blocked_patterns=[
         (SSN_PATTERN, PatternType.REGEX),
         (ACCOUNT_PATTERN, PatternType.REGEX),
-        "password", "secret",
+        "password",
+        "secret",
     ],
     log_all_calls=True,
     checkpoint_frequency=3,
@@ -116,8 +130,10 @@ velocity_policy = GovernancePolicy(
     require_human_approval=False,
     max_tool_calls=30,
     allowed_tools=[
-        "check_daily_velocity", "check_weekly_velocity",
-        "compare_peer_group", "detect_activity_spike",
+        "check_daily_velocity",
+        "check_weekly_velocity",
+        "compare_peer_group",
+        "detect_activity_spike",
     ],
     blocked_patterns=[
         (SSN_PATTERN, PatternType.REGEX),
@@ -133,7 +149,9 @@ screener_policy = GovernancePolicy(
     require_human_approval=False,
     max_tool_calls=30,
     allowed_tools=[
-        "screen_ofac", "screen_country", "screen_pep",
+        "screen_ofac",
+        "screen_country",
+        "screen_pep",
         "fuzzy_name_match",
     ],
     blocked_patterns=[
@@ -150,7 +168,9 @@ sar_policy = GovernancePolicy(
     require_human_approval=False,  # controlled by custom interceptor
     max_tool_calls=20,
     allowed_tools=[
-        "generate_sar", "submit_sar", "check_filing_deadline",
+        "generate_sar",
+        "submit_sar",
+        "check_filing_deadline",
     ],
     blocked_patterns=[
         (SSN_PATTERN, PatternType.REGEX),
@@ -164,6 +184,7 @@ sar_policy = GovernancePolicy(
 # ═══════════════════════════════════════════════════════════════════════════
 # 3. CUSTOM INTERCEPTORS
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class SARApprovalInterceptor:
     """Requires human approval specifically for SAR submission."""
@@ -227,8 +248,15 @@ def save_audit_csv(path: str) -> None:
     if not audit_log:
         return
     fieldnames = [
-        "timestamp", "agent_id", "event_type", "tool", "call_count",
-        "reason", "checkpoint", "risk_score", "decision",
+        "timestamp",
+        "agent_id",
+        "event_type",
+        "tool",
+        "call_count",
+        "reason",
+        "checkpoint",
+        "risk_score",
+        "decision",
     ]
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
@@ -240,6 +268,7 @@ def save_audit_csv(path: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 # 5. INTEGRATION SUBCLASS
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class AMLIntegration(BaseIntegration):
     """Integration for AML/KYC governance."""
@@ -254,6 +283,7 @@ class AMLIntegration(BaseIntegration):
 # ═══════════════════════════════════════════════════════════════════════════
 # 6. DATA MODELS
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @dataclass
 class Transaction:
@@ -292,6 +322,7 @@ class SARReport:
 # 7. MOCK AGENTS
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TransactionMonitor:
     """Watches transaction stream and flags anomalies."""
 
@@ -300,8 +331,9 @@ class TransactionMonitor:
     def __init__(self) -> None:
         self._alert_counter = 0
 
-    def _make_alert(self, tx: Transaction, alert_type: str,
-                    score: float, desc: str, needs_sar: bool = False) -> RiskAlert:
+    def _make_alert(
+        self, tx: Transaction, alert_type: str, score: float, desc: str, needs_sar: bool = False
+    ) -> RiskAlert:
         self._alert_counter += 1
         return RiskAlert(
             alert_id=f"ALT-{self._alert_counter:04d}",
@@ -319,7 +351,9 @@ class TransactionMonitor:
         if len(near_threshold) >= 2:
             total = sum(t.amount for t in near_threshold)
             return self._make_alert(
-                near_threshold[0], "STRUCTURING", 0.92,
+                near_threshold[0],
+                "STRUCTURING",
+                0.92,
                 f"Possible structuring: {len(near_threshold)} transactions totaling "
                 f"${total:,.2f}, each just under ${CTR_THRESHOLD:,.0f} threshold",
                 needs_sar=True,
@@ -333,18 +367,23 @@ class TransactionMonitor:
         for sender in senders:
             if sender in receivers[1:]:
                 return self._make_alert(
-                    transactions[0], "ROUND_TRIP", 0.88,
+                    transactions[0],
+                    "ROUND_TRIP",
+                    0.88,
                     f"Circular fund flow detected: funds return to originator '{sender}'",
                     needs_sar=True,
                 )
         return None
 
-    def detect_dormant_activation(self, tx: Transaction,
-                                  last_activity_days: int) -> Optional[RiskAlert]:
+    def detect_dormant_activation(
+        self, tx: Transaction, last_activity_days: int
+    ) -> Optional[RiskAlert]:
         """Account dormant > 180 days suddenly active."""
         if last_activity_days > 180:
             return self._make_alert(
-                tx, "DORMANT_ACTIVATION", 0.75,
+                tx,
+                "DORMANT_ACTIVATION",
+                0.75,
                 f"Dormant account reactivated after {last_activity_days} days "
                 f"with ${tx.amount:,.2f} transaction",
             )
@@ -354,7 +393,9 @@ class TransactionMonitor:
         """Flag transactions involving FATF high-risk jurisdictions."""
         if tx.country in FATF_HIGH_RISK:
             return self._make_alert(
-                tx, "HIGH_RISK_JURISDICTION", 0.85,
+                tx,
+                "HIGH_RISK_JURISDICTION",
+                0.85,
                 f"Transaction involves FATF high-risk jurisdiction: {tx.country}",
                 needs_sar=True,
             )
@@ -371,8 +412,7 @@ class VelocityAnalyzer:
     DAILY_LIMIT = 50_000
     WEEKLY_LIMIT = 200_000
 
-    def _make_alert(self, tx: Transaction, alert_type: str,
-                    score: float, desc: str) -> RiskAlert:
+    def _make_alert(self, tx: Transaction, alert_type: str, score: float, desc: str) -> RiskAlert:
         self._alert_counter += 1
         return RiskAlert(
             alert_id=f"VEL-{self._alert_counter:04d}",
@@ -383,29 +423,36 @@ class VelocityAnalyzer:
             agent=self.name,
         )
 
-    def check_velocity(self, tx: Transaction,
-                       daily_total: float, weekly_total: float) -> Optional[RiskAlert]:
+    def check_velocity(
+        self, tx: Transaction, daily_total: float, weekly_total: float
+    ) -> Optional[RiskAlert]:
         if daily_total + tx.amount > self.DAILY_LIMIT:
             return self._make_alert(
-                tx, "DAILY_VELOCITY_BREACH", 0.80,
+                tx,
+                "DAILY_VELOCITY_BREACH",
+                0.80,
                 f"Daily velocity breach: ${daily_total + tx.amount:,.2f} "
                 f"exceeds ${self.DAILY_LIMIT:,.0f} limit",
             )
         if weekly_total + tx.amount > self.WEEKLY_LIMIT:
             return self._make_alert(
-                tx, "WEEKLY_VELOCITY_BREACH", 0.70,
+                tx,
+                "WEEKLY_VELOCITY_BREACH",
+                0.70,
                 f"Weekly velocity breach: ${weekly_total + tx.amount:,.2f} "
                 f"exceeds ${self.WEEKLY_LIMIT:,.0f} limit",
             )
         return None
 
-    def detect_activity_spike(self, tx: Transaction,
-                              avg_monthly_count: int,
-                              current_month_count: int) -> Optional[RiskAlert]:
+    def detect_activity_spike(
+        self, tx: Transaction, avg_monthly_count: int, current_month_count: int
+    ) -> Optional[RiskAlert]:
         """Flag if current month transactions exceed 3x average."""
         if avg_monthly_count > 0 and current_month_count > avg_monthly_count * 3:
             return self._make_alert(
-                tx, "ACTIVITY_SPIKE", 0.78,
+                tx,
+                "ACTIVITY_SPIKE",
+                0.78,
                 f"Activity spike: {current_month_count} transactions this month "
                 f"vs {avg_monthly_count} avg (>{3}x normal)",
             )
@@ -418,8 +465,7 @@ class SanctionsScreener:
     name = "SanctionsScreener"
     _alert_counter = 0
 
-    def _make_alert(self, tx: Transaction, alert_type: str,
-                    score: float, desc: str) -> RiskAlert:
+    def _make_alert(self, tx: Transaction, alert_type: str, score: float, desc: str) -> RiskAlert:
         self._alert_counter += 1
         return RiskAlert(
             alert_id=f"SCR-{self._alert_counter:04d}",
@@ -456,7 +502,9 @@ class SanctionsScreener:
             sdn_lower = entry["name"].lower()
             if name_lower == sdn_lower:
                 return self._make_alert(
-                    tx, "OFAC_EXACT_MATCH", 1.0,
+                    tx,
+                    "OFAC_EXACT_MATCH",
+                    1.0,
                     f"OFAC SDN exact match: '{name}' — program: {entry['program']}, "
                     f"country: {entry['country']}",
                 )
@@ -464,16 +512,19 @@ class SanctionsScreener:
             max_len = max(len(name_lower), len(sdn_lower))
             if max_len > 0 and distance / max_len < 0.25:
                 return self._make_alert(
-                    tx, "OFAC_FUZZY_MATCH", 0.85,
-                    f"OFAC SDN fuzzy match: '{name}' ≈ '{entry['name']}' "
-                    f"(distance={distance})",
+                    tx,
+                    "OFAC_FUZZY_MATCH",
+                    0.85,
+                    f"OFAC SDN fuzzy match: '{name}' ≈ '{entry['name']}' (distance={distance})",
                 )
         return None
 
     def screen_country(self, country: str, tx: Transaction) -> Optional[RiskAlert]:
         if country in FATF_HIGH_RISK:
             return self._make_alert(
-                tx, "FATF_HIGH_RISK_COUNTRY", 0.90,
+                tx,
+                "FATF_HIGH_RISK_COUNTRY",
+                0.90,
                 f"FATF high-risk jurisdiction: {country}",
             )
         return None
@@ -482,7 +533,9 @@ class SanctionsScreener:
         if name in PEP_DATABASE:
             pep = PEP_DATABASE[name]
             return self._make_alert(
-                tx, "PEP_MATCH", 0.80,
+                tx,
+                "PEP_MATCH",
+                0.80,
                 f"Politically Exposed Person: {name} — {pep['role']}, {pep['country']}",
             )
         return None
@@ -494,8 +547,7 @@ class SARFiler:
     name = "SARFiler"
     _sar_counter = 0
 
-    def generate_sar(self, subject: str, alerts: List[RiskAlert],
-                     total_amount: float) -> SARReport:
+    def generate_sar(self, subject: str, alerts: List[RiskAlert], total_amount: float) -> SARReport:
         self._sar_counter += 1
         narrative_lines = [
             f"Suspicious Activity Report — {subject}",
@@ -506,14 +558,15 @@ class SARFiler:
         ]
         for alert in alerts:
             narrative_lines.append(
-                f"  • [{alert.alert_type}] (score={alert.risk_score:.2f}) "
-                f"{alert.description}"
+                f"  • [{alert.alert_type}] (score={alert.risk_score:.2f}) {alert.description}"
             )
-        narrative_lines.extend([
-            "",
-            "This report is filed pursuant to 31 CFR §1020.320.",
-            "CONFIDENTIAL — Tipping-off prohibition per 31 USC §5318(g)(2).",
-        ])
+        narrative_lines.extend(
+            [
+                "",
+                "This report is filed pursuant to 31 CFR §1020.320.",
+                "CONFIDENTIAL — Tipping-off prohibition per 31 USC §5318(g)(2).",
+            ]
+        )
         return SARReport(
             sar_id=f"SAR-{self._sar_counter:04d}",
             subject=subject,
@@ -528,6 +581,7 @@ class SARFiler:
 # ═══════════════════════════════════════════════════════════════════════════
 # 8. GOVERNED EXECUTION HELPERS
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def governed_call(
     integration: AMLIntegration,
@@ -562,13 +616,16 @@ def governed_call(
         return None
 
     ctx.call_count += 1
-    ctx.tool_calls.append({
-        "call_id": request.call_id,
-        "tool": tool_name,
-        "arguments": {k: v for k, v in arguments.items()
-                      if not isinstance(v, (list, datetime))},
-        "timestamp": datetime.now().isoformat(),
-    })
+    ctx.tool_calls.append(
+        {
+            "call_id": request.call_id,
+            "tool": tool_name,
+            "arguments": {
+                k: v for k, v in arguments.items() if not isinstance(v, (list, datetime))
+            },
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
 
     if ctx.policy.log_all_calls:
         integration.emit(
@@ -599,14 +656,14 @@ def governed_call(
         )
         print(f"    ○ CHECKPOINT {checkpoint_id}")
 
-    print(f"    ✔ ALLOWED  │ tool={tool_name} "
-          f"(call {ctx.call_count}/{ctx.policy.max_tool_calls})")
+    print(f"    ✔ ALLOWED  │ tool={tool_name} (call {ctx.call_count}/{ctx.policy.max_tool_calls})")
     return f"mock_result_for_{tool_name}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 9. PIPELINE RUNNER
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @dataclass
 class PipelineResult:
@@ -645,35 +702,56 @@ def run_pipeline(
 
     # Structuring check
     tx_batch = (extra_txs or []) + [tx]
-    governed_call(ig, cx, ic, "scan_transaction",
-                  {"tx_id": tx.tx_id, "amount": tx.amount, "receiver": tx.receiver})
+    governed_call(
+        ig,
+        cx,
+        ic,
+        "scan_transaction",
+        {"tx_id": tx.tx_id, "amount": tx.amount, "receiver": tx.receiver},
+    )
 
     structuring = monitor.detect_structuring(tx_batch)
     if structuring:
-        governed_call(ig, cx, ic, "flag_structuring",
-                      {"alert": structuring.alert_id, "score": structuring.risk_score})
+        governed_call(
+            ig,
+            cx,
+            ic,
+            "flag_structuring",
+            {"alert": structuring.alert_id, "score": structuring.risk_score},
+        )
         result.alerts.append(structuring)
 
     # Round-trip check
     if extra_txs and len(extra_txs) >= 2:
         round_trip = monitor.detect_round_trip(tx_batch)
         if round_trip:
-            governed_call(ig, cx, ic, "flag_round_trip",
-                          {"alert": round_trip.alert_id, "score": round_trip.risk_score})
+            governed_call(
+                ig,
+                cx,
+                ic,
+                "flag_round_trip",
+                {"alert": round_trip.alert_id, "score": round_trip.risk_score},
+            )
             result.alerts.append(round_trip)
 
     # Dormant account check
     dormant = monitor.detect_dormant_activation(tx, last_activity_days)
     if dormant:
-        governed_call(ig, cx, ic, "flag_dormant_activation",
-                      {"alert": dormant.alert_id, "days": last_activity_days})
+        governed_call(
+            ig,
+            cx,
+            ic,
+            "flag_dormant_activation",
+            {"alert": dormant.alert_id, "days": last_activity_days},
+        )
         result.alerts.append(dormant)
 
     # Geographic risk
     geo = monitor.score_geographic_risk(tx)
     if geo:
-        governed_call(ig, cx, ic, "score_geographic_risk",
-                      {"country": tx.country, "score": geo.risk_score})
+        governed_call(
+            ig, cx, ic, "score_geographic_risk", {"country": tx.country, "score": geo.risk_score}
+        )
         result.alerts.append(geo)
 
     # ── Stage 2: Velocity Analyzer ────────────────────────────
@@ -682,19 +760,30 @@ def run_pipeline(
     ic2 = interceptors["velocity"]
     cx2 = contexts["velocity"]
 
-    governed_call(ig2, cx2, ic2, "check_daily_velocity",
-                  {"tx_id": tx.tx_id, "daily_total": daily_total})
+    governed_call(
+        ig2, cx2, ic2, "check_daily_velocity", {"tx_id": tx.tx_id, "daily_total": daily_total}
+    )
 
     vel_alert = velocity.check_velocity(tx, daily_total, weekly_total)
     if vel_alert:
-        governed_call(ig2, cx2, ic2, "detect_activity_spike",
-                      {"alert": vel_alert.alert_id, "score": vel_alert.risk_score})
+        governed_call(
+            ig2,
+            cx2,
+            ic2,
+            "detect_activity_spike",
+            {"alert": vel_alert.alert_id, "score": vel_alert.risk_score},
+        )
         result.alerts.append(vel_alert)
 
     spike = velocity.detect_activity_spike(tx, avg_monthly_count, current_month_count)
     if spike:
-        governed_call(ig2, cx2, ic2, "detect_activity_spike",
-                      {"alert": spike.alert_id, "count": current_month_count})
+        governed_call(
+            ig2,
+            cx2,
+            ic2,
+            "detect_activity_spike",
+            {"alert": spike.alert_id, "count": current_month_count},
+        )
         result.alerts.append(spike)
 
     # ── Stage 3: Sanctions Screener ───────────────────────────
@@ -703,20 +792,17 @@ def run_pipeline(
     ic3 = interceptors["screener"]
     cx3 = contexts["screener"]
 
-    governed_call(ig3, cx3, ic3, "screen_ofac",
-                  {"name": tx.receiver, "tx_id": tx.tx_id})
+    governed_call(ig3, cx3, ic3, "screen_ofac", {"name": tx.receiver, "tx_id": tx.tx_id})
     ofac = screener.screen_ofac(tx.receiver, tx)
     if ofac:
         result.alerts.append(ofac)
 
-    governed_call(ig3, cx3, ic3, "screen_country",
-                  {"country": tx.country, "tx_id": tx.tx_id})
+    governed_call(ig3, cx3, ic3, "screen_country", {"country": tx.country, "tx_id": tx.tx_id})
     country_hit = screener.screen_country(tx.country, tx)
     if country_hit:
         result.alerts.append(country_hit)
 
-    governed_call(ig3, cx3, ic3, "screen_pep",
-                  {"name": tx.receiver, "tx_id": tx.tx_id})
+    governed_call(ig3, cx3, ic3, "screen_pep", {"name": tx.receiver, "tx_id": tx.tx_id})
     pep_hit = screener.screen_pep(tx.receiver, tx)
     if pep_hit:
         result.alerts.append(pep_hit)
@@ -731,14 +817,18 @@ def run_pipeline(
         ic4 = interceptors["filer"]
         cx4 = contexts["filer"]
 
-        governed_call(ig4, cx4, ic4, "generate_sar",
-                      {"subject": tx.receiver, "alert_count": len(result.alerts)})
+        governed_call(
+            ig4,
+            cx4,
+            ic4,
+            "generate_sar",
+            {"subject": tx.receiver, "alert_count": len(result.alerts)},
+        )
         sar = filer.generate_sar(tx.receiver, result.alerts, tx.amount)
         result.sar = sar
 
         # Attempt submission — requires human approval
-        governed_call(ig4, cx4, ic4, "submit_sar",
-                      {"sar_id": sar.sar_id, "subject": tx.receiver})
+        governed_call(ig4, cx4, ic4, "submit_sar", {"sar_id": sar.sar_id, "subject": tx.receiver})
 
         result.final_decision = "SAR_FILED"
     elif result.alerts:
@@ -754,6 +844,7 @@ def run_pipeline(
 # ═══════════════════════════════════════════════════════════════════════════
 # 10. DISPLAY HELPERS
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def print_header(title: str) -> None:
     width = 72
@@ -772,22 +863,28 @@ def print_scenario(num: int, title: str) -> None:
 def print_result(pr: PipelineResult) -> None:
     tx = pr.transaction
     status_icon = {"CLEAR": "✅", "ELEVATED_REVIEW": "⚠️", "SAR_FILED": "🚨"}.get(
-        pr.final_decision, "❓")
+        pr.final_decision, "❓"
+    )
     print(f"\n  Result: {status_icon} {pr.final_decision}")
-    print(f"  Transaction: {tx.tx_id} │ ${tx.amount:,.2f} │ "
-          f"{tx.sender} → {tx.receiver} │ {tx.country}")
+    print(
+        f"  Transaction: {tx.tx_id} │ ${tx.amount:,.2f} │ "
+        f"{tx.sender} → {tx.receiver} │ {tx.country}"
+    )
     if pr.alerts:
         print(f"  Alerts ({len(pr.alerts)}):")
         for a in pr.alerts:
             print(f"    • [{a.alert_type}] score={a.risk_score:.2f} — {a.description}")
     if pr.sar:
-        print(f"  SAR: {pr.sar.sar_id} │ status={pr.sar.status} │ "
-              f"deadline={pr.sar.filing_deadline.strftime('%Y-%m-%d') if pr.sar.filing_deadline else 'N/A'}")
+        print(
+            f"  SAR: {pr.sar.sar_id} │ status={pr.sar.status} │ "
+            f"deadline={pr.sar.filing_deadline.strftime('%Y-%m-%d') if pr.sar.filing_deadline else 'N/A'}"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 11. DEMO SCENARIOS
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def create_agents_and_governance():
     """Set up all agents, integrations, contexts, and interceptors."""
@@ -854,8 +951,11 @@ def run_demo() -> None:
         tx_counter[0] += 1
         return Transaction(
             tx_id=f"TX-{tx_counter[0]:04d}",
-            amount=amount, sender=sender, receiver=receiver,
-            country=country, description=desc,
+            amount=amount,
+            sender=sender,
+            receiver=receiver,
+            country=country,
+            description=desc,
         )
 
     # ── Scenario 1: Normal transaction ────────────────────────
@@ -871,24 +971,30 @@ def run_demo() -> None:
         make_tx(9_500.00, "John Smith", "Shell Co Alpha", desc="Consulting 2"),
     ]
     tx2 = make_tx(9_500.00, "John Smith", "Shell Co Alpha", desc="Consulting 3")
-    r2 = run_pipeline(tx2, integrations, contexts, interceptors, agents,
-                      extra_txs=struct_txs)
+    r2 = run_pipeline(tx2, integrations, contexts, interceptors, agents, extra_txs=struct_txs)
     print_result(r2)
 
     # ── Scenario 3: OFAC sanctions hit ────────────────────────
     print_scenario(3, "OFAC sanctions hit")
-    tx3 = make_tx(25_000.00, "Global Imports", "Viktor Bout",
-                  country="Russia", desc="Arms dealer")
+    tx3 = make_tx(25_000.00, "Global Imports", "Viktor Bout", country="Russia", desc="Arms dealer")
     r3 = run_pipeline(tx3, integrations, contexts, interceptors, agents)
     print_result(r3)
 
     # ── Scenario 4: Dormant account spike ─────────────────────
     print_scenario(4, "Dormant account activation (270 days idle)")
-    tx4 = make_tx(45_000.00, "Dormant Holdings LLC", "Offshore Trust",
-                  desc="Sudden reactivation")
-    r4 = run_pipeline(tx4, integrations, contexts, interceptors, agents,
-                      last_activity_days=270, daily_total=0, weekly_total=0,
-                      avg_monthly_count=2, current_month_count=15)
+    tx4 = make_tx(45_000.00, "Dormant Holdings LLC", "Offshore Trust", desc="Sudden reactivation")
+    r4 = run_pipeline(
+        tx4,
+        integrations,
+        contexts,
+        interceptors,
+        agents,
+        last_activity_days=270,
+        daily_total=0,
+        weekly_total=0,
+        avg_monthly_count=2,
+        current_month_count=15,
+    )
     print_result(r4)
 
     # ── Scenario 5: Round-trip laundering ─────────────────────
@@ -899,34 +1005,39 @@ def run_demo() -> None:
         make_tx(49_000.00, "Gamma Trust", "Alpha Fund", desc="Return"),
     ]
     tx5 = make_tx(48_500.00, "Alpha Fund", "Beta Holdings", desc="Reinvestment")
-    r5 = run_pipeline(tx5, integrations, contexts, interceptors, agents,
-                      extra_txs=rt_txs)
+    r5 = run_pipeline(tx5, integrations, contexts, interceptors, agents, extra_txs=rt_txs)
     print_result(r5)
 
     # ── Scenario 6: PEP transaction ───────────────────────────
     print_scenario(6, "Politically Exposed Person (PEP)")
-    tx6 = make_tx(120_000.00, "Swiss Bank AG", "Carlos Mendez",
-                  country="Panama", desc="Wealth management")
+    tx6 = make_tx(
+        120_000.00, "Swiss Bank AG", "Carlos Mendez", country="Panama", desc="Wealth management"
+    )
     r6 = run_pipeline(tx6, integrations, contexts, interceptors, agents)
     print_result(r6)
 
     # ── Scenario 7: High-risk jurisdiction ────────────────────
     print_scenario(7, "High-risk jurisdiction (Iran)")
-    tx7 = make_tx(75_000.00, "Trade Corp", "Tehran Imports",
-                  country="Iran", desc="Commercial goods")
+    tx7 = make_tx(
+        75_000.00, "Trade Corp", "Tehran Imports", country="Iran", desc="Commercial goods"
+    )
     r7 = run_pipeline(tx7, integrations, contexts, interceptors, agents)
     print_result(r7)
 
     # ── Scenario 8: SAR filing with human approval gate ───────
     print_scenario(8, "SAR filing — human approval required")
     print("\n  (This scenario demonstrates the governance gate on SAR submission)")
-    tx8 = make_tx(500_000.00, "Unknown Sender", "Al-Rashid Trading Co",
-                  country="Iran", desc="Suspicious large transfer")
-    r8 = run_pipeline(tx8, integrations, contexts, interceptors, agents,
-                      daily_total=480_000)
+    tx8 = make_tx(
+        500_000.00,
+        "Unknown Sender",
+        "Al-Rashid Trading Co",
+        country="Iran",
+        desc="Suspicious large transfer",
+    )
+    r8 = run_pipeline(tx8, integrations, contexts, interceptors, agents, daily_total=480_000)
     print_result(r8)
     if r8.sar:
-        print(f"\n  SAR Narrative:\n")
+        print("\n  SAR Narrative:\n")
         for line in r8.sar.narrative.split("\n"):
             print(f"    {line}")
 
@@ -940,17 +1051,21 @@ def run_demo() -> None:
     print(f"  Blocked calls: {len(blocked)}")
     print(f"  Checkpoints:   {len(checkpoints)}")
 
-    print(f"\n  Blocked calls detail:")
+    print("\n  Blocked calls detail:")
     for i, entry in enumerate(blocked, 1):
-        print(f"    {i}. [{entry.get('agent_id')}] tool={entry.get('tool')} "
-              f"— {entry.get('reason', '')[:80]}")
+        print(
+            f"    {i}. [{entry.get('agent_id')}] tool={entry.get('tool')} "
+            f"— {entry.get('reason', '')[:80]}"
+        )
 
     # ── Agent Context Summary ─────────────────────────────────
     print_header("Agent Context Summary")
     for key in ("monitor", "velocity", "screener", "filer"):
         cx = contexts[key]
-        print(f"  {key:<12} │ calls={cx.call_count:>2}/{cx.policy.max_tool_calls:<3} "
-              f"│ checkpoints={len(cx.checkpoints)}")
+        print(
+            f"  {key:<12} │ calls={cx.call_count:>2}/{cx.policy.max_tool_calls:<3} "
+            f"│ checkpoints={len(cx.checkpoints)}"
+        )
 
     # ── Export audit trail ────────────────────────────────────
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -962,8 +1077,8 @@ def run_demo() -> None:
     print_header("Audit Trail Exported")
     print(f"  JSON: {json_path}")
     print(f"  CSV:  {csv_path}")
-    print(f"\n  Immutable record for BSA/AML compliance review.")
-    print(f"  Retention: 5 years per 31 USC §5318(g).\n")
+    print("\n  Immutable record for BSA/AML compliance review.")
+    print("  Retention: 5 years per 31 USC §5318(g).\n")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -10,23 +10,18 @@ the post-MSRC security audit.
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
-from agentmesh.identity import AgentIdentity, AgentDID
+from agentmesh.identity import AgentDID, AgentIdentity
 from agentmesh.identity.agent_id import IdentityRegistry
+from agentmesh.trust.bridge import TrustBridge
 from agentmesh.trust.handshake import (
     TrustHandshake,
-    HandshakeChallenge,
-    HandshakeResult,
 )
-from agentmesh.trust.bridge import TrustBridge
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -143,7 +138,9 @@ class TestPluginPathTraversal:
     def test_dotdot_in_plugin_name_rejected(self, tmp_path: Path):
         """Plugin name with path traversal chars is rejected by validator."""
         from agentmesh.marketplace import (
-            PluginManifest, PluginType, MarketplaceError,
+            MarketplaceError,
+            PluginManifest,
+            PluginType,
         )
 
         # URL-encoded traversal — rejected because of '.' and '%' chars
@@ -159,7 +156,9 @@ class TestPluginPathTraversal:
     def test_dotdot_raw_in_plugin_name_rejected(self, tmp_path: Path):
         """Plugin name with raw '../' is rejected by validator."""
         from agentmesh.marketplace import (
-            PluginManifest, PluginType, MarketplaceError,
+            MarketplaceError,
+            PluginManifest,
+            PluginType,
         )
 
         with pytest.raises(MarketplaceError, match="alphanumeric"):
@@ -173,7 +172,7 @@ class TestPluginPathTraversal:
 
     def test_absolute_path_plugin_name(self, tmp_path: Path):
         """Plugin name that looks like an absolute path."""
-        from agentmesh.marketplace import PluginManifest, PluginType, MarketplaceError
+        from agentmesh.marketplace import MarketplaceError, PluginManifest, PluginType
 
         try:
             manifest = PluginManifest(
@@ -244,12 +243,14 @@ class TestSignatureVerificationRobustness:
         """Ed25519 signatures are 64 bytes; truncated ones must fail."""
         agent = _create_agent("test")
         import base64
+
         truncated = base64.b64encode(b"\x00" * 32).decode()  # 32 bytes, not 64
         assert agent.verify_signature(b"data", truncated) is False
 
     def test_all_zeros_signature(self):
         agent = _create_agent("test")
         import base64
+
         zeros = base64.b64encode(b"\x00" * 64).decode()
         assert agent.verify_signature(b"data", zeros) is False
 
@@ -394,7 +395,10 @@ class TestPluginSignatureBypass:
         regardless of verify=True. This is a configuration weakness.
         """
         from agentmesh.marketplace import (
-            PluginInstaller, PluginRegistry, PluginManifest, PluginType,
+            PluginInstaller,
+            PluginManifest,
+            PluginRegistry,
+            PluginType,
         )
 
         registry = PluginRegistry()
@@ -420,8 +424,12 @@ class TestPluginSignatureBypass:
         """Plugin signed by an unknown key should be rejected if author
         has a different trusted key registered."""
         from agentmesh.marketplace import (
-            PluginInstaller, PluginRegistry, PluginManifest, PluginType,
-            PluginSigner, MarketplaceError,
+            MarketplaceError,
+            PluginInstaller,
+            PluginManifest,
+            PluginRegistry,
+            PluginSigner,
+            PluginType,
         )
 
         attacker_key = ed25519.Ed25519PrivateKey.generate()
@@ -467,8 +475,10 @@ class TestHandshakeChallengeDoS:
     @pytest.mark.asyncio
     async def test_expired_challenge_rejected_in_verify(self):
         """Expired challenges must be rejected during verification."""
+        import base64
+        import secrets
+
         from agentmesh.trust.handshake import HandshakeResponse
-        import secrets, base64
 
         handshake, agent_a, agent_b, registry = _setup_handshake()
         challenge = handshake.create_challenge()
@@ -630,7 +640,8 @@ class TestPeerRecordIntegrity:
             registry=registry,
         )
         result = await bridge.verify_peer(
-            peer_did=str(agent_b.did), required_trust_score=500,
+            peer_did=str(agent_b.did),
+            required_trust_score=500,
         )
         assert result.verified is True
 
@@ -657,7 +668,8 @@ class TestPeerRecordIntegrity:
             registry=registry,
         )
         await bridge.verify_peer(
-            peer_did=str(agent_b.did), required_trust_score=500,
+            peer_did=str(agent_b.did),
+            required_trust_score=500,
         )
 
         # Tamper with capabilities
@@ -680,7 +692,8 @@ class TestPeerRecordIntegrity:
             registry=registry,
         )
         await bridge.verify_peer(
-            peer_did=str(agent_b.did), required_trust_score=500,
+            peer_did=str(agent_b.did),
+            required_trust_score=500,
         )
         trusted = await bridge.is_peer_trusted(str(agent_b.did), required_score=500)
         assert trusted is True
@@ -700,7 +713,8 @@ class TestPeerRecordIntegrity:
             registry=registry,
         )
         await bridge.verify_peer(
-            peer_did=str(agent_b.did), required_trust_score=500,
+            peer_did=str(agent_b.did),
+            required_trust_score=500,
         )
         # Delete the stored signature
         bridge._peer_signatures.pop(str(agent_b.did), None)
@@ -837,14 +851,18 @@ class TestMCPCircuitBreaker:
         # Fail 3 times to open the circuit
         for _ in range(3):
             call = await server.invoke_tool(
-                "broken_tool", {}, "did:mesh:caller",
+                "broken_tool",
+                {},
+                "did:mesh:caller",
                 caller_trust_score=500,
             )
             assert call.success is not True
 
         # 4th call should be blocked by circuit breaker
         call = await server.invoke_tool(
-            "broken_tool", {}, "did:mesh:caller",
+            "broken_tool",
+            {},
+            "did:mesh:caller",
             caller_trust_score=500,
         )
         assert call.error is not None
@@ -877,16 +895,25 @@ class TestMCPCircuitBreaker:
 
         # 2 failures
         await server.invoke_tool(
-            "flaky_tool", {}, "did:mesh:caller", caller_trust_score=500,
+            "flaky_tool",
+            {},
+            "did:mesh:caller",
+            caller_trust_score=500,
         )
         await server.invoke_tool(
-            "flaky_tool", {}, "did:mesh:caller", caller_trust_score=500,
+            "flaky_tool",
+            {},
+            "did:mesh:caller",
+            caller_trust_score=500,
         )
         assert server._tool_failures.get("flaky_tool", 0) == 2
 
         # 1 success should reset the counter
         call = await server.invoke_tool(
-            "flaky_tool", {}, "did:mesh:caller", caller_trust_score=500,
+            "flaky_tool",
+            {},
+            "did:mesh:caller",
+            caller_trust_score=500,
         )
         assert call.success is True
         assert server._tool_failures.get("flaky_tool", 0) == 0
@@ -921,7 +948,10 @@ class TestPIISanitizationInErrors:
         )
 
         call = await server.invoke_tool(
-            "pii_tool", {}, "did:mesh:caller", caller_trust_score=500,
+            "pii_tool",
+            {},
+            "did:mesh:caller",
+            caller_trust_score=500,
         )
         assert call.error is not None
         # Error message should be truncated to 200 chars + type prefix

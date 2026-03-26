@@ -99,7 +99,9 @@ class VerificationIdentity:
         signature_bytes = private_key_obj.sign(data.encode("utf-8"))
         signature_b64 = base64.b64encode(signature_bytes).decode("ascii")
 
-        return VerificationSignature(public_key=self.public_key, signature=signature_b64)
+        return VerificationSignature(
+            public_key=self.public_key, signature=signature_b64
+        )
 
     def verify_signature(self, data: str, signature: VerificationSignature) -> bool:
         """Verify a signature against this identity's public key."""

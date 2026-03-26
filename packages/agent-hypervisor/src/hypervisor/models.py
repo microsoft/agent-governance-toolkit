@@ -149,9 +149,7 @@ class SessionConfig:
                 f"max_participants must be an integer, got {type(self.max_participants).__name__}"
             )
         if self.max_participants < 1:
-            raise ValueError(
-                f"max_participants must be at least 1, got {self.max_participants}"
-            )
+            raise ValueError(f"max_participants must be at least 1, got {self.max_participants}")
         if self.max_participants > _MAX_PARTICIPANTS_LIMIT:
             raise ValueError(
                 f"max_participants must not exceed {_MAX_PARTICIPANTS_LIMIT}, "
@@ -176,9 +174,7 @@ class SessionConfig:
                 f"min_eff_score must be a number, got {type(self.min_eff_score).__name__}"
             )
         if not (0.0 <= self.min_eff_score <= 1.0):
-            raise ValueError(
-                f"min_eff_score must be between 0.0 and 1.0, got {self.min_eff_score}"
-            )
+            raise ValueError(f"min_eff_score must be between 0.0 and 1.0, got {self.min_eff_score}")
 
 
 @dataclass
@@ -198,25 +194,15 @@ class SessionParticipant:
             try:
                 self.ring = ExecutionRing(self.ring)
             except (ValueError, KeyError):
-                raise ValueError(
-                    f"ring must be a valid ExecutionRing (0-3), got {self.ring!r}"
-                )
+                raise ValueError(f"ring must be a valid ExecutionRing (0-3), got {self.ring!r}")
         if not isinstance(self.sigma_raw, (int, float)):
-            raise TypeError(
-                f"sigma_raw must be a number, got {type(self.sigma_raw).__name__}"
-            )
+            raise TypeError(f"sigma_raw must be a number, got {type(self.sigma_raw).__name__}")
         if not (0.0 <= self.sigma_raw <= 1.0):
-            raise ValueError(
-                f"sigma_raw must be between 0.0 and 1.0, got {self.sigma_raw}"
-            )
+            raise ValueError(f"sigma_raw must be between 0.0 and 1.0, got {self.sigma_raw}")
         if not isinstance(self.eff_score, (int, float)):
-            raise TypeError(
-                f"eff_score must be a number, got {type(self.eff_score).__name__}"
-            )
+            raise TypeError(f"eff_score must be a number, got {type(self.eff_score).__name__}")
         if not (0.0 <= self.eff_score <= 1.0):
-            raise ValueError(
-                f"eff_score must be between 0.0 and 1.0, got {self.eff_score}"
-            )
+            raise ValueError(f"eff_score must be between 0.0 and 1.0, got {self.eff_score}")
 
 
 @dataclass
@@ -238,9 +224,7 @@ class ActionDescriptor:
         if not isinstance(self.name, str) or not self.name.strip():
             raise ValueError("name must be a non-empty string")
         if len(self.name) > _MAX_NAME_LENGTH:
-            raise ValueError(
-                f"name exceeds maximum length of {_MAX_NAME_LENGTH} characters"
-            )
+            raise ValueError(f"name exceeds maximum length of {_MAX_NAME_LENGTH} characters")
         _validate_api_path(self.execute_api, "execute_api")
         if self.undo_api is not None:
             _validate_api_path(self.undo_api, "undo_api")

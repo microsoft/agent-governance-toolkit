@@ -8,7 +8,7 @@ import pytest
 
 from agentmesh.constants import DEFAULT_DELEGATION_MAX_DEPTH
 from agentmesh.exceptions import DelegationDepthError
-from agentmesh.identity.delegation import ScopeChain, DelegationLink
+from agentmesh.identity.delegation import DelegationLink, ScopeChain
 
 
 def _make_link(depth: int, parent_did: str, child_did: str, previous_hash: str | None = None):

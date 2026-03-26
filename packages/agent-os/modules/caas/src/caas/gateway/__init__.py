@@ -8,12 +8,12 @@ to address CISO concerns about data security and privacy.
 """
 
 from caas.gateway.trust_gateway import (
-    TrustGateway,
-    DeploymentMode,
-    SecurityPolicy,
-    SecurityLevel,
     AuditLog,
-    DataRetentionPolicy
+    DataRetentionPolicy,
+    DeploymentMode,
+    SecurityLevel,
+    SecurityPolicy,
+    TrustGateway,
 )
 
 __all__ = [
@@ -22,6 +22,5 @@ __all__ = [
     "SecurityPolicy",
     "SecurityLevel",
     "AuditLog",
-    "DataRetentionPolicy"
+    "DataRetentionPolicy",
 ]
-

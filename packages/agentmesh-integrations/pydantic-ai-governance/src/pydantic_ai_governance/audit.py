@@ -50,9 +50,12 @@ class AuditTrail:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> AuditEntry:
         entry = AuditEntry(
-            timestamp=time.time(), event_type=event_type,
-            tool_name=tool_name, allowed=allowed,
-            reason=reason, agent_id=agent_id,
+            timestamp=time.time(),
+            event_type=event_type,
+            tool_name=tool_name,
+            allowed=allowed,
+            reason=reason,
+            agent_id=agent_id,
             metadata=metadata or {},
         )
         self._entries.append(entry)

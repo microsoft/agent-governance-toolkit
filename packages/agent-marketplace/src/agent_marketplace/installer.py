@@ -211,4 +211,3 @@ def _parse_dependency(dep_spec: str) -> tuple[str, Optional[str]]:
             name, version = dep_spec.split(op, 1)
             return name.strip(), version.strip()
     return dep_spec.strip(), None
-

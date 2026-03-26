@@ -8,7 +8,8 @@ Run with: pip install agent-os-kernel && python my_first_agent.py
 """
 
 import asyncio
-from agent_os.stateless import StatelessKernel, ExecutionContext
+
+from agent_os.stateless import ExecutionContext, StatelessKernel
 
 
 async def main():

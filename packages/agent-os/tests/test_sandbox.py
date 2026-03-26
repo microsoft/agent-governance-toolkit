@@ -14,7 +14,6 @@ from agent_os.sandbox import (
     SecurityViolation,
 )
 
-
 # ---------------------------------------------------------------------------
 # SandboxConfig
 # ---------------------------------------------------------------------------
@@ -93,22 +92,16 @@ class TestCheckFileAccess:
         assert sandbox.check_file_access("/etc/passwd", "r") is False
 
     def test_allowed_path_grants_access(self):
-        sandbox = ExecutionSandbox(
-            config=SandboxConfig(allowed_paths=["/tmp/sandbox"])
-        )
+        sandbox = ExecutionSandbox(config=SandboxConfig(allowed_paths=["/tmp/sandbox"]))
         assert sandbox.check_file_access("/tmp/sandbox/data.txt", "r") is True
 
     def test_outside_allowed_path_blocked(self):
-        sandbox = ExecutionSandbox(
-            config=SandboxConfig(allowed_paths=["/tmp/sandbox"])
-        )
+        sandbox = ExecutionSandbox(config=SandboxConfig(allowed_paths=["/tmp/sandbox"]))
         assert sandbox.check_file_access("/etc/passwd", "r") is False
 
     @pytest.mark.skipif(sys.platform != "win32", reason="Windows-specific path handling")
     def test_windows_paths(self):
-        sandbox = ExecutionSandbox(
-            config=SandboxConfig(allowed_paths=["C:/Users/agent/workspace"])
-        )
+        sandbox = ExecutionSandbox(config=SandboxConfig(allowed_paths=["C:/Users/agent/workspace"]))
         assert sandbox.check_file_access("C:\\Users\\agent\\workspace\\f.txt", "r") is True
 
 
@@ -251,9 +244,7 @@ class TestSandboxImportHook:
 
 class TestExecuteSandboxed:
     def test_sandboxed_blocks_import(self):
-        sandbox = ExecutionSandbox(
-            config=SandboxConfig(blocked_modules=["fake_sandbox_test_mod"])
-        )
+        sandbox = ExecutionSandbox(config=SandboxConfig(blocked_modules=["fake_sandbox_test_mod"]))
 
         def bad_func():
             __import__("fake_sandbox_test_mod")
@@ -289,8 +280,11 @@ class TestExecuteSandboxed:
 class TestSecurityViolation:
     def test_fields(self):
         v = SecurityViolation(
-            line=10, column=4, violation_type="blocked_import",
-            description="bad import", severity="critical",
+            line=10,
+            column=4,
+            violation_type="blocked_import",
+            description="bad import",
+            severity="critical",
         )
         assert v.line == 10
         assert v.column == 4
@@ -298,6 +292,9 @@ class TestSecurityViolation:
 
     def test_default_severity(self):
         v = SecurityViolation(
-            line=1, column=0, violation_type="test", description="test",
+            line=1,
+            column=0,
+            violation_type="test",
+            description="test",
         )
         assert v.severity == "high"

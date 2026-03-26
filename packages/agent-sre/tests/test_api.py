@@ -20,6 +20,7 @@ from agent_sre.slo.objectives import SLO, ErrorBudget
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_slo(name: str, target: float = 0.95) -> SLO:
     """Create a simple SLO for testing."""
     sli = TaskSuccessRate(target=target, window="1h")
@@ -59,6 +60,7 @@ def _url(server: AgentSREServer, path: str) -> str:
 # CostSnapshot unit tests
 # ---------------------------------------------------------------------------
 
+
 class TestCostSnapshot:
     def test_defaults(self):
         snap = CostSnapshot()
@@ -86,6 +88,7 @@ class TestCostSnapshot:
 # ---------------------------------------------------------------------------
 # APIState unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestAPIState:
     def test_add_and_get_slo(self):
@@ -178,6 +181,7 @@ class TestAPIState:
 # ---------------------------------------------------------------------------
 # HTTP endpoint tests
 # ---------------------------------------------------------------------------
+
 
 class TestHealthEndpoint:
     def test_health(self, api_server):
@@ -272,11 +276,13 @@ class TestCostEndpoint:
 
     def test_cost_with_data(self, api_server):
         state, server = api_server
-        state.update_cost(CostSnapshot(
-            total_usd=15.5,
-            per_agent={"agent-a": 10.0, "agent-b": 5.5},
-            budget_usd=50.0,
-        ))
+        state.update_cost(
+            CostSnapshot(
+                total_usd=15.5,
+                per_agent={"agent-a": 10.0, "agent-b": 5.5},
+                budget_usd=50.0,
+            )
+        )
         status, body = _get(_url(server, "/api/cost"))
         assert status == 200
         assert body["total_usd"] == 15.5

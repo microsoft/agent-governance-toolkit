@@ -1,6 +1,5 @@
 """Tests for core modules that don't require openai-agents SDK."""
 
-import time
 import threading
 from openai_agents_trust.identity import AgentIdentity
 from openai_agents_trust.trust import TrustScorer, TrustScore
@@ -10,9 +9,12 @@ from openai_agents_trust.audit import AuditLog
 
 # === Identity Tests ===
 
+
 class TestAgentIdentity:
     def test_create_identity(self):
-        identity = AgentIdentity(agent_id="agent-1", name="Researcher", secret_key="secret123")
+        identity = AgentIdentity(
+            agent_id="agent-1", name="Researcher", secret_key="secret123"
+        )
         assert identity.agent_id == "agent-1"
         assert identity.name == "Researcher"
 
@@ -41,6 +43,7 @@ class TestAgentIdentity:
 
 
 # === Trust Tests ===
+
 
 class TestTrustScore:
     def test_default_scores(self):
@@ -108,6 +111,7 @@ class TestTrustScorer:
 
 # === Policy Tests ===
 
+
 class TestGovernancePolicy:
     def test_default_policy(self):
         policy = GovernancePolicy()
@@ -146,6 +150,7 @@ class TestGovernancePolicy:
 
 
 # === Audit Tests ===
+
 
 class TestAuditLog:
     def test_record_entry(self):
@@ -196,6 +201,7 @@ class TestAuditLog:
 
     def test_thread_safety(self):
         log = AuditLog()
+
         def writer(n):
             for i in range(50):
                 log.record(f"agent-{n}", f"action-{i}", "allow")

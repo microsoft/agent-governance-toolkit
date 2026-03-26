@@ -9,9 +9,9 @@ passed through the public API.  Hot/Warm/Cold labels are preserved on
 each item for compatibility but do not affect retrieval behaviour.
 """
 
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from caas.models import ContextLayer, ContextTriadItem, ContextTriadState
 
@@ -108,12 +108,16 @@ class ContextTriadManager:
     def get_hot_context(self, max_tokens: int = 1000, include_metadata: bool = False) -> str:
         """Return items labelled *hot*."""
         items = [i for i in self.state.hot_context if i.layer == ContextLayer.HOT]
-        return self._format_items(items, "Hot Context (Current Situation)", max_tokens, include_metadata)
+        return self._format_items(
+            items, "Hot Context (Current Situation)", max_tokens, include_metadata
+        )
 
     def get_warm_context(self, max_tokens: int = 500, include_metadata: bool = False) -> str:
         """Return items labelled *warm*."""
         items = [i for i in self.state.hot_context if i.layer == ContextLayer.WARM]
-        return self._format_items(items, "Warm Context (User Persona)", max_tokens, include_metadata)
+        return self._format_items(
+            items, "Warm Context (User Persona)", max_tokens, include_metadata
+        )
 
     def get_cold_context(
         self,
@@ -126,7 +130,9 @@ class ContextTriadManager:
         if query:
             q = query.lower()
             items = [i for i in items if q in i.content.lower() or q in str(i.metadata).lower()]
-        return self._format_items(items, "Cold Context (Historical Archive)", max_tokens, include_metadata)
+        return self._format_items(
+            items, "Cold Context (Historical Archive)", max_tokens, include_metadata
+        )
 
     def get_full_context(
         self,
@@ -170,7 +176,9 @@ class ContextTriadManager:
                 result["total_tokens"] += len(ctx) // 4
 
         if include_cold and cold_query:
-            ctx = self.get_cold_context(cold_query, max_tokens_per_layer.get("cold", 1000), include_metadata)
+            ctx = self.get_cold_context(
+                cold_query, max_tokens_per_layer.get("cold", 1000), include_metadata
+            )
             if ctx:
                 result["cold_context"] = ctx
                 result["layers_included"].append("cold")

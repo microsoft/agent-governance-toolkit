@@ -113,16 +113,16 @@ from agentmesh import TrustHandshake
 # Before writer accepts work from researcher
 async def governed_task_handoff(from_agent, to_agent, task):
     handshake = TrustHandshake()
-    
+
     # Verify peer
     result = await handshake.verify(
         peer_did=from_agent.agentmesh_identity.did,
         required_score=700
     )
-    
+
     if not result.verified:
         raise SecurityError(f"Untrusted peer: {result.reason}")
-    
+
     # Accept task
     return to_agent.execute(task)
 ```
@@ -138,12 +138,12 @@ reward_engine = RewardEngine()
 def update_crew_scores(crew):
     for agent in crew.agents:
         identity = agent.agentmesh_identity
-        
+
         # Score based on:
         # - Task completion quality
         # - Collaboration with other agents
         # - Policy compliance
-        
+
         score = reward_engine.update_score(
             agent_id=identity.did,
             dimensions={
@@ -152,7 +152,7 @@ def update_crew_scores(crew):
                 "policy_compliance": 1.0
             }
         )
-        
+
         print(f"{agent.role}: {score.total}/1000")
 ```
 
@@ -169,16 +169,16 @@ def governed_task_execution(task, agent):
         agent=agent.agentmesh_identity.did,
         task=task.description
     )
-    
+
     if not result.allowed:
         raise PermissionError(f"Policy violation: {result.reason}")
-    
+
     # Execute task
     output = agent.execute_task(task)
-    
+
     # Audit
     audit_log.log("task_completed", agent=agent.role, task=task.description)
-    
+
     return output
 ```
 

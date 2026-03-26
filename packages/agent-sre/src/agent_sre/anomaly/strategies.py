@@ -106,16 +106,14 @@ class SequentialStrategy:
         if observed == 0:
             score = 1.0
             explanation = (
-                f"transition '{last_item}' -> '{new_item}' never seen "
-                f"({total_transitions} samples)"
+                f"transition '{last_item}' -> '{new_item}' never seen ({total_transitions} samples)"
             )
             return True, score, explanation
 
         if frequency < 0.05:
             score = 1.0 - frequency
             explanation = (
-                f"transition '{last_item}' -> '{new_item}' is rare "
-                f"(frequency {frequency:.2%})"
+                f"transition '{last_item}' -> '{new_item}' is rare (frequency {frequency:.2%})"
             )
             return True, score, explanation
 
@@ -144,11 +142,19 @@ class ResourceStrategy:
         Returns (is_anomaly, score).
         """
         # Check explicit budgets
-        if self.token_budget is not None and "token" in metric_name.lower() and value > self.token_budget:
+        if (
+            self.token_budget is not None
+            and "token" in metric_name.lower()
+            and value > self.token_budget
+        ):
             score = value / self.token_budget if self.token_budget > 0 else 1.0
             return True, score
 
-        if self.api_rate_limit is not None and "api" in metric_name.lower() and value > self.api_rate_limit:
+        if (
+            self.api_rate_limit is not None
+            and "api" in metric_name.lower()
+            and value > self.api_rate_limit
+        ):
             score = value / self.api_rate_limit if self.api_rate_limit > 0 else 1.0
             return True, score
 

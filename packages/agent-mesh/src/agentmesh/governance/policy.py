@@ -11,14 +11,15 @@ Supports schema versioning via ``apiVersion`` (e.g.,
 warnings; unknown versions raise ``ValueError``.
 """
 
-from datetime import datetime
-from typing import Optional, Literal, Any
-from pydantic import BaseModel, Field
-import logging
-import warnings
-import yaml
 import json
+import logging
 import re
+import warnings
+from datetime import datetime
+from typing import Any, Literal
+
+import yaml
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -40,18 +41,16 @@ class PolicyRule(BaseModel):
     """
 
     name: str = Field(..., description="Rule name")
-    description: Optional[str] = Field(None)
+    description: str | None = Field(None)
 
     # Condition
     condition: str = Field(..., description="Condition expression")
 
     # Action
-    action: Literal["allow", "deny", "warn", "require_approval", "log"] = Field(
-        default="deny"
-    )
+    action: Literal["allow", "deny", "warn", "require_approval", "log"] = Field(default="deny")
 
     # Rate limiting
-    limit: Optional[str] = Field(None, description="Rate limit (e.g., '100/hour')")
+    limit: str | None = Field(None, description="Rate limit (e.g., '100/hour')")
 
     # Approval workflow
     approvers: list[str] = Field(default_factory=list)
@@ -165,10 +164,10 @@ class Policy(BaseModel):
     )
     version: str = Field(default="1.0")
     name: str = Field(...)
-    description: Optional[str] = Field(None)
+    description: str | None = Field(None)
 
     # Target
-    agent: Optional[str] = Field(None, description="Agent this policy applies to")
+    agent: str | None = Field(None, description="Agent this policy applies to")
     agents: list[str] = Field(default_factory=list, description="Multiple agents")
 
     # Scope for conflict resolution
@@ -293,25 +292,27 @@ class PolicyDecision(BaseModel):
     action: Literal["allow", "deny", "warn", "require_approval", "log"]
 
     # Which rule matched
-    matched_rule: Optional[str] = None
-    policy_name: Optional[str] = None
+    matched_rule: str | None = None
+    policy_name: str | None = None
 
     # Details
-    reason: Optional[str] = None
+    reason: str | None = None
 
     # For require_approval
     approvers: list[str] = Field(default_factory=list)
 
     # For rate limiting
     rate_limited: bool = False
-    rate_limit_reset: Optional[datetime] = None
+    rate_limit_reset: datetime | None = None
 
     # Timing
     evaluated_at: datetime = Field(default_factory=datetime.utcnow)
-    evaluation_ms: Optional[float] = None
+    evaluation_ms: float | None = None
 
     # Extension metadata (e.g., authority resolver details)
-    metadata: Optional[dict] = Field(default=None, description="Additional decision context from resolvers")
+    metadata: dict | None = Field(
+        default=None, description="Additional decision context from resolvers"
+    )
 
 
 class PolicyEngine:
@@ -402,7 +403,9 @@ class PolicyEngine:
         """
         self._authority_resolver = resolver
 
-    def _apply_rule(self, rule: PolicyRule, policy: Policy, context: Optional[dict] = None) -> PolicyDecision:
+    def _apply_rule(
+        self, rule: PolicyRule, policy: Policy, context: dict | None = None
+    ) -> PolicyDecision:
         """Apply a matched rule and generate actionable error messages."""
         # Check rate limit if applicable
         if rule.limit:
@@ -451,7 +454,7 @@ class PolicyEngine:
             approvers=rule.approvers if rule.action == "require_approval" else [],
         )
 
-    def _get_suggestion(self, rule: PolicyRule, context: Optional[dict] = None) -> str:
+    def _get_suggestion(self, rule: PolicyRule, context: dict | None = None) -> str:
         """Generate actionable suggestions based on the rule condition."""
         condition = rule.condition.lower()
 
@@ -502,6 +505,7 @@ class PolicyEngine:
 
         if limit_key not in self._rate_limits or self._rate_limits[limit_key] is None:
             from datetime import timedelta
+
             self._rate_limits[limit_key] = {
                 "count": 0,
                 "reset_at": datetime.utcnow() + timedelta(seconds=period),
@@ -524,7 +528,7 @@ class PolicyEngine:
         period = period_map.get(parts[1], 3600)
         return count, period
 
-    def get_policy(self, name: str) -> Optional[Policy]:
+    def get_policy(self, name: str) -> Policy | None:
         """Get a loaded policy by name.
 
         Args:
@@ -559,7 +563,12 @@ class PolicyEngine:
 
     # ── OPA/Rego integration ──────────────────────────────────
 
-    def load_rego(self, rego_path: Optional[str] = None, rego_content: Optional[str] = None, package: str = "agentmesh") -> "OPAEvaluator":  # noqa: F821
+    def load_rego(
+        self,
+        rego_path: str | None = None,
+        rego_content: str | None = None,
+        package: str = "agentmesh",
+    ) -> "OPAEvaluator":  # noqa: F821
         """
         Load a .rego file alongside YAML/JSON policies.
 
@@ -575,6 +584,7 @@ class PolicyEngine:
             OPAEvaluator instance for direct use
         """
         from agentmesh.governance.opa import OPAEvaluator
+
         evaluator = OPAEvaluator(mode="local", rego_path=rego_path, rego_content=rego_content)
         self._rego_evaluators.append((package, evaluator))
         return evaluator
@@ -583,9 +593,9 @@ class PolicyEngine:
 
     def load_cedar(
         self,
-        cedar_path: Optional[str] = None,
-        cedar_content: Optional[str] = None,
-        entities: Optional[list] = None,
+        cedar_path: str | None = None,
+        cedar_content: str | None = None,
+        entities: list | None = None,
         mode: str = "auto",
     ) -> "CedarEvaluator":  # noqa: F821
         """
@@ -604,6 +614,7 @@ class PolicyEngine:
             CedarEvaluator instance for direct use
         """
         from agentmesh.governance.cedar import CedarEvaluator
+
         evaluator = CedarEvaluator(
             mode=mode,
             policy_path=cedar_path,
@@ -659,15 +670,17 @@ class PolicyEngine:
 
                 for rule in policy.rules:
                     if rule.enabled and rule.evaluate(context):
-                        candidates.append(CandidateDecision(
-                            action=rule.action,
-                            priority=rule.priority,
-                            scope=scope,
-                            policy_name=policy.name,
-                            rule_name=rule.name,
-                            reason=rule.description or f"Rule {rule.name} matched",
-                            approvers=rule.approvers,
-                        ))
+                        candidates.append(
+                            CandidateDecision(
+                                action=rule.action,
+                                priority=rule.priority,
+                                scope=scope,
+                                policy_name=policy.name,
+                                rule_name=rule.name,
+                                reason=rule.description or f"Rule {rule.name} matched",
+                                approvers=rule.approvers,
+                            )
+                        )
 
             if candidates:
                 result = self._resolver.resolve(candidates)
@@ -715,6 +728,7 @@ class PolicyEngine:
                 DelegationInfo,
                 TrustInfo,
             )
+
             delegation_info = DelegationInfo(
                 agent_did=agent_did,
                 delegated_capabilities=context.get("capabilities", []),
@@ -804,7 +818,9 @@ class PolicyEngine:
         return PolicyDecision(
             allowed=(default == "allow"),
             action=default,
-            reason="No matching rules, using default" if applicable else "No policies loaded (deny by default)",
+            reason="No matching rules, using default"
+            if applicable
+            else "No policies loaded (deny by default)",
             evaluated_at=start,
             evaluation_ms=elapsed,
         )
@@ -889,9 +905,7 @@ def migrate_policy(yaml_content: str, target_version: str = CURRENT_API_VERSION)
             del data["version"]
         return yaml.dump(data, default_flow_style=False, sort_keys=False)
 
-    logger.warning(
-        "No migration path from '%s' to '%s'", current, target_version
-    )
+    logger.warning("No migration path from '%s' to '%s'", current, target_version)
     return yaml_content
 
 

@@ -36,7 +36,7 @@ import subprocess
 import sys
 import textwrap
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from agentmesh.marketplace.installer import RESTRICTED_MODULES, MarketplaceError
 
@@ -46,12 +46,31 @@ logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT_SECONDS = 30
 
 # Additional modules blocked beyond RESTRICTED_MODULES.
-_EXTRA_BLOCKED = frozenset({
-    "socket", "http", "urllib", "ftplib", "smtplib", "telnetlib",
-    "pickle", "shelve", "marshal", "code", "codeop", "compileall",
-    "multiprocessing", "signal", "resource", "pty", "termios",
-    "fcntl", "mmap", "winreg", "_winapi",
-})
+_EXTRA_BLOCKED = frozenset(
+    {
+        "socket",
+        "http",
+        "urllib",
+        "ftplib",
+        "smtplib",
+        "telnetlib",
+        "pickle",
+        "shelve",
+        "marshal",
+        "code",
+        "codeop",
+        "compileall",
+        "multiprocessing",
+        "signal",
+        "resource",
+        "pty",
+        "termios",
+        "fcntl",
+        "mmap",
+        "winreg",
+        "_winapi",
+    }
+)
 
 ALL_BLOCKED_MODULES = RESTRICTED_MODULES | _EXTRA_BLOCKED
 
@@ -156,7 +175,7 @@ class PluginSandbox:
         self,
         plugins_dir: Path,
         timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
-        python_executable: Optional[str] = None,
+        python_executable: str | None = None,
     ) -> None:
         self._plugins_dir = plugins_dir
         self._timeout = timeout_seconds
@@ -168,8 +187,8 @@ class PluginSandbox:
         entry_function: str,
         input_data: dict[str, Any],
         *,
-        module_name: Optional[str] = None,
-        timeout: Optional[int] = None,
+        module_name: str | None = None,
+        timeout: int | None = None,
     ) -> dict[str, Any]:
         """Execute a plugin function in the sandbox.
 
@@ -212,6 +231,7 @@ class PluginSandbox:
         }
         # On Windows, Python needs SYSTEMROOT to load standard library.
         import os as _os
+
         for key in ("SYSTEMROOT", "SystemRoot", "COMSPEC", "TEMP", "TMP"):
             val = _os.environ.get(key)
             if val:
@@ -240,9 +260,7 @@ class PluginSandbox:
         try:
             output = json.loads(proc.stdout)
         except (json.JSONDecodeError, ValueError) as exc:
-            raise PluginSandboxError(
-                f"Plugin '{plugin_name}' returned invalid JSON: {exc}"
-            )
+            raise PluginSandboxError(f"Plugin '{plugin_name}' returned invalid JSON: {exc}")
 
         if "error" in output:
             logger.warning("Plugin %s error: %s", plugin_name, output["error"])

@@ -3,6 +3,7 @@
 Tests that adversarial inputs are correctly blocked by the policy engine's
 input validation layer.
 """
+
 import re
 import sys
 import atheris
@@ -10,7 +11,15 @@ import atheris
 
 CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 PATH_TRAVERSAL_RE = re.compile(r"\.\./|\.\.\\|%2e%2e|%252e")
-PROTECTED_DIRS = {"/etc", "/root", "/var/run", "/proc", "/sys", "C:\\Windows", "C:\\System32"}
+PROTECTED_DIRS = {
+    "/etc",
+    "/root",
+    "/var/run",
+    "/proc",
+    "/sys",
+    "C:\\Windows",
+    "C:\\System32",
+}
 DANGEROUS_CODE_RE = re.compile(
     r"(exec|eval|compile|__import__|subprocess|os\.system|os\.popen)",
     re.IGNORECASE,

@@ -151,8 +151,10 @@ class TestProgressiveSeverity:
 
     def test_initial_severity(self) -> None:
         prog = ProgressiveConfig(
-            initial_severity=0.2, max_severity=0.8,
-            step_increase=0.1, increase_after_success_count=3,
+            initial_severity=0.2,
+            max_severity=0.8,
+            step_increase=0.1,
+            increase_after_success_count=3,
         )
         sched = _make_schedule(progressive=prog)
         scheduler = ChaosScheduler([sched])
@@ -160,8 +162,10 @@ class TestProgressiveSeverity:
 
     def test_severity_increases_after_successes(self) -> None:
         prog = ProgressiveConfig(
-            initial_severity=0.2, max_severity=0.8,
-            step_increase=0.1, increase_after_success_count=3,
+            initial_severity=0.2,
+            max_severity=0.8,
+            step_increase=0.1,
+            increase_after_success_count=3,
         )
         sched = _make_schedule(progressive=prog)
         scheduler = ChaosScheduler([sched])
@@ -172,8 +176,10 @@ class TestProgressiveSeverity:
 
     def test_failure_resets_consecutive_count(self) -> None:
         prog = ProgressiveConfig(
-            initial_severity=0.2, max_severity=0.8,
-            step_increase=0.1, increase_after_success_count=3,
+            initial_severity=0.2,
+            max_severity=0.8,
+            step_increase=0.1,
+            increase_after_success_count=3,
         )
         sched = _make_schedule(progressive=prog)
         scheduler = ChaosScheduler([sched])
@@ -186,8 +192,10 @@ class TestProgressiveSeverity:
 
     def test_severity_capped_at_max(self) -> None:
         prog = ProgressiveConfig(
-            initial_severity=0.2, max_severity=0.5,
-            step_increase=0.1, increase_after_success_count=1,
+            initial_severity=0.2,
+            max_severity=0.5,
+            step_increase=0.1,
+            increase_after_success_count=1,
         )
         sched = _make_schedule(progressive=prog)
         scheduler = ChaosScheduler([sched])
@@ -220,9 +228,7 @@ class TestResilienceTrend:
         scheduler = ChaosScheduler([sched])
         scores = [0.5, 0.6, 0.7, 0.8, 0.9]
         for score in scores:
-            scheduler.record_execution(
-                _make_execution("s1", resilience=score)
-            )
+            scheduler.record_execution(_make_execution("s1", resilience=score))
         assert scheduler.get_resilience_trend("s1", window=3) == [0.7, 0.8, 0.9]
 
     def test_trend_with_fewer_than_window(self) -> None:

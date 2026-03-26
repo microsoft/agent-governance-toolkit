@@ -18,7 +18,7 @@ if (document.readyState === 'loading') {
 
 async function init() {
   const settings = await getSettings();
-  
+
   if (!settings.enabled || !settings.platforms.aws) {
     return;
   }
@@ -60,7 +60,7 @@ async function init() {
 
 function detectAWSService(): string {
   const url = window.location.href;
-  
+
   if (url.includes('ec2')) return 'ec2';
   if (url.includes('s3')) return 's3';
   if (url.includes('lambda')) return 'lambda';
@@ -68,7 +68,7 @@ function detectAWSService(): string {
   if (url.includes('iam')) return 'iam';
   if (url.includes('cloudwatch')) return 'cloudwatch';
   if (url.includes('rds')) return 'rds';
-  
+
   return 'other';
 }
 
@@ -235,7 +235,7 @@ function injectS3Integration() {
       <span style="font-size: 20px;">🛡️</span>
       <div style="flex: 1;">
         <span style="font-size: 13px; color: #065f46;">
-          AgentOS is monitoring bucket permissions. 
+          AgentOS is monitoring bucket permissions.
           <strong>All buckets compliant</strong> with security policies.
         </span>
       </div>
@@ -276,7 +276,7 @@ function injectBillingIntegration() {
         <span style="font-size: 24px;">🛡️</span>
         <h3 style="font-size: 16px; font-weight: 600; margin: 0;">AgentOS Cost Insights</h3>
       </div>
-      
+
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px;">
         <div style="background: #f9fafb; padding: 12px; border-radius: 6px;">
           <div style="font-size: 11px; color: #6b7280;">CURRENT MONTH</div>
@@ -294,7 +294,7 @@ function injectBillingIntegration() {
           <div style="font-size: 11px; color: #92400e;">5 optimizations found</div>
         </div>
       </div>
-      
+
       <button class="agentos-action-btn primary" style="width: 100%;">
         View Optimization Recommendations
       </button>
@@ -390,11 +390,11 @@ function injectFAB() {
   menu.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
     const action = target.dataset.action;
-    
+
     if (action) {
       runAWSAgent(action);
     }
-    
+
     menu.style.display = 'none';
   });
 
@@ -408,9 +408,9 @@ function injectFAB() {
 
 function runAWSAgent(action: string) {
   console.log('AgentOS: Running AWS agent:', action);
-  
+
   showToast(`Running ${action}...`, 'info');
-  
+
   chrome.runtime.sendMessage({
     type: 'ACTION_REQUESTED',
     agentId: `aws-${action}`,

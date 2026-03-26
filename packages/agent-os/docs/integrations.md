@@ -281,16 +281,16 @@ policy = GovernancePolicy(
     max_tokens=10000,           # Token limit
     max_tool_calls=20,          # Tool call limit
     timeout_seconds=300,        # Timeout
-    
+
     # Permissions
     allowed_tools=["safe_tool"],  # Whitelist tools
     blocked_patterns=["secret"],   # Block content
     require_human_approval=False,  # Human-in-loop
-    
+
     # Thresholds
     confidence_threshold=0.8,   # Min confidence
     drift_threshold=0.15,       # CMVK drift
-    
+
     # Audit
     log_all_calls=True,         # Full logging
     checkpoint_frequency=5      # Checkpoint every N calls

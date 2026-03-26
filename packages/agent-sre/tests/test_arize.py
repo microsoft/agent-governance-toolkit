@@ -7,7 +7,6 @@ Covers: PhoenixExporter, PhoenixSpan, EvaluationImporter, EvaluationRecord.
 No external dependencies.
 """
 
-
 from agent_sre.integrations.arize import (
     EvaluationImporter,
     EvaluationRecord,
@@ -185,31 +184,37 @@ class TestEvaluationRecord:
 class TestEvaluationImporter:
     def test_import_single(self):
         imp = EvaluationImporter()
-        record = imp.import_evaluation({
-            "eval_name": "hallucination",
-            "label": "hallucinated",
-            "score": 0.85,
-        })
+        record = imp.import_evaluation(
+            {
+                "eval_name": "hallucination",
+                "label": "hallucinated",
+                "score": 0.85,
+            }
+        )
         assert record.eval_name == "hallucination"
         assert len(imp.get_records()) == 1
 
     def test_import_batch(self):
         imp = EvaluationImporter()
-        records = imp.import_batch([
-            {"eval_name": "hallucination", "score": 0.9},
-            {"eval_name": "relevance", "score": 0.8},
-            {"eval_name": "correctness", "score": 0.95},
-        ])
+        records = imp.import_batch(
+            [
+                {"eval_name": "hallucination", "score": 0.9},
+                {"eval_name": "relevance", "score": 0.8},
+                {"eval_name": "correctness", "score": 0.95},
+            ]
+        )
         assert len(records) == 3
         assert len(imp.get_records()) == 3
 
     def test_get_sli_values(self):
         imp = EvaluationImporter()
-        imp.import_batch([
-            {"eval_name": "hallucination", "score": 0.9},
-            {"eval_name": "hallucination", "score": 0.7},
-            {"eval_name": "relevance", "score": 0.85},
-        ])
+        imp.import_batch(
+            [
+                {"eval_name": "hallucination", "score": 0.9},
+                {"eval_name": "hallucination", "score": 0.7},
+                {"eval_name": "relevance", "score": 0.85},
+            ]
+        )
         sli = imp.get_sli_values()
         assert "hallucination_rate" in sli
         assert len(sli["hallucination_rate"]) == 2
@@ -224,20 +229,24 @@ class TestEvaluationImporter:
 
     def test_filter_by_eval_name(self):
         imp = EvaluationImporter()
-        imp.import_batch([
-            {"eval_name": "hallucination", "score": 0.9},
-            {"eval_name": "relevance", "score": 0.8},
-        ])
+        imp.import_batch(
+            [
+                {"eval_name": "hallucination", "score": 0.9},
+                {"eval_name": "relevance", "score": 0.8},
+            ]
+        )
         hallu = imp.get_records(eval_name="hallucination")
         assert len(hallu) == 1
 
     def test_stats(self):
         imp = EvaluationImporter()
-        imp.import_batch([
-            {"eval_name": "hallucination", "score": 0.9},
-            {"eval_name": "hallucination", "score": 0.7},
-            {"eval_name": "relevance", "score": 0.85},
-        ])
+        imp.import_batch(
+            [
+                {"eval_name": "hallucination", "score": 0.9},
+                {"eval_name": "hallucination", "score": 0.7},
+                {"eval_name": "relevance", "score": 0.85},
+            ]
+        )
         stats = imp.get_stats()
         assert stats["total_evaluations"] == 3
         assert stats["by_eval_name"]["hallucination"] == 2
@@ -261,18 +270,23 @@ class TestIntegration:
         # Export side
         exporter = PhoenixExporter()
         exporter.export_slo_evaluation(
-            "my-slo", "healthy", 0.95, 0.3,
+            "my-slo",
+            "healthy",
+            0.95,
+            0.3,
             indicators={"task_success_rate": 0.98},
             trace_id="trace-001",
         )
 
         # Import side (Phoenix would have run evaluations)
         importer = EvaluationImporter()
-        importer.import_batch([
-            {"eval_name": "hallucination", "score": 0.05, "trace_id": "trace-001"},
-            {"eval_name": "relevance", "score": 0.95, "trace_id": "trace-001"},
-            {"eval_name": "correctness", "score": 0.92, "trace_id": "trace-001"},
-        ])
+        importer.import_batch(
+            [
+                {"eval_name": "hallucination", "score": 0.05, "trace_id": "trace-001"},
+                {"eval_name": "relevance", "score": 0.95, "trace_id": "trace-001"},
+                {"eval_name": "correctness", "score": 0.92, "trace_id": "trace-001"},
+            ]
+        )
 
         # Get SLI values for SLO calculation
         sli = importer.get_sli_values()
@@ -286,6 +300,13 @@ class TestIntegration:
             PhoenixExporter,
             PhoenixSpan,
         )
-        assert all(c is not None for c in [
-            PhoenixExporter, PhoenixSpan, EvaluationImporter, EvaluationRecord,
-        ])
+
+        assert all(
+            c is not None
+            for c in [
+                PhoenixExporter,
+                PhoenixSpan,
+                EvaluationImporter,
+                EvaluationRecord,
+            ]
+        )

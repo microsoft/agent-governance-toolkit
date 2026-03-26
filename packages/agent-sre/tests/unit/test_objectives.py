@@ -2,8 +2,6 @@
 # Licensed under the MIT License.
 """Tests for SLO definitions and error budget engine."""
 
-
-
 from agent_sre.slo.indicators import CostPerTask, PolicyCompliance, TaskSuccessRate
 from agent_sre.slo.objectives import SLO, ErrorBudget, ExhaustionAction, SLOStatus
 

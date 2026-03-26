@@ -13,17 +13,16 @@ Commands:
 - policy: Manage policies
 """
 
+import json
 import logging
+from pathlib import Path
 
 import click
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich import box
-from pathlib import Path
-from typing import Optional
-import json
 import yaml
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -216,8 +215,9 @@ build-backend = "hatchling.build"
 
     # Summary
     console.print()
-    console.print(Panel(
-        f"""[bold green]Agent initialized successfully![/bold green]
+    console.print(
+        Panel(
+            f"""[bold green]Agent initialized successfully![/bold green]
 
 [bold]Next steps:[/bold]
 1. cd {agent_dir}
@@ -233,9 +233,10 @@ build-backend = "hatchling.build"
 - Identity TTL: 15 minutes (auto-rotate)
 - Min peer trust score: 500
 - Audit logging: enabled""",
-        title="🛡️ AgentMesh",
-        border_style="green",
-    ))
+            title="🛡️ AgentMesh",
+            border_style="green",
+        )
+    )
 
 
 @app.command()
@@ -275,11 +276,15 @@ def register(agent_dir: str, name: str = None):
     identity_file.parent.mkdir(parents=True, exist_ok=True)
 
     with open(identity_file, "w") as f:
-        json.dump({
-            "did": identity.did,
-            "public_key": identity.public_key,
-            "created_at": identity.created_at.isoformat(),
-        }, f, indent=2)
+        json.dump(
+            {
+                "did": identity.did,
+                "public_key": identity.public_key,
+                "created_at": identity.created_at.isoformat(),
+            },
+            f,
+            indent=2,
+        )
 
     console.print(f"[green]Identity saved to {identity_file}[/green]")
 
@@ -349,14 +354,17 @@ def policy(policy_file: str, validate: bool):
             else:
                 policy_data = json.load(f)
 
-        from agentmesh.governance import PolicyEngine, Policy
+        from agentmesh.governance import Policy, PolicyEngine
+
         engine = PolicyEngine()
 
         policies = policy_data.get("policies", [])
         for p in policies:
             policy_obj = Policy(**p)
             engine.load_policy(policy_obj)
-            console.print(f"  [green]✓[/green] Loaded: {policy_obj.name} ({len(policy_obj.rules)} rules)")
+            console.print(
+                f"  [green]✓[/green] Loaded: {policy_obj.name} ({len(policy_obj.rules)} rules)"
+            )
 
         console.print(f"\n[green]Successfully loaded {len(policies)} policies[/green]")
 
@@ -376,11 +384,36 @@ def audit(agent: str, limit: int, fmt: str):
     """View audit logs."""
     # Simulated audit entries
     entries = [
-        {"timestamp": "2026-01-31T10:15:00Z", "agent": "agent-1", "action": "credential_issued", "status": "success"},
-        {"timestamp": "2026-01-31T10:14:30Z", "agent": "agent-1", "action": "policy_check", "status": "allowed"},
-        {"timestamp": "2026-01-31T10:14:00Z", "agent": "agent-2", "action": "handshake", "status": "success"},
-        {"timestamp": "2026-01-31T10:13:00Z", "agent": "agent-1", "action": "tool_call", "status": "allowed"},
-        {"timestamp": "2026-01-31T10:12:00Z", "agent": "agent-3", "action": "policy_check", "status": "blocked"},
+        {
+            "timestamp": "2026-01-31T10:15:00Z",
+            "agent": "agent-1",
+            "action": "credential_issued",
+            "status": "success",
+        },
+        {
+            "timestamp": "2026-01-31T10:14:30Z",
+            "agent": "agent-1",
+            "action": "policy_check",
+            "status": "allowed",
+        },
+        {
+            "timestamp": "2026-01-31T10:14:00Z",
+            "agent": "agent-2",
+            "action": "handshake",
+            "status": "success",
+        },
+        {
+            "timestamp": "2026-01-31T10:13:00Z",
+            "agent": "agent-1",
+            "action": "tool_call",
+            "status": "allowed",
+        },
+        {
+            "timestamp": "2026-01-31T10:12:00Z",
+            "agent": "agent-3",
+            "action": "policy_check",
+            "status": "blocked",
+        },
     ]
 
     if agent:
@@ -412,10 +445,12 @@ def audit(agent: str, limit: int, fmt: str):
 
 # Import proxy command from proxy module
 from .proxy import proxy  # noqa: E402
+
 app.add_command(proxy)
 
 # Import trust subcommand group
 from .trust_cli import trust  # noqa: E402
+
 app.add_command(trust)
 
 
@@ -441,7 +476,7 @@ def init_integration(claude: bool, config_path: str, backup: bool):
         console.print("[yellow]Please specify an integration type (e.g., --claude)[/yellow]")
 
 
-def _init_claude_integration(config_path: Optional[str], backup: bool):
+def _init_claude_integration(config_path: str | None, backup: bool):
     """Initialize Claude Desktop integration."""
     console.print("\n[bold blue]🔧 Setting up Claude Desktop Integration[/bold blue]\n")
 
@@ -449,12 +484,21 @@ def _init_claude_integration(config_path: Optional[str], backup: bool):
     if not config_path:
         # Default Claude Desktop config locations
         import platform
+
         system = platform.system()
 
         if system == "Darwin":  # macOS
-            default_path = Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
+            default_path = (
+                Path.home()
+                / "Library"
+                / "Application Support"
+                / "Claude"
+                / "claude_desktop_config.json"
+            )
         elif system == "Windows":
-            default_path = Path.home() / "AppData" / "Roaming" / "Claude" / "claude_desktop_config.json"
+            default_path = (
+                Path.home() / "AppData" / "Roaming" / "Claude" / "claude_desktop_config.json"
+            )
         else:  # Linux
             default_path = Path.home() / ".config" / "claude" / "claude_desktop_config.json"
 
@@ -475,6 +519,7 @@ def _init_claude_integration(config_path: Optional[str], backup: bool):
         if backup:
             backup_path = config_path.with_suffix(".json.backup")
             import shutil
+
             shutil.copy(config_path, backup_path)
             logger.debug("Backed up existing config to %s", backup_path)
 
@@ -492,10 +537,14 @@ def _init_claude_integration(config_path: Optional[str], backup: bool):
             "command": "agentmesh",
             "args": [
                 "proxy",
-                "--target", "npx",
-                "--target", "-y",
-                "--target", "@modelcontextprotocol/server-filesystem",
-                "--target", str(Path.home())
+                "--target",
+                "npx",
+                "--target",
+                "-y",
+                "--target",
+                "@modelcontextprotocol/server-filesystem",
+                "--target",
+                str(Path.home()),
             ],
             "env": {},
         }
@@ -503,8 +552,7 @@ def _init_claude_integration(config_path: Optional[str], backup: bool):
 
     # Check if already configured
     has_agentmesh = any(
-        "agentmesh" in str(server.get("command", ""))
-        for server in config["mcpServers"].values()
+        "agentmesh" in str(server.get("command", "")) for server in config["mcpServers"].values()
     )
 
     if not has_agentmesh:
@@ -521,15 +569,16 @@ def _init_claude_integration(config_path: Optional[str], backup: bool):
 
     # Show instructions
     console.print()
-    console.print(Panel(
-        """[bold]Next Steps:[/bold]
+    console.print(
+        Panel(
+            f"""[bold]Next Steps:[/bold]
 
 1. Restart Claude Desktop
 2. AgentMesh will now intercept all tool calls to the protected server
 3. View logs in the terminal where Claude Desktop was launched
 
 [bold]Customization:[/bold]
-Edit {path} to:
+Edit {config_path} to:
 - Add more protected servers
 - Change policy level (--policy strict|moderate|permissive)
 - Disable verification footers (--no-footer)
@@ -537,10 +586,11 @@ Edit {path} to:
 [bold]Example Usage:[/bold]
 In Claude Desktop, try: "Read the contents of my home directory"
 AgentMesh will enforce policies and add trust verification to outputs.
-        """.format(path=config_path),
-        title="🎉 Claude Desktop Integration Ready",
-        border_style="green",
-    ))
+        """,
+            title="🎉 Claude Desktop Integration Ready",
+            border_style="green",
+        )
+    )
 
 
 def main():

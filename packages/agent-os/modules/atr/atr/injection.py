@@ -384,8 +384,7 @@ class InjectionResolver:
 
                 if value is None and not marker.optional:
                     raise InjectionError(
-                        f"Cannot resolve dependency for parameter '{param_name}' "
-                        f"with key {key!r}"
+                        f"Cannot resolve dependency for parameter '{param_name}' with key {key!r}"
                     )
 
                 resolved_kwargs[param_name] = value

@@ -31,6 +31,7 @@ class AgentOSError(Exception):
 
 # --- Policy errors ---
 
+
 class PolicyError(AgentOSError):
     """Base exception for policy-related errors."""
 
@@ -61,6 +62,7 @@ class PolicyTimeoutError(PolicyError):
 
 # --- Budget errors ---
 
+
 class BudgetError(AgentOSError):
     """Base exception for budget-related errors."""
 
@@ -83,6 +85,7 @@ class BudgetWarningError(BudgetError):
 
 
 # --- Identity errors ---
+
 
 class IdentityError(AgentOSError):
     """Base exception for identity-related errors."""
@@ -107,6 +110,7 @@ class CredentialExpiredError(IdentityError):
 
 # --- Integration errors ---
 
+
 class IntegrationError(AgentOSError):
     """Base exception for integration-related errors."""
 
@@ -130,6 +134,7 @@ class AdapterTimeoutError(IntegrationError):
 
 # --- Configuration errors ---
 
+
 class ConfigurationError(AgentOSError):
     """Base exception for configuration-related errors."""
 
@@ -152,6 +157,7 @@ class MissingConfigError(ConfigurationError):
 
 
 # --- Rate limit errors ---
+
 
 class RateLimitError(AgentOSError):
     """Raised when a rate limit is hit."""

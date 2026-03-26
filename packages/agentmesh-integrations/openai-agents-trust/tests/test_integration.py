@@ -34,7 +34,9 @@ class TestTrustInputGuardrail:
 
     def test_allows_trusted_agent(self):
         audit = AuditLog()
-        config = TrustGuardrailConfig(scorer=TrustScorer(), min_score=0.5, audit_log=audit)
+        config = TrustGuardrailConfig(
+            scorer=TrustScorer(), min_score=0.5, audit_log=audit
+        )
         guardrail = trust_input_guardrail(config)
         result = guardrail.guardrail_function(None, make_agent("trusted"), "test")
         assert isinstance(result, GuardrailFunctionOutput)
@@ -44,7 +46,9 @@ class TestTrustInputGuardrail:
 
     def test_blocks_untrusted_agent(self):
         audit = AuditLog()
-        config = TrustGuardrailConfig(scorer=TrustScorer(default_score=0.3), min_score=0.5, audit_log=audit)
+        config = TrustGuardrailConfig(
+            scorer=TrustScorer(default_score=0.3), min_score=0.5, audit_log=audit
+        )
         guardrail = trust_input_guardrail(config)
         result = guardrail.guardrail_function(None, make_agent("untrusted"), "test")
         assert result.tripwire_triggered is True
@@ -52,14 +56,18 @@ class TestTrustInputGuardrail:
         assert len(audit.get_entries(decision="deny")) == 1
 
     def test_requires_identity_blocks_unregistered(self):
-        config = TrustGuardrailConfig(scorer=TrustScorer(), require_identity=True, audit_log=AuditLog())
+        config = TrustGuardrailConfig(
+            scorer=TrustScorer(), require_identity=True, audit_log=AuditLog()
+        )
         guardrail = trust_input_guardrail(config)
         result = guardrail.guardrail_function(None, make_agent("no-id"), "test")
         assert result.tripwire_triggered is True
 
     def test_requires_identity_allows_registered(self):
         identity = AgentIdentity(agent_id="a1", name="Agent 1", secret_key="key")
-        config = TrustGuardrailConfig(scorer=TrustScorer(), require_identity=True, identities={"a1": identity})
+        config = TrustGuardrailConfig(
+            scorer=TrustScorer(), require_identity=True, identities={"a1": identity}
+        )
         guardrail = trust_input_guardrail(config)
         result = guardrail.guardrail_function(None, make_agent("a1"), "test")
         assert result.tripwire_triggered is False
@@ -73,21 +81,28 @@ class TestPolicyInputGuardrail:
 
     def test_allows_clean_input(self):
         audit = AuditLog()
-        config = PolicyGuardrailConfig(policy=GovernancePolicy(blocked_patterns=[r"DROP TABLE"]), audit_log=audit)
+        config = PolicyGuardrailConfig(
+            policy=GovernancePolicy(blocked_patterns=[r"DROP TABLE"]), audit_log=audit
+        )
         guardrail = policy_input_guardrail(config)
         result = guardrail.guardrail_function(None, make_agent(), "SELECT * FROM users")
         assert result.tripwire_triggered is False
         assert len(audit) == 1
 
     def test_blocks_dangerous_input(self):
-        config = PolicyGuardrailConfig(policy=GovernancePolicy(blocked_patterns=[r"DROP TABLE"]), audit_log=AuditLog())
+        config = PolicyGuardrailConfig(
+            policy=GovernancePolicy(blocked_patterns=[r"DROP TABLE"]),
+            audit_log=AuditLog(),
+        )
         guardrail = policy_input_guardrail(config)
         result = guardrail.guardrail_function(None, make_agent(), "DROP TABLE users")
         assert result.tripwire_triggered is True
         assert "violation" in result.output_info
 
     def test_blocks_regex(self):
-        config = PolicyGuardrailConfig(policy=GovernancePolicy(blocked_patterns=[r"eval\(.*\)"]))
+        config = PolicyGuardrailConfig(
+            policy=GovernancePolicy(blocked_patterns=[r"eval\(.*\)"])
+        )
         guardrail = policy_input_guardrail(config)
         result = guardrail.guardrail_function(None, make_agent(), "Run eval('code')")
         assert result.tripwire_triggered is True
@@ -99,13 +114,17 @@ class TestContentOutputGuardrail:
         assert isinstance(guardrail, OutputGuardrail)
 
     def test_allows_clean_output(self):
-        guardrail = content_output_guardrail(GovernancePolicy(blocked_patterns=[r"password"]))
+        guardrail = content_output_guardrail(
+            GovernancePolicy(blocked_patterns=[r"password"])
+        )
         result = guardrail.guardrail_function(None, make_agent(), "Clean report")
         assert result.tripwire_triggered is False
 
     def test_blocks_sensitive_output(self):
         audit = AuditLog()
-        guardrail = content_output_guardrail(GovernancePolicy(blocked_patterns=[r"password"]), audit_log=audit)
+        guardrail = content_output_guardrail(
+            GovernancePolicy(blocked_patterns=[r"password"]), audit_log=audit
+        )
         result = guardrail.guardrail_function(None, make_agent(), "The password is abc")
         assert result.tripwire_triggered is True
         assert len(audit.get_entries(decision="deny")) == 1

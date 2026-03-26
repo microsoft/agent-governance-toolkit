@@ -87,21 +87,25 @@ def load_runbooks_from_yaml(path: str | Path) -> list[Runbook]:
     for entry in data.get("runbooks", []):
         steps: list[RunbookStep] = []
         for step_data in entry.get("steps", []):
-            steps.append(RunbookStep(
-                name=step_data["name"],
-                action=step_data.get("action", ""),
-                timeout_seconds=step_data.get("timeout_seconds", 300),
-                requires_approval=step_data.get("requires_approval", False),
-                rollback_action=step_data.get("rollback_action"),
-            ))
+            steps.append(
+                RunbookStep(
+                    name=step_data["name"],
+                    action=step_data.get("action", ""),
+                    timeout_seconds=step_data.get("timeout_seconds", 300),
+                    requires_approval=step_data.get("requires_approval", False),
+                    rollback_action=step_data.get("rollback_action"),
+                )
+            )
 
-        runbooks.append(Runbook(
-            id=entry.get("id", ""),
-            name=entry.get("name", ""),
-            description=entry.get("description", ""),
-            trigger_conditions=entry.get("trigger_conditions", []),
-            steps=steps,
-            labels=entry.get("labels", {}),
-        ))
+        runbooks.append(
+            Runbook(
+                id=entry.get("id", ""),
+                name=entry.get("name", ""),
+                description=entry.get("description", ""),
+                trigger_conditions=entry.get("trigger_conditions", []),
+                steps=steps,
+                labels=entry.get("labels", {}),
+            )
+        )
 
     return runbooks

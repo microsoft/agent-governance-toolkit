@@ -13,30 +13,24 @@ import pytest
 
 from langflow_agentmesh.policy import (
     GovernancePolicy,
-    GovernanceEventType,
     PatternType,
-    PolicyCheckResult,
 )
 from langflow_agentmesh.governance_component import (
     GovernanceComponent,
-    GovernanceResult,
 )
 from langflow_agentmesh.trust_router import (
     TrustRouter,
     TrustScore,
     RouteDecision,
-    RouteResult,
 )
 from langflow_agentmesh.audit_logger import (
     AuditLogger,
-    AuditEntry,
     GENESIS_HASH,
 )
 from langflow_agentmesh.compliance_checker import (
     ComplianceChecker,
     ComplianceFramework,
     ComplianceStatus,
-    RiskLevel,
 )
 
 
@@ -57,9 +51,7 @@ class TestGovernancePolicy:
         assert result.allowed is True
 
     def test_check_content_substring_match(self):
-        policy = GovernancePolicy(
-            blocked_patterns=[("rm -rf", PatternType.SUBSTRING)]
-        )
+        policy = GovernancePolicy(blocked_patterns=[("rm -rf", PatternType.SUBSTRING)])
         result = policy.check_content("please run rm -rf /tmp")
         assert result.allowed is False
         assert "rm -rf" in result.reason
@@ -72,9 +64,7 @@ class TestGovernancePolicy:
         assert result.allowed is False
 
     def test_check_content_glob_match(self):
-        policy = GovernancePolicy(
-            blocked_patterns=[("*.exe", PatternType.GLOB)]
-        )
+        policy = GovernancePolicy(blocked_patterns=[("*.exe", PatternType.GLOB)])
         result = policy.check_content("download malware.exe")
         assert result.allowed is False
 
@@ -165,9 +155,7 @@ class TestGovernanceComponent:
         assert "blocklist" in result.violation_reason
 
     def test_blocked_pattern(self):
-        comp = GovernanceComponent(
-            blocked_patterns=[("rm -rf", "substring")]
-        )
+        comp = GovernanceComponent(blocked_patterns=[("rm -rf", "substring")])
         result = comp.process("execute", {"cmd": "rm -rf /"}, agent_id="a1")
         assert result.allowed is False
 
@@ -298,8 +286,11 @@ class TestAuditLogger:
     def test_log_entry(self):
         logger = AuditLogger()
         entry = logger.log(
-            agent_id="a1", action="search", decision="allowed",
-            context={"query": "hello"}, timestamp=1000.0,
+            agent_id="a1",
+            action="search",
+            decision="allowed",
+            context={"query": "hello"},
+            timestamp=1000.0,
         )
         assert entry.agent_id == "a1"
         assert entry.previous_hash == GENESIS_HASH
@@ -340,9 +331,7 @@ class TestAuditLogger:
     def test_export_jsonl_to_file(self):
         logger = AuditLogger()
         logger.log("a1", "search", "allowed", timestamp=1000.0)
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".jsonl", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             path = f.name
         try:
             count = logger.export_jsonl_to_file(path)
@@ -380,7 +369,9 @@ class TestComplianceChecker:
     def test_all_frameworks_checked(self):
         checker = ComplianceChecker()
         result = checker.check(
-            "search", {"query": "hello"}, agent_id="a1",
+            "search",
+            {"query": "hello"},
+            agent_id="a1",
             context={"audit_enabled": True, "access_logged": True},
         )
         assert "eu_ai_act" in result.frameworks_checked
@@ -390,7 +381,9 @@ class TestComplianceChecker:
     def test_compliant_action(self):
         checker = ComplianceChecker()
         result = checker.check(
-            "search", {"query": "hello"}, agent_id="a1",
+            "search",
+            {"query": "hello"},
+            agent_id="a1",
             context={"audit_enabled": True, "access_logged": True},
         )
         assert result.compliance_status == ComplianceStatus.COMPLIANT
@@ -398,7 +391,9 @@ class TestComplianceChecker:
     def test_eu_ai_act_unacceptable_risk(self):
         checker = ComplianceChecker(frameworks=[ComplianceFramework.EU_AI_ACT])
         result = checker.check(
-            "social_scoring", {}, agent_id="a1",
+            "social_scoring",
+            {},
+            agent_id="a1",
         )
         assert result.compliance_status == ComplianceStatus.NON_COMPLIANT
         assert any("Article 5" in v.rule for v in result.violations)
@@ -406,7 +401,9 @@ class TestComplianceChecker:
     def test_eu_ai_act_high_risk_missing_transparency(self):
         checker = ComplianceChecker(frameworks=[ComplianceFramework.EU_AI_ACT])
         result = checker.check(
-            "classify", {}, agent_id="a1",
+            "classify",
+            {},
+            agent_id="a1",
             context={"domain": "employment"},
         )
         assert result.compliance_status == ComplianceStatus.REQUIRES_REVIEW
@@ -415,7 +412,9 @@ class TestComplianceChecker:
     def test_eu_ai_act_high_risk_with_oversight(self):
         checker = ComplianceChecker(frameworks=[ComplianceFramework.EU_AI_ACT])
         result = checker.check(
-            "classify", {}, agent_id="a1",
+            "classify",
+            {},
+            agent_id="a1",
             context={
                 "domain": "employment",
                 "transparency_notice": True,
@@ -427,7 +426,9 @@ class TestComplianceChecker:
     def test_soc2_missing_agent_id(self):
         checker = ComplianceChecker(frameworks=[ComplianceFramework.SOC2])
         result = checker.check(
-            "search", {}, agent_id=None,
+            "search",
+            {},
+            agent_id=None,
             context={"audit_enabled": True},
         )
         assert any("CC6.1" in v.rule for v in result.violations)
@@ -435,7 +436,9 @@ class TestComplianceChecker:
     def test_soc2_missing_audit(self):
         checker = ComplianceChecker(frameworks=[ComplianceFramework.SOC2])
         result = checker.check(
-            "search", {}, agent_id="a1",
+            "search",
+            {},
+            agent_id="a1",
             context={"audit_enabled": False},
         )
         assert any("CC7.2" in v.rule for v in result.violations)
@@ -443,7 +446,9 @@ class TestComplianceChecker:
     def test_soc2_sensitive_action_unapproved(self):
         checker = ComplianceChecker(frameworks=[ComplianceFramework.SOC2])
         result = checker.check(
-            "delete", {}, agent_id="a1",
+            "delete",
+            {},
+            agent_id="a1",
             context={"audit_enabled": True},
         )
         assert any("CC8.1" in v.rule for v in result.violations)
@@ -451,7 +456,9 @@ class TestComplianceChecker:
     def test_hipaa_phi_ssn_detected(self):
         checker = ComplianceChecker(frameworks=[ComplianceFramework.HIPAA])
         result = checker.check(
-            "query", {"data": "SSN: 123-45-6789"}, agent_id="a1",
+            "query",
+            {"data": "SSN: 123-45-6789"},
+            agent_id="a1",
             context={"access_logged": True},
         )
         assert result.compliance_status == ComplianceStatus.NON_COMPLIANT
@@ -460,7 +467,9 @@ class TestComplianceChecker:
     def test_hipaa_phi_mrn_detected(self):
         checker = ComplianceChecker(frameworks=[ComplianceFramework.HIPAA])
         result = checker.check(
-            "query", {"patient": "MRN: 12345"}, agent_id="a1",
+            "query",
+            {"patient": "MRN: 12345"},
+            agent_id="a1",
             context={"access_logged": True},
         )
         assert result.compliance_status == ComplianceStatus.NON_COMPLIANT
@@ -468,7 +477,9 @@ class TestComplianceChecker:
     def test_hipaa_minimum_necessary(self):
         checker = ComplianceChecker(frameworks=[ComplianceFramework.HIPAA])
         result = checker.check(
-            "query", {}, agent_id="a1",
+            "query",
+            {},
+            agent_id="a1",
             context={"data_scope": "full", "access_logged": True},
         )
         assert any("Minimum Necessary" in v.rule for v in result.violations)
@@ -476,7 +487,9 @@ class TestComplianceChecker:
     def test_hipaa_compliant(self):
         checker = ComplianceChecker(frameworks=[ComplianceFramework.HIPAA])
         result = checker.check(
-            "search", {"query": "hello"}, agent_id="a1",
+            "search",
+            {"query": "hello"},
+            agent_id="a1",
             context={"access_logged": True},
         )
         assert result.compliance_status == ComplianceStatus.COMPLIANT
@@ -489,7 +502,9 @@ class TestComplianceChecker:
     def test_result_to_dict(self):
         checker = ComplianceChecker()
         result = checker.check(
-            "search", {}, agent_id="a1",
+            "search",
+            {},
+            agent_id="a1",
             context={"audit_enabled": True, "access_logged": True},
         )
         d = result.to_dict()

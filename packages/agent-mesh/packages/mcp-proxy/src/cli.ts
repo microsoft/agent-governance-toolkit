@@ -4,9 +4,9 @@
 
 /**
  * AgentMesh MCP Proxy CLI
- * 
+ *
  * Wrap any MCP server with security controls.
- * 
+ *
  * Usage:
  *   agentmesh protect [options] <mcp-command> [args...]
  *   agentmesh audit <logfile>
@@ -52,7 +52,7 @@ program
     try {
       // Load policy
       const policy = await loadPolicy(options.policy);
-      
+
       // Create audit logger
       const auditLogger = new AuditLogger({
         path: options.log,
@@ -104,7 +104,7 @@ program
 
       // Filter violations only
       if (options.violationsOnly) {
-        filtered = filtered.filter((e: any) => 
+        filtered = filtered.filter((e: any) =>
           e.type?.includes('violation') || e.data?.decision === 'deny'
         );
       }
@@ -112,7 +112,7 @@ program
       // Time filter
       if (options.since) {
         const since = parseTimespec(options.since);
-        filtered = filtered.filter((e: any) => 
+        filtered = filtered.filter((e: any) =>
           new Date(e.time).getTime() > since
         );
       }

@@ -105,7 +105,9 @@ async def test_backpressure_triggered_on_high_load():
 async def test_backpressure_drops_background_when_full():
     """Test that BACKGROUND messages are dropped when queue is full."""
     # Create broker with very small queue, disable priority delivery for queue inspection
-    broker = InMemoryBroker(max_queue_size=5, backpressure_threshold=0.8, use_priority_delivery=False)
+    broker = InMemoryBroker(
+        max_queue_size=5, backpressure_threshold=0.8, use_priority_delivery=False
+    )
     bus = MessageBus(adapter=broker)
 
     async with bus:
@@ -132,7 +134,9 @@ async def test_backpressure_drops_background_when_full():
 async def test_backpressure_raises_when_no_background_to_drop():
     """Test that publish raises error when queue is full and no BACKGROUND messages to drop."""
     # Create broker with very small queue, disable priority delivery
-    broker = InMemoryBroker(max_queue_size=3, backpressure_threshold=0.9, use_priority_delivery=False)
+    broker = InMemoryBroker(
+        max_queue_size=3, backpressure_threshold=0.9, use_priority_delivery=False
+    )
     bus = MessageBus(adapter=broker)
 
     async with bus:
@@ -192,13 +196,21 @@ async def test_priority_with_mixed_workload():
 
         # Publish mixed workload
         for i in range(5):
-            await bus.publish("test.topic", {"type": "background", "id": i}, priority=MessagePriority.BACKGROUND)
+            await bus.publish(
+                "test.topic", {"type": "background", "id": i}, priority=MessagePriority.BACKGROUND
+            )
 
         for i in range(3):
-            await bus.publish("test.topic", {"type": "critical", "id": i}, priority=MessagePriority.CRITICAL)
+            await bus.publish(
+                "test.topic", {"type": "critical", "id": i}, priority=MessagePriority.CRITICAL
+            )
 
         for i in range(5):
-            await bus.publish("test.topic", {"type": "background", "id": i+5}, priority=MessagePriority.BACKGROUND)
+            await bus.publish(
+                "test.topic",
+                {"type": "background", "id": i + 5},
+                priority=MessagePriority.BACKGROUND,
+            )
 
         await asyncio.sleep(0.2)
 
@@ -212,7 +224,9 @@ async def test_priority_with_mixed_workload():
         # The first 3 messages processed should be critical (or at least appear early)
         first_three = received[:3]
         critical_count_in_first_three = sum(1 for r in first_three if r[1] == "critical")
-        assert critical_count_in_first_three >= 2, "Most critical messages should be processed early"
+        assert critical_count_in_first_three >= 2, (
+            "Most critical messages should be processed early"
+        )
 
 
 @pytest.mark.asyncio

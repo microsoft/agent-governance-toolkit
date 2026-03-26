@@ -91,9 +91,7 @@ class SessionVFS:
         prefix = self.namespace
         return [p.removeprefix(prefix) for p in self._files if p.startswith(prefix)]
 
-    def set_permissions(
-        self, path: str, allowed_agents: set[str], agent_did: str
-    ) -> VFSEdit:
+    def set_permissions(self, path: str, allowed_agents: set[str], agent_did: str) -> VFSEdit:
         """Set path-level permissions."""
         full_path = self._resolve(path)
         self._permissions[full_path] = set(allowed_agents)
@@ -124,9 +122,13 @@ class SessionVFS:
         snapshot = self._snapshots[snapshot_id]
         self._files = dict(snapshot["files"])
         self._permissions = {k: set(v) for k, v in snapshot["permissions"].items()}
-        self._edit_log.append(VFSEdit(
-            path=self.namespace, operation="restore", agent_did=agent_did,
-        ))
+        self._edit_log.append(
+            VFSEdit(
+                path=self.namespace,
+                operation="restore",
+                agent_did=agent_did,
+            )
+        )
 
     def list_snapshots(self) -> list[str]:
         return list(self._snapshots.keys())
@@ -160,9 +162,7 @@ class SessionVFS:
     def _check_permission(self, full_path: str, agent_did: str) -> None:
         allowed = self._permissions.get(full_path)
         if allowed is not None and agent_did not in allowed:
-            raise VFSPermissionError(
-                f"Agent {agent_did} not permitted to access {full_path}"
-            )
+            raise VFSPermissionError(f"Agent {agent_did} not permitted to access {full_path}")
 
 
 def _hash(content: str) -> str:

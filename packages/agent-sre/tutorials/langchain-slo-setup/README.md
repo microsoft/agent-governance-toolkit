@@ -2,8 +2,8 @@
 
 Monitor a LangChain agent with **Service Level Objectives**, **error budgets**, and **alerts** using [Agent SRE](https://github.com/microsoft/agent-governance-toolkit).
 
-> **Time:** ~15 minutes  
-> **Prerequisites:** Python 3.10+  
+> **Time:** ~15 minutes
+> **Prerequisites:** Python 3.10+
 > **API keys required:** None (demo uses mocked LangChain components)
 
 ---

@@ -263,7 +263,10 @@ class GoogleADKKernel(BaseIntegration):
     def _check_timeout(self) -> tuple[bool, str]:
         elapsed = time.time() - self._start_time
         if elapsed > self._adk_config.timeout_seconds:
-            return False, f"Execution timeout ({elapsed:.0f}s > {self._adk_config.timeout_seconds}s)"
+            return (
+                False,
+                f"Execution timeout ({elapsed:.0f}s > {self._adk_config.timeout_seconds}s)",
+            )
         return True, ""
 
     def _check_budget(self, cost: float = 1.0) -> tuple[bool, str]:
@@ -295,7 +298,9 @@ class GoogleADKKernel(BaseIntegration):
     # ADK Callback Hooks
     # ------------------------------------------------------------------
 
-    def before_tool_callback(self, tool_context: Any = None, **kwargs: Any) -> dict[str, Any] | None:
+    def before_tool_callback(
+        self, tool_context: Any = None, **kwargs: Any
+    ) -> dict[str, Any] | None:
         """
         ADK before_tool_callback — called before each tool execution.
 
@@ -358,9 +363,14 @@ class GoogleADKKernel(BaseIntegration):
                     "agent_name": agent_name,
                     "timestamp": time.time(),
                 }
-                self._record("approval_required", agent_name, {
-                    "tool": tool_name, "call_id": call_id,
-                })
+                self._record(
+                    "approval_required",
+                    agent_name,
+                    {
+                        "tool": tool_name,
+                        "call_id": call_id,
+                    },
+                )
                 error = self._raise_violation(
                     "human_approval_required",
                     f"Tool '{tool_name}' requires human approval (call_id={call_id})",
@@ -389,7 +399,9 @@ class GoogleADKKernel(BaseIntegration):
         tool_name = getattr(tool_context, "tool_name", kwargs.get("tool_name", "unknown"))
         agent_name = getattr(tool_context, "agent_name", kwargs.get("agent_name", "unknown"))
 
-        self._record("after_tool", agent_name, {"tool": tool_name, "result_type": type(tool_result).__name__})
+        self._record(
+            "after_tool", agent_name, {"tool": tool_name, "result_type": type(tool_result).__name__}
+        )
 
         # Check output content
         if isinstance(tool_result, str):
@@ -475,9 +487,14 @@ class GoogleADKKernel(BaseIntegration):
         if call_id in self._pending_approvals:
             self._approved_calls[call_id] = True
             info = self._pending_approvals.pop(call_id)
-            self._record("approval_granted", info.get("agent_name", "unknown"), {
-                "call_id": call_id, "tool": info.get("tool_name"),
-            })
+            self._record(
+                "approval_granted",
+                info.get("agent_name", "unknown"),
+                {
+                    "call_id": call_id,
+                    "tool": info.get("tool_name"),
+                },
+            )
             return True
         return False
 
@@ -488,9 +505,14 @@ class GoogleADKKernel(BaseIntegration):
         """
         if call_id in self._pending_approvals:
             info = self._pending_approvals.pop(call_id)
-            self._record("approval_denied", info.get("agent_name", "unknown"), {
-                "call_id": call_id, "tool": info.get("tool_name"),
-            })
+            self._record(
+                "approval_denied",
+                info.get("agent_name", "unknown"),
+                {
+                    "call_id": call_id,
+                    "tool": info.get("tool_name"),
+                },
+            )
             return True
         return False
 

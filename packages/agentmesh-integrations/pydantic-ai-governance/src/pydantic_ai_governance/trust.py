@@ -31,9 +31,7 @@ class TrustScore:
     }
 
     def compute_overall(self) -> float:
-        self.overall = sum(
-            getattr(self, dim) * w for dim, w in self._WEIGHTS.items()
-        )
+        self.overall = sum(getattr(self, dim) * w for dim, w in self._WEIGHTS.items())
         return self.overall
 
     def to_dict(self) -> Dict[str, float]:
@@ -66,7 +64,9 @@ class TrustScorer:
             self._scores[agent_id] = TrustScore()
         return self._scores[agent_id]
 
-    def record_success(self, agent_id: str, dimensions: Optional[List[str]] = None) -> TrustScore:
+    def record_success(
+        self, agent_id: str, dimensions: Optional[List[str]] = None
+    ) -> TrustScore:
         score = self.get_score(agent_id)
         dims = dimensions or ["overall"]
         for dim in dims:
@@ -76,7 +76,9 @@ class TrustScorer:
         score.last_updated = time.time()
         return score
 
-    def record_failure(self, agent_id: str, dimensions: Optional[List[str]] = None) -> TrustScore:
+    def record_failure(
+        self, agent_id: str, dimensions: Optional[List[str]] = None
+    ) -> TrustScore:
         score = self.get_score(agent_id)
         dims = dimensions or ["overall"]
         for dim in dims:
@@ -96,7 +98,12 @@ class TrustScorer:
         score.last_updated = time.time()
         return score
 
-    def check_trust(self, agent_id: str, min_overall: float = 0.3, min_dimensions: Optional[Dict[str, float]] = None) -> bool:
+    def check_trust(
+        self,
+        agent_id: str,
+        min_overall: float = 0.3,
+        min_dimensions: Optional[Dict[str, float]] = None,
+    ) -> bool:
         score = self.get_score(agent_id)
         if score.overall < min_overall:
             return False

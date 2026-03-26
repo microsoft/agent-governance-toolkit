@@ -35,7 +35,7 @@ export function AgentList({ agents, onToggle, onStop }: AgentListProps) {
         <span className="section-title">Active Agents</span>
         <span className="agent-count">{agents.length}</span>
       </div>
-      
+
       <div className="agents-list">
         {agents.map((agent) => (
           <AgentCard
@@ -63,7 +63,7 @@ function AgentCard({ agent, onToggle, onStop }: AgentCardProps) {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
@@ -98,9 +98,9 @@ function AgentCard({ agent, onToggle, onStop }: AgentCardProps) {
           </button>
         </div>
       </div>
-      
+
       <div className="agent-description">{agent.description}</div>
-      
+
       <div className="agent-meta">
         <span>Last run: {formatLastRun(agent.lastRun)}</span>
         <span>•</span>

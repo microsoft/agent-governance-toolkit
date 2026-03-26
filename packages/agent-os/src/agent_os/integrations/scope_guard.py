@@ -82,9 +82,7 @@ def _escalate(current: str, proposed: str) -> str:
     return current
 
 
-def _get_diff_stats(
-    repo_path: str, base_branch: str = "main"
-) -> tuple[list[str], int, int]:
+def _get_diff_stats(repo_path: str, base_branch: str = "main") -> tuple[list[str], int, int]:
     """Return ``(changed_files, insertions, deletions)`` via ``git diff --numstat``.
 
     Args:
@@ -193,39 +191,29 @@ class ScopeGuard:
             if files_changed > max_files * 2:
                 decision = "HARD_FAIL"
                 reasons.append(
-                    f"files changed ({files_changed}) exceeds 2× limit "
-                    f"({max_files * 2})"
+                    f"files changed ({files_changed}) exceeds 2× limit ({max_files * 2})"
                 )
             else:
                 decision = _escalate(decision, "SOFT_FAIL")
-                reasons.append(
-                    f"files changed ({files_changed}) exceeds limit ({max_files})"
-                )
+                reasons.append(f"files changed ({files_changed}) exceeds limit ({max_files})")
 
         # Check line count
         if max_lines > 0 and lines_changed > max_lines:
             if lines_changed > max_lines * 2:
                 decision = "HARD_FAIL"
                 reasons.append(
-                    f"lines changed ({lines_changed}) exceeds 2× limit "
-                    f"({max_lines * 2})"
+                    f"lines changed ({lines_changed}) exceeds 2× limit ({max_lines * 2})"
                 )
             else:
                 decision = _escalate(decision, "SOFT_FAIL")
-                reasons.append(
-                    f"lines changed ({lines_changed}) exceeds limit ({max_lines})"
-                )
+                reasons.append(f"lines changed ({lines_changed}) exceeds limit ({max_lines})")
 
         # Check drift indicators
         if config.drift_detection and drift_indicators:
-            warnings = [
-                d for d in drift_indicators if d.get("severity") == "warning"
-            ]
+            warnings = [d for d in drift_indicators if d.get("severity") == "warning"]
             if warnings:
                 decision = _escalate(decision, "SOFT_FAIL")
-                reasons.append(
-                    f"{len(warnings)} scope drift warning(s) detected"
-                )
+                reasons.append(f"{len(warnings)} scope drift warning(s) detected")
 
         # Excess files for downstream remediation
         excess_files: list[str] = []
@@ -268,9 +256,7 @@ class ScopeGuard:
         Returns:
             A :class:`ScopeEvaluation`.
         """
-        changed_files, insertions, deletions = _get_diff_stats(
-            repo_path, base_branch
-        )
+        changed_files, insertions, deletions = _get_diff_stats(repo_path, base_branch)
         return self.evaluate(
             agent_id=agent_id,
             config=config,

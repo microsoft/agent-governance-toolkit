@@ -85,7 +85,7 @@
 
 #### The Enterprise Reality
 
-**AIOS Approach**: 
+**AIOS Approach**:
 > "If an agent is slow, optimize it. If it fails, retry it."
 
 **Our Approach**:
@@ -107,10 +107,10 @@ async def transfer_money(kernel, agent_ctx, amount):
     if not allowed:
         # Kernel panic - cannot proceed
         raise PolicyViolation("Transfer exceeds limit")
-    
+
     # Execute with full audit trail
-    result = await agent_ctx.syscall(SyscallType.SYS_EXEC, 
-        tool="transfer", 
+    result = await agent_ctx.syscall(SyscallType.SYS_EXEC,
+        tool="transfer",
         args={"amount": amount}
     )
     # Flight recorder has everything

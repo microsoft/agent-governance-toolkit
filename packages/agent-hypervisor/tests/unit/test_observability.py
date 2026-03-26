@@ -57,21 +57,27 @@ class TestHypervisorEventBus:
 
     def test_query_combined_filters(self):
         bus = HypervisorEventBus()
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ASSIGNED,
-            session_id="s1",
-            agent_did="a1",
-        ))
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ASSIGNED,
-            session_id="s1",
-            agent_did="a2",
-        ))
-        bus.emit(HypervisorEvent(
-            event_type=EventType.SLASH_EXECUTED,
-            session_id="s1",
-            agent_did="a1",
-        ))
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ASSIGNED,
+                session_id="s1",
+                agent_did="a1",
+            )
+        )
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ASSIGNED,
+                session_id="s1",
+                agent_did="a2",
+            )
+        )
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.SLASH_EXECUTED,
+                session_id="s1",
+                agent_did="a1",
+            )
+        )
 
         results = bus.query(
             event_type=EventType.RING_ASSIGNED,

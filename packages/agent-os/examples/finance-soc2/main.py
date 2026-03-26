@@ -24,7 +24,7 @@ import csv
 import json
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -37,10 +37,9 @@ sys.path.insert(0, os.path.join(_REPO_ROOT, "src"))
 from agent_os.integrations.base import (
     BaseIntegration,
     ExecutionContext,
-    GovernancePolicy,
     GovernanceEventType,
+    GovernancePolicy,
     PatternType,
-    PolicyInterceptor,
     ToolCallRequest,
     ToolCallResult,
 )
@@ -128,8 +127,17 @@ def save_audit_csv(path: str) -> None:
     if not audit_log:
         return
     fieldnames = [
-        "timestamp", "agent_id", "event_type", "tool", "role",
-        "call_count", "reason", "checkpoint", "amount", "recipient", "decision",
+        "timestamp",
+        "agent_id",
+        "event_type",
+        "tool",
+        "role",
+        "call_count",
+        "reason",
+        "checkpoint",
+        "amount",
+        "recipient",
+        "decision",
     ]
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
@@ -141,6 +149,7 @@ def save_audit_csv(path: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 # 4. INTEGRATION SUBCLASS
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class SOC2Integration(BaseIntegration):
     """Thin integration used to access Agent OS governance helpers."""
@@ -162,6 +171,7 @@ class SOC2Integration(BaseIntegration):
 #    - Max tool calls
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class SOC2Interceptor:
     """Role-aware interceptor that enforces SOC2 governance controls."""
 
@@ -179,10 +189,7 @@ class SOC2Interceptor:
 
     def intercept(self, request: ToolCallRequest) -> ToolCallResult:
         # 1. Check allowed tools for this role (SOC2 CC6.1 separation of duties)
-        if (
-            self.policy.allowed_tools
-            and request.tool_name not in self.policy.allowed_tools
-        ):
+        if self.policy.allowed_tools and request.tool_name not in self.policy.allowed_tools:
             return ToolCallResult(
                 allowed=False,
                 reason=f"Tool '{request.tool_name}' not permitted for role '{self.role}'",
@@ -228,6 +235,7 @@ class SOC2Interceptor:
 #    Simulates an LLM-based agent that processes financial transactions.
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class Transaction:
     tx_id: str
@@ -266,6 +274,7 @@ class FinancialAgent:
 # ═══════════════════════════════════════════════════════════════════════════
 # 7. GOVERNED EXECUTION HELPER
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def governed_call(
     integration: SOC2Integration,
@@ -306,12 +315,14 @@ def governed_call(
         return None
 
     ctx.call_count += 1
-    ctx.tool_calls.append({
-        "call_id": request.call_id,
-        "tool": tool_name,
-        "arguments": arguments,
-        "timestamp": datetime.now().isoformat(),
-    })
+    ctx.tool_calls.append(
+        {
+            "call_id": request.call_id,
+            "tool": tool_name,
+            "arguments": arguments,
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
 
     if ctx.policy.log_all_calls:
         integration.emit(
@@ -343,13 +354,16 @@ def governed_call(
         )
         print(f"  \u25cb CHECKPOINT created: {checkpoint_id} (after {ctx.call_count} calls)")
 
-    print(f"  \u2714 ALLOWED  | tool={tool_name} (call {ctx.call_count}/{ctx.policy.max_tool_calls})")
+    print(
+        f"  \u2714 ALLOWED  | tool={tool_name} (call {ctx.call_count}/{ctx.policy.max_tool_calls})"
+    )
     return f"mock_result_for_{tool_name}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 8. DISPLAY HELPERS
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def print_header(title: str) -> None:
     width = 64
@@ -377,6 +391,7 @@ def _wire_listeners(integration: SOC2Integration) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 # 9. DEMO SCENARIOS
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def run_demo() -> None:
     # -- Set up role-specific integrations & interceptors -------------------
@@ -406,52 +421,60 @@ def run_demo() -> None:
     print(f"  Human approval required: YES (transactions > ${APPROVAL_THRESHOLD:,.0f})")
     print(f"  Max tool calls per session: {ap_policy.max_tool_calls}")
     print(f"  Rate limit: {RATE_LIMIT_PER_SESSION} transfers/session")
-    print(f"  Blocked patterns: SSN regex, credit-card regex, sanctions list, PII keywords")
+    print("  Blocked patterns: SSN regex, credit-card regex, sanctions list, PII keywords")
     print(f"  Audit logging: {'ON' if ap_policy.log_all_calls else 'OFF'}")
     print(f"  Sanctioned entities: {', '.join(SANCTIONED_ENTITIES)}")
 
     # -- Scenario 1: Small transfer (auto-approved) ------------------------
     print_section("Scenario 1: Small transfer \u2014 accounts_payable (auto-approved)")
-    print(f"\n  $500.00 \u2192 Vendor ABC (within AP limit of $5,000)")
+    print("\n  $500.00 \u2192 Vendor ABC (within AP limit of $5,000)")
     result = governed_call(
-        ap_integration, ap_ctx, ap_interceptor,
+        ap_integration,
+        ap_ctx,
+        ap_interceptor,
         "transfer",
         {"amount": 500.00, "recipient": "Vendor ABC", "description": "Office supplies"},
     )
     if result:
         tx = agent.process(500.00, "Vendor ABC", "Office supplies")
-        audit_log.append({
-            "agent_id": ap_ctx.agent_id,
-            "event_type": "TRANSACTION",
-            "tool": "transfer",
-            "role": "accounts_payable",
-            "amount": 500.00,
-            "recipient": "Vendor ABC",
-            "decision": tx.status,
-            "timestamp": datetime.now().isoformat(),
-        })
+        audit_log.append(
+            {
+                "agent_id": ap_ctx.agent_id,
+                "event_type": "TRANSACTION",
+                "tool": "transfer",
+                "role": "accounts_payable",
+                "amount": 500.00,
+                "recipient": "Vendor ABC",
+                "decision": tx.status,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
         print(f"  \u2705 PROCESSED: ${tx.amount:,.2f} to {tx.recipient} \u2014 {tx.status}")
 
     # -- Scenario 2: Large transfer (needs approval) -----------------------
     print_section("Scenario 2: Large transfer \u2014 finance_manager (needs approval)")
-    print(f"\n  $25,000.00 \u2192 Vendor XYZ (within FM limit of $50,000)")
+    print("\n  $25,000.00 \u2192 Vendor XYZ (within FM limit of $50,000)")
     result = governed_call(
-        fm_integration, fm_ctx, fm_interceptor,
+        fm_integration,
+        fm_ctx,
+        fm_interceptor,
         "transfer",
         {"amount": 25_000.00, "recipient": "Vendor XYZ", "description": "Q2 consulting fees"},
     )
     if result:
         tx = agent.process(25_000.00, "Vendor XYZ", "Q2 consulting fees")
-        audit_log.append({
-            "agent_id": fm_ctx.agent_id,
-            "event_type": "TRANSACTION",
-            "tool": "transfer",
-            "role": "finance_manager",
-            "amount": 25_000.00,
-            "recipient": "Vendor XYZ",
-            "decision": tx.status,
-            "timestamp": datetime.now().isoformat(),
-        })
+        audit_log.append(
+            {
+                "agent_id": fm_ctx.agent_id,
+                "event_type": "TRANSACTION",
+                "tool": "transfer",
+                "role": "finance_manager",
+                "amount": 25_000.00,
+                "recipient": "Vendor XYZ",
+                "decision": tx.status,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
         if tx.status == "pending_approval":
             print(f"  \u23f3 PENDING APPROVAL: ${tx.amount:,.2f} to {tx.recipient}")
             print("  >> Approval request sent to: finance_manager, cfo")
@@ -460,9 +483,11 @@ def run_demo() -> None:
 
     # -- Scenario 3: Sanctioned entity (blocked) ---------------------------
     print_section("Scenario 3: Sanctioned entity \u2014 blocked by governance")
-    print(f"\n  $100.00 \u2192 SanctionedCorp (on OFAC sanctions list)")
+    print("\n  $100.00 \u2192 SanctionedCorp (on OFAC sanctions list)")
     governed_call(
-        ap_integration, ap_ctx, ap_interceptor,
+        ap_integration,
+        ap_ctx,
+        ap_interceptor,
         "transfer",
         {"amount": 100.00, "recipient": "SanctionedCorp", "description": "Payment"},
     )
@@ -481,13 +506,19 @@ def run_demo() -> None:
     print(f"\n  Simulating burst: {RATE_LIMIT_PER_SESSION - 1} prior transfers already made")
     print(f"  Transfer #{RATE_LIMIT_PER_SESSION}: $200 \u2192 Vendor D")
     governed_call(
-        burst_integration, burst_ctx, burst_interceptor,
+        burst_integration,
+        burst_ctx,
+        burst_interceptor,
         "transfer",
         {"amount": 200.00, "recipient": "Vendor D", "description": "Last allowed transfer"},
     )
-    print(f"\n  Transfer #{RATE_LIMIT_PER_SESSION + 1}: $300 \u2192 Vendor E (should be rate-limited)")
+    print(
+        f"\n  Transfer #{RATE_LIMIT_PER_SESSION + 1}: $300 \u2192 Vendor E (should be rate-limited)"
+    )
     governed_call(
-        burst_integration, burst_ctx, burst_interceptor,
+        burst_integration,
+        burst_ctx,
+        burst_interceptor,
         "transfer",
         {"amount": 300.00, "recipient": "Vendor E", "description": "Over rate limit"},
     )
@@ -495,7 +526,9 @@ def run_demo() -> None:
     # -- Scenario 5: Balance query (allowed) -------------------------------
     print_section("Scenario 5: Balance query \u2014 accounts_payable (allowed)")
     result = governed_call(
-        ap_integration, ap_ctx, ap_interceptor,
+        ap_integration,
+        ap_ctx,
+        ap_interceptor,
         "query_balance",
         {"account": "operating-account"},
     )
@@ -505,9 +538,11 @@ def run_demo() -> None:
 
     # -- Scenario 6: Role escalation attempt (AP tries to approve) ---------
     print_section("Scenario 6: Role escalation \u2014 AP tries to approve (blocked)")
-    print(f"\n  accounts_payable attempting 'approve' tool (not in allowed_tools)")
+    print("\n  accounts_payable attempting 'approve' tool (not in allowed_tools)")
     governed_call(
-        ap_integration, ap_ctx, ap_interceptor,
+        ap_integration,
+        ap_ctx,
+        ap_interceptor,
         "approve",
         {"tx_id": "TX-0002", "approver": "accounts_payable"},
     )
@@ -531,7 +566,9 @@ def run_demo() -> None:
         elif decision in ("approved", "pending_approval"):
             label = "APPROVED" if decision == "approved" else "PENDING"
             suffix = "" if decision == "approved" else "  (needs human approval)"
-            print(f"  {i:>2}. [{agent_id}] {label:<11} ${amount:,.2f} \u2192 {entry.get('recipient', '')}{suffix}")
+            print(
+                f"  {i:>2}. [{agent_id}] {label:<11} ${amount:,.2f} \u2192 {entry.get('recipient', '')}{suffix}"
+            )
         else:
             print(f"  {i:>2}. [{agent_id}] ALLOWED    tool={tool}  (calls={call_count})")
 
@@ -560,8 +597,8 @@ def run_demo() -> None:
     print_header("Audit Trail Exported")
     print(f"  JSON: {json_path}")
     print(f"  CSV:  {csv_path}")
-    print(f"\n  These files provide an immutable record for SOC2 compliance review.")
-    print(f"  Retention policy: 7 years per SOC2 Trust Service Criteria.\n")
+    print("\n  These files provide an immutable record for SOC2 compliance review.")
+    print("  Retention policy: 7 years per SOC2 Trust Service Criteria.\n")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

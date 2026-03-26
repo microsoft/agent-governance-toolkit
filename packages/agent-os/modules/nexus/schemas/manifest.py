@@ -9,36 +9,25 @@ Extends the IATP manifest (RFC-001) with Nexus-specific fields.
 
 from datetime import datetime, timezone
 from typing import Literal, Optional
+
 from pydantic import BaseModel, Field, field_validator
-import re
 
 
 class AgentIdentity(BaseModel):
     """Decentralized identity for an agent."""
-    
+
     did: str = Field(
         ...,
         description="Decentralized Identifier (did:nexus:...)",
-        examples=["did:nexus:carbon-auditor-v1.2.0"]
+        examples=["did:nexus:carbon-auditor-v1.2.0"],
     )
     verification_key: str = Field(
-        ...,
-        description="Ed25519 public key (base64 encoded)",
-        examples=["ed25519:abc123..."]
+        ..., description="Ed25519 public key (base64 encoded)", examples=["ed25519:abc123..."]
     )
-    owner_id: str = Field(
-        ...,
-        description="Developer/Organization ID"
-    )
-    display_name: Optional[str] = Field(
-        None,
-        description="Human-readable agent name"
-    )
-    contact: Optional[str] = Field(
-        None,
-        description="Contact email for security issues"
-    )
-    
+    owner_id: str = Field(..., description="Developer/Organization ID")
+    display_name: Optional[str] = Field(None, description="Human-readable agent name")
+    contact: Optional[str] = Field(None, description="Contact email for security issues")
+
     @field_validator("did")
     @classmethod
     def validate_did(cls, v: str) -> str:
@@ -46,7 +35,7 @@ class AgentIdentity(BaseModel):
         if not v.startswith("did:nexus:"):
             raise ValueError("DID must start with 'did:nexus:'")
         return v
-    
+
     @field_validator("verification_key")
     @classmethod
     def validate_key(cls, v: str) -> str:
@@ -58,144 +47,105 @@ class AgentIdentity(BaseModel):
 
 class AgentCapabilities(BaseModel):
     """What this agent can do."""
-    
+
     domains: list[str] = Field(
         default_factory=list,
-        description="Capability domains (e.g., 'data-analysis', 'code-generation')"
+        description="Capability domains (e.g., 'data-analysis', 'code-generation')",
     )
-    tools: list[str] = Field(
-        default_factory=list,
-        description="Available tool names"
-    )
+    tools: list[str] = Field(default_factory=list, description="Available tool names")
     max_concurrency: int = Field(
-        default=10,
-        ge=1,
-        le=1000,
-        description="Maximum concurrent requests"
+        default=10, ge=1, le=1000, description="Maximum concurrent requests"
     )
     sla_latency_ms: int = Field(
-        default=5000,
-        ge=100,
-        le=300000,
-        description="SLA latency in milliseconds"
+        default=5000, ge=100, le=300000, description="SLA latency in milliseconds"
     )
-    idempotency: bool = Field(
-        default=False,
-        description="Whether operations are idempotent"
-    )
+    idempotency: bool = Field(default=False, description="Whether operations are idempotent")
     reversibility: Literal["full", "partial", "none"] = Field(
-        default="partial",
-        description="Level of operation reversibility"
+        default="partial", description="Level of operation reversibility"
     )
     undo_window_seconds: Optional[int] = Field(
-        default=3600,
-        description="Time window for undo operations (if reversible)"
+        default=3600, description="Time window for undo operations (if reversible)"
     )
 
 
 class AgentPrivacy(BaseModel):
     """Privacy and data handling policies."""
-    
+
     retention_policy: Literal["ephemeral", "session", "permanent"] = Field(
-        default="ephemeral",
-        description="How long data is retained"
+        default="ephemeral", description="How long data is retained"
     )
     pii_handling: Literal["reject", "anonymize", "accept"] = Field(
-        default="reject",
-        description="How PII is handled"
+        default="reject", description="How PII is handled"
     )
     human_in_loop: bool = Field(
-        default=False,
-        description="Whether human review is part of processing"
+        default=False, description="Whether human review is part of processing"
     )
     training_consent: bool = Field(
-        default=False,
-        description="Whether data may be used for training"
+        default=False, description="Whether data may be used for training"
     )
     data_residency: Optional[str] = Field(
-        default=None,
-        description="Required data residency region (e.g., 'us', 'eu')"
+        default=None, description="Required data residency region (e.g., 'us', 'eu')"
     )
 
 
 class MuteRules(BaseModel):
     """Agent OS Mute Agent rules attached to this agent."""
-    
+
     rule_hashes: list[str] = Field(
-        default_factory=list,
-        description="SHA-256 hashes of attached mute rules"
+        default_factory=list, description="SHA-256 hashes of attached mute rules"
     )
     last_validated: Optional[datetime] = Field(
-        default=None,
-        description="When rules were last validated by Control Plane"
+        default=None, description="When rules were last validated by Control Plane"
     )
     control_plane_signature: Optional[str] = Field(
-        default=None,
-        description="Control Plane signature of rule validation"
+        default=None, description="Control Plane signature of rule validation"
     )
 
 
 class AgentManifest(BaseModel):
     """
     Complete manifest for Nexus registration.
-    
+
     This extends the IATP manifest (RFC-001) with Nexus-specific fields
     for the Trust Exchange.
     """
-    
+
     schema_version: str = Field(
-        default="1.0",
-        description="Schema version for forward compatibility"
+        default="1.0", description="Schema version for forward compatibility"
     )
     identity: AgentIdentity
     capabilities: AgentCapabilities = Field(default_factory=AgentCapabilities)
     privacy: AgentPrivacy = Field(default_factory=AgentPrivacy)
     mute_rules: MuteRules = Field(default_factory=MuteRules)
-    
+
     # Nexus-specific fields
     verification_level: Literal["verified_partner", "verified", "registered", "unknown"] = Field(
-        default="registered",
-        description="Verification tier on Nexus"
+        default="registered", description="Verification tier on Nexus"
     )
     registered_at: Optional[datetime] = Field(
-        default=None,
-        description="When agent was registered on Nexus"
+        default=None, description="When agent was registered on Nexus"
     )
-    last_seen: Optional[datetime] = Field(
-        default=None,
-        description="Last activity timestamp"
-    )
-    trust_score: int = Field(
-        default=400,
-        ge=0,
-        le=1000,
-        description="Current trust score (0-1000)"
-    )
-    
+    last_seen: Optional[datetime] = Field(default=None, description="Last activity timestamp")
+    trust_score: int = Field(default=400, ge=0, le=1000, description="Current trust score (0-1000)")
+
     # Attestation
-    codebase_hash: Optional[str] = Field(
-        default=None,
-        description="SHA-256 hash of agent codebase"
-    )
+    codebase_hash: Optional[str] = Field(default=None, description="SHA-256 hash of agent codebase")
     config_hash: Optional[str] = Field(
-        default=None,
-        description="SHA-256 hash of agent configuration"
+        default=None, description="SHA-256 hash of agent configuration"
     )
     attestation_signature: Optional[str] = Field(
-        default=None,
-        description="Control Plane signature of attestation"
+        default=None, description="Control Plane signature of attestation"
     )
     attestation_expires: Optional[datetime] = Field(
-        default=None,
-        description="When attestation expires"
+        default=None, description="When attestation expires"
     )
-    
+
     def is_attestation_valid(self) -> bool:
         """Check if attestation is present and not expired."""
         if not self.attestation_signature or not self.attestation_expires:
             return False
         return datetime.now(timezone.utc) < self.attestation_expires
-    
+
     def to_iatp_manifest(self) -> dict:
         """Convert to IATP-compatible manifest format."""
         return {

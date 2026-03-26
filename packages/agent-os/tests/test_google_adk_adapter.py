@@ -10,20 +10,19 @@ Run with: python -m pytest tests/test_google_adk_adapter.py -v --tb=short
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from unittest.mock import MagicMock
 
 import pytest
 
 from agent_os.integrations.google_adk_adapter import (
+    _HAS_ADK,
     AuditEvent,
     GoogleADKKernel,
     PolicyConfig,
     PolicyViolationError,
-    _HAS_ADK,
     _check_adk_available,
 )
-
 
 # =============================================================================
 # Fake ADK context objects (no real google.adk dependency)
@@ -112,6 +111,7 @@ class TestGoogleADKKernelInit:
     def test_extends_base_integration(self):
         """GoogleADKKernel should extend BaseIntegration."""
         from agent_os.integrations.base import BaseIntegration
+
         k = GoogleADKKernel()
         assert isinstance(k, BaseIntegration)
 
@@ -486,7 +486,9 @@ class TestAuditAndStats:
     def test_audit_log_records_events(self):
         k = GoogleADKKernel()
         k.before_tool_callback(FakeToolContext(tool_name="search", agent_name="a1"))
-        k.after_tool_callback(FakeToolContext(tool_name="search", agent_name="a1"), tool_result="ok")
+        k.after_tool_callback(
+            FakeToolContext(tool_name="search", agent_name="a1"), tool_result="ok"
+        )
         k.before_agent_callback(FakeCallbackContext(agent_name="a1"))
         k.after_agent_callback(FakeCallbackContext(agent_name="a1"), content="done")
 
@@ -671,13 +673,21 @@ class TestIntegration:
         assert k.before_agent_callback(FakeCallbackContext(agent_name="assistant")) is None
 
         # Tool 1: allowed
-        assert k.before_tool_callback(
-            FakeToolContext(tool_name="search", tool_args={"q": "weather"}, agent_name="assistant")
-        ) is None
-        assert k.after_tool_callback(
-            FakeToolContext(tool_name="search", agent_name="assistant"),
-            tool_result="Sunny, 72°F",
-        ) == "Sunny, 72°F"
+        assert (
+            k.before_tool_callback(
+                FakeToolContext(
+                    tool_name="search", tool_args={"q": "weather"}, agent_name="assistant"
+                )
+            )
+            is None
+        )
+        assert (
+            k.after_tool_callback(
+                FakeToolContext(tool_name="search", agent_name="assistant"),
+                tool_result="Sunny, 72°F",
+            )
+            == "Sunny, 72°F"
+        )
 
         # Tool 2: blocked tool
         result = k.before_tool_callback(
@@ -696,9 +706,14 @@ class TestIntegration:
         assert result is not None
 
         # Tool 4: allowed tool but blocked output
-        assert k.before_tool_callback(
-            FakeToolContext(tool_name="db_query", tool_args={"q": "SELECT *"}, agent_name="assistant")
-        ) is None
+        assert (
+            k.before_tool_callback(
+                FakeToolContext(
+                    tool_name="db_query", tool_args={"q": "SELECT *"}, agent_name="assistant"
+                )
+            )
+            is None
+        )
         result = k.after_tool_callback(
             FakeToolContext(tool_name="db_query", agent_name="assistant"),
             tool_result="SECRET_API_KEY=abc123",
@@ -745,4 +760,3 @@ class TestIntegration:
         result = k.before_tool_callback(FakeToolContext(tool_name="shell"))
         assert result is not None
         assert "blocked" in result["error"].lower()
-

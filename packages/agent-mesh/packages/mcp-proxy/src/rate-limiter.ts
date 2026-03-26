@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Rate Limiter
- * 
+ *
  * Token bucket rate limiting for tool calls.
  */
 
@@ -43,9 +43,9 @@ export class RateLimiter {
   private checkBucket(key: string, config: RateLimitConfig): boolean {
     const now = Date.now();
     const refillInterval = this.parseInterval(config.per);
-    
+
     let bucket = this.buckets.get(key);
-    
+
     if (!bucket) {
       bucket = {
         tokens: config.requests,
@@ -57,7 +57,7 @@ export class RateLimiter {
     // Refill tokens based on time passed
     const timePassed = now - bucket.lastRefill;
     const refillTokens = Math.floor(timePassed / refillInterval) * config.requests;
-    
+
     if (refillTokens > 0) {
       bucket.tokens = Math.min(config.requests, bucket.tokens + refillTokens);
       bucket.lastRefill = now;
@@ -87,7 +87,7 @@ export class RateLimiter {
 
   getStatus(): Record<string, { remaining: number; limit: number }> {
     const status: Record<string, { remaining: number; limit: number }> = {};
-    
+
     const globalBucket = this.buckets.get('global');
     status['global'] = {
       remaining: globalBucket?.tokens ?? this.globalConfig.requests,

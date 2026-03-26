@@ -49,6 +49,7 @@ __all__: List[str] = [
 # Optional ChromaDB adapter - only import if chromadb is installed
 try:
     from emk.store import ChromaDBAdapter
+
     __all__.append("ChromaDBAdapter")
 except ImportError:
     if TYPE_CHECKING:
@@ -56,6 +57,7 @@ except ImportError:
 
 # Causal memory (requires sqlite3, always available in stdlib)
 from emk.causal import CausalEpisode, CausalMemoryStore
+
 __all__.extend(["CausalEpisode", "CausalMemoryStore"])
 
 # Optional Hugging Face utilities - only import if huggingface_hub is installed
@@ -65,11 +67,14 @@ try:
         download_episodes_from_hub,
         push_experiment_results,
     )
-    __all__.extend([
-        "upload_episodes_to_hub",
-        "download_episodes_from_hub",
-        "push_experiment_results",
-    ])
+
+    __all__.extend(
+        [
+            "upload_episodes_to_hub",
+            "download_episodes_from_hub",
+            "push_experiment_results",
+        ]
+    )
 except ImportError:
     pass
 

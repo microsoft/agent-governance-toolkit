@@ -79,6 +79,19 @@ __license__ = "MIT"
 # Core Models
 # Attestation & Reputation
 from iatp.attestation import AttestationValidator, ReputationManager
+
+# IPC Pipes - Typed inter-agent communication (v0.4.0)
+from iatp.ipc_pipes import (
+    AgentPipelineStage,
+    PipeConfig,
+    Pipeline,
+    PipeMessage,
+    PipeState,
+    PolicyCheckPipe,
+    TypedPipe,
+    create_pipeline,
+    pipe_agents,
+)
 from iatp.models import (
     AgentCapabilities,
     AttestationRecord,
@@ -105,19 +118,6 @@ from iatp.sidecar import SidecarProxy, create_sidecar
 
 # Telemetry & Tracing
 from iatp.telemetry import FlightRecorder, TraceIDGenerator
-
-# IPC Pipes - Typed inter-agent communication (v0.4.0)
-from iatp.ipc_pipes import (
-    TypedPipe,
-    PipeMessage,
-    PipeConfig,
-    PipeState,
-    PolicyCheckPipe,
-    Pipeline,
-    AgentPipelineStage,
-    create_pipeline,
-    pipe_agents,
-)
 
 # Public API exports - controls what is visible via `from iatp import *`
 __all__ = [

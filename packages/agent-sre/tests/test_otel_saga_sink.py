@@ -82,6 +82,7 @@ class TestOTelSpanSink:
 
         call_kwargs = mock_exporter.export_span_simple.call_args
         from agent_sre.replay.capture import SpanStatus
+
         assert call_kwargs.kwargs.get("status") == SpanStatus.ERROR
 
     def test_spans_exported_counter(self):

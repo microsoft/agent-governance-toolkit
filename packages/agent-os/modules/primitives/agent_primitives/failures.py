@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 class FailureType(str, Enum):
     """Types of agent failures."""
+
     BLOCKED_BY_CONTROL_PLANE = "blocked_by_control_plane"
     TIMEOUT = "timeout"
     INVALID_ACTION = "invalid_action"
@@ -25,6 +26,7 @@ class FailureType(str, Enum):
 
 class FailureSeverity(str, Enum):
     """Severity levels for failures."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -33,13 +35,13 @@ class FailureSeverity(str, Enum):
 
 class FailureTrace(BaseModel):
     """Full trace of an agent failure including reasoning chain."""
-    
+
     user_prompt: str = Field(..., description="Original user prompt that led to failure")
     chain_of_thought: List[str] = Field(default_factory=list, description="Agent's reasoning steps")
     failed_action: Dict[str, Any] = Field(..., description="The action that failed")
     error_details: str = Field(..., description="Detailed error information")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -47,13 +49,13 @@ class FailureTrace(BaseModel):
                 "chain_of_thought": [
                     "User wants to delete records",
                     "I need to identify which records are 'recent'",
-                    "I'll delete from users table"
+                    "I'll delete from users table",
                 ],
                 "failed_action": {
                     "action": "execute_sql",
-                    "query": "DELETE FROM users WHERE created_at > '2024-01-01'"
+                    "query": "DELETE FROM users WHERE created_at > '2024-01-01'",
                 },
-                "error_details": "Action blocked by control plane: Dangerous SQL query"
+                "error_details": "Action blocked by control plane: Dangerous SQL query",
             }
         }
     )
@@ -61,7 +63,7 @@ class FailureTrace(BaseModel):
 
 class AgentFailure(BaseModel):
     """Represents a failure detected in an agent."""
-    
+
     agent_id: str = Field(..., description="Unique identifier for the agent")
     failure_type: FailureType = Field(..., description="Type of failure")
     severity: FailureSeverity = Field(default=FailureSeverity.MEDIUM)
@@ -69,8 +71,10 @@ class AgentFailure(BaseModel):
     error_message: str = Field(..., description="Error message from the failure")
     context: Dict[str, Any] = Field(default_factory=dict, description="Additional context")
     stack_trace: Optional[str] = Field(None, description="Stack trace if available")
-    failure_trace: Optional[FailureTrace] = Field(None, description="Full failure trace if available")
-    
+    failure_trace: Optional[FailureTrace] = Field(
+        None, description="Full failure trace if available"
+    )
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -78,7 +82,7 @@ class AgentFailure(BaseModel):
                 "failure_type": "blocked_by_control_plane",
                 "severity": "high",
                 "error_message": "Agent action blocked by control plane policy",
-                "context": {"action": "delete_file", "resource": "/etc/passwd"}
+                "context": {"action": "delete_file", "resource": "/etc/passwd"},
             }
         }
     )

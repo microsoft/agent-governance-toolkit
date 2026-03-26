@@ -72,7 +72,7 @@ rules:
   # Block PHI in external communications
   - name: block-phi-external
     trigger: action
-    condition: 
+    condition:
       action_type: send_message
       destination: external
     check: does_not_contain_phi
@@ -88,7 +88,7 @@ rules:
     action: log
     log_level: audit
     retention_years: 6
-    
+
   # Minimum necessary - only access required fields
   - name: minimum-necessary
     trigger: action

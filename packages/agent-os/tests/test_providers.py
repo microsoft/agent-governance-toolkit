@@ -2,22 +2,18 @@
 # Licensed under the MIT License.
 """Tests for the provider discovery system."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from importlib.metadata import EntryPoint
 
 from agent_os.providers import (
-    _discover_provider,
-    get_verification_engine,
-    get_self_correction_kernel,
-    get_policy_engine,
-    get_context_service,
-    get_memory_store,
-    get_trust_protocol,
-    get_mute_agent,
-    list_providers,
-    clear_cache,
     PROVIDER_GROUPS,
+    _discover_provider,
+    clear_cache,
+    get_policy_engine,
+    get_self_correction_kernel,
+    get_verification_engine,
+    list_providers,
 )
 
 

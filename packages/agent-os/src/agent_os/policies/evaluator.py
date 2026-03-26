@@ -84,9 +84,7 @@ class PolicyEvaluator:
         """
         from .backends import OPABackend
 
-        backend = OPABackend(
-            rego_path=rego_path, rego_content=rego_content, package=package
-        )
+        backend = OPABackend(rego_path=rego_path, rego_content=rego_content, package=package)
         self.add_backend(backend)
         return backend
 

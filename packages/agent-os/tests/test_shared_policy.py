@@ -4,21 +4,18 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from agent_os.policies.shared import (
     Condition,
-    SharedPolicyDecision,
     SharedPolicyEvaluator,
     SharedPolicyRule,
     SharedPolicySchema,
     policy_document_to_shared,
     shared_to_policy_document,
 )
-
 
 # ---------------------------------------------------------------------------
 # Condition validation
@@ -142,9 +139,7 @@ class TestSharedPolicyEvaluator:
 
     def test_allow_matches(self):
         ev = SharedPolicyEvaluator()
-        decision = ev.evaluate(
-            {"tool_name": "search", "token_count": 100}, self._make_rules()
-        )
+        decision = ev.evaluate({"tool_name": "search", "token_count": 100}, self._make_rules())
         assert decision.allowed
         assert decision.matched_rule_id == "allow-search"
 
@@ -185,7 +180,7 @@ class TestSharedPolicyEvaluator:
             ],
         )
         ev = SharedPolicyEvaluator()
-        assert not ev.evaluate({"a": 1, "b": 999}, [rule]).allowed is False
+        assert ev.evaluate({"a": 1, "b": 999}, [rule]).allowed is not False
         assert not ev.evaluate({"a": 1, "b": 2}, [rule]).allowed
 
     def test_regex_matches(self):

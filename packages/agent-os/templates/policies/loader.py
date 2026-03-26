@@ -21,7 +21,6 @@ Usage:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -34,10 +33,7 @@ def list_templates() -> list[str]:
     Returns:
         Sorted list of template names (without .yaml extension).
     """
-    return sorted(
-        p.stem
-        for p in _TEMPLATES_DIR.glob("*.yaml")
-    )
+    return sorted(p.stem for p in _TEMPLATES_DIR.glob("*.yaml"))
 
 
 def load_policy_yaml(name: str) -> dict[str, Any]:
@@ -59,11 +55,9 @@ def load_policy_yaml(name: str) -> dict[str, Any]:
     path = _TEMPLATES_DIR / f"{name}.yaml"
     if not path.exists():
         available = ", ".join(list_templates())
-        raise FileNotFoundError(
-            f"Policy template '{name}' not found. Available: {available}"
-        )
+        raise FileNotFoundError(f"Policy template '{name}' not found. Available: {available}")
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f.read())
 
     if not isinstance(data, dict):
@@ -72,7 +66,7 @@ def load_policy_yaml(name: str) -> dict[str, Any]:
     return data
 
 
-def load_policy(name: str) -> "GovernancePolicy":
+def load_policy(name: str) -> GovernancePolicy:
     """Load a policy template and return a GovernancePolicy instance.
 
     Extracts GovernancePolicy-compatible fields from the YAML template

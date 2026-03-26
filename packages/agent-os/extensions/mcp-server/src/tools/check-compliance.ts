@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * check_compliance Tool
- * 
+ *
  * Checks an agent against compliance frameworks.
  */
 
@@ -290,28 +290,28 @@ The compliance check evaluates:
       required: ['agentId', 'framework'],
     },
   },
-  
+
   async execute(args: unknown, context: ServiceContext): Promise<string> {
     const input = CheckComplianceInputSchema.parse(args);
-    
-    context.logger.info('Checking compliance', { 
-      agentId: input.agentId, 
-      framework: input.framework 
+
+    context.logger.info('Checking compliance', {
+      agentId: input.agentId,
+      framework: input.framework
     });
-    
+
     // Get agent
     const agent = await context.agentManager.getAgent(input.agentId);
     if (!agent) {
       throw new Error(`Agent not found: ${input.agentId}`);
     }
-    
+
     // Get controls for framework
     const controls = COMPLIANCE_CONTROLS[input.framework] || [];
-    
+
     if (controls.length === 0) {
       throw new Error(`Framework not supported: ${input.framework}`);
     }
-    
+
     // Evaluate each control
     const results = controls.map(control => {
       const result = control.check(agent, agent.config.policies);
@@ -323,12 +323,12 @@ The compliance check evaluates:
         evidence: result.evidence,
       };
     });
-    
+
     const passedCount = results.filter(r => r.status === 'passed').length;
     const totalCount = results.length;
     const score = Math.round((passedCount / totalCount) * 100);
     const compliant = score >= 80; // 80% threshold for compliance
-    
+
     // Format results
     const controlsFormatted = results.map(r => {
       const emoji = r.status === 'passed' ? '✅' : '❌';
@@ -336,7 +336,7 @@ The compliance check evaluates:
    ${r.description}
    Evidence: ${r.evidence.join(', ')}`;
     }).join('\n\n');
-    
+
     // Generate recommendations
     const failedControls = results.filter(r => r.status === 'failed');
     const recommendations = failedControls.map(c => {
@@ -348,7 +348,7 @@ The compliance check evaluates:
       };
       return `- ${c.name}: ${suggestions[c.name] || 'Review policy configuration'}`;
     });
-    
+
     return `
 # Compliance Report: ${input.framework}
 
@@ -379,7 +379,7 @@ ${recommendations.join('\n')}
 ` : ''}
 ## Next Steps
 
-${compliant 
+${compliant
   ? `1. Export this report for auditors
 2. Schedule regular compliance checks
 3. Review any warnings above`

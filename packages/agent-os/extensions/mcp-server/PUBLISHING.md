@@ -315,20 +315,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-      
+
       - name: Install dependencies
         run: npm ci
         working-directory: packages/mcp-server
-      
+
       - name: Build
         run: npm run build
         working-directory: packages/mcp-server
-      
+
       - name: Publish
         run: npm publish --access public
         working-directory: packages/mcp-server
@@ -363,6 +363,6 @@ When Anthropic launches their official MCP server directory:
 
 ---
 
-**Package Status**: Ready for npm publish  
-**Version**: 1.0.0  
+**Package Status**: Ready for npm publish
+**Version**: 1.0.0
 **Package Size**: ~50 KB (estimated)

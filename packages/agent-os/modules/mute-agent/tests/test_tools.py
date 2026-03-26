@@ -2,29 +2,29 @@
 # Licensed under the MIT License.
 """Comprehensive tests for MockInfrastructureAPI, User permissions, Service, and SessionContext."""
 
-import sys
 import os
+import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
+from datetime import datetime
 
 import pytest
-from datetime import datetime
 from core.tools import (
+    Deployment,
+    Environment,
     MockInfrastructureAPI,
+    ResourceState,
+    Service,
     SessionContext,
     User,
     UserRole,
-    Environment,
-    ResourceState,
-    Service,
-    Deployment,
-    Artifact,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_context(role: UserRole = UserRole.ADMIN, name: str = "tester") -> SessionContext:
     return SessionContext(user=User(name=name, role=role))
@@ -33,6 +33,7 @@ def _make_context(role: UserRole = UserRole.ADMIN, name: str = "tester") -> Sess
 # ---------------------------------------------------------------------------
 # User permission matrix
 # ---------------------------------------------------------------------------
+
 
 class TestUserPermissions:
     """Test all role × environment × read/write combinations."""
@@ -69,11 +70,15 @@ class TestUserPermissions:
 # Service model
 # ---------------------------------------------------------------------------
 
+
 class TestServiceModel:
     def test_to_dict_contains_expected_keys(self):
         svc = Service(
-            id="svc-1", name="web", environment=Environment.DEV,
-            state=ResourceState.RUNNING, replicas=2,
+            id="svc-1",
+            name="web",
+            environment=Environment.DEV,
+            state=ResourceState.RUNNING,
+            replicas=2,
         )
         d = svc.to_dict()
         assert d["id"] == "svc-1"
@@ -85,8 +90,12 @@ class TestServiceModel:
     def test_to_dict_with_deployment(self):
         now = datetime.now()
         svc = Service(
-            id="svc-2", name="api", environment=Environment.PROD,
-            state=ResourceState.DEPLOYING, last_deployed=now, deployment_id="dep-1",
+            id="svc-2",
+            name="api",
+            environment=Environment.PROD,
+            state=ResourceState.DEPLOYING,
+            last_deployed=now,
+            deployment_id="dep-1",
         )
         d = svc.to_dict()
         assert d["deployment_id"] == "dep-1"
@@ -96,6 +105,7 @@ class TestServiceModel:
 # ---------------------------------------------------------------------------
 # SessionContext
 # ---------------------------------------------------------------------------
+
 
 class TestSessionContext:
     def test_update_focus_sets_fields(self):
@@ -123,6 +133,7 @@ class TestSessionContext:
 # MockInfrastructureAPI – default state
 # ---------------------------------------------------------------------------
 
+
 class TestMockInfrastructureAPIDefaults:
     def test_default_services_exist(self):
         api = MockInfrastructureAPI()
@@ -143,6 +154,7 @@ class TestMockInfrastructureAPIDefaults:
 # ---------------------------------------------------------------------------
 # get_system_state
 # ---------------------------------------------------------------------------
+
 
 class TestGetSystemState:
     def test_returns_all_services_for_admin(self):
@@ -170,6 +182,7 @@ class TestGetSystemState:
 # get_service_logs
 # ---------------------------------------------------------------------------
 
+
 class TestGetServiceLogs:
     def test_returns_logs_and_updates_focus(self):
         api = MockInfrastructureAPI()
@@ -195,6 +208,7 @@ class TestGetServiceLogs:
 # ---------------------------------------------------------------------------
 # restart_service
 # ---------------------------------------------------------------------------
+
 
 class TestRestartService:
     def test_admin_can_restart_prod(self):
@@ -241,6 +255,7 @@ class TestRestartService:
 # scale_service
 # ---------------------------------------------------------------------------
 
+
 class TestScaleService:
     def test_scale_up(self):
         api = MockInfrastructureAPI()
@@ -267,11 +282,15 @@ class TestScaleService:
 # rollback_deployment
 # ---------------------------------------------------------------------------
 
+
 class TestRollbackDeployment:
     def _add_deployment(self, api, dep_id, svc_id, state=ResourceState.RUNNING):
         api.deployments[dep_id] = Deployment(
-            id=dep_id, service_id=svc_id, artifact_id=None,
-            state=state, created_at=datetime.now(),
+            id=dep_id,
+            service_id=svc_id,
+            artifact_id=None,
+            state=state,
+            created_at=datetime.now(),
         )
 
     def test_rollback_success(self):
@@ -306,6 +325,7 @@ class TestRollbackDeployment:
 # ---------------------------------------------------------------------------
 # force_delete
 # ---------------------------------------------------------------------------
+
 
 class TestForceDelete:
     def test_admin_can_force_delete(self):
@@ -344,6 +364,7 @@ class TestForceDelete:
 # ---------------------------------------------------------------------------
 # Statistics
 # ---------------------------------------------------------------------------
+
 
 class TestStatistics:
     def test_initial_statistics(self):

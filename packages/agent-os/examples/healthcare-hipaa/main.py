@@ -20,20 +20,17 @@ Benchmarkable: "Reviewed 1,200 charts, 0 PHI breaches, 99.2% accuracy"
 
 import asyncio
 import hashlib
-import json
 import re
-import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
-from collections import defaultdict
-import uuid
-
 
 # ============================================================
 # SAFE LOGGING HELPER
 # ============================================================
+
 
 def _redact(value, visible_chars: int = 0) -> str:
     """Redact a sensitive value for safe logging.
@@ -43,6 +40,7 @@ def _redact(value, visible_chars: int = 0) -> str:
     SHA-256 digest is used for cross-reference correlation.
     """
     import hashlib
+
     raw = str(value)
     if not raw:
         return "[REDACTED]"
@@ -135,6 +133,7 @@ APPROVED_DESTINATIONS = [
 # DATA MODELS
 # ============================================================
 
+
 class AccessLevel(Enum):
     NORMAL = "normal"
     EMERGENCY = "emergency"  # Break-the-glass
@@ -145,6 +144,7 @@ class AccessLevel(Enum):
 @dataclass
 class User:
     """Healthcare system user."""
+
     user_id: str
     name: str
     role: str
@@ -156,6 +156,7 @@ class User:
 @dataclass
 class Patient:
     """Patient record."""
+
     patient_id: str
     mrn: str
     name: str
@@ -171,6 +172,7 @@ class Patient:
 @dataclass
 class ChartEntry:
     """Medical chart entry."""
+
     entry_id: str
     patient_id: str
     entry_type: str  # note, order, result, medication
@@ -184,6 +186,7 @@ class ChartEntry:
 @dataclass
 class MedicalChart:
     """Complete patient medical chart."""
+
     patient: Patient
     entries: list[ChartEntry] = field(default_factory=list)
     diagnoses: list[str] = field(default_factory=list)
@@ -195,6 +198,7 @@ class MedicalChart:
 @dataclass
 class ReviewFinding:
     """Chart review finding."""
+
     finding_id: str
     severity: str  # critical, warning, info
     category: str  # contradiction, missing, quality
@@ -207,6 +211,7 @@ class ReviewFinding:
 @dataclass
 class AuditEntry:
     """HIPAA audit log entry."""
+
     audit_id: str
     timestamp: datetime
     user_id: str
@@ -223,16 +228,17 @@ class AuditEntry:
 # HIPAA AUDIT LOGGER
 # ============================================================
 
+
 class HIPAAAuditLog:
     """
     Tamper-evident HIPAA-compliant audit logging.
     Required for breach investigations and compliance audits.
     """
-    
+
     def __init__(self):
         self.entries: list[AuditEntry] = []
         self.previous_hash: str = "GENESIS"
-    
+
     def log(
         self,
         user_id: str,
@@ -241,7 +247,7 @@ class HIPAAAuditLog:
         resource: str,
         outcome: str,
         access_level: AccessLevel = AccessLevel.NORMAL,
-        reason: Optional[str] = None
+        reason: Optional[str] = None,
     ) -> str:
         """Create tamper-evident audit entry."""
         entry = AuditEntry(
@@ -255,42 +261,41 @@ class HIPAAAuditLog:
             access_level=access_level,
             reason=reason,
         )
-        
+
         # Create blockchain-style hash chain
         hash_input = f"{self.previous_hash}|{entry.timestamp}|{entry.user_id}|{entry.action}"
         entry.hash = hashlib.sha256(hash_input.encode()).hexdigest()[:16]
         self.previous_hash = entry.hash
-        
+
         self.entries.append(entry)
         return entry.audit_id
-    
+
     def verify_integrity(self) -> tuple[bool, Optional[str]]:
         """Verify audit log has not been tampered with."""
         if not self.entries:
             return True, None
-        
+
         prev_hash = "GENESIS"
         for entry in self.entries:
             expected_input = f"{prev_hash}|{entry.timestamp}|{entry.user_id}|{entry.action}"
             expected_hash = hashlib.sha256(expected_input.encode()).hexdigest()[:16]
-            
+
             if entry.hash != expected_hash:
                 return False, f"Tampering detected at entry {entry.audit_id}"
-            
+
             prev_hash = entry.hash
-        
+
         return True, None
-    
+
     def get_patient_access_history(self, patient_id: str) -> list[AuditEntry]:
         """Get all access to a patient's records."""
         return [e for e in self.entries if e.patient_id == patient_id]
-    
+
     def get_user_activity(self, user_id: str, hours: int = 24) -> list[AuditEntry]:
         """Get user activity within time window."""
         cutoff = datetime.now(timezone.utc).timestamp() - (hours * 3600)
         return [
-            e for e in self.entries 
-            if e.user_id == user_id and e.timestamp.timestamp() > cutoff
+            e for e in self.entries if e.user_id == user_id and e.timestamp.timestamp() > cutoff
         ]
 
 
@@ -298,24 +303,27 @@ class HIPAAAuditLog:
 # PHI PROTECTION
 # ============================================================
 
+
 class PHIProtector:
     """Detect and protect Protected Health Information."""
-    
+
     def __init__(self):
         self.patterns = {k: re.compile(v, re.IGNORECASE) for k, v in PHI_IDENTIFIERS.items()}
-    
+
     def detect_phi(self, text: str) -> list[dict]:
         """Detect all PHI in text."""
         findings = []
         for phi_type, pattern in self.patterns.items():
             for match in pattern.finditer(text):
-                findings.append({
-                    "type": phi_type,
-                    "value": match.group(),
-                    "position": match.span(),
-                })
+                findings.append(
+                    {
+                        "type": phi_type,
+                        "value": match.group(),
+                        "position": match.span(),
+                    }
+                )
         return findings
-    
+
     def de_identify(self, text: str) -> str:
         """De-identify text by replacing PHI with placeholders."""
         result = text
@@ -323,7 +331,7 @@ class PHIProtector:
             replacement = f"[{phi_type.upper()}_REDACTED]"
             result = pattern.sub(replacement, result)
         return result
-    
+
     def is_phi_free(self, text: str) -> bool:
         """Check if text contains no PHI."""
         return len(self.detect_phi(text)) == 0
@@ -333,55 +341,60 @@ class PHIProtector:
 # CLINICAL VERIFICATION
 # ============================================================
 
+
 class ClinicalVerifier:
     """
     Verification for clinical accuracy.
     Catches contradictions that could indicate errors.
     """
-    
+
     def __init__(self):
         self.models = ["gpt-4-medical", "claude-3-medical", "med-palm-2"]
-    
+
     async def verify_chart(self, chart: MedicalChart) -> list[ReviewFinding]:
         """Verify chart for contradictions and errors."""
         findings = []
-        
+
         # Check for known contradictions
         chart_text = self._chart_to_text(chart)
-        
+
         for term1, term2 in CLINICAL_CONTRADICTIONS:
             if term1.lower() in chart_text.lower() and term2.lower() in chart_text.lower():
-                findings.append(ReviewFinding(
-                    finding_id=str(uuid.uuid4())[:8],
-                    severity="critical",
-                    category="contradiction",
-                    description=f"Potential contradiction: '{term1}' and '{term2}' found",
-                    location="chart_wide",
-                    recommendation="Review and reconcile conflicting information",
-                    confidence=0.95,
-                ))
-        
+                findings.append(
+                    ReviewFinding(
+                        finding_id=str(uuid.uuid4())[:8],
+                        severity="critical",
+                        category="contradiction",
+                        description=f"Potential contradiction: '{term1}' and '{term2}' found",
+                        location="chart_wide",
+                        recommendation="Review and reconcile conflicting information",
+                        confidence=0.95,
+                    )
+                )
+
         # Check medication-allergy interactions
         for med in chart.medications:
             med_name = med.get("name", "").lower()
             for allergy in chart.allergies:
                 if self._check_allergy_interaction(med_name, allergy.lower()):
-                    findings.append(ReviewFinding(
-                        finding_id=str(uuid.uuid4())[:8],
-                        severity="critical",
-                        category="safety",
-                        description=f"Medication '{med_name}' may interact with allergy '{allergy}'",
-                        location="medications",
-                        recommendation="Verify allergy status and medication appropriateness",
-                        confidence=0.90,
-                    ))
-        
+                    findings.append(
+                        ReviewFinding(
+                            finding_id=str(uuid.uuid4())[:8],
+                            severity="critical",
+                            category="safety",
+                            description=f"Medication '{med_name}' may interact with allergy '{allergy}'",
+                            location="medications",
+                            recommendation="Verify allergy status and medication appropriateness",
+                            confidence=0.90,
+                        )
+                    )
+
         # Simulate consensus
         agreement = await self._get_model_consensus(chart_text, findings)
-        
+
         # Filter to high-confidence findings
         return [f for f in findings if f.confidence >= 0.7]
-    
+
     def _chart_to_text(self, chart: MedicalChart) -> str:
         """Convert chart to searchable text."""
         parts = [
@@ -394,7 +407,7 @@ class ClinicalVerifier:
         for entry in chart.entries:
             parts.append(f"{entry.entry_type}: {entry.content}")
         return "\n".join(parts)
-    
+
     def _check_allergy_interaction(self, med: str, allergy: str) -> bool:
         """Check for medication-allergy interactions."""
         interactions = {
@@ -408,7 +421,7 @@ class ClinicalVerifier:
                 if any(m in med for m in meds) or allergen in med:
                     return True
         return False
-    
+
     async def _get_model_consensus(self, text: str, findings: list) -> float:
         """Simulate consensus scoring."""
         # In production, this calls medical LLM APIs
@@ -419,21 +432,18 @@ class ClinicalVerifier:
 # ACCESS CONTROL
 # ============================================================
 
+
 class AccessController:
     """
     Role-based access control with break-the-glass.
     """
-    
+
     def __init__(self, audit_log: HIPAAAuditLog):
         self.audit_log = audit_log
         self.emergency_overrides: dict[str, datetime] = {}
-    
+
     def check_access(
-        self,
-        user: User,
-        patient_id: str,
-        resource: str,
-        action: str = "read"
+        self, user: User, patient_id: str, resource: str, action: str = "read"
     ) -> tuple[bool, str]:
         """
         Check if user has access to resource.
@@ -442,54 +452,56 @@ class AccessController:
         # Check if user is active
         if not user.active:
             self.audit_log.log(
-                user.user_id, patient_id, action, resource, "denied",
-                reason="user_inactive"
+                user.user_id, patient_id, action, resource, "denied", reason="user_inactive"
             )
             return False, "User account is inactive"
-        
+
         # Get role permissions
         perms = ROLE_PERMISSIONS.get(user.role, {})
         can_access = perms.get("can_access", [])
-        
+
         # Check resource access
         resource_type = self._get_resource_type(resource)
         if resource_type not in can_access and "phi" not in can_access:
             self.audit_log.log(
-                user.user_id, patient_id, action, resource, "denied",
-                reason=f"role_{user.role}_cannot_access_{resource_type}"
+                user.user_id,
+                patient_id,
+                action,
+                resource,
+                "denied",
+                reason=f"role_{user.role}_cannot_access_{resource_type}",
             )
             return False, f"Role {user.role} cannot access {resource_type}"
-        
+
         # Log successful access
-        self.audit_log.log(
-            user.user_id, patient_id, action, resource, "success"
-        )
+        self.audit_log.log(user.user_id, patient_id, action, resource, "success")
         return True, "Access granted"
-    
-    def emergency_override(
-        self,
-        user: User,
-        patient_id: str,
-        reason: str
-    ) -> tuple[bool, str]:
+
+    def emergency_override(self, user: User, patient_id: str, reason: str) -> tuple[bool, str]:
         """
         Break-the-glass emergency access.
         Grants temporary access but triggers alerts.
         """
         override_id = f"{user.user_id}:{patient_id}"
-        
+
         # Log emergency override
         self.audit_log.log(
-            user.user_id, patient_id, "emergency_override", "all",
+            user.user_id,
+            patient_id,
+            "emergency_override",
+            "all",
             "emergency_granted",
             access_level=AccessLevel.EMERGENCY,
-            reason=reason
+            reason=reason,
         )
-        
+
         self.emergency_overrides[override_id] = datetime.now(timezone.utc)
-        
-        return True, f"EMERGENCY ACCESS GRANTED - This access is logged and will be audited. Reason: {reason}"
-    
+
+        return (
+            True,
+            f"EMERGENCY ACCESS GRANTED - This access is logged and will be audited. Reason: {reason}",
+        )
+
     def _get_resource_type(self, resource: str) -> str:
         """Map resource to type category."""
         resource_lower = resource.lower()
@@ -512,10 +524,11 @@ class AccessController:
 # MAIN AGENT
 # ============================================================
 
+
 class MedicalChartReviewAgent:
     """
     Production HIPAA-compliant medical chart review agent.
-    
+
     Pipeline:
     1. Verify user access rights
     2. Retrieve chart with PHI protection
@@ -523,98 +536,95 @@ class MedicalChartReviewAgent:
     4. Generate findings with audit trail
     5. De-identify output for non-clinical users
     """
-    
+
     def __init__(self, agent_id: str = "chart-review-001"):
         self.agent_id = agent_id
-        
+
         # Initialize components
         self.audit_log = HIPAAAuditLog()
         self.phi_protector = PHIProtector()
         self.clinical_verifier = ClinicalVerifier()
         self.access_controller = AccessController(self.audit_log)
-        
+
         # Storage
         self.patients: dict[str, Patient] = {}
         self.charts: dict[str, MedicalChart] = {}
         self.users: dict[str, User] = {}
-        
+
         # Metrics
         self.charts_reviewed = 0
         self.findings_generated = 0
         self.access_denied = 0
         self.phi_blocked = 0
-        
-        print(f"🏥 Medical Chart Review Agent initialized")
+
+        print("🏥 Medical Chart Review Agent initialized")
         print(f"   Agent ID: {agent_id}")
-        print(f"   HIPAA Compliant: ✓")
-        print(f"   Audit Logging: ✓")
-    
+        print("   HIPAA Compliant: ✓")
+        print("   Audit Logging: ✓")
+
     def register_user(self, user: User):
         """Register a healthcare system user."""
         self.users[user.user_id] = user
-    
+
     def add_patient(self, patient: Patient):
         """Add patient to system."""
         self.patients[patient.patient_id] = patient
         self.charts[patient.patient_id] = MedicalChart(patient=patient)
-    
+
     def add_chart_entry(self, patient_id: str, entry: ChartEntry, user: User):
         """Add entry to patient chart with access check."""
         allowed, reason = self.access_controller.check_access(
             user, patient_id, entry.entry_type, "write"
         )
-        
+
         if not allowed:
             print(f"❌ Cannot add entry: {reason}")
             return False
-        
+
         if patient_id in self.charts:
             self.charts[patient_id].entries.append(entry)
             return True
         return False
-    
+
     async def review_chart(
-        self,
-        patient_id: str,
-        user: User,
-        reason: str = "routine_review"
+        self, patient_id: str, user: User, reason: str = "routine_review"
     ) -> dict:
         """
         Review patient chart with full HIPAA compliance.
         """
-        print(f"\n{'='*60}")
-        print(f"📋 Chart Review Request")
+        print(f"\n{'=' * 60}")
+        print("📋 Chart Review Request")
         print(f"   Patient: {_redact(patient_id, 3)}")
         print(f"   User: {user.name} ({user.role})")
         print(f"   Reason: {reason}")
-        
+
         # Step 1: Check access
         allowed, access_reason = self.access_controller.check_access(
             user, patient_id, "chart", "read"
         )
-        
+
         if not allowed:
             print(f"❌ ACCESS DENIED: {access_reason}")
             self.access_denied += 1
             return {
                 "status": "denied",
                 "reason": access_reason,
-                "audit_id": self.audit_log.entries[-1].audit_id
+                "audit_id": self.audit_log.entries[-1].audit_id,
             }
-        
+
         # Step 2: Get chart
         chart = self.charts.get(patient_id)
         if not chart:
             return {"status": "error", "reason": "Patient not found"}
-        
-        print(f"✅ Access granted - reviewing chart...")
-        
+
+        print("✅ Access granted - reviewing chart...")
+
         # Step 3: Clinical verification
         findings = await self.clinical_verifier.verify_chart(chart)
         self.findings_generated += len(findings)
-        
+
         print(f"🔍 Found {len(findings)} potential issues")
-        
+
         # Step 4: Prepare output based on role
         if user.role in ["physician", "nurse"]:
             # Full PHI access for clinical roles
@@ -622,10 +632,10 @@ class MedicalChartReviewAgent:
         else:
             # De-identified for non-clinical
             output = self._format_deidentified_review(chart, findings)
-            print(f"🔒 Output de-identified for non-clinical role")
-        
+            print("🔒 Output de-identified for non-clinical role")
+
         self.charts_reviewed += 1
-        
+
         return {
             "status": "completed",
             "patient_id": patient_id,
@@ -635,7 +645,7 @@ class MedicalChartReviewAgent:
             "audit_id": self.audit_log.entries[-1].audit_id,
             "deidentified": user.role not in ["physician", "nurse"],
         }
-    
+
     def _format_clinical_review(self, chart: MedicalChart, findings: list) -> dict:
         """Format review with full PHI for clinical staff."""
         return {
@@ -649,13 +659,13 @@ class MedicalChartReviewAgent:
                     "confidence": f"{f.confidence:.0%}",
                 }
                 for f in findings
-            ]
+            ],
         }
-    
+
     def _format_deidentified_review(self, chart: MedicalChart, findings: list) -> dict:
         """Format de-identified review for non-clinical staff."""
         return {
-            "summary": f"Chart review for [PATIENT_REDACTED] (MRN: [MRN_REDACTED])",
+            "summary": "Chart review for [PATIENT_REDACTED] (MRN: [MRN_REDACTED])",
             "findings": [
                 {
                     "severity": f.severity,
@@ -665,31 +675,26 @@ class MedicalChartReviewAgent:
                     "confidence": f"{f.confidence:.0%}",
                 }
                 for f in findings
-            ]
+            ],
         }
-    
-    async def emergency_access(
-        self,
-        patient_id: str,
-        user: User,
-        emergency_reason: str
-    ) -> dict:
+
+    async def emergency_access(self, patient_id: str, user: User, emergency_reason: str) -> dict:
         """
         Break-the-glass emergency access.
         Bypasses normal access controls but triggers alerts.
         """
-        print(f"\n🚨 EMERGENCY ACCESS REQUEST")
+        print("\n🚨 EMERGENCY ACCESS REQUEST")
         print(f"   Patient: {_redact(patient_id, 3)}")
         print(f"   User: {user.name}")
         print(f"   Reason: {emergency_reason}")
-        
+
         allowed, message = self.access_controller.emergency_override(
             user, patient_id, emergency_reason
         )
-        
+
         print(f"⚠️  {message}")
-        print(f"   Compliance team has been notified")
-        
+        print("   Compliance team has been notified")
+
         # Return full chart access
         chart = self.charts.get(patient_id)
         if chart:
@@ -706,7 +711,7 @@ class MedicalChartReviewAgent:
                 "audit_id": self.audit_log.entries[-1].audit_id,
             }
         return {"status": "error", "reason": "Patient not found"}
-    
+
     def get_audit_trail(self, patient_id: str) -> list[dict]:
         """Get HIPAA audit trail for patient."""
         entries = self.audit_log.get_patient_access_history(patient_id)
@@ -721,7 +726,7 @@ class MedicalChartReviewAgent:
             }
             for e in entries
         ]
-    
+
     def get_metrics(self) -> dict:
         """Get agent metrics."""
         integrity_ok, _ = self.audit_log.verify_integrity()
@@ -739,40 +744,33 @@ class MedicalChartReviewAgent:
 # DEMO
 # ============================================================
 
+
 async def demo():
     """Demonstrate the medical chart review agent."""
     print("=" * 60)
     print("Medical Chart Review Agent - HIPAA Compliant")
     print("Powered by Agent OS Governance")
     print("=" * 60)
-    
+
     agent = MedicalChartReviewAgent()
-    
+
     # Register users
     doctor = User(
         user_id="DR001",
         name="Dr. Sarah Chen",
         role="physician",
         department="cardiology",
-        npi="1234567890"
+        npi="1234567890",
     )
-    nurse = User(
-        user_id="RN001",
-        name="James Wilson",
-        role="nurse",
-        department="cardiology"
-    )
+    nurse = User(user_id="RN001", name="James Wilson", role="nurse", department="cardiology")
     receptionist = User(
-        user_id="RC001",
-        name="Emily Brown",
-        role="receptionist",
-        department="front_desk"
+        user_id="RC001", name="Emily Brown", role="receptionist", department="front_desk"
     )
-    
+
     agent.register_user(doctor)
     agent.register_user(nurse)
     agent.register_user(receptionist)
-    
+
     # Add patient
     patient = Patient(
         patient_id="P12345",
@@ -784,10 +782,10 @@ async def demo():
         phone="(617) 555-1234",
         email="john.smith@email.com",
         insurance_id="BCBS123456789",
-        emergency_contact="Jane Smith (wife) - (617) 555-5678"
+        emergency_contact="Jane Smith (wife) - (617) 555-5678",
     )
     agent.add_patient(patient)
-    
+
     # Add chart data
     chart = agent.charts["P12345"]
     chart.diagnoses = ["Type 2 Diabetes", "Hypertension", "Hyperlipidemia"]
@@ -797,7 +795,7 @@ async def demo():
         {"name": "Amoxicillin", "dose": "500mg", "frequency": "TID"},  # Potential issue!
     ]
     chart.allergies = ["Penicillin", "Sulfa"]  # Contradiction with amoxicillin!
-    
+
     print("\n" + "=" * 60)
     print("Test 1: Physician Reviews Chart (Full Access)")
     print("=" * 60)
@@ -807,44 +805,44 @@ async def demo():
     for f in result.get("findings", []):
         icon = "🚨" if f["severity"] == "critical" else "⚠️"
         print(f"  {icon} [{_redact(f.get('severity', ''), 10)}] finding detected")
-    
+
     print("\n" + "=" * 60)
     print("Test 2: Receptionist Reviews Chart (De-identified)")
     print("=" * 60)
     result = await agent.review_chart("P12345", receptionist, "billing_inquiry")
     print(f"Status: {_redact(result.get('status', ''), 10)}")
-    if result['status'] == 'denied':
-        print(f"Reason: access denied")
+    if result["status"] == "denied":
+        print("Reason: access denied")
     else:
         print(f"De-identified: {_redact(result.get('deidentified', False), 10)}")
-    
+
     print("\n" + "=" * 60)
     print("Test 3: Nurse Emergency Access (Break-the-Glass)")
     print("=" * 60)
     result = await agent.emergency_access(
-        "P12345", 
-        nurse, 
-        "Patient arrived unconscious, need immediate medication history"
+        "P12345", nurse, "Patient arrived unconscious, need immediate medication history"
     )
     print(f"Status: {result['status']}")
     if "warning" in result:
         print(f"⚠️  {result['warning']}")
-    
+
     print("\n" + "=" * 60)
     print("HIPAA Audit Trail")
     print("=" * 60)
     trail = agent.get_audit_trail("P12345")
     for entry in trail:
         icon = "🚨" if entry["access_level"] == "emergency" else "📝"
-        print(f"  {icon} {entry['timestamp'][:19]} | {entry['user']} | {entry['action']} | {entry['outcome']}")
-    
+        print(
+            f"  {icon} {entry['timestamp'][:19]} | {entry['user']} | {entry['action']} | {entry['outcome']}"
+        )
+
     print("\n" + "=" * 60)
     print("📊 Metrics")
     print("=" * 60)
     metrics = agent.get_metrics()
     for k, v in metrics.items():
         print(f"   {k}: {v}")
-    
+
     print("\n" + "=" * 60)
     print("✅ Demo Complete - All access HIPAA compliant and audited")
     print("=" * 60)

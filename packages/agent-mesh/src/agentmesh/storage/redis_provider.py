@@ -6,7 +6,6 @@ Redis Storage Provider.
 Production-ready Redis backend with connection pooling and error handling.
 """
 
-from typing import Optional
 import logging
 
 from .provider import AbstractStorageProvider, StorageConfig
@@ -80,7 +79,7 @@ class RedisStorageProvider(AbstractStorageProvider):
 
     # Key-Value Operations
 
-    async def get(self, key: str) -> Optional[str]:
+    async def get(self, key: str) -> str | None:
         """Get value by key."""
         return await self._client.get(key)
 
@@ -88,7 +87,7 @@ class RedisStorageProvider(AbstractStorageProvider):
         self,
         key: str,
         value: str,
-        ttl_seconds: Optional[int] = None,
+        ttl_seconds: int | None = None,
     ) -> bool:
         """Set value with optional TTL."""
         if ttl_seconds is not None:
@@ -107,7 +106,7 @@ class RedisStorageProvider(AbstractStorageProvider):
 
     # Hash Operations
 
-    async def hget(self, key: str, field: str) -> Optional[str]:
+    async def hget(self, key: str, field: str) -> str | None:
         """Get hash field value."""
         return await self._client.hget(key, field)
 
@@ -154,7 +153,7 @@ class RedisStorageProvider(AbstractStorageProvider):
         result = await self._client.zadd(key, {member: score})
         return result >= 0
 
-    async def zscore(self, key: str, member: str) -> Optional[float]:
+    async def zscore(self, key: str, member: str) -> float | None:
         """Get score of member in sorted set."""
         return await self._client.zscore(key, member)
 
@@ -166,9 +165,7 @@ class RedisStorageProvider(AbstractStorageProvider):
         with_scores: bool = False,
     ) -> list[str] | list[tuple[str, float]]:
         """Get sorted set range."""
-        return await self._client.zrange(
-            key, start, stop, withscores=with_scores
-        )
+        return await self._client.zrange(key, start, stop, withscores=with_scores)
 
     async def zrangebyscore(
         self,
@@ -178,9 +175,7 @@ class RedisStorageProvider(AbstractStorageProvider):
         with_scores: bool = False,
     ) -> list[str] | list[tuple[str, float]]:
         """Get sorted set range by score."""
-        return await self._client.zrangebyscore(
-            key, min_score, max_score, withscores=with_scores
-        )
+        return await self._client.zrangebyscore(key, min_score, max_score, withscores=with_scores)
 
     # Atomic Operations
 
@@ -198,7 +193,7 @@ class RedisStorageProvider(AbstractStorageProvider):
 
     # Batch Operations
 
-    async def mget(self, keys: list[str]) -> list[Optional[str]]:
+    async def mget(self, keys: list[str]) -> list[str | None]:
         """Get multiple values."""
         return await self._client.mget(keys)
 
@@ -215,7 +210,7 @@ class RedisStorageProvider(AbstractStorageProvider):
     async def scan(
         self,
         cursor: int = 0,
-        match: Optional[str] = None,
+        match: str | None = None,
         count: int = 100,
     ) -> tuple[int, list[str]]:
         """Scan keys with cursor."""

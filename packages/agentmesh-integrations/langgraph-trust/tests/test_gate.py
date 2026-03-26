@@ -4,8 +4,6 @@ import threading
 
 from langgraph_trust.gate import TrustGate, TrustScoreTracker
 from langgraph_trust.identity import AgentIdentityManager
-from langgraph_trust.state import TrustVerdict
-
 
 # ── TrustScoreTracker ──────────────────────────────────────────────────
 
@@ -106,8 +104,10 @@ class TestTrustGate:
         tracker = TrustScoreTracker()
         tracker.set_score("agent-b", 0.65)
         gate = TrustGate(
-            min_score=0.5, review_threshold=0.7,
-            tracker=tracker, agent_name="agent-b",
+            min_score=0.5,
+            review_threshold=0.7,
+            tracker=tracker,
+            agent_name="agent-b",
         )
         result = gate({})
         assert result["trust_result"]["verdict"] == "review"
@@ -118,8 +118,10 @@ class TestTrustGate:
         idm = AgentIdentityManager()
         idm.create_identity("agent-c", capabilities=["summarize", "translate"])
         gate = TrustGate(
-            min_score=0.5, tracker=tracker,
-            identity_manager=idm, agent_name="agent-c",
+            min_score=0.5,
+            tracker=tracker,
+            identity_manager=idm,
+            agent_name="agent-c",
             required_capabilities=["summarize"],
         )
         result = gate({})
@@ -131,8 +133,10 @@ class TestTrustGate:
         idm = AgentIdentityManager()
         idm.create_identity("agent-c", capabilities=["summarize"])
         gate = TrustGate(
-            min_score=0.5, tracker=tracker,
-            identity_manager=idm, agent_name="agent-c",
+            min_score=0.5,
+            tracker=tracker,
+            identity_manager=idm,
+            agent_name="agent-c",
             required_capabilities=["code_exec"],
         )
         result = gate({})
@@ -143,8 +147,10 @@ class TestTrustGate:
         tracker = TrustScoreTracker()
         idm = AgentIdentityManager()
         gate = TrustGate(
-            min_score=0.5, tracker=tracker,
-            identity_manager=idm, agent_name="ghost",
+            min_score=0.5,
+            tracker=tracker,
+            identity_manager=idm,
+            agent_name="ghost",
             required_capabilities=["anything"],
         )
         result = gate({})
@@ -157,8 +163,10 @@ class TestTrustGate:
         idm = AgentIdentityManager()
         idm.create_identity("admin", capabilities=["*"])
         gate = TrustGate(
-            min_score=0.5, tracker=tracker,
-            identity_manager=idm, agent_name="admin",
+            min_score=0.5,
+            tracker=tracker,
+            identity_manager=idm,
+            agent_name="admin",
             required_capabilities=["anything", "everything"],
         )
         result = gate({})

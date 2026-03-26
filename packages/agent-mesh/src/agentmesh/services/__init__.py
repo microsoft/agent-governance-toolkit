@@ -11,9 +11,9 @@ High-level services for AgentMesh:
 """
 
 from agentmesh.services.audit import AuditService
+from agentmesh.services.rate_limiter import RateLimiter, TokenBucket
 from agentmesh.services.registry import AgentRegistry, AgentRegistryEntry
 from agentmesh.services.reward_engine import RewardService
-from agentmesh.services.rate_limiter import RateLimiter, TokenBucket
 
 __all__ = [
     "AuditService",

@@ -143,7 +143,7 @@ kg = MultidimensionalKnowledgeGraph()
 kg.add_dimension(Dimension("security", "Security constraints", 10))
 
 # Add action and constraint
-kg.add_node_to_dimension("security", 
+kg.add_node_to_dimension("security",
     Node("read_file", NodeType.ACTION, {"operation": "read"}))
 kg.add_node_to_dimension("security",
     Node("require_auth", NodeType.CONSTRAINT, {"type": "auth"}))
@@ -157,7 +157,7 @@ reasoning = ReasoningAgent(kg, router, protocol)
 execution = ExecutionAgent(protocol)
 
 # Register handler
-execution.register_action_handler("read_file", 
+execution.register_action_handler("read_file",
     lambda p: {"content": "data"})
 
 # Execute workflow

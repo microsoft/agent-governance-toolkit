@@ -4,13 +4,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 from agent_os.adversarial import (
+    BUILTIN_VECTORS,
     AdversarialEvaluator,
     AttackCategory,
     AttackVector,
-    BUILTIN_VECTORS,
     EvaluationReport,
     VectorResult,
 )
@@ -18,14 +16,12 @@ from agent_os.integrations.base import (
     GovernancePolicy,
     PatternType,
     PolicyInterceptor,
-    ToolCallRequest,
-    ToolCallResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _strict_policy() -> GovernancePolicy:
     """A strict policy that blocks dangerous patterns and tools."""
@@ -57,6 +53,7 @@ def _permissive_policy() -> GovernancePolicy:
 # Built-in vectors sanity checks
 # ---------------------------------------------------------------------------
 
+
 class TestBuiltinVectors:
     def test_builtin_vectors_not_empty(self):
         assert len(BUILTIN_VECTORS) >= 8
@@ -76,6 +73,7 @@ class TestBuiltinVectors:
 # ---------------------------------------------------------------------------
 # Evaluator with strict policy — all vectors should be blocked
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluatorStrict:
     def test_all_builtin_blocked(self):
@@ -109,6 +107,7 @@ class TestEvaluatorStrict:
 # Evaluator with permissive policy — vectors should pass through (= failures)
 # ---------------------------------------------------------------------------
 
+
 class TestEvaluatorPermissive:
     def test_permissive_has_failures(self):
         interceptor = PolicyInterceptor(_permissive_policy())
@@ -131,6 +130,7 @@ class TestEvaluatorPermissive:
 # ---------------------------------------------------------------------------
 # EvaluationReport dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluationReport:
     def test_empty_report(self):

@@ -90,9 +90,7 @@ def compose_policies(*policies: GovernancePolicy) -> GovernancePolicy:
         result["confidence_threshold"] = max(
             result["confidence_threshold"], other["confidence_threshold"]
         )
-        result["drift_threshold"] = min(
-            result["drift_threshold"], other["drift_threshold"]
-        )
+        result["drift_threshold"] = min(result["drift_threshold"], other["drift_threshold"])
 
         # Checkpoint frequency – more frequent wins
         result["checkpoint_frequency"] = min(

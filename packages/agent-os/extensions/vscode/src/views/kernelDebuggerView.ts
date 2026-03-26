@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Agent OS - Kernel Debugger View
- * 
+ *
  * Real-time visualization of agent execution, kernel state, and signals.
  * Provides time-travel debugging capabilities for agent decisions.
  */
@@ -42,9 +42,9 @@ interface KernelState {
 }
 
 export class KernelDebuggerProvider implements vscode.TreeDataProvider<DebuggerItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<DebuggerItem | undefined | null | void> = 
+    private _onDidChangeTreeData: vscode.EventEmitter<DebuggerItem | undefined | null | void> =
         new vscode.EventEmitter<DebuggerItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<DebuggerItem | undefined | null | void> = 
+    readonly onDidChangeTreeData: vscode.Event<DebuggerItem | undefined | null | void> =
         this._onDidChangeTreeData.event;
 
     private kernelState: KernelState = {
@@ -72,7 +72,7 @@ export class KernelDebuggerProvider implements vscode.TreeDataProvider<DebuggerI
         // In production, this would connect to the actual Agent OS kernel
         // For now, we simulate state updates
         this.kernelState.uptime += 1;
-        
+
         // Simulate agent activity
         if (this.kernelState.activeAgents.length === 0) {
             this.kernelState.activeAgents = [
@@ -130,7 +130,7 @@ export class KernelDebuggerProvider implements vscode.TreeDataProvider<DebuggerI
 
         // Children based on category
         const data = element.data;
-        
+
         if (data?.type === 'kernel-status') {
             return Promise.resolve([
                 new DebuggerItem(
@@ -162,7 +162,7 @@ export class KernelDebuggerProvider implements vscode.TreeDataProvider<DebuggerI
 
         if (data?.type === 'agents') {
             return Promise.resolve(
-                this.kernelState.activeAgents.map(agent => 
+                this.kernelState.activeAgents.map(agent =>
                     new DebuggerItem(
                         `${this.getStatusIcon(agent.status)} ${agent.name}`,
                         vscode.TreeItemCollapsibleState.Collapsed,
@@ -255,7 +255,7 @@ export class KernelDebuggerProvider implements vscode.TreeDataProvider<DebuggerI
     }
 
     // Public methods for external control
-    
+
     addAgent(agent: AgentState): void {
         this.kernelState.activeAgents.push(agent);
         this._onDidChangeTreeData.fire();
@@ -334,13 +334,13 @@ export class DebuggerItem extends vscode.TreeItem {
 
 /**
  * Memory Browser View
- * 
+ *
  * Visualizes the Agent VFS (Virtual File System) for debugging agent memory.
  */
 export class MemoryBrowserProvider implements vscode.TreeDataProvider<MemoryItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<MemoryItem | undefined | null | void> = 
+    private _onDidChangeTreeData: vscode.EventEmitter<MemoryItem | undefined | null | void> =
         new vscode.EventEmitter<MemoryItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<MemoryItem | undefined | null | void> = 
+    readonly onDidChangeTreeData: vscode.Event<MemoryItem | undefined | null | void> =
         this._onDidChangeTreeData.event;
 
     private vfsRoot: VFSNode = {
@@ -404,8 +404,8 @@ export class MemoryBrowserProvider implements vscode.TreeDataProvider<MemoryItem
         const path = `${parentPath}${node.name}${node.type === 'directory' ? '/' : ''}`;
         return new MemoryItem(
             node.name,
-            node.type === 'directory' 
-                ? vscode.TreeItemCollapsibleState.Collapsed 
+            node.type === 'directory'
+                ? vscode.TreeItemCollapsibleState.Collapsed
                 : vscode.TreeItemCollapsibleState.None,
             node.type,
             path,
@@ -430,7 +430,7 @@ export class MemoryBrowserProvider implements vscode.TreeDataProvider<MemoryItem
     writeFile(path: string, content: string): void {
         const parts = path.split('/').filter(p => p);
         const fileName = parts.pop()!;
-        
+
         let current: VFSNode = this.vfsRoot;
         for (const part of parts) {
             let child = current.children?.find(c => c.name === part);
@@ -471,7 +471,7 @@ export class MemoryItem extends vscode.TreeItem {
     ) {
         super(label, collapsibleState);
 
-        this.iconPath = nodeType === 'directory' 
+        this.iconPath = nodeType === 'directory'
             ? new vscode.ThemeIcon('folder')
             : new vscode.ThemeIcon('file');
 

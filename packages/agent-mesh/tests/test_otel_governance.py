@@ -17,9 +17,8 @@ from unittest.mock import patch
 
 import pytest
 
-from agentmesh.observability.otel_governance import GovernanceTracer, _OTEL_AVAILABLE
-from agentmesh.observability.prometheus_governance import GovernanceMetrics, _PROMETHEUS_AVAILABLE
-
+from agentmesh.observability.otel_governance import _OTEL_AVAILABLE, GovernanceTracer
+from agentmesh.observability.prometheus_governance import _PROMETHEUS_AVAILABLE, GovernanceMetrics
 
 # ---------------------------------------------------------------------------
 # Helpers — in-memory OTEL exporter
@@ -31,13 +30,13 @@ def _make_governance_tracer():
     if not _OTEL_AVAILABLE:
         pytest.skip("opentelemetry not installed")
 
+    from opentelemetry import trace
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import (
         SimpleSpanProcessor,
         SpanExporter,
         SpanExportResult,
     )
-    from opentelemetry import trace
 
     class _InMemoryExporter(SpanExporter):
         """Minimal in-memory exporter for testing."""
@@ -252,30 +251,21 @@ class TestGovernanceMetricsRecording:
             == 1.0
         )
         assert (
-            metrics.policy_evaluation_duration_ms.labels(
-                policy_name="max-tokens"
-            )._sum.get()
-            == 3.5
+            metrics.policy_evaluation_duration_ms.labels(policy_name="max-tokens")._sum.get() == 3.5
         )
 
     def test_record_trust_score(self):
         metrics, _ = _make_governance_metrics()
         metrics.record_trust_score("did:mesh:abc", 0.91)
 
-        assert (
-            metrics.trust_score.labels(agent_did="did:mesh:abc")._value.get()
-            == 0.91
-        )
+        assert metrics.trust_score.labels(agent_did="did:mesh:abc")._value.get() == 0.91
 
     def test_record_signal(self):
         metrics, _ = _make_governance_metrics()
         metrics.record_signal("SIGKILL", "agent-001")
         metrics.record_signal("SIGKILL", "agent-002")
 
-        assert (
-            metrics.signals_total.labels(signal_name="SIGKILL")._value.get()
-            == 2.0
-        )
+        assert metrics.signals_total.labels(signal_name="SIGKILL")._value.get() == 2.0
 
     def test_record_violation(self):
         metrics, _ = _make_governance_metrics()
@@ -302,18 +292,8 @@ class TestGovernanceMetricsRecording:
         metrics.record_audit_event("policy_check")
         metrics.record_audit_event("trust_update")
 
-        assert (
-            metrics.audit_events_total.labels(
-                event_type="trust_update"
-            )._value.get()
-            == 2.0
-        )
-        assert (
-            metrics.audit_events_total.labels(
-                event_type="policy_check"
-            )._value.get()
-            == 1.0
-        )
+        assert metrics.audit_events_total.labels(event_type="trust_update")._value.get() == 2.0
+        assert metrics.audit_events_total.labels(event_type="policy_check")._value.get() == 1.0
 
 
 # =========================================================================
@@ -353,9 +333,7 @@ class TestMetricsGracefulDegradation:
 
     def test_disabled_when_import_fails(self):
         with patch.dict(sys.modules, {"prometheus_client": None}):
-            mod = importlib.import_module(
-                "agentmesh.observability.prometheus_governance"
-            )
+            mod = importlib.import_module("agentmesh.observability.prometheus_governance")
             importlib.reload(mod)
             m = mod.GovernanceMetrics()
 

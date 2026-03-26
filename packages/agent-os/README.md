@@ -427,7 +427,7 @@ agent-os/
 ## ⭐ Star Feature: Agent Runtime
 
 > **Execution supervisor for multi-agent collaboration** — think "VMware for AI agents."
-> 
+>
 > **Now its own repo: [`agent-runtime`](https://github.com/microsoft/agent-governance-toolkit)** — 184 tests, 268μs full pipeline, zero dependencies beyond pydantic.
 
 Just as OS runtimes isolate execution environments and enforce resource boundaries, the Agent Runtime isolates AI agent sessions and enforces **governance boundaries** at sub-millisecond latency.
@@ -887,7 +887,7 @@ Agent OS provides an MCP server that works with any MCP-compatible AI assistant:
 npx agentos-mcp-server
 ```
 
-**npm:** [`agentos-mcp-server`](https://www.npmjs.com/package/agentos-mcp-server)  
+**npm:** [`agentos-mcp-server`](https://www.npmjs.com/package/agentos-mcp-server)
 **MCP Registry:** `io.github.microsoft/agentos`
 
 Add to your config file:

@@ -20,8 +20,9 @@ import logging
 import math
 import time
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 from agentmesh.constants import TRUST_SCORE_DEFAULT, TRUST_SCORE_MAX
 
@@ -32,15 +33,16 @@ logger = logging.getLogger(__name__)
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class TrustEvent:
     """A trust-relevant event for an agent."""
 
     agent_did: str
-    event_type: str            # e.g. "policy_violation", "handoff_failure"
-    severity_weight: float     # 0.0 (minor) – 1.0 (critical)
+    event_type: str  # e.g. "policy_violation", "handoff_failure"
+    severity_weight: float  # 0.0 (minor) – 1.0 (critical)
     timestamp: float = field(default_factory=time.time)
-    details: Optional[str] = None
+    details: str | None = None
 
 
 @dataclass
@@ -65,14 +67,15 @@ class RegimeChangeAlert:
     agent_did: str
     kl_divergence: float
     threshold: float
-    recent_distribution: Dict[str, float]
-    historical_distribution: Dict[str, float]
+    recent_distribution: dict[str, float]
+    historical_distribution: dict[str, float]
     detected_at: float = field(default_factory=time.time)
 
 
 # ---------------------------------------------------------------------------
 # NetworkTrustEngine — basic linear decay implementation
 # ---------------------------------------------------------------------------
+
 
 class NetworkTrustEngine:
     """
@@ -111,26 +114,26 @@ class NetworkTrustEngine:
         self.baseline_days = baseline_days
 
         # Agent scores (0 – 1000)
-        self._scores: Dict[str, float] = {}
+        self._scores: dict[str, float] = {}
 
         # Interaction graph: (from_did, to_did) → InteractionEdge
-        self._edges: Dict[Tuple[str, str], InteractionEdge] = {}
+        self._edges: dict[tuple[str, str], InteractionEdge] = {}
 
         # Action history: agent_did → list of (timestamp, action_type)
-        self._action_history: Dict[str, List[Tuple[float, str]]] = defaultdict(list)
+        self._action_history: dict[str, list[tuple[float, str]]] = defaultdict(list)
 
         # Event log
-        self._events: List[TrustEvent] = []
+        self._events: list[TrustEvent] = []
 
         # Regime alerts
-        self._alerts: List[RegimeChangeAlert] = []
+        self._alerts: list[RegimeChangeAlert] = []
 
         # Last positive signal time per agent
-        self._last_positive: Dict[str, float] = {}
+        self._last_positive: dict[str, float] = {}
 
         # Callbacks
-        self._on_regime_change: List[Callable] = []
-        self._on_score_change: List[Callable] = []
+        self._on_regime_change: list[Callable] = []
+        self._on_score_change: list[Callable] = []
 
     # -- Score management -----------------------------------------------------
 
@@ -150,9 +153,9 @@ class NetworkTrustEngine:
         self._edges[key].interaction_count += 1
         self._edges[key].last_interaction = time.time()
 
-    def get_neighbors(self, agent_did: str) -> List[Tuple[str, float]]:
+    def get_neighbors(self, agent_did: str) -> list[tuple[str, float]]:
         """Return (peer_did, interaction_weight) pairs for *agent_did*."""
-        neighbors: List[Tuple[str, float]] = []
+        neighbors: list[tuple[str, float]] = []
         for (f, t), edge in self._edges.items():
             if f == agent_did:
                 neighbors.append((t, edge.weight))
@@ -172,14 +175,14 @@ class NetworkTrustEngine:
         current = self.get_score(agent_did)
         self.set_score(agent_did, current + bonus)
 
-    def process_trust_event(self, event: TrustEvent) -> Dict[str, float]:
+    def process_trust_event(self, event: TrustEvent) -> dict[str, float]:
         """
         Process a trust event with network propagation.
 
         Returns a dict of {agent_did: score_delta} for every affected agent.
         """
         self._events.append(event)
-        deltas: Dict[str, float] = {}
+        deltas: dict[str, float] = {}
 
         # Direct impact
         direct_impact = event.severity_weight * 100
@@ -212,7 +215,7 @@ class NetworkTrustEngine:
         severity: float,
         depth: int,
         visited: set,
-        deltas: Dict[str, float],
+        deltas: dict[str, float],
     ) -> None:
         if depth >= self.propagation_depth:
             return
@@ -221,7 +224,7 @@ class NetworkTrustEngine:
                 continue
             visited.add(peer_did)
             decay = severity * interaction_weight * self.propagation_factor
-            impact = decay * 100 * (0.5 ** depth)  # diminishes per hop
+            impact = decay * 100 * (0.5**depth)  # diminishes per hop
             current = self.get_score(peer_did)
             self.set_score(peer_did, current - impact)
             deltas[peer_did] = deltas.get(peer_did, 0) - impact
@@ -229,14 +232,14 @@ class NetworkTrustEngine:
 
     # -- Temporal decay -------------------------------------------------------
 
-    def apply_temporal_decay(self, now: Optional[float] = None) -> Dict[str, float]:
+    def apply_temporal_decay(self, now: float | None = None) -> dict[str, float]:
         """
         Simple linear decay for agents without recent positive signals.
 
         Call this periodically (e.g. every minute).  Returns deltas.
         """
         now = now or time.time()
-        deltas: Dict[str, float] = {}
+        deltas: dict[str, float] = {}
         for agent_did, score in list(self._scores.items()):
             last = self._last_positive.get(agent_did, now)
             hours_since = (now - last) / 3600
@@ -250,7 +253,9 @@ class NetworkTrustEngine:
 
     # -- Regime detection -----------------------------------------------------
 
-    def detect_regime_change(self, agent_did: str, now: Optional[float] = None) -> Optional[RegimeChangeAlert]:
+    def detect_regime_change(
+        self, agent_did: str, now: float | None = None
+    ) -> RegimeChangeAlert | None:
         """
         Check if *agent_did* has shifted behaviour recently.
 
@@ -309,10 +314,10 @@ class NetworkTrustEngine:
         return len(self._scores)
 
     @property
-    def alerts(self) -> List[RegimeChangeAlert]:
+    def alerts(self) -> list[RegimeChangeAlert]:
         return list(self._alerts)
 
-    def get_health_report(self) -> Dict[str, Any]:
+    def get_health_report(self) -> dict[str, Any]:
         return {
             "agent_count": self.agent_count,
             "edge_count": len(self._edges),
@@ -324,13 +329,13 @@ class NetworkTrustEngine:
     # -- Internal helpers -----------------------------------------------------
 
     @staticmethod
-    def _to_distribution(actions: List[str]) -> Dict[str, float]:
+    def _to_distribution(actions: list[str]) -> dict[str, float]:
         counts = Counter(actions)
         total = sum(counts.values())
         return {k: v / total for k, v in counts.items()}
 
     @staticmethod
-    def _kl_divergence(p: Dict[str, float], q: Dict[str, float]) -> float:
+    def _kl_divergence(p: dict[str, float], q: dict[str, float]) -> float:
         """KL(P || Q) with Laplace smoothing."""
         all_keys = set(p) | set(q)
         eps = 1e-10

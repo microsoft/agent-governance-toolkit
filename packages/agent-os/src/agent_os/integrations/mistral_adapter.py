@@ -253,8 +253,7 @@ class GovernedMistralClient:
             total = self._ctx.prompt_tokens + self._ctx.completion_tokens
             if total > self._kernel.policy.max_tokens:
                 raise PolicyViolationError(
-                    f"Token limit exceeded: {total} > "
-                    f"{self._kernel.policy.max_tokens}"
+                    f"Token limit exceeded: {total} > {self._kernel.policy.max_tokens}"
                 )
 
         # Check for tool calls in response choices
@@ -287,9 +286,7 @@ class GovernedMistralClient:
 
                 if self._kernel.policy.allowed_tools:
                     if fn_name not in self._kernel.policy.allowed_tools:
-                        raise PolicyViolationError(
-                            f"Tool not allowed: {fn_name}"
-                        )
+                        raise PolicyViolationError(f"Tool not allowed: {fn_name}")
 
         # Post-execute bookkeeping
         self._kernel.post_execute(self._ctx, response)

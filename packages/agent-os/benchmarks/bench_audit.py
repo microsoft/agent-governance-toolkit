@@ -36,8 +36,9 @@ _ALLOW_DECISION = PolicyDecision(
 )
 
 
-def _make_entry(agent_id: str = "bench-agent", action: str = "read_data",
-                result_success: bool = True) -> AuditEntry:
+def _make_entry(
+    agent_id: str = "bench-agent", action: str = "read_data", result_success: bool = True
+) -> AuditEntry:
     """Create an AuditEntry with the current API."""
     return AuditEntry(
         timestamp=datetime.now(timezone.utc),

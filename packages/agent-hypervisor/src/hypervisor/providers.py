@@ -37,9 +37,7 @@ def _discover_provider(group: str) -> type | None:
             ep = next(iter(eps))
             provider_cls = ep.load()
             if not isinstance(provider_cls, type):
-                logger.warning(
-                    "Provider %s is not a class, skipping", ep.name
-                )
+                logger.warning("Provider %s is not a class, skipping", ep.name)
             else:
                 _provider_cache[group] = provider_cls
                 logger.info("Advanced provider loaded: %s from %s", ep.name, ep.value)
@@ -62,6 +60,7 @@ def get_ring_engine(**kwargs: Any):
         return provider(**kwargs)
 
     from hypervisor.rings.enforcer import RingEnforcer
+
     return RingEnforcer(**kwargs)
 
 
@@ -76,6 +75,7 @@ def get_liability_engine(**kwargs: Any):
         return provider(**kwargs)
 
     from hypervisor.liability.engine import LiabilityEngine
+
     return LiabilityEngine(**kwargs)
 
 
@@ -90,6 +90,7 @@ def get_saga_engine(**kwargs: Any):
         return provider(**kwargs)
 
     from hypervisor.saga.engine import SagaOrchestrator
+
     return SagaOrchestrator(**kwargs)
 
 
@@ -104,6 +105,7 @@ def get_breach_detector(**kwargs: Any):
         return provider(**kwargs)
 
     from hypervisor.rings.breach_detector import RingBreachDetector
+
     return RingBreachDetector(**kwargs)
 
 

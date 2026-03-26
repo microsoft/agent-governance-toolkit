@@ -8,8 +8,6 @@ No real LlamaIndex dependency — simulates callback events directly.
 Run with: python -m pytest tests/test_llamaindex.py -v --tb=short
 """
 
-
-
 from agent_sre.integrations.llamaindex.handler import (
     AgentSRELlamaIndexHandler,
 )
@@ -246,7 +244,8 @@ class TestIntegration:
     def test_full_rag_execution(self):
         """Simulate a full RAG pipeline: query → retriever → LLM → query end."""
         handler = AgentSRELlamaIndexHandler(
-            cost_per_1k_input=0.01, cost_per_1k_output=0.03,
+            cost_per_1k_input=0.01,
+            cost_per_1k_output=0.03,
         )
 
         # Query starts
@@ -284,4 +283,5 @@ class TestIntegration:
     def test_imports_from_package(self):
         """Verify package exports."""
         from agent_sre.integrations.llamaindex import AgentSRELlamaIndexHandler as Imported
+
         assert Imported is AgentSRELlamaIndexHandler

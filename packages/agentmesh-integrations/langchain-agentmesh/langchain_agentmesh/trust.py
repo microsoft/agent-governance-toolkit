@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from langchain_agentmesh.identity import VerificationIdentity, VerificationSignature, UserContext
+from langchain_agentmesh.identity import UserContext, VerificationIdentity, VerificationSignature
 
 
 @dataclass
@@ -330,9 +330,7 @@ class DelegationChain:
         """
         self.root_identity = root_identity
         self.delegations: List[Delegation] = []
-        self._known_identities: Dict[str, VerificationIdentity] = {
-            root_identity.did: root_identity
-        }
+        self._known_identities: Dict[str, VerificationIdentity] = {root_identity.did: root_identity}
 
     def add_delegation(
         self,
@@ -356,7 +354,9 @@ class DelegationChain:
             ValueError: If delegatee lacks identity
         """
         if not delegatee.identity:
-            raise ValueError("Delegatee must have a VerificationIdentity to be part of a delegation")
+            raise ValueError(
+                "Delegatee must have a VerificationIdentity to be part of a delegation"
+            )
 
         delegator = delegator_identity or self.root_identity
         delegatee_did = delegatee.identity.did
@@ -366,12 +366,15 @@ class DelegationChain:
             expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)
 
         # Create delegation data for signing
-        delegation_data = json.dumps({
-            "delegator": delegator.did,
-            "delegatee": delegatee_did,
-            "capabilities": sorted(capabilities),
-            "expires_at": expires_at.isoformat() if expires_at else None,
-        }, sort_keys=True)
+        delegation_data = json.dumps(
+            {
+                "delegator": delegator.did,
+                "delegatee": delegatee_did,
+                "capabilities": sorted(capabilities),
+                "expires_at": expires_at.isoformat() if expires_at else None,
+            },
+            sort_keys=True,
+        )
 
         # Sign with delegator's identity
         signature = delegator.sign(delegation_data)
@@ -415,12 +418,17 @@ class DelegationChain:
                 return False
 
             # Verify delegation signature
-            delegation_data = json.dumps({
-                "delegator": delegation.delegator,
-                "delegatee": delegation.delegatee,
-                "capabilities": sorted(delegation.capabilities),
-                "expires_at": delegation.expires_at.isoformat() if delegation.expires_at else None,
-            }, sort_keys=True)
+            delegation_data = json.dumps(
+                {
+                    "delegator": delegation.delegator,
+                    "delegatee": delegation.delegatee,
+                    "capabilities": sorted(delegation.capabilities),
+                    "expires_at": delegation.expires_at.isoformat()
+                    if delegation.expires_at
+                    else None,
+                },
+                sort_keys=True,
+            )
 
             if not delegator_identity.verify_signature(delegation_data, delegation.signature):
                 return False
@@ -499,10 +507,7 @@ class AgentDirectory:
         Returns:
             List of agent cards with the capability
         """
-        return [
-            card for card in self._cards.values()
-            if capability in card.capabilities
-        ]
+        return [card for card in self._cards.values() if capability in card.capabilities]
 
     def list_trusted(self, min_trust_score: float = 0.7) -> List[TrustedAgentCard]:
         """List all agents above a minimum trust score.
@@ -513,10 +518,7 @@ class AgentDirectory:
         Returns:
             List of trusted agent cards
         """
-        return [
-            card for card in self._cards.values()
-            if card.trust_score >= min_trust_score
-        ]
+        return [card for card in self._cards.values() if card.trust_score >= min_trust_score]
 
     def remove(self, did: str) -> bool:
         """Remove an agent from the directory.

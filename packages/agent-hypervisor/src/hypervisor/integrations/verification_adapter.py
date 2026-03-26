@@ -104,8 +104,14 @@ class VerificationAdapter:
         self._check_history.append(result)
         return result
 
-    def get_agent_drift_history(self, agent_did: str, session_id: str | None = None) -> list[DriftCheckResult]:
-        return [r for r in self._check_history if r.agent_did == agent_did and (session_id is None or r.session_id == session_id)]
+    def get_agent_drift_history(
+        self, agent_did: str, session_id: str | None = None
+    ) -> list[DriftCheckResult]:
+        return [
+            r
+            for r in self._check_history
+            if r.agent_did == agent_did and (session_id is None or r.session_id == session_id)
+        ]
 
     def get_drift_rate(self, agent_did: str, session_id: str | None = None) -> float:
         history = self.get_agent_drift_history(agent_did, session_id)

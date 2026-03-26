@@ -146,6 +146,7 @@ class TrustedFunctionGuard:
         1. Function not blocked
         2. Trust score meets function-specific threshold (or default)
         """
+
         def deny(reason: str) -> FunctionCallResult:
             r = FunctionCallResult(
                 allowed=False,
@@ -242,6 +243,7 @@ class HandoffVerifier:
         3. Delegation depth within bounds (if context provided)
         4. Source != Target (no self-delegation)
         """
+
         def deny(reason: str) -> HandoffResult:
             r = HandoffResult(
                 allowed=False,
@@ -260,15 +262,22 @@ class HandoffVerifier:
 
         # Source trust
         if source_trust < self.min_trust_score:
-            return deny(f"Source trust {source_trust} below minimum {self.min_trust_score}")
+            return deny(
+                f"Source trust {source_trust} below minimum {self.min_trust_score}"
+            )
 
         # Target trust
         if target_trust < self.min_trust_score:
-            return deny(f"Target trust {target_trust} below minimum {self.min_trust_score}")
+            return deny(
+                f"Target trust {target_trust} below minimum {self.min_trust_score}"
+            )
 
         # Mutual trust (if required)
         if self.require_mutual_trust:
-            if source_trust < self.min_trust_score or target_trust < self.min_trust_score:
+            if (
+                source_trust < self.min_trust_score
+                or target_trust < self.min_trust_score
+            ):
                 return deny("Mutual trust requirement not met")
 
         # Delegation depth

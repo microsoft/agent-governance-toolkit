@@ -11,12 +11,12 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 from langchain_core.tools import BaseTool, StructuredTool
 
-from langchain_agentmesh.identity import VerificationIdentity, UserContext
+from langchain_agentmesh.identity import UserContext, VerificationIdentity
 from langchain_agentmesh.trust import (
+    TrustedAgentCard,
     TrustHandshake,
     TrustPolicy,
     TrustVerificationResult,
-    TrustedAgentCard,
 )
 
 

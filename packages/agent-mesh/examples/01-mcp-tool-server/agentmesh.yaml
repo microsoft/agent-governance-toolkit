@@ -33,7 +33,7 @@ reward:
     output_quality: 0.20
     security_posture: 0.25
     collaboration_health: 0.10
-  
+
   thresholds:
     credential_revocation: 400
     warning: 600
@@ -48,12 +48,12 @@ resources:
   allowed_paths:
     - "/data/*"
     - "/tmp/*"
-  
+
   blocked_paths:
     - "/etc/passwd"
     - "/etc/shadow"
     - "/.ssh/*"
-  
+
   api_endpoints:
     - "https://api.weather.com/*"
     - "https://api.example.com/*"

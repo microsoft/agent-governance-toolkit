@@ -9,13 +9,12 @@ from __future__ import annotations
 
 import hashlib
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Set
-
+from datetime import UTC, datetime, timezone
+from typing import Any, Dict, List, Optional, Set
 
 from agentmesh.exceptions import TrustViolationError  # noqa: E402
-
 
 # Backward compatibility: TrustViolationError is re-exported from agentmesh.exceptions
 
@@ -28,10 +27,10 @@ class AgentIdentity:
     did: str
     public_key: str
     trust_score: float = 0.5
-    capabilities: List[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_agent(cls, agent: Any) -> "AgentIdentity":
+    def from_agent(cls, agent: Any) -> AgentIdentity:
         """Create identity from a Swarm Agent."""
         agent_name = getattr(agent, "name", "unnamed_agent")
         seed = f"{agent_name}:{time.time_ns()}"
@@ -61,7 +60,7 @@ class HandoffRecord:
     trust_score: float
     verified: bool
     reason: str = ""
-    context_keys: List[str] = field(default_factory=list)
+    context_keys: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -69,15 +68,23 @@ class TrustPolicy:
     """Policy for trusted handoffs."""
 
     min_trust_score: float = 0.5
-    allowed_targets: Set[str] = field(default_factory=set)
-    blocked_targets: Set[str] = field(default_factory=set)
-    sensitive_context_keys: Set[str] = field(default_factory=lambda: {
-        "password", "api_key", "secret", "token", "credential",
-        "ssn", "credit_card", "bank_account",
-    })
+    allowed_targets: set[str] = field(default_factory=set)
+    blocked_targets: set[str] = field(default_factory=set)
+    sensitive_context_keys: set[str] = field(
+        default_factory=lambda: {
+            "password",
+            "api_key",
+            "secret",
+            "token",
+            "credential",
+            "ssn",
+            "credit_card",
+            "bank_account",
+        }
+    )
     sensitive_trust_score: float = 0.8
     audit_logging: bool = True
-    on_violation: Optional[Callable[[str, str, str], None]] = None
+    on_violation: Callable[[str, str, str], None] | None = None
 
 
 class HandoffVerifier:
@@ -85,8 +92,8 @@ class HandoffVerifier:
 
     def __init__(self, policy: TrustPolicy):
         self.policy = policy
-        self._identities: Dict[str, AgentIdentity] = {}
-        self._handoff_log: List[HandoffRecord] = []
+        self._identities: dict[str, AgentIdentity] = {}
+        self._handoff_log: list[HandoffRecord] = []
 
     def register_agent(self, agent: Any, trust_score: float = 0.5) -> AgentIdentity:
         """Register an agent with the trust system."""
@@ -99,7 +106,7 @@ class HandoffVerifier:
         self,
         from_agent: str,
         to_agent: str,
-        context_variables: Optional[Dict[str, Any]] = None,
+        context_variables: dict[str, Any] | None = None,
     ) -> bool:
         """Verify if a handoff is allowed."""
         verified = True
@@ -128,13 +135,15 @@ class HandoffVerifier:
 
             if target_identity.trust_score < required_score:
                 verified = False
-                reason = f"Trust score {target_identity.trust_score} below required {required_score}"
+                reason = (
+                    f"Trust score {target_identity.trust_score} below required {required_score}"
+                )
 
         if self.policy.audit_logging:
             record = HandoffRecord(
                 from_agent=from_agent,
                 to_agent=to_agent,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 trust_score=self._identities.get(to_agent, AgentIdentity("", "", "")).trust_score,
                 verified=verified,
                 reason=reason,
@@ -155,7 +164,7 @@ class HandoffVerifier:
             identity = self._identities[agent_name]
             identity.trust_score = max(0.0, min(1.0, identity.trust_score + delta))
 
-    def get_handoff_log(self) -> List[HandoffRecord]:
+    def get_handoff_log(self) -> list[HandoffRecord]:
         """Get the handoff audit log."""
         return self._handoff_log.copy()
 
@@ -216,10 +225,10 @@ class TrustedAgent:
 class TrustedSwarm:
     """Swarm client with trust-verified handoffs."""
 
-    def __init__(self, policy: Optional[TrustPolicy] = None):
+    def __init__(self, policy: TrustPolicy | None = None):
         self.policy = policy or TrustPolicy()
         self.verifier = HandoffVerifier(self.policy)
-        self._agents: Dict[str, TrustedAgent] = {}
+        self._agents: dict[str, TrustedAgent] = {}
 
     def register_agent(
         self,
@@ -234,8 +243,8 @@ class TrustedSwarm:
     def run(
         self,
         agent: Any,
-        messages: List[Dict[str, str]],
-        context_variables: Optional[Dict[str, Any]] = None,
+        messages: list[dict[str, str]],
+        context_variables: dict[str, Any] | None = None,
         **kwargs,
     ) -> Any:
         """Run swarm with trust verification."""
@@ -251,7 +260,7 @@ class TrustedSwarm:
         client = Swarm()
         return client.run(agent, messages, context_variables, **kwargs)
 
-    def get_trust_report(self) -> Dict[str, Any]:
+    def get_trust_report(self) -> dict[str, Any]:
         """Get trust status report."""
         return {
             "agents": {
@@ -262,9 +271,7 @@ class TrustedSwarm:
                 for name, agent in self._agents.items()
             },
             "handoff_count": len(self.verifier.get_handoff_log()),
-            "violations": sum(
-                1 for r in self.verifier.get_handoff_log() if not r.verified
-            ),
+            "violations": sum(1 for r in self.verifier.get_handoff_log() if not r.verified),
         }
 
 

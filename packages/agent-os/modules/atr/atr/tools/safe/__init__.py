@@ -23,13 +23,13 @@ Available Tools:
 
 Example:
     >>> from atr.tools.safe import HttpClientTool, FileReaderTool
-    >>> 
+    >>>
     >>> # Create tools with restrictions
     >>> http = HttpClientTool(
     ...     allowed_domains=["api.example.com"],
     ...     rate_limit=10  # requests per minute
     ... )
-    >>> 
+    >>>
     >>> reader = FileReaderTool(
     ...     sandbox_path="/data/safe",
     ...     max_file_size=1_000_000  # 1MB
@@ -40,7 +40,7 @@ from typing import List
 
 __all__: List[str] = [
     "HttpClientTool",
-    "FileReaderTool", 
+    "FileReaderTool",
     "JsonParserTool",
     "CalculatorTool",
     "DateTimeTool",
@@ -53,23 +53,30 @@ def __getattr__(name: str):
     """Lazy import tools."""
     if name == "HttpClientTool":
         from atr.tools.safe.http_client import HttpClientTool
+
         return HttpClientTool
     elif name == "FileReaderTool":
         from atr.tools.safe.file_reader import FileReaderTool
+
         return FileReaderTool
     elif name == "JsonParserTool":
         from atr.tools.safe.json_parser import JsonParserTool
+
         return JsonParserTool
     elif name == "CalculatorTool":
         from atr.tools.safe.calculator import CalculatorTool
+
         return CalculatorTool
     elif name == "DateTimeTool":
         from atr.tools.safe.datetime_tool import DateTimeTool
+
         return DateTimeTool
     elif name == "TextTool":
         from atr.tools.safe.text_tool import TextTool
+
         return TextTool
     elif name == "create_safe_toolkit":
         from atr.tools.safe.toolkit import create_safe_toolkit
+
         return create_safe_toolkit
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

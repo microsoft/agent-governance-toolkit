@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Compliance Framework Module
- * 
+ *
  * Provides pre-configured compliance templates and report generation
  * for SOC 2, GDPR, HIPAA, and PCI DSS.
  */
@@ -339,7 +339,7 @@ export class ComplianceManager {
         // In a real implementation, this would check against actual policy configurations
         // For now, return a mock evaluation
         const config = vscode.workspace.getConfiguration('agentOS');
-        
+
         if (control.policies?.includes('audit_logging')) {
             return config.get('audit.enabled', false);
         }
@@ -349,7 +349,7 @@ export class ComplianceManager {
         if (control.policies?.includes('encryption')) {
             return true; // Assume encryption is always on
         }
-        
+
         return Math.random() > 0.5; // Mock for demo
     }
 
@@ -363,7 +363,7 @@ export class ComplianceManager {
             for (const control of notImplemented.slice(0, 5)) {
                 recommendations.push(`Implement ${control.name} (${control.id}): ${control.requirement}`);
             }
-            
+
             if (notImplemented.length > 5) {
                 recommendations.push(`...and ${notImplemented.length - 5} more controls need implementation.`);
             }
@@ -406,7 +406,7 @@ export class ComplianceManager {
     }
 
     private _generateMarkdownReport(report: ComplianceReport): string {
-        const controlsTable = report.controls.map(c => 
+        const controlsTable = report.controls.map(c =>
             `| ${c.implemented ? '✅' : '❌'} | ${c.id} | ${c.name} | ${c.category} |`
         ).join('\n');
 

@@ -19,7 +19,7 @@ policies:
           - "(?i)(illegal|illicit) (drugs|substances)"
     action: SIGSTOP
     reason: "Content flagged for human review"
-  
+
   # Block PII in outputs
   - name: no_pii
     scope: output
@@ -29,7 +29,7 @@ policies:
           - "\\b\\d{16}\\b"                # Credit card
     action: SIGKILL
     reason: "PII detected in output"
-  
+
   # Rate limit LLM calls
   - name: rate_limit
     scope: action

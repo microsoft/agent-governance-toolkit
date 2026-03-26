@@ -6,15 +6,16 @@ Scope Chains
 Simple scope passing: sub-agent gets parent's scopes minus any denied ones.
 """
 
-from datetime import datetime, timedelta
-from typing import ClassVar, Optional
-from pydantic import BaseModel, Field, field_validator
 import hashlib
 import json
+from datetime import datetime, timedelta
+from typing import ClassVar
 
-from agentmesh.identity.agent_id import AgentIdentity
+from pydantic import BaseModel, Field, field_validator
+
 from agentmesh.constants import DEFAULT_DELEGATION_MAX_DEPTH
-from agentmesh.exceptions import DelegationError, DelegationDepthError
+from agentmesh.exceptions import DelegationDepthError, DelegationError
+from agentmesh.identity.agent_id import AgentIdentity
 
 
 class UserContext(BaseModel):
@@ -27,11 +28,11 @@ class UserContext(BaseModel):
     """
 
     user_id: str = Field(..., description="Unique user identifier")
-    user_email: Optional[str] = Field(None, description="User email for audit trails")
+    user_email: str | None = Field(None, description="User email for audit trails")
     roles: list[str] = Field(default_factory=list, description="User roles for RBAC")
     permissions: list[str] = Field(default_factory=list, description="Fine-grained permissions")
     issued_at: datetime = Field(default_factory=datetime.utcnow)
-    expires_at: Optional[datetime] = Field(None, description="OBO context expiration")
+    expires_at: datetime | None = Field(None, description="OBO context expiration")
     metadata: dict = Field(default_factory=dict, description="Additional user attributes")
 
     def is_valid(self) -> bool:
@@ -54,9 +55,9 @@ class UserContext(BaseModel):
     def create(
         cls,
         user_id: str,
-        user_email: Optional[str] = None,
-        roles: Optional[list[str]] = None,
-        permissions: Optional[list[str]] = None,
+        user_email: str | None = None,
+        roles: list[str] | None = None,
+        permissions: list[str] | None = None,
         ttl_seconds: int = 3600,
     ) -> "UserContext":
         """Create a new user context with TTL."""
@@ -89,20 +90,22 @@ class DelegationLink(BaseModel):
     child_did: str = Field(..., description="DID of child agent")
 
     # Capability narrowing
-    parent_capabilities: list[str] = Field(..., description="Parent's capabilities at delegation time")
+    parent_capabilities: list[str] = Field(
+        ..., description="Parent's capabilities at delegation time"
+    )
     delegated_capabilities: list[str] = Field(..., description="Capabilities granted to child")
 
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    expires_at: Optional[datetime] = Field(None)
+    expires_at: datetime | None = Field(None)
 
     # User context for OBO flows
-    user_context: Optional[UserContext] = Field(None, description="End-user context for OBO flows")
+    user_context: UserContext | None = Field(None, description="End-user context for OBO flows")
 
     # Kept for API compatibility (not cryptographically enforced)
     parent_signature: str = Field(..., description="Parent's signature on this delegation")
     link_hash: str = Field(..., description="Hash of this link for chain verification")
-    previous_link_hash: Optional[str] = Field(None, description="Hash of previous link in chain")
+    previous_link_hash: str | None = Field(None, description="Hash of previous link in chain")
 
     def verify_capability_narrowing(self) -> bool:
         """Verify that delegated capabilities are a subset of parent's."""
@@ -160,7 +163,9 @@ class ScopeChain(BaseModel):
     DEFAULT_MAX_DEPTH: ClassVar[int] = DEFAULT_DELEGATION_MAX_DEPTH
 
     chain_id: str = Field(..., description="Unique chain identifier")
-    max_depth: int = Field(default=DEFAULT_DELEGATION_MAX_DEPTH, description="Maximum allowed chain depth")
+    max_depth: int = Field(
+        default=DEFAULT_DELEGATION_MAX_DEPTH, description="Maximum allowed chain depth"
+    )
 
     # Root (human sponsor)
     root_sponsor_email: str = Field(..., description="Human sponsor at chain root")
@@ -206,9 +211,7 @@ class ScopeChain(BaseModel):
         if not v or not v.strip():
             raise DelegationError("leaf_did must not be empty")
         if not v.startswith("did:mesh:"):
-            raise DelegationError(
-                f"leaf_did must match 'did:mesh:' pattern, got: {v}"
-            )
+            raise DelegationError(f"leaf_did must match 'did:mesh:' pattern, got: {v}")
         return v
 
     # Chain metadata
@@ -227,8 +230,7 @@ class ScopeChain(BaseModel):
         new_depth = len(self.links) + 1
         if new_depth > self.max_depth:
             raise DelegationDepthError(
-                f"Scope chain depth {new_depth} exceeds maximum allowed depth "
-                f"of {self.max_depth}"
+                f"Scope chain depth {new_depth} exceeds maximum allowed depth of {self.max_depth}"
             )
 
         if self.links:
@@ -255,10 +257,12 @@ class ScopeChain(BaseModel):
         identity = self.known_identities.get(link.parent_did)
         if identity is None:
             return True  # Graceful fallback — can't verify without identity
-        signable_data = f"{link.parent_did}:{link.child_did}:{','.join(sorted(link.delegated_capabilities))}"
+        signable_data = (
+            f"{link.parent_did}:{link.child_did}:{','.join(sorted(link.delegated_capabilities))}"
+        )
         return identity.verify_signature(signable_data.encode(), link.parent_signature)
 
-    def verify(self) -> tuple[bool, Optional[str]]:
+    def verify(self) -> tuple[bool, str | None]:
         """
         Verify the chain — scope narrowing, hash integrity, and signatures.
         """
@@ -305,23 +309,27 @@ class ScopeChain(BaseModel):
         trace = []
 
         if capability in self.root_capabilities or "*" in self.root_capabilities:
-            trace.append({
-                "level": "root",
-                "grantor": self.root_sponsor_email,
-                "capability": capability,
-                "source_capabilities": self.root_capabilities,
-            })
+            trace.append(
+                {
+                    "level": "root",
+                    "grantor": self.root_sponsor_email,
+                    "capability": capability,
+                    "source_capabilities": self.root_capabilities,
+                }
+            )
 
         for link in self.links:
             if capability in link.delegated_capabilities:
-                trace.append({
-                    "level": f"depth_{link.depth}",
-                    "grantor": link.parent_did,
-                    "grantee": link.child_did,
-                    "capability": capability,
-                    "parent_capabilities": link.parent_capabilities,
-                    "delegated_capabilities": link.delegated_capabilities,
-                })
+                trace.append(
+                    {
+                        "level": f"depth_{link.depth}",
+                        "grantor": link.parent_did,
+                        "grantee": link.child_did,
+                        "capability": capability,
+                        "parent_capabilities": link.parent_capabilities,
+                        "delegated_capabilities": link.delegated_capabilities,
+                    }
+                )
 
         return trace
 

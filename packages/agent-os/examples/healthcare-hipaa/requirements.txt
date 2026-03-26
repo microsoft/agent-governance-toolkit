@@ -4,7 +4,7 @@
 # Agent OS
 agent-os-kernel>=0.1.0
 
-# LLM providers  
+# LLM providers
 openai>=1.0.0
 anthropic>=0.18.0
 

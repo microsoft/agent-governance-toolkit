@@ -9,7 +9,7 @@ between all agents before and during crew execution.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from agentmesh.exceptions import TrustViolationError
 
@@ -42,8 +42,8 @@ class TrustAwareCrew:
 
     def __init__(
         self,
-        agents: List[TrustAwareAgent],
-        tasks: Optional[List[Any]] = None,
+        agents: list[TrustAwareAgent],
+        tasks: list[Any] | None = None,
         min_trust_score: int = 500,
         **kwargs: Any,
     ) -> None:
@@ -53,13 +53,13 @@ class TrustAwareCrew:
         self._crewai_kwargs = kwargs
         self._crewai_crew: Any = None
 
-    def verify_crew_trust(self) -> Dict[str, Any]:
+    def verify_crew_trust(self) -> dict[str, Any]:
         """Verify all agents in crew meet trust requirements.
 
         Returns:
             Dictionary with per-agent trust status and overall result.
         """
-        results: Dict[str, Any] = {}
+        results: dict[str, Any] = {}
         all_trusted = True
 
         for agent in self.agents:
@@ -75,7 +75,7 @@ class TrustAwareCrew:
 
         return {"agents": results, "all_trusted": all_trusted}
 
-    def kickoff(self, **kwargs: Any) -> Dict[str, Any]:
+    def kickoff(self, **kwargs: Any) -> dict[str, Any]:
         """Run crew with trust enforcement.
 
         Verifies trust for all agents, then attempts to run the crew
@@ -93,22 +93,14 @@ class TrustAwareCrew:
         trust_report = self.verify_crew_trust()
 
         if not trust_report["all_trusted"]:
-            untrusted = [
-                did
-                for did, info in trust_report["agents"].items()
-                if not info["trusted"]
-            ]
-            raise TrustViolationError(
-                f"Crew trust verification failed for agents: {untrusted}"
-            )
+            untrusted = [did for did, info in trust_report["agents"].items() if not info["trusted"]]
+            raise TrustViolationError(f"Crew trust verification failed for agents: {untrusted}")
 
         crew_result: Any = None
         try:
             from crewai import Crew as CrewAICrew
 
-            crewai_agents = [
-                a.crewai_agent for a in self.agents if a.crewai_agent is not None
-            ]
+            crewai_agents = [a.crewai_agent for a in self.agents if a.crewai_agent is not None]
             if crewai_agents:
                 self._crewai_crew = CrewAICrew(
                     agents=crewai_agents,

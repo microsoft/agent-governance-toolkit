@@ -502,23 +502,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
       - name: Install AgentOS
         run: pip install agent-os-kernel
-      
+
       - name: Run Policy Validation
         run: agent-os validate --policy policies/ --strict
         env:
           AGENT_OS_KEY: ${{ secrets.AGENT_OS_KEY }}
-      
+
       - name: Security Scan
         run: agent-os scan --path src/ --output sarif
-      
+
       - name: Upload Results
         uses: github/codeql-action/upload-sarif@v2
         with:

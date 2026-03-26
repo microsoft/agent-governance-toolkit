@@ -13,27 +13,27 @@ the mesh server and exposes a local health/task API.
 """
 
 import asyncio
+import json
+import logging
 import os
 import time
-import logging
-import json
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import redis.asyncio as aioredis
-import yaml
 import uvicorn
+import yaml
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import Response
 from prometheus_client import (
+    CONTENT_TYPE_LATEST,
     Counter,
     Gauge,
     Histogram,
     generate_latest,
-    CONTENT_TYPE_LATEST,
 )
-from fastapi.responses import Response
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -71,7 +71,9 @@ HANDSHAKE_DURATION = Histogram(
     "Handshake latency",
     buckets=[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0],
 )
-POLICY_VIOLATIONS = Counter("agentmesh_policy_violations_total", "Policy violations", ["agent_id", "violation_type"])
+POLICY_VIOLATIONS = Counter(
+    "agentmesh_policy_violations_total", "Policy violations", ["agent_id", "violation_type"]
+)
 REDIS_OPS = Counter("agentmesh_redis_operations_total", "Redis operations", ["operation"])
 HEARTBEAT_TS = Gauge("agentmesh_agent_last_heartbeat", "Last heartbeat unix ts", ["agent_id"])
 
@@ -89,7 +91,7 @@ mesh_config: dict = {}
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 async def _connect_redis():
@@ -113,7 +115,12 @@ async def _load_config():
 
 async def _persist_agent(agent_id: str, data: dict):
     if redis_client:
-        await redis_client.hset(f"agentmesh:agent:{agent_id}", mapping={k: json.dumps(v) if isinstance(v, (dict, list)) else str(v) for k, v in data.items()})
+        await redis_client.hset(
+            f"agentmesh:agent:{agent_id}",
+            mapping={
+                k: json.dumps(v) if isinstance(v, (dict, list)) else str(v) for k, v in data.items()
+            },
+        )
         REDIS_OPS.labels(operation="hset").inc()
 
 
@@ -223,9 +230,17 @@ if MODE == "server":
         HANDSHAKE_DURATION.observe(time.monotonic() - start)
 
         await _persist_agent(agent_id, agents[agent_id])
-        await _publish("agentmesh:events", {"type": "register" if is_new else "heartbeat", "agent_id": agent_id})
+        await _publish(
+            "agentmesh:events",
+            {"type": "register" if is_new else "heartbeat", "agent_id": agent_id},
+        )
 
-        logger.info("Agent %s %s (trust=%.2f)", agent_id, "registered" if is_new else "heartbeat", agents[agent_id]["trust_score"])
+        logger.info(
+            "Agent %s %s (trust=%.2f)",
+            agent_id,
+            "registered" if is_new else "heartbeat",
+            agents[agent_id]["trust_score"],
+        )
         return {"agent_id": agent_id, "trust_score": agents[agent_id]["trust_score"]}
 
     @app.get("/agents")
@@ -270,8 +285,12 @@ if MODE == "server":
         TRUST_SCORE.labels(agent_id=agent_id).set(a["trust_score"])
         TASKS_TOTAL.labels(agent_id=agent_id, status="success").inc()
 
-        await _publish("agentmesh:events", {"type": "task_complete", "agent_id": agent_id, "task_id": task_id})
-        logger.info("Task %s completed for %s (trust now %.2f)", task_id, agent_id, a["trust_score"])
+        await _publish(
+            "agentmesh:events", {"type": "task_complete", "agent_id": agent_id, "task_id": task_id}
+        )
+        logger.info(
+            "Task %s completed for %s (trust now %.2f)", task_id, agent_id, a["trust_score"]
+        )
         return {"task_id": task_id, "status": "completed", "trust_score": a["trust_score"]}
 
     @app.get("/trust/scores")

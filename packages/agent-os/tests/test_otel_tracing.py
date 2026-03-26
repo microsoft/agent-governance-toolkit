@@ -4,7 +4,7 @@
 
 import pytest
 
-from agent_os.stateless import StatelessKernel, ExecutionContext, MemoryBackend
+from agent_os.stateless import ExecutionContext, MemoryBackend, StatelessKernel
 
 # Detect whether the OTel SDK is available for span verification
 try:

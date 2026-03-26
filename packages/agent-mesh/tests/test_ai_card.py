@@ -8,22 +8,19 @@ JSON serialization, discovery catalog, and TrustedAgentCard bridging.
 """
 
 import json
-from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from agentmesh.identity.agent_id import AgentIdentity
+from agentmesh.integrations.ai_card.discovery import AICardDiscovery
 from agentmesh.integrations.ai_card.schema import (
     AICard,
     AICardIdentity,
     AICardService,
     AICardSignature,
-    AICardVerifiable,
     CapabilityAttestation,
     DelegationRecord,
 )
-from agentmesh.integrations.ai_card.discovery import AICardDiscovery
-
 
 # ── Fixtures ──────────────────────────────────────────────────
 
@@ -82,7 +79,11 @@ class TestAICardSchema:
             ),
             services=[
                 AICardService(protocol="a2a", url="https://agent.example.com/a2a"),
-                AICardService(protocol="mcp", url="https://agent.example.com/mcp", metadata={"tools": ["search"]}),
+                AICardService(
+                    protocol="mcp",
+                    url="https://agent.example.com/mcp",
+                    metadata={"tools": ["search"]},
+                ),
             ],
             custom={"org": "test-org"},
         )
@@ -227,7 +228,9 @@ class TestJSONSerialization:
 
     def test_roundtrip_with_services(self, identity):
         services = [
-            AICardService(protocol="a2a", url="https://a2a.example.com", metadata={"skills": ["search"]}),
+            AICardService(
+                protocol="a2a", url="https://a2a.example.com", metadata={"skills": ["search"]}
+            ),
             AICardService(protocol="mcp", url="https://mcp.example.com"),
         ]
         card = AICard.from_identity(identity, services=services)

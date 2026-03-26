@@ -14,13 +14,12 @@ import time
 import pytest
 
 from agent_os.semantic_policy import (
+    _SIGNALS,
     IntentCategory,
     IntentClassification,
     PolicyDenied,
     SemanticPolicyEngine,
-    _SIGNALS,
 )
-
 
 # ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -88,6 +87,7 @@ class TestPolicyLoadingAndParsing:
     def test_compiled_regex_objects(self, engine):
         """Each compiled signal should be (compiled_regex, weight, explanation)."""
         import re
+
         for cat, sigs in engine._compiled.items():
             for regex, weight, explanation in sigs:
                 assert isinstance(regex, re.Pattern)
@@ -101,10 +101,7 @@ class TestPolicyLoadingAndParsing:
             ],
         }
         engine = SemanticPolicyEngine(custom_signals=custom)
-        assert any(
-            expl == "greeting"
-            for _, _, expl in engine._compiled[IntentCategory.BENIGN]
-        )
+        assert any(expl == "greeting" for _, _, expl in engine._compiled[IntentCategory.BENIGN])
 
     def test_custom_signals_extend_not_replace(self):
         original_count = len(_SIGNALS[IntentCategory.DESTRUCTIVE_DATA])
@@ -252,7 +249,9 @@ class TestPolicyEvaluation:
         assert r.category == IntentCategory.DATA_WRITE
 
     def test_update(self, engine):
-        r = engine.classify("sql", {"query": "UPDATE settings SET value = 'dark' WHERE key = 'theme'"})
+        r = engine.classify(
+            "sql", {"query": "UPDATE settings SET value = 'dark' WHERE key = 'theme'"}
+        )
         assert r.category == IntentCategory.DATA_WRITE
 
     # -- benign --
@@ -337,18 +336,12 @@ class TestPolicyComposition:
 
     def test_independent_engines_no_state_leak(self):
         """Two engines should not share mutable state."""
-        a = SemanticPolicyEngine(
-            custom_signals={IntentCategory.BENIGN: [(r"\bfoo\b", 0.5, "foo")]}
-        )
+        a = SemanticPolicyEngine(custom_signals={IntentCategory.BENIGN: [(r"\bfoo\b", 0.5, "foo")]})
         b = SemanticPolicyEngine()
 
         # 'foo' signal should only exist in engine a
-        assert any(
-            expl == "foo" for _, _, expl in a._compiled.get(IntentCategory.BENIGN, [])
-        )
-        assert not any(
-            expl == "foo" for _, _, expl in b._compiled.get(IntentCategory.BENIGN, [])
-        )
+        assert any(expl == "foo" for _, _, expl in a._compiled.get(IntentCategory.BENIGN, []))
+        assert not any(expl == "foo" for _, _, expl in b._compiled.get(IntentCategory.BENIGN, []))
 
     def test_chain_multiple_checks(self):
         """Running check through multiple engines in sequence."""
@@ -453,6 +446,7 @@ class TestDynamicPolicyUpdates:
     def test_add_custom_signal_at_runtime(self):
         """Adding a compiled signal to the engine after construction."""
         import re
+
         engine = SemanticPolicyEngine()
         engine._compiled.setdefault(IntentCategory.DESTRUCTIVE_DATA, []).append(
             (re.compile(r"\bobliterate\b", re.IGNORECASE), 0.9, "obliterate"),
@@ -492,9 +486,7 @@ class TestEdgeCases:
 
     def test_very_long_input(self, engine):
         """Engine should handle very long input strings."""
-        long_text = "SELECT id FROM t WHERE " + " AND ".join(
-            f"col{i} = {i}" for i in range(1000)
-        )
+        long_text = "SELECT id FROM t WHERE " + " AND ".join(f"col{i} = {i}" for i in range(1000))
         r = engine.classify("sql", {"query": long_text})
         assert isinstance(r, IntentClassification)
 
@@ -521,9 +513,12 @@ class TestEdgeCases:
 
     def test_deeply_nested_params(self, engine):
         """Nested dicts are flattened to values only (one level)."""
-        r = engine.classify("action", {
-            "outer": {"inner": "DROP TABLE x"},
-        })
+        r = engine.classify(
+            "action",
+            {
+                "outer": {"inner": "DROP TABLE x"},
+            },
+        )
         # The nested dict values are str()-ified, so "DROP TABLE x" should be found
         assert r.category == IntentCategory.DESTRUCTIVE_DATA
 
@@ -598,42 +593,45 @@ class TestPolicyDeniedException:
 class TestIntentClassificationProperties:
     """Test the is_dangerous property across all categories."""
 
-    @pytest.mark.parametrize("category", [
-        IntentCategory.DESTRUCTIVE_DATA,
-        IntentCategory.DATA_EXFILTRATION,
-        IntentCategory.PRIVILEGE_ESCALATION,
-        IntentCategory.SYSTEM_MODIFICATION,
-        IntentCategory.CODE_EXECUTION,
-    ])
+    @pytest.mark.parametrize(
+        "category",
+        [
+            IntentCategory.DESTRUCTIVE_DATA,
+            IntentCategory.DATA_EXFILTRATION,
+            IntentCategory.PRIVILEGE_ESCALATION,
+            IntentCategory.SYSTEM_MODIFICATION,
+            IntentCategory.CODE_EXECUTION,
+        ],
+    )
     def test_dangerous_categories_high_confidence(self, category):
-        c = IntentClassification(
-            category=category, confidence=0.8, matched_signals=("test",)
-        )
+        c = IntentClassification(category=category, confidence=0.8, matched_signals=("test",))
         assert c.is_dangerous is True
 
-    @pytest.mark.parametrize("category", [
-        IntentCategory.DESTRUCTIVE_DATA,
-        IntentCategory.DATA_EXFILTRATION,
-        IntentCategory.PRIVILEGE_ESCALATION,
-        IntentCategory.SYSTEM_MODIFICATION,
-        IntentCategory.CODE_EXECUTION,
-    ])
+    @pytest.mark.parametrize(
+        "category",
+        [
+            IntentCategory.DESTRUCTIVE_DATA,
+            IntentCategory.DATA_EXFILTRATION,
+            IntentCategory.PRIVILEGE_ESCALATION,
+            IntentCategory.SYSTEM_MODIFICATION,
+            IntentCategory.CODE_EXECUTION,
+        ],
+    )
     def test_dangerous_categories_low_confidence(self, category):
-        c = IntentClassification(
-            category=category, confidence=0.3, matched_signals=("test",)
-        )
+        c = IntentClassification(category=category, confidence=0.3, matched_signals=("test",))
         assert c.is_dangerous is False
 
-    @pytest.mark.parametrize("category", [
-        IntentCategory.NETWORK_ACCESS,
-        IntentCategory.DATA_READ,
-        IntentCategory.DATA_WRITE,
-        IntentCategory.BENIGN,
-    ])
+    @pytest.mark.parametrize(
+        "category",
+        [
+            IntentCategory.NETWORK_ACCESS,
+            IntentCategory.DATA_READ,
+            IntentCategory.DATA_WRITE,
+            IntentCategory.BENIGN,
+        ],
+    )
     def test_non_dangerous_categories(self, category):
-        c = IntentClassification(
-            category=category, confidence=0.9, matched_signals=("test",)
-        )
+        c = IntentClassification(category=category, confidence=0.9, matched_signals=("test",))
         assert c.is_dangerous is False
 
     def test_boundary_confidence_050(self):
@@ -761,14 +759,13 @@ class TestPublicAPI:
     def test_importable_from_agent_os(self):
         from agent_os import (
             SemanticPolicyEngine,
-            IntentCategory,
-            IntentClassification,
-            PolicyDenied,
         )
+
         assert callable(SemanticPolicyEngine)
 
     def test_module_all_exports(self):
         from agent_os import semantic_policy
+
         assert "SemanticPolicyEngine" in semantic_policy.__all__
         assert "IntentCategory" in semantic_policy.__all__
         assert "IntentClassification" in semantic_policy.__all__

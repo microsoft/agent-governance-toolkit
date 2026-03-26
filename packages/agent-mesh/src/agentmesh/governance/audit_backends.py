@@ -16,12 +16,11 @@ import os
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
 from .audit import AuditEntry
-
 
 # ---------------------------------------------------------------------------
 # AuditSink Protocol
@@ -72,14 +71,14 @@ class SignedAuditEntry(BaseModel):
     event_type: str
     agent_did: str
     action: str
-    resource: Optional[str] = None
-    target_did: Optional[str] = None
+    resource: str | None = None
+    target_did: str | None = None
     data: dict[str, Any] = Field(default_factory=dict)
     outcome: str = "success"
-    policy_decision: Optional[str] = None
-    matched_rule: Optional[str] = None
-    trace_id: Optional[str] = None
-    session_id: Optional[str] = None
+    policy_decision: str | None = None
+    matched_rule: str | None = None
+    trace_id: str | None = None
+    session_id: str | None = None
 
     # Integrity fields
     content_hash: str = ""
@@ -291,9 +290,7 @@ class FileAuditSink:
         if not self._path.exists():
             return
         if self._path.stat().st_size >= self._max_file_size:
-            rotated = self._path.with_suffix(
-                f".{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.jsonl"
-            )
+            rotated = self._path.with_suffix(f".{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.jsonl")
             os.replace(self._path, rotated)
             # Reset chain for the new file
             self._previous_hash = ""
@@ -301,7 +298,7 @@ class FileAuditSink:
     def _read_last_hash(self) -> str:
         """Read the content_hash of the last entry in the file."""
         last_line = ""
-        with open(self._path, "r", encoding="utf-8") as fh:
+        with open(self._path, encoding="utf-8") as fh:
             for line in fh:
                 stripped = line.strip()
                 if stripped:
@@ -316,7 +313,7 @@ class FileAuditSink:
         entries: list[SignedAuditEntry] = []
         if not self._path.exists():
             return entries
-        with open(self._path, "r", encoding="utf-8") as fh:
+        with open(self._path, encoding="utf-8") as fh:
             for line in fh:
                 stripped = line.strip()
                 if stripped:
@@ -360,7 +357,7 @@ class HashChainVerifier:
             return False, ["File does not exist"]
 
         entries: list[SignedAuditEntry] = []
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             for lineno, line in enumerate(fh, start=1):
                 stripped = line.strip()
                 if not stripped:
@@ -386,15 +383,11 @@ class HashChainVerifier:
             # Content hash
             expected_hash = entry._compute_content_hash()
             if entry.content_hash != expected_hash:
-                errors.append(
-                    f"Entry {idx} ({entry.entry_id}): content hash mismatch"
-                )
+                errors.append(f"Entry {idx} ({entry.entry_id}): content hash mismatch")
 
             # HMAC signature
             if not entry.verify(secret_key):
-                errors.append(
-                    f"Entry {idx} ({entry.entry_id}): HMAC signature invalid"
-                )
+                errors.append(f"Entry {idx} ({entry.entry_id}): HMAC signature invalid")
 
             previous_hash = entry.content_hash
 

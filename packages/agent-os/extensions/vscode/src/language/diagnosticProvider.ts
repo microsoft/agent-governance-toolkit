@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Diagnostic Provider for Agent OS
- * 
+ *
  * Provides real-time diagnostics for policy violations, security issues,
  * and best practice recommendations.
  */
@@ -248,7 +248,7 @@ export class AgentOSDiagnosticProvider {
 
         // Apply policy rules for YAML/JSON policy files
         if (document.languageId === 'yaml' || document.languageId === 'json') {
-            if (document.fileName.includes('agent-os') || 
+            if (document.fileName.includes('agent-os') ||
                 document.fileName.includes('policy') ||
                 document.fileName.includes('.agents')) {
                 for (const rule of this.policyRules) {
@@ -267,10 +267,10 @@ export class AgentOSDiagnosticProvider {
         diagnostics: vscode.Diagnostic[]
     ): void {
         let match: RegExpExecArray | null;
-        
+
         // Reset regex state
         rule.pattern.lastIndex = 0;
-        
+
         while ((match = rule.pattern.exec(text)) !== null) {
             const startPos = document.positionAt(match.index);
             const endPos = document.positionAt(match.index + match[0].length);
@@ -283,7 +283,7 @@ export class AgentOSDiagnosticProvider {
             );
             diagnostic.code = rule.code;
             diagnostic.source = rule.source;
-            
+
             if (rule.tags) {
                 diagnostic.tags = rule.tags;
             }
@@ -322,11 +322,11 @@ class AgentOSCodeActionProvider implements vscode.CodeActionProvider {
                         vscode.CodeActionKind.QuickFix
                     );
                     action.edit = new vscode.WorkspaceEdit();
-                    
+
                     const text = document.getText(diagnostic.range);
                     const replacement = quickFix.replacement.replace('$0', text);
                     action.edit.replace(document.uri, diagnostic.range, replacement);
-                    
+
                     action.diagnostics = [diagnostic];
                     action.isPreferred = true;
                     actions.push(action);
@@ -338,7 +338,7 @@ class AgentOSCodeActionProvider implements vscode.CodeActionProvider {
                     vscode.CodeActionKind.QuickFix
                 );
                 suppressAction.edit = new vscode.WorkspaceEdit();
-                
+
                 const line = document.lineAt(diagnostic.range.start.line);
                 const suppressComment = this.getSuppressComment(document.languageId, diagnostic.code as string);
                 suppressAction.edit.insert(
@@ -346,7 +346,7 @@ class AgentOSCodeActionProvider implements vscode.CodeActionProvider {
                     new vscode.Position(line.lineNumber, line.text.length),
                     suppressComment
                 );
-                
+
                 suppressAction.diagnostics = [diagnostic];
                 actions.push(suppressAction);
 

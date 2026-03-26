@@ -1,5 +1,5 @@
 # AgentMesh MCP Proxy - Strict Policy
-# 
+#
 # Allowlist-only policy: Only explicitly permitted tools can run.
 # Use this for high-security environments.
 
@@ -11,7 +11,7 @@ default_action: deny
 
 rules:
   # === FILE OPERATIONS (Read-only) ===
-  
+
   - tool: "read_file"
     action: allow
     conditions:
@@ -53,7 +53,7 @@ rules:
     reason: "Code evaluation blocked"
 
   # === CATCH-ALL ===
-  
+
   - tool: "*"
     action: deny
     reason: "Tool not in allowlist"

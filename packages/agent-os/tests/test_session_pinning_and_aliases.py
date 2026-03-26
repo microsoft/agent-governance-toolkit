@@ -2,17 +2,11 @@
 # Licensed under the MIT License.
 """Tests for session policy pinning and tool alias registry."""
 
-import copy
-import pytest
-
 from agent_os.integrations.base import (
     BaseIntegration,
-    ExecutionContext,
     GovernancePolicy,
-    PolicyInterceptor,
-    ToolCallRequest,
 )
-from agent_os.integrations.tool_aliases import ToolAliasRegistry, DEFAULT_ALIASES
+from agent_os.integrations.tool_aliases import ToolAliasRegistry
 
 
 class _StubIntegration(BaseIntegration):
@@ -175,9 +169,15 @@ class TestToolAliasRegistry:
     def test_default_aliases_cover_common_families(self):
         """Verify all documented tool families have aliases."""
         registry = ToolAliasRegistry()
-        families = ["web_search", "file_read", "file_write",
-                     "shell_execute", "code_execute", "database_query",
-                     "http_request"]
+        families = [
+            "web_search",
+            "file_read",
+            "file_write",
+            "shell_execute",
+            "code_execute",
+            "database_query",
+            "http_request",
+        ]
         for family in families:
             aliases = registry.get_aliases(family)
             assert len(aliases) >= 2, f"{family} should have at least 2 aliases"

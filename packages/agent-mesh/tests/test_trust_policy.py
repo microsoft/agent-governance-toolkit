@@ -2,11 +2,11 @@
 # Licensed under the MIT License.
 """Tests for trust policy DSL — models, YAML I/O, and evaluation."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
 
+from agentmesh.governance.policy_evaluator import PolicyEvaluator, TrustPolicyDecision
 from agentmesh.governance.trust_policy import (
     ConditionOperator,
     TrustCondition,
@@ -15,8 +15,6 @@ from agentmesh.governance.trust_policy import (
     TrustRule,
     load_policies,
 )
-from agentmesh.governance.policy_evaluator import PolicyEvaluator, TrustPolicyDecision
-
 
 # ── Helpers ────────────────────────────────────────────────────
 
@@ -191,9 +189,7 @@ class TestDefaultFallback:
         assert "exceeds maximum" in denied.reason
 
     def test_no_rules_uses_defaults_namespace(self):
-        policy = _make_policy(
-            defaults=TrustDefaults(allowed_namespaces=["core", "internal"])
-        )
+        policy = _make_policy(defaults=TrustDefaults(allowed_namespaces=["core", "internal"]))
         evaluator = PolicyEvaluator([policy])
 
         denied = evaluator.evaluate({"agent": {"namespace": "external"}})
@@ -218,9 +214,7 @@ class TestDefaultFallback:
 
 
 class TestExamplePolicies:
-    @pytest.mark.skipif(
-        not EXAMPLES_DIR.exists(), reason="examples/policies/ not found"
-    )
+    @pytest.mark.skipif(not EXAMPLES_DIR.exists(), reason="examples/policies/ not found")
     def test_all_example_policies_load(self):
         """All example YAML policies load and validate."""
         policies = load_policies(EXAMPLES_DIR)
@@ -230,9 +224,7 @@ class TestExamplePolicies:
         assert "strict-trust-policy" in names
         assert "permissive-trust-policy" in names
 
-    @pytest.mark.skipif(
-        not EXAMPLES_DIR.exists(), reason="examples/policies/ not found"
-    )
+    @pytest.mark.skipif(not EXAMPLES_DIR.exists(), reason="examples/policies/ not found")
     def test_strict_policy_denies_low_trust(self):
         policies = load_policies(EXAMPLES_DIR)
         strict = next(p for p in policies if p.name == "strict-trust-policy")
@@ -240,9 +232,7 @@ class TestExamplePolicies:
         decision = evaluator.evaluate({"trust_score": 400, "agent": {"namespace": "core"}})
         assert decision.allowed is False
 
-    @pytest.mark.skipif(
-        not EXAMPLES_DIR.exists(), reason="examples/policies/ not found"
-    )
+    @pytest.mark.skipif(not EXAMPLES_DIR.exists(), reason="examples/policies/ not found")
     def test_permissive_policy_allows_high_trust(self):
         policies = load_policies(EXAMPLES_DIR)
         permissive = next(p for p in policies if p.name == "permissive-trust-policy")
@@ -277,9 +267,7 @@ class TestEdgeCases:
 
     def test_decision_model_fields(self):
         """TrustPolicyDecision has expected fields."""
-        d = TrustPolicyDecision(
-            allowed=True, rule_name="r1", action="allow", reason="ok"
-        )
+        d = TrustPolicyDecision(allowed=True, rule_name="r1", action="allow", reason="ok")
         assert d.allowed is True
         assert d.rule_name == "r1"
         assert d.action == "allow"

@@ -5,28 +5,28 @@
 import pytest
 
 from agent_os.exceptions import (
+    AdapterNotFoundError,
+    AdapterTimeoutError,
     AgentOSError,
-    PolicyError,
-    PolicyViolationError,
-    PolicyDeniedError,
-    PolicyTimeoutError,
     BudgetError,
     BudgetExceededError,
     BudgetWarningError,
+    ConfigurationError,
+    CredentialExpiredError,
     IdentityError,
     IdentityVerificationError,
-    CredentialExpiredError,
     IntegrationError,
-    AdapterNotFoundError,
-    AdapterTimeoutError,
-    ConfigurationError,
     InvalidPolicyError,
     MissingConfigError,
+    PolicyDeniedError,
+    PolicyError,
+    PolicyTimeoutError,
+    PolicyViolationError,
     RateLimitError,
 )
 
-
 # --- Hierarchy tests ---
+
 
 class TestExceptionHierarchy:
     """Verify the inheritance chain for all exception classes."""
@@ -34,26 +34,36 @@ class TestExceptionHierarchy:
     def test_base_inherits_from_exception(self):
         assert issubclass(AgentOSError, Exception)
 
-    @pytest.mark.parametrize("cls", [
-        PolicyError, BudgetError, IdentityError,
-        IntegrationError, ConfigurationError, RateLimitError,
-    ])
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            PolicyError,
+            BudgetError,
+            IdentityError,
+            IntegrationError,
+            ConfigurationError,
+            RateLimitError,
+        ],
+    )
     def test_mid_level_inherits_from_base(self, cls):
         assert issubclass(cls, AgentOSError)
 
-    @pytest.mark.parametrize("cls,parent", [
-        (PolicyViolationError, PolicyError),
-        (PolicyDeniedError, PolicyError),
-        (PolicyTimeoutError, PolicyError),
-        (BudgetExceededError, BudgetError),
-        (BudgetWarningError, BudgetError),
-        (IdentityVerificationError, IdentityError),
-        (CredentialExpiredError, IdentityError),
-        (AdapterNotFoundError, IntegrationError),
-        (AdapterTimeoutError, IntegrationError),
-        (InvalidPolicyError, ConfigurationError),
-        (MissingConfigError, ConfigurationError),
-    ])
+    @pytest.mark.parametrize(
+        "cls,parent",
+        [
+            (PolicyViolationError, PolicyError),
+            (PolicyDeniedError, PolicyError),
+            (PolicyTimeoutError, PolicyError),
+            (BudgetExceededError, BudgetError),
+            (BudgetWarningError, BudgetError),
+            (IdentityVerificationError, IdentityError),
+            (CredentialExpiredError, IdentityError),
+            (AdapterNotFoundError, IntegrationError),
+            (AdapterTimeoutError, IntegrationError),
+            (InvalidPolicyError, ConfigurationError),
+            (MissingConfigError, ConfigurationError),
+        ],
+    )
     def test_leaf_inherits_from_parent(self, cls, parent):
         assert issubclass(cls, parent)
         assert issubclass(cls, AgentOSError)
@@ -64,29 +74,33 @@ class TestExceptionHierarchy:
 
 # --- Error code defaults ---
 
+
 class TestErrorCodeDefaults:
     """Each exception should have a sensible default error_code."""
 
-    @pytest.mark.parametrize("cls,expected_code", [
-        (AgentOSError, "AGENT_OS_ERROR"),
-        (PolicyError, "POLICY_ERROR"),
-        (PolicyViolationError, "POLICY_VIOLATION"),
-        (PolicyDeniedError, "POLICY_DENIED"),
-        (PolicyTimeoutError, "POLICY_TIMEOUT"),
-        (BudgetError, "BUDGET_ERROR"),
-        (BudgetExceededError, "BUDGET_EXCEEDED"),
-        (BudgetWarningError, "BUDGET_WARNING"),
-        (IdentityError, "IDENTITY_ERROR"),
-        (IdentityVerificationError, "IDENTITY_VERIFICATION_FAILED"),
-        (CredentialExpiredError, "CREDENTIAL_EXPIRED"),
-        (IntegrationError, "INTEGRATION_ERROR"),
-        (AdapterNotFoundError, "ADAPTER_NOT_FOUND"),
-        (AdapterTimeoutError, "ADAPTER_TIMEOUT"),
-        (ConfigurationError, "CONFIGURATION_ERROR"),
-        (InvalidPolicyError, "INVALID_POLICY"),
-        (MissingConfigError, "MISSING_CONFIG"),
-        (RateLimitError, "RATE_LIMIT_EXCEEDED"),
-    ])
+    @pytest.mark.parametrize(
+        "cls,expected_code",
+        [
+            (AgentOSError, "AGENT_OS_ERROR"),
+            (PolicyError, "POLICY_ERROR"),
+            (PolicyViolationError, "POLICY_VIOLATION"),
+            (PolicyDeniedError, "POLICY_DENIED"),
+            (PolicyTimeoutError, "POLICY_TIMEOUT"),
+            (BudgetError, "BUDGET_ERROR"),
+            (BudgetExceededError, "BUDGET_EXCEEDED"),
+            (BudgetWarningError, "BUDGET_WARNING"),
+            (IdentityError, "IDENTITY_ERROR"),
+            (IdentityVerificationError, "IDENTITY_VERIFICATION_FAILED"),
+            (CredentialExpiredError, "CREDENTIAL_EXPIRED"),
+            (IntegrationError, "INTEGRATION_ERROR"),
+            (AdapterNotFoundError, "ADAPTER_NOT_FOUND"),
+            (AdapterTimeoutError, "ADAPTER_TIMEOUT"),
+            (ConfigurationError, "CONFIGURATION_ERROR"),
+            (InvalidPolicyError, "INVALID_POLICY"),
+            (MissingConfigError, "MISSING_CONFIG"),
+            (RateLimitError, "RATE_LIMIT_EXCEEDED"),
+        ],
+    )
     def test_default_error_code(self, cls, expected_code):
         err = cls("test message")
         assert err.error_code == expected_code
@@ -97,6 +111,7 @@ class TestErrorCodeDefaults:
 
 
 # --- to_dict() ---
+
 
 class TestToDict:
     """The to_dict method should return a structured dict."""
@@ -129,6 +144,7 @@ class TestToDict:
 
 # --- Details propagation ---
 
+
 class TestDetailsPropagation:
     """Details dict should propagate through the hierarchy."""
 
@@ -155,6 +171,7 @@ class TestDetailsPropagation:
 
 
 # --- isinstance checks ---
+
 
 class TestIsInstanceChecks:
     """Catching a parent should also catch child exceptions."""
@@ -189,6 +206,7 @@ class TestIsInstanceChecks:
 
 # --- Message propagation ---
 
+
 class TestMessagePropagation:
     """str(err) should return the message."""
 
@@ -203,13 +221,16 @@ class TestMessagePropagation:
 
 # --- Backward compatibility with base.py ---
 
+
 class TestBackwardCompatibility:
     """PolicyViolationError imported from base.py should be the same class."""
 
     def test_base_import_is_same_class(self):
         from agent_os.integrations.base import PolicyViolationError as BasePVE
+
         assert BasePVE is PolicyViolationError
 
     def test_integrations_init_import(self):
         from agent_os.integrations import PolicyViolationError as InitPVE
+
         assert InitPVE is PolicyViolationError

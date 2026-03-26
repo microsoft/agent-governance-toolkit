@@ -98,9 +98,7 @@ class SharedSessionObject:
         if agent_did in self._participants:
             raise SessionParticipantError(f"Agent {agent_did} already in session")
         if self.participant_count >= self.config.max_participants:
-            raise SessionParticipantError(
-                f"Session at capacity ({self.config.max_participants})"
-            )
+            raise SessionParticipantError(f"Session at capacity ({self.config.max_participants})")
         if eff_score < self.config.min_eff_score and ring != ExecutionRing.RING_3_SANDBOX:
             raise SessionParticipantError(
                 f"eff_score {eff_score:.2f} below minimum {self.config.min_eff_score:.2f}"
@@ -165,9 +163,7 @@ class SharedSessionObject:
         }
         return sid
 
-    def restore_vfs_snapshot(
-        self, snapshot_id: str, agent_did: str
-    ) -> None:
+    def restore_vfs_snapshot(self, snapshot_id: str, agent_did: str) -> None:
         """Restore VFS to a previous snapshot.
 
         Args:

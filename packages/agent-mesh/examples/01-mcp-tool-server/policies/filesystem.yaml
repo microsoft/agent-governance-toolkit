@@ -3,7 +3,7 @@ policies:
     name: "Filesystem Access Control"
     version: "1.0.0"
     enabled: true
-    
+
     rules:
       - id: "block-sensitive-paths"
         name: "Block Sensitive System Paths"
@@ -16,7 +16,7 @@ policies:
           - "params.path starts_with '/root'"
         message: "Access to sensitive system path blocked"
         severity: "critical"
-      
+
       - id: "allow-data-directory"
         name: "Allow Data Directory Access"
         action: "allow"
@@ -25,7 +25,7 @@ policies:
           - "params.path starts_with '/data/'"
         message: "Data directory access allowed"
         severity: "info"
-      
+
       - id: "allow-tmp-directory"
         name: "Allow Temp Directory Access"
         action: "allow"
@@ -34,7 +34,7 @@ policies:
           - "params.path starts_with '/tmp/'"
         message: "Temp directory access allowed"
         severity: "info"
-      
+
       - id: "block-write-by-default"
         name: "Block Filesystem Writes by Default"
         action: "block"
@@ -43,7 +43,7 @@ policies:
           - "not (params.path starts_with '/tmp/')"
         message: "Filesystem writes only allowed to /tmp/"
         severity: "high"
-      
+
       - id: "log-all-filesystem-access"
         name: "Audit All Filesystem Access"
         action: "audit"

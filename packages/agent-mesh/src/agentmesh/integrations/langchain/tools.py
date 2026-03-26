@@ -9,7 +9,8 @@ LangChain tool execution.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from agentmesh.exceptions import TrustVerificationError
 
@@ -49,7 +50,7 @@ def trust_verified_tool(
     tool: Any,
     agent_did: str,
     min_score: int = 500,
-    trust_store: Optional[Any] = None,
+    trust_store: Any | None = None,
 ) -> Callable[..., Any]:
     """Wrap a LangChain tool with trust verification.
 
@@ -140,8 +141,8 @@ class TrustVerifiedTool(BaseTool):  # type: ignore[misc]
         description: str,
         agent_did: str,
         min_trust_score: int = 500,
-        trust_store: Optional[Any] = None,
-        inner_fn: Optional[Callable[..., Any]] = None,
+        trust_store: Any | None = None,
+        inner_fn: Callable[..., Any] | None = None,
         **kwargs: Any,
     ) -> None:
         if _HAS_LANGCHAIN:

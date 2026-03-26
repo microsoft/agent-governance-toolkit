@@ -1,9 +1,9 @@
 # Product Requirements Document: Dependency Gap Analysis
 
-**Document Version:** 2.0  
-**Date:** January 26, 2026  
-**Author:** Carbon Auditor Swarm Team  
-**Status:** Updated - Many Features Now Addressed!  
+**Document Version:** 2.0
+**Date:** January 26, 2026
+**Author:** Carbon Auditor Swarm Team
+**Status:** Updated - Many Features Now Addressed!
 
 ---
 

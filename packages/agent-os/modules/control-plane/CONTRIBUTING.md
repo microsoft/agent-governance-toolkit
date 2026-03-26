@@ -132,12 +132,12 @@ from agent_control_plane import AgentControlPlane, create_standard_agent
 class TestMyFeature(unittest.TestCase):
     def setUp(self):
         self.control_plane = AgentControlPlane()
-    
+
     def test_feature_success_case(self):
         """Test that feature works in normal conditions"""
         # Test implementation
         pass
-    
+
     def test_feature_error_case(self):
         """Test that feature handles errors properly"""
         # Test implementation
@@ -206,7 +206,7 @@ mypy src/
    git push origin your-feature-branch
    ```
 
-6. **Create a Pull Request**: 
+6. **Create a Pull Request**:
    - Go to the original repository on GitHub
    - Click "New Pull Request"
    - Select your branch
@@ -279,10 +279,10 @@ The release process is mostly automated through GitHub Actions. Here's how to cr
    ```bash
    # Run full test suite
    python -m pytest tests/ -v
-   
+
    # Run linting
    flake8 src/ --count --select=E9,F63,F7,F82 --show-source
-   
+
    # Test package build
    python -m build
    twine check dist/*

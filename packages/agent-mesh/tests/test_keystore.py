@@ -2,11 +2,11 @@
 # Licensed under the MIT License.
 """Tests for KeyStore implementations (SoftwareKeyStore and PKCS11KeyStore)."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
 
-from agentmesh.identity.keystore import KeyStore, SoftwareKeyStore, PKCS11KeyStore
-
+from agentmesh.identity.keystore import KeyStore, PKCS11KeyStore, SoftwareKeyStore
 
 # ---------------------------------------------------------------------------
 # SoftwareKeyStore — full coverage

@@ -7,9 +7,9 @@ Tests MCP protocol compliance: initialize, list_tools, call_tool,
 resources, prompts, and error handling at the server handler level.
 """
 
-import pytest
 import json
 
+import pytest
 
 pytestmark = pytest.mark.asyncio
 
@@ -18,6 +18,7 @@ def _get_server():
     """Create a KernelMCPServer, skip if not installed."""
     try:
         from mcp_kernel_server.server import KernelMCPServer
+
         return KernelMCPServer()
     except ImportError:
         pytest.skip("mcp_kernel_server not installed")
@@ -68,7 +69,7 @@ class TestMCPListTools:
         server = _get_server()
         result = await server.handle_list_tools()
         for tool in result["tools"]:
-            assert "name" in tool, f"Tool missing 'name'"
+            assert "name" in tool, "Tool missing 'name'"
             assert "description" in tool, f"Tool {tool.get('name')} missing 'description'"
             assert "inputSchema" in tool, f"Tool {tool.get('name')} missing 'inputSchema'"
             assert isinstance(tool["inputSchema"], dict)
@@ -92,70 +93,91 @@ class TestMCPCallTool:
 
     async def test_call_cmvk_verify(self):
         server = _get_server()
-        result = await server.handle_call_tool("cmvk_verify", {
-            "claim": "The sky is blue",
-            "models": ["mock-1", "mock-2"],
-        })
+        result = await server.handle_call_tool(
+            "cmvk_verify",
+            {
+                "claim": "The sky is blue",
+                "models": ["mock-1", "mock-2"],
+            },
+        )
         assert "content" in result
         assert len(result["content"]) > 0
         assert result["content"][0]["type"] == "text"
 
     async def test_call_kernel_execute_allowed(self):
         server = _get_server()
-        result = await server.handle_call_tool("kernel_execute", {
-            "agent_id": "test-agent",
-            "action": "read_data",
-            "params": {"key": "value"},
-            "context": {"policies": []},
-        })
+        result = await server.handle_call_tool(
+            "kernel_execute",
+            {
+                "agent_id": "test-agent",
+                "action": "read_data",
+                "params": {"key": "value"},
+                "context": {"policies": []},
+            },
+        )
         assert "content" in result
         assert result.get("isError", False) is False
 
     async def test_call_kernel_execute_blocked(self):
         server = _get_server()
-        result = await server.handle_call_tool("kernel_execute", {
-            "agent_id": "test-agent",
-            "action": "file_write",
-            "params": {"path": "/etc/passwd"},
-            "context": {"policies": ["read_only"]},
-        })
+        result = await server.handle_call_tool(
+            "kernel_execute",
+            {
+                "agent_id": "test-agent",
+                "action": "file_write",
+                "params": {"path": "/etc/passwd"},
+                "context": {"policies": ["read_only"]},
+            },
+        )
         assert result["isError"] is True
 
     async def test_call_iatp_sign(self):
         server = _get_server()
-        result = await server.handle_call_tool("iatp_sign", {
-            "content": "trusted content",
-            "agent_id": "signer-agent",
-            "capabilities": ["read"],
-            "metadata": {},
-        })
+        result = await server.handle_call_tool(
+            "iatp_sign",
+            {
+                "content": "trusted content",
+                "agent_id": "signer-agent",
+                "capabilities": ["read"],
+                "metadata": {},
+            },
+        )
         assert result.get("isError", False) is False
         data = json.loads(result["content"][0]["text"])
         assert "signature" in data
 
     async def test_call_verify_code_safety(self):
         server = _get_server()
-        result = await server.handle_call_tool("verify_code_safety", {
-            "code": "print('hello world')",
-            "language": "python",
-        })
+        result = await server.handle_call_tool(
+            "verify_code_safety",
+            {
+                "code": "print('hello world')",
+                "language": "python",
+            },
+        )
         assert "content" in result
 
     async def test_call_get_audit_log(self):
         server = _get_server()
-        result = await server.handle_call_tool("get_audit_log", {
-            "agent_id": "test-agent",
-            "limit": 10,
-        })
+        result = await server.handle_call_tool(
+            "get_audit_log",
+            {
+                "agent_id": "test-agent",
+                "limit": 10,
+            },
+        )
         assert "content" in result
 
     async def test_call_tool_result_content_format(self):
         """All tool results should return MCP-compliant content array."""
         server = _get_server()
-        result = await server.handle_call_tool("cmvk_verify", {
-            "claim": "test",
-            "models": ["m1"],
-        })
+        result = await server.handle_call_tool(
+            "cmvk_verify",
+            {
+                "claim": "test",
+                "models": ["m1"],
+            },
+        )
         assert "content" in result
         assert isinstance(result["content"], list)
         for item in result["content"]:

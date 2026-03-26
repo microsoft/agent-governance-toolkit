@@ -14,12 +14,13 @@ import hashlib
 import json
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any, Dict, List, Optional
 
 try:
-    import urllib.request
     import urllib.error
+    import urllib.request
+
     _HTTP_AVAILABLE = True
 except ImportError:
     _HTTP_AVAILABLE = False
@@ -41,16 +42,16 @@ class FlowiseNodeIdentity:
     did: str
     public_key: str
     trust_score: float = 0.5
-    capabilities: List[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
 
     @classmethod
     def generate(
         cls,
         node_name: str,
         node_type: str = "custom",
-        capabilities: Optional[List[str]] = None,
+        capabilities: list[str] | None = None,
         trust_score: float = 0.5,
-    ) -> "FlowiseNodeIdentity":
+    ) -> FlowiseNodeIdentity:
         """Generate identity for a Flowise node."""
         seed = f"flowise:{node_name}:{node_type}:{time.time_ns()}"
         did_hash = hashlib.sha256(seed.encode()).hexdigest()[:32]
@@ -83,8 +84,8 @@ class FlowiseTrustPolicy:
     """Trust policy for Flowise API interactions."""
 
     min_trust_score: float = 0.5
-    allowed_flows: Optional[List[str]] = None
-    blocked_flows: Optional[List[str]] = None
+    allowed_flows: list[str] | None = None
+    blocked_flows: list[str] | None = None
     require_https: bool = True
     audit_logging: bool = True
     max_calls_per_minute: int = 60
@@ -119,17 +120,17 @@ class TrustGatedFlowiseClient:
         self,
         base_url: str,
         identity: FlowiseNodeIdentity,
-        policy: Optional[FlowiseTrustPolicy] = None,
-        api_key: Optional[str] = None,
+        policy: FlowiseTrustPolicy | None = None,
+        api_key: str | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.identity = identity
         self.policy = policy or FlowiseTrustPolicy()
         self.api_key = api_key
-        self._call_log: List[FlowiseCallRecord] = []
-        self._call_timestamps: List[float] = []
+        self._call_log: list[FlowiseCallRecord] = []
+        self._call_timestamps: list[float] = []
 
-    def _build_headers(self) -> Dict[str, str]:
+    def _build_headers(self) -> dict[str, str]:
         """Build request headers with trust metadata."""
         headers = {
             "Content-Type": "application/json",
@@ -157,15 +158,11 @@ class TrustGatedFlowiseClient:
 
         if self.policy.require_https and not self.base_url.startswith("https"):
             if not self.base_url.startswith("http://localhost"):
-                raise FlowiseTrustError(
-                    "HTTPS required by policy (localhost exempt)"
-                )
+                raise FlowiseTrustError("HTTPS required by policy (localhost exempt)")
 
         # Rate limiting
         now = time.time()
-        self._call_timestamps = [
-            t for t in self._call_timestamps if now - t < 60
-        ]
+        self._call_timestamps = [t for t in self._call_timestamps if now - t < 60]
         if len(self._call_timestamps) >= self.policy.max_calls_per_minute:
             raise FlowiseTrustError("Rate limit exceeded")
         self._call_timestamps.append(now)
@@ -174,8 +171,8 @@ class TrustGatedFlowiseClient:
         self,
         flow_id: str,
         question: str,
-        overrides: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        overrides: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Send a prediction request to a Flowise chatflow.
 
         Args:
@@ -189,7 +186,7 @@ class TrustGatedFlowiseClient:
         self._check_policy(flow_id)
 
         url = f"{self.base_url}/api/v1/prediction/{flow_id}"
-        payload: Dict[str, Any] = {"question": question}
+        payload: dict[str, Any] = {"question": question}
         if overrides:
             payload["overrideConfig"] = overrides
 
@@ -198,8 +195,8 @@ class TrustGatedFlowiseClient:
     def upsert(
         self,
         flow_id: str,
-        documents: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        documents: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """Upsert documents into a Flowise vector store flow."""
         self._check_policy(flow_id)
 
@@ -210,9 +207,9 @@ class TrustGatedFlowiseClient:
     def _make_request(
         self,
         url: str,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         flow_id: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute an HTTP request with trust headers."""
         headers = self._build_headers()
         data = json.dumps(payload).encode("utf-8")
@@ -221,39 +218,37 @@ class TrustGatedFlowiseClient:
         status_code = 0
 
         try:
-            req = urllib.request.Request(
-                url, data=data, headers=headers, method="POST"
-            )
+            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
             with urllib.request.urlopen(req, timeout=30) as resp:
                 status_code = resp.status
                 result = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             status_code = e.code
-            raise FlowiseTrustError(
-                f"Flowise API error {e.code}: {e.reason}"
-            ) from e
+            raise FlowiseTrustError(f"Flowise API error {e.code}: {e.reason}") from e
         except Exception as e:
             raise FlowiseTrustError(f"Flowise API error: {e}") from e
         finally:
             elapsed_ms = (time.time() - start_time) * 1000
             if self.policy.audit_logging:
-                self._call_log.append(FlowiseCallRecord(
-                    flow_id=flow_id,
-                    endpoint=url,
-                    timestamp=datetime.now(timezone.utc),
-                    caller_did=self.identity.did,
-                    trust_score=self.identity.trust_score,
-                    status_code=status_code,
-                    response_time_ms=elapsed_ms,
-                ))
+                self._call_log.append(
+                    FlowiseCallRecord(
+                        flow_id=flow_id,
+                        endpoint=url,
+                        timestamp=datetime.now(UTC),
+                        caller_did=self.identity.did,
+                        trust_score=self.identity.trust_score,
+                        status_code=status_code,
+                        response_time_ms=elapsed_ms,
+                    )
+                )
 
         return result
 
-    def get_audit_log(self) -> List[FlowiseCallRecord]:
+    def get_audit_log(self) -> list[FlowiseCallRecord]:
         """Return the API call audit log."""
         return self._call_log.copy()
 
-    def get_trust_report(self) -> Dict[str, Any]:
+    def get_trust_report(self) -> dict[str, Any]:
         """Get trust status report for this client."""
         return {
             "identity": {
@@ -280,7 +275,7 @@ class FlowiseNodeDefinition:
     """
 
     @staticmethod
-    def trust_gate_node() -> Dict[str, Any]:
+    def trust_gate_node() -> dict[str, Any]:
         """Generate a trust gate node definition for Flowise."""
         return {
             "label": "AgentMesh Trust Gate",
@@ -327,7 +322,7 @@ class FlowiseNodeDefinition:
         }
 
     @staticmethod
-    def identity_node() -> Dict[str, Any]:
+    def identity_node() -> dict[str, Any]:
         """Generate an identity setup node definition for Flowise."""
         return {
             "label": "AgentMesh Identity",
@@ -369,7 +364,7 @@ class FlowiseNodeDefinition:
         }
 
     @classmethod
-    def export_all(cls) -> List[Dict[str, Any]]:
+    def export_all(cls) -> list[dict[str, Any]]:
         """Export all AgentMesh node definitions."""
         return [cls.trust_gate_node(), cls.identity_node()]
 

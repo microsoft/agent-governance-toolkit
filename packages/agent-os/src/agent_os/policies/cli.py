@@ -165,13 +165,9 @@ def cmd_test(args: argparse.Namespace) -> int:
         errors: list[str] = []
 
         if expected_allowed is not None and decision.allowed != expected_allowed:
-            errors.append(
-                f"expected allowed={expected_allowed}, got allowed={decision.allowed}"
-            )
+            errors.append(f"expected allowed={expected_allowed}, got allowed={decision.allowed}")
         if expected_action is not None and decision.action != expected_action:
-            errors.append(
-                f"expected action='{expected_action}', got action='{decision.action}'"
-            )
+            errors.append(f"expected action='{expected_action}', got action='{decision.action}'")
 
         if errors:
             failed += 1
@@ -248,11 +244,15 @@ def cmd_diff(args: argparse.Namespace) -> int:
 
     for name in sorted(names1 - names2):
         r = rules1[name]
-        differences.append(f"  rule removed: '{name}' (action={r.action.value}, priority={r.priority})")
+        differences.append(
+            f"  rule removed: '{name}' (action={r.action.value}, priority={r.priority})"
+        )
 
     for name in sorted(names2 - names1):
         r = rules2[name]
-        differences.append(f"  rule added: '{name}' (action={r.action.value}, priority={r.priority})")
+        differences.append(
+            f"  rule added: '{name}' (action={r.action.value}, priority={r.priority})"
+        )
 
     for name in sorted(names1 & names2):
         r1 = rules1[name]
@@ -262,9 +262,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
                 f"  rule '{name}' action: '{r1.action.value}' -> '{r2.action.value}'"
             )
         if r1.priority != r2.priority:
-            differences.append(
-                f"  rule '{name}' priority: {r1.priority} -> {r2.priority}"
-            )
+            differences.append(f"  rule '{name}' priority: {r1.priority} -> {r2.priority}")
         if r1.condition != r2.condition:
             differences.append(f"  rule '{name}' condition changed")
         if r1.message != r2.message:

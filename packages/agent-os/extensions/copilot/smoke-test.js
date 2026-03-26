@@ -86,7 +86,7 @@ test('diagnoseError returns analysis', diagnosis.rootCause !== undefined);
 const issues = debugHelper.detectPerformanceIssues('for(let i=0;i<1000;i++){arr.push(i)}', 'javascript');
 test('detectPerformanceIssues returns array', Array.isArray(issues));
 
-// GitHubIntegration Tests  
+// GitHubIntegration Tests
 console.log('');
 console.log('--- GitHubIntegration ---');
 const github = new GitHubIntegration();

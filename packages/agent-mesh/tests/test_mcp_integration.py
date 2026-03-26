@@ -10,7 +10,7 @@ credentials).
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,7 +23,6 @@ from agentmesh.integrations.mcp import (
     TrustGatedMCPServer,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers & Fixtures
 # ---------------------------------------------------------------------------
@@ -32,7 +31,7 @@ from agentmesh.integrations.mcp import (
 def _make_identity(
     name: str = "test-agent",
     sponsor: str = "admin@test.com",
-    capabilities: Optional[List[str]] = None,
+    capabilities: list[str] | None = None,
 ) -> AgentIdentity:
     """Create a test AgentIdentity via the real factory."""
     return AgentIdentity.create(
@@ -42,7 +41,7 @@ def _make_identity(
     )
 
 
-async def _echo_handler(**kwargs: Any) -> Dict[str, Any]:
+async def _echo_handler(**kwargs: Any) -> dict[str, Any]:
     """Simple async handler that echoes its arguments."""
     return {"echo": kwargs}
 
@@ -52,7 +51,7 @@ async def _failing_handler(**kwargs: Any) -> None:
     raise RuntimeError("handler exploded")
 
 
-async def _sql_handler(query: str = "") -> Dict[str, Any]:
+async def _sql_handler(query: str = "") -> dict[str, Any]:
     """Simulated SQL tool handler."""
     return {"rows": [], "query": query}
 
@@ -226,9 +225,7 @@ class TestInvokeTool:
         assert call.completed_at is not None
 
     @pytest.mark.asyncio
-    async def test_reject_insufficient_trust_score(
-        self, server: TrustGatedMCPServer
-    ) -> None:
+    async def test_reject_insufficient_trust_score(self, server: TrustGatedMCPServer) -> None:
         server.register_tool("echo", _echo_handler, min_trust_score=600)
         call = await server.invoke_tool(
             tool_name="echo",
@@ -294,9 +291,7 @@ class TestInvokeTool:
         assert "Missing capability" in call.error
 
     @pytest.mark.asyncio
-    async def test_no_capability_required_passes(
-        self, server: TrustGatedMCPServer
-    ) -> None:
+    async def test_no_capability_required_passes(self, server: TrustGatedMCPServer) -> None:
         """Tools with no required_capability accept any caller with sufficient trust."""
         server.register_tool("open_tool", _echo_handler)
         call = await server.invoke_tool(
@@ -309,9 +304,7 @@ class TestInvokeTool:
         assert call.success is True
 
     @pytest.mark.asyncio
-    async def test_handler_exception_recorded(
-        self, server: TrustGatedMCPServer
-    ) -> None:
+    async def test_handler_exception_recorded(self, server: TrustGatedMCPServer) -> None:
         server.register_tool("bomb", _failing_handler)
         call = await server.invoke_tool(
             tool_name="bomb",
@@ -401,9 +394,7 @@ class TestInvokeTool:
         assert call.call_id.startswith("echo-")
 
     @pytest.mark.asyncio
-    async def test_exact_boundary_trust_score(
-        self, server: TrustGatedMCPServer
-    ) -> None:
+    async def test_exact_boundary_trust_score(self, server: TrustGatedMCPServer) -> None:
         """Trust score exactly equal to minimum should pass."""
         server.register_tool("echo", _echo_handler, min_trust_score=500)
         call = await server.invoke_tool(
@@ -415,9 +406,7 @@ class TestInvokeTool:
         assert call.success is True
 
     @pytest.mark.asyncio
-    async def test_one_below_boundary_trust_score(
-        self, server: TrustGatedMCPServer
-    ) -> None:
+    async def test_one_below_boundary_trust_score(self, server: TrustGatedMCPServer) -> None:
         """Trust score one below minimum should fail."""
         server.register_tool("echo", _echo_handler, min_trust_score=500)
         call = await server.invoke_tool(
@@ -435,7 +424,10 @@ class TestInvokeTool:
         server.register_tool("echo", _echo_handler)
         assert server._tools["echo"].last_called is None
         await server.invoke_tool(
-            "echo", {}, caller_did="did:mesh:a", caller_trust_score=500,
+            "echo",
+            {},
+            caller_did="did:mesh:a",
+            caller_trust_score=500,
         )
         assert server._tools["echo"].last_called is not None
         assert isinstance(server._tools["echo"].last_called, datetime)
@@ -458,9 +450,7 @@ class TestCheckCapability:
     def test_wildcard_match(self, server: TrustGatedMCPServer) -> None:
         assert server._check_capability(["use:*"], "use:sql") is True
 
-    def test_wildcard_match_different_suffix(
-        self, server: TrustGatedMCPServer
-    ) -> None:
+    def test_wildcard_match_different_suffix(self, server: TrustGatedMCPServer) -> None:
         assert server._check_capability(["use:*"], "use:filesystem") is True
 
     def test_wildcard_different_prefix(self, server: TrustGatedMCPServer) -> None:
@@ -471,18 +461,14 @@ class TestCheckCapability:
         """Wildcard 'use:*' should match 'use:sql:advanced'."""
         assert server._check_capability(["use:*"], "use:sql:advanced") is True
 
-    def test_no_required_capability_always_passes(
-        self, server: TrustGatedMCPServer
-    ) -> None:
+    def test_no_required_capability_always_passes(self, server: TrustGatedMCPServer) -> None:
         """Empty string required_capability returns True."""
         assert server._check_capability([], "") is True
 
     def test_empty_client_capabilities(self, server: TrustGatedMCPServer) -> None:
         assert server._check_capability([], "use:sql") is False
 
-    def test_multiple_capabilities_one_matches(
-        self, server: TrustGatedMCPServer
-    ) -> None:
+    def test_multiple_capabilities_one_matches(self, server: TrustGatedMCPServer) -> None:
         caps = ["read:data", "use:sql", "write:logs"]
         assert server._check_capability(caps, "use:sql") is True
 
@@ -492,9 +478,7 @@ class TestCheckCapability:
         assert server._check_capability(caps, "read:metrics") is True
         assert server._check_capability(caps, "write:data") is False
 
-    def test_wildcard_exact_colon_star_literal(
-        self, server: TrustGatedMCPServer
-    ) -> None:
+    def test_wildcard_exact_colon_star_literal(self, server: TrustGatedMCPServer) -> None:
         """Capability 'use:*' itself as required — only exact match or broader wildcard."""
         assert server._check_capability(["use:*"], "use:*") is True
 
@@ -523,9 +507,7 @@ class TestVerifyClient:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_trust_bridge_success(
-        self, server_identity: AgentIdentity
-    ) -> None:
+    async def test_trust_bridge_success(self, server_identity: AgentIdentity) -> None:
         bridge = AsyncMock()
         bridge.verify_peer = AsyncMock(return_value=True)
         server = TrustGatedMCPServer(server_identity, trust_bridge=bridge)
@@ -537,9 +519,7 @@ class TestVerifyClient:
         assert "did:mesh:bridged" in server._verified_clients
 
     @pytest.mark.asyncio
-    async def test_trust_bridge_failure(
-        self, server_identity: AgentIdentity
-    ) -> None:
+    async def test_trust_bridge_failure(self, server_identity: AgentIdentity) -> None:
         bridge = AsyncMock()
         bridge.verify_peer = AsyncMock(return_value=False)
         server = TrustGatedMCPServer(server_identity, trust_bridge=bridge)
@@ -549,9 +529,7 @@ class TestVerifyClient:
         assert "did:mesh:untrusted" not in server._verified_clients
 
     @pytest.mark.asyncio
-    async def test_trust_bridge_exception(
-        self, server_identity: AgentIdentity
-    ) -> None:
+    async def test_trust_bridge_exception(self, server_identity: AgentIdentity) -> None:
         """If TrustBridge raises an exception, verification fails gracefully."""
         bridge = AsyncMock()
         bridge.verify_peer = AsyncMock(side_effect=ConnectionError("network down"))
@@ -580,9 +558,7 @@ class TestVerifyClient:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_card_without_trust_score_attr(
-        self, server: TrustGatedMCPServer
-    ) -> None:
+    async def test_card_without_trust_score_attr(self, server: TrustGatedMCPServer) -> None:
         """Card object without trust_score attribute should fail verification."""
         card = MagicMock(spec=[])  # empty spec → no attributes
         result = await server.verify_client("did:mesh:noattr", client_card=card)
@@ -594,9 +570,7 @@ class TestVerifyClient:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_cache_preferred_over_bridge(
-        self, server_identity: AgentIdentity
-    ) -> None:
+    async def test_cache_preferred_over_bridge(self, server_identity: AgentIdentity) -> None:
         """If client is in cache, TrustBridge should NOT be called."""
         bridge = AsyncMock()
         bridge.verify_peer = AsyncMock(return_value=True)
@@ -667,24 +641,16 @@ class TestAuditSummary:
         }
 
     @pytest.mark.asyncio
-    async def test_summary_after_mixed_calls(
-        self, server: TrustGatedMCPServer
-    ) -> None:
+    async def test_summary_after_mixed_calls(self, server: TrustGatedMCPServer) -> None:
         server.register_tool("echo", _echo_handler)
         server.register_tool("bomb", _failing_handler)
 
         # Successful call
-        await server.invoke_tool(
-            "echo", {}, "did:mesh:a", caller_trust_score=500
-        )
+        await server.invoke_tool("echo", {}, "did:mesh:a", caller_trust_score=500)
         # Handler failure
-        await server.invoke_tool(
-            "bomb", {}, "did:mesh:b", caller_trust_score=500
-        )
+        await server.invoke_tool("bomb", {}, "did:mesh:b", caller_trust_score=500)
         # Unknown tool
-        await server.invoke_tool(
-            "ghost", {}, "did:mesh:c", caller_trust_score=500
-        )
+        await server.invoke_tool("ghost", {}, "did:mesh:c", caller_trust_score=500)
 
         summary = server.get_audit_summary()
         assert summary["totalTools"] == 2
@@ -693,9 +659,7 @@ class TestAuditSummary:
         assert summary["recentCalls"] == 3  # all 3 recorded in history
 
     @pytest.mark.asyncio
-    async def test_verified_clients_count(
-        self, server: TrustGatedMCPServer
-    ) -> None:
+    async def test_verified_clients_count(self, server: TrustGatedMCPServer) -> None:
         card = MagicMock()
         card.trust_score = 999
         await server.verify_client("did:mesh:a", client_card=card)
@@ -723,9 +687,7 @@ class TestRecordCall:
         assert len(server._call_history) == 1
         assert server._call_history[0].call_id == "test-1"
 
-    def test_record_call_respects_audit_flag(
-        self, server_identity: AgentIdentity
-    ) -> None:
+    def test_record_call_respects_audit_flag(self, server_identity: AgentIdentity) -> None:
         """When audit_all_calls=False, nothing is recorded."""
         server = TrustGatedMCPServer(server_identity, audit_all_calls=False)
         call = MCPToolCall(
@@ -791,18 +753,14 @@ class TestMCPClientConnect:
     """Tests for TrustGatedMCPClient.connect."""
 
     @pytest.mark.asyncio
-    async def test_connect_without_bridge(
-        self, client_identity: AgentIdentity
-    ) -> None:
+    async def test_connect_without_bridge(self, client_identity: AgentIdentity) -> None:
         client = TrustGatedMCPClient(client_identity)
         result = await client.connect("https://mcp.example.com:8080")
         assert result is True
         assert "https://mcp.example.com:8080" in client._connected_servers
 
     @pytest.mark.asyncio
-    async def test_connect_with_bridge_no_server_did(
-        self, client_identity: AgentIdentity
-    ) -> None:
+    async def test_connect_with_bridge_no_server_did(self, client_identity: AgentIdentity) -> None:
         """When _discover_server_did returns None, bridge is skipped."""
         bridge = AsyncMock()
         bridge.verify_peer = AsyncMock(return_value=False)
@@ -819,9 +777,7 @@ class TestMCPClientConnect:
         bridge.verify_peer = AsyncMock(return_value=True)
         client = TrustGatedMCPClient(client_identity, trust_bridge=bridge)
 
-        with patch.object(
-            client, "_discover_server_did", return_value="did:mesh:server1"
-        ):
+        with patch.object(client, "_discover_server_did", return_value="did:mesh:server1"):
             result = await client.connect("http://trusted-server:8080")
         assert result is True
         bridge.verify_peer.assert_awaited_once_with("did:mesh:server1")
@@ -834,17 +790,13 @@ class TestMCPClientConnect:
         bridge.verify_peer = AsyncMock(return_value=False)
         client = TrustGatedMCPClient(client_identity, trust_bridge=bridge)
 
-        with patch.object(
-            client, "_discover_server_did", return_value="did:mesh:evil"
-        ):
+        with patch.object(client, "_discover_server_did", return_value="did:mesh:evil"):
             result = await client.connect("http://evil-server:8080")
         assert result is False
         assert "http://evil-server:8080" not in client._connected_servers
 
     @pytest.mark.asyncio
-    async def test_connect_multiple_servers(
-        self, client_identity: AgentIdentity
-    ) -> None:
+    async def test_connect_multiple_servers(self, client_identity: AgentIdentity) -> None:
         client = TrustGatedMCPClient(client_identity)
         await client.connect("http://server-a:8080")
         await client.connect("http://server-b:9090")
@@ -860,9 +812,7 @@ class TestMCPClientInvoke:
     """Tests for TrustGatedMCPClient.invoke — now raises NotImplementedError."""
 
     @pytest.mark.asyncio
-    async def test_invoke_raises_not_implemented(
-        self, client_identity: AgentIdentity
-    ) -> None:
+    async def test_invoke_raises_not_implemented(self, client_identity: AgentIdentity) -> None:
         client = TrustGatedMCPClient(client_identity)
         await client.connect("https://mcp.example.com:8080")
 
@@ -874,9 +824,7 @@ class TestMCPClientInvoke:
             )
 
     @pytest.mark.asyncio
-    async def test_invoke_mentions_server_and_tool(
-        self, client_identity: AgentIdentity
-    ) -> None:
+    async def test_invoke_mentions_server_and_tool(self, client_identity: AgentIdentity) -> None:
         """Error message should include the server URL and tool name."""
         client = TrustGatedMCPClient(client_identity)
         await client.connect("http://my-server:9090")
@@ -891,9 +839,7 @@ class TestMCPClientInvoke:
         assert "my_tool" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_invoke_auto_connects_then_raises(
-        self, client_identity: AgentIdentity
-    ) -> None:
+    async def test_invoke_auto_connects_then_raises(self, client_identity: AgentIdentity) -> None:
         """Invoking on an unconnected server auto-connects, then raises."""
         client = TrustGatedMCPClient(client_identity)
         with pytest.raises(NotImplementedError):
@@ -902,17 +848,13 @@ class TestMCPClientInvoke:
         assert "http://auto:8080" in client._connected_servers
 
     @pytest.mark.asyncio
-    async def test_invoke_auto_connect_failure(
-        self, client_identity: AgentIdentity
-    ) -> None:
+    async def test_invoke_auto_connect_failure(self, client_identity: AgentIdentity) -> None:
         """If auto-connect fails (bridge rejects), return error dict instead of raise."""
         bridge = AsyncMock()
         bridge.verify_peer = AsyncMock(return_value=False)
         client = TrustGatedMCPClient(client_identity, trust_bridge=bridge)
 
-        with patch.object(
-            client, "_discover_server_did", return_value="did:mesh:bad"
-        ):
+        with patch.object(client, "_discover_server_did", return_value="did:mesh:bad"):
             result = await client.invoke("http://bad-server:8080", "tool", {})
         assert result == {"error": "Failed to connect to server"}
 
@@ -951,9 +893,7 @@ class TestMCPClientGetCredentials:
         creds = client.get_credentials()
         assert creds["capabilities"] == []
 
-    def test_credentials_trust_score_default(
-        self, client_identity: AgentIdentity
-    ) -> None:
+    def test_credentials_trust_score_default(self, client_identity: AgentIdentity) -> None:
         """AgentIdentity has no trust_score attr → falls back to 500."""
         client = TrustGatedMCPClient(client_identity)
         creds = client.get_credentials()
@@ -1031,30 +971,37 @@ class TestEndToEndServerWorkflow:
         assert summary["recentCalls"] == 1
 
     @pytest.mark.asyncio
-    async def test_multiple_tools_multiple_callers(
-        self, server: TrustGatedMCPServer
-    ) -> None:
+    async def test_multiple_tools_multiple_callers(self, server: TrustGatedMCPServer) -> None:
         server.register_tool("echo", _echo_handler)
         server.register_tool("sql", _sql_handler, required_capability="use:sql")
 
         # Caller with use:sql → accepted
         call1 = await server.invoke_tool(
-            "sql", {"query": "SELECT 1"}, "did:mesh:a",
-            caller_capabilities=["use:sql"], caller_trust_score=500,
+            "sql",
+            {"query": "SELECT 1"},
+            "did:mesh:a",
+            caller_capabilities=["use:sql"],
+            caller_trust_score=500,
         )
         assert call1.success is True
 
         # Caller without use:sql → rejected
         call2 = await server.invoke_tool(
-            "sql", {"query": "DROP TABLE"}, "did:mesh:b",
-            caller_capabilities=["use:echo"], caller_trust_score=500,
+            "sql",
+            {"query": "DROP TABLE"},
+            "did:mesh:b",
+            caller_capabilities=["use:echo"],
+            caller_trust_score=500,
         )
         assert call2.success is False
 
         # Caller with enough trust for echo (no capability required)
         call3 = await server.invoke_tool(
-            "echo", {"msg": "hi"}, "did:mesh:b",
-            caller_capabilities=[], caller_trust_score=300,
+            "echo",
+            {"msg": "hi"},
+            "did:mesh:b",
+            caller_capabilities=[],
+            caller_trust_score=300,
         )
         assert call3.success is True
 
@@ -1064,9 +1011,7 @@ class TestEndToEndServerWorkflow:
         assert summary["recentCalls"] == 3
 
     @pytest.mark.asyncio
-    async def test_wildcard_capability_e2e(
-        self, server: TrustGatedMCPServer
-    ) -> None:
+    async def test_wildcard_capability_e2e(self, server: TrustGatedMCPServer) -> None:
         """Agent with 'use:*' wildcard can invoke any 'use:' tool."""
         server.register_tool("sql", _sql_handler, required_capability="use:sql")
         server.register_tool("fs", _echo_handler, required_capability="use:fs")

@@ -9,10 +9,10 @@ Provides pluggable transport backends for agent-to-agent communication:
 
 from .base import Transport, TransportConfig, TransportState
 from .grpc_transport import (
+    HAS_GRPC,
     GRPCTransport,
     HandshakeRequest,
     HandshakeResponse,
-    HAS_GRPC,
     PolicyCheckRequest,
     PolicyCheckResponse,
     TrustDimension,

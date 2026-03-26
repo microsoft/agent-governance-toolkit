@@ -6,7 +6,6 @@ Indexer — simple tag-based filtering for episodes.
 """
 
 from typing import List, Set, Dict, Any
-import hashlib
 import re
 
 from emk.schema import Episode
@@ -18,13 +17,46 @@ class Indexer:
     @staticmethod
     def extract_tags(text: str, min_length: int = 3) -> Set[str]:
         """Extract potential search tags from *text*."""
-        words = re.findall(r'\b\w+\b', text.lower())
+        words = re.findall(r"\b\w+\b", text.lower())
         stop_words = {
-            'the', 'is', 'at', 'which', 'on', 'and', 'a', 'an',
-            'as', 'are', 'was', 'were', 'been', 'be', 'have', 'has',
-            'had', 'do', 'does', 'did', 'will', 'would', 'should',
-            'could', 'may', 'might', 'must', 'can', 'to', 'from',
-            'in', 'out', 'up', 'down', 'for', 'with', 'by', 'of',
+            "the",
+            "is",
+            "at",
+            "which",
+            "on",
+            "and",
+            "a",
+            "an",
+            "as",
+            "are",
+            "was",
+            "were",
+            "been",
+            "be",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "should",
+            "could",
+            "may",
+            "might",
+            "must",
+            "can",
+            "to",
+            "from",
+            "in",
+            "out",
+            "up",
+            "down",
+            "for",
+            "with",
+            "by",
+            "of",
         }
         return {w for w in words if len(w) >= min_length and w not in stop_words}
 
@@ -46,12 +78,12 @@ class Indexer:
     def enrich_metadata(episode: Episode, auto_tags: bool = True) -> Dict[str, Any]:
         """Enrich episode metadata with tags and length metrics."""
         enriched = episode.metadata.copy()
-        if auto_tags and 'tags' not in enriched:
-            enriched['tags'] = Indexer.generate_episode_tags(episode)
-        enriched['goal_length'] = len(episode.goal)
-        enriched['action_length'] = len(episode.action)
-        enriched['result_length'] = len(episode.result)
-        enriched['reflection_length'] = len(episode.reflection)
+        if auto_tags and "tags" not in enriched:
+            enriched["tags"] = Indexer.generate_episode_tags(episode)
+        enriched["goal_length"] = len(episode.goal)
+        enriched["action_length"] = len(episode.action)
+        enriched["result_length"] = len(episode.result)
+        enriched["reflection_length"] = len(episode.reflection)
         return enriched
 
     @staticmethod

@@ -8,13 +8,12 @@ breaking changes.
 """
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from agentmesh.identity import AgentIdentity, ScopeChain, DelegationLink
+from agentmesh.identity import AgentIdentity, DelegationLink
 from agentmesh.reward.scoring import (
     DimensionType,
     RewardDimension,
@@ -23,7 +22,6 @@ from agentmesh.reward.scoring import (
 from agentmesh.trust.handshake import (
     HandshakeChallenge,
     HandshakeResponse,
-    HandshakeResult,
 )
 
 SNAPSHOTS_DIR = Path(__file__).parent / "snapshots"
@@ -68,6 +66,7 @@ def _assert_structure_matches(expected: Any, actual: Any, path: str) -> None:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def identity() -> AgentIdentity:
     return AgentIdentity.create(
@@ -82,6 +81,7 @@ def identity() -> AgentIdentity:
 # ---------------------------------------------------------------------------
 # 1. AgentIdentity serialization
 # ---------------------------------------------------------------------------
+
 
 class TestAgentIdentitySnapshot:
     def test_identity_serialization(self, identity: AgentIdentity) -> None:
@@ -106,6 +106,7 @@ class TestAgentIdentitySnapshot:
 # 2. Trust handshake initiation message (challenge)
 # ---------------------------------------------------------------------------
 
+
 class TestHandshakeInitiationSnapshot:
     def test_handshake_challenge(self) -> None:
         challenge = HandshakeChallenge.generate()
@@ -119,6 +120,7 @@ class TestHandshakeInitiationSnapshot:
 # ---------------------------------------------------------------------------
 # 3. Trust handshake response message
 # ---------------------------------------------------------------------------
+
 
 class TestHandshakeResponseSnapshot:
     def test_handshake_response(self, identity: AgentIdentity) -> None:
@@ -150,6 +152,7 @@ class TestHandshakeResponseSnapshot:
 # ---------------------------------------------------------------------------
 # 4. Delegation token (serialized delegation link)
 # ---------------------------------------------------------------------------
+
 
 class TestDelegationTokenSnapshot:
     def test_delegation_link(self) -> None:
@@ -187,6 +190,7 @@ class TestDelegationTokenSnapshot:
 # 5. Trust score report (all 5 dimensions)
 # ---------------------------------------------------------------------------
 
+
 class TestTrustScoreSnapshot:
     def test_trust_score_report(self) -> None:
         dimensions = {}
@@ -220,6 +224,7 @@ class TestTrustScoreSnapshot:
 # ---------------------------------------------------------------------------
 # 6. JWK export
 # ---------------------------------------------------------------------------
+
 
 class TestJwkExportSnapshot:
     def test_jwk_public_export(self, identity: AgentIdentity) -> None:

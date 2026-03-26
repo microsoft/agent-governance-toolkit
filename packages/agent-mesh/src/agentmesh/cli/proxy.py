@@ -15,28 +15,39 @@ Usage:
 
 import asyncio
 import json
+import logging
 import os
+import subprocess
 import sys
 from datetime import datetime
-from typing import Any, Dict, Optional, List
-import subprocess
-
-import logging
+from typing import Any
 
 import click
 
-from agentmesh import PolicyEngine, AuditLog, RewardEngine
+from agentmesh import AuditLog, PolicyEngine, RewardEngine
 from agentmesh.identity import AgentIdentity
 
 logger = logging.getLogger(__name__)
 
 # Allowlist of binaries the proxy may spawn as MCP targets.
 # Extend via AGENTMESH_PROXY_ALLOWED_TARGETS env var (comma-separated).
-_DEFAULT_ALLOWED_TARGETS = frozenset({
-    "npx", "node", "python", "python3", "uvx", "uv",
-    "npx.cmd", "node.exe", "python.exe", "python3.exe",
-    "echo", "cat", "test",  # Common for testing
-})
+_DEFAULT_ALLOWED_TARGETS = frozenset(
+    {
+        "npx",
+        "node",
+        "python",
+        "python3",
+        "uvx",
+        "uv",
+        "npx.cmd",
+        "node.exe",
+        "python.exe",
+        "python3.exe",
+        "echo",
+        "cat",
+        "test",  # Common for testing
+    }
+)
 
 
 class MCPProxy:
@@ -49,7 +60,7 @@ class MCPProxy:
 
     def __init__(
         self,
-        target_command: List[str],
+        target_command: list[str],
         policy: str = "strict",
         identity_name: str = "mcp-proxy",
         enable_footer: bool = True,
@@ -73,9 +84,7 @@ class MCPProxy:
         # Create proxy identity
         logger.info("Initializing AgentMesh proxy identity...")
         self.identity = AgentIdentity.create(
-            name=identity_name,
-            sponsor="proxy@agentmesh.ai",
-            capabilities=["tool:*"]
+            name=identity_name, sponsor="proxy@agentmesh.ai", capabilities=["tool:*"]
         )
 
         # Initialize governance components
@@ -88,12 +97,12 @@ class MCPProxy:
         self.trust_score = 800  # Starting score
 
         # Process handle
-        self.target_process: Optional[subprocess.Popen] = None
+        self.target_process: subprocess.Popen | None = None
 
         logger.info("Proxy initialized with trust score: %d/1000", self.trust_score)
 
     @staticmethod
-    def _validate_target_command(target_command: List[str]) -> None:
+    def _validate_target_command(target_command: list[str]) -> None:
         """Validate target command binary against the allowlist (V11)."""
         if not target_command:
             raise ValueError("target_command must not be empty")
@@ -250,10 +259,7 @@ rules: []
         while True:
             try:
                 # Read from target stdout
-                line = await loop.run_in_executor(
-                    None,
-                    self.target_process.stdout.readline
-                )
+                line = await loop.run_in_executor(None, self.target_process.stdout.readline)
 
                 if not line:
                     break
@@ -285,7 +291,7 @@ rules: []
         except Exception as e:
             logger.error("Error writing to target: %s", e)
 
-    async def _handle_tool_call(self, message: Dict[str, Any]) -> Dict[str, Any]:
+    async def _handle_tool_call(self, message: dict[str, Any]) -> dict[str, Any]:
         """
         Handle a tools/call request - enforce policy.
 
@@ -330,8 +336,8 @@ rules: []
                             "rule": decision.matched_rule,
                             "trust_score": self.trust_score,
                         }
-                    }
-                }
+                    },
+                },
             }
 
             # Don't forward to target, return error directly
@@ -351,7 +357,7 @@ rules: []
 
         return message
 
-    def _add_verification_footer(self, message: Dict[str, Any]) -> Dict[str, Any]:
+    def _add_verification_footer(self, message: dict[str, Any]) -> dict[str, Any]:
         """Add AgentMesh verification footer to tool output."""
         result = message.get("result", {})
 
@@ -360,7 +366,11 @@ rules: []
             content_list = result.get("content", [])
 
             # Get DID as string
-            did_str = str(self.identity.did) if hasattr(self.identity.did, '__str__') else self.identity.did
+            did_str = (
+                str(self.identity.did)
+                if hasattr(self.identity.did, "__str__")
+                else self.identity.did
+            )
 
             # Add footer as a new content item
             footer = {
@@ -369,7 +379,7 @@ rules: []
                     f"\n\n> 🔒 Verified by AgentMesh (Trust Score: {self.trust_score}/1000)\n"
                     f"> Agent: {did_str[:40]}...\n"
                     f"> Policy: {self.policy_level} | Audit: Enabled"
-                )
+                ),
             }
 
             if isinstance(content_list, list):
@@ -380,12 +390,7 @@ rules: []
 
         return message
 
-    def _audit_log_tool_call(
-        self,
-        tool_name: str,
-        arguments: Dict[str, Any],
-        decision: Any
-    ):
+    def _audit_log_tool_call(self, tool_name: str, arguments: dict[str, Any], decision: Any):
         """Log tool call to audit trail."""
         entry = {
             "timestamp": datetime.utcnow().isoformat() + "Z",

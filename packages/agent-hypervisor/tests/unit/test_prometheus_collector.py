@@ -30,14 +30,18 @@ class _FakePrometheusExporter:
         self.counters: list[tuple[str, float, dict]] = []
 
     def set_gauge(
-        self, name: str, value: float,
+        self,
+        name: str,
+        value: float,
         labels: dict[str, str] | None = None,
         help_text: str = "",
     ) -> None:
         self.gauges.append((name, value, labels or {}))
 
     def inc_counter(
-        self, name: str, value: float = 1.0,
+        self,
+        name: str,
+        value: float = 1.0,
         labels: dict[str, str] | None = None,
         help_text: str = "",
     ) -> None:
@@ -50,18 +54,22 @@ class TestRingMetricsCollector:
         bus = HypervisorEventBus()
         collector = RingMetricsCollector(bus)
 
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ASSIGNED,
-            agent_did="agent-1",
-            session_id="sess-1",
-            payload={"ring": 2},
-        ))
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ASSIGNED,
-            agent_did="agent-2",
-            session_id="sess-1",
-            payload={"ring": 3},
-        ))
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ASSIGNED,
+                agent_did="agent-1",
+                session_id="sess-1",
+                payload={"ring": 2},
+            )
+        )
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ASSIGNED,
+                agent_did="agent-2",
+                session_id="sess-1",
+                payload={"ring": 3},
+            )
+        )
 
         snapshot = collector.collect()
         transitions = snapshot[METRIC_RING_TRANSITIONS_TOTAL]
@@ -74,12 +82,14 @@ class TestRingMetricsCollector:
         bus = HypervisorEventBus()
         collector = RingMetricsCollector(bus)
 
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ELEVATED,
-            agent_did="agent-a",
-            session_id="sess-x",
-            payload={"to_ring": 1},
-        ))
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ELEVATED,
+                agent_did="agent-a",
+                session_id="sess-x",
+                payload={"to_ring": 1},
+            )
+        )
 
         exporter = _FakePrometheusExporter()
         collector.export_to_prometheus(exporter)
@@ -99,18 +109,22 @@ class TestRingMetricsCollector:
         bus = HypervisorEventBus()
         collector = RingMetricsCollector(bus)
 
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ASSIGNED,
-            agent_did="a1",
-            session_id="s1",
-            payload={"ring": 2},
-        ))
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ASSIGNED,
-            agent_did="a1",
-            session_id="s1",
-            payload={"ring": 2},
-        ))
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ASSIGNED,
+                agent_did="a1",
+                session_id="s1",
+                payload={"ring": 2},
+            )
+        )
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ASSIGNED,
+                agent_did="a1",
+                session_id="s1",
+                payload={"ring": 2},
+            )
+        )
 
         exporter = _FakePrometheusExporter()
         collector.export_to_prometheus(exporter)
@@ -131,16 +145,20 @@ class TestRingMetricsCollector:
         bus = HypervisorEventBus()
         collector = RingMetricsCollector(bus)
 
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_BREACH_DETECTED,
-            agent_did="bad-agent",
-            session_id="sess-1",
-        ))
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_BREACH_DETECTED,
-            agent_did="bad-agent",
-            session_id="sess-1",
-        ))
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_BREACH_DETECTED,
+                agent_did="bad-agent",
+                session_id="sess-1",
+            )
+        )
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_BREACH_DETECTED,
+                agent_did="bad-agent",
+                session_id="sess-1",
+            )
+        )
 
         snapshot = collector.collect()
         breaches = snapshot[METRIC_RING_BREACHES_TOTAL]
@@ -157,20 +175,24 @@ class TestRingMetricsCollector:
         collector = RingMetricsCollector(bus)
 
         now = datetime.now(UTC)
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ELEVATED,
-            agent_did="agent-1",
-            session_id="s1",
-            timestamp=now,
-            payload={"to_ring": 1},
-        ))
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_DEMOTED,
-            agent_did="agent-1",
-            session_id="s1",
-            timestamp=now + timedelta(seconds=30),
-            payload={"to_ring": 2},
-        ))
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ELEVATED,
+                agent_did="agent-1",
+                session_id="s1",
+                timestamp=now,
+                payload={"to_ring": 1},
+            )
+        )
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_DEMOTED,
+                agent_did="agent-1",
+                session_id="s1",
+                timestamp=now + timedelta(seconds=30),
+                payload={"to_ring": 2},
+            )
+        )
 
         snapshot = collector.collect()
         durations = snapshot[METRIC_RING_ELEVATION_DURATION]
@@ -182,18 +204,22 @@ class TestRingMetricsCollector:
         bus = HypervisorEventBus()
         collector = RingMetricsCollector(bus)
 
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ASSIGNED,
-            agent_did="a1",
-            payload={"ring": 3},
-        ))
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ASSIGNED,
+                agent_did="a1",
+                payload={"ring": 3},
+            )
+        )
         assert collector.collect()[METRIC_RING_CURRENT]["a1"] == 3
 
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ELEVATED,
-            agent_did="a1",
-            payload={"to_ring": 1},
-        ))
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ELEVATED,
+                agent_did="a1",
+                payload={"to_ring": 1},
+            )
+        )
         assert collector.collect()[METRIC_RING_CURRENT]["a1"] == 1
 
     def test_reset(self):
@@ -201,11 +227,13 @@ class TestRingMetricsCollector:
         bus = HypervisorEventBus()
         collector = RingMetricsCollector(bus)
 
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ASSIGNED,
-            agent_did="a1",
-            payload={"ring": 2},
-        ))
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ASSIGNED,
+                agent_did="a1",
+                payload={"ring": 2},
+            )
+        )
         assert collector.collect()["events_processed"] == 1
 
         collector.reset()
@@ -218,9 +246,11 @@ class TestRingMetricsCollector:
         bus = HypervisorEventBus()
         collector = RingMetricsCollector(bus)
 
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_BREACH_DETECTED,
-        ))
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_BREACH_DETECTED,
+            )
+        )
 
         snapshot = collector.collect()
         assert ("unknown", "unknown") in snapshot[METRIC_RING_BREACHES_TOTAL]

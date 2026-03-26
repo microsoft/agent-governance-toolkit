@@ -6,10 +6,10 @@ Capability Scoping
 Simple string-based capability scope checking.
 """
 
-from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field
 import uuid
+from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 class CapabilityGrant(BaseModel):
@@ -30,7 +30,7 @@ class CapabilityGrant(BaseModel):
     capability: str = Field(..., description="Capability string (e.g., 'read:data')")
     action: str = Field(..., description="Action part (e.g., 'read')")
     resource: str = Field(..., description="Resource part (e.g., 'data')")
-    qualifier: Optional[str] = Field(None, description="Optional qualifier")
+    qualifier: str | None = Field(None, description="Optional qualifier")
 
     # Grant metadata
     granted_to: str = Field(..., description="DID of grantee")
@@ -38,24 +38,22 @@ class CapabilityGrant(BaseModel):
 
     # Scope restrictions
     resource_ids: list[str] = Field(
-        default_factory=list,
-        description="Specific resource IDs this grant applies to"
+        default_factory=list, description="Specific resource IDs this grant applies to"
     )
     conditions: dict = Field(
-        default_factory=dict,
-        description="Additional conditions for this grant"
+        default_factory=dict, description="Additional conditions for this grant"
     )
 
     # Timing
     granted_at: datetime = Field(default_factory=datetime.utcnow)
-    expires_at: Optional[datetime] = Field(None)
+    expires_at: datetime | None = Field(None)
 
     # Status
     active: bool = Field(default=True)
-    revoked_at: Optional[datetime] = Field(None)
+    revoked_at: datetime | None = Field(None)
 
     @classmethod
-    def parse_capability(cls, capability: str) -> tuple[str, str, Optional[str]]:
+    def parse_capability(cls, capability: str) -> tuple[str, str, str | None]:
         """Parse a capability string into (action, resource, qualifier)."""
         parts = capability.split(":")
         if len(parts) < 2:
@@ -73,8 +71,8 @@ class CapabilityGrant(BaseModel):
         capability: str,
         granted_to: str,
         granted_by: str,
-        resource_ids: Optional[list[str]] = None,
-        expires_at: Optional[datetime] = None,
+        resource_ids: list[str] | None = None,
+        expires_at: datetime | None = None,
     ) -> "CapabilityGrant":
         """Create a new capability grant from a capability string."""
         action, resource, qualifier = cls.parse_capability(capability)
@@ -98,7 +96,7 @@ class CapabilityGrant(BaseModel):
             return False
         return True
 
-    def matches(self, requested: str, resource_id: Optional[str] = None) -> bool:
+    def matches(self, requested: str, resource_id: str | None = None) -> bool:
         """Check if this grant satisfies a requested capability.
 
         Uses simple startswith matching for scope checking.
@@ -174,7 +172,7 @@ class CapabilityScope(BaseModel):
     def has_capability(
         self,
         capability: str,
-        resource_id: Optional[str] = None,
+        resource_id: str | None = None,
     ) -> bool:
         """Check if the agent has a specific capability.
 
@@ -309,7 +307,7 @@ class CapabilityRegistry:
         capability: str,
         to_agent: str,
         from_agent: str,
-        resource_ids: Optional[list[str]] = None,
+        resource_ids: list[str] | None = None,
     ) -> CapabilityGrant:
         """Grant a capability to an agent.
 
@@ -347,7 +345,7 @@ class CapabilityRegistry:
         self,
         agent_did: str,
         capability: str,
-        resource_id: Optional[str] = None,
+        resource_id: str | None = None,
     ) -> bool:
         """Check if an agent has a specific capability.
 

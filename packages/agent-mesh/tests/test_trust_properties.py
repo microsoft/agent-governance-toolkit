@@ -8,8 +8,7 @@ across a wide range of inputs.
 Closes #114.
 """
 
-import pytest
-from hypothesis import given, settings, assume
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from agentmesh.constants import (
@@ -21,10 +20,9 @@ from agentmesh.constants import (
     WEIGHT_RESOURCE_EFFICIENCY,
     WEIGHT_SECURITY_POSTURE,
 )
-from agentmesh.reward import RewardEngine, TrustScore, NetworkTrustEngine, TrustEvent
+from agentmesh.reward import NetworkTrustEngine, RewardEngine, TrustEvent, TrustScore
 from agentmesh.reward.engine import RewardConfig
-from agentmesh.reward.scoring import DimensionType, RewardDimension
-
+from agentmesh.reward.scoring import DimensionType
 
 # ---------------------------------------------------------------------------
 # Strategies
@@ -38,6 +36,7 @@ agent_did = st.just("did:mesh:prop_test_agent")
 # ---------------------------------------------------------------------------
 # Property: Trust scores are always in valid range [0, 1000]
 # ---------------------------------------------------------------------------
+
 
 class TestTrustScoreRange:
     """Trust scores must always remain in [0, 1000]."""
@@ -61,6 +60,7 @@ class TestTrustScoreRange:
 # ---------------------------------------------------------------------------
 # Property: Positive-only signals ⟹ monotonically non-decreasing score
 # ---------------------------------------------------------------------------
+
 
 class TestMonotonicPositiveSignals:
     """Scores with all positive interactions are monotonically non-decreasing."""
@@ -94,6 +94,7 @@ class TestMonotonicPositiveSignals:
 # ---------------------------------------------------------------------------
 # Property: Trust decay is bounded (score never goes below 0)
 # ---------------------------------------------------------------------------
+
 
 class TestTrustDecayBounded:
     """Trust decay must never push a score below 0."""
@@ -145,6 +146,7 @@ class TestTrustDecayBounded:
 # Property: Dimension weights always sum to 1.0 (within float tolerance)
 # ---------------------------------------------------------------------------
 
+
 class TestDimensionWeightsSum:
     """Default dimension weights must sum to 1.0."""
 
@@ -171,9 +173,7 @@ class TestDimensionWeightsSum:
         w4=st.floats(min_value=0.01, max_value=0.5, allow_nan=False, allow_infinity=False),
     )
     @settings(max_examples=100)
-    def test_custom_weights_validation(
-        self, w1: float, w2: float, w3: float, w4: float
-    ):
+    def test_custom_weights_validation(self, w1: float, w2: float, w3: float, w4: float):
         """RewardConfig.validate_weights detects when weights don't sum to 1.0."""
         w5 = 1.0 - (w1 + w2 + w3 + w4)
         assume(w5 > 0)  # only test valid partitions
@@ -191,6 +191,7 @@ class TestDimensionWeightsSum:
 # ---------------------------------------------------------------------------
 # Property: Higher dimension scores ⟹ higher or equal total score
 # ---------------------------------------------------------------------------
+
 
 class TestHigherComponentsHigherTotal:
     """Higher component scores always produce higher or equal totals."""
@@ -210,12 +211,8 @@ class TestHigherComponentsHigherTotal:
         did = "did:mesh:cmp_test"
 
         for dim in DimensionType:
-            engine_low.record_signal(
-                agent_did=did, dimension=dim, value=base_value, source="prop"
-            )
-            engine_high.record_signal(
-                agent_did=did, dimension=dim, value=high_value, source="prop"
-            )
+            engine_low.record_signal(agent_did=did, dimension=dim, value=base_value, source="prop")
+            engine_high.record_signal(agent_did=did, dimension=dim, value=high_value, source="prop")
 
         score_low = engine_low._recalculate_score(did).total_score
         score_high = engine_high._recalculate_score(did).total_score
@@ -230,10 +227,13 @@ class TestHigherComponentsHigherTotal:
 # Property: NetworkTrustEngine score clamping
 # ---------------------------------------------------------------------------
 
+
 class TestNetworkEngineClamping:
     """NetworkTrustEngine.set_score always clamps to [0, 1000]."""
 
-    @given(score=st.floats(min_value=-1000.0, max_value=3000.0, allow_nan=False, allow_infinity=False))
+    @given(
+        score=st.floats(min_value=-1000.0, max_value=3000.0, allow_nan=False, allow_infinity=False)
+    )
     @settings(max_examples=200)
     def test_set_score_clamps(self, score: float):
         engine = NetworkTrustEngine()

@@ -10,10 +10,10 @@ import com.agentos.plugin.settings.AgentOSSettings
  * Startup activity that runs when a project is opened.
  */
 class AgentOSStartupActivity : StartupActivity {
-    
+
     override fun runActivity(project: Project) {
         val settings = AgentOSSettings.getInstance().state
-        
+
         if (settings.enabled) {
             NotificationGroupManager.getInstance()
                 .getNotificationGroup("Agent OS Notifications")
@@ -26,7 +26,7 @@ class AgentOSStartupActivity : StartupActivity {
                 .notify(project)
         }
     }
-    
+
     private fun countActivePolicies(settings: AgentOSSettings.State): Int {
         var count = 0
         if (settings.blockDestructiveSQL) count++

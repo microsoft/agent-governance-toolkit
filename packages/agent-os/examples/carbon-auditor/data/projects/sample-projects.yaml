@@ -1,5 +1,5 @@
 # Sample Carbon Projects Data
-# 
+#
 # Based on real Verra VCS project structures (anonymized)
 # Source: https://registry.verra.org/app/search/VCS
 #
@@ -183,7 +183,7 @@ data_sources:
       provider: "NASA/USGS"
       resolution: "30m"
       api: "https://earthexplorer.usgs.gov/"
-  
+
   registry:
     - name: "Verra VCS"
       url: "https://registry.verra.org/"

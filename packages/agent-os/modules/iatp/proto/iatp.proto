@@ -70,16 +70,16 @@ enum Severity {
 message PrivacyContract {
   // How long the agent stores data
   RetentionPolicy retention = 1;
-  
+
   // Geographic location of data storage (e.g., "us-west", "eu-central")
   string storage_location = 2;
-  
+
   // Whether humans may review the data
   bool human_review = 3;
-  
+
   // Whether data is encrypted at rest
   bool encryption_at_rest = 4;
-  
+
   // Whether data is encrypted in transit
   bool encryption_in_transit = 5;
 }
@@ -88,22 +88,22 @@ message PrivacyContract {
 message AgentCapabilities {
   // Whether duplicate requests are handled safely
   bool idempotency = 1;
-  
+
   // Level of transaction reversibility support
   ReversibilityLevel reversibility = 2;
-  
+
   // Time window for undo operations
   google.protobuf.Duration undo_window = 3;
-  
+
   // Promised response latency
   google.protobuf.Duration sla_latency = 4;
-  
+
   // Maximum requests per minute
   int32 rate_limit = 5;
-  
+
   // Supported protocol versions
   repeated string protocol_versions = 6;
-  
+
   // List of supported actions/operations
   repeated string supported_actions = 7;
 }
@@ -112,25 +112,25 @@ message AgentCapabilities {
 message CapabilityManifest {
   // Unique identifier for the agent
   string agent_id = 1;
-  
+
   // Version of the agent
   string agent_version = 2;
-  
+
   // Trust level of the agent
   TrustLevel trust_level = 3;
-  
+
   // Capabilities supported by the agent
   AgentCapabilities capabilities = 4;
-  
+
   // Privacy policies of the agent
   PrivacyContract privacy_contract = 5;
-  
+
   // RBAC scopes defining agent permissions
   repeated string scopes = 6;
-  
+
   // Agent's public key for verification (base64 encoded)
   string public_key = 7;
-  
+
   // Additional metadata
   google.protobuf.Struct metadata = 8;
 }
@@ -139,22 +139,22 @@ message CapabilityManifest {
 message AttestationRecord {
   // Unique identifier for the agent
   string agent_id = 1;
-  
+
   // SHA-256 hash of the agent's codebase
   string codebase_hash = 2;
-  
+
   // SHA-256 hash of the agent's configuration
   string config_hash = 3;
-  
+
   // Digital signature from Control Plane (base64 encoded)
   string signature = 4;
-  
+
   // Identifier for the public key used to verify signature
   string signing_key_id = 5;
-  
+
   // When attestation was created
   google.protobuf.Timestamp timestamp = 6;
-  
+
   // When attestation expires
   google.protobuf.Timestamp expires_at = 7;
 }
@@ -163,19 +163,19 @@ message AttestationRecord {
 message TracingContext {
   // Unique trace ID for the request
   string trace_id = 1;
-  
+
   // Parent trace ID if this is part of a chain
   string parent_trace_id = 2;
-  
+
   // Span ID within the trace
   string span_id = 3;
-  
+
   // Agent ID processing this request
   string agent_id = 4;
-  
+
   // Timestamp of the trace
   google.protobuf.Timestamp timestamp = 5;
-  
+
   // Baggage items (key-value pairs propagated across services)
   map<string, string> baggage = 6;
 }
@@ -184,28 +184,28 @@ message TracingContext {
 message ReputationEvent {
   // Unique identifier for this event
   string event_id = 1;
-  
+
   // Agent whose reputation is affected
   string agent_id = 2;
-  
+
   // Type of event (e.g., "hallucination", "timeout", "success")
   string event_type = 3;
-  
+
   // Severity level
   Severity severity = 4;
-  
+
   // Change in reputation score (negative for bad events)
   double score_delta = 5;
-  
+
   // When event occurred
   google.protobuf.Timestamp timestamp = 6;
-  
+
   // Associated trace ID if event was part of a request
   string trace_id = 7;
-  
+
   // Additional context about the event
   google.protobuf.Struct details = 8;
-  
+
   // Component that detected the event
   string detected_by = 9;
 }
@@ -214,25 +214,25 @@ message ReputationEvent {
 message ReputationScore {
   // Agent identifier
   string agent_id = 1;
-  
+
   // Current reputation score (0.0 to 10.0)
   double score = 2;
-  
+
   // Starting reputation score
   double initial_score = 3;
-  
+
   // Total number of reputation events
   int32 total_events = 4;
-  
+
   // Number of positive reputation events
   int32 positive_events = 5;
-  
+
   // Number of negative reputation events
   int32 negative_events = 6;
-  
+
   // Timestamp of last update
   google.protobuf.Timestamp last_updated = 7;
-  
+
   // Recent reputation events (up to 100)
   repeated ReputationEvent recent_events = 8;
 }
@@ -245,13 +245,13 @@ message ReputationScore {
 message HandshakeRequest {
   // Capability manifest of the requesting agent
   CapabilityManifest manifest = 1;
-  
+
   // Optional attestation record
   AttestationRecord attestation = 2;
-  
+
   // Tracing context for distributed tracing
   TracingContext tracing = 3;
-  
+
   // Challenge nonce for mutual authentication
   bytes challenge_nonce = 4;
 }
@@ -260,25 +260,25 @@ message HandshakeRequest {
 message HandshakeResponse {
   // Whether handshake was accepted
   bool accepted = 1;
-  
+
   // Capability manifest of the responding agent
   CapabilityManifest manifest = 2;
-  
+
   // Negotiated trust level
   TrustLevel negotiated_trust = 3;
-  
+
   // Session token for subsequent requests
   string session_token = 4;
-  
+
   // Session expiration time
   google.protobuf.Timestamp session_expires = 5;
-  
+
   // Warning message if trust is low
   string warning_message = 6;
-  
+
   // Response to challenge nonce (signed)
   bytes challenge_response = 7;
-  
+
   // Tracing context
   TracingContext tracing = 8;
 }
@@ -291,22 +291,22 @@ message HandshakeResponse {
 message ActionRequest {
   // Session token from handshake
   string session_token = 1;
-  
+
   // Name of the action to execute
   string action_name = 2;
-  
+
   // Action parameters
   google.protobuf.Struct parameters = 3;
-  
+
   // Tracing context
   TracingContext tracing = 4;
-  
+
   // Whether this action should be reversible
   bool require_reversible = 5;
-  
+
   // Idempotency key for safe retries
   string idempotency_key = 6;
-  
+
   // Request timeout
   google.protobuf.Duration timeout = 7;
 }
@@ -315,25 +315,25 @@ message ActionRequest {
 message ActionResponse {
   // Whether action succeeded
   bool success = 1;
-  
+
   // Result data
   google.protobuf.Struct result = 2;
-  
+
   // Error message if failed
   string error_message = 3;
-  
+
   // Error code if failed
   string error_code = 4;
-  
+
   // Transaction ID for reversible actions
   string transaction_id = 5;
-  
+
   // Undo information if action is reversible
   UndoInfo undo_info = 6;
-  
+
   // Tracing context
   TracingContext tracing = 7;
-  
+
   // Execution duration
   google.protobuf.Duration duration = 8;
 }
@@ -342,13 +342,13 @@ message ActionResponse {
 message UndoInfo {
   // Whether this action can be undone
   bool can_undo = 1;
-  
+
   // Deadline for undo operation
   google.protobuf.Timestamp undo_deadline = 2;
-  
+
   // Instructions or data needed for undo
   google.protobuf.Struct undo_data = 3;
-  
+
   // Estimated cost of undo (if applicable)
   string undo_cost = 4;
 }
@@ -357,13 +357,13 @@ message UndoInfo {
 message UndoRequest {
   // Session token
   string session_token = 1;
-  
+
   // Transaction ID to undo
   string transaction_id = 2;
-  
+
   // Reason for undo
   string reason = 3;
-  
+
   // Tracing context
   TracingContext tracing = 4;
 }
@@ -372,13 +372,13 @@ message UndoRequest {
 message UndoResponse {
   // Whether undo succeeded
   bool success = 1;
-  
+
   // Error message if failed
   string error_message = 2;
-  
+
   // Partial undo info if only partially reversed
   google.protobuf.Struct partial_result = 3;
-  
+
   // Tracing context
   TracingContext tracing = 4;
 }
@@ -391,10 +391,10 @@ message UndoResponse {
 message GetReputationRequest {
   // Agent ID to query
   string agent_id = 1;
-  
+
   // Whether to include recent events
   bool include_events = 2;
-  
+
   // Maximum number of events to include
   int32 max_events = 3;
 }
@@ -403,7 +403,7 @@ message GetReputationRequest {
 message GetReputationResponse {
   // Agent's reputation score
   ReputationScore reputation = 1;
-  
+
   // Whether agent was found
   bool found = 2;
 }
@@ -412,10 +412,10 @@ message GetReputationResponse {
 message ReportEventRequest {
   // The reputation event to report
   ReputationEvent event = 1;
-  
+
   // Reporter's agent ID
   string reporter_id = 2;
-  
+
   // Signature from reporter (for verification)
   string signature = 3;
 }
@@ -424,10 +424,10 @@ message ReportEventRequest {
 message ReportEventResponse {
   // Whether event was recorded
   bool recorded = 1;
-  
+
   // New reputation score after event
   double new_score = 2;
-  
+
   // Error message if not recorded
   string error_message = 3;
 }
@@ -450,12 +450,12 @@ message HealthCheckResponse {
     SERVING_STATUS_SERVING = 1;
     SERVING_STATUS_NOT_SERVING = 2;
   }
-  
+
   ServingStatus status = 1;
-  
+
   // Version of the service
   string version = 2;
-  
+
   // Uptime in seconds
   int64 uptime_seconds = 3;
 }
@@ -468,16 +468,16 @@ message HealthCheckResponse {
 service TrustProtocol {
   // Initiate trust handshake between agents
   rpc Handshake(HandshakeRequest) returns (HandshakeResponse);
-  
+
   // Execute an action on the remote agent
   rpc ExecuteAction(ActionRequest) returns (ActionResponse);
-  
+
   // Undo a previous action
   rpc UndoAction(UndoRequest) returns (UndoResponse);
-  
+
   // Stream of actions (for long-running operations)
   rpc StreamActions(stream ActionRequest) returns (stream ActionResponse);
-  
+
   // Health check
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
 }
@@ -486,10 +486,10 @@ service TrustProtocol {
 service ReputationService {
   // Get an agent's reputation
   rpc GetReputation(GetReputationRequest) returns (GetReputationResponse);
-  
+
   // Report a reputation event
   rpc ReportEvent(ReportEventRequest) returns (ReportEventResponse);
-  
+
   // Stream reputation updates
   rpc StreamReputationUpdates(GetReputationRequest) returns (stream ReputationScore);
 }
@@ -498,7 +498,7 @@ service ReputationService {
 service AttestationService {
   // Request attestation for an agent
   rpc RequestAttestation(AttestationRequest) returns (AttestationResponse);
-  
+
   // Verify an attestation record
   rpc VerifyAttestation(VerifyAttestationRequest) returns (VerifyAttestationResponse);
 }
@@ -507,13 +507,13 @@ service AttestationService {
 message AttestationRequest {
   // Agent requesting attestation
   string agent_id = 1;
-  
+
   // Codebase hash to attest
   string codebase_hash = 2;
-  
+
   // Config hash to attest
   string config_hash = 3;
-  
+
   // Requested validity duration
   google.protobuf.Duration validity = 4;
 }
@@ -522,10 +522,10 @@ message AttestationRequest {
 message AttestationResponse {
   // The attestation record
   AttestationRecord attestation = 1;
-  
+
   // Whether attestation was granted
   bool granted = 2;
-  
+
   // Error message if not granted
   string error_message = 3;
 }
@@ -540,13 +540,13 @@ message VerifyAttestationRequest {
 message VerifyAttestationResponse {
   // Whether attestation is valid
   bool valid = 1;
-  
+
   // Whether attestation has expired
   bool expired = 2;
-  
+
   // Verification error if invalid
   string error_message = 3;
-  
+
   // Trust level implied by attestation
   TrustLevel implied_trust = 4;
 }

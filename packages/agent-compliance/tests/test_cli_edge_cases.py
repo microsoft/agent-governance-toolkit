@@ -41,8 +41,10 @@ class TestIntegrityBothFlags:
 
         rc = run_cli(
             "integrity",
-            "--manifest", manifest_file,
-            "--generate", output_file,
+            "--manifest",
+            manifest_file,
+            "--generate",
+            output_file,
         )
 
         assert rc == 1
@@ -56,7 +58,8 @@ class TestNonExistentManifest:
     def test_nonexistent_manifest_returns_error(self, capsys):
         rc = run_cli(
             "integrity",
-            "--manifest", "/absolutely/does/not/exist/integrity.json",
+            "--manifest",
+            "/absolutely/does/not/exist/integrity.json",
         )
 
         assert rc == 1
@@ -67,7 +70,8 @@ class TestNonExistentManifest:
         """The error should be user-friendly, not a raw traceback."""
         run_cli(
             "integrity",
-            "--manifest", "/absolutely/does/not/exist/integrity.json",
+            "--manifest",
+            "/absolutely/does/not/exist/integrity.json",
         )
 
         captured = capsys.readouterr()

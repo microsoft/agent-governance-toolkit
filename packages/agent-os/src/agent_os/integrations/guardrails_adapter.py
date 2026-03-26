@@ -131,7 +131,6 @@ class RegexValidator:
         return self._name
 
     def validate(self, value: str, metadata: dict[str, Any] | None = None) -> ValidationOutcome:
-
         for pattern in self._patterns:
             match = pattern.search(value)
             if match:

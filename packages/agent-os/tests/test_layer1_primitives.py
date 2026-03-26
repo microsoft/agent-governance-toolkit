@@ -6,10 +6,10 @@ Test Layer 1: Primitives packages.
 
 import pytest
 
-
 # Check if optional packages are installed
 try:
     import agent_primitives
+
     HAS_PRIMITIVES = True
 except ImportError:
     HAS_PRIMITIVES = False
@@ -18,25 +18,28 @@ except ImportError:
 @pytest.mark.skipif(not HAS_PRIMITIVES, reason="agent_primitives not installed")
 class TestAgentPrimitives:
     """Test agent-primitives package."""
-    
+
     def test_import_primitives(self):
         """Test basic import."""
-        from agent_primitives import AgentFailure, FailureType, FailureSeverity
+        from agent_primitives import FailureSeverity, FailureType
+
         assert FailureType is not None
         assert FailureSeverity is not None
-    
+
     def test_failure_types(self):
         """Test failure type enum values."""
         from agent_primitives import FailureType
-        assert hasattr(FailureType, 'TIMEOUT')
-        assert hasattr(FailureType, 'INVALID_ACTION')
-        assert hasattr(FailureType, 'RESOURCE_EXHAUSTED')
-    
+
+        assert hasattr(FailureType, "TIMEOUT")
+        assert hasattr(FailureType, "INVALID_ACTION")
+        assert hasattr(FailureType, "RESOURCE_EXHAUSTED")
+
     def test_create_agent_failure(self):
         """Test creating an AgentFailure."""
-        from agent_primitives import AgentFailure, FailureType, FailureSeverity
         from datetime import datetime, timezone
-        
+
+        from agent_primitives import AgentFailure, FailureType
+
         failure = AgentFailure(
             agent_id="test-agent",
             failure_type=FailureType.TIMEOUT,
@@ -44,26 +47,28 @@ class TestAgentPrimitives:
             context={"action": "test"},
             timestamp=datetime.now(timezone.utc),
         )
-        
+
         assert failure.agent_id == "test-agent"
         assert failure.failure_type == FailureType.TIMEOUT
 
 
 class TestCMVK:
     """Test verification-kernel package."""
-    
+
     def test_import_cmvk(self):
         """Test basic import."""
         try:
             from cmvk import DriftDetector
+
             assert DriftDetector is not None
         except ImportError:
             pytest.skip("cmvk not installed with numpy")
-    
+
     def test_drift_detection_stub(self):
         """Test drift detector can be instantiated."""
         try:
             from cmvk import DriftDetector
+
             detector = DriftDetector()
             assert detector is not None
         except ImportError:
@@ -72,11 +77,12 @@ class TestCMVK:
 
 class TestCaaS:
     """Test context-as-a-service package."""
-    
+
     def test_import_caas(self):
         """Test basic import."""
         try:
             from caas_core import ContextPipeline
+
             assert ContextPipeline is not None
         except ImportError:
             pytest.skip("caas not installed")
@@ -84,11 +90,12 @@ class TestCaaS:
 
 class TestEMK:
     """Test episodic-memory-kernel package."""
-    
+
     def test_import_emk(self):
         """Test basic import."""
         try:
-            from emk import EpisodicMemory, Episode
+            from emk import Episode, EpisodicMemory
+
             assert EpisodicMemory is not None
             assert Episode is not None
         except ImportError:
@@ -100,8 +107,10 @@ class TestEMK:
 # =========================================================================
 
 try:
-    from cmvk import verify, verify_embeddings, VerificationScore, DriftType
     import numpy as np
+
+    from cmvk import DriftType, VerificationScore, verify, verify_embeddings
+
     HAS_CMVK = True
 except ImportError:
     HAS_CMVK = False
@@ -170,6 +179,7 @@ class TestDriftDetectorEdgeCases:
 
 try:
     from emk import Episode, FileAdapter
+
     HAS_EMK = True
 except ImportError:
     HAS_EMK = False
@@ -189,7 +199,10 @@ class TestEpisodicMemoryEdgeCases:
         """Retrieve with a non-matching filter returns empty."""
         store = FileAdapter(str(tmp_path / "filtered.jsonl"))
         ep = Episode(
-            goal="test", action="act", result="ok", reflection="fine",
+            goal="test",
+            action="act",
+            result="ok",
+            reflection="fine",
             metadata={"user_id": "abc"},
         )
         store.store(ep)
@@ -206,8 +219,10 @@ class TestEpisodicMemoryEdgeCases:
         store = FileAdapter(str(tmp_path / "multi.jsonl"))
         for i in range(5):
             ep = Episode(
-                goal=f"goal-{i}", action=f"act-{i}",
-                result=f"res-{i}", reflection=f"ref-{i}",
+                goal=f"goal-{i}",
+                action=f"act-{i}",
+                result=f"res-{i}",
+                reflection=f"ref-{i}",
             )
             store.store(ep)
         results = store.retrieve(limit=10)
@@ -218,8 +233,10 @@ class TestEpisodicMemoryEdgeCases:
         store = FileAdapter(str(tmp_path / "limit.jsonl"))
         for i in range(10):
             ep = Episode(
-                goal=f"g-{i}", action=f"a-{i}",
-                result=f"r-{i}", reflection=f"ref-{i}",
+                goal=f"g-{i}",
+                action=f"a-{i}",
+                result=f"r-{i}",
+                reflection=f"ref-{i}",
             )
             store.store(ep)
         results = store.retrieve(limit=3)

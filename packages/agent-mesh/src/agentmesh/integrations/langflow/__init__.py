@@ -15,12 +15,10 @@ from __future__ import annotations
 import hashlib
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any, Dict, List, Optional
 
-
 from agentmesh.exceptions import TrustVerificationError  # noqa: E402
-
 
 # Backward compatibility: TrustVerificationError is re-exported from agentmesh.exceptions
 
@@ -33,16 +31,16 @@ class ComponentIdentity:
     did: str
     public_key: str
     trust_score: float = 0.5
-    capabilities: List[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
     component_type: str = "custom"
 
     @classmethod
     def generate(
         cls,
         component_name: str,
-        capabilities: Optional[List[str]] = None,
+        capabilities: list[str] | None = None,
         trust_score: float = 0.5,
-    ) -> "ComponentIdentity":
+    ) -> ComponentIdentity:
         """Generate a new identity for a Langflow component."""
         seed = f"langflow:{component_name}:{time.time_ns()}"
         did_hash = hashlib.sha256(seed.encode()).hexdigest()[:32]
@@ -65,7 +63,7 @@ class ConnectionRecord:
     trust_score: float
     verified: bool
     reason: str = ""
-    data_keys: List[str] = field(default_factory=list)
+    data_keys: list[str] = field(default_factory=list)
 
 
 class TrustVerificationComponent:
@@ -91,8 +89,8 @@ class TrustVerificationComponent:
     def __init__(
         self,
         min_trust_score: float = 0.5,
-        required_capabilities: Optional[List[str]] = None,
-        sensitive_data_keys: Optional[set] = None,
+        required_capabilities: list[str] | None = None,
+        sensitive_data_keys: set | None = None,
         sensitive_trust_score: float = 0.8,
         on_failure: str = "block",
         audit_logging: bool = True,
@@ -100,18 +98,22 @@ class TrustVerificationComponent:
         self.min_trust_score = min_trust_score
         self.required_capabilities = required_capabilities or []
         self.sensitive_data_keys = sensitive_data_keys or {
-            "password", "api_key", "secret", "token", "credential",
+            "password",
+            "api_key",
+            "secret",
+            "token",
+            "credential",
         }
         self.sensitive_trust_score = sensitive_trust_score
         self.on_failure = on_failure  # "block" | "warn" | "audit"
         self.audit_logging = audit_logging
-        self._audit_log: List[ConnectionRecord] = []
+        self._audit_log: list[ConnectionRecord] = []
 
     def verify(
         self,
         source: ComponentIdentity,
         target: ComponentIdentity,
-        data: Optional[Dict[str, Any]] = None,
+        data: dict[str, Any] | None = None,
     ) -> bool:
         """Verify trust for a connection between two components."""
         verified = True
@@ -136,17 +138,14 @@ class TrustVerificationComponent:
 
             if target.trust_score < required_score:
                 verified = False
-                reason = (
-                    f"Trust score {target.trust_score:.2f} "
-                    f"below required {required_score:.2f}"
-                )
+                reason = f"Trust score {target.trust_score:.2f} below required {required_score:.2f}"
 
         # Audit log
         if self.audit_logging:
             record = ConnectionRecord(
                 source_component=source.component_name,
                 target_component=target.component_name,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 trust_score=target.trust_score,
                 verified=verified,
                 reason=reason,
@@ -159,7 +158,7 @@ class TrustVerificationComponent:
 
         return verified
 
-    def get_audit_log(self) -> List[ConnectionRecord]:
+    def get_audit_log(self) -> list[ConnectionRecord]:
         """Return the connection audit log."""
         return self._audit_log.copy()
 
@@ -175,12 +174,12 @@ class IdentityComponent:
     description: str = "Creates a cryptographic identity for an agent in the flow"
 
     def __init__(self):
-        self._identities: Dict[str, ComponentIdentity] = {}
+        self._identities: dict[str, ComponentIdentity] = {}
 
     def build(
         self,
         agent_name: str,
-        capabilities: Optional[List[str]] = None,
+        capabilities: list[str] | None = None,
         trust_score: float = 0.5,
     ) -> ComponentIdentity:
         """Build/retrieve an identity for the given agent name."""
@@ -195,11 +194,11 @@ class IdentityComponent:
         self._identities[agent_name] = identity
         return identity
 
-    def get_identity(self, agent_name: str) -> Optional[ComponentIdentity]:
+    def get_identity(self, agent_name: str) -> ComponentIdentity | None:
         """Retrieve an existing identity."""
         return self._identities.get(agent_name)
 
-    def list_identities(self) -> Dict[str, ComponentIdentity]:
+    def list_identities(self) -> dict[str, ComponentIdentity]:
         """List all registered identities."""
         return dict(self._identities)
 
@@ -214,7 +213,7 @@ class TrustGatedFlow:
     def __init__(
         self,
         min_trust_score: float = 0.5,
-        required_capabilities: Optional[List[str]] = None,
+        required_capabilities: list[str] | None = None,
         audit_logging: bool = True,
     ):
         self.identity_manager = IdentityComponent()
@@ -223,12 +222,12 @@ class TrustGatedFlow:
             required_capabilities=required_capabilities or [],
             audit_logging=audit_logging,
         )
-        self._flow_nodes: Dict[str, ComponentIdentity] = {}
+        self._flow_nodes: dict[str, ComponentIdentity] = {}
 
     def register_node(
         self,
         node_name: str,
-        capabilities: Optional[List[str]] = None,
+        capabilities: list[str] | None = None,
         trust_score: float = 0.5,
     ) -> ComponentIdentity:
         """Register a flow node with trust identity."""
@@ -244,7 +243,7 @@ class TrustGatedFlow:
         self,
         from_node: str,
         to_node: str,
-        data: Optional[Dict[str, Any]] = None,
+        data: dict[str, Any] | None = None,
     ) -> bool:
         """Verify a connection between two flow nodes."""
         source = self._flow_nodes.get(from_node)
@@ -257,7 +256,7 @@ class TrustGatedFlow:
 
         return self.verifier.verify(source, target, data)
 
-    def get_flow_report(self) -> Dict[str, Any]:
+    def get_flow_report(self) -> dict[str, Any]:
         """Get trust status for the entire flow."""
         audit = self.verifier.get_audit_log()
         return {
@@ -274,7 +273,7 @@ class TrustGatedFlow:
             "blocked": sum(1 for r in audit if not r.verified),
         }
 
-    def to_langflow_config(self) -> Dict[str, Any]:
+    def to_langflow_config(self) -> dict[str, Any]:
         """Export trust configuration as Langflow-compatible JSON."""
         return {
             "type": "agentmesh_trust_flow",

@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional
 
 try:
     import yaml  # type: ignore
+
     _HAS_YAML = True
 except ImportError:
     _HAS_YAML = False
@@ -172,9 +173,7 @@ def load_slo_template(
     path = d / f"{name}.yaml"
     if not path.exists():
         available = list_templates(specs_dir)
-        raise FileNotFoundError(
-            f"Template '{name}' not found. Available: {available}"
-        )
+        raise FileNotFoundError(f"Template '{name}' not found. Available: {available}")
     content = path.read_text(encoding="utf-8")
     return _parse_yaml(content)
 

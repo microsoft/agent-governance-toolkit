@@ -14,6 +14,7 @@ def test_top_level_imports():
         PolicyReward,
         policy_penalty,
     )
+
     assert GovernedRunner is not None
     assert PolicyReward is not None
     assert FlightRecorderEmitter is not None
@@ -28,6 +29,7 @@ def test_backward_compat_shim():
         PolicyReward,
         FlightRecorderEmitter,
     )
+
     assert GovernedRunner is not None
     assert PolicyReward is not None
     assert FlightRecorderEmitter is not None

@@ -17,8 +17,8 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import yaml
 from fastapi import FastAPI, HTTPException
@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 
 from hypervisor import __version__
 from hypervisor.core import Hypervisor
-from hypervisor.models import ExecutionRing, SessionConfig
+from hypervisor.models import SessionConfig
 from hypervisor.security.kill_switch import KillReason, KillSwitch
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ class RegisterAgentRequest(BaseModel):
 
     agent_did: str = Field(..., description="Decentralized identifier for the agent")
     sigma_raw: float = Field(0.0, description="Raw reputation score (0.0 – 1.0)")
-    actions: Optional[list[dict[str, Any]]] = Field(
+    actions: list[dict[str, Any]] | None = Field(
         None, description="IATP capability manifest actions"
     )
 
@@ -85,9 +85,9 @@ class AuditEntry(BaseModel):
 
 # ── State ───────────────────────────────────────────────────────────────────
 
-_hypervisor: Optional[Hypervisor] = None
-_kill_switch: Optional[KillSwitch] = None
-_session_id: Optional[str] = None
+_hypervisor: Hypervisor | None = None
+_kill_switch: KillSwitch | None = None
+_session_id: str | None = None
 _audit_log: list[dict[str, str]] = []
 
 
@@ -97,7 +97,7 @@ def _log_audit(event: str, agent_did: str, detail: str) -> None:
             "event": event,
             "agent_did": agent_did,
             "detail": detail,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
     )
 

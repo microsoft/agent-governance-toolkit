@@ -89,7 +89,9 @@ class TrustProxy:
         self._tool_policies: Dict[str, ToolPolicy] = dict(tool_policies or {})
         self._blocked_dids: set = set(blocked_dids or [])
         self.require_did = require_did
-        self._rate_tracker: Dict[str, Dict[str, List[float]]] = {}  # {tool: {did: [timestamps]}}
+        self._rate_tracker: Dict[
+            str, Dict[str, List[float]]
+        ] = {}  # {tool: {did: [timestamps]}}
         self._audit_log: List[AuthResult] = []
 
     def set_tool_policy(self, tool_name: str, policy: ToolPolicy) -> None:
@@ -152,7 +154,9 @@ class TrustProxy:
             return deny(f"Tool '{tool_name}' is blocked by policy")
 
         # 4. Trust score
-        min_trust = policy.min_trust if policy and policy.min_trust else self.default_min_trust
+        min_trust = (
+            policy.min_trust if policy and policy.min_trust else self.default_min_trust
+        )
         if agent_trust_score < min_trust:
             return deny(
                 f"Trust score {agent_trust_score} below minimum {min_trust} for '{tool_name}'"
@@ -171,7 +175,9 @@ class TrustProxy:
             timestamps = tool_rates.get(agent_did, [])
             timestamps = [t for t in timestamps if t > now - 60]
             if len(timestamps) >= policy.max_calls_per_minute:
-                return deny(f"Rate limit exceeded for '{tool_name}' ({policy.max_calls_per_minute}/min)")
+                return deny(
+                    f"Rate limit exceeded for '{tool_name}' ({policy.max_calls_per_minute}/min)"
+                )
             timestamps.append(now)
             tool_rates[agent_did] = timestamps
 

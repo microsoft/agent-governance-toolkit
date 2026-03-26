@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * MCP Proxy - The core security layer
- * 
+ *
  * Wraps any MCP server with policy enforcement, rate limiting,
  * input sanitization, and audit logging.
  */
@@ -34,7 +34,7 @@ export class MCPProxy {
   constructor(options: ProxyOptions) {
     this.options = options;
     this.sanitizer = new Sanitizer();
-    
+
     if (options.rateLimit) {
       this.rateLimiter = new RateLimiter(options.rateLimit);
     }
@@ -43,7 +43,7 @@ export class MCPProxy {
   async start(): Promise<void> {
     // Resolve command (handle npm packages)
     const resolvedCommand = this.resolveCommand(this.options.command);
-    
+
     if (this.options.verbose) {
       console.error(`[proxy] Starting: ${resolvedCommand} ${this.options.args.join(' ')}`);
     }
@@ -98,9 +98,9 @@ export class MCPProxy {
   private handleClientInput(data: Buffer): void {
     // Parse JSON-RPC messages from the client
     this.buffer += data.toString();
-    
+
     const messages = this.parseMessages();
-    
+
     for (const message of messages) {
       const processed = this.processClientMessage(message);
       if (processed !== null) {
@@ -118,10 +118,10 @@ export class MCPProxy {
   private parseMessages(): any[] {
     const messages: any[] = [];
     const lines = this.buffer.split('\n');
-    
+
     // Keep incomplete last line in buffer
     this.buffer = lines.pop() || '';
-    
+
     for (const line of lines) {
       if (line.trim()) {
         try {
@@ -131,7 +131,7 @@ export class MCPProxy {
         }
       }
     }
-    
+
     return messages;
   }
 
@@ -199,7 +199,7 @@ export class MCPProxy {
 
     // Log allowed call
     if (this.options.verbose) {
-      console.error(`[proxy] ${decision.allowed ? '✅' : '⚠️'} ${toolName}`, 
+      console.error(`[proxy] ${decision.allowed ? '✅' : '⚠️'} ${toolName}`,
         this.options.mode === 'shadow' && !decision.allowed ? '(shadow mode - passed)' : '');
     }
 

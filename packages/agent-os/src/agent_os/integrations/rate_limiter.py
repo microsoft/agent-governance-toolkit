@@ -23,6 +23,7 @@ from .base import GovernancePolicy
 @dataclass(frozen=True)
 class RateLimitStatus:
     """Snapshot of an agent's rate-limit state."""
+
     allowed: bool
     remaining_calls: int
     reset_at: float

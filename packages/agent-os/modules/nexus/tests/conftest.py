@@ -4,7 +4,7 @@
 
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 
@@ -13,16 +13,15 @@ _nexus_parent = os.path.join(os.path.dirname(__file__), "..", "..")
 if _nexus_parent not in sys.path:
     sys.path.insert(0, _nexus_parent)
 
-from nexus.reputation import ReputationEngine, ReputationHistory, TrustScore, TrustTier
 from nexus.escrow import EscrowManager
+from nexus.reputation import ReputationEngine, ReputationHistory
+from nexus.schemas.escrow import EscrowRequest
 from nexus.schemas.manifest import (
-    AgentIdentity,
     AgentCapabilities,
-    AgentPrivacy,
-    MuteRules,
+    AgentIdentity,
     AgentManifest,
+    AgentPrivacy,
 )
-from nexus.schemas.escrow import EscrowRequest, EscrowReceipt, EscrowStatus
 
 
 @pytest.fixture

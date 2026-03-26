@@ -21,11 +21,10 @@ Run:  python demo.py          (no dependencies beyond agent-os)
 from __future__ import annotations
 
 import csv
-import io
 import json
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -38,8 +37,8 @@ sys.path.insert(0, os.path.join(_REPO_ROOT, "src"))
 from agent_os.integrations.base import (
     BaseIntegration,
     ExecutionContext,
-    GovernancePolicy,
     GovernanceEventType,
+    GovernancePolicy,
     PatternType,
     PolicyInterceptor,
     ToolCallRequest,
@@ -50,11 +49,13 @@ from agent_os.integrations.base import (
 def _redact(value, visible_chars: int = 0) -> str:
     """Redact a sensitive value for safe logging."""
     import hashlib
+
     raw = str(value)
     if not raw:
         return "[REDACTED]"
     digest = hashlib.sha256(raw.encode()).hexdigest()[:8]
     return f"***{digest}"
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 1. GOVERNANCE POLICY
@@ -135,6 +136,7 @@ def save_audit_csv(path: str) -> None:
 # 3. INTEGRATION SUBCLASS
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class SOXIntegration(BaseIntegration):
     """Thin integration used to access governance helpers."""
 
@@ -150,6 +152,7 @@ class SOXIntegration(BaseIntegration):
 #    Simulates an LLM-based agent that processes financial transactions.
 #    No real model calls are made.
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @dataclass
 class Transaction:
@@ -197,6 +200,7 @@ class FinancialAgent:
 # ═══════════════════════════════════════════════════════════════════════════
 # 5. GOVERNED EXECUTION HELPER
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def governed_call(
     integration: SOXIntegration,
@@ -273,13 +277,16 @@ def governed_call(
         )
         print(f"  \u25cb CHECKPOINT created: {checkpoint_id} (after {ctx.call_count} calls)")
 
-    print(f"  \u2714 ALLOWED  | tool={tool_name} (call {ctx.call_count}/{ctx.policy.max_tool_calls})")
+    print(
+        f"  \u2714 ALLOWED  | tool={tool_name} (call {ctx.call_count}/{ctx.policy.max_tool_calls})"
+    )
     return f"mock_result_for_{tool_name}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 6. DISPLAY HELPERS
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def print_header(title: str) -> None:
     width = 64
@@ -302,7 +309,11 @@ DEMO_TRANSACTIONS = [
     {"amount": 15_000.00, "recipient": "Acme Consulting LLC", "desc": "Q2 consulting fees"},
     {"amount": 800.00, "recipient": "Cloud Services Co", "desc": "Monthly hosting"},
     {"amount": 5_500.00, "recipient": "Legal Partners LLP", "desc": "Contract review"},
-    {"amount": 45_000.00, "recipient": "Enterprise Software Corp", "desc": "Annual license renewal"},
+    {
+        "amount": 45_000.00,
+        "recipient": "Enterprise Software Corp",
+        "desc": "Annual license renewal",
+    },
 ]
 
 
@@ -324,7 +335,7 @@ def run_demo() -> None:
     print(f"  Human approval required: YES (transactions > ${APPROVAL_THRESHOLD:,.0f})")
     print(f"  Max tool calls: {sox_policy.max_tool_calls}")
     print(f"  Allowed tools: {', '.join(sox_policy.allowed_tools)}")
-    print(f"  Blocked patterns: SSN regex, credit-card regex, password, secret")
+    print("  Blocked patterns: SSN regex, credit-card regex, password, secret")
     print(f"  Audit logging: {'ON' if sox_policy.log_all_calls else 'OFF'}")
     print(f"  Checkpoint frequency: every {sox_policy.checkpoint_frequency} calls")
 
@@ -338,7 +349,9 @@ def run_demo() -> None:
         print(f"\n  [{i}] ${amount:,.2f} \u2192 {recipient} ({desc})")
 
         result = governed_call(
-            integration, ctx, interceptor,
+            integration,
+            ctx,
+            interceptor,
             "process_transaction",
             {"amount": amount, "recipient": recipient, "description": desc},
         )
@@ -348,15 +361,17 @@ def run_demo() -> None:
         tx = agent.process(amount, recipient, desc)
 
         # Record transaction details in audit log
-        audit_log.append({
-            "agent_id": ctx.agent_id,
-            "event_type": "TRANSACTION",
-            "tool": "process_transaction",
-            "amount": amount,
-            "recipient": recipient,
-            "decision": tx.status,
-            "timestamp": datetime.now().isoformat(),
-        })
+        audit_log.append(
+            {
+                "agent_id": ctx.agent_id,
+                "event_type": "TRANSACTION",
+                "tool": "process_transaction",
+                "amount": amount,
+                "recipient": recipient,
+                "decision": tx.status,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
         if tx.status == "pending_approval":
             print(f"  \u23f3 PENDING APPROVAL: ${amount:,.2f} to {recipient}")
@@ -368,10 +383,13 @@ def run_demo() -> None:
     print_section("Scenario 6: Blocked PII (SSN detected)")
     ssn_message = "Pay vendor 123-45-6789 for invoice #42"
     import re
-    redacted_msg = re.sub(r'\d{3}-\d{2}-\d{4}', 'XXX-XX-XXXX', ssn_message)
+
+    redacted_msg = re.sub(r"\d{3}-\d{2}-\d{4}", "XXX-XX-XXXX", ssn_message)
     print(f'  Input: "{_redact(ssn_message, 11)}"')
     governed_call(
-        integration, ctx, interceptor,
+        integration,
+        ctx,
+        interceptor,
         "process_transaction",
         {"note": ssn_message, "amount": 500},
     )
@@ -382,7 +400,9 @@ def run_demo() -> None:
     cc_message = "Refund to card 4111-1111-1111-1111"
     print(f'  Input: "{cc_message}"')
     governed_call(
-        integration, ctx, interceptor,
+        integration,
+        ctx,
+        interceptor,
         "process_transaction",
         {"note": cc_message, "amount": 200},
     )
@@ -392,7 +412,9 @@ def run_demo() -> None:
     print_section("Scenario 8: Unauthorized tool blocked")
     print('  Attempting to call "delete_ledger_entry" (not in allowed_tools):')
     governed_call(
-        integration, ctx, interceptor,
+        integration,
+        ctx,
+        interceptor,
         "delete_ledger_entry",
         {"entry_id": "LE-0042"},
     )
@@ -400,7 +422,9 @@ def run_demo() -> None:
     # -- Scenario 9: Query balance (allowed) -------------------------------
     print_section("Scenario 9: Balance query (allowed)")
     result = governed_call(
-        integration, ctx, interceptor,
+        integration,
+        ctx,
+        interceptor,
         "query_balance",
         {"account": "operating-account"},
     )
@@ -411,7 +435,9 @@ def run_demo() -> None:
     # -- Scenario 10: Generate report (allowed) ----------------------------
     print_section("Scenario 10: Generate compliance report")
     result = governed_call(
-        integration, ctx, interceptor,
+        integration,
+        ctx,
+        interceptor,
         "generate_report",
         {"type": "sox_quarterly"},
     )
@@ -435,9 +461,13 @@ def run_demo() -> None:
         elif checkpoint:
             print(f"  {i:>2}. [{agent_id}] CHECKPOINT {checkpoint}  (calls={call_count})")
         elif decision == "approved":
-            print(f"  {i:>2}. [{agent_id}] APPROVED   ${amount:,.2f} \u2192 {entry.get('recipient', '')}")
+            print(
+                f"  {i:>2}. [{agent_id}] APPROVED   ${amount:,.2f} \u2192 {entry.get('recipient', '')}"
+            )
         elif decision == "pending_approval":
-            print(f"  {i:>2}. [{agent_id}] PENDING    ${amount:,.2f} \u2192 {entry.get('recipient', '')}  (needs human approval)")
+            print(
+                f"  {i:>2}. [{agent_id}] PENDING    ${amount:,.2f} \u2192 {entry.get('recipient', '')}  (needs human approval)"
+            )
         else:
             print(f"  {i:>2}. [{agent_id}] ALLOWED    tool={tool}  (calls={call_count})")
 
@@ -460,8 +490,8 @@ def run_demo() -> None:
     print_header("Audit Trail Exported")
     print(f"  JSON: {json_path}")
     print(f"  CSV:  {csv_path}")
-    print(f"\n  These files provide an immutable record for SOX compliance review.")
-    print(f"  Retention policy: 7 years per SOX \u00a7802.\n")
+    print("\n  These files provide an immutable record for SOX compliance review.")
+    print("  Retention policy: 7 years per SOX \u00a7802.\n")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

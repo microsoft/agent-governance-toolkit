@@ -12,13 +12,13 @@ import uuid
 
 import pytest
 
-from agentmesh.identity import AgentIdentity, ScopeChain, DelegationLink
-from agentmesh.trust import TrustHandshake, HandshakeResult
-
+from agentmesh.identity import AgentIdentity, DelegationLink, ScopeChain
+from agentmesh.trust import HandshakeResult, TrustHandshake
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_identity(name: str) -> AgentIdentity:
     """Create an agent identity with a unique name."""
@@ -32,6 +32,7 @@ def _make_identity(name: str) -> AgentIdentity:
 def _make_registry(*identities: AgentIdentity):
     """Create a registry pre-populated with identities."""
     from agentmesh.identity.agent_id import IdentityRegistry
+
     registry = IdentityRegistry()
     for identity in identities:
         registry.register(identity)
@@ -66,6 +67,7 @@ async def _mutual_handshake(
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestHandshakeE2E:
     """Full handshake lifecycle integration tests."""

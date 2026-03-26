@@ -3,6 +3,7 @@
 """
 Tests for the IATP Policy Engine.
 """
+
 from iatp.models import (
     AgentCapabilities,
     CapabilityManifest,
@@ -35,7 +36,7 @@ def test_validate_manifest_ephemeral_allowed():
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.EPHEMERAL,
             human_review=False,
-        )
+        ),
     )
 
     is_allowed, error_msg, warning_msg = engine.validate_manifest(manifest)
@@ -59,7 +60,7 @@ def test_validate_manifest_permanent_warning():
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.PERMANENT,
             human_review=True,
-        )
+        ),
     )
 
     is_allowed, error_msg, warning_msg = engine.validate_manifest(manifest)
@@ -86,7 +87,7 @@ def test_validate_manifest_no_reversibility_warning():
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.TEMPORARY,
             human_review=False,
-        )
+        ),
     )
 
     is_allowed, error_msg, warning_msg = engine.validate_manifest(manifest)
@@ -106,7 +107,7 @@ def test_add_custom_rule():
         "name": "CustomTestRule",
         "description": "Test custom rule",
         "action": "deny",
-        "conditions": {"trust_level": ["untrusted"]}
+        "conditions": {"trust_level": ["untrusted"]},
     }
 
     engine.add_custom_rule(custom_rule)
@@ -122,7 +123,7 @@ def test_add_custom_rule():
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.EPHEMERAL,
             human_review=False,
-        )
+        ),
     )
 
     is_allowed, error_msg, warning_msg = engine.validate_manifest(manifest)
@@ -145,12 +146,11 @@ def test_validate_handshake_compatible():
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.EPHEMERAL,
             human_review=False,
-        )
+        ),
     )
 
     is_compatible, error_msg = engine.validate_handshake(
-        manifest,
-        required_capabilities=["reversibility", "idempotency"]
+        manifest, required_capabilities=["reversibility", "idempotency"]
     )
 
     assert is_compatible is True
@@ -171,12 +171,11 @@ def test_validate_handshake_missing_capabilities():
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.TEMPORARY,
             human_review=False,
-        )
+        ),
     )
 
     is_compatible, error_msg = engine.validate_handshake(
-        manifest,
-        required_capabilities=["reversibility"]
+        manifest, required_capabilities=["reversibility"]
     )
 
     assert is_compatible is False
@@ -200,7 +199,7 @@ def test_manifest_to_context():
             human_review=True,
             encryption_at_rest=True,
             encryption_in_transit=True,
-        )
+        ),
     )
 
     context = engine._manifest_to_context(manifest)
@@ -230,13 +229,10 @@ def test_validate_handshake_with_required_scopes():
             retention=RetentionPolicy.EPHEMERAL,
             human_review=False,
         ),
-        scopes=["repo:read", "repo:write"]
+        scopes=["repo:read", "repo:write"],
     )
 
-    is_compatible, error_msg = engine.validate_handshake(
-        manifest,
-        required_scopes=["repo:write"]
-    )
+    is_compatible, error_msg = engine.validate_handshake(manifest, required_scopes=["repo:write"])
 
     assert is_compatible is True
     assert error_msg is None
@@ -257,12 +253,12 @@ def test_validate_handshake_missing_scopes():
             retention=RetentionPolicy.TEMPORARY,
             human_review=False,
         ),
-        scopes=["repo:read"]  # Only has read access
+        scopes=["repo:read"],  # Only has read access
     )
 
     is_compatible, error_msg = engine.validate_handshake(
         manifest,
-        required_scopes=["repo:write"]  # But needs write access
+        required_scopes=["repo:write"],  # But needs write access
     )
 
     assert is_compatible is False
@@ -285,12 +281,11 @@ def test_validate_handshake_multiple_scopes():
             retention=RetentionPolicy.EPHEMERAL,
             human_review=False,
         ),
-        scopes=["repo:read", "repo:write", "admin:manage"]
+        scopes=["repo:read", "repo:write", "admin:manage"],
     )
 
     is_compatible, error_msg = engine.validate_handshake(
-        manifest,
-        required_scopes=["repo:read", "repo:write"]
+        manifest, required_scopes=["repo:read", "repo:write"]
     )
 
     assert is_compatible is True
@@ -312,12 +307,12 @@ def test_validate_handshake_no_scopes_required():
             retention=RetentionPolicy.TEMPORARY,
             human_review=False,
         ),
-        scopes=[]  # No scopes
+        scopes=[],  # No scopes
     )
 
     is_compatible, error_msg = engine.validate_handshake(
         manifest,
-        required_scopes=None  # No scopes required
+        required_scopes=None,  # No scopes required
     )
 
     assert is_compatible is True
@@ -339,7 +334,7 @@ def test_manifest_to_context_with_scopes():
             retention=RetentionPolicy.EPHEMERAL,
             human_review=False,
         ),
-        scopes=["repo:read", "repo:write"]
+        scopes=["repo:read", "repo:write"],
     )
 
     context = engine._manifest_to_context(manifest)

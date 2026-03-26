@@ -1,8 +1,8 @@
 # IATP-001: Trust Handshake Protocol
 
-**Status:** Draft  
-**Author:** Inter-Agent Trust Protocol Team  
-**Created:** 2026-01-23  
+**Status:** Draft
+**Author:** Inter-Agent Trust Protocol Team
+**Created:** 2026-01-23
 **Updated:** 2026-01-23
 
 ## Abstract
@@ -415,20 +415,20 @@ This automatically reduces the agent's reputation across the network.
 
 ### A.1 High-Trust Scenario
 
-**Agent:** Verified banking partner  
-**Trust Score:** 10  
+**Agent:** Verified banking partner
+**Trust Score:** 10
 **Result:** Immediate execution, full audit trail
 
 ### A.2 Low-Trust with Override
 
-**Agent:** Unknown booking service  
-**Trust Score:** 3  
+**Agent:** Unknown booking service
+**Trust Score:** 3
 **Result:** Warning → User override → Quarantined execution
 
 ### A.3 Blocked Transaction
 
-**Agent:** Untrusted + permanent retention  
-**Data:** Contains credit card  
+**Agent:** Untrusted + permanent retention
+**Data:** Contains credit card
 **Result:** 403 Forbidden, no execution
 
 ---

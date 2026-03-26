@@ -15,15 +15,14 @@ try:
     from aiokafka.errors import KafkaError
 except ImportError:
     raise ImportError(
-        "Kafka adapter requires 'aiokafka' package. "
-        "Install it with: pip install amb-core[kafka]"
+        "Kafka adapter requires 'aiokafka' package. Install it with: pip install amb-core[kafka]"
     )
 
 
 class KafkaBroker(BrokerAdapter):
     """
     Kafka-based broker adapter.
-    
+
     This adapter uses Kafka topics for message distribution with
     high throughput and durability.
     """
@@ -31,7 +30,7 @@ class KafkaBroker(BrokerAdapter):
     def __init__(self, bootstrap_servers: str = "localhost:9092"):
         """
         Initialize Kafka broker.
-        
+
         Args:
             bootstrap_servers: Kafka bootstrap servers
         """
@@ -45,7 +44,7 @@ class KafkaBroker(BrokerAdapter):
         """Connect to Kafka."""
         self._producer = AIOKafkaProducer(
             bootstrap_servers=self.bootstrap_servers,
-            value_serializer=lambda v: json.dumps(v).encode()
+            value_serializer=lambda v: json.dumps(v).encode(),
         )
         await self._producer.start()
 
@@ -74,11 +73,11 @@ class KafkaBroker(BrokerAdapter):
     async def publish(self, message: Message, wait_for_confirmation: bool = False) -> Optional[str]:
         """
         Publish message to Kafka topic.
-        
+
         Args:
             message: Message to publish
             wait_for_confirmation: Wait for broker confirmation
-        
+
         Returns:
             Message ID
         """
@@ -86,13 +85,11 @@ class KafkaBroker(BrokerAdapter):
             raise ConnectionError("Not connected to Kafka")
 
         # Serialize message
-        message_dict = message.model_dump(mode='json')
+        message_dict = message.model_dump(mode="json")
 
         # Publish
         future = await self._producer.send(
-            message.topic,
-            value=message_dict,
-            key=message.id.encode() if message.id else None
+            message.topic, value=message_dict, key=message.id.encode() if message.id else None
         )
 
         if wait_for_confirmation:
@@ -104,11 +101,11 @@ class KafkaBroker(BrokerAdapter):
     async def subscribe(self, topic: str, handler: MessageHandler) -> str:
         """
         Subscribe to a Kafka topic.
-        
+
         Args:
             topic: Topic to subscribe to
             handler: Message handler
-        
+
         Returns:
             Subscription ID
         """
@@ -120,7 +117,7 @@ class KafkaBroker(BrokerAdapter):
             bootstrap_servers=self.bootstrap_servers,
             value_deserializer=lambda v: json.loads(v.decode()),
             group_id=f"amb-{subscription_id}",
-            auto_offset_reset='latest'
+            auto_offset_reset="latest",
         )
 
         await consumer.start()
@@ -160,7 +157,7 @@ class KafkaBroker(BrokerAdapter):
     async def unsubscribe(self, subscription_id: str) -> None:
         """
         Unsubscribe from a topic.
-        
+
         Args:
             subscription_id: Subscription ID
         """
@@ -175,13 +172,13 @@ class KafkaBroker(BrokerAdapter):
     async def request(self, message: Message, timeout: float = 30.0) -> Message:
         """
         Send request and wait for response.
-        
+
         This is a simplified implementation using temporary topics.
-        
+
         Args:
             message: Request message
             timeout: Timeout in seconds
-        
+
         Returns:
             Response message
         """
@@ -224,13 +221,13 @@ class KafkaBroker(BrokerAdapter):
     async def get_pending_messages(self, topic: str, limit: int = 10) -> List[Message]:
         """
         Get pending messages from Kafka topic.
-        
+
         This creates a temporary consumer to read recent messages.
-        
+
         Args:
             topic: Topic to get messages from
             limit: Maximum messages to retrieve
-        
+
         Returns:
             List of messages
         """
@@ -239,8 +236,8 @@ class KafkaBroker(BrokerAdapter):
             topic,
             bootstrap_servers=self.bootstrap_servers,
             value_deserializer=lambda v: json.loads(v.decode()),
-            auto_offset_reset='earliest',
-            consumer_timeout_ms=1000
+            auto_offset_reset="earliest",
+            consumer_timeout_ms=1000,
         )
 
         try:

@@ -232,14 +232,14 @@ from mcp import ClientSession
 
 async with ClientSession() as session:
     await session.connect("http://localhost:8080")
-    
+
     # Verify code safety
     result = await session.call_tool("verify_code_safety", {
         "code": "import os; os.system('rm -rf /')",
         "language": "python"
     })
     print(result["safe"])  # False
-    
+
     # Multi-model code review
     result = await session.call_tool("cmvk_review", {
         "code": "...",

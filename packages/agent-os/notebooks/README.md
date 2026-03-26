@@ -114,7 +114,7 @@ Upload notebooks to [Google Colab](https://colab.research.google.com/) for cloud
 
 ## 🤝 Contributing
 
-Found an issue or want to add a notebook? 
+Found an issue or want to add a notebook?
 - [Open an issue](https://github.com/microsoft/agent-governance-toolkit/issues)
 - [Submit a PR](https://github.com/microsoft/agent-governance-toolkit/pulls)
 

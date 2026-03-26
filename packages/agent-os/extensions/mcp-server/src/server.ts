@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * AgentOS MCP Server - Core Server Implementation
- * 
+ *
  * Exposes AgentOS capabilities through Model Context Protocol:
  * - 10 Tools for agent lifecycle management
  * - Resources for VFS and audit logs
@@ -61,10 +61,10 @@ export class AgentOSMCPServer {
   private server: Server;
   private logger: Logger;
   private context: ServiceContext;
-  
+
   static readonly SERVER_NAME = 'agentos';
   static readonly SERVER_VERSION = '1.0.0';
-  
+
   constructor(config: ServerConfig) {
     // Initialize logger
     this.logger = createLogger({
@@ -83,14 +83,14 @@ export class AgentOSMCPServer {
         })
       ]
     });
-    
+
     // Initialize services
     const agentManager = new AgentManager(config.dataDir);
     const policyEngine = new PolicyEngine(config.policyMode);
     const approvalWorkflow = new ApprovalWorkflow(config.dataDir);
     const auditLogger = new AuditLogger(config.dataDir);
     const templateLibrary = new TemplateLibrary();
-    
+
     this.context = {
       agentManager,
       policyEngine,
@@ -100,7 +100,7 @@ export class AgentOSMCPServer {
       logger: this.logger,
       config,
     };
-    
+
     // Initialize MCP server
     this.server = new Server(
       {
@@ -115,15 +115,15 @@ export class AgentOSMCPServer {
         },
       }
     );
-    
+
     this.setupHandlers();
   }
-  
+
   private setupHandlers(): void {
     // ==========================================================================
     // Tools Handler
     // ==========================================================================
-    
+
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
         tools: [
@@ -140,15 +140,15 @@ export class AgentOSMCPServer {
         ],
       };
     });
-    
+
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
-      
+
       this.logger.info(`Tool called: ${name}`, { args });
-      
+
       try {
         let result: unknown;
-        
+
         switch (name) {
           case 'create_agent':
             result = await createAgentTool.execute(args, this.context);
@@ -183,7 +183,7 @@ export class AgentOSMCPServer {
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
-        
+
         // Log to audit trail
         await this.context.auditLogger.log({
           action: `tool:${name}`,
@@ -191,7 +191,7 @@ export class AgentOSMCPServer {
           outcome: 'SUCCESS',
           metadata: { args, result },
         });
-        
+
         return {
           content: [
             {
@@ -202,7 +202,7 @@ export class AgentOSMCPServer {
         };
       } catch (error) {
         this.logger.error(`Tool ${name} failed`, { error });
-        
+
         // Log failure to audit trail
         await this.context.auditLogger.log({
           action: `tool:${name}`,
@@ -211,7 +211,7 @@ export class AgentOSMCPServer {
           errorMessage: error instanceof Error ? error.message : String(error),
           metadata: { args },
         });
-        
+
         return {
           content: [
             {
@@ -223,14 +223,14 @@ export class AgentOSMCPServer {
         };
       }
     });
-    
+
     // ==========================================================================
     // Resources Handler
     // ==========================================================================
-    
+
     this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
       const agents = await this.context.agentManager.listAgents();
-      
+
       return {
         resources: [
           {
@@ -260,15 +260,15 @@ export class AgentOSMCPServer {
         ],
       };
     });
-    
+
     this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       const { uri } = request.params;
-      
+
       this.logger.info(`Resource read: ${uri}`);
-      
+
       try {
         let content: unknown;
-        
+
         if (uri === 'agentos://agents') {
           content = await this.context.agentManager.listAgents();
         } else if (uri === 'agentos://policies') {
@@ -281,7 +281,7 @@ export class AgentOSMCPServer {
         } else {
           throw new Error(`Unknown resource: ${uri}`);
         }
-        
+
         return {
           contents: [
             {
@@ -296,11 +296,11 @@ export class AgentOSMCPServer {
         throw error;
       }
     });
-    
+
     // ==========================================================================
     // Prompts Handler
     // ==========================================================================
-    
+
     this.server.setRequestHandler(ListPromptsRequestSchema, async () => {
       return {
         prompts: Object.values(PROMPTS).map((p) => ({
@@ -310,22 +310,22 @@ export class AgentOSMCPServer {
         })),
       };
     });
-    
+
     this.server.setRequestHandler(GetPromptRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
-      
+
       const prompt = PROMPTS[name];
       if (!prompt) {
         throw new Error(`Unknown prompt: ${name}`);
       }
-      
+
       // Fill in template with arguments
       let text = prompt.template;
       for (const arg of prompt.arguments || []) {
         const value = args?.[arg.name] || '';
         text = text.replace(new RegExp(`\\{${arg.name}\\}`, 'g'), String(value));
       }
-      
+
       return {
         description: prompt.description,
         messages: [
@@ -340,29 +340,29 @@ export class AgentOSMCPServer {
       };
     });
   }
-  
+
   /**
    * Run server in stdio mode for Claude Desktop.
    */
   async runStdio(): Promise<void> {
     this.logger.info('Starting AgentOS MCP Server in stdio mode');
-    
+
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    
+
     this.logger.info('AgentOS MCP Server connected via stdio');
   }
-  
+
   /**
    * Run server in HTTP mode for development/testing.
    */
   async runHttp(port: number): Promise<void> {
     this.logger.info(`Starting AgentOS MCP Server in HTTP mode on port ${port}`);
-    
+
     // Note: HTTP transport would be implemented here
     // For now, just log that it's not implemented
     this.logger.warn('HTTP mode not yet implemented. Use stdio mode for Claude Desktop.');
-    
+
     // Keep process alive
     await new Promise(() => {});
   }

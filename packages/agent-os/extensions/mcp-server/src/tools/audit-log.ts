@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * audit_log Tool
- * 
+ *
  * Queries the audit trail for agent actions.
  */
 
@@ -53,24 +53,24 @@ Use for:
       required: ['agentId'],
     },
   },
-  
+
   async execute(args: unknown, context: ServiceContext): Promise<string> {
     const input = AuditLogInputSchema.parse(args);
-    
+
     context.logger.info('Querying audit log', { agentId: input.agentId });
-    
+
     // Verify agent exists
     const agent = await context.agentManager.getAgent(input.agentId);
     if (!agent) {
       throw new Error(`Agent not found: ${input.agentId}`);
     }
-    
+
     // Query audit log
     const entries = await context.auditLogger.query(input);
-    
+
     // Get summary
     const summary = await context.auditLogger.getSummary(input.agentId, 30);
-    
+
     if (entries.length === 0) {
       return `
 **Audit Log: ${agent.config.name}**
@@ -90,7 +90,7 @@ are too restrictive. Try:
 - Checking agent status
 `.trim();
     }
-    
+
     // Format entries
     const outcomeEmoji: Record<string, string> = {
       SUCCESS: '✅',
@@ -98,17 +98,17 @@ are too restrictive. Try:
       BLOCKED: '🚫',
       PENDING: '⏳',
     };
-    
+
     const entriesFormatted = entries.slice(0, 20).map(entry => {
       const time = new Date(entry.timestamp).toLocaleString();
       const emoji = outcomeEmoji[entry.outcome] || '❓';
-      const policyResult = entry.policyCheck?.result 
-        ? ` [Policy: ${entry.policyCheck.result}]` 
+      const policyResult = entry.policyCheck?.result
+        ? ` [Policy: ${entry.policyCheck.result}]`
         : '';
-      
+
       return `${emoji} [${time}] ${entry.action}${policyResult}`;
     }).join('\n');
-    
+
     return `
 **Audit Log: ${agent.config.name}**
 

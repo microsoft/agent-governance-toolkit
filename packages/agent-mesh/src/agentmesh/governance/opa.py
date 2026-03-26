@@ -35,12 +35,12 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
 import shutil
+import subprocess
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
@@ -58,12 +58,13 @@ class OPADecision:
             (``"remote"``, ``"local"``, or ``"fallback"``).
         error: Error message if evaluation failed, otherwise ``None``.
     """
+
     allowed: bool
     raw_result: Any = None
     query: str = ""
     evaluation_ms: float = 0.0
     source: Literal["remote", "local", "fallback"] = "local"
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class OPAEvaluator:
@@ -79,8 +80,8 @@ class OPAEvaluator:
         self,
         mode: Literal["remote", "local"] = "local",
         opa_url: str = "http://localhost:8181",
-        rego_path: Optional[str] = None,
-        rego_content: Optional[str] = None,
+        rego_path: str | None = None,
+        rego_content: str | None = None,
         timeout_seconds: float = 5.0,
     ):
         """Initialise the OPA evaluator.
@@ -114,7 +115,7 @@ class OPAEvaluator:
         Returns:
             OPADecision with the result
         """
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
 
         try:
             if self.mode == "remote":
@@ -122,12 +123,12 @@ class OPAEvaluator:
             else:
                 result = self._evaluate_local(query, input_data)
 
-            elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+            elapsed = (datetime.now(UTC) - start).total_seconds() * 1000
             result.evaluation_ms = elapsed
             return result
 
         except Exception as e:
-            elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+            elapsed = (datetime.now(UTC) - start).total_seconds() * 1000
             logger.error(f"OPA evaluation failed: {e}")
             return OPADecision(
                 allowed=False,
@@ -139,12 +140,12 @@ class OPAEvaluator:
 
     def _evaluate_remote(self, query: str, input_data: dict) -> OPADecision:
         """Query a remote OPA server via REST API."""
-        import urllib.request
-        from urllib.parse import quote
-
         # V32: Sanitise query path to prevent URL injection
         # Only allow alphanumeric, dots, underscores, hyphens in query
         import re as _re
+        import urllib.request
+        from urllib.parse import quote
+
         if not _re.fullmatch(r"[a-zA-Z0-9._\-]+", query):
             return OPADecision(
                 allowed=False,
@@ -154,7 +155,11 @@ class OPAEvaluator:
             )
 
         # Convert query path to URL: "data.agentmesh.allow" -> "/v1/data/agentmesh/allow"
-        path_parts = query.replace("data.", "", 1).replace(".", "/") if query.startswith("data.") else query.replace(".", "/")
+        path_parts = (
+            query.replace("data.", "", 1).replace(".", "/")
+            if query.startswith("data.")
+            else query.replace(".", "/")
+        )
         # URL-encode each segment as a safety net
         safe_path = "/".join(quote(seg, safe="") for seg in path_parts.split("/"))
         url = f"{self.opa_url}/v1/data/{safe_path}"
@@ -171,7 +176,11 @@ class OPAEvaluator:
             with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
                 result_value = body.get("result", False)
-                allowed = bool(result_value) if isinstance(result_value, (bool, int)) else result_value is not None
+                allowed = (
+                    bool(result_value)
+                    if isinstance(result_value, (bool, int))
+                    else result_value is not None
+                )
 
                 return OPADecision(
                     allowed=allowed,
@@ -218,6 +227,7 @@ class OPAEvaluator:
         else:
             # Write rego content to temp file
             import tempfile
+
             with tempfile.NamedTemporaryFile(mode="w", suffix=".rego", delete=False) as f:
                 f.write(self.rego_content)
                 cmd.append(f.name)
@@ -269,7 +279,9 @@ class OPAEvaluator:
         - allow { not input.pii }
         """
         if not self.rego_content:
-            return OPADecision(allowed=False, query=query, source="fallback", error="No rego content")
+            return OPADecision(
+                allowed=False, query=query, source="fallback", error="No rego content"
+            )
 
         # Determine what we're querying
         target_rule = query.split(".")[-1]  # e.g., "allow" from "data.agentmesh.allow"
@@ -298,7 +310,7 @@ class OPAEvaluator:
             if stripped.startswith(f"{target_rule} {{"):
                 # Single-line rule: allow { input.role == "admin" }
                 if stripped.endswith("}"):
-                    body = stripped[len(target_rule)+2:-1].strip()
+                    body = stripped[len(target_rule) + 2 : -1].strip()
                     if self._eval_rego_condition(body, input_data):
                         result = True
                 else:

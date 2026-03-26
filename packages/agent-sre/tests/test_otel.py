@@ -40,6 +40,7 @@ class _InMemorySpanExporter(SpanExporter):
     def shutdown(self) -> None:
         self._stopped = True
 
+
 from agent_sre.integrations.otel import EventLogger, MetricsExporter, TraceExporter
 from agent_sre.integrations.otel.conventions import (
     METRIC_COST_TOTAL,
@@ -256,10 +257,8 @@ class TestMetricsExporter:
 
     def test_multiple_sli_labels(self, metrics_exporter, metric_reader):
         """Multiple SLIs with different labels don't overwrite each other."""
-        metrics_exporter.record_sli("task_success_rate", 0.98, 0.95, "24h",
-                                     labels={"env": "prod"})
-        metrics_exporter.record_sli("cost_per_task", 0.35, 0.50, "24h",
-                                     labels={"env": "prod"})
+        metrics_exporter.record_sli("task_success_rate", 0.98, 0.95, "24h", labels={"env": "prod"})
+        metrics_exporter.record_sli("cost_per_task", 0.35, 0.50, "24h", labels={"env": "prod"})
 
         data = metric_reader.get_metrics_data()
         sli_count = 0

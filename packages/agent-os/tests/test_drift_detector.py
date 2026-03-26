@@ -24,15 +24,11 @@ def detector():
 
 class TestCompareConfigs:
     def test_identical_configs_no_findings(self, detector):
-        findings = detector.compare_configs(
-            {"a": 1, "b": 2}, {"a": 1, "b": 2}
-        )
+        findings = detector.compare_configs({"a": 1, "b": 2}, {"a": 1, "b": 2})
         assert findings == []
 
     def test_different_value_detected(self, detector):
-        findings = detector.compare_configs(
-            {"max_tokens": 4096}, {"max_tokens": 2048}
-        )
+        findings = detector.compare_configs({"max_tokens": 4096}, {"max_tokens": 2048})
         assert len(findings) == 1
         assert findings[0].drift_type == DriftType.CONFIG_DRIFT
         assert findings[0].field == "max_tokens"
@@ -57,9 +53,7 @@ class TestCompareConfigs:
         assert findings[0].field == "retries"
 
     def test_label_propagates(self, detector):
-        findings = detector.compare_configs(
-            {"x": 1}, {"x": 2}, label="staging-vs-prod"
-        )
+        findings = detector.compare_configs({"x": 1}, {"x": 2}, label="staging-vs-prod")
         assert "staging-vs-prod" in findings[0].source
 
 
@@ -128,17 +122,13 @@ class TestCompareTrustScores:
         assert findings[0].severity == "critical"
 
     def test_missing_score_source(self, detector):
-        findings = detector.compare_trust_scores(
-            {}, {"agent-a": 0.85}, tolerance=0.1
-        )
+        findings = detector.compare_trust_scores({}, {"agent-a": 0.85}, tolerance=0.1)
         assert len(findings) == 1
         assert "missing" in findings[0].message.lower()
         assert "source" in findings[0].message.lower()
 
     def test_missing_score_target(self, detector):
-        findings = detector.compare_trust_scores(
-            {"agent-a": 0.85}, {}, tolerance=0.1
-        )
+        findings = detector.compare_trust_scores({"agent-a": 0.85}, {}, tolerance=0.1)
         assert len(findings) == 1
         assert "missing" in findings[0].message.lower()
         assert "target" in findings[0].message.lower()
@@ -149,18 +139,22 @@ class TestCompareTrustScores:
 
 class TestDetectVersionDrift:
     def test_no_drift_all_same(self, detector):
-        findings = detector.detect_version_drift({
-            "agent-os": "2.1.0",
-            "agent-runtime": "2.1.0",
-        })
+        findings = detector.detect_version_drift(
+            {
+                "agent-os": "2.1.0",
+                "agent-runtime": "2.1.0",
+            }
+        )
         assert findings == []
 
     def test_version_mismatch_detected(self, detector):
-        findings = detector.detect_version_drift({
-            "agent-os": "2.1.0",
-            "agent-runtime": "2.1.0",
-            "agent-mesh": "1.9.0",
-        })
+        findings = detector.detect_version_drift(
+            {
+                "agent-os": "2.1.0",
+                "agent-runtime": "2.1.0",
+                "agent-mesh": "1.9.0",
+            }
+        )
         assert len(findings) == 1
         assert findings[0].drift_type == DriftType.VERSION_DRIFT
         assert findings[0].actual == "1.9.0"
@@ -175,52 +169,60 @@ class TestDetectVersionDrift:
 
 class TestScan:
     def test_scan_two_sources(self, detector):
-        report = detector.scan([
-            {
-                "label": "staging",
-                "config": {"max_tokens": 4096, "timeout": 300},
-                "policies": {"allow_write": True},
-            },
-            {
-                "label": "production",
-                "config": {"max_tokens": 2048, "timeout": 300},
-                "policies": {"allow_write": True},
-            },
-        ])
+        report = detector.scan(
+            [
+                {
+                    "label": "staging",
+                    "config": {"max_tokens": 4096, "timeout": 300},
+                    "policies": {"allow_write": True},
+                },
+                {
+                    "label": "production",
+                    "config": {"max_tokens": 2048, "timeout": 300},
+                    "policies": {"allow_write": True},
+                },
+            ]
+        )
         assert isinstance(report, DriftReport)
         assert report.sources_scanned == 2
         assert len(report.findings) >= 1
         assert report.scanned_at  # non-empty timestamp
 
     def test_scan_with_trust_scores(self, detector):
-        report = detector.scan([
-            {
-                "label": "env-a",
-                "trust_scores": {"agent-1": 0.9},
-            },
-            {
-                "label": "env-b",
-                "trust_scores": {"agent-1": 0.5},
-            },
-        ])
+        report = detector.scan(
+            [
+                {
+                    "label": "env-a",
+                    "trust_scores": {"agent-1": 0.9},
+                },
+                {
+                    "label": "env-b",
+                    "trust_scores": {"agent-1": 0.5},
+                },
+            ]
+        )
         assert len(report.findings) >= 1
         assert any(f.drift_type == DriftType.TRUST_DRIFT for f in report.findings)
 
     def test_scan_with_version_drift(self, detector):
-        report = detector.scan([
-            {
-                "label": "env-a",
-                "components": {"agent-os": "2.1.0", "agent-runtime": "2.0.0"},
-            },
-        ])
+        report = detector.scan(
+            [
+                {
+                    "label": "env-a",
+                    "components": {"agent-os": "2.1.0", "agent-runtime": "2.0.0"},
+                },
+            ]
+        )
         assert len(report.findings) >= 1
         assert any(f.drift_type == DriftType.VERSION_DRIFT for f in report.findings)
 
     def test_scan_summary_format(self, detector):
-        report = detector.scan([
-            {"label": "a", "config": {"x": 1}},
-            {"label": "b", "config": {"x": 2}},
-        ])
+        report = detector.scan(
+            [
+                {"label": "a", "config": {"x": 1}},
+                {"label": "b", "config": {"x": 2}},
+            ]
+        )
         assert "finding" in report.summary.lower()
 
     def test_scan_empty_sources(self, detector):
@@ -235,8 +237,10 @@ class TestScan:
 class TestToMarkdown:
     def test_no_findings_shows_check(self, detector):
         report = DriftReport(
-            findings=[], scanned_at="2025-01-01T00:00:00Z",
-            sources_scanned=2, summary="0 finding(s)",
+            findings=[],
+            scanned_at="2025-01-01T00:00:00Z",
+            sources_scanned=2,
+            summary="0 finding(s)",
         )
         md = detector.to_markdown(report)
         assert "No drift detected" in md

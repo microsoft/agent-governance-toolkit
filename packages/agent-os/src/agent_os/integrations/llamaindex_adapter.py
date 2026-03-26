@@ -47,7 +47,7 @@ class LlamaIndexKernel(BaseIntegration):
         - stream_chat()
         - retrieve()
         """
-        agent_id = getattr(agent, 'name', None) or f"llamaindex-{id(agent)}"
+        agent_id = getattr(agent, "name", None) or f"llamaindex-{id(agent)}"
         ctx = self.create_context(agent_id)
 
         self._wrapped_agents[id(agent)] = agent
@@ -67,9 +67,7 @@ class LlamaIndexKernel(BaseIntegration):
 
             def _check_stopped(self):
                 if kernel._stopped.get(self._agent_id):
-                    raise PolicyViolationError(
-                        f"Agent '{self._agent_id}' is stopped (SIGSTOP)"
-                    )
+                    raise PolicyViolationError(f"Agent '{self._agent_id}' is stopped (SIGSTOP)")
 
             def query(self, query_str: Any, **kwargs) -> Any:
                 """Governed query"""

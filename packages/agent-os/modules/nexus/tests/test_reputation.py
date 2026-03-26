@@ -12,7 +12,7 @@ _nexus_parent = os.path.join(os.path.dirname(__file__), "..", "..")
 if _nexus_parent not in sys.path:
     sys.path.insert(0, _nexus_parent)
 
-from nexus.reputation import ReputationEngine, ReputationHistory, TrustScore, TrustTier, SlashEvent
+from nexus.reputation import ReputationHistory, TrustScore, TrustTier
 
 
 class TestTrustTier:
@@ -54,22 +54,34 @@ class TestTrustScoreMeetsThreshold:
 
     def test_meets_when_equal(self):
         ts = TrustScore(
-            agent_did="did:nexus:a", total_score=500, tier=TrustTier.STANDARD,
-            base_score=400, behavioral_modifier=100, capability_modifier=0,
+            agent_did="did:nexus:a",
+            total_score=500,
+            tier=TrustTier.STANDARD,
+            base_score=400,
+            behavioral_modifier=100,
+            capability_modifier=0,
         )
         assert ts.meets_threshold(500) is True
 
     def test_meets_when_above(self):
         ts = TrustScore(
-            agent_did="did:nexus:a", total_score=700, tier=TrustTier.TRUSTED,
-            base_score=600, behavioral_modifier=100, capability_modifier=0,
+            agent_did="did:nexus:a",
+            total_score=700,
+            tier=TrustTier.TRUSTED,
+            base_score=600,
+            behavioral_modifier=100,
+            capability_modifier=0,
         )
         assert ts.meets_threshold(500) is True
 
     def test_fails_when_below(self):
         ts = TrustScore(
-            agent_did="did:nexus:a", total_score=300, tier=TrustTier.PROBATIONARY,
-            base_score=300, behavioral_modifier=0, capability_modifier=0,
+            agent_did="did:nexus:a",
+            total_score=300,
+            tier=TrustTier.PROBATIONARY,
+            base_score=300,
+            behavioral_modifier=0,
+            capability_modifier=0,
         )
         assert ts.meets_threshold(500) is False
 
@@ -79,7 +91,10 @@ class TestReputationHistory:
 
     def test_success_rate_with_tasks(self):
         h = ReputationHistory(
-            agent_did="did:nexus:a", successful_tasks=8, failed_tasks=2, total_tasks=10,
+            agent_did="did:nexus:a",
+            successful_tasks=8,
+            failed_tasks=2,
+            total_tasks=10,
         )
         assert h.success_rate == pytest.approx(0.8)
 
@@ -89,7 +104,9 @@ class TestReputationHistory:
 
     def test_dispute_win_rate_with_disputes(self):
         h = ReputationHistory(
-            agent_did="did:nexus:a", disputes_won=3, disputes_lost=1,
+            agent_did="did:nexus:a",
+            disputes_won=3,
+            disputes_lost=1,
         )
         assert h.dispute_win_rate == pytest.approx(0.75)
 
@@ -123,21 +140,26 @@ class TestCalculateTrustScore:
 
     def test_successful_tasks_increase_score(self, reputation_engine):
         history = ReputationHistory(
-            agent_did="did:nexus:a", successful_tasks=50, total_tasks=50,
+            agent_did="did:nexus:a",
+            successful_tasks=50,
+            total_tasks=50,
         )
         score = reputation_engine.calculate_trust_score("registered", history)
         assert score.behavioral_modifier > 0
 
     def test_failed_tasks_decrease_score(self, reputation_engine):
         history = ReputationHistory(
-            agent_did="did:nexus:a", failed_tasks=10, total_tasks=10,
+            agent_did="did:nexus:a",
+            failed_tasks=10,
+            total_tasks=10,
         )
         score = reputation_engine.calculate_trust_score("registered", history)
         assert score.behavioral_modifier < 0
 
     def test_disputes_lost_reduce_score(self, reputation_engine):
         history = ReputationHistory(
-            agent_did="did:nexus:a", disputes_lost=3,
+            agent_did="did:nexus:a",
+            disputes_lost=3,
         )
         score = reputation_engine.calculate_trust_score("registered", history)
         assert score.behavioral_modifier < 0
@@ -145,29 +167,38 @@ class TestCalculateTrustScore:
     def test_capability_modifier_idempotency(self, reputation_engine):
         history = ReputationHistory(agent_did="did:nexus:a")
         score = reputation_engine.calculate_trust_score(
-            "registered", history, capabilities={"idempotency": True},
+            "registered",
+            history,
+            capabilities={"idempotency": True},
         )
         assert score.capability_modifier >= 20
 
     def test_capability_modifier_reversibility_full(self, reputation_engine):
         history = ReputationHistory(agent_did="did:nexus:a")
         score = reputation_engine.calculate_trust_score(
-            "registered", history, capabilities={"reversibility": "full"},
+            "registered",
+            history,
+            capabilities={"reversibility": "full"},
         )
         assert score.capability_modifier >= 50
 
     def test_privacy_ephemeral_boost(self, reputation_engine):
         history = ReputationHistory(agent_did="did:nexus:a")
         score = reputation_engine.calculate_trust_score(
-            "registered", history, privacy={"retention_policy": "ephemeral"},
+            "registered",
+            history,
+            privacy={"retention_policy": "ephemeral"},
         )
         assert score.capability_modifier >= 30
 
     def test_score_clamped_to_0_1000(self, reputation_engine):
         # Very bad history
         history = ReputationHistory(
-            agent_did="did:nexus:a", failed_tasks=100, total_tasks=100,
-            disputes_lost=10, times_slashed=10,
+            agent_did="did:nexus:a",
+            failed_tasks=100,
+            total_tasks=100,
+            disputes_lost=10,
+            times_slashed=10,
         )
         score = reputation_engine.calculate_trust_score("unknown", history)
         assert 0 <= score.total_score <= 1000
@@ -223,25 +254,33 @@ class TestSlashReputation:
 
     def test_critical_slash_penalty(self, reputation_engine):
         event = reputation_engine.slash_reputation(
-            "did:nexus:a", reason="fraud", severity="critical",
+            "did:nexus:a",
+            reason="fraud",
+            severity="critical",
         )
         assert event.score_reduction == 200
 
     def test_high_slash_penalty(self, reputation_engine):
         event = reputation_engine.slash_reputation(
-            "did:nexus:a", reason="hallucination", severity="high",
+            "did:nexus:a",
+            reason="hallucination",
+            severity="high",
         )
         assert event.score_reduction == 100
 
     def test_medium_slash_penalty(self, reputation_engine):
         event = reputation_engine.slash_reputation(
-            "did:nexus:a", reason="timeout", severity="medium",
+            "did:nexus:a",
+            reason="timeout",
+            severity="medium",
         )
         assert event.score_reduction == 50
 
     def test_low_slash_penalty(self, reputation_engine):
         event = reputation_engine.slash_reputation(
-            "did:nexus:a", reason="policy_violation", severity="low",
+            "did:nexus:a",
+            reason="policy_violation",
+            severity="low",
         )
         assert event.score_reduction == 25
 
@@ -253,22 +292,30 @@ class TestSlashReputation:
 
     def test_slash_with_evidence(self, reputation_engine):
         event = reputation_engine.slash_reputation(
-            "did:nexus:a", reason="fraud", severity="high",
-            evidence_hash="ev_hash_123", trace_id="trace_456",
+            "did:nexus:a",
+            reason="fraud",
+            severity="high",
+            evidence_hash="ev_hash_123",
+            trace_id="trace_456",
         )
         assert event.evidence_hash == "ev_hash_123"
         assert event.trace_id == "trace_456"
 
     def test_slash_broadcast_flag(self, reputation_engine):
         event = reputation_engine.slash_reputation(
-            "did:nexus:a", reason="fraud", severity="high", broadcast=False,
+            "did:nexus:a",
+            reason="fraud",
+            severity="high",
+            broadcast=False,
         )
         assert event.broadcast_to_network is False
         assert event.broadcast_at is None
 
     def test_slash_score_after_not_negative(self, reputation_engine):
         event = reputation_engine.slash_reputation(
-            "did:nexus:a", reason="fraud", severity="critical",
+            "did:nexus:a",
+            reason="fraud",
+            severity="critical",
         )
         assert event.score_after >= 0
 

@@ -70,7 +70,7 @@ For tools that need to validate policy definitions, use this JSON Schema:
           "default": 60
         },
         "max_requests_per_hour": {
-          "type": "integer", 
+          "type": "integer",
           "minimum": 0,
           "default": 1000
         },
@@ -389,7 +389,7 @@ PolicyEngine includes built-in safety checks that are always active:
 
 ```python
 from agent_control_plane.policy_engine import (
-    PolicyEngine, Condition, ConditionalPermission, 
+    PolicyEngine, Condition, ConditionalPermission,
     ResourceQuota, RiskPolicy
 )
 from agent_control_plane.agent_kernel import ActionType
@@ -460,18 +460,18 @@ def load_yaml_policies(path: str, engine: PolicyEngine):
     """Convert YAML security config to PolicyEngine calls."""
     with open(path) as f:
         config = yaml.safe_load(f)
-    
+
     for policy in config.get("policies", []):
         action = policy["action"]
         effect = policy.get("effect", "allow")
-        
+
         if effect == "deny":
             # Don't add to allow-list (implicit deny)
             continue
-        
+
         # Add to default allow-list
         engine.add_constraint("default", [action])
-        
+
         # Add rate limits if specified
         if "rate_limit" in policy:
             count, period = policy["rate_limit"].split("/")

@@ -7,15 +7,16 @@ Every agent gets a unique, cryptographically bound identity issued by AgentMesh 
 Identity persists across restarts; revocation propagates in ≤5s.
 """
 
-from datetime import datetime
-from typing import ClassVar, Optional, Literal
-from pydantic import BaseModel, Field, field_validator
-from cryptography.hazmat.primitives.asymmetric import ed25519
-from cryptography.hazmat.primitives import serialization
+import base64
 import hashlib
 import logging
 import uuid
-import base64
+from datetime import datetime
+from typing import ClassVar, Literal
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
+from pydantic import BaseModel, Field, field_validator
 
 from agentmesh.exceptions import IdentityError
 
@@ -33,7 +34,7 @@ class AgentDID(BaseModel):
     unique_id: str = Field(..., description="Unique identifier within the mesh")
 
     @classmethod
-    def generate(cls, name: str, org: Optional[str] = None) -> "AgentDID":
+    def generate(cls, name: str, org: str | None = None) -> "AgentDID":
         """Generate a new DID for an agent."""
         # Create deterministic but unique ID
         seed = f"{name}:{org or 'default'}:{uuid.uuid4().hex[:8]}"
@@ -68,7 +69,7 @@ class AgentIdentity(BaseModel):
 
     did: AgentDID = Field(..., description="Decentralized identifier")
     name: str = Field(..., description="Human-readable agent name")
-    description: Optional[str] = Field(None, description="Agent description")
+    description: str | None = Field(None, description="Agent description")
 
     # Cryptographic identity
     public_key: str = Field(..., description="Ed25519 public key (base64)")
@@ -79,8 +80,8 @@ class AgentIdentity(BaseModel):
     sponsor_verified: bool = Field(default=False, description="Whether sponsor is verified")
 
     # Organization
-    organization: Optional[str] = Field(None, description="Organization name")
-    organization_id: Optional[str] = Field(None, description="Organization identifier")
+    organization: str | None = Field(None, description="Organization name")
+    organization_id: str | None = Field(None, description="Organization identifier")
 
     # Capabilities (what this agent is allowed to do)
     capabilities: list[str] = Field(default_factory=list)
@@ -88,23 +89,23 @@ class AgentIdentity(BaseModel):
     # Metadata
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    expires_at: Optional[datetime] = Field(None, description="Identity expiration")
+    expires_at: datetime | None = Field(None, description="Identity expiration")
 
     # Status
     status: Literal["active", "suspended", "revoked"] = Field(default="active")
-    revocation_reason: Optional[str] = Field(None)
+    revocation_reason: str | None = Field(None)
 
     # Delegation
-    parent_did: Optional[str] = Field(None, description="Parent agent DID if delegated")
+    parent_did: str | None = Field(None, description="Parent agent DID if delegated")
     delegation_depth: int = Field(default=0, ge=0, description="Depth in scope chain")
-    max_initial_trust_score: Optional[int] = Field(
+    max_initial_trust_score: int | None = Field(
         None,
         description="Lineage-bound trust cap: child's initial trust score "
         "cannot exceed this value (Invariant 6 — Sybil resistance)",
     )
 
     # Private key stored separately (not serialized)
-    _private_key: Optional[ed25519.Ed25519PrivateKey] = None
+    _private_key: ed25519.Ed25519PrivateKey | None = None
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -133,11 +134,9 @@ class AgentIdentity(BaseModel):
 
     @field_validator("parent_did")
     @classmethod
-    def validate_parent_did(cls, v: Optional[str]) -> Optional[str]:
+    def validate_parent_did(cls, v: str | None) -> str | None:
         if v is not None and not v.startswith("did:mesh:"):
-            raise IdentityError(
-                f"Parent DID must match 'did:mesh:' pattern, got: {v}"
-            )
+            raise IdentityError(f"Parent DID must match 'did:mesh:' pattern, got: {v}")
         return v
 
     @classmethod
@@ -145,9 +144,9 @@ class AgentIdentity(BaseModel):
         cls,
         name: str,
         sponsor: str,
-        capabilities: Optional[list[str]] = None,
-        organization: Optional[str] = None,
-        description: Optional[str] = None,
+        capabilities: list[str] | None = None,
+        organization: str | None = None,
+        description: str | None = None,
     ) -> "AgentIdentity":
         """
         Create a new agent identity.
@@ -224,8 +223,8 @@ class AgentIdentity(BaseModel):
         self,
         name: str,
         capabilities: list[str],
-        description: Optional[str] = None,
-        max_initial_trust_score: Optional[int] = None,
+        description: str | None = None,
+        max_initial_trust_score: int | None = None,
     ) -> "AgentIdentity":
         """
         Delegate to a child agent with narrowed capabilities.
@@ -448,7 +447,7 @@ class IdentityRegistry:
             self._by_sponsor[identity.sponsor_email] = []
         self._by_sponsor[identity.sponsor_email].append(did_str)
 
-    def get(self, did: str | AgentDID) -> Optional[AgentIdentity]:
+    def get(self, did: str | AgentDID) -> AgentIdentity | None:
         """Get an identity by DID."""
         did_str = str(did) if isinstance(did, AgentDID) else did
         return self._identities.get(did_str)

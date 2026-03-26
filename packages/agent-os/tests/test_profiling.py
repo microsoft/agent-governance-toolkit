@@ -34,9 +34,13 @@ class TestProfilingReport:
         assert "No profiling data" in r.format_report()
 
     def test_format_report(self):
-        r = ProfilingReport(methods={
-            "a": MethodStats(name="a", call_count=2, total_time_ms=10.0, min_time_ms=4.0, max_time_ms=6.0),
-        })
+        r = ProfilingReport(
+            methods={
+                "a": MethodStats(
+                    name="a", call_count=2, total_time_ms=10.0, min_time_ms=4.0, max_time_ms=6.0
+                ),
+            }
+        )
         text = r.format_report()
         assert "a" in text
         assert "TOTAL" in text

@@ -9,7 +9,7 @@ import pytest
 
 class TestSCAK:
     """Test self-correcting-agent-kernel package."""
-    
+
     def test_import_scak(self):
         """Test basic import."""
         try:
@@ -18,37 +18,42 @@ class TestSCAK:
                 diagnose_failure,
                 triage_failure,
             )
+
             assert SelfCorrectingAgentKernel is not None
         except ImportError:
             pytest.skip("scak not fully installed")
-    
+
     def test_import_failure_models(self):
         """Test importing failure models from scak."""
         try:
-            from agent_kernel.models import FailureType, FailureSeverity
+            from agent_kernel.models import FailureSeverity, FailureType
+
             assert FailureType is not None
             assert FailureSeverity is not None
         except ImportError:
             # May use agent_primitives instead
-            from agent_primitives import FailureType, FailureSeverity
+            from agent_primitives import FailureSeverity, FailureType
+
             assert FailureType is not None
 
 
 class TestMuteAgent:
     """Test mute-agent package."""
-    
+
     def test_import_mute_agent(self):
         """Test basic import."""
         try:
             from mute_agent import MuteAgent
+
             assert MuteAgent is not None
         except ImportError:
             pytest.skip("mute-agent not installed")
-    
+
     def test_import_core_components(self):
         """Test importing core components."""
         try:
-            from mute_agent.core import ReasoningAgent, ExecutionAgent
+            from mute_agent.core import ExecutionAgent, ReasoningAgent
+
             assert ReasoningAgent is not None
             assert ExecutionAgent is not None
         except ImportError:
@@ -62,6 +67,7 @@ class TestMuteAgent:
 
 try:
     from agent_kernel import SelfCorrectingAgentKernel
+
     HAS_SCAK = True
 except ImportError:
     HAS_SCAK = False

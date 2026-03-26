@@ -16,13 +16,13 @@
       --accent-red: #f14c4c;
       --border-color: #404040;
     }
-    
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
     }
-    
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 12px;
@@ -31,13 +31,13 @@
       height: 100vh;
       overflow: hidden;
     }
-    
+
     .container {
       display: flex;
       flex-direction: column;
       height: 100%;
     }
-    
+
     /* Header */
     .header {
       display: flex;
@@ -47,7 +47,7 @@
       background: var(--bg-secondary);
       border-bottom: 1px solid var(--border-color);
     }
-    
+
     .header h1 {
       font-size: 14px;
       font-weight: 600;
@@ -55,36 +55,36 @@
       align-items: center;
       gap: 8px;
     }
-    
+
     .header h1 .icon {
       font-size: 16px;
     }
-    
+
     .status {
       display: flex;
       align-items: center;
       gap: 6px;
       font-size: 11px;
     }
-    
+
     .status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
       background: var(--accent-green);
     }
-    
+
     .status-dot.disconnected {
       background: var(--accent-red);
     }
-    
+
     /* Tabs */
     .tabs {
       display: flex;
       background: var(--bg-secondary);
       border-bottom: 1px solid var(--border-color);
     }
-    
+
     .tab {
       padding: 8px 16px;
       cursor: pointer;
@@ -92,65 +92,65 @@
       color: var(--text-secondary);
       transition: all 0.2s;
     }
-    
+
     .tab:hover {
       color: var(--text-primary);
       background: var(--bg-tertiary);
     }
-    
+
     .tab.active {
       color: var(--accent-blue);
       border-bottom-color: var(--accent-blue);
     }
-    
+
     /* Content */
     .content {
       flex: 1;
       overflow: hidden;
       display: flex;
     }
-    
+
     .panel {
       display: none;
       flex: 1;
       overflow: auto;
       padding: 12px;
     }
-    
+
     .panel.active {
       display: block;
     }
-    
+
     /* Message List */
     .message-list {
       display: flex;
       flex-direction: column;
       gap: 8px;
     }
-    
+
     .message-item {
       background: var(--bg-secondary);
       border: 1px solid var(--border-color);
       border-radius: 4px;
       padding: 10px;
     }
-    
+
     .message-header {
       display: flex;
       justify-content: space-between;
       margin-bottom: 8px;
     }
-    
+
     .message-type {
       font-weight: 600;
       color: var(--accent-blue);
     }
-    
+
     .message-time {
       color: var(--text-secondary);
       font-size: 11px;
     }
-    
+
     .message-body {
       font-family: 'Consolas', 'Monaco', monospace;
       font-size: 11px;
@@ -160,7 +160,7 @@
       overflow-x: auto;
       white-space: pre;
     }
-    
+
     .message-meta {
       display: flex;
       gap: 12px;
@@ -168,7 +168,7 @@
       font-size: 11px;
       color: var(--text-secondary);
     }
-    
+
     /* Agent Network */
     .network-canvas {
       width: 100%;
@@ -176,48 +176,48 @@
       background: var(--bg-secondary);
       border-radius: 4px;
     }
-    
+
     /* Trust Table */
     .trust-table {
       width: 100%;
       border-collapse: collapse;
     }
-    
+
     .trust-table th,
     .trust-table td {
       padding: 8px 12px;
       text-align: left;
       border-bottom: 1px solid var(--border-color);
     }
-    
+
     .trust-table th {
       background: var(--bg-secondary);
       font-weight: 600;
       color: var(--text-secondary);
     }
-    
+
     .trust-level {
       padding: 2px 8px;
       border-radius: 3px;
       font-size: 11px;
       font-weight: 600;
     }
-    
+
     .trust-level.high {
       background: rgba(78, 201, 176, 0.2);
       color: var(--accent-green);
     }
-    
+
     .trust-level.medium {
       background: rgba(220, 220, 170, 0.2);
       color: var(--accent-yellow);
     }
-    
+
     .trust-level.low {
       background: rgba(241, 76, 76, 0.2);
       color: var(--accent-red);
     }
-    
+
     /* Stats Cards */
     .stats-grid {
       display: grid;
@@ -225,45 +225,45 @@
       gap: 12px;
       margin-bottom: 16px;
     }
-    
+
     .stat-card {
       background: var(--bg-secondary);
       border: 1px solid var(--border-color);
       border-radius: 4px;
       padding: 12px;
     }
-    
+
     .stat-label {
       color: var(--text-secondary);
       font-size: 11px;
       margin-bottom: 4px;
     }
-    
+
     .stat-value {
       font-size: 24px;
       font-weight: 600;
       color: var(--accent-blue);
     }
-    
+
     .stat-value.success {
       color: var(--accent-green);
     }
-    
+
     .stat-value.warning {
       color: var(--accent-yellow);
     }
-    
+
     .stat-value.danger {
       color: var(--accent-red);
     }
-    
+
     /* Toolbar */
     .toolbar {
       display: flex;
       gap: 8px;
       margin-bottom: 12px;
     }
-    
+
     .toolbar button {
       background: var(--bg-secondary);
       border: 1px solid var(--border-color);
@@ -273,11 +273,11 @@
       cursor: pointer;
       font-size: 12px;
     }
-    
+
     .toolbar button:hover {
       background: var(--bg-tertiary);
     }
-    
+
     .toolbar input {
       flex: 1;
       background: var(--bg-secondary);
@@ -287,18 +287,18 @@
       border-radius: 3px;
       font-size: 12px;
     }
-    
+
     .toolbar input::placeholder {
       color: var(--text-secondary);
     }
-    
+
     /* Empty State */
     .empty-state {
       text-align: center;
       padding: 40px;
       color: var(--text-secondary);
     }
-    
+
     .empty-state .icon {
       font-size: 48px;
       margin-bottom: 16px;
@@ -318,7 +318,7 @@
         <span id="connectionText">Connected</span>
       </div>
     </div>
-    
+
     <!-- Tabs -->
     <div class="tabs">
       <div class="tab active" data-tab="messages">AMB Messages</div>
@@ -326,7 +326,7 @@
       <div class="tab" data-tab="network">Agent Network</div>
       <div class="tab" data-tab="stats">Statistics</div>
     </div>
-    
+
     <!-- Content -->
     <div class="content">
       <!-- AMB Messages Panel -->
@@ -344,7 +344,7 @@
           </div>
         </div>
       </div>
-      
+
       <!-- IATP Trust Panel -->
       <div class="panel" id="trust">
         <div class="toolbar">
@@ -368,7 +368,7 @@
           </tbody>
         </table>
       </div>
-      
+
       <!-- Agent Network Panel -->
       <div class="panel" id="network">
         <div class="toolbar">
@@ -378,7 +378,7 @@
         </div>
         <canvas class="network-canvas" id="networkCanvas"></canvas>
       </div>
-      
+
       <!-- Statistics Panel -->
       <div class="panel" id="stats">
         <div class="stats-grid">
@@ -410,7 +410,7 @@
       </div>
     </div>
   </div>
-  
+
   <script src="panel.js"></script>
 </body>
 </html>

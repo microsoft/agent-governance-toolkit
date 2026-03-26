@@ -6,20 +6,22 @@ Trust Handshake
 Ed25519 challenge/response handshake with registry-backed identity verification.
 """
 
-from datetime import datetime, timedelta
-from typing import Any, Optional, Literal
-from pydantic import BaseModel, Field
+import asyncio
 import logging
 import secrets
-import asyncio
+from datetime import datetime, timedelta
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
+
 from agentmesh.constants import (
     TIER_TRUSTED_THRESHOLD,
     TIER_VERIFIED_PARTNER_THRESHOLD,
     TRUST_SCORE_DEFAULT,
 )
+from agentmesh.exceptions import HandshakeError, HandshakeTimeoutError
 from agentmesh.identity.agent_id import AgentIdentity, IdentityRegistry
 from agentmesh.identity.delegation import UserContext
-from agentmesh.exceptions import HandshakeError, HandshakeTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +64,7 @@ class HandshakeResponse(BaseModel):
     public_key: str
 
     # User context for OBO flows
-    user_context: Optional[dict] = Field(None, description="End-user context for OBO flows")
+    user_context: dict | None = Field(None, description="End-user context for OBO flows")
 
     # Metadata
     timestamp: datetime = Field(default_factory=datetime.utcnow)
@@ -73,7 +75,7 @@ class HandshakeResult(BaseModel):
 
     verified: bool
     peer_did: str
-    peer_name: Optional[str] = None
+    peer_name: str | None = None
 
     # Trust details
     trust_score: int = Field(default=0, ge=0, le=1000)
@@ -83,15 +85,17 @@ class HandshakeResult(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
 
     # User context (propagated from OBO flow)
-    user_context: Optional[UserContext] = Field(None, description="End-user context if acting on behalf of a user")
+    user_context: UserContext | None = Field(
+        None, description="End-user context if acting on behalf of a user"
+    )
 
     # Timing
     handshake_started: datetime = Field(default_factory=datetime.utcnow)
-    handshake_completed: Optional[datetime] = None
-    latency_ms: Optional[int] = None
+    handshake_completed: datetime | None = None
+    latency_ms: int | None = None
 
     # Rejection reason (if not verified)
-    rejection_reason: Optional[str] = None
+    rejection_reason: str | None = None
 
     @classmethod
     def success(
@@ -99,9 +103,9 @@ class HandshakeResult(BaseModel):
         peer_did: str,
         trust_score: int,
         capabilities: list[str],
-        peer_name: Optional[str] = None,
-        started: Optional[datetime] = None,
-        user_context: Optional[UserContext] = None,
+        peer_name: str | None = None,
+        started: datetime | None = None,
+        user_context: UserContext | None = None,
     ) -> "HandshakeResult":
         """Create a successful handshake result."""
         now = datetime.utcnow()
@@ -135,7 +139,7 @@ class HandshakeResult(BaseModel):
         cls,
         peer_did: str,
         reason: str,
-        started: Optional[datetime] = None,
+        started: datetime | None = None,
     ) -> "HandshakeResult":
         """Create a failed handshake result."""
         now = datetime.utcnow()
@@ -174,25 +178,21 @@ class TrustHandshake:
     def __init__(
         self,
         agent_did: str,
-        identity: Optional[AgentIdentity] = None,
-        registry: Optional[IdentityRegistry] = None,
+        identity: AgentIdentity | None = None,
+        registry: IdentityRegistry | None = None,
         cache_ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     ):
         if not agent_did or not agent_did.strip():
             raise HandshakeError("agent_did must not be empty")
         if not agent_did.startswith("did:mesh:"):
-            raise HandshakeError(
-                f"agent_did must match 'did:mesh:' pattern, got: {agent_did}"
-            )
+            raise HandshakeError(f"agent_did must match 'did:mesh:' pattern, got: {agent_did}")
         if cache_ttl_seconds < 0:
             raise HandshakeError(
                 f"cache_ttl_seconds must be non-negative, got: {cache_ttl_seconds}"
             )
         if timeout_seconds <= 0:
-            raise ValueError(
-                f"timeout_seconds must be positive, got: {timeout_seconds}"
-            )
+            raise ValueError(f"timeout_seconds must be positive, got: {timeout_seconds}")
         self.agent_did = agent_did
         self.identity = identity
         self.registry = registry
@@ -203,7 +203,7 @@ class TrustHandshake:
         # V10: Limit pending challenges to prevent DoS accumulation
         self._max_pending_challenges = 1000
 
-    def _get_cached_result(self, peer_did: str) -> Optional[HandshakeResult]:
+    def _get_cached_result(self, peer_did: str) -> HandshakeResult | None:
         """Get cached verification result if still valid."""
         if peer_did in self._verified_peers:
             result, timestamp = self._verified_peers[peer_did]
@@ -218,10 +218,7 @@ class TrustHandshake:
 
     def _purge_expired_challenges(self) -> None:
         """Remove expired challenges to prevent unbounded growth."""
-        expired = [
-            cid for cid, ch in self._pending_challenges.items()
-            if ch.is_expired()
-        ]
+        expired = [cid for cid, ch in self._pending_challenges.items() if ch.is_expired()]
         for cid in expired:
             del self._pending_challenges[cid]
 
@@ -234,7 +231,7 @@ class TrustHandshake:
         peer_did: str,
         protocol: str = "iatp",
         required_trust_score: int = 700,
-        required_capabilities: Optional[list[str]] = None,
+        required_capabilities: list[str] | None = None,
         use_cache: bool = True,
     ) -> HandshakeResult:
         """
@@ -253,26 +250,24 @@ class TrustHandshake:
                 timeout=self.timeout_seconds,
             )
             return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise HandshakeTimeoutError(
                 f"Handshake with {peer_did} exceeded {self.timeout_seconds}s timeout"
             )
         except HandshakeTimeoutError:
             raise
         except Exception as e:
-            return HandshakeResult.failure(
-                peer_did, f"Handshake error: {str(e)}", start
-            )
+            return HandshakeResult.failure(peer_did, f"Handshake error: {str(e)}", start)
 
     async def _do_initiate(
         self,
         peer_did: str,
         required_trust_score: int,
-        required_capabilities: Optional[list[str]],
+        required_capabilities: list[str] | None,
         start: datetime,
     ) -> HandshakeResult:
         """Execute the core handshake: generate nonce, verify it comes back."""
-        challenge: Optional[HandshakeChallenge] = None
+        challenge: HandshakeChallenge | None = None
         try:
             # V10: Purge expired challenges and enforce limit
             self._purge_expired_challenges()
@@ -289,9 +284,7 @@ class TrustHandshake:
             response = await self._get_peer_response(peer_did, challenge)
 
             if not response:
-                return HandshakeResult.failure(
-                    peer_did, "No response from peer", start
-                )
+                return HandshakeResult.failure(peer_did, "No response from peer", start)
 
             # Verify nonce and basic checks
             verification = await self._verify_response(
@@ -299,9 +292,7 @@ class TrustHandshake:
             )
 
             if not verification["valid"]:
-                return HandshakeResult.failure(
-                    peer_did, verification["reason"], start
-                )
+                return HandshakeResult.failure(peer_did, verification["reason"], start)
 
             response_user_ctx = None
             if response.user_context:
@@ -327,8 +318,8 @@ class TrustHandshake:
         my_capabilities: list[str],
         my_trust_score: int,
         private_key: Any = None,
-        identity: Optional[AgentIdentity] = None,
-        user_context: Optional[UserContext] = None,
+        identity: AgentIdentity | None = None,
+        user_context: UserContext | None = None,
     ) -> HandshakeResponse:
         """Respond to a trust handshake challenge with an Ed25519 signature.
 
@@ -342,8 +333,7 @@ class TrustHandshake:
         agent_identity = identity or self.identity
         if not agent_identity:
             raise HandshakeError(
-                "Identity required for handshake response — "
-                "cannot sign without Ed25519 private key"
+                "Identity required for handshake response — cannot sign without Ed25519 private key"
             )
 
         response_nonce = secrets.token_hex(16)
@@ -367,7 +357,7 @@ class TrustHandshake:
         self,
         peer_did: str,
         challenge: HandshakeChallenge,
-    ) -> Optional[HandshakeResponse]:
+    ) -> HandshakeResponse | None:
         """Resolve peer identity from registry and produce a signed response.
 
         Returns ``None`` (causing handshake failure) when:
@@ -411,7 +401,7 @@ class TrustHandshake:
         response: HandshakeResponse,
         challenge: HandshakeChallenge,
         required_score: int,
-        required_capabilities: Optional[list[str]],
+        required_capabilities: list[str] | None,
     ) -> dict:
         """Verify handshake response with Ed25519 signature verification.
 
@@ -459,7 +449,7 @@ class TrustHandshake:
         if response.trust_score < required_score:
             return {
                 "valid": False,
-                "reason": f"Trust score {response.trust_score} below required {required_score}"
+                "reason": f"Trust score {response.trust_score} below required {required_score}",
             }
 
         # V06: Prefer registry trust score over self-reported value
@@ -470,10 +460,7 @@ class TrustHandshake:
         if required_capabilities:
             missing = set(required_capabilities) - set(response.capabilities)
             if missing:
-                return {
-                    "valid": False,
-                    "reason": f"Missing capabilities: {missing}"
-                }
+                return {"valid": False, "reason": f"Missing capabilities: {missing}"}
 
         return {"valid": True, "reason": None, "registry_trust_score": registry_trust_score}
 

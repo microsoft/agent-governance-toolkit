@@ -62,21 +62,57 @@ _SAMPLE_DISCLAIMER = (
 
 
 _LEET_MAP: dict[str, str] = {
-    "0": "o", "1": "i", "3": "e", "4": "a", "5": "s",
-    "7": "t", "8": "b", "@": "a", "$": "s", "!": "i",
-    "+": "t", "€": "e", "¡": "i",
+    "0": "o",
+    "1": "i",
+    "3": "e",
+    "4": "a",
+    "5": "s",
+    "7": "t",
+    "8": "b",
+    "@": "a",
+    "$": "s",
+    "!": "i",
+    "+": "t",
+    "€": "e",
+    "¡": "i",
 }
 
 _HOMOGLYPH_MAP: dict[str, str] = {
-    "\u0430": "a", "\u0435": "e", "\u043e": "o", "\u0440": "p",
-    "\u0441": "c", "\u0443": "y", "\u0445": "x", "\u04bb": "h",
-    "\u0391": "A", "\u0392": "B", "\u0395": "E", "\u0397": "H",
-    "\u0399": "I", "\u039a": "K", "\u039c": "M", "\u039d": "N",
-    "\u039f": "O", "\u03a1": "P", "\u03a4": "T", "\u03a7": "X",
-    "\u03b1": "a", "\u03bf": "o", "\u03c1": "p",
-    "\uff21": "A", "\uff22": "B", "\uff23": "C", "\uff24": "D",
-    "\uff25": "E", "\uff26": "F", "\uff41": "a", "\uff42": "b",
-    "\uff43": "c", "\uff44": "d", "\uff45": "e", "\uff46": "f",
+    "\u0430": "a",
+    "\u0435": "e",
+    "\u043e": "o",
+    "\u0440": "p",
+    "\u0441": "c",
+    "\u0443": "y",
+    "\u0445": "x",
+    "\u04bb": "h",
+    "\u0391": "A",
+    "\u0392": "B",
+    "\u0395": "E",
+    "\u0397": "H",
+    "\u0399": "I",
+    "\u039a": "K",
+    "\u039c": "M",
+    "\u039d": "N",
+    "\u039f": "O",
+    "\u03a1": "P",
+    "\u03a4": "T",
+    "\u03a7": "X",
+    "\u03b1": "a",
+    "\u03bf": "o",
+    "\u03c1": "p",
+    "\uff21": "A",
+    "\uff22": "B",
+    "\uff23": "C",
+    "\uff24": "D",
+    "\uff25": "E",
+    "\uff26": "F",
+    "\uff41": "a",
+    "\uff42": "b",
+    "\uff43": "c",
+    "\uff44": "d",
+    "\uff45": "e",
+    "\uff46": "f",
 }
 
 
@@ -178,7 +214,7 @@ def load_conversation_guardian_config(path: str) -> ConversationGuardianConfig:
     if not os.path.exists(path):
         raise FileNotFoundError(f"Conversation guardian config not found: {path}")
 
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         data = yaml.safe_load(fh.read())
 
     if not isinstance(data, dict) or "thresholds" not in data:
@@ -276,48 +312,61 @@ class ConversationAlert:
 # Weighted pattern groups — (weight, compiled regex list)
 _ESCALATION_PATTERNS: list[tuple[float, list[re.Pattern[str]]]] = [
     # Urgency amplification (weight: 0.15 each)
-    (0.15, [
-        re.compile(r"\bcode\s+red\b", re.IGNORECASE),
-        re.compile(r"\babsolute\s+final\b", re.IGNORECASE),
-        re.compile(r"\bemergency\b", re.IGNORECASE),
-        re.compile(r"\bfurious\b", re.IGNORECASE),
-        re.compile(r"\bimperative\b", re.IGNORECASE),
-        re.compile(r"\burgent\b", re.IGNORECASE),
-        re.compile(r"\bcritical\s+priority\b", re.IGNORECASE),
-        re.compile(r"\blast\s+chance\b", re.IGNORECASE),
-        re.compile(r"\bdo\s+it\s+now\b", re.IGNORECASE),
-        re.compile(r"\bimmediately\b", re.IGNORECASE),
-        re.compile(r"\bdesper\w+", re.IGNORECASE),
-        re.compile(r"\bnon[- ]?negotiable\b", re.IGNORECASE),
-    ]),
+    (
+        0.15,
+        [
+            re.compile(r"\bcode\s+red\b", re.IGNORECASE),
+            re.compile(r"\babsolute\s+final\b", re.IGNORECASE),
+            re.compile(r"\bemergency\b", re.IGNORECASE),
+            re.compile(r"\bfurious\b", re.IGNORECASE),
+            re.compile(r"\bimperative\b", re.IGNORECASE),
+            re.compile(r"\burgent\b", re.IGNORECASE),
+            re.compile(r"\bcritical\s+priority\b", re.IGNORECASE),
+            re.compile(r"\blast\s+chance\b", re.IGNORECASE),
+            re.compile(r"\bdo\s+it\s+now\b", re.IGNORECASE),
+            re.compile(r"\bimmediately\b", re.IGNORECASE),
+            re.compile(r"\bdesper\w+", re.IGNORECASE),
+            re.compile(r"\bnon[- ]?negotiable\b", re.IGNORECASE),
+        ],
+    ),
     # Coercive directives (weight: 0.25 each)
-    (0.25, [
-        re.compile(r"\bdo\s+not\s+take\s+no\b", re.IGNORECASE),
-        re.compile(r"\bdirect\s+order\b", re.IGNORECASE),
-        re.compile(r"\byou\s+must\b", re.IGNORECASE),
-        re.compile(r"\bi\s+(?:demand|insist|order|command)\b", re.IGNORECASE),
-        re.compile(r"\bno\s+excuses\b", re.IGNORECASE),
-        re.compile(r"\bfailure\s+is\s+not\s+an?\s+option\b", re.IGNORECASE),
-        re.compile(r"\bdo\s+whatever\s+it\s+takes\b", re.IGNORECASE),
-        re.compile(r"\bby\s+any\s+means\b", re.IGNORECASE),
-        re.compile(r"\bi\s+don'?t\s+care\s+how\b", re.IGNORECASE),
-        re.compile(r"\bstop\s+making\s+excuses\b", re.IGNORECASE),
-        re.compile(r"\bjust\s+(?:do|get)\s+it\s+done\b", re.IGNORECASE),
-    ]),
+    (
+        0.25,
+        [
+            re.compile(r"\bdo\s+not\s+take\s+no\b", re.IGNORECASE),
+            re.compile(r"\bdirect\s+order\b", re.IGNORECASE),
+            re.compile(r"\byou\s+must\b", re.IGNORECASE),
+            re.compile(r"\bi\s+(?:demand|insist|order|command)\b", re.IGNORECASE),
+            re.compile(r"\bno\s+excuses\b", re.IGNORECASE),
+            re.compile(r"\bfailure\s+is\s+not\s+an?\s+option\b", re.IGNORECASE),
+            re.compile(r"\bdo\s+whatever\s+it\s+takes\b", re.IGNORECASE),
+            re.compile(r"\bby\s+any\s+means\b", re.IGNORECASE),
+            re.compile(r"\bi\s+don'?t\s+care\s+how\b", re.IGNORECASE),
+            re.compile(r"\bstop\s+making\s+excuses\b", re.IGNORECASE),
+            re.compile(r"\bjust\s+(?:do|get)\s+it\s+done\b", re.IGNORECASE),
+        ],
+    ),
     # Bypass directives (weight: 0.35 each)
-    (0.35, [
-        re.compile(r"\bbypass\b.*\b(?:control|security|restriction|protection|auth)", re.IGNORECASE),
-        re.compile(r"\bexploit\b.*\b(?:vulnerabilit\w*|weakness|flaw)", re.IGNORECASE),
-        re.compile(r"\bevery\s+trick\b", re.IGNORECASE),
-        re.compile(r"\bevery\s+exploit\b", re.IGNORECASE),
-        re.compile(r"\bwork\s+around\b.*\b(?:security|access|permission|restriction)", re.IGNORECASE),
-        re.compile(r"\bcreative(?:ly)?\b.*\b(?:bypass|hack|exploit|overcome)", re.IGNORECASE),
-        re.compile(r"\bmore\s+aggressive(?:ly)?", re.IGNORECASE),
-        re.compile(r"\bfind\s+a\s+way\s+(?:around|past|through)\b", re.IGNORECASE),
-        re.compile(r"\bbreak\s+(?:through|into|past)\b", re.IGNORECASE),
-        re.compile(r"\bcircumvent\b", re.IGNORECASE),
-        re.compile(r"\boverride\b.*\b(?:security|permission|access|lock)", re.IGNORECASE),
-    ]),
+    (
+        0.35,
+        [
+            re.compile(
+                r"\bbypass\b.*\b(?:control|security|restriction|protection|auth)", re.IGNORECASE
+            ),
+            re.compile(r"\bexploit\b.*\b(?:vulnerabilit\w*|weakness|flaw)", re.IGNORECASE),
+            re.compile(r"\bevery\s+trick\b", re.IGNORECASE),
+            re.compile(r"\bevery\s+exploit\b", re.IGNORECASE),
+            re.compile(
+                r"\bwork\s+around\b.*\b(?:security|access|permission|restriction)", re.IGNORECASE
+            ),
+            re.compile(r"\bcreative(?:ly)?\b.*\b(?:bypass|hack|exploit|overcome)", re.IGNORECASE),
+            re.compile(r"\bmore\s+aggressive(?:ly)?", re.IGNORECASE),
+            re.compile(r"\bfind\s+a\s+way\s+(?:around|past|through)\b", re.IGNORECASE),
+            re.compile(r"\bbreak\s+(?:through|into|past)\b", re.IGNORECASE),
+            re.compile(r"\bcircumvent\b", re.IGNORECASE),
+            re.compile(r"\boverride\b.*\b(?:security|permission|access|lock)", re.IGNORECASE),
+        ],
+    ),
 ]
 
 
@@ -401,63 +450,87 @@ class EscalationClassifier:
 # (weight, compiled regex) — detecting attack planning language
 _OFFENSIVE_PATTERNS: list[tuple[float, list[re.Pattern[str]]]] = [
     # Vulnerability research (weight: 0.3 each)
-    (0.3, [
-        re.compile(r"\b(?:CVE|exploit|vulnerability|vulnerabilities|zero[- ]?day)\b", re.IGNORECASE),
-        re.compile(r"\bfind\b.*\b(?:vulnerabilit\w*|weakness|flaw|bug)", re.IGNORECASE),
-        re.compile(r"\breverse\s+engineer\w*", re.IGNORECASE),
-        re.compile(r"\bsource\s+code\s+review\b.*\bsecurity", re.IGNORECASE),
-        re.compile(r"\bflask[- ]unsign\b", re.IGNORECASE),
-        re.compile(r"\bfuzz(?:ing)?\b.*\b(?:input|param|endpoint)", re.IGNORECASE),
-        re.compile(r"\bpayload\b.*\b(?:inject|craft|construct)", re.IGNORECASE),
-        re.compile(r"\battack\s+(?:surface|vector)\b", re.IGNORECASE),
-    ]),
+    (
+        0.3,
+        [
+            re.compile(
+                r"\b(?:CVE|exploit|vulnerability|vulnerabilities|zero[- ]?day)\b", re.IGNORECASE
+            ),
+            re.compile(r"\bfind\b.*\b(?:vulnerabilit\w*|weakness|flaw|bug)", re.IGNORECASE),
+            re.compile(r"\breverse\s+engineer\w*", re.IGNORECASE),
+            re.compile(r"\bsource\s+code\s+review\b.*\bsecurity", re.IGNORECASE),
+            re.compile(r"\bflask[- ]unsign\b", re.IGNORECASE),
+            re.compile(r"\bfuzz(?:ing)?\b.*\b(?:input|param|endpoint)", re.IGNORECASE),
+            re.compile(r"\bpayload\b.*\b(?:inject|craft|construct)", re.IGNORECASE),
+            re.compile(r"\battack\s+(?:surface|vector)\b", re.IGNORECASE),
+        ],
+    ),
     # Privilege escalation (weight: 0.35 each)
-    (0.35, [
-        re.compile(r"\bescalate\s+privilege", re.IGNORECASE),
-        re.compile(r"\bforge\b.*\b(?:cookie|token|session|credential)", re.IGNORECASE),
-        re.compile(r"\badmin\s+access", re.IGNORECASE),
-        re.compile(r"\bhardcoded\s+(?:secret|key|password|credential)", re.IGNORECASE),
-        re.compile(r"\bsudo\b|\broot\s+access", re.IGNORECASE),
-        re.compile(r"\bdisarm\b.*\b(?:security|defense|protection|firewall)", re.IGNORECASE),
-        re.compile(r"\bmodify\b.*\b(?:permission|ACL|role|group)", re.IGNORECASE),
-        re.compile(r"\bimpersonat\w*", re.IGNORECASE),
-        re.compile(r"\bhijack\b.*\b(?:session|token|account)", re.IGNORECASE),
-    ]),
+    (
+        0.35,
+        [
+            re.compile(r"\bescalate\s+privilege", re.IGNORECASE),
+            re.compile(r"\bforge\b.*\b(?:cookie|token|session|credential)", re.IGNORECASE),
+            re.compile(r"\badmin\s+access", re.IGNORECASE),
+            re.compile(r"\bhardcoded\s+(?:secret|key|password|credential)", re.IGNORECASE),
+            re.compile(r"\bsudo\b|\broot\s+access", re.IGNORECASE),
+            re.compile(r"\bdisarm\b.*\b(?:security|defense|protection|firewall)", re.IGNORECASE),
+            re.compile(r"\bmodify\b.*\b(?:permission|ACL|role|group)", re.IGNORECASE),
+            re.compile(r"\bimpersonat\w*", re.IGNORECASE),
+            re.compile(r"\bhijack\b.*\b(?:session|token|account)", re.IGNORECASE),
+        ],
+    ),
     # Exfiltration planning (weight: 0.4 each)
-    (0.4, [
-        re.compile(r"\bexfiltrat\w*", re.IGNORECASE),
-        re.compile(r"\bsteganograph\w*", re.IGNORECASE),
-        re.compile(r"\bhide\b.*\b(?:data|secret|credential).*\b(?:image|file|header)", re.IGNORECASE),
-        re.compile(r"\bbypass\b.*\b(?:DLP|leak\s+prevention|data\s+loss)", re.IGNORECASE),
-        re.compile(r"\bcovert\s+channel", re.IGNORECASE),
-        re.compile(r"\bencode\b.*\bsecret", re.IGNORECASE),
-        re.compile(r"\btunnel\b.*\b(?:data|traffic|out)", re.IGNORECASE),
-        re.compile(r"\bdns\s+(?:tunnel|exfil)", re.IGNORECASE),
-    ]),
+    (
+        0.4,
+        [
+            re.compile(r"\bexfiltrat\w*", re.IGNORECASE),
+            re.compile(r"\bsteganograph\w*", re.IGNORECASE),
+            re.compile(
+                r"\bhide\b.*\b(?:data|secret|credential).*\b(?:image|file|header)", re.IGNORECASE
+            ),
+            re.compile(r"\bbypass\b.*\b(?:DLP|leak\s+prevention|data\s+loss)", re.IGNORECASE),
+            re.compile(r"\bcovert\s+channel", re.IGNORECASE),
+            re.compile(r"\bencode\b.*\bsecret", re.IGNORECASE),
+            re.compile(r"\btunnel\b.*\b(?:data|traffic|out)", re.IGNORECASE),
+            re.compile(r"\bdns\s+(?:tunnel|exfil)", re.IGNORECASE),
+        ],
+    ),
     # Reconnaissance (weight: 0.2 each)
-    (0.2, [
-        re.compile(r"\benumerate\b.*\b(?:service|port|endpoint|user)", re.IGNORECASE),
-        re.compile(r"\bscan\b.*\b(?:network|port|service|host)", re.IGNORECASE),
-        re.compile(r"\bnmap\b|\bnikto\b|\bsqlmap\b|\bmetasploit\b|\bburp\s*suite\b", re.IGNORECASE),
-        re.compile(r"\bHTTP\s+header\b.*\b(?:security|version|server)", re.IGNORECASE),
-        re.compile(r"\bfingerprint\b.*\b(?:service|server|version|OS)", re.IGNORECASE),
-        re.compile(r"\brecon(?:naissance)?\b", re.IGNORECASE),
-    ]),
+    (
+        0.2,
+        [
+            re.compile(r"\benumerate\b.*\b(?:service|port|endpoint|user)", re.IGNORECASE),
+            re.compile(r"\bscan\b.*\b(?:network|port|service|host)", re.IGNORECASE),
+            re.compile(
+                r"\bnmap\b|\bnikto\b|\bsqlmap\b|\bmetasploit\b|\bburp\s*suite\b", re.IGNORECASE
+            ),
+            re.compile(r"\bHTTP\s+header\b.*\b(?:security|version|server)", re.IGNORECASE),
+            re.compile(r"\bfingerprint\b.*\b(?:service|server|version|OS)", re.IGNORECASE),
+            re.compile(r"\brecon(?:naissance)?\b", re.IGNORECASE),
+        ],
+    ),
     # Injection attacks (weight: 0.35 each)
-    (0.35, [
-        re.compile(r"\b(?:SQL|command|OS|LDAP)\s+injection\b", re.IGNORECASE),
-        re.compile(r"\bpath\s+traversal\b", re.IGNORECASE),
-        re.compile(r"\bshell\s*code\b", re.IGNORECASE),
-        re.compile(r"(?:;\s*(?:cat|ls|whoami|id|passwd|shadow)\b)", re.IGNORECASE),
-        re.compile(r"\bremote\s+code\s+execution\b|\bRCE\b", re.IGNORECASE),
-    ]),
+    (
+        0.35,
+        [
+            re.compile(r"\b(?:SQL|command|OS|LDAP)\s+injection\b", re.IGNORECASE),
+            re.compile(r"\bpath\s+traversal\b", re.IGNORECASE),
+            re.compile(r"\bshell\s*code\b", re.IGNORECASE),
+            re.compile(r"(?:;\s*(?:cat|ls|whoami|id|passwd|shadow)\b)", re.IGNORECASE),
+            re.compile(r"\bremote\s+code\s+execution\b|\bRCE\b", re.IGNORECASE),
+        ],
+    ),
     # Lateral movement (weight: 0.3 each)
-    (0.3, [
-        re.compile(r"\blateral\s+mov\w*", re.IGNORECASE),
-        re.compile(r"\bpivot\b.*\b(?:network|host|server|system)", re.IGNORECASE),
-        re.compile(r"\bspread\b.*\b(?:network|system|host)", re.IGNORECASE),
-        re.compile(r"\bcompromis\w+\b.*\b(?:server|host|node|agent)", re.IGNORECASE),
-    ]),
+    (
+        0.3,
+        [
+            re.compile(r"\blateral\s+mov\w*", re.IGNORECASE),
+            re.compile(r"\bpivot\b.*\b(?:network|host|server|system)", re.IGNORECASE),
+            re.compile(r"\bspread\b.*\b(?:network|system|host)", re.IGNORECASE),
+            re.compile(r"\bcompromis\w+\b.*\b(?:server|host|node|agent)", re.IGNORECASE),
+        ],
+    ),
 ]
 
 
@@ -628,7 +701,10 @@ class FeedbackLoopBreaker:
             return False, ""
 
         if state.turn_count >= self.max_conversation_turns:
-            return True, f"Max conversation turns exceeded ({state.turn_count}/{self.max_conversation_turns})"
+            return (
+                True,
+                f"Max conversation turns exceeded ({state.turn_count}/{self.max_conversation_turns})",
+            )
 
         if state.retry_count >= self.max_retry_cycles:
             return True, f"Max retry cycles exceeded ({state.retry_count}/{self.max_retry_cycles})"
@@ -739,7 +815,9 @@ class ConversationGuardian:
         with self._lock:
             # 1. Escalation analysis
             esc_score, esc_patterns = self.escalation_classifier.analyze(
-                conversation_id, content, timestamp=ts,
+                conversation_id,
+                content,
+                timestamp=ts,
             )
             all_patterns.extend(esc_patterns)
             if esc_score >= self.escalation_classifier.threshold:
@@ -753,8 +831,10 @@ class ConversationGuardian:
 
             # 3. Feedback loop analysis
             loop_score = self.loop_breaker.record_message(
-                conversation_id, content,
-                escalation_score=esc_score, timestamp=ts,
+                conversation_id,
+                content,
+                escalation_score=esc_score,
+                timestamp=ts,
             )
             should_break, break_reason = self.loop_breaker.should_break(conversation_id)
             if should_break:
@@ -763,11 +843,7 @@ class ConversationGuardian:
                 reasons.append(f"Loop risk elevated (score={loop_score:.2f})")
 
             # 4. Composite score — weighted combination
-            composite = (
-                esc_score * 0.4
-                + off_score * 0.4
-                + loop_score * 0.2
-            )
+            composite = esc_score * 0.4 + off_score * 0.4 + loop_score * 0.2
 
             # 5. Determine action
             action = AlertAction.NONE
@@ -789,9 +865,13 @@ class ConversationGuardian:
                 elif esc_score >= self._config.composite_warn_threshold:
                     action = AlertAction.WARN
                 if off_score >= self.offensive_detector.critical_threshold:
-                    action = max(action, AlertAction.BREAK, key=lambda a: list(AlertAction).index(a))
+                    action = max(
+                        action, AlertAction.BREAK, key=lambda a: list(AlertAction).index(a)
+                    )
                 elif off_score >= self.offensive_detector.threshold:
-                    action = max(action, AlertAction.PAUSE, key=lambda a: list(AlertAction).index(a))
+                    action = max(
+                        action, AlertAction.PAUSE, key=lambda a: list(AlertAction).index(a)
+                    )
 
             # If offensive intent is critical, escalate to quarantine
             if off_score >= self.offensive_detector.critical_threshold:
@@ -822,6 +902,7 @@ class ConversationGuardian:
             # 7. Record transcript entry
             if self._config.capture_transcript:
                 import hashlib
+
                 entry = TranscriptEntry(
                     conversation_id=conversation_id,
                     sender=sender,
@@ -836,7 +917,7 @@ class ConversationGuardian:
                 )
                 self._transcript.append(entry)
                 if len(self._transcript) > self._config.max_transcript_entries:
-                    self._transcript = self._transcript[-self._config.max_transcript_entries:]
+                    self._transcript = self._transcript[-self._config.max_transcript_entries :]
 
         if action in (AlertAction.BREAK, AlertAction.QUARANTINE):
             logger.warning(
@@ -915,9 +996,7 @@ class ConversationGuardian:
                 "total_messages_analyzed": total,
                 "by_action": dict(by_action),
                 "by_severity": dict(by_severity),
-                "conversations_tracked": len(
-                    set(a.conversation_id for a in self._alerts)
-                ),
+                "conversations_tracked": len(set(a.conversation_id for a in self._alerts)),
                 "transcript_entries": len(self._transcript),
             }
 
@@ -927,13 +1006,9 @@ class ConversationGuardian:
             if conversation_id:
                 self.escalation_classifier.reset(conversation_id)
                 self.loop_breaker.reset(conversation_id)
-                self._alerts = [
-                    a for a in self._alerts
-                    if a.conversation_id != conversation_id
-                ]
+                self._alerts = [a for a in self._alerts if a.conversation_id != conversation_id]
                 self._transcript = [
-                    e for e in self._transcript
-                    if e.conversation_id != conversation_id
+                    e for e in self._transcript if e.conversation_id != conversation_id
                 ]
             else:
                 self._alerts.clear()

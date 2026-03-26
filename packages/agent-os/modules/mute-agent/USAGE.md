@@ -147,10 +147,10 @@ session = reasoning_agent.propose_action(
 if session.validation_result.is_valid:
     # Accept the proposal
     protocol.accept_proposal(session.session_id)
-    
+
     # Execute
     result = execution_agent.execute(session.session_id)
-    
+
     print(f"Result: {result.execution_result}")
 else:
     print(f"Validation failed: {session.validation_result.errors}")
@@ -409,7 +409,7 @@ if session.validation_result.is_valid:
     if session.validation_result.warnings:
         # Log warnings but proceed
         logger.warning(f"Warnings: {session.validation_result.warnings}")
-    
+
     protocol.accept_proposal(session.session_id)
     result = execution_agent.execute(session.session_id)
 else:

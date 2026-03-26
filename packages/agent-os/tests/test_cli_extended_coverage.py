@@ -16,16 +16,12 @@ Covers CLI commands and helpers that lack sufficient test coverage:
   - Edge cases: empty files, binary files, unknown extensions
 """
 
-import argparse
 import json
-import os
 import sys
-import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
-
 
 # ============================================================================
 # PolicyChecker — Comprehensive Rule Coverage
@@ -37,6 +33,7 @@ class TestPolicyCheckerRules:
 
     def _checker(self):
         from agent_os.cli import PolicyChecker
+
         return PolicyChecker()
 
     # -- Destructive SQL ---------------------------------------------------
@@ -77,8 +74,10 @@ class TestPolicyCheckerRules:
         f = tmp_path / "cleanup.sh"
         f.write_text("rm -rf /tmp/cache")
         violations = self._checker().check_file(str(f))
-        assert any("rm -rf" in v.violation.lower() or "recursive" in v.violation.lower()
-                    for v in violations)
+        assert any(
+            "rm -rf" in v.violation.lower() or "recursive" in v.violation.lower()
+            for v in violations
+        )
 
     def test_detects_shutil_rmtree(self, tmp_path):
         """shutil.rmtree is flagged."""
@@ -101,8 +100,7 @@ class TestPolicyCheckerRules:
         f = tmp_path / "config.py"
         f.write_text('api_key = "abcdefghijklmnopqrstuvwxyz1234567890abcdef"')
         violations = self._checker().check_file(str(f))
-        assert any("API key" in v.violation or "key" in v.violation.lower()
-                    for v in violations)
+        assert any("API key" in v.violation or "key" in v.violation.lower() for v in violations)
 
     def test_detects_hardcoded_password(self, tmp_path):
         """Hardcoded password is flagged."""
@@ -146,8 +144,9 @@ class TestPolicyCheckerRules:
         f = tmp_path / "setup.sh"
         f.write_text("chmod 777 /var/www")
         violations = self._checker().check_file(str(f))
-        assert any("chmod 777" in v.violation or "permissions" in v.violation.lower()
-                    for v in violations)
+        assert any(
+            "chmod 777" in v.violation or "permissions" in v.violation.lower() for v in violations
+        )
 
     # -- Code Injection ----------------------------------------------------
 
@@ -170,8 +169,10 @@ class TestPolicyCheckerRules:
         f = tmp_path / "handler.py"
         f.write_text('os.system("ls " + user_input)')
         violations = self._checker().check_file(str(f))
-        assert any("command injection" in v.violation.lower() or "os.system" in v.violation.lower()
-                    for v in violations)
+        assert any(
+            "command injection" in v.violation.lower() or "os.system" in v.violation.lower()
+            for v in violations
+        )
 
     # -- XSS ---------------------------------------------------------------
 
@@ -180,14 +181,14 @@ class TestPolicyCheckerRules:
         f = tmp_path / "app.js"
         f.write_text('document.getElementById("x").innerHTML = userInput;')
         violations = self._checker().check_file(str(f))
-        assert any("innerHTML" in v.violation or "XSS" in v.violation
-                    for v in violations)
+        assert any("innerHTML" in v.violation or "XSS" in v.violation for v in violations)
 
     # -- Language Filtering ------------------------------------------------
 
     def test_sql_rules_not_applied_to_md(self, tmp_path):
         """SQL rules should not trigger on markdown files."""
         from agent_os.cli import PolicyChecker
+
         checker = PolicyChecker()
         f = tmp_path / "notes.md"
         f.write_text("DROP TABLE users;")
@@ -234,6 +235,7 @@ class TestPolicyCheckerRules:
     def test_language_detection(self):
         """_get_language maps extensions correctly."""
         from agent_os.cli import PolicyChecker
+
         checker = PolicyChecker()
         assert checker._get_language("app.py") == "python"
         assert checker._get_language("app.js") == "javascript"
@@ -256,6 +258,7 @@ class TestCmdCheck:
     def test_check_clean_file(self, tmp_path, capsys):
         """Clean file produces exit code 0."""
         from agent_os.cli import cmd_check
+
         f = tmp_path / "clean.py"
         f.write_text("x = 1 + 2\nprint(x)\n")
 
@@ -271,6 +274,7 @@ class TestCmdCheck:
     def test_check_violation_file(self, tmp_path):
         """File with violations returns exit code 1."""
         from agent_os.cli import cmd_check
+
         f = tmp_path / "bad.py"
         f.write_text("result = eval(user_input)\n")
 
@@ -286,6 +290,7 @@ class TestCmdCheck:
     def test_check_json_output(self, tmp_path, capsys):
         """JSON format output contains expected structure."""
         from agent_os.cli import cmd_check
+
         f = tmp_path / "bad.py"
         f.write_text('password = "secret123"\n')
 
@@ -331,6 +336,7 @@ class TestCmdCheck:
     def test_check_multiple_files(self, tmp_path):
         """Multiple files can be checked at once."""
         from agent_os.cli import cmd_check
+
         clean = tmp_path / "clean.py"
         clean.write_text("x = 1\n")
         bad = tmp_path / "bad.py"
@@ -370,6 +376,7 @@ class TestCmdReview:
     def test_review_clean_file(self, tmp_path):
         """Reviewing a clean file without CMVK returns 0."""
         from agent_os.cli import cmd_review
+
         f = tmp_path / "clean.py"
         f.write_text("x = 1 + 2\nprint(x)\n")
 
@@ -385,6 +392,7 @@ class TestCmdReview:
     def test_review_with_violations(self, tmp_path):
         """File with violations returns 1 when not using CMVK."""
         from agent_os.cli import cmd_review
+
         f = tmp_path / "bad.py"
         f.write_text("result = eval(user_input)\n")
 
@@ -400,6 +408,7 @@ class TestCmdReview:
     def test_review_with_cmvk(self, tmp_path):
         """CMVK review runs simulated multi-model review."""
         from agent_os.cli import cmd_review
+
         f = tmp_path / "app.py"
         f.write_text("import json\ndata = json.loads(payload)\n")
 
@@ -415,6 +424,7 @@ class TestCmdReview:
     def test_review_json_format_with_cmvk(self, tmp_path, capsys):
         """CMVK review JSON output includes model_results."""
         from agent_os.cli import cmd_review
+
         f = tmp_path / "app.py"
         f.write_text("x = 1\n")
 
@@ -452,6 +462,7 @@ class TestCmdInstallHooks:
     def test_install_hooks_no_git_dir(self, tmp_path, monkeypatch):
         """Install hooks fails if .git does not exist."""
         from agent_os.cli import cmd_install_hooks
+
         monkeypatch.chdir(tmp_path)
 
         class Args:
@@ -468,6 +479,7 @@ class TestCmdInstallHooks:
     def test_install_hooks_creates_hook(self, tmp_path, monkeypatch):
         """Install hooks creates pre-commit file."""
         from agent_os.cli import cmd_install_hooks
+
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git").mkdir()
 
@@ -485,6 +497,7 @@ class TestCmdInstallHooks:
     def test_install_hooks_no_overwrite_without_force(self, tmp_path, monkeypatch):
         """Existing hook is not overwritten without --force."""
         from agent_os.cli import cmd_install_hooks
+
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git" / "hooks").mkdir(parents=True)
         hook = tmp_path / ".git" / "hooks" / "pre-commit"
@@ -505,6 +518,7 @@ class TestCmdInstallHooks:
     def test_install_hooks_force_overwrites(self, tmp_path, monkeypatch):
         """--force overwrites existing hook."""
         from agent_os.cli import cmd_install_hooks
+
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git" / "hooks").mkdir(parents=True)
         hook = tmp_path / ".git" / "hooks" / "pre-commit"
@@ -525,6 +539,7 @@ class TestCmdInstallHooks:
     def test_install_hooks_append(self, tmp_path, monkeypatch):
         """--append adds Agent OS check to existing hook."""
         from agent_os.cli import cmd_install_hooks
+
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git" / "hooks").mkdir(parents=True)
         hook = tmp_path / ".git" / "hooks" / "pre-commit"
@@ -543,6 +558,7 @@ class TestCmdInstallHooks:
     def test_install_hooks_append_idempotent(self, tmp_path, monkeypatch):
         """Appending when check already present is a no-op."""
         from agent_os.cli import cmd_install_hooks
+
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".git" / "hooks").mkdir(parents=True)
         hook = tmp_path / ".git" / "hooks" / "pre-commit"
@@ -637,6 +653,7 @@ class TestEnvConfig:
     def test_get_env_config_defaults(self):
         """Default env config without environment variables."""
         from agent_os.cli import get_env_config
+
         config = get_env_config()
         assert config["log_level"] == "WARNING"
         assert config["backend"] == "memory"
@@ -644,6 +661,7 @@ class TestEnvConfig:
     def test_get_env_config_custom(self, monkeypatch):
         """Custom environment variables are picked up."""
         from agent_os.cli import get_env_config
+
         monkeypatch.setenv("AGENTOS_LOG_LEVEL", "DEBUG")
         monkeypatch.setenv("AGENTOS_BACKEND", "redis")
         monkeypatch.setenv("AGENTOS_CONFIG", "/custom/path")
@@ -655,28 +673,34 @@ class TestEnvConfig:
 
     def test_configure_logging_valid_level(self):
         """configure_logging sets valid log levels."""
-        from agent_os.cli import configure_logging
         import logging
+
+        from agent_os.cli import configure_logging
+
         configure_logging("DEBUG")
         assert logging.getLogger().level == logging.DEBUG
         configure_logging("WARNING")
 
     def test_configure_logging_invalid_level(self):
         """Invalid log level defaults to WARNING."""
-        from agent_os.cli import configure_logging
         import logging
+
+        from agent_os.cli import configure_logging
+
         configure_logging("INVALID")
         assert logging.getLogger().level == logging.WARNING
 
     def test_get_config_path_from_args(self):
         """Config path from explicit args takes precedence."""
         from agent_os.cli import get_config_path
+
         p = get_config_path("/custom/path")
         assert p == Path("/custom/path")
 
     def test_get_config_path_from_env(self, monkeypatch):
         """Config path from AGENTOS_CONFIG env var when no arg."""
         from agent_os.cli import get_config_path
+
         monkeypatch.setenv("AGENTOS_CONFIG", "/env/path")
         p = get_config_path(None)
         assert p == Path("/env/path")
@@ -684,6 +708,7 @@ class TestEnvConfig:
     def test_get_config_path_default(self, monkeypatch):
         """Default config path is current directory."""
         from agent_os.cli import get_config_path
+
         monkeypatch.delenv("AGENTOS_CONFIG", raising=False)
         p = get_config_path(None)
         assert str(p) == "."
@@ -700,6 +725,7 @@ class TestMainRouting:
     def test_main_routes_to_init(self, tmp_path):
         """main routes 'init' to cmd_init."""
         from agent_os.cli import main
+
         original = sys.argv
         try:
             sys.argv = ["agentos", "init", "--path", str(tmp_path)]
@@ -712,6 +738,7 @@ class TestMainRouting:
     def test_main_routes_to_check(self, tmp_path):
         """main routes 'check' to cmd_check."""
         from agent_os.cli import main
+
         f = tmp_path / "clean.py"
         f.write_text("x = 1\n")
         original = sys.argv
@@ -725,6 +752,7 @@ class TestMainRouting:
     def test_main_routes_to_status(self):
         """main routes 'status' to cmd_status."""
         from agent_os.cli import main
+
         original = sys.argv
         try:
             sys.argv = ["agentos", "status"]
@@ -736,6 +764,7 @@ class TestMainRouting:
     def test_main_routes_to_metrics(self):
         """main routes 'metrics' to cmd_metrics."""
         from agent_os.cli import main
+
         original = sys.argv
         try:
             sys.argv = ["agentos", "metrics"]
@@ -747,6 +776,7 @@ class TestMainRouting:
     def test_main_handles_file_not_found(self):
         """main returns 1 for FileNotFoundError."""
         from agent_os.cli import main
+
         original = sys.argv
         try:
             sys.argv = ["agentos", "check", "/nonexistent/file.py"]
@@ -758,6 +788,7 @@ class TestMainRouting:
     def test_main_keyboard_interrupt(self):
         """main returns 130 on KeyboardInterrupt."""
         from agent_os.cli import main
+
         original = sys.argv
         try:
             sys.argv = ["agentos", "status"]
@@ -778,13 +809,15 @@ class TestAuditCsvExport:
 
     def test_audit_csv_export(self, tmp_path):
         """Audit with CSV export creates a valid CSV file."""
-        from agent_os.cli import cmd_init, cmd_audit
         import csv
+
+        from agent_os.cli import cmd_audit, cmd_init
 
         class InitArgs:
             path = str(tmp_path)
             template = "strict"
             force = False
+
         cmd_init(InitArgs())
 
         csv_path = str(tmp_path / "audit.csv")
@@ -817,6 +850,7 @@ class TestCmdValidateExtended:
     def test_validate_strict_mode_warns_unknown_fields(self, tmp_path, capsys):
         """Strict mode warns about unknown fields."""
         from agent_os.cli import cmd_validate
+
         f = tmp_path / "policy.yaml"
         f.write_text("version: '1.0'\nname: test\ncustom_field: value\n")
 
@@ -832,6 +866,7 @@ class TestCmdValidateExtended:
     def test_validate_multiple_files(self, tmp_path):
         """Multiple policy files can be validated at once."""
         from agent_os.cli import cmd_validate
+
         f1 = tmp_path / "a.yaml"
         f1.write_text("version: '1.0'\nname: policy-a\n")
         f2 = tmp_path / "b.yaml"
@@ -847,6 +882,7 @@ class TestCmdValidateExtended:
     def test_validate_mixed_valid_invalid(self, tmp_path):
         """Mix of valid and invalid files returns error."""
         from agent_os.cli import cmd_validate
+
         good = tmp_path / "good.yaml"
         good.write_text("version: '1.0'\nname: good\n")
         bad = tmp_path / "bad.yaml"
@@ -862,10 +898,9 @@ class TestCmdValidateExtended:
     def test_validate_invalid_rule_type(self, tmp_path, capsys):
         """Unknown rule type generates a warning."""
         from agent_os.cli import cmd_validate
+
         f = tmp_path / "policy.yaml"
-        f.write_text(
-            "version: '1.0'\nname: test\nrules:\n  - type: explode\n"
-        )
+        f.write_text("version: '1.0'\nname: test\nrules:\n  - type: explode\n")
 
         class Args:
             files = [str(f)]
@@ -889,11 +924,13 @@ class TestColorsEdgeCases:
     def test_supports_color_with_no_color_env(self, monkeypatch):
         """NO_COLOR env var disables color support."""
         from agent_os.cli import supports_color
+
         monkeypatch.setenv("NO_COLOR", "1")
         assert supports_color() is False
 
     def test_supports_color_with_ci_env(self, monkeypatch):
         """CI env var disables color support."""
         from agent_os.cli import supports_color
+
         monkeypatch.setenv("CI", "true")
         assert supports_color() is False

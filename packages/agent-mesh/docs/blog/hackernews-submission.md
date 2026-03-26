@@ -14,7 +14,7 @@ We're open-sourcing AgentMesh, a governance platform for multi-agent AI systems.
 
 **What AgentMesh does:**
 - Identity: Cryptographic agent IDs with human sponsor accountability
-- Trust: Protocol-native verification (A2A, MCP, IATP) with <200ms handshakes  
+- Trust: Protocol-native verification (A2A, MCP, IATP) with <200ms handshakes
 - Governance: Declarative policies with EU AI Act/SOC2/HIPAA mapping
 - Reward: Continuous behavioral scoring (not static blocklists)
 

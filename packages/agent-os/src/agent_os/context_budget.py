@@ -20,11 +20,12 @@ from typing import Any, Callable
 # Signals
 # ---------------------------------------------------------------------------
 
+
 class AgentSignal(Enum):
     """Kernel signals for context budget enforcement."""
 
-    SIGSTOP = auto()    # Budget exceeded — halt the agent
-    SIGWARN = auto()    # Budget nearing limit
+    SIGSTOP = auto()  # Budget exceeded — halt the agent
+    SIGWARN = auto()  # Budget nearing limit
     SIGRESUME = auto()  # Budget replenished
 
 
@@ -32,15 +33,16 @@ class AgentSignal(Enum):
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class ContextWindow:
     """An allocated context window for an agent task."""
 
     agent_id: str
     task: str
-    lookup_budget: int       # tokens for retrieval / facts
-    reasoning_budget: int    # tokens for LLM reasoning
-    total: int               # lookup + reasoning
+    lookup_budget: int  # tokens for retrieval / facts
+    reasoning_budget: int  # tokens for LLM reasoning
+    total: int  # lookup + reasoning
     created_at: float = field(default_factory=time.time)
 
     @property
@@ -55,10 +57,10 @@ class ContextWindow:
 class ContextPriority(Enum):
     """Task priority levels for context allocation."""
 
-    CRITICAL = 3   # Gets full allocation even if pool is tight
+    CRITICAL = 3  # Gets full allocation even if pool is tight
     HIGH = 2
     NORMAL = 1
-    LOW = 0        # Smallest possible allocation
+    LOW = 0  # Smallest possible allocation
 
 
 @dataclass
@@ -90,6 +92,7 @@ class UsageRecord:
 # Budget Exceeded Error
 # ---------------------------------------------------------------------------
 
+
 class BudgetExceeded(Exception):
     """Raised when an agent exceeds its context budget."""
 
@@ -97,9 +100,7 @@ class BudgetExceeded(Exception):
         self.agent_id = agent_id
         self.budget = budget
         self.used = used
-        super().__init__(
-            f"Agent {agent_id} exceeded context budget: {used}/{budget} tokens"
-        )
+        super().__init__(f"Agent {agent_id} exceeded context budget: {used}/{budget} tokens")
 
 
 # ---------------------------------------------------------------------------
@@ -150,9 +151,7 @@ class ContextScheduler:
 
         self._active: dict[str, UsageRecord] = {}
         self._history: list[UsageRecord] = []
-        self._signal_handlers: dict[AgentSignal, list[Callable]] = {
-            s: [] for s in AgentSignal
-        }
+        self._signal_handlers: dict[AgentSignal, list[Callable]] = {s: [] for s in AgentSignal}
 
     # -- Allocation -----------------------------------------------------------
 

@@ -80,12 +80,20 @@ class TestAgentMeshBridge:
 
     def test_process_handshake_event(self) -> None:
         bridge = AgentMeshBridge()
-        bridge.process_event(MeshEvent(
-            event_type="handshake", agent_did="did:mesh:a", details={"success": True},
-        ))
-        bridge.process_event(MeshEvent(
-            event_type="handshake", agent_did="did:mesh:b", details={"success": False},
-        ))
+        bridge.process_event(
+            MeshEvent(
+                event_type="handshake",
+                agent_did="did:mesh:a",
+                details={"success": True},
+            )
+        )
+        bridge.process_event(
+            MeshEvent(
+                event_type="handshake",
+                agent_did="did:mesh:b",
+                details={"success": False},
+            )
+        )
         val = bridge.handshake_sli.current_value()
         assert val is not None
         assert val < 1.0  # at least one failure recorded
@@ -93,16 +101,24 @@ class TestAgentMeshBridge:
     def test_agent_trust_cache(self) -> None:
         bridge = AgentMeshBridge()
         assert bridge.get_agent_trust("did:mesh:unknown") is None
-        bridge.process_event(MeshEvent(
-            event_type="trust_update", agent_did="did:mesh:a", details={"score": 800},
-        ))
+        bridge.process_event(
+            MeshEvent(
+                event_type="trust_update",
+                agent_did="did:mesh:a",
+                details={"score": 800},
+            )
+        )
         assert bridge.get_agent_trust("did:mesh:a") == 800
 
     def test_trust_revocation_clears_cache(self) -> None:
         bridge = AgentMeshBridge()
-        bridge.process_event(MeshEvent(
-            event_type="trust_update", agent_did="did:mesh:a", details={"score": 800},
-        ))
+        bridge.process_event(
+            MeshEvent(
+                event_type="trust_update",
+                agent_did="did:mesh:a",
+                details={"score": 800},
+            )
+        )
         bridge.process_event(MeshEvent(event_type="trust_revocation", agent_did="did:mesh:a"))
         assert bridge.get_agent_trust("did:mesh:a") == 0
 
@@ -131,7 +147,9 @@ class TestAgentOSBridge:
 
     def test_blocked_records_compliance_failure(self) -> None:
         bridge = AgentOSBridge()
-        bridge.process_audit_entry(AuditLogEntry(entry_type="blocked", agent_id="bot-1", policy_name="p1"))
+        bridge.process_audit_entry(
+            AuditLogEntry(entry_type="blocked", agent_id="bot-1", policy_name="p1")
+        )
         val = bridge.policy_sli.current_value()
         assert val is not None
         assert val == 0.0  # 0 out of 1 compliant
@@ -154,7 +172,9 @@ class TestAgentOSBridge:
 
     def test_summary(self) -> None:
         bridge = AgentOSBridge()
-        bridge.process_audit_entry(AuditLogEntry(entry_type="blocked", agent_id="bot-1", policy_name="p1"))
+        bridge.process_audit_entry(
+            AuditLogEntry(entry_type="blocked", agent_id="bot-1", policy_name="p1")
+        )
         bridge.process_audit_entry(AuditLogEntry(entry_type="warning", agent_id="bot-1"))
         s = bridge.summary()
         assert s["events_processed"] == 2
@@ -203,7 +223,9 @@ class TestAgentOSBridge:
     def test_agent_event_tracking(self) -> None:
         bridge = AgentOSBridge()
         bridge.process_audit_entry(AuditLogEntry(entry_type="allowed", agent_id="bot-1"))
-        bridge.process_audit_entry(AuditLogEntry(entry_type="blocked", agent_id="bot-1", policy_name="p1"))
+        bridge.process_audit_entry(
+            AuditLogEntry(entry_type="blocked", agent_id="bot-1", policy_name="p1")
+        )
         bridge.process_audit_entry(AuditLogEntry(entry_type="allowed", agent_id="bot-2"))
         assert bridge.get_agent_violation_count("bot-1") == 2
         assert bridge.get_agent_violation_count("bot-2") == 1
@@ -211,11 +233,16 @@ class TestAgentOSBridge:
 
     def test_summary_with_policy_review(self) -> None:
         bridge = AgentOSBridge()
-        bridge.process_audit_entry(AuditLogEntry(entry_type="blocked", agent_id="a", policy_name="p1"))
-        bridge.process_audit_entry(AuditLogEntry(
-            entry_type="policy_review", agent_id="b",
-            details={"review_outcome": "rejected"},
-        ))
+        bridge.process_audit_entry(
+            AuditLogEntry(entry_type="blocked", agent_id="a", policy_name="p1")
+        )
+        bridge.process_audit_entry(
+            AuditLogEntry(
+                entry_type="policy_review",
+                agent_id="b",
+                details={"review_outcome": "rejected"},
+            )
+        )
         bridge.process_audit_entry(AuditLogEntry(entry_type="allowed", agent_id="c"))
         s = bridge.summary()
         assert s["policy_review_count"] == 1

@@ -30,8 +30,7 @@ class CircuitOpenError(Exception):
         self.agent_id = agent_id
         self.retry_after = retry_after
         super().__init__(
-            f"Circuit breaker OPEN for agent '{agent_id}'. "
-            f"Retry after {retry_after:.1f}s."
+            f"Circuit breaker OPEN for agent '{agent_id}'. Retry after {retry_after:.1f}s."
         )
 
 
@@ -58,9 +57,7 @@ class CircuitBreakerConfig:
             and reset_timeout_seconds is not None
             and recovery_timeout_seconds != reset_timeout_seconds
         ):
-            raise ValueError(
-                "recovery_timeout_seconds and reset_timeout_seconds must match"
-            )
+            raise ValueError("recovery_timeout_seconds and reset_timeout_seconds must match")
         timeout = recovery_timeout_seconds
         if timeout is None:
             timeout = reset_timeout_seconds
@@ -125,6 +122,7 @@ class CircuitBreaker:
             self.record_failure()
             raise
         if inspect.isawaitable(result):
+
             async def _await_result() -> Any:
                 try:
                     value = await result
@@ -133,6 +131,7 @@ class CircuitBreaker:
                     raise
                 self.record_success()
                 return value
+
             return _await_result()
         self.record_success()
         return result

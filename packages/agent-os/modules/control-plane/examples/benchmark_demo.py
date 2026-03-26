@@ -8,33 +8,29 @@ This script runs a subset of the red team dataset and displays
 the key differences between prompt-based safety and the Control Plane.
 """
 
-import sys
 import os
+import sys
 
 # Add parent directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from benchmark.red_team_dataset import (
-    get_prompts_by_category,
-    PromptCategory,
-    get_dataset_stats
-)
+from benchmark.red_team_dataset import PromptCategory, get_dataset_stats, get_prompts_by_category
 
 
 def show_dataset_overview():
     """Display an overview of the red team dataset"""
     stats = get_dataset_stats()
-    
-    print("\n" + "="*70)
+
+    print("\n" + "=" * 70)
     print("RED TEAM DATASET OVERVIEW")
-    print("="*70)
+    print("=" * 70)
     print(f"\nTotal Prompts: {stats['total']}")
-    print(f"\nBreakdown by Category:")
+    print("\nBreakdown by Category:")
     print(f"  • Direct Violations:     {stats['direct_violations']:>2} (obvious attacks)")
     print(f"  • Prompt Injections:     {stats['prompt_injections']:>2} (jailbreaks)")
     print(f"  • Contextual Confusion:  {stats['contextual_confusion']:>2} (social engineering)")
     print(f"  • Valid Requests:        {stats['valid_requests']:>2} (legitimate operations)")
-    print(f"\nExpected Outcomes:")
+    print("\nExpected Outcomes:")
     print(f"  • Should be blocked:     {stats['expected_blocked']:>2}")
     print(f"  • Should be allowed:     {stats['expected_allowed']:>2}")
     print()
@@ -42,10 +38,10 @@ def show_dataset_overview():
 
 def show_sample_prompts():
     """Display sample prompts from each category"""
-    print("="*70)
+    print("=" * 70)
     print("SAMPLE PROMPTS FROM EACH CATEGORY")
-    print("="*70)
-    
+    print("=" * 70)
+
     # Direct Violations
     print("\n1. DIRECT VIOLATIONS (Obvious Attacks)")
     print("-" * 70)
@@ -53,7 +49,7 @@ def show_sample_prompts():
     for i, prompt in enumerate(violations, 1):
         print(f"   {i}. {prompt.prompt}")
         print(f"      → {prompt.description}")
-    
+
     # Prompt Injections
     print("\n2. PROMPT INJECTIONS (Jailbreaks)")
     print("-" * 70)
@@ -61,7 +57,7 @@ def show_sample_prompts():
     for i, prompt in enumerate(injections, 1):
         print(f"   {i}. {prompt.prompt[:65]}...")
         print(f"      → {prompt.description}")
-    
+
     # Contextual Confusion
     print("\n3. CONTEXTUAL CONFUSION (Social Engineering)")
     print("-" * 70)
@@ -69,7 +65,7 @@ def show_sample_prompts():
     for i, prompt in enumerate(confusion, 1):
         print(f"   {i}. {prompt.prompt[:65]}...")
         print(f"      → {prompt.description}")
-    
+
     # Valid Requests
     print("\n4. VALID REQUESTS (Legitimate Operations)")
     print("-" * 70)
@@ -82,9 +78,9 @@ def show_sample_prompts():
 
 def show_methodology():
     """Display the benchmark methodology"""
-    print("="*70)
+    print("=" * 70)
     print("BENCHMARK METHODOLOGY")
-    print("="*70)
+    print("=" * 70)
     print("""
 The benchmark compares two approaches:
 
@@ -116,9 +112,9 @@ Key Metrics Tracked:
 
 def show_expected_results():
     """Display expected results"""
-    print("="*70)
+    print("=" * 70)
     print("EXPECTED RESULTS")
-    print("="*70)
+    print("=" * 70)
     print("""
 Based on our hypothesis:
 
@@ -144,9 +140,9 @@ Why the difference?
 
 def show_run_instructions():
     """Show how to run the full benchmark"""
-    print("="*70)
+    print("=" * 70)
     print("RUNNING THE FULL BENCHMARK")
-    print("="*70)
+    print("=" * 70)
     print("""
 To run the complete comparative study:
 
@@ -168,20 +164,20 @@ For more details, see: benchmark/README.md
 
 def main():
     """Main demo function"""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("COMPARATIVE SAFETY STUDY DEMO")
     print("Agent Control Plane vs Prompt-Based Safety")
-    print("="*70)
-    
+    print("=" * 70)
+
     show_dataset_overview()
     show_sample_prompts()
     show_methodology()
     show_expected_results()
     show_run_instructions()
-    
-    print("="*70)
+
+    print("=" * 70)
     print("Ready to run the benchmark? Execute: python3 benchmark.py")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
 
 if __name__ == "__main__":

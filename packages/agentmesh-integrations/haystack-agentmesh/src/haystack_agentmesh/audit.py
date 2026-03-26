@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 try:
     from haystack import component
 except ImportError:  # pragma: no cover
+
     class _ComponentShim:
         def __call__(self, cls):
             return cls
@@ -23,12 +24,14 @@ except ImportError:  # pragma: no cover
         def input_types(**kwargs):
             def decorator(func):
                 return func
+
             return decorator
 
         @staticmethod
         def output_types(**kwargs):
             def decorator(func):
                 return func
+
             return decorator
 
     component = _ComponentShim()  # type: ignore[assignment]

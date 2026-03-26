@@ -12,7 +12,7 @@ This project exists thanks to all the people who contribute.
 
 We welcome and recognize all contributors! Below is a list of people who have contributed to this project.
 
-<!-- 
+<!--
 To add yourself to this list:
 1. Make a contribution to the project
 2. Add your name below in alphabetical order

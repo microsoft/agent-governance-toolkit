@@ -52,12 +52,28 @@ def cli(args: list[str] | None = None) -> int:
             "version": "0.1.0",
             "engines": ["slo", "cost", "chaos", "delivery", "replay", "incidents"],
             "integrations": [
-                "agent_os", "agent_mesh", "otel", "langchain", "llamaindex",
-                "langfuse", "arize", "braintrust", "helicone", "datadog",
-                "langsmith", "mcp", "prometheus",
+                "agent_os",
+                "agent_mesh",
+                "otel",
+                "langchain",
+                "llamaindex",
+                "langfuse",
+                "arize",
+                "braintrust",
+                "helicone",
+                "datadog",
+                "langsmith",
+                "mcp",
+                "prometheus",
             ],
-            "adapters": ["langgraph", "crewai", "autogen", "openai_agents",
-                         "semantic_kernel", "dify"],
+            "adapters": [
+                "langgraph",
+                "crewai",
+                "autogen",
+                "openai_agents",
+                "semantic_kernel",
+                "dify",
+            ],
         }
         print(json.dumps(info, indent=2))
         return 0

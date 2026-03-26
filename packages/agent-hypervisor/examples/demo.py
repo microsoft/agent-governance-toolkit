@@ -251,8 +251,8 @@ async def demo_audit() -> None:
 
     step(f"Total deltas: {session.delta_engine.turn_count}")
 
-    audit log = await hv.terminate_session(session.sso.session_id)
-    step(f"audit log root: {audit log}")
+    audit_log = await hv.terminate_session(session.sso.session_id)
+    step(f"audit log root: {audit_log}")
 
     # Verify commitment
     commitment = hv.commitment.get_commitment(session.sso.session_id)
@@ -260,7 +260,7 @@ async def demo_audit() -> None:
         step(f"Commitment stored for session")
         step(f"  Participants: {len(commitment.participant_dids)}")
         step(f"  Deltas: {commitment.delta_count}")
-        step(f"  Verified: {hv.commitment.verify(session.sso.session_id, audit log)}")
+        step(f"  Verified: {hv.commitment.verify(session.sso.session_id, audit_log)}")
 
     print(f"\n  {BOLD}Audit guarantees:{RESET}")
     print(f"    Every agent action is delta-captured")

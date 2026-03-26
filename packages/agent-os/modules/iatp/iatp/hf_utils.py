@@ -37,6 +37,7 @@ try:
         upload_file,
         upload_folder,
     )
+
     HF_AVAILABLE = True
 except ImportError:
     HF_AVAILABLE = False
@@ -62,6 +63,7 @@ IATP_VERSION = "0.3.1"
 # =============================================================================
 # Hub Client
 # =============================================================================
+
 
 class IATPHubClient:
     """
@@ -279,6 +281,7 @@ class IATPHubClient:
 # Convenience Functions
 # =============================================================================
 
+
 def upload_experiment_logs(
     file_path: str | Path,
     repo_id: str = DEFAULT_REPO_ID,
@@ -346,7 +349,7 @@ def create_iatp_dataset_card(
         >>> card = create_iatp_dataset_card()
         >>> print(card)
     """
-    card_content = '''---
+    card_content = """---
 license: mit
 task_categories:
   - text-classification
@@ -463,7 +466,7 @@ MIT License
 Contributions are welcome! Please see the
 [GitHub repository](https://github.com/microsoft/agent-governance-toolkit)
 for contribution guidelines.
-'''
+"""
 
     if output_path:
         output_path = Path(output_path)

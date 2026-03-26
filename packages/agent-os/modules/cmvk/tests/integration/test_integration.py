@@ -3,8 +3,8 @@ Integration tests for the full verification kernel.
 """
 
 import pytest
-
 from cross_model_verification_kernel.core.kernel import VerificationKernel
+
 from tests.unit.test_agents import MockGenerator, MockVerifier
 
 

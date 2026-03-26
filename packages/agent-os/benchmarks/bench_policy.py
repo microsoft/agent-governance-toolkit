@@ -72,7 +72,10 @@ def bench_single_rule_evaluation(iterations: int = 10_000) -> Dict[str, Any]:
     evaluator = PolicyEvaluator(policies=[_make_policy_doc(1)])
     ctx = {"action": "action_0", "agent_id": "bench"}
 
-    return {"name": "Single Rule Evaluation", **_sync_timer(lambda: evaluator.evaluate(ctx), iterations)}
+    return {
+        "name": "Single Rule Evaluation",
+        **_sync_timer(lambda: evaluator.evaluate(ctx), iterations),
+    }
 
 
 def bench_10_rule_policy(iterations: int = 10_000) -> Dict[str, Any]:
@@ -80,7 +83,10 @@ def bench_10_rule_policy(iterations: int = 10_000) -> Dict[str, Any]:
     evaluator = PolicyEvaluator(policies=[_make_policy_doc(10)])
     ctx = {"action": "action_9", "agent_id": "bench"}
 
-    return {"name": "Policy Evaluation (10 rules)", **_sync_timer(lambda: evaluator.evaluate(ctx), iterations)}
+    return {
+        "name": "Policy Evaluation (10 rules)",
+        **_sync_timer(lambda: evaluator.evaluate(ctx), iterations),
+    }
 
 
 def bench_100_rule_policy(iterations: int = 10_000) -> Dict[str, Any]:
@@ -88,7 +94,10 @@ def bench_100_rule_policy(iterations: int = 10_000) -> Dict[str, Any]:
     evaluator = PolicyEvaluator(policies=[_make_policy_doc(100)])
     ctx = {"action": "action_99", "agent_id": "bench"}
 
-    return {"name": "Policy Evaluation (100 rules)", **_sync_timer(lambda: evaluator.evaluate(ctx), iterations)}
+    return {
+        "name": "Policy Evaluation (100 rules)",
+        **_sync_timer(lambda: evaluator.evaluate(ctx), iterations),
+    }
 
 
 def bench_yaml_policy_load(iterations: int = 1_000) -> Dict[str, Any]:

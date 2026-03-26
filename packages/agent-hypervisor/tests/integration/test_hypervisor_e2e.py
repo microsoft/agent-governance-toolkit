@@ -54,12 +54,8 @@ class TestFullLifecycle:
         sid = session.sso.session_id
 
         # Join two agents
-        ring_a = await self.hv.join_session(
-            sid, "did:mesh:agent-alpha", sigma_raw=0.85
-        )
-        ring_b = await self.hv.join_session(
-            sid, "did:mesh:agent-beta", sigma_raw=0.45
-        )
+        ring_a = await self.hv.join_session(sid, "did:mesh:agent-alpha", sigma_raw=0.85)
+        ring_b = await self.hv.join_session(sid, "did:mesh:agent-beta", sigma_raw=0.45)
         assert ring_a == ExecutionRing.RING_2_STANDARD
         assert ring_b == ExecutionRing.RING_3_SANDBOX
 
@@ -95,12 +91,8 @@ class TestFullLifecycle:
 
     async def test_multiple_concurrent_sessions(self):
         """Multiple sessions can run independently."""
-        s1 = await self.hv.create_session(
-            config=SessionConfig(), creator_did="did:mesh:admin"
-        )
-        s2 = await self.hv.create_session(
-            config=SessionConfig(), creator_did="did:mesh:admin"
-        )
+        s1 = await self.hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
+        s2 = await self.hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
 
         await self.hv.join_session(s1.sso.session_id, "did:mesh:a", sigma_raw=0.8)
         await self.hv.join_session(s2.sso.session_id, "did:mesh:b", sigma_raw=0.9)
@@ -123,21 +115,13 @@ class TestRingEnforcementIntegration:
         self.hv = Hypervisor()
 
     async def test_high_score_gets_standard_ring(self):
-        session = await self.hv.create_session(
-            config=SessionConfig(), creator_did="did:mesh:admin"
-        )
-        ring = await self.hv.join_session(
-            session.sso.session_id, "did:mesh:expert", sigma_raw=0.85
-        )
+        session = await self.hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
+        ring = await self.hv.join_session(session.sso.session_id, "did:mesh:expert", sigma_raw=0.85)
         assert ring == ExecutionRing.RING_2_STANDARD
 
     async def test_low_score_gets_sandbox(self):
-        session = await self.hv.create_session(
-            config=SessionConfig(), creator_did="did:mesh:admin"
-        )
-        ring = await self.hv.join_session(
-            session.sso.session_id, "did:mesh:newbie", sigma_raw=0.3
-        )
+        session = await self.hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
+        ring = await self.hv.join_session(session.sso.session_id, "did:mesh:newbie", sigma_raw=0.3)
         assert ring == ExecutionRing.RING_3_SANDBOX
 
     async def test_non_reversible_action_forces_strong_mode(self):
@@ -180,9 +164,7 @@ class TestVouchingSlashingIntegration:
         self.session_id = "test-session"
 
     def test_vouch_and_compute_eff_score(self):
-        self.hv.vouching.vouch(
-            "did:mesh:high", "did:mesh:low", self.session_id, 0.9, bond_pct=0.3
-        )
+        self.hv.vouching.vouch("did:mesh:high", "did:mesh:low", self.session_id, 0.9, bond_pct=0.3)
         eff_score = self.hv.vouching.compute_eff_score(
             "did:mesh:low", self.session_id, 0.4, risk_weight=0.5
         )
@@ -194,9 +176,7 @@ class TestVouchingSlashingIntegration:
     def test_max_exposure_prevents_over_bonding(self):
         """Agent cannot bond more than max_exposure of their σ."""
         # Default max_exposure = 0.80
-        self.hv.vouching.vouch(
-            "did:mesh:high", "did:mesh:a", self.session_id, 0.9, bond_pct=0.5
-        )
+        self.hv.vouching.vouch("did:mesh:high", "did:mesh:a", self.session_id, 0.9, bond_pct=0.5)
         # Already bonded 0.45, max = 0.72 (80% of 0.9), remaining = 0.27
         with pytest.raises(VouchingError, match="exceed max exposure"):
             self.hv.vouching.vouch(
@@ -205,9 +185,7 @@ class TestVouchingSlashingIntegration:
 
     def test_slash_cascades_to_voucher(self):
         """Community edition: penalty logs but doesn't apply penalties."""
-        self.hv.vouching.vouch(
-            "did:mesh:high", "did:mesh:low", self.session_id, 0.9, bond_pct=0.3
-        )
+        self.hv.vouching.vouch("did:mesh:high", "did:mesh:low", self.session_id, 0.9, bond_pct=0.3)
         agent_scores = {"did:mesh:high": 0.9, "did:mesh:low": 0.5}
         result = self.hv.slashing.slash(
             "did:mesh:low", self.session_id, 0.5, 0.5, "policy_violation", agent_scores
@@ -218,9 +196,7 @@ class TestVouchingSlashingIntegration:
         assert len(result.voucher_clips) == 0
 
     def test_release_bonds_on_session_terminate(self):
-        self.hv.vouching.vouch(
-            "did:mesh:high", "did:mesh:low", self.session_id, 0.9
-        )
+        self.hv.vouching.vouch("did:mesh:high", "did:mesh:low", self.session_id, 0.9)
         released = self.hv.vouching.release_session_bonds(self.session_id)
         assert released == 1
         exposure = self.hv.vouching.get_total_exposure("did:mesh:high", self.session_id)
@@ -242,9 +218,7 @@ class TestSagaIntegration:
 
     async def test_saga_happy_path(self):
         """Multi-step saga executes all steps successfully."""
-        session = await self.hv.create_session(
-            config=SessionConfig(), creator_did="did:mesh:admin"
-        )
+        session = await self.hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
         saga = session.saga.create_saga(session.sso.session_id)
 
         step1 = session.saga.add_step(
@@ -266,13 +240,14 @@ class TestSagaIntegration:
 
     async def test_saga_timeout_triggers_failure(self):
         """Step that exceeds timeout is marked as failed."""
-        session = await self.hv.create_session(
-            config=SessionConfig(), creator_did="did:mesh:admin"
-        )
+        session = await self.hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
         saga = session.saga.create_saga(session.sso.session_id)
 
         step = session.saga.add_step(
-            saga.saga_id, "slow_op", "did:mesh:a", "/api/slow",
+            saga.saga_id,
+            "slow_op",
+            "did:mesh:a",
+            "/api/slow",
             timeout_seconds=1,  # 1 second timeout
         )
 
@@ -281,20 +256,20 @@ class TestSagaIntegration:
             return "done"
 
         with pytest.raises(SagaTimeoutError):
-            await session.saga.execute_step(
-                saga.saga_id, step.step_id, executor=slow_executor
-            )
+            await session.saga.execute_step(saga.saga_id, step.step_id, executor=slow_executor)
 
     async def test_saga_retry_on_failure(self):
         """Step retries on transient failure and eventually succeeds."""
-        session = await self.hv.create_session(
-            config=SessionConfig(), creator_did="did:mesh:admin"
-        )
+        session = await self.hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
         saga = session.saga.create_saga(session.sso.session_id)
 
         step = session.saga.add_step(
-            saga.saga_id, "flaky_op", "did:mesh:a", "/api/flaky",
-            timeout_seconds=5, max_retries=2,
+            saga.saga_id,
+            "flaky_op",
+            "did:mesh:a",
+            "/api/flaky",
+            timeout_seconds=5,
+            max_retries=2,
         )
 
         call_count = 0
@@ -315,9 +290,7 @@ class TestSagaIntegration:
 
     async def test_saga_compensation_on_failure(self):
         """Failed step triggers compensation of all committed steps."""
-        session = await self.hv.create_session(
-            config=SessionConfig(), creator_did="did:mesh:admin"
-        )
+        session = await self.hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
         saga = session.saga.create_saga(session.sso.session_id)
 
         step1 = session.saga.add_step(
@@ -341,7 +314,8 @@ class TestSagaIntegration:
         # Step 3 fails
         with pytest.raises(ValueError):
             await session.saga.execute_step(
-                saga.saga_id, step3.step_id,
+                saga.saga_id,
+                step3.step_id,
                 executor=lambda: (_ for _ in ()).throw(ValueError("boom")),
             )
 
@@ -359,13 +333,14 @@ class TestSagaIntegration:
 
     async def test_saga_escalation_on_compensation_failure(self):
         """Failed compensation escalates to Joint Liability penalty."""
-        session = await self.hv.create_session(
-            config=SessionConfig(), creator_did="did:mesh:admin"
-        )
+        session = await self.hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
         saga = session.saga.create_saga(session.sso.session_id)
 
         step1 = session.saga.add_step(
-            saga.saga_id, "irrev", "did:mesh:a", "/api/irrev"
+            saga.saga_id,
+            "irrev",
+            "did:mesh:a",
+            "/api/irrev",
             # No undo_api — compensation impossible
         )
         await session.saga.execute_step(
@@ -415,9 +390,7 @@ class TestAuditTrailIntegration:
 
     async def test_hash_chain_integrity(self):
         """Community edition: no chain verification, always returns True."""
-        session = await self.hv.create_session(
-            config=SessionConfig(), creator_did="did:mesh:admin"
-        )
+        session = await self.hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
         for i in range(10):
             session.delta_engine.capture(
                 f"did:mesh:agent-{i % 3}",
@@ -432,9 +405,7 @@ class TestAuditTrailIntegration:
 
     async def test_hash_chain_root_deterministic(self):
         """Same session with same deltas produces consistent audit log roots."""
-        session = await self.hv.create_session(
-            config=SessionConfig(), creator_did="did:mesh:admin"
-        )
+        session = await self.hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
 
         # Capture deltas
         session.delta_engine.capture(
@@ -518,9 +489,7 @@ class TestEdgeCases:
             await self.hv.join_session("fake-session", "did:mesh:a", sigma_raw=0.8)
 
     async def test_duplicate_agent_rejected(self):
-        session = await self.hv.create_session(
-            config=SessionConfig(), creator_did="did:mesh:admin"
-        )
+        session = await self.hv.create_session(config=SessionConfig(), creator_did="did:mesh:admin")
         sid = session.sso.session_id
         await self.hv.join_session(sid, "did:mesh:a", sigma_raw=0.8)
         with pytest.raises(Exception):

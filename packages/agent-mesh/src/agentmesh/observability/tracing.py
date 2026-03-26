@@ -7,22 +7,24 @@ Provides distributed tracing for AgentMesh operations including
 trust handshakes, identity verification, scope chains, and policy checks.
 """
 
-from typing import Optional, Any, Callable, TypeVar
-from functools import wraps
 import inspect
 import os
 import time
+from collections.abc import Callable
+from functools import wraps
+from typing import Any, TypeVar
 
 F = TypeVar("F", bound=Callable[..., Any])
 
 # Check if OpenTelemetry is available
 _OTEL_AVAILABLE = False
 try:
-    from opentelemetry import trace, context
+    from opentelemetry import context, trace
+    from opentelemetry.propagate import extract as _otel_extract
+    from opentelemetry.propagate import inject as _otel_inject
+    from opentelemetry.sdk.resources import Resource
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-    from opentelemetry.sdk.resources import Resource
-    from opentelemetry.propagate import inject as _otel_inject, extract as _otel_extract
 
     _OTEL_AVAILABLE = True
 except ImportError:
@@ -40,7 +42,7 @@ except ImportError:
 
 def setup_tracing(
     service_name: str = "agentmesh",
-    endpoint: Optional[str] = None,
+    endpoint: str | None = None,
     insecure: bool = False,
 ) -> None:
     """
@@ -53,10 +55,10 @@ def setup_tracing(
     """
     try:
         from opentelemetry import trace
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
         from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
     except ImportError:
         # OpenTelemetry not installed, skip setup
         return
@@ -68,11 +70,13 @@ def setup_tracing(
         return
 
     # Create resource
-    resource = Resource.create({
-        "service.name": service_name,
-        "service.namespace": "agentmesh",
-        "deployment.environment": os.getenv("AGENTMESH_ENV", "development"),
-    })
+    resource = Resource.create(
+        {
+            "service.name": service_name,
+            "service.namespace": "agentmesh",
+            "deployment.environment": os.getenv("AGENTMESH_ENV", "development"),
+        }
+    )
 
     # Create tracer provider
     provider = TracerProvider(resource=resource)
@@ -91,6 +95,7 @@ def get_tracer(name: str = "agentmesh"):
     """Get tracer instance."""
     try:
         from opentelemetry import trace
+
         return trace.get_tracer(name)
     except ImportError:
         return None
@@ -98,9 +103,9 @@ def get_tracer(name: str = "agentmesh"):
 
 def trace_operation(
     operation_name: str,
-    agent_did: Optional[str] = None,
-    trust_score: Optional[int] = None,
-    policy_result: Optional[str] = None,
+    agent_did: str | None = None,
+    trust_score: int | None = None,
+    policy_result: str | None = None,
 ):
     """
     Decorator to trace an operation.
@@ -111,6 +116,7 @@ def trace_operation(
         trust_score: Optional trust score
         policy_result: Optional policy result (ALLOW/DENY)
     """
+
     def decorator(func):
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
@@ -171,6 +177,7 @@ def trace_operation(
 
         # Return appropriate wrapper based on function type
         import inspect
+
         if inspect.iscoroutinefunction(func):
             return async_wrapper
         return sync_wrapper
@@ -184,7 +191,7 @@ class TraceContext:
     def __init__(
         self,
         operation_name: str,
-        agent_did: Optional[str] = None,
+        agent_did: str | None = None,
         **attributes: Any,
     ):
         self.operation_name = operation_name
@@ -226,7 +233,7 @@ class TraceContext:
         if self.span:
             self.span.set_attribute(key, value)
 
-    def add_event(self, name: str, attributes: Optional[dict] = None):
+    def add_event(self, name: str, attributes: dict | None = None):
         """Add event to current span."""
         if self.span:
             self.span.add_event(name, attributes or {})
@@ -234,9 +241,9 @@ class TraceContext:
 
 def configure_tracing(
     service_name: str = "agentmesh",
-    endpoint: Optional[str] = None,
+    endpoint: str | None = None,
     console: bool = False,
-) -> Optional[Any]:
+) -> Any | None:
     """Configure OpenTelemetry tracing with optional OTLP or console export.
 
     Args:
@@ -284,7 +291,7 @@ class MeshTracer:
     def __init__(
         self,
         service_name: str = "agentmesh",
-        endpoint: Optional[str] = None,
+        endpoint: str | None = None,
     ) -> None:
         self._service_name = service_name
         self._endpoint = endpoint or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
@@ -432,7 +439,9 @@ class MeshTracer:
         def _extract(*args: Any, **kwargs: Any) -> dict:
             result = kwargs.pop("result", None)
             decision = (
-                getattr(result, "decision", None) or str(result) if result is not None else "unknown"
+                getattr(result, "decision", None) or str(result)
+                if result is not None
+                else "unknown"
             )
             return {
                 "policy.name": kwargs.get("policy_name") or _arg(args, 0),

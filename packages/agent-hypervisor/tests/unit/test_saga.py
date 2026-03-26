@@ -89,16 +89,12 @@ class TestSagaOrchestrator:
     @pytest.mark.asyncio
     async def test_execute_step_success(self):
         saga = self.orchestrator.create_saga("session:1")
-        step = self.orchestrator.add_step(
-            saga.saga_id, "a1", "did:a", "/api/exec"
-        )
+        step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/api/exec")
 
         async def executor():
             return "done"
 
-        result = await self.orchestrator.execute_step(
-            saga.saga_id, step.step_id, executor=executor
-        )
+        result = await self.orchestrator.execute_step(saga.saga_id, step.step_id, executor=executor)
 
         assert result == "done"
         assert step.state == StepState.COMMITTED
@@ -106,9 +102,7 @@ class TestSagaOrchestrator:
     @pytest.mark.asyncio
     async def test_execute_step_failure(self):
         saga = self.orchestrator.create_saga("session:1")
-        step = self.orchestrator.add_step(
-            saga.saga_id, "a1", "did:a", "/api/exec"
-        )
+        step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/api/exec")
 
         async def failing_executor():
             raise RuntimeError("boom")
@@ -126,15 +120,12 @@ class TestSagaOrchestrator:
 
         # Add and commit 3 steps
         for i in range(3):
-            step = self.orchestrator.add_step(
-                saga.saga_id, f"a{i}", "did:a", "/exec", f"/undo/{i}"
-            )
+            step = self.orchestrator.add_step(saga.saga_id, f"a{i}", "did:a", "/exec", f"/undo/{i}")
+
             async def ok_executor():
                 return "ok"
 
-            await self.orchestrator.execute_step(
-                saga.saga_id, step.step_id, executor=ok_executor
-            )
+            await self.orchestrator.execute_step(saga.saga_id, step.step_id, executor=ok_executor)
 
         # Compensate all
         async def compensator(step):
@@ -147,15 +138,12 @@ class TestSagaOrchestrator:
     @pytest.mark.asyncio
     async def test_compensate_with_failure_escalates(self):
         saga = self.orchestrator.create_saga("session:1")
-        step = self.orchestrator.add_step(
-            saga.saga_id, "a1", "did:a", "/exec", "/undo"
-        )
+        step = self.orchestrator.add_step(saga.saga_id, "a1", "did:a", "/exec", "/undo")
+
         async def ok_executor():
             return "ok"
 
-        await self.orchestrator.execute_step(
-            saga.saga_id, step.step_id, executor=ok_executor
-        )
+        await self.orchestrator.execute_step(saga.saga_id, step.step_id, executor=ok_executor)
 
         async def failing_compensator(step):
             raise RuntimeError("undo failed")

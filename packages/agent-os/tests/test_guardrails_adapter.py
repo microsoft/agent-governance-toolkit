@@ -8,10 +8,6 @@ No real guardrails-ai dependency — uses built-in validators and mocks.
 Run with: python -m pytest tests/test_guardrails_adapter.py -v --tb=short
 """
 
-from unittest.mock import MagicMock
-
-import pytest
-
 from agent_os.integrations.guardrails_adapter import (
     FailAction,
     GuardrailsKernel,
@@ -21,7 +17,6 @@ from agent_os.integrations.guardrails_adapter import (
     ValidationOutcome,
     ValidationResult,
 )
-
 
 # =============================================================================
 # RegexValidator
@@ -168,9 +163,7 @@ class TestGuardrailsKernel:
         assert r.passed
 
     def test_single_validator_pass(self):
-        k = GuardrailsKernel(
-            validators=[KeywordValidator(blocked_keywords=["DROP TABLE"])]
-        )
+        k = GuardrailsKernel(validators=[KeywordValidator(blocked_keywords=["DROP TABLE"])])
         r = k.validate("Hello world")
         assert r.passed
 

@@ -7,10 +7,10 @@ Every agent identity is linked to a human sponsor who is accountable.
 The sponsor's credentials are cryptographically linked to the scope chain.
 """
 
-from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field, EmailStr
 import uuid
+from datetime import datetime
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 class HumanSponsor(BaseModel):
@@ -25,17 +25,17 @@ class HumanSponsor(BaseModel):
 
     # Identity
     email: EmailStr = Field(..., description="Verified email address")
-    name: Optional[str] = Field(None, description="Human name")
+    name: str | None = Field(None, description="Human name")
 
     # Organization
-    organization_id: Optional[str] = Field(None)
-    organization_name: Optional[str] = Field(None)
-    department: Optional[str] = Field(None)
+    organization_id: str | None = Field(None)
+    organization_name: str | None = Field(None)
+    department: str | None = Field(None)
 
     # Verification
     verified: bool = Field(default=False)
-    verified_at: Optional[datetime] = Field(None)
-    verification_method: Optional[str] = Field(None)  # "email", "sso", "manual"
+    verified_at: datetime | None = Field(None)
+    verification_method: str | None = Field(None)  # "email", "sso", "manual"
 
     # Permissions
     max_agents: int = Field(default=10, description="Max agents this sponsor can create")
@@ -50,15 +50,15 @@ class HumanSponsor(BaseModel):
 
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    last_activity_at: Optional[datetime] = Field(None)
+    last_activity_at: datetime | None = Field(None)
 
     @classmethod
     def create(
         cls,
         email: str,
-        name: Optional[str] = None,
-        organization: Optional[str] = None,
-        allowed_capabilities: Optional[list[str]] = None,
+        name: str | None = None,
+        organization: str | None = None,
+        allowed_capabilities: list[str] | None = None,
     ) -> "HumanSponsor":
         """Create a new human sponsor.
 
@@ -149,7 +149,7 @@ class HumanSponsor(BaseModel):
         if agent_did in self.agent_dids:
             self.agent_dids.remove(agent_did)
 
-    def suspend(self, reason: Optional[str] = None) -> None:
+    def suspend(self, reason: str | None = None) -> None:
         """Suspend this sponsor (and all their agents should be suspended too).
 
         Args:
@@ -194,7 +194,7 @@ class SponsorRegistry:
         self._sponsors[sponsor.sponsor_id] = sponsor
         self._by_email[sponsor.email] = sponsor.sponsor_id
 
-    def get(self, sponsor_id: str) -> Optional[HumanSponsor]:
+    def get(self, sponsor_id: str) -> HumanSponsor | None:
         """Get sponsor by ID.
 
         Args:
@@ -205,7 +205,7 @@ class SponsorRegistry:
         """
         return self._sponsors.get(sponsor_id)
 
-    def get_by_email(self, email: str) -> Optional[HumanSponsor]:
+    def get_by_email(self, email: str) -> HumanSponsor | None:
         """Get sponsor by email.
 
         Args:
@@ -222,8 +222,8 @@ class SponsorRegistry:
     def get_or_create(
         self,
         email: str,
-        name: Optional[str] = None,
-        organization: Optional[str] = None,
+        name: str | None = None,
+        organization: str | None = None,
     ) -> HumanSponsor:
         """Get existing sponsor or create new one.
 

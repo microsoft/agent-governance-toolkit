@@ -121,9 +121,7 @@ class BlueGreenManager:
 
     def get_inactive(self) -> AgentEnvironment:
         """Return the standby (inactive) environment."""
-        inactive = (
-            Environment.GREEN if self._active_env == Environment.BLUE else Environment.BLUE
-        )
+        inactive = Environment.GREEN if self._active_env == Environment.BLUE else Environment.BLUE
         return self._env(inactive)
 
     def deploy(self, version: str) -> AgentEnvironment:
@@ -216,8 +214,7 @@ class BlueGreenManager:
         inactive = self.get_inactive()
         if inactive.health_status != "healthy":
             msg = (
-                f"Cannot switch to {inactive.name.value}: "
-                f"health_status is {inactive.health_status}"
+                f"Cannot switch to {inactive.name.value}: health_status is {inactive.health_status}"
             )
             raise RuntimeError(msg)
 
@@ -244,9 +241,7 @@ class BlueGreenManager:
         time.sleep(self.config.drain_timeout_seconds)
 
         # Complete drain → inactive
-        drained = self._env(draining.name).model_copy(
-            update={"state": EnvironmentState.INACTIVE}
-        )
+        drained = self._env(draining.name).model_copy(update={"state": EnvironmentState.INACTIVE})
         self._set_env(drained.name, drained)
         self._emit("switch", new_active.name, {"previous": drained.name.value})
         return new_active
@@ -278,9 +273,7 @@ class BlueGreenManager:
         self._previous_active = None
 
         # Complete drain
-        drained = self._env(draining.name).model_copy(
-            update={"state": EnvironmentState.INACTIVE}
-        )
+        drained = self._env(draining.name).model_copy(update={"state": EnvironmentState.INACTIVE})
         self._set_env(drained.name, drained)
         self._emit("rollback", restored.name, {"rolled_back_from": draining.name.value})
         return restored

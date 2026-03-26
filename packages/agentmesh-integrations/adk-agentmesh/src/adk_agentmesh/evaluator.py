@@ -27,6 +27,7 @@ class Verdict(str, Enum):
 @dataclass
 class PolicyDecision:
     """Result of a policy evaluation."""
+
     verdict: Verdict
     reason: str = ""
     matched_rule: str = ""
@@ -87,6 +88,7 @@ class ADKPolicyEvaluator:
     def _load_policy(self, path: str | Path) -> None:
         """Load governance policy from YAML config."""
         import yaml
+
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"Policy config not found: {path}")
@@ -152,7 +154,12 @@ class ADKPolicyEvaluator:
         return PolicyDecision(verdict=Verdict.ALLOW)
 
     async def evaluate_agent_delegation(
-        self, *, parent_agent: str, child_agent: str, scope: Any = None, context: Any = None
+        self,
+        *,
+        parent_agent: str,
+        child_agent: str,
+        scope: Any = None,
+        context: Any = None,
     ) -> PolicyDecision:
         """Evaluate whether agent delegation should be allowed."""
         self._log_audit(
@@ -163,12 +170,15 @@ class ADKPolicyEvaluator:
         )
         return PolicyDecision(verdict=Verdict.ALLOW)
 
-    def before_tool_callback(self, tool_name: str, tool_args: dict, **kwargs) -> Optional[dict]:
+    def before_tool_callback(
+        self, tool_name: str, tool_args: dict, **kwargs
+    ) -> Optional[dict]:
         """ADK before_tool_callback hook.
 
         Returns None to allow, or a dict with error to block.
         """
         import asyncio
+
         decision = asyncio.get_event_loop().run_until_complete(
             self.evaluate_tool_call(
                 tool_name=tool_name,
@@ -202,11 +212,15 @@ class ADKPolicyEvaluator:
 
     def _deny(self, reason: str, rule: str, **meta) -> PolicyDecision:
         self._log_audit("tool_call_denied", reason=reason, rule=rule, **meta)
-        return PolicyDecision(verdict=Verdict.DENY, reason=reason, matched_rule=rule, metadata=meta)
+        return PolicyDecision(
+            verdict=Verdict.DENY, reason=reason, matched_rule=rule, metadata=meta
+        )
 
     def _log_audit(self, event_type: str, **details) -> None:
-        self._audit_log.append({
-            "event": event_type,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            **details,
-        })
+        self._audit_log.append(
+            {
+                "event": event_type,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                **details,
+            }
+        )

@@ -192,7 +192,7 @@ policies:
   - name: no_pii_export
     condition: "action.type == 'export' and data.contains_pii"
     action: deny
-    
+
   - name: rate_limit_api
     condition: "action.type == 'api_call'"
     limit: "100/hour"
@@ -262,11 +262,11 @@ async def handle_delegation(delegation):
     # Verify delegation came from trusted source
     if not await bridge.verify_delegation(delegation):
         raise PermissionError("Delegation not verified")
-    
+
     # Execute within delegated scope
     with kernel.scoped(delegation.scope):
         result = await data_analyst(delegation.task)
-        
+
     # Report completion to AgentMesh
     await bridge.report_completion(delegation.id, result)
     return result
@@ -325,7 +325,7 @@ spec:
     # Your agent with Agent OS embedded
     - name: agent
       image: my-agent:latest
-      
+
     # AgentMesh sidecar for trust
     - name: agentmesh-sidecar
       image: agentmesh/sidecar:latest
@@ -392,6 +392,6 @@ Start with Agent OS for immediate safety benefits, add AgentMesh when you need m
 
 ---
 
-**Questions?** 
+**Questions?**
 - Agent OS: [github.com/microsoft/agent-governance-toolkit/discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)
 - AgentMesh: [github.com/microsoft/agent-governance-toolkit/discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)

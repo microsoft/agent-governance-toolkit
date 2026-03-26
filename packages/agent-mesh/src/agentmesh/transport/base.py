@@ -7,9 +7,10 @@ must implement to exchange trust data between agents.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any
 
 
 class TransportState(str, Enum):
@@ -97,7 +98,7 @@ class Transport(ABC):
         """
 
     @abstractmethod
-    async def receive(self, timeout: Optional[float] = None) -> dict[str, Any]:
+    async def receive(self, timeout: float | None = None) -> dict[str, Any]:
         """Receive the next message.
 
         Args:
@@ -130,9 +131,7 @@ class Transport(ABC):
             callback: The callback to remove.
         """
         if topic in self._subscribers:
-            self._subscribers[topic] = [
-                cb for cb in self._subscribers[topic] if cb is not callback
-            ]
+            self._subscribers[topic] = [cb for cb in self._subscribers[topic] if cb is not callback]
 
     async def _notify_subscribers(self, topic: str, payload: dict[str, Any]) -> None:
         """Dispatch a message to all subscribers for the given topic.

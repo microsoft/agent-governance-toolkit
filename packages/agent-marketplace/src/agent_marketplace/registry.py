@@ -153,11 +153,16 @@ class PluginRegistry:
         results: list[PluginManifest] = []
         for versions in self._plugins.values():
             latest = max(versions.values(), key=lambda m: _semver_tuple(m.version))
-            if query_lower in latest.name.lower() or query_lower in latest.description.lower():
+            if (
+                query_lower in latest.name.lower()
+                or query_lower in latest.description.lower()
+            ):
                 results.append(latest)
         return results
 
-    def list_plugins(self, type_filter: Optional[PluginType] = None) -> list[PluginManifest]:
+    def list_plugins(
+        self, type_filter: Optional[PluginType] = None
+    ) -> list[PluginManifest]:
         """List all registered plugins (latest version of each).
 
         Args:

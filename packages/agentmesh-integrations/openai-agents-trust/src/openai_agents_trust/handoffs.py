@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, Union
+from typing import Any, Optional
 
 from agents import Agent
 from agents.handoffs import Handoff, HandoffInputData, handoff
 from agents.run_context import RunContextWrapper
-from agents.util._types import MaybeAwaitable
 
 from .audit import AuditLog
 from .trust import TrustScorer

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Policy Editor Panel - WebView-based policy management studio
- * 
+ *
  * Provides a visual interface for creating, editing, and testing policies
  * with syntax highlighting, real-time validation, and template library.
  */
@@ -295,7 +295,7 @@ policies:
         this._update();
 
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
-        
+
         this._panel.webview.onDidReceiveMessage(
             async message => {
                 switch (message.type) {
@@ -463,7 +463,7 @@ policies:
             const content = await vscode.workspace.fs.readFile(uris[0]);
             const ext = path.extname(uris[0].fsPath).toLowerCase();
             const format = ext === '.json' ? 'json' : ext === '.rego' ? 'rego' : 'yaml';
-            
+
             this._panel.webview.postMessage({
                 type: 'policyImported',
                 content: content.toString(),
@@ -815,7 +815,7 @@ policies:
             <h2>📋 Policy Templates</h2>
             <div id="templates"></div>
         </div>
-        
+
         <div class="editor-container">
             <div class="toolbar">
                 <select id="format">
@@ -834,7 +834,7 @@ policies:
                 <textarea class="editor" id="editor" spellcheck="false" placeholder="Enter your policy here or select a template..."></textarea>
             </div>
         </div>
-        
+
         <div class="validation-panel">
             <h2>🔍 Validation</h2>
             <div id="validationResults">
@@ -842,7 +842,7 @@ policies:
                     Edit your policy and click Validate to check for errors.
                 </p>
             </div>
-            
+
             <h2 style="margin-top: 20px;">🧪 Test Results</h2>
             <div id="testResults">
                 <p style="color: var(--vscode-descriptionForeground); font-size: 12px;">
@@ -857,7 +857,7 @@ policies:
         const templates = ${templatesJson};
         const editor = document.getElementById('editor');
         const lineNumbers = document.getElementById('lineNumbers');
-        
+
         // Render templates
         const templatesContainer = document.getElementById('templates');
         templates.forEach(template => {
@@ -877,7 +877,7 @@ policies:
             const lines = editor.value.split('\\n').length;
             lineNumbers.innerHTML = Array.from({length: lines}, (_, i) => i + 1).join('<br>');
         }
-        
+
         editor.addEventListener('input', updateLineNumbers);
         editor.addEventListener('scroll', () => {
             lineNumbers.scrollTop = editor.scrollTop;

@@ -2,12 +2,13 @@
 # Licensed under the MIT License.
 """Integration tests for MCP Kernel Server."""
 
-import sys
-import os
 import json
+import os
+import sys
+
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from mcp_kernel_server.server import KernelMCPServer, ServerConfig
 from mcp_kernel_server.tools import GetAuditLogTool
@@ -70,11 +71,13 @@ class TestEndToEnd:
         assert exec_result["isError"] is True
 
         # Log the blocked action to audit
-        GetAuditLogTool.log_entry({
-            "type": "blocked",
-            "agent_id": "test-agent",
-            "action": "file_write",
-        })
+        GetAuditLogTool.log_entry(
+            {
+                "type": "blocked",
+                "agent_id": "test-agent",
+                "action": "file_write",
+            }
+        )
 
         # Retrieve audit log
         audit_result = await self.server.handle_call_tool(
@@ -88,7 +91,8 @@ class TestEndToEnd:
     async def test_cmvk_verify_and_review(self):
         # Verify a claim
         verify_result = await self.server.handle_call_tool(
-            "cmvk_verify", {"claim": "2+2=4"},
+            "cmvk_verify",
+            {"claim": "2+2=4"},
         )
         assert verify_result["isError"] is False
 
@@ -115,7 +119,12 @@ class TestEndToEnd:
         # Slash reputation
         slash_result = await self.server.handle_call_tool(
             "iatp_reputation",
-            {"action": "slash", "agent_id": "bad-actor", "slash_reason": "misinfo", "slash_severity": "high"},
+            {
+                "action": "slash",
+                "agent_id": "bad-actor",
+                "slash_reason": "misinfo",
+                "slash_severity": "high",
+            },
         )
         assert slash_result["isError"] is False
 
@@ -129,12 +138,14 @@ class TestEndToEnd:
 
     @pytest.mark.asyncio
     async def test_jsonrpc_handler(self):
-        response = await self.server._handle_jsonrpc({
-            "jsonrpc": "2.0",
-            "method": "initialize",
-            "params": {},
-            "id": 1,
-        })
+        response = await self.server._handle_jsonrpc(
+            {
+                "jsonrpc": "2.0",
+                "method": "initialize",
+                "params": {},
+                "id": 1,
+            }
+        )
         assert response["jsonrpc"] == "2.0"
         assert response["id"] == 1
         assert "result" in response

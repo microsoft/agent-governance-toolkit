@@ -7,10 +7,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 import yaml
 
-from agent_os.policies.cli import cmd_diff, cmd_test, cmd_validate, main
+from agent_os.policies.cli import main
 from agent_os.policies.schema import (
     PolicyAction,
     PolicyCondition,
@@ -25,11 +24,7 @@ from agent_os.policies.schema import (
 # ---------------------------------------------------------------------------
 
 SCHEMA_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "src"
-    / "agent_os"
-    / "policies"
-    / "policy_schema.json"
+    Path(__file__).resolve().parent.parent / "src" / "agent_os" / "policies" / "policy_schema.json"
 )
 
 
@@ -263,12 +258,14 @@ class TestDiffCommand:
     def test_rule_added(self, tmp_path, capsys):
         data1 = _valid_policy_dict()
         data2 = _valid_policy_dict()
-        data2["rules"].append({
-            "name": "new_rule",
-            "condition": {"field": "x", "operator": "eq", "value": 1},
-            "action": "audit",
-            "priority": 10,
-        })
+        data2["rules"].append(
+            {
+                "name": "new_rule",
+                "condition": {"field": "x", "operator": "eq", "value": 1},
+                "action": "audit",
+                "priority": 10,
+            }
+        )
         f1 = _write_yaml(tmp_path / "a.yaml", data1)
         f2 = _write_yaml(tmp_path / "b.yaml", data2)
         rc = main(["diff", str(f1), str(f2)])
@@ -341,9 +338,7 @@ class TestCLIEntryPoint:
             rules=[
                 PolicyRule(
                     name="r1",
-                    condition=PolicyCondition(
-                        field="f", operator=PolicyOperator.EQ, value="v"
-                    ),
+                    condition=PolicyCondition(field="f", operator=PolicyOperator.EQ, value="v"),
                     action=PolicyAction.ALLOW,
                 ),
             ],

@@ -21,7 +21,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "packages" / "agent-os" / "src"))
 
 from agent_os.integrations import CrewAIKernel
-from agent_os.integrations.base import GovernancePolicy, PolicyViolationError
+from agent_os.integrations.base import GovernancePolicy
 
 # ── 1. Define a governance policy ─────────────────────────────────────────
 policy = GovernancePolicy(
@@ -44,7 +44,13 @@ print("\n[1] Crew task with a dangerous SQL injection pattern …")
 allowed, reason = kernel.pre_execute(ctx, "Execute: DROP TABLE users")
 if not allowed:
     print(f"    🚫 BLOCKED — {reason}")
-    audit.append({"ts": datetime.now().isoformat(), "task": "DROP TABLE users", "status": "BLOCKED"})
+    audit.append(
+        {
+            "ts": datetime.now().isoformat(),
+            "task": "DROP TABLE users",
+            "status": "BLOCKED",
+        }
+    )
 
 # ── 3. Policy violation: call budget exhausted ────────────────────────────
 print("\n[2] Exhausting the call budget …")
@@ -52,7 +58,13 @@ ctx.call_count = policy.max_tool_calls  # simulate budget consumed
 allowed, reason = kernel.pre_execute(ctx, "Summarise quarterly reports")
 if not allowed:
     print(f"    🚫 BLOCKED — {reason}")
-    audit.append({"ts": datetime.now().isoformat(), "task": "summarise reports", "status": "BLOCKED"})
+    audit.append(
+        {
+            "ts": datetime.now().isoformat(),
+            "task": "summarise reports",
+            "status": "BLOCKED",
+        }
+    )
 ctx.call_count = 0  # reset for next check
 
 # ── 4. Compliant task succeeds ────────────────────────────────────────────
@@ -60,7 +72,13 @@ print("\n[3] Safe crew task passes policy check …")
 allowed, reason = kernel.pre_execute(ctx, "Summarise the quarterly financial reports")
 if allowed:
     print("    ✅ ALLOWED — policy check passed")
-    audit.append({"ts": datetime.now().isoformat(), "task": "summarise reports", "status": "ALLOWED"})
+    audit.append(
+        {
+            "ts": datetime.now().isoformat(),
+            "task": "summarise reports",
+            "status": "ALLOWED",
+        }
+    )
 
 # ── 5. Audit trail ────────────────────────────────────────────────────────
 print("\n── Audit Trail ──────────────────────────────────────────")

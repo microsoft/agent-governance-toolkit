@@ -13,15 +13,7 @@ Usage:
 
 from agent_os.integrations import (
     GovernancePolicy,
-    LangChainKernel,
-    LlamaIndexKernel,
-    CrewAIKernel,
-    AutoGenKernel,
-    OpenAIKernel,
-    SemanticKernelWrapper,
 )
-from agent_os.integrations.openai_agents_sdk import OpenAIAgentsKernel
-
 
 # ── Shared policy for all frameworks ─────────────────────────────
 policy = GovernancePolicy(
@@ -146,5 +138,7 @@ if __name__ == "__main__":
 
     print("\n" + "=" * 60)
     print("All 7 frameworks governed with a single GovernancePolicy!")
-    print("Docs: https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/integrations.md")
+    print(
+        "Docs: https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/integrations.md"
+    )
     print("=" * 60)

@@ -13,13 +13,14 @@ Both decorators work with function-based views and class-based views
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Optional
+from typing import Any
 
 from .middleware import _TRUST_EXEMPT_ATTR, _TRUST_REQUIRED_ATTR
 
 
-def trust_required(min_score: Optional[int] = None) -> Callable[..., Any]:
+def trust_required(min_score: int | None = None) -> Callable[..., Any]:
     """Decorator that sets a per-view minimum trust score.
 
     When ``min_score`` is ``None`` the global

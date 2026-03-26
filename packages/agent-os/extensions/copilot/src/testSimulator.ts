@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Test Simulator
- * 
+ *
  * Provides testing and simulation capabilities for agents,
  * including scenario-based testing and edge case detection.
  */
@@ -100,28 +100,28 @@ export interface SecurityVulnerability {
 }
 
 export class TestSimulator {
-    
+
     /**
      * Generate test scenarios for an agent
      */
     generateTestScenarios(spec: AgentSpec): TestScenario[] {
         const scenarios: TestScenario[] = [];
-        
+
         // Happy path scenario
         scenarios.push(this.generateHappyPathScenario(spec));
-        
+
         // Error handling scenarios
         scenarios.push(...this.generateErrorScenarios(spec));
-        
+
         // Edge case scenarios
         scenarios.push(...this.generateEdgeCaseScenarios(spec));
-        
+
         // Security scenarios
         scenarios.push(...this.generateSecurityScenarios(spec));
-        
+
         // Performance scenarios
         scenarios.push(this.generatePerformanceScenario(spec));
-        
+
         return scenarios;
     }
 
@@ -133,10 +133,10 @@ export class TestSimulator {
         agent?: GeneratedAgent
     ): Promise<TestResult[]> {
         const results: TestResult[] = [];
-        
+
         for (const scenario of scenarios) {
             logger.info('Running test scenario', { name: scenario.name });
-            
+
             const startTime = Date.now();
             const result: TestResult = {
                 scenario,
@@ -144,12 +144,12 @@ export class TestSimulator {
                 duration: 0,
                 assertions: []
             };
-            
+
             try {
                 // Simulate test execution
                 const outputs = await this.simulateExecution(scenario);
                 result.outputs = outputs;
-                
+
                 // Run assertions
                 for (const assertion of scenario.assertions) {
                     const assertionResult = this.checkAssertion(assertion, outputs);
@@ -162,11 +162,11 @@ export class TestSimulator {
                 result.passed = false;
                 result.error = error instanceof Error ? error.message : String(error);
             }
-            
+
             result.duration = Date.now() - startTime;
             results.push(result);
         }
-        
+
         return results;
     }
 
@@ -175,7 +175,7 @@ export class TestSimulator {
      */
     detectEdgeCases(spec: AgentSpec): EdgeCase[] {
         const edgeCases: EdgeCase[] = [];
-        
+
         // Input edge cases
         edgeCases.push({
             name: 'Empty Input',
@@ -194,7 +194,7 @@ export class TestSimulator {
             },
             recommendation: 'Add validation for empty/null inputs'
         });
-        
+
         edgeCases.push({
             name: 'Malformed Input',
             description: 'Agent receives invalid/malformed data',
@@ -212,7 +212,7 @@ export class TestSimulator {
             },
             recommendation: 'Add input validation and sanitization'
         });
-        
+
         // Network edge cases
         if (spec.dataSources.some(s => s.includes('API'))) {
             edgeCases.push({
@@ -233,7 +233,7 @@ export class TestSimulator {
                 },
                 recommendation: 'Implement timeout handling and retry logic'
             });
-            
+
             edgeCases.push({
                 name: 'Rate Limited',
                 description: 'External API returns rate limit error',
@@ -252,7 +252,7 @@ export class TestSimulator {
                 recommendation: 'Implement exponential backoff and rate limit handling'
             });
         }
-        
+
         // Resource edge cases
         edgeCases.push({
             name: 'Large Dataset',
@@ -271,7 +271,7 @@ export class TestSimulator {
             },
             recommendation: 'Implement pagination and streaming for large datasets'
         });
-        
+
         // Timing edge cases
         edgeCases.push({
             name: 'Concurrent Execution',
@@ -290,7 +290,7 @@ export class TestSimulator {
             },
             recommendation: 'Implement proper locking or idempotency'
         });
-        
+
         return edgeCases;
     }
 
@@ -299,9 +299,9 @@ export class TestSimulator {
      */
     runSecurityAudit(code: string, language: string): SecurityAuditResult {
         const vulnerabilities: SecurityVulnerability[] = [];
-        
+
         // Check for common vulnerabilities
-        
+
         // SQL Injection
         if (/f["'].*\{.*\}.*SELECT|query\(.*\+.*\)/i.test(code)) {
             vulnerabilities.push({
@@ -313,7 +313,7 @@ export class TestSimulator {
                 cwe: 'CWE-89'
             });
         }
-        
+
         // Command Injection
         if (/exec\(|system\(|subprocess.*shell\s*=\s*True/i.test(code)) {
             vulnerabilities.push({
@@ -325,7 +325,7 @@ export class TestSimulator {
                 cwe: 'CWE-78'
             });
         }
-        
+
         // Hardcoded Secrets
         if (/(api[_-]?key|password|secret)\s*=\s*["'][^"']+["']/i.test(code)) {
             vulnerabilities.push({
@@ -337,7 +337,7 @@ export class TestSimulator {
                 cwe: 'CWE-798'
             });
         }
-        
+
         // Insecure Deserialization
         if (/pickle\.load|yaml\.load\((?!.*Loader)/i.test(code)) {
             vulnerabilities.push({
@@ -349,7 +349,7 @@ export class TestSimulator {
                 cwe: 'CWE-502'
             });
         }
-        
+
         // Missing Authentication
         if (/@app\.route|router\.(get|post)/i.test(code) && !/auth|token|permission/i.test(code)) {
             vulnerabilities.push({
@@ -361,7 +361,7 @@ export class TestSimulator {
                 cwe: 'CWE-306'
             });
         }
-        
+
         // Insecure Random
         if (/random\.|Math\.random/i.test(code) && /secret|token|key|password/i.test(code)) {
             vulnerabilities.push({
@@ -373,7 +373,7 @@ export class TestSimulator {
                 cwe: 'CWE-330'
             });
         }
-        
+
         // Path Traversal
         if (/open\(.*\+|file.*=.*request/i.test(code)) {
             vulnerabilities.push({
@@ -385,7 +385,7 @@ export class TestSimulator {
                 cwe: 'CWE-22'
             });
         }
-        
+
         // XSS (for web agents)
         if (/innerHTML|document\.write|dangerouslySetInnerHTML/i.test(code)) {
             vulnerabilities.push({
@@ -397,12 +397,12 @@ export class TestSimulator {
                 cwe: 'CWE-79'
             });
         }
-        
+
         // Calculate score
         const severityWeights = { critical: 30, high: 20, medium: 10, low: 5 };
         const totalDeduction = vulnerabilities.reduce((sum, v) => sum + severityWeights[v.severity], 0);
         const score = Math.max(0, 100 - totalDeduction);
-        
+
         // Generate recommendations
         const recommendations: string[] = [];
         if (vulnerabilities.some(v => v.severity === 'critical')) {
@@ -417,7 +417,7 @@ export class TestSimulator {
         if (score < 80) {
             recommendations.push('Consider a professional security review');
         }
-        
+
         return {
             passed: score >= 70 && !vulnerabilities.some(v => v.severity === 'critical'),
             score,
@@ -437,28 +437,28 @@ export class TestSimulator {
             storage: 0,
             network: 0
         };
-        
+
         // Estimate compute cost
         const avgDurationMinutes = 1;  // Assume 1 minute average
         const computeCostPerMinute = 0.0001;  // GitHub Actions is ~$0.008/min for linux
         costs.compute = runsPerMonth * avgDurationMinutes * computeCostPerMinute;
-        
+
         // Estimate API call costs
         for (const source of spec.dataSources) {
             if (source.includes('API')) {
                 costs.apiCalls += runsPerMonth * 0.001;  // Rough estimate per API call
             }
         }
-        
+
         // Estimate storage
         const storageGBPerMonth = 0.1;  // Logs, artifacts
         costs.storage = storageGBPerMonth * 0.02;  // ~$0.02/GB
-        
+
         // Estimate network
         costs.network = runsPerMonth * 0.001;  // Minimal
-        
+
         const total = costs.compute + costs.apiCalls + costs.storage + costs.network;
-        
+
         return {
             monthly: total,
             perRun: total / runsPerMonth,
@@ -474,18 +474,18 @@ export class TestSimulator {
         const passed = results.filter(r => r.passed).length;
         const failed = results.length - passed;
         const passRate = ((passed / results.length) * 100).toFixed(0);
-        
+
         let output = `## 🧪 Test Results\n\n`;
         output += `**Summary:** ${passed}/${results.length} passed (${passRate}%)\n\n`;
-        
+
         output += `| Scenario | Status | Duration |\n`;
         output += `|----------|--------|----------|\n`;
-        
+
         for (const result of results) {
             const status = result.passed ? '✅ Pass' : '❌ Fail';
             output += `| ${result.scenario.name} | ${status} | ${result.duration}ms |\n`;
         }
-        
+
         // Show failures
         const failures = results.filter(r => !r.passed);
         if (failures.length > 0) {
@@ -501,7 +501,7 @@ export class TestSimulator {
                 output += '\n';
             }
         }
-        
+
         return output;
     }
 
@@ -510,16 +510,16 @@ export class TestSimulator {
      */
     formatSecurityAudit(audit: SecurityAuditResult): string {
         const scoreEmoji = audit.score >= 80 ? '🟢' : audit.score >= 60 ? '🟡' : '🔴';
-        
+
         let output = `## 🔒 Security Audit Results\n\n`;
         output += `**Score:** ${scoreEmoji} ${audit.score}/100\n`;
         output += `**Status:** ${audit.passed ? '✅ Passed' : '❌ Failed'}\n\n`;
-        
+
         if (audit.vulnerabilities.length > 0) {
             output += `### Vulnerabilities Found (${audit.vulnerabilities.length})\n\n`;
             output += `| Severity | Issue | Description |\n`;
             output += `|----------|-------|-------------|\n`;
-            
+
             for (const vuln of audit.vulnerabilities) {
                 const severityEmoji = {
                     critical: '🔴',
@@ -529,7 +529,7 @@ export class TestSimulator {
                 }[vuln.severity];
                 output += `| ${severityEmoji} ${vuln.severity} | ${vuln.name} | ${vuln.description} |\n`;
             }
-            
+
             output += '\n### Remediations\n\n';
             for (const vuln of audit.vulnerabilities) {
                 output += `- **${vuln.name}:** ${vuln.remediation}\n`;
@@ -537,14 +537,14 @@ export class TestSimulator {
         } else {
             output += `✅ No vulnerabilities detected!\n`;
         }
-        
+
         if (audit.recommendations.length > 0) {
             output += `\n### Recommendations\n\n`;
             for (const rec of audit.recommendations) {
                 output += `- ${rec}\n`;
             }
         }
-        
+
         return output;
     }
 
@@ -568,7 +568,7 @@ export class TestSimulator {
 
     private generateErrorScenarios(spec: AgentSpec): TestScenario[] {
         const scenarios: TestScenario[] = [];
-        
+
         // Network error
         if (spec.dataSources?.some(s => s.includes('API'))) {
             scenarios.push({
@@ -583,7 +583,7 @@ export class TestSimulator {
                 ]
             });
         }
-        
+
         // Auth error
         if (spec.policies?.some(p => p.type === 'auth')) {
             scenarios.push({
@@ -597,7 +597,7 @@ export class TestSimulator {
                 ]
             });
         }
-        
+
         return scenarios;
     }
 
@@ -657,15 +657,15 @@ export class TestSimulator {
     private async simulateExecution(scenario: TestScenario): Promise<Record<string, any>> {
         // Simulate execution with randomized results
         await new Promise(resolve => setTimeout(resolve, Math.random() * 100 + 50));
-        
+
         if (scenario.inputs.simulateNetworkError) {
             return { status: 'error', error: 'network connection failed' };
         }
-        
+
         if (scenario.inputs.invalidAuth) {
             return { status: 'error', error: 'authentication failed' };
         }
-        
+
         return {
             status: 'success',
             data: scenario.inputs.data || [],
@@ -676,7 +676,7 @@ export class TestSimulator {
     private checkAssertion(assertion: TestAssertion, outputs: Record<string, any>): AssertionResult {
         const actual = outputs[assertion.field];
         let passed = false;
-        
+
         switch (assertion.type) {
             case 'equals':
                 passed = actual === assertion.expected;
@@ -698,7 +698,7 @@ export class TestSimulator {
             default:
                 passed = true;
         }
-        
+
         return {
             assertion,
             passed,
@@ -709,15 +709,15 @@ export class TestSimulator {
 
     private getCostRecommendations(spec: AgentSpec, costs: CostBreakdown): string[] {
         const recommendations: string[] = [];
-        
+
         if (costs.apiCalls > costs.compute) {
             recommendations.push('Consider caching API responses to reduce costs');
         }
-        
+
         if (spec.schedule && spec.schedule.includes('* * * * *')) {
             recommendations.push('Running every minute can be expensive - consider longer intervals');
         }
-        
+
         return recommendations;
     }
 }

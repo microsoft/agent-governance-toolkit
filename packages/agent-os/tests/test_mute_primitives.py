@@ -2,20 +2,18 @@
 # Licensed under the MIT License.
 """Tests for the Mute Agent (Face/Hands) kernel primitives."""
 
-import asyncio
 import pytest
+
 from agent_os.mute import (
-    ActionStep,
     ActionStatus,
+    ActionStep,
     CapabilityViolation,
     ExecutionPlan,
     PipelineResult,
-    StepResult,
     face_agent,
     mute_agent,
     pipe,
 )
-
 
 # =============================================================================
 # Test Fixtures — sample Face and Mute agents
@@ -29,11 +27,13 @@ async def sample_face(task: str) -> ExecutionPlan:
     if "read" in task.lower():
         steps.append(ActionStep(action="db.read", params={"query": task}))
     if "write" in task.lower():
-        steps.append(ActionStep(
-            action="db.write",
-            params={"data": "test"},
-            depends_on=[0] if steps else [],
-        ))
+        steps.append(
+            ActionStep(
+                action="db.write",
+                params={"data": "test"},
+                depends_on=[0] if steps else [],
+            )
+        )
     if "file" in task.lower():
         steps.append(ActionStep(action="file.read", params={"path": "/tmp/test"}))
     if not steps:
@@ -66,10 +66,12 @@ class TestExecutionPlan:
         assert len(plan.plan_id) == 12
 
     def test_plan_with_steps(self):
-        plan = ExecutionPlan(steps=[
-            ActionStep(action="db.read", params={"q": "test"}),
-            ActionStep(action="db.write", params={"d": "x"}),
-        ])
+        plan = ExecutionPlan(
+            steps=[
+                ActionStep(action="db.read", params={"q": "test"}),
+                ActionStep(action="db.write", params={"d": "x"}),
+            ]
+        )
         assert len(plan.steps) == 2
         assert plan.actions_used == {"db.read", "db.write"}
 
@@ -121,9 +123,11 @@ class TestFaceAgent:
     async def test_face_validates_capabilities(self):
         @face_agent(capabilities=["db.read"])
         async def restricted_face(task: str) -> ExecutionPlan:
-            return ExecutionPlan(steps=[
-                ActionStep(action="db.delete", params={}),  # Not allowed
-            ])
+            return ExecutionPlan(
+                steps=[
+                    ActionStep(action="db.delete", params={}),  # Not allowed
+                ]
+            )
 
         with pytest.raises(CapabilityViolation):
             await restricted_face("test")
@@ -132,9 +136,11 @@ class TestFaceAgent:
     async def test_face_no_capabilities_skips_validation(self):
         @face_agent()
         async def open_face(task: str) -> ExecutionPlan:
-            return ExecutionPlan(steps=[
-                ActionStep(action="anything_goes"),
-            ])
+            return ExecutionPlan(
+                steps=[
+                    ActionStep(action="anything_goes"),
+                ]
+            )
 
         plan = await open_face("test")
         assert plan.steps[0].action == "anything_goes"
@@ -217,9 +223,11 @@ class TestPipe:
     async def test_pipeline_denies_out_of_scope_actions(self):
         @face_agent(capabilities=["db.read", "db.delete"])
         async def delete_face(task: str) -> ExecutionPlan:
-            return ExecutionPlan(steps=[
-                ActionStep(action="db.delete", params={"table": "users"}),
-            ])
+            return ExecutionPlan(
+                steps=[
+                    ActionStep(action="db.delete", params={"table": "users"}),
+                ]
+            )
 
         @mute_agent(capabilities=["db.read"])  # Cannot delete!
         async def read_mute(step: ActionStep) -> dict:
@@ -234,10 +242,12 @@ class TestPipe:
     async def test_pipeline_with_dependencies(self):
         @face_agent(capabilities=["a", "b"])
         async def dep_face(task: str) -> ExecutionPlan:
-            return ExecutionPlan(steps=[
-                ActionStep(action="a", params={"step": 0}),
-                ActionStep(action="b", params={"step": 1}, depends_on=[0]),
-            ])
+            return ExecutionPlan(
+                steps=[
+                    ActionStep(action="a", params={"step": 0}),
+                    ActionStep(action="b", params={"step": 1}, depends_on=[0]),
+                ]
+            )
 
         @mute_agent(capabilities=["a", "b"])
         async def dep_mute(step: ActionStep) -> dict:
@@ -252,10 +262,12 @@ class TestPipe:
     async def test_pipeline_dependency_failure(self):
         @face_agent(capabilities=["a", "b"])
         async def dep_face(task: str) -> ExecutionPlan:
-            return ExecutionPlan(steps=[
-                ActionStep(action="a"),
-                ActionStep(action="b", depends_on=[0]),
-            ])
+            return ExecutionPlan(
+                steps=[
+                    ActionStep(action="a"),
+                    ActionStep(action="b", depends_on=[0]),
+                ]
+            )
 
         @mute_agent(capabilities=["a", "b"])
         async def failing_mute(step: ActionStep) -> dict:
@@ -295,10 +307,12 @@ class TestPipe:
     async def test_pipeline_halt_on_error(self):
         @face_agent(capabilities=["a", "b"])
         async def multi_face(task: str) -> ExecutionPlan:
-            return ExecutionPlan(steps=[
-                ActionStep(action="a"),
-                ActionStep(action="b"),
-            ])
+            return ExecutionPlan(
+                steps=[
+                    ActionStep(action="a"),
+                    ActionStep(action="b"),
+                ]
+            )
 
         @mute_agent(capabilities=["a", "b"])
         async def fail_first(step: ActionStep) -> dict:
@@ -306,9 +320,7 @@ class TestPipe:
                 raise RuntimeError("boom")
             return {}
 
-        result = await pipe(
-            multi_face, fail_first, "test", halt_on_error=True
-        )
+        result = await pipe(multi_face, fail_first, "test", halt_on_error=True)
         assert result.success is False
         assert len(result.step_results) == 1  # Halted after first failure
 
@@ -316,10 +328,12 @@ class TestPipe:
     async def test_pipeline_continues_on_error(self):
         @face_agent(capabilities=["a", "b"])
         async def multi_face(task: str) -> ExecutionPlan:
-            return ExecutionPlan(steps=[
-                ActionStep(action="a"),
-                ActionStep(action="b"),
-            ])
+            return ExecutionPlan(
+                steps=[
+                    ActionStep(action="a"),
+                    ActionStep(action="b"),
+                ]
+            )
 
         @mute_agent(capabilities=["a", "b"])
         async def fail_first(step: ActionStep) -> dict:
@@ -327,9 +341,7 @@ class TestPipe:
                 raise RuntimeError("boom")
             return {"ok": True}
 
-        result = await pipe(
-            multi_face, fail_first, "test", halt_on_error=False
-        )
+        result = await pipe(multi_face, fail_first, "test", halt_on_error=False)
         assert result.success is False
         assert len(result.step_results) == 2
         assert result.step_results[0].status == ActionStatus.FAILED

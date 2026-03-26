@@ -6,7 +6,7 @@ import fnmatch
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class PatternType(Enum):
@@ -150,7 +150,10 @@ class GovernancePolicy:
         self_patterns = {(p, t.value) for p, t in self.blocked_patterns}
         other_patterns = {(p, t.value) for p, t in other.blocked_patterns}
         if self_patterns != other_patterns:
-            changes["blocked_patterns"] = (self.blocked_patterns, other.blocked_patterns)
+            changes["blocked_patterns"] = (
+                self.blocked_patterns,
+                other.blocked_patterns,
+            )
 
         return changes
 

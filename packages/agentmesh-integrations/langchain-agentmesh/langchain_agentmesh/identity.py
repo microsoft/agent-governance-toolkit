@@ -15,8 +15,8 @@ from typing import Any, Dict, List, Optional
 
 # Try to import cryptography for real Ed25519 operations
 try:
-    from cryptography.hazmat.primitives.asymmetric import ed25519
     from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric import ed25519
 
     CRYPTO_AVAILABLE = True
 except ImportError:
@@ -95,7 +95,9 @@ class VerificationIdentity:
 
     @classmethod
     def generate(
-        cls, agent_name: str, capabilities: Optional[List[str]] = None,
+        cls,
+        agent_name: str,
+        capabilities: Optional[List[str]] = None,
         ttl_seconds: Optional[int] = None,
     ) -> "VerificationIdentity":
         """Generate a new verification identity with Ed25519 key pair.
@@ -118,12 +120,8 @@ class VerificationIdentity:
             private_key_obj = ed25519.Ed25519PrivateKey.generate()
             public_key_obj = private_key_obj.public_key()
 
-            private_key_b64 = base64.b64encode(
-                private_key_obj.private_bytes_raw()
-            ).decode("ascii")
-            public_key_b64 = base64.b64encode(
-                public_key_obj.public_bytes_raw()
-            ).decode("ascii")
+            private_key_b64 = base64.b64encode(private_key_obj.private_bytes_raw()).decode("ascii")
+            public_key_b64 = base64.b64encode(public_key_obj.public_bytes_raw()).decode("ascii")
         else:
             # Fallback for environments without cryptography
             key_seed = hashlib.sha256(f"{did}:key".encode()).hexdigest()
@@ -160,18 +158,16 @@ class VerificationIdentity:
 
         if CRYPTO_AVAILABLE:
             private_key_bytes = base64.b64decode(self.private_key)
-            private_key_obj = ed25519.Ed25519PrivateKey.from_private_bytes(
-                private_key_bytes
-            )
+            private_key_obj = ed25519.Ed25519PrivateKey.from_private_bytes(private_key_bytes)
             signature_bytes = private_key_obj.sign(data.encode("utf-8"))
             signature_b64 = base64.b64encode(signature_bytes).decode("ascii")
         else:
             # SECURITY WARNING: Fallback simulation — NOT cryptographically secure.
             # Only for demo/development when cryptography package is unavailable.
             sig_input = f"{data}:{self.private_key}"
-            signature_b64 = base64.b64encode(
-                hashlib.sha256(sig_input.encode()).digest()
-            ).decode("ascii")
+            signature_b64 = base64.b64encode(hashlib.sha256(sig_input.encode()).digest()).decode(
+                "ascii"
+            )
 
         return VerificationSignature(
             public_key=self.public_key,
@@ -194,9 +190,7 @@ class VerificationIdentity:
         if CRYPTO_AVAILABLE:
             try:
                 public_key_bytes = base64.b64decode(self.public_key)
-                public_key_obj = ed25519.Ed25519PublicKey.from_public_bytes(
-                    public_key_bytes
-                )
+                public_key_obj = ed25519.Ed25519PublicKey.from_public_bytes(public_key_bytes)
                 signature_bytes = base64.b64decode(signature.signature)
                 public_key_obj.verify(signature_bytes, data.encode("utf-8"))
                 return True
@@ -231,15 +225,9 @@ class VerificationIdentity:
             public_key=data["public_key"],
             capabilities=data.get("capabilities", []),
             created_at=(
-                datetime.fromisoformat(created_str)
-                if created_str
-                else datetime.now(timezone.utc)
+                datetime.fromisoformat(created_str) if created_str else datetime.now(timezone.utc)
             ),
-            expires_at=(
-                datetime.fromisoformat(expires_str)
-                if expires_str
-                else None
-            ),
+            expires_at=(datetime.fromisoformat(expires_str) if expires_str else None),
         )
 
     def public_identity(self) -> "VerificationIdentity":
@@ -334,14 +322,8 @@ class UserContext:
             roles=data.get("roles", []),
             permissions=data.get("permissions", []),
             issued_at=(
-                datetime.fromisoformat(issued_str)
-                if issued_str
-                else datetime.now(timezone.utc)
+                datetime.fromisoformat(issued_str) if issued_str else datetime.now(timezone.utc)
             ),
-            expires_at=(
-                datetime.fromisoformat(expires_str)
-                if expires_str
-                else None
-            ),
+            expires_at=(datetime.fromisoformat(expires_str) if expires_str else None),
             metadata=data.get("metadata", {}),
         )

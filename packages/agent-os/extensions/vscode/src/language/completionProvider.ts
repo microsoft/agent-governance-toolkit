@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Completion Provider for Agent OS
- * 
+ *
  * Provides context-aware code completion for AgentOS APIs and policy files.
  */
 
@@ -18,7 +18,7 @@ interface CompletionItem {
 }
 
 export class AgentOSCompletionProvider implements vscode.CompletionItemProvider {
-    
+
     private readonly policyKeywords: CompletionItem[] = [
         {
             label: 'kernel',
@@ -347,7 +347,7 @@ export class AgentOSCompletionProvider implements vscode.CompletionItemProvider 
 }
 
 export class AgentOSHoverProvider implements vscode.HoverProvider {
-    
+
     private readonly hoverInfo: Map<string, { title: string; description: string; example?: string }> = new Map([
         ['SIGKILL', {
             title: 'SIGKILL Signal',

@@ -214,7 +214,7 @@ func scrubSensitiveData(data string) string {
 func logFlightRecord(entry FlightRecordEntry) {
 	entry.Timestamp = time.Now().UTC().Format(time.RFC3339)
 	flightRecorder = append(flightRecorder, entry)
-	
+
 	// Also log to stdout
 	jsonData, _ := json.Marshal(entry)
 	log.Printf("FLIGHT_RECORDER: %s\n", string(jsonData))
@@ -461,18 +461,18 @@ func main() {
 	if manifest.Identity.AgentID == "" {
 		manifest.Identity.AgentID = "default-agent"
 	}
-	
+
 	manifest.TrustLevel = TrustLevel(trustLevelStr)
 	manifest.Capabilities.Idempotency = true
 	manifest.Capabilities.ConcurrencyLimit = 100
 	manifest.Capabilities.SLALatencyMs = 2000
-	
+
 	manifest.Reversibility.Level = ReversibilityLevel(os.Getenv("IATP_REVERSIBILITY"))
 	if manifest.Reversibility.Level == "" {
 		manifest.Reversibility.Level = Partial
 	}
 	manifest.Reversibility.UndoWindowSeconds = 3600
-	
+
 	manifest.Privacy.RetentionPolicy = RetentionPolicy(os.Getenv("IATP_RETENTION"))
 	if manifest.Privacy.RetentionPolicy == "" {
 		manifest.Privacy.RetentionPolicy = Temporary

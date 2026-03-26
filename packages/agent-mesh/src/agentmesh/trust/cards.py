@@ -7,10 +7,11 @@ Agent cards for discovery and verification with cryptographic signing.
 Based on learnings from A2A Protocol integration review.
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
 import json
+from datetime import UTC, datetime, timedelta
+from typing import Any, Optional
+
+from pydantic import BaseModel, Field
 
 from agentmesh.identity.agent_id import AgentIdentity
 from agentmesh.identity.revocation import RevocationList
@@ -27,22 +28,22 @@ class TrustedAgentCard(BaseModel):
     # Basic info
     name: str = Field(..., description="Agent name")
     description: str = Field(default="", description="Agent description")
-    capabilities: List[str] = Field(default_factory=list)
+    capabilities: list[str] = Field(default_factory=list)
 
     # Identity (public info only)
-    agent_did: Optional[str] = Field(None, description="Agent DID")
-    public_key: Optional[str] = Field(None, description="Public key for verification")
+    agent_did: str | None = Field(None, description="Agent DID")
+    public_key: str | None = Field(None, description="Public key for verification")
 
     # Trust metadata
     trust_score: float = Field(default=1.0, ge=0.0, le=1.0)
 
     # Cryptographic signature over card content
-    card_signature: Optional[str] = Field(None, description="Signature over card content")
-    signature_timestamp: Optional[datetime] = None
+    card_signature: str | None = Field(None, description="Signature over card content")
+    signature_timestamp: datetime | None = None
 
     # Additional metadata
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def _get_signable_content(self) -> str:
         """Get deterministic content for signing."""
@@ -71,9 +72,9 @@ class TrustedAgentCard(BaseModel):
 
         signable = self._get_signable_content()
         self.card_signature = identity.sign(signable.encode())
-        self.signature_timestamp = datetime.now(timezone.utc)
+        self.signature_timestamp = datetime.now(UTC)
 
-    def verify_signature(self, identity: Optional[AgentIdentity] = None) -> bool:
+    def verify_signature(self, identity: AgentIdentity | None = None) -> bool:
         """
         Verify the card's signature is valid.
 
@@ -94,8 +95,9 @@ class TrustedAgentCard(BaseModel):
 
         # Verify using embedded public key
         # This requires reconstructing a minimal identity for verification
-        from cryptography.hazmat.primitives.asymmetric import ed25519
         import base64
+
+        from cryptography.hazmat.primitives.asymmetric import ed25519
 
         try:
             public_key_bytes = base64.b64decode(self.public_key)
@@ -125,7 +127,7 @@ class TrustedAgentCard(BaseModel):
         card.sign(identity)
         return card
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize the card to a plain dictionary.
 
         Includes identity and signature fields only when they are
@@ -148,11 +150,13 @@ class TrustedAgentCard(BaseModel):
             result["public_key"] = self.public_key
         if self.card_signature:
             result["card_signature"] = self.card_signature
-            result["signature_timestamp"] = self.signature_timestamp.isoformat() if self.signature_timestamp else None
+            result["signature_timestamp"] = (
+                self.signature_timestamp.isoformat() if self.signature_timestamp else None
+            )
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TrustedAgentCard":
+    def from_dict(cls, data: dict[str, Any]) -> "TrustedAgentCard":
         """Deserialize a card from a dictionary.
 
         Performs safe access on all keys so missing values fall back to
@@ -178,7 +182,7 @@ class TrustedAgentCard(BaseModel):
             card_signature=data.get("card_signature"),
             signature_timestamp=datetime.fromisoformat(signature_ts) if signature_ts else None,
             metadata=data.get("metadata", {}),
-            created_at=datetime.fromisoformat(created_at) if created_at else datetime.now(timezone.utc),
+            created_at=datetime.fromisoformat(created_at) if created_at else datetime.now(UTC),
         )
 
 
@@ -205,8 +209,8 @@ class CardRegistry:
                 verification. When set, revoked agent DIDs fail
                 ``is_verified()`` even if their signatures are valid.
         """
-        self._cards: Dict[str, TrustedAgentCard] = {}
-        self._verified_cache: Dict[str, tuple[bool, datetime]] = {}
+        self._cards: dict[str, TrustedAgentCard] = {}
+        self._verified_cache: dict[str, tuple[bool, datetime]] = {}
         self._cache_ttl = timedelta(seconds=cache_ttl_seconds)
         self._revocation_list = revocation_list
 
@@ -225,11 +229,11 @@ class CardRegistry:
 
         if card.agent_did:
             self._cards[card.agent_did] = card
-            self._verified_cache[card.agent_did] = (True, datetime.now(timezone.utc))
+            self._verified_cache[card.agent_did] = (True, datetime.now(UTC))
 
         return True
 
-    def get(self, agent_did: str) -> Optional[TrustedAgentCard]:
+    def get(self, agent_did: str) -> TrustedAgentCard | None:
         """Get a registered card by agent DID.
 
         Args:
@@ -265,7 +269,7 @@ class CardRegistry:
 
         if agent_did in self._verified_cache:
             verified, timestamp = self._verified_cache[agent_did]
-            if datetime.now(timezone.utc) - timestamp < self._cache_ttl:
+            if datetime.now(UTC) - timestamp < self._cache_ttl:
                 return verified
 
         card = self._cards.get(agent_did)
@@ -273,7 +277,7 @@ class CardRegistry:
             return False
 
         verified = card.verify_signature()
-        self._verified_cache[agent_did] = (verified, datetime.now(timezone.utc))
+        self._verified_cache[agent_did] = (verified, datetime.now(UTC))
         return verified
 
     def clear_cache(self) -> None:
@@ -284,7 +288,7 @@ class CardRegistry:
         """
         self._verified_cache.clear()
 
-    def list_cards(self) -> List[TrustedAgentCard]:
+    def list_cards(self) -> list[TrustedAgentCard]:
         """List all registered agent cards.
 
         Returns:
@@ -292,7 +296,7 @@ class CardRegistry:
         """
         return list(self._cards.values())
 
-    def find_by_capability(self, capability: str) -> List[TrustedAgentCard]:
+    def find_by_capability(self, capability: str) -> list[TrustedAgentCard]:
         """Find registered cards that advertise a specific capability.
 
         Args:
@@ -302,7 +306,4 @@ class CardRegistry:
             List of ``TrustedAgentCard`` instances whose
             ``capabilities`` list contains the given string.
         """
-        return [
-            card for card in self._cards.values()
-            if capability in card.capabilities
-        ]
+        return [card for card in self._cards.values() if capability in card.capabilities]

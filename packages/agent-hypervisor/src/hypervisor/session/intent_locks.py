@@ -96,17 +96,16 @@ class IntentLockManager:
 
     def get_agent_locks(self, agent_did: str, session_id: str) -> list[IntentLock]:
         return [
-            lock for lock in self._locks.values()
-            if lock.agent_did == agent_did
-            and lock.session_id == session_id
-            and lock.is_active
+            lock
+            for lock in self._locks.values()
+            if lock.agent_did == agent_did and lock.session_id == session_id and lock.is_active
         ]
 
     def get_resource_locks(self, resource_path: str) -> list[IntentLock]:
         return [
-            lock for lock in self._locks.values()
-            if lock.resource_path == resource_path
-            and lock.is_active
+            lock
+            for lock in self._locks.values()
+            if lock.resource_path == resource_path and lock.is_active
         ]
 
     @property

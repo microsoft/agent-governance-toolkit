@@ -20,6 +20,7 @@ from agent_sre.benchmarks import (
 # Mock agents
 # ---------------------------------------------------------------------------
 
+
 def good_agent(input_data):
     """Agent that always returns correct answers."""
     q = input_data.get("question", "")
@@ -71,10 +72,12 @@ def expensive_agent(input_data):
 # BenchmarkScenario
 # ---------------------------------------------------------------------------
 
+
 class TestBenchmarkScenario:
     def test_validate_with_expected(self):
         s = BenchmarkScenario(
-            name="test", category=BenchmarkCategory.ACCURACY,
+            name="test",
+            category=BenchmarkCategory.ACCURACY,
             expected_output="hello",
         )
         assert s.validate("hello") is True
@@ -82,7 +85,8 @@ class TestBenchmarkScenario:
 
     def test_validate_with_fn(self):
         s = BenchmarkScenario(
-            name="test", category=BenchmarkCategory.ACCURACY,
+            name="test",
+            category=BenchmarkCategory.ACCURACY,
             expected_output="4",
             validation_fn=lambda exp, actual: exp in str(actual),
         )
@@ -91,7 +95,8 @@ class TestBenchmarkScenario:
 
     def test_validate_no_expected(self):
         s = BenchmarkScenario(
-            name="test", category=BenchmarkCategory.LATENCY,
+            name="test",
+            category=BenchmarkCategory.LATENCY,
         )
         assert s.validate("anything") is True
 
@@ -103,6 +108,7 @@ class TestBenchmarkScenario:
 # ---------------------------------------------------------------------------
 # BenchmarkSuite
 # ---------------------------------------------------------------------------
+
 
 class TestBenchmarkSuite:
     def test_default_suite(self):
@@ -134,6 +140,7 @@ class TestBenchmarkSuite:
 # ---------------------------------------------------------------------------
 # BenchmarkRunner — good agent
 # ---------------------------------------------------------------------------
+
 
 class TestRunnerGoodAgent:
     def test_run_all(self):
@@ -175,6 +182,7 @@ class TestRunnerGoodAgent:
 # BenchmarkRunner — bad agent
 # ---------------------------------------------------------------------------
 
+
 class TestRunnerBadAgent:
     def test_bad_agent_fails(self):
         suite = BenchmarkSuite.default()
@@ -186,12 +194,14 @@ class TestRunnerBadAgent:
 
     def test_bad_agent_cost_over_budget(self):
         suite = BenchmarkSuite(name="cost-test")
-        suite.add(BenchmarkScenario(
-            name="cheap-task",
-            category=BenchmarkCategory.COST,
-            input_data={"task": "test"},
-            max_cost_usd=0.01,
-        ))
+        suite.add(
+            BenchmarkScenario(
+                name="cheap-task",
+                category=BenchmarkCategory.COST,
+                input_data={"task": "test"},
+                max_cost_usd=0.01,
+            )
+        )
         runner = BenchmarkRunner(suite)
         report = runner.run(bad_agent)
         assert report.runs[0].result == ScenarioResult.FAILED
@@ -201,6 +211,7 @@ class TestRunnerBadAgent:
 # ---------------------------------------------------------------------------
 # BenchmarkRunner — error agent
 # ---------------------------------------------------------------------------
+
 
 class TestRunnerErrorAgent:
     def test_error_agent(self):
@@ -215,15 +226,18 @@ class TestRunnerErrorAgent:
 # BenchmarkRunner — slow agent
 # ---------------------------------------------------------------------------
 
+
 class TestRunnerSlowAgent:
     def test_timeout_detection(self):
         suite = BenchmarkSuite(name="timeout-test")
-        suite.add(BenchmarkScenario(
-            name="fast-required",
-            category=BenchmarkCategory.LATENCY,
-            input_data={"task": "test"},
-            timeout_seconds=0.01,  # 10ms timeout
-        ))
+        suite.add(
+            BenchmarkScenario(
+                name="fast-required",
+                category=BenchmarkCategory.LATENCY,
+                input_data={"task": "test"},
+                timeout_seconds=0.01,  # 10ms timeout
+            )
+        )
         runner = BenchmarkRunner(suite)
         report = runner.run(slow_agent)
         assert report.runs[0].result == ScenarioResult.FAILED
@@ -233,6 +247,7 @@ class TestRunnerSlowAgent:
 # ---------------------------------------------------------------------------
 # BenchmarkReport
 # ---------------------------------------------------------------------------
+
 
 class TestBenchmarkReport:
     def test_empty_report(self):

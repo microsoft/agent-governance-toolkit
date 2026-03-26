@@ -20,12 +20,15 @@ from agent_sre.incidents.runbook import (
 from agent_sre.incidents.runbook_executor import RunbookExecutor
 from agent_sre.incidents.runbook_registry import RunbookRegistry, load_runbooks_from_yaml
 
-BUILTIN_DIR = Path(__file__).resolve().parent.parent / "src" / "agent_sre" / "incidents" / "runbooks"
+BUILTIN_DIR = (
+    Path(__file__).resolve().parent.parent / "src" / "agent_sre" / "incidents" / "runbooks"
+)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_incident(
     signal_type: SignalType = SignalType.SLO_BREACH,
@@ -50,6 +53,7 @@ def _rollback_action(incident: Incident) -> str:
 # ---------------------------------------------------------------------------
 # Model tests
 # ---------------------------------------------------------------------------
+
 
 class TestRunbookModels:
     def test_step_to_dict_callable(self) -> None:
@@ -101,6 +105,7 @@ class TestRunbookModels:
 # ---------------------------------------------------------------------------
 # Executor tests
 # ---------------------------------------------------------------------------
+
 
 class TestRunbookExecutor:
     def test_runs_steps_in_order(self) -> None:
@@ -213,6 +218,7 @@ class TestRunbookExecutor:
 # Registry tests
 # ---------------------------------------------------------------------------
 
+
 class TestRunbookRegistry:
     def test_register_and_get(self) -> None:
         registry = RunbookRegistry()
@@ -273,6 +279,7 @@ class TestRunbookRegistry:
 # YAML loading tests
 # ---------------------------------------------------------------------------
 
+
 class TestYamlLoading:
     def test_load_runbooks_from_yaml(self, tmp_path: Path) -> None:
         yaml_content = """
@@ -315,6 +322,7 @@ runbooks:
 # Built-in runbook validation
 # ---------------------------------------------------------------------------
 
+
 class TestBuiltinRunbooks:
     def test_all_builtin_runbooks_load(self) -> None:
         yaml_files = list(BUILTIN_DIR.glob("*.yaml"))
@@ -340,9 +348,7 @@ class TestBuiltinRunbooks:
         assert len(registry.list_all()) == 4
 
         # SLO breach incident should match rollback-version
-        incident = _make_incident(
-            signal_type=SignalType.SLO_BREACH, severity=IncidentSeverity.P1
-        )
+        incident = _make_incident(signal_type=SignalType.SLO_BREACH, severity=IncidentSeverity.P1)
         matched = registry.match(incident)
         matched_ids = {m.id for m in matched}
         assert "rollback-version" in matched_ids

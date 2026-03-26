@@ -56,6 +56,7 @@ logger = logging.getLogger(__name__)
 # Graceful import handling for pydantic-ai
 try:
     import pydantic_ai  # noqa: F401
+
     HAS_PYDANTIC_AI = True
 except ImportError:
     HAS_PYDANTIC_AI = False
@@ -67,9 +68,7 @@ class HumanApprovalRequired(PolicyViolationError):
     def __init__(self, tool_name: str, arguments: dict[str, Any]):
         self.tool_name = tool_name
         self.arguments = arguments
-        super().__init__(
-            f"Tool '{tool_name}' requires human approval before execution"
-        )
+        super().__init__(f"Tool '{tool_name}' requires human approval before execution")
 
 
 class PydanticAIKernel(BaseIntegration):
@@ -144,9 +143,7 @@ class PydanticAIKernel(BaseIntegration):
         ctx = self.create_context(agent_id)
         self._wrapped_agents[id(agent)] = agent
 
-        logger.info(
-            "Wrapping PydanticAI agent with governance: agent_id=%s", agent_id
-        )
+        logger.info("Wrapping PydanticAI agent with governance: agent_id=%s", agent_id)
 
         original = agent
         kernel = self
@@ -277,6 +274,7 @@ class PydanticAIKernel(BaseIntegration):
                 # Approved — skip the interceptor's require_human_approval check
                 # by using a policy copy without the flag
                 from dataclasses import replace
+
                 policy_for_interceptor = replace(self.policy, require_human_approval=False)
             else:
                 return ToolCallResult(
@@ -306,8 +304,7 @@ class PydanticAIKernel(BaseIntegration):
                 "max_tool_calls": self.policy.max_tool_calls,
                 "allowed_tools": self.policy.allowed_tools,
                 "blocked_patterns": [
-                    p if isinstance(p, str) else p[0]
-                    for p in self.policy.blocked_patterns
+                    p if isinstance(p, str) else p[0] for p in self.policy.blocked_patterns
                 ],
                 "require_human_approval": self.policy.require_human_approval,
             },
@@ -356,9 +353,7 @@ def _wrap_single_tool(
     tool_name = getattr(tool_entry, "name", None) or getattr(
         tool_entry, "__name__", str(tool_entry)
     )
-    original_fn = getattr(tool_entry, "function", None) or getattr(
-        tool_entry, "_run", None
-    )
+    original_fn = getattr(tool_entry, "function", None) or getattr(tool_entry, "_run", None)
     if original_fn is None:
         return
 
@@ -380,9 +375,7 @@ def _wrap_single_tool(
                 arguments=call_args,
                 agent_id=ctx.agent_id,
             )
-            raise PolicyViolationError(
-                result.reason or f"Tool '{tool_name}' blocked by policy"
-            )
+            raise PolicyViolationError(result.reason or f"Tool '{tool_name}' blocked by policy")
 
         ctx.call_count += 1
         kernel._record_audit(

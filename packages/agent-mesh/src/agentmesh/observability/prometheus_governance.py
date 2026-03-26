@@ -12,8 +12,6 @@ installed.
 
 from __future__ import annotations
 
-from typing import Optional
-
 # ---------------------------------------------------------------------------
 # Conditional Prometheus import
 # ---------------------------------------------------------------------------
@@ -21,10 +19,10 @@ from typing import Optional
 _PROMETHEUS_AVAILABLE = False
 try:
     from prometheus_client import (
+        CollectorRegistry,  # noqa: F401
         Counter,
         Gauge,
         Histogram,
-        CollectorRegistry,  # noqa: F401
         generate_latest,
     )
 
@@ -64,7 +62,7 @@ class GovernanceMetrics:
     def __init__(
         self,
         prefix: str = "agentmesh_governance",
-        registry: Optional[object] = None,
+        registry: object | None = None,
     ) -> None:
         if not _PROMETHEUS_AVAILABLE:
             self._enabled = False
@@ -148,12 +146,8 @@ class GovernanceMetrics:
         """
         if not self._enabled:
             return
-        self.policy_evaluations_total.labels(
-            policy_name=policy_name, action=action
-        ).inc()
-        self.policy_evaluation_duration_ms.labels(
-            policy_name=policy_name
-        ).observe(duration_ms)
+        self.policy_evaluations_total.labels(policy_name=policy_name, action=action).inc()
+        self.policy_evaluation_duration_ms.labels(policy_name=policy_name).observe(duration_ms)
 
     def record_trust_score(self, agent_did: str, score: float) -> None:
         """Set the trust-score gauge for *agent_did*.
@@ -189,9 +183,7 @@ class GovernanceMetrics:
         """
         if not self._enabled:
             return
-        self.violations_total.labels(
-            violation_type=violation_type, severity=severity
-        ).inc()
+        self.violations_total.labels(violation_type=violation_type, severity=severity).inc()
 
     def record_audit_event(self, event_type: str) -> None:
         """Increment the audit-events counter.

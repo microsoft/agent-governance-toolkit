@@ -1,8 +1,8 @@
 # IATP-002: Reversibility & Compensating Transactions
 
-**Status:** Draft  
-**Author:** Inter-Agent Trust Protocol Team  
-**Created:** 2026-01-23  
+**Status:** Draft
+**Author:** Inter-Agent Trust Protocol Team
+**Created:** 2026-01-23
 **Updated:** 2026-01-23
 
 ## Abstract
@@ -196,7 +196,7 @@ When Agent A calls Agent B, which calls Agent C, failures must propagate backwar
 ```
 Agent A → Agent B → Agent C
   ✓        ✓        ✗ (fails)
-  
+
 Compensation Flow:
   ←        ←        ✗
   undo     undo     (failed state)

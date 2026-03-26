@@ -34,7 +34,7 @@ python main.py
 governance:
   name: hr-recruiting-agent
   framework: fair-hiring
-  
+
 permissions:
   candidate_data:
     blocked_fields:
@@ -50,17 +50,17 @@ permissions:
       - experience
       - education
       - work_history
-      
+
   screening:
     - action: evaluate_candidate
       require: [consistent_criteria, blind_review]
     - action: reject_candidate
       require: [documented_reason, non_discriminatory]
-      
+
 data_retention:
   unsuccessful_candidates: 180  # days
   successful_candidates: 2555   # 7 years
-  
+
 audit:
   level: comprehensive
   include:

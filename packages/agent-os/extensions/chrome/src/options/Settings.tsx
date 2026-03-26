@@ -26,7 +26,7 @@ export function Settings() {
 
   const handleSave = async () => {
     if (!settings) return;
-    
+
     try {
       await saveSettings(settings);
       showToast('Settings saved successfully!', 'success');

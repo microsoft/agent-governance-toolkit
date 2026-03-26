@@ -7,9 +7,6 @@ Behavioral feedback loop that scores agent actions
 against a governance rubric.
 """
 
-from .engine import RewardEngine
-from .scoring import TrustScore, RewardDimension, RewardSignal
-from .trust_decay import NetworkTrustEngine, TrustEvent
 from .distribution import (
     ContributionWeightedStrategy,
     DistributionResult,
@@ -22,6 +19,9 @@ from .distribution import (
     TrustWeightedStrategy,
 )
 from .distributor import RewardDistributor
+from .engine import RewardEngine
+from .scoring import RewardDimension, RewardSignal, TrustScore
+from .trust_decay import NetworkTrustEngine, TrustEvent
 
 __all__ = [
     "RewardEngine",

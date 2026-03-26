@@ -66,12 +66,21 @@ from agent_os.integrations.gemini_adapter import GeminiKernel, GovernedGeminiMod
 from agent_os.integrations.google_adk_adapter import GoogleADKKernel
 from agent_os.integrations.guardrails_adapter import GuardrailsKernel
 from agent_os.integrations.langchain_adapter import LangChainKernel
+
 try:
     from agent_os.integrations.maf_adapter import (
         AuditTrailMiddleware as MAFAuditTrailMiddleware,
+    )
+    from agent_os.integrations.maf_adapter import (
         CapabilityGuardMiddleware as MAFCapabilityGuardMiddleware,
+    )
+    from agent_os.integrations.maf_adapter import (
         GovernancePolicyMiddleware as MAFGovernancePolicyMiddleware,
+    )
+    from agent_os.integrations.maf_adapter import (
         RogueDetectionMiddleware as MAFRogueDetectionMiddleware,
+    )
+    from agent_os.integrations.maf_adapter import (
         create_governance_middleware as maf_create_governance_middleware,
     )
 except ImportError:  # agent_framework is an optional dependency
@@ -104,6 +113,7 @@ from .base import (
     ToolCallRequest,
     ToolCallResult,
 )
+from .compat import CompatReport, check_compatibility, doctor, warn_on_import
 from .config import AgentOSConfig, get_config, reset_config
 from .conversation_guardian import (
     AlertAction,
@@ -128,7 +138,6 @@ from .escalation import (
     QuorumConfig,
     WebhookApprovalBackend,
 )
-from .compat import CompatReport, check_compatibility, doctor, warn_on_import
 from .health import ComponentHealth, HealthChecker, HealthReport, HealthStatus
 from .logging import GovernanceLogger, JSONFormatter, get_logger
 from .policy_compose import PolicyHierarchy, compose_policies, override_policy

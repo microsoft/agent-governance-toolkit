@@ -44,6 +44,7 @@ GOLD_EVIDENCE = {
 # CriterionResult
 # ---------------------------------------------------------------------------
 
+
 class TestCriterionResult:
     def test_to_dict(self):
         cr = CriterionResult(name="test", passed=True, required=True, message="ok")
@@ -55,6 +56,7 @@ class TestCriterionResult:
 # ---------------------------------------------------------------------------
 # CertificationResult
 # ---------------------------------------------------------------------------
+
 
 class TestCertificationResult:
     def test_passed_counts(self):
@@ -105,6 +107,7 @@ class TestCertificationResult:
 # CertificationEvaluator — tier criteria
 # ---------------------------------------------------------------------------
 
+
 class TestEvaluatorCriteria:
     def test_default_criteria_count(self):
         ev = CertificationEvaluator()
@@ -129,6 +132,7 @@ class TestEvaluatorCriteria:
 # ---------------------------------------------------------------------------
 # CertificationEvaluator — bronze
 # ---------------------------------------------------------------------------
+
 
 class TestBronzeCertification:
     def test_bronze_passes(self):
@@ -161,6 +165,7 @@ class TestBronzeCertification:
 # CertificationEvaluator — silver
 # ---------------------------------------------------------------------------
 
+
 class TestSilverCertification:
     def test_silver_passes(self):
         ev = CertificationEvaluator()
@@ -191,6 +196,7 @@ class TestSilverCertification:
 # CertificationEvaluator — gold
 # ---------------------------------------------------------------------------
 
+
 class TestGoldCertification:
     def test_gold_passes(self):
         ev = CertificationEvaluator()
@@ -210,9 +216,7 @@ class TestGoldCertification:
         result = ev.evaluate(CertificationTier.GOLD, evidence)
         # postmortem is advisory (required=False), so should still pass
         assert result.passed is True
-        assert result.optional_passed < len([
-            c for c in result.criteria_results if not c.required
-        ])
+        assert result.optional_passed < len([c for c in result.criteria_results if not c.required])
 
     def test_gold_requires_canary(self):
         ev = CertificationEvaluator()
@@ -224,6 +228,7 @@ class TestGoldCertification:
 # ---------------------------------------------------------------------------
 # CertificationEvaluator — highest_tier
 # ---------------------------------------------------------------------------
+
 
 class TestHighestTier:
     def test_highest_is_gold(self):
@@ -261,6 +266,7 @@ class TestHighestTier:
 # ---------------------------------------------------------------------------
 # Custom criteria
 # ---------------------------------------------------------------------------
+
 
 class TestCustomCriteria:
     def test_custom_evaluator(self):

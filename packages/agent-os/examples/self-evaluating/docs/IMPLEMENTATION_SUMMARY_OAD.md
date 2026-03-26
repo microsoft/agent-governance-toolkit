@@ -56,7 +56,7 @@ The OpenAgent Definition (OAD) provides:
 **Code Changes:**
 ```python
 # New initialization parameter
-def __init__(self, ..., enable_metadata: bool = True, 
+def __init__(self, ..., enable_metadata: bool = True,
              manifest_file: str = "agent_manifest.json")
 
 # Automatic trust score updates

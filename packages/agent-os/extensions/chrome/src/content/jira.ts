@@ -18,7 +18,7 @@ if (document.readyState === 'loading') {
 
 async function init() {
   const settings = await getSettings();
-  
+
   if (!settings.enabled || !settings.platforms.jira) {
     return;
   }
@@ -53,12 +53,12 @@ async function init() {
 function detectPageType(): string {
   const path = window.location.pathname;
   const url = window.location.href;
-  
+
   if (path.includes('/browse/') || url.includes('selectedIssue=')) return 'issue';
   if (path.includes('/board')) return 'board';
   if (path.includes('/backlog')) return 'backlog';
   if (path.includes('/sprint')) return 'sprint';
-  
+
   return 'other';
 }
 
@@ -82,7 +82,7 @@ function injectIssueIntegration() {
         <span style="font-size: 20px;">🛡️</span>
         <h4 style="font-size: 14px; font-weight: 600; margin: 0;">AgentOS Automation</h4>
       </div>
-      
+
       <div style="display: flex; flex-direction: column; gap: 8px;">
         <button class="agentos-jira-btn" data-action="breakdown">
           📝 Break into subtasks
@@ -322,11 +322,11 @@ function injectFAB() {
   menu.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
     const action = target.dataset.action;
-    
+
     if (action) {
       runJiraAgent(action);
     }
-    
+
     menu.style.display = 'none';
   });
 
@@ -340,10 +340,10 @@ function injectFAB() {
 
 function runJiraAgent(action: string) {
   console.log('AgentOS: Running Jira agent:', action);
-  
+
   // Show loading toast
   showToast(`Running ${action}...`, 'info');
-  
+
   chrome.runtime.sendMessage({
     type: 'ACTION_REQUESTED',
     agentId: `jira-${action}`,

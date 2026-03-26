@@ -13,19 +13,16 @@ if _nexus_parent not in sys.path:
     sys.path.insert(0, _nexus_parent)
 
 from nexus.escrow import EscrowManager
-from nexus.reputation import ReputationEngine
-from nexus.schemas.escrow import (
-    EscrowRequest,
-    EscrowReceipt,
-    EscrowStatus,
-    EscrowRelease,
-    EscrowResolution,
-)
 from nexus.exceptions import (
-    EscrowNotFoundError,
-    EscrowExpiredError,
     EscrowAlreadyResolvedError,
+    EscrowNotFoundError,
     InsufficientCreditsError,
+)
+from nexus.schemas.escrow import (
+    EscrowReceipt,
+    EscrowRelease,
+    EscrowRequest,
+    EscrowStatus,
 )
 
 
@@ -80,7 +77,9 @@ class TestActivateEscrow:
             await funded_escrow_manager.activate_escrow("escrow_nonexistent")
 
     @pytest.mark.asyncio
-    async def test_activate_already_active_raises(self, funded_escrow_manager, sample_escrow_request):
+    async def test_activate_already_active_raises(
+        self, funded_escrow_manager, sample_escrow_request
+    ):
         receipt = await funded_escrow_manager.create_escrow(sample_escrow_request, "sig_req")
         await funded_escrow_manager.activate_escrow(receipt.escrow_id)
         with pytest.raises(EscrowAlreadyResolvedError):
@@ -95,7 +94,10 @@ class TestCompleteTask:
         receipt = await funded_escrow_manager.create_escrow(sample_escrow_request, "sig_req")
         await funded_escrow_manager.activate_escrow(receipt.escrow_id)
         completed = await funded_escrow_manager.complete_task(
-            receipt.escrow_id, output_hash="hash123", duration_ms=500, provider_signature="sig_prov",
+            receipt.escrow_id,
+            output_hash="hash123",
+            duration_ms=500,
+            provider_signature="sig_prov",
         )
         assert completed.status == EscrowStatus.AWAITING_VALIDATION
 
@@ -105,7 +107,10 @@ class TestCompleteTask:
         # Still PENDING, not ACTIVE
         with pytest.raises(EscrowAlreadyResolvedError):
             await funded_escrow_manager.complete_task(
-                receipt.escrow_id, output_hash="h", duration_ms=100, provider_signature="s",
+                receipt.escrow_id,
+                output_hash="h",
+                duration_ms=100,
+                provider_signature="s",
             )
 
 
@@ -117,7 +122,8 @@ class TestReleaseEscrow:
         receipt = await funded_escrow_manager.create_escrow(sample_escrow_request, "sig_req")
         await funded_escrow_manager.activate_escrow(receipt.escrow_id)
         release = EscrowRelease(
-            escrow_id=receipt.escrow_id, outcome="success",
+            escrow_id=receipt.escrow_id,
+            outcome="success",
             scak_validated=False,
         )
         resolution = await funded_escrow_manager.release_escrow(release)
@@ -139,17 +145,22 @@ class TestReleaseEscrow:
         receipt = await funded_escrow_manager.create_escrow(sample_escrow_request, "sig_req")
         await funded_escrow_manager.activate_escrow(receipt.escrow_id)
         release = EscrowRelease(
-            escrow_id=receipt.escrow_id, outcome="dispute",
+            escrow_id=receipt.escrow_id,
+            outcome="dispute",
             dispute_reason="Output was wrong",
         )
         resolution = await funded_escrow_manager.release_escrow(release)
         assert resolution.final_status == EscrowStatus.DISPUTED
 
     @pytest.mark.asyncio
-    async def test_release_already_resolved_raises(self, funded_escrow_manager, sample_escrow_request):
+    async def test_release_already_resolved_raises(
+        self, funded_escrow_manager, sample_escrow_request
+    ):
         receipt = await funded_escrow_manager.create_escrow(sample_escrow_request, "sig_req")
         await funded_escrow_manager.activate_escrow(receipt.escrow_id)
-        release = EscrowRelease(escrow_id=receipt.escrow_id, outcome="success", scak_validated=False)
+        release = EscrowRelease(
+            escrow_id=receipt.escrow_id, outcome="success", scak_validated=False
+        )
         await funded_escrow_manager.release_escrow(release)
         with pytest.raises(EscrowAlreadyResolvedError):
             await funded_escrow_manager.release_escrow(release)
@@ -201,12 +212,17 @@ class TestEscrowStatusTransitions:
         assert receipt.status == EscrowStatus.ACTIVE
 
         await funded_escrow_manager.complete_task(
-            receipt.escrow_id, output_hash="h", duration_ms=100, provider_signature="s",
+            receipt.escrow_id,
+            output_hash="h",
+            duration_ms=100,
+            provider_signature="s",
         )
         assert receipt.status == EscrowStatus.AWAITING_VALIDATION
 
         release = EscrowRelease(
-            escrow_id=receipt.escrow_id, outcome="success", scak_validated=False,
+            escrow_id=receipt.escrow_id,
+            outcome="success",
+            scak_validated=False,
         )
         # AWAITING_VALIDATION is still active per is_active()
         resolution = await funded_escrow_manager.release_escrow(release)
@@ -219,30 +235,39 @@ class TestEscrowSchemas:
     def test_escrow_request_credits_validation(self):
         with pytest.raises(Exception):  # pydantic ValidationError
             EscrowRequest(
-                requester_did="did:nexus:a", provider_did="did:nexus:b",
-                task_hash="hash", credits=0,  # must be > 0
+                requester_did="did:nexus:a",
+                provider_did="did:nexus:b",
+                task_hash="hash",
+                credits=0,  # must be > 0
             )
 
     def test_escrow_request_credits_max(self):
         with pytest.raises(Exception):
             EscrowRequest(
-                requester_did="did:nexus:a", provider_did="did:nexus:b",
-                task_hash="hash", credits=20000,  # max 10000
+                requester_did="did:nexus:a",
+                provider_did="did:nexus:b",
+                task_hash="hash",
+                credits=20000,  # max 10000
             )
 
     def test_escrow_request_timeout_min(self):
         with pytest.raises(Exception):
             EscrowRequest(
-                requester_did="did:nexus:a", provider_did="did:nexus:b",
-                task_hash="hash", credits=100, timeout_seconds=10,  # min 60
+                requester_did="did:nexus:a",
+                provider_did="did:nexus:b",
+                task_hash="hash",
+                credits=100,
+                timeout_seconds=10,  # min 60
             )
 
     def test_escrow_receipt_is_expired(self):
         receipt = EscrowReceipt(
             escrow_id="e1",
             request=EscrowRequest(
-                requester_did="did:nexus:a", provider_did="did:nexus:b",
-                task_hash="hash", credits=100,
+                requester_did="did:nexus:a",
+                provider_did="did:nexus:b",
+                task_hash="hash",
+                credits=100,
             ),
             expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
             requester_signature="sig",
@@ -253,8 +278,10 @@ class TestEscrowSchemas:
         receipt = EscrowReceipt(
             escrow_id="e1",
             request=EscrowRequest(
-                requester_did="did:nexus:a", provider_did="did:nexus:b",
-                task_hash="hash", credits=100,
+                requester_did="did:nexus:a",
+                provider_did="did:nexus:b",
+                task_hash="hash",
+                credits=100,
             ),
             status=EscrowStatus.ACTIVE,
             expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
@@ -266,8 +293,10 @@ class TestEscrowSchemas:
         receipt = EscrowReceipt(
             escrow_id="e1",
             request=EscrowRequest(
-                requester_did="did:nexus:a", provider_did="did:nexus:b",
-                task_hash="hash", credits=100,
+                requester_did="did:nexus:a",
+                provider_did="did:nexus:b",
+                task_hash="hash",
+                credits=100,
             ),
             status=EscrowStatus.RELEASED,
             expires_at=datetime.now(timezone.utc) + timedelta(hours=1),

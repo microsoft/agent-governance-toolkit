@@ -14,6 +14,7 @@ class DelegationScope:
 
     Enforces monotonic narrowing — child scope cannot exceed parent scope.
     """
+
     allowed_tools: list[str] = field(default_factory=list)
     max_tool_calls: int = 50
     max_depth: int = 3
@@ -59,13 +60,17 @@ class GovernanceCallbacks:
         )
     """
 
-    def __init__(self, evaluator: Any, delegation_scope: Optional[DelegationScope] = None):
+    def __init__(
+        self, evaluator: Any, delegation_scope: Optional[DelegationScope] = None
+    ):
         self.evaluator = evaluator
         self.scope = delegation_scope or DelegationScope()
 
     def before_tool(self, tool_name: str, tool_args: dict, **kwargs) -> Optional[dict]:
         """Pre-tool governance check."""
-        if self.scope.read_only and tool_name.startswith(("write_", "delete_", "update_")):
+        if self.scope.read_only and tool_name.startswith(
+            ("write_", "delete_", "update_")
+        ):
             return {"error": f"Read-only scope: '{tool_name}' is blocked"}
         if self.scope.allowed_tools and tool_name not in self.scope.allowed_tools:
             return {"error": f"Tool '{tool_name}' not in delegation scope"}

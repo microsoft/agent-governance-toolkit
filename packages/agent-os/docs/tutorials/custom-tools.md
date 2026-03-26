@@ -18,7 +18,7 @@ toolkit = create_safe_toolkit("standard")
 
 # Available tools
 http = toolkit["http"]       # HTTP client with rate limiting
-files = toolkit["files"]     # File reader with sandboxing  
+files = toolkit["files"]     # File reader with sandboxing
 json = toolkit["json"]       # JSON/YAML parser
 calc = toolkit["calculator"] # Safe math operations
 dt = toolkit["datetime"]     # Timezone-aware datetime
@@ -221,16 +221,16 @@ from atr.decorator import tool
 def my_tool(input_data: str) -> dict:
     """
     Process input data safely.
-    
+
     Args:
         input_data: Data to process
-    
+
     Returns:
         Processed result
     """
     # Your logic here
     result = input_data.upper()
-    
+
     return {
         "success": True,
         "result": result
@@ -254,21 +254,21 @@ def process_data(
     filter_pattern: Optional[str] = None
 ) -> dict:
     """Process a list of items safely."""
-    
+
     # Validate inputs
     if len(items) > max_items:
         return {
             "success": False,
             "error": f"Too many items: {len(items)}. Max: {max_items}"
         }
-    
+
     # Process
     result = []
     for item in items:
         if filter_pattern and filter_pattern not in item:
             continue
         result.append(item.strip())
-    
+
     return {
         "success": True,
         "result": result,
@@ -284,7 +284,7 @@ from typing import Dict, Any
 
 class DatabaseTool:
     """Safe database query tool."""
-    
+
     def __init__(
         self,
         connection_string: str,
@@ -295,7 +295,7 @@ class DatabaseTool:
         self.allowed_tables = set(allowed_tables)
         self.max_results = max_results
         self._connection = None
-    
+
     def _validate_table(self, table: str):
         """Ensure table is in allowed list."""
         if table not in self.allowed_tables:
@@ -303,7 +303,7 @@ class DatabaseTool:
                 f"Table '{table}' not allowed. "
                 f"Allowed: {', '.join(self.allowed_tables)}"
             )
-    
+
     @tool(
         name="db_select",
         description="Run a safe SELECT query",
@@ -318,7 +318,7 @@ class DatabaseTool:
     ) -> Dict[str, Any]:
         """
         Run a SELECT query safely.
-        
+
         Args:
             table: Table name (must be in allowed list)
             columns: Columns to select (default: all)
@@ -328,22 +328,22 @@ class DatabaseTool:
         # Validate
         self._validate_table(table)
         limit = min(limit, self.max_results)
-        
+
         # Build query safely (no SQL injection)
         cols = ", ".join(columns) if columns else "*"
         query = f"SELECT {cols} FROM {table}"
-        
+
         if where:
             conditions = " AND ".join(
                 f"{k} = ?" for k in where.keys()
             )
             query += f" WHERE {conditions}"
-        
+
         query += f" LIMIT {limit}"
-        
+
         # Execute (using parameterized query)
         # ... actual database code ...
-        
+
         return {
             "success": True,
             "query": query,
@@ -365,9 +365,9 @@ import asyncio
 )
 async def fetch_multiple(urls: List[str], timeout: float = 10.0) -> dict:
     """Fetch multiple URLs concurrently."""
-    
+
     import aiohttp
-    
+
     async def fetch_one(session, url):
         try:
             async with session.get(url, timeout=timeout) as response:
@@ -382,11 +382,11 @@ async def fetch_multiple(urls: List[str], timeout: float = 10.0) -> dict:
                 "error": str(e),
                 "success": False
             }
-    
+
     async with aiohttp.ClientSession() as session:
         tasks = [fetch_one(session, url) for url in urls]
         results = await asyncio.gather(*tasks)
-    
+
     return {
         "success": True,
         "results": results,
@@ -430,10 +430,10 @@ def safe_tool(data: str, max_length: int = 1000) -> dict:
     # Always validate inputs
     if len(data) > max_length:
         return {"error": f"Input too long: {len(data)} > {max_length}"}
-    
+
     # Sanitize
     data = data.strip()
-    
+
     # Process
     return {"result": process(data)}
 ```
@@ -446,7 +446,7 @@ def list_tool(items: list, max_items: int = 100) -> dict:
     # Limit output size
     result = items[:max_items]
     truncated = len(items) > max_items
-    
+
     return {
         "result": result,
         "truncated": truncated,
@@ -477,14 +477,14 @@ async def slow_tool(data: str, timeout: float = 30.0) -> dict:
 @tool(name="memory_safe_tool")
 def memory_safe_tool(data: list, max_memory_mb: int = 100) -> dict:
     import sys
-    
+
     # Check memory usage
     size_bytes = sys.getsizeof(data)
     size_mb = size_bytes / (1024 * 1024)
-    
+
     if size_mb > max_memory_mb:
         return {"error": f"Data too large: {size_mb:.1f}MB > {max_memory_mb}MB"}
-    
+
     return {"result": process(data)}
 ```
 

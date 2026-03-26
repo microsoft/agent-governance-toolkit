@@ -29,7 +29,7 @@ import django as _django  # noqa: E402
 
 _django.setup()
 
-from django.http import HttpResponse, JsonResponse  # noqa: E402
+from django.http import JsonResponse  # noqa: E402
 from django.test import RequestFactory  # noqa: E402
 from django.urls import path  # noqa: E402
 
@@ -68,6 +68,7 @@ urlpatterns = [
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
+
 def _make_middleware(get_response=None):
     """Create an AgentTrustMiddleware wrapping a dummy get_response."""
     if get_response is None:
@@ -101,8 +102,9 @@ class TestAgentTrustMiddleware:
         assert "Missing agent DID" in body["error"]
 
     def test_valid_did_with_signature_passes(self):
-        from cryptography.hazmat.primitives.asymmetric import ed25519
         import base64
+
+        from cryptography.hazmat.primitives.asymmetric import ed25519
 
         # Create agent keypair and sign the DID
         private_key = ed25519.Ed25519PrivateKey.generate()
@@ -177,8 +179,9 @@ class TestAgentTrustMiddleware:
 
     def test_settings_override_defaults(self):
         """Custom settings override the built-in defaults."""
-        from cryptography.hazmat.primitives.asymmetric import ed25519
         import base64
+
+        from cryptography.hazmat.primitives.asymmetric import ed25519
 
         private_key = ed25519.Ed25519PrivateKey.generate()
         public_key = private_key.public_key()
@@ -199,8 +202,9 @@ class TestAgentTrustMiddleware:
 
     def test_custom_did_header(self):
         """AGENTMESH_DID_HEADER changes which header is read."""
-        from cryptography.hazmat.primitives.asymmetric import ed25519
         import base64
+
+        from cryptography.hazmat.primitives.asymmetric import ed25519
 
         private_key = ed25519.Ed25519PrivateKey.generate()
         public_key = private_key.public_key()
@@ -230,8 +234,9 @@ class TestTrustRequiredDecorator:
 
     def test_per_view_threshold_enforced(self):
         """@trust_required(min_score=800) rejects score 750 even with valid sig."""
-        from cryptography.hazmat.primitives.asymmetric import ed25519
         import base64
+
+        from cryptography.hazmat.primitives.asymmetric import ed25519
 
         private_key = ed25519.Ed25519PrivateKey.generate()
         public_key = private_key.public_key()
@@ -304,9 +309,7 @@ class TestImportWithoutDjango:
                 del sys.modules[mod_name]
 
         try:
-            mod = importlib.import_module(
-                "agentmesh.integrations.django_middleware"
-            )
+            mod = importlib.import_module("agentmesh.integrations.django_middleware")
             # Should import without error; __all__ is empty
             assert mod.__all__ == [] or isinstance(mod.__all__, list)
         finally:

@@ -1,7 +1,5 @@
 """Tests for NostrWoTProvider."""
 
-import pytest
-
 
 class TestNostrWoTProvider:
     """Scaffold — contributors should add real tests here."""

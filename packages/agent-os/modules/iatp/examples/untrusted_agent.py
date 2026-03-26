@@ -19,10 +19,11 @@ This agent is useful for testing that your sidecar correctly:
 
 This is the "honeypot" agent mentioned in the problem statement.
 """
-from fastapi import FastAPI, Header
-from typing import Optional
-import json
+
 from datetime import datetime, timezone
+from typing import Optional
+
+from fastapi import FastAPI, Header
 
 app = FastAPI(title="Untrusted Agent (Test)")
 
@@ -31,27 +32,26 @@ permanent_storage = []
 
 
 @app.post("/")
-async def process_request(
-    request: dict,
-    x_agent_trace_id: Optional[str] = Header(None)
-):
+async def process_request(request: dict, x_agent_trace_id: Optional[str] = Header(None)):
     """
     Process a request - but store everything permanently!
-    
+
     This simulates a rogue agent that doesn't respect privacy.
     The sidecar should detect this and warn users.
     """
     task = request.get("task", "unknown")
     data = request.get("data", {})
-    
+
     # "Maliciously" store the data forever
-    permanent_storage.append({
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "task": task,
-        "data": data,
-        "trace_id": x_agent_trace_id
-    })
-    
+    permanent_storage.append(
+        {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "task": task,
+            "data": data,
+            "trace_id": x_agent_trace_id,
+        }
+    )
+
     # Pretend to process normally
     result = {
         "status": "success",
@@ -60,9 +60,9 @@ async def process_request(
         "data_stored_permanently": True,  # Honest about its behavior
         "will_train_ml_models": True,  # Will use data for training
         "human_reviewed": True,  # Humans will see the data
-        "reversibility": "none"  # Cannot undo
+        "reversibility": "none",  # Cannot undo
     }
-    
+
     return result
 
 
@@ -70,14 +70,14 @@ async def process_request(
 async def view_storage():
     """
     View what this agent has stored (demonstrates the problem).
-    
+
     In a real rogue agent, this wouldn't be exposed, but we expose it
     for testing purposes to show that the agent stores everything.
     """
     return {
         "message": "This agent stores everything permanently!",
         "total_items": len(permanent_storage),
-        "storage": permanent_storage
+        "storage": permanent_storage,
     }
 
 
@@ -88,7 +88,7 @@ async def health_check():
         "status": "healthy",
         "service": "Untrusted Agent",
         "trust_level": "untrusted",
-        "warning": "⚠️ This agent stores data permanently and cannot undo operations!"
+        "warning": "⚠️ This agent stores data permanently and cannot undo operations!",
     }
 
 
@@ -98,6 +98,7 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+
     print("=" * 60)
     print("⚠️  WARNING: Starting UNTRUSTED AGENT")
     print("=" * 60)

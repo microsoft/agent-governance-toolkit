@@ -16,9 +16,10 @@ at call time if their framework is unavailable.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 from agentmesh.identity.agent_id import AgentIdentity
 
@@ -30,7 +31,7 @@ class TrustConfig:
     """Configuration for trust verification."""
 
     required_trust_score: float = 0.5
-    required_capabilities: List[str] = field(default_factory=list)
+    required_capabilities: list[str] = field(default_factory=list)
     # V16: Default to strict mode — require explicit opt-in for permissive
     permissive_mode: bool = False
 
@@ -59,8 +60,8 @@ class TrustMiddleware:
 
     def __init__(
         self,
-        identity: Optional[AgentIdentity] = None,
-        config: Optional[TrustConfig] = None,
+        identity: AgentIdentity | None = None,
+        config: TrustConfig | None = None,
     ) -> None:
         self.identity = identity
         self.config = config or TrustConfig()
@@ -69,9 +70,9 @@ class TrustMiddleware:
 
     def verify_request(
         self,
-        headers: Dict[str, str],
-        config_override: Optional[TrustConfig] = None,
-    ) -> Tuple[VerificationResult, Optional[Dict[str, Any]]]:
+        headers: dict[str, str],
+        config_override: TrustConfig | None = None,
+    ) -> tuple[VerificationResult, dict[str, Any] | None]:
         """Verify trust headers and return *(result, error_body | None)*.
 
         *error_body* is a JSON-serialisable dict when verification fails, or
@@ -104,22 +105,33 @@ class TrustMiddleware:
         missing = [c for c in cfg.required_capabilities if c not in peer_caps]
         if missing:
             return (
-                VerificationResult(verified=False, peer_did=peer_did, trust_score=score,
-                                   reason=f"Missing capabilities: {missing}"),
+                VerificationResult(
+                    verified=False,
+                    peer_did=peer_did,
+                    trust_score=score,
+                    reason=f"Missing capabilities: {missing}",
+                ),
                 {"error": "Insufficient capabilities", "missing": missing},
             )
 
         if score < cfg.required_trust_score:
             return (
-                VerificationResult(verified=False, peer_did=peer_did, trust_score=score,
-                                   reason="Trust score too low"),
-                {"error": "Insufficient trust score", "required": cfg.required_trust_score,
-                 "actual": score},
+                VerificationResult(
+                    verified=False,
+                    peer_did=peer_did,
+                    trust_score=score,
+                    reason="Trust score too low",
+                ),
+                {
+                    "error": "Insufficient trust score",
+                    "required": cfg.required_trust_score,
+                    "actual": score,
+                },
             )
 
         return VerificationResult(verified=True, peer_did=peer_did, trust_score=score), None
 
-    def response_headers(self) -> Dict[str, str]:
+    def response_headers(self) -> dict[str, str]:
         """Return trust headers to attach to outgoing responses."""
         if not self.identity:
             return {}
@@ -132,12 +144,13 @@ class TrustMiddleware:
 
 # -- Framework-specific decorators -----------------------------------------
 
+
 def flask_trust_required(
     middleware: TrustMiddleware,
-    config: Optional[TrustConfig] = None,
+    config: TrustConfig | None = None,
 ) -> Callable:
     """Flask decorator that rejects untrusted requests."""
-    from flask import request, g, jsonify  # noqa: late import
+    from flask import g, jsonify, request  # noqa: late import
 
     def decorator(fn: Callable) -> Callable:
         @wraps(fn)
@@ -149,18 +162,20 @@ def flask_trust_required(
             g.trust_result = result
             g.peer_did = result.peer_did
             return fn(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
 def fastapi_trust_required(
     middleware: TrustMiddleware,
-    config: Optional[TrustConfig] = None,
+    config: TrustConfig | None = None,
 ) -> Callable:
     """FastAPI dependency that rejects untrusted requests."""
     from fastapi import Request  # noqa: late import
 
-    async def dependency(request: Request) -> Optional[VerificationResult]:
+    async def dependency(request: Request) -> VerificationResult | None:
         result, err = middleware.verify_request(dict(request.headers), config)
         if err:
             status = 401 if "required" in err.get("error", "") else 403
@@ -172,4 +187,5 @@ def fastapi_trust_required(
 
 def _fastapi_http_exc(status: int, detail: Any) -> Exception:
     from fastapi import HTTPException  # noqa: late import
+
     return HTTPException(status_code=status, detail=detail)

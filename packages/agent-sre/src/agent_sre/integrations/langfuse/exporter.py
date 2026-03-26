@@ -144,40 +144,48 @@ class LangfuseExporter:
         scores: list[SLOScore] = []
 
         # Overall SLO status
-        scores.append(self._record_score(
-            trace_id=trace_id,
-            name=f"slo.{slo.name}.status",
-            value=float(status_code),
-            comment=f"SLO status: {status.value}",
-        ))
+        scores.append(
+            self._record_score(
+                trace_id=trace_id,
+                name=f"slo.{slo.name}.status",
+                value=float(status_code),
+                comment=f"SLO status: {status.value}",
+            )
+        )
 
         # Error budget remaining
-        scores.append(self._record_score(
-            trace_id=trace_id,
-            name=f"slo.{slo.name}.budget_remaining",
-            value=slo.error_budget.remaining,
-            comment=f"Error budget: {slo.error_budget.remaining_percent:.1f}% remaining",
-        ))
+        scores.append(
+            self._record_score(
+                trace_id=trace_id,
+                name=f"slo.{slo.name}.budget_remaining",
+                value=slo.error_budget.remaining,
+                comment=f"Error budget: {slo.error_budget.remaining_percent:.1f}% remaining",
+            )
+        )
 
         # Burn rate
         burn = slo.error_budget.burn_rate()
-        scores.append(self._record_score(
-            trace_id=trace_id,
-            name=f"slo.{slo.name}.burn_rate",
-            value=burn,
-            comment=f"Burn rate: {burn:.2f}x",
-        ))
+        scores.append(
+            self._record_score(
+                trace_id=trace_id,
+                name=f"slo.{slo.name}.burn_rate",
+                value=burn,
+                comment=f"Burn rate: {burn:.2f}x",
+            )
+        )
 
         # Per-SLI scores
         for indicator in slo.indicators:
             current = indicator.current_value()
             if current is not None:
-                scores.append(self._record_score(
-                    trace_id=trace_id,
-                    name=f"sli.{indicator.name}",
-                    value=current,
-                    comment=f"SLI {indicator.name}: {current:.4f} (target: {indicator.target})",
-                ))
+                scores.append(
+                    self._record_score(
+                        trace_id=trace_id,
+                        name=f"sli.{indicator.name}",
+                        value=current,
+                        comment=f"SLI {indicator.name}: {current:.4f} (target: {indicator.target})",
+                    )
+                )
 
         return scores
 

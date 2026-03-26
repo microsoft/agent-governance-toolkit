@@ -61,8 +61,8 @@ class GovernancePolicy:
     log_all_calls: bool = True
     version: str = "1.0.0"
 
-    _compiled_patterns: Optional[List[Tuple[str, PatternType, "re.Pattern[str]"]]] = field(
-        default=None, repr=False, compare=False
+    _compiled_patterns: Optional[List[Tuple[str, PatternType, "re.Pattern[str]"]]] = (
+        field(default=None, repr=False, compare=False)
     )
 
     def __post_init__(self) -> None:

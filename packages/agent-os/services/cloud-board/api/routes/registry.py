@@ -6,10 +6,11 @@ Registry Routes
 API endpoints for agent registration and discovery.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query
-from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime, timezone
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 # Would import from modules.nexus in production
 # For now, define inline models
@@ -84,12 +85,12 @@ _agents: dict[str, dict] = {}
 async def register_agent(request: RegisterAgentRequest):
     """
     Register a new agent on Nexus.
-    
+
     This is the entry point for the viral loop - agents must register
     to communicate with other agents on the network.
     """
     agent_did = request.identity.did
-    
+
     # Check if already registered
     if agent_did in _agents:
         raise HTTPException(
@@ -97,9 +98,9 @@ async def register_agent(request: RegisterAgentRequest):
             detail={
                 "error": "AGENT_ALREADY_REGISTERED",
                 "message": f"Agent {agent_did} is already registered",
-            }
+            },
         )
-    
+
     # Validate DID format
     if not agent_did.startswith("did:nexus:"):
         raise HTTPException(
@@ -107,22 +108,22 @@ async def register_agent(request: RegisterAgentRequest):
             detail={
                 "error": "INVALID_DID",
                 "message": "DID must start with 'did:nexus:'",
-            }
+            },
         )
-    
+
     # Calculate initial trust score
     trust_score = 400  # Base score for new registrations
-    
+
     if request.capabilities:
         if request.capabilities.reversibility == "full":
             trust_score += 50
-    
+
     if request.privacy:
         if request.privacy.retention_policy == "ephemeral":
             trust_score += 30
         if request.privacy.pii_handling == "reject":
             trust_score += 20
-    
+
     # Store agent
     now = datetime.now(timezone.utc).isoformat()
     _agents[agent_did] = {
@@ -134,14 +135,15 @@ async def register_agent(request: RegisterAgentRequest):
         "registered_at": now,
         "last_seen": now,
     }
-    
+
     # Generate manifest hash
     import hashlib
     import json
+
     manifest_hash = hashlib.sha256(
         json.dumps(_agents[agent_did], sort_keys=True).encode()
     ).hexdigest()
-    
+
     return RegisterAgentResponse(
         success=True,
         agent_did=agent_did,
@@ -161,9 +163,9 @@ async def get_agent(agent_did: str):
             detail={
                 "error": "AGENT_NOT_FOUND",
                 "message": f"Agent {agent_did} not found in registry",
-            }
+            },
         )
-    
+
     agent = _agents[agent_did]
     return AgentManifestResponse(**agent)
 
@@ -177,36 +179,39 @@ async def update_agent(agent_did: str, request: RegisterAgentRequest):
             detail={
                 "error": "AGENT_NOT_FOUND",
                 "message": f"Agent {agent_did} not found",
-            }
+            },
         )
-    
+
     if request.identity.did != agent_did:
         raise HTTPException(
             status_code=400,
             detail={
                 "error": "DID_MISMATCH",
                 "message": "DID in request does not match URL",
-            }
+            },
         )
-    
+
     # Preserve registration time
     registered_at = _agents[agent_did]["registered_at"]
-    
+
     # Update agent
     now = datetime.now(timezone.utc).isoformat()
-    _agents[agent_did].update({
-        "identity": request.identity.model_dump(),
-        "capabilities": request.capabilities.model_dump() if request.capabilities else {},
-        "privacy": request.privacy.model_dump() if request.privacy else {},
-        "last_seen": now,
-    })
-    
+    _agents[agent_did].update(
+        {
+            "identity": request.identity.model_dump(),
+            "capabilities": request.capabilities.model_dump() if request.capabilities else {},
+            "privacy": request.privacy.model_dump() if request.privacy else {},
+            "last_seen": now,
+        }
+    )
+
     import hashlib
     import json
+
     manifest_hash = hashlib.sha256(
         json.dumps(_agents[agent_did], sort_keys=True).encode()
     ).hexdigest()
-    
+
     return RegisterAgentResponse(
         success=True,
         agent_did=agent_did,
@@ -226,9 +231,9 @@ async def deregister_agent(agent_did: str):
             detail={
                 "error": "AGENT_NOT_FOUND",
                 "message": f"Agent {agent_did} not found",
-            }
+            },
         )
-    
+
     del _agents[agent_did]
     return {"success": True, "message": f"Agent {agent_did} deregistered"}
 
@@ -241,7 +246,7 @@ async def verify_peer(
 ):
     """
     Verify a peer agent before IATP handshake.
-    
+
     This is the core viral mechanism - returns error with registration
     URL for unregistered agents.
     """
@@ -255,12 +260,12 @@ async def verify_peer(
                 "peer_id": agent_did,
                 "registration_url": f"https://nexus.agent-os.dev/register?agent={agent_did}",
                 "action_required": "Register the agent on Nexus to enable communication",
-            }
+            },
         )
-    
+
     agent = _agents[agent_did]
     trust_score = agent["trust_score"]
-    
+
     # Check trust threshold
     if trust_score < min_score:
         raise HTTPException(
@@ -273,13 +278,13 @@ async def verify_peer(
                 "required_score": min_score,
                 "score_gap": min_score - trust_score,
                 "improvement_url": f"https://nexus.agent-os.dev/reputation/{agent_did}",
-            }
+            },
         )
-    
+
     # Check capabilities if required
     required_caps = capabilities.split(",") if capabilities else []
     agent_caps = agent.get("capabilities", {}).get("domains", [])
-    
+
     if required_caps:
         missing = set(required_caps) - set(agent_caps)
         if missing:
@@ -291,10 +296,10 @@ async def verify_peer(
                 capabilities=agent_caps,
                 rejection_reason=f"Missing capabilities: {missing}",
             )
-    
+
     # Update last seen
     agent["last_seen"] = datetime.now(timezone.utc).isoformat()
-    
+
     return VerifyPeerResponse(
         verified=True,
         peer_did=agent_did,
@@ -315,33 +320,33 @@ async def discover_agents(
 ):
     """Discover agents matching criteria."""
     results = []
-    
+
     required_caps = capabilities.split(",") if capabilities else []
-    
+
     for agent_did, agent in _agents.items():
         # Filter by score
         if agent["trust_score"] < min_score:
             continue
-        
+
         # Filter by capabilities
         if required_caps:
             agent_caps = agent.get("capabilities", {}).get("domains", [])
             if not all(c in agent_caps for c in required_caps):
                 continue
-        
+
         # Filter by privacy policy
         if privacy_policy:
             if agent.get("privacy", {}).get("retention_policy") != privacy_policy:
                 continue
-        
+
         results.append(AgentManifestResponse(**agent))
-        
+
         if len(results) >= limit:
             break
-    
+
     # Sort by trust score
     results.sort(key=lambda a: a.trust_score, reverse=True)
-    
+
     return results
 
 

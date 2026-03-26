@@ -100,7 +100,7 @@ policies:
       - file_write
       - database_write
       - send_email
-  
+
   - name: no_pii
     blocked_patterns:
       - "\\bssn\\b"
@@ -301,17 +301,17 @@ async def data_analyst(task: str):
     # Check episodic memory for similar tasks
     similar = memory.retrieve(query=task, k=3)
     context = "\n".join([f"- {ep.goal}: {ep.result}" for ep in similar])
-    
+
     # Store current task in working memory
     vfs.write("/mem/working/task.txt", task)
-    
+
     # Your LLM logic here
     result = f"Analysis of: {task}"
-    
+
     # Record episode
     episode = Episode(goal=task, action="analyze", result=result)
     memory.store(episode)
-    
+
     return result
 
 # Run with governance

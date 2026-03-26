@@ -15,22 +15,23 @@ Updated for atr 0.2.0:
 - Access control with permissions
 """
 
-import atr
-from atr import RetryPolicy, BackoffStrategy, HttpHealthCheck, CallableHealthCheck
 import hashlib
 import json
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import numpy as np
 
+import atr
+from atr import BackoffStrategy, CallableHealthCheck, RetryPolicy
 
 # =============================================================================
 # Provenance Metadata (for cryptographic verification)
 # =============================================================================
+
 
 @dataclass
 class ProvenanceMetadata:
@@ -38,11 +39,12 @@ class ProvenanceMetadata:
     Cryptographic provenance for tool outputs.
     Enables verification that data hasn't been tampered with.
     """
+
     signature: str
     source: str
     timestamp: str
     algorithm: str = "sha256"
-    
+
     @classmethod
     def create(cls, data: Dict[str, Any], source: str) -> "ProvenanceMetadata":
         """Create provenance metadata for data."""
@@ -53,7 +55,7 @@ class ProvenanceMetadata:
             source=source,
             timestamp=datetime.now(timezone.utc).isoformat(),
         )
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "signature": self.signature,
@@ -66,6 +68,7 @@ class ProvenanceMetadata:
 # =============================================================================
 # PDF Parser Tool (atr 0.2.0 - with versioning and retry)
 # =============================================================================
+
 
 @atr.register(
     name="pdf_parser",
@@ -84,15 +87,15 @@ class ProvenanceMetadata:
 def parse_pdf(file_path: str) -> Dict[str, Any]:
     """
     Parse a PDF or text document and extract text content.
-    
+
     Args:
         file_path: Path to the PDF or text file
-        
+
     Returns:
         Dictionary with extracted text, page count, and provenance
     """
     path = Path(file_path)
-    
+
     if not path.exists():
         # Return mock data for demo purposes
         text = _get_mock_pdf_content()
@@ -101,9 +104,9 @@ def parse_pdf(file_path: str) -> Dict[str, Any]:
             "pages": 5,
             "filename": path.name,
         }
-    elif path.suffix in ['.txt', '.md']:
+    elif path.suffix in [".txt", ".md"]:
         # Handle text files (for demo)
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding="utf-8") as f:
             text = f.read()
         data = {
             "text": text,
@@ -114,6 +117,7 @@ def parse_pdf(file_path: str) -> Dict[str, Any]:
         # Attempt real PDF parsing
         try:
             from pypdf import PdfReader
+
             reader = PdfReader(file_path)
             text = ""
             for page in reader.pages:
@@ -130,11 +134,11 @@ def parse_pdf(file_path: str) -> Dict[str, Any]:
                 "pages": 5,
                 "filename": path.name,
             }
-    
+
     # Add provenance
     provenance = ProvenanceMetadata.create(data, f"file://{file_path}")
     data["_provenance"] = provenance.to_dict()
-    
+
     return data
 
 
@@ -175,6 +179,7 @@ Reference Period: 2020-2024
 # Table Extractor Tool (atr 0.2.0 - with versioning)
 # =============================================================================
 
+
 @atr.register(
     name="table_extractor",
     version="1.0.0",  # NEW: Tool versioning (ATR-002)
@@ -186,10 +191,10 @@ Reference Period: 2020-2024
 def extract_tables(text: str) -> Dict[str, Any]:
     """
     Extract structured data (project ID, coordinates, NDVI, carbon stock) from text.
-    
+
     Args:
         text: The document text to parse
-        
+
     Returns:
         Dictionary with extracted structured data
     """
@@ -202,30 +207,27 @@ def extract_tables(text: str) -> Dict[str, Any]:
     }
 
     # Extract Project ID
-    project_match = re.search(r'Project ID:\s*(VCS-[\w-]+)', text)
+    project_match = re.search(r"Project ID:\s*(VCS-[\w-]+)", text)
     if project_match:
         data["project_id"] = project_match.group(1)
 
     # Extract coordinates
-    coord_match = re.search(
-        r'Polygon Coordinates.*?:\s*(\[[-\d.,\s\[\]]+\])',
-        text, re.DOTALL
-    )
+    coord_match = re.search(r"Polygon Coordinates.*?:\s*(\[[-\d.,\s\[\]]+\])", text, re.DOTALL)
     if coord_match:
         data["polygon"] = coord_match.group(1)
 
     # Extract year
-    year_match = re.search(r'Year:\s*(\d{4})', text)
+    year_match = re.search(r"Year:\s*(\d{4})", text)
     if year_match:
         data["year"] = int(year_match.group(1))
 
     # Extract NDVI
-    ndvi_match = re.search(r'NDVI.*?:\s*([\d.]+)', text)
+    ndvi_match = re.search(r"NDVI.*?:\s*([\d.]+)", text)
     if ndvi_match:
         data["claimed_ndvi"] = float(ndvi_match.group(1))
 
     # Extract carbon stock
-    carbon_match = re.search(r'Carbon Stock:\s*([\d.]+)', text)
+    carbon_match = re.search(r"Carbon Stock:\s*([\d.]+)", text)
     if carbon_match:
         data["carbon_stock"] = float(carbon_match.group(1))
 
@@ -239,6 +241,7 @@ def extract_tables(text: str) -> Dict[str, Any]:
 # =============================================================================
 # Sentinel API Tool (atr 0.2.0 - with rate limiting and retry)
 # =============================================================================
+
 
 @atr.register(
     name="sentinel_api",
@@ -260,19 +263,15 @@ def extract_tables(text: str) -> Dict[str, Any]:
         name="copernicus_api",
     ),
 )
-def fetch_sentinel_data(
-    polygon: str,
-    start_date: str,
-    end_date: str
-) -> Dict[str, Any]:
+def fetch_sentinel_data(polygon: str, start_date: str, end_date: str) -> Dict[str, Any]:
     """
     Fetch Sentinel-2 satellite imagery for a polygon and date range.
-    
+
     Args:
         polygon: GeoJSON polygon coordinates as string
         start_date: Start date (YYYY-MM-DD)
         end_date: End date (YYYY-MM-DD)
-        
+
     Returns:
         Dictionary with imagery metadata and band data
     """
@@ -301,6 +300,7 @@ def fetch_sentinel_data(
 # NDVI Calculator Tool (atr 0.2.0 - with versioning)
 # =============================================================================
 
+
 @atr.register(
     name="ndvi_calculator",
     version="1.0.0",  # NEW: Tool versioning (ATR-002)
@@ -310,25 +310,23 @@ def fetch_sentinel_data(
     permissions=["geo-agent"],  # NEW: Access control (ATR-005)
 )
 def calculate_ndvi(
-    red_band: str,
-    nir_band: str,
-    simulate_deforestation: bool = False
+    red_band: str, nir_band: str, simulate_deforestation: bool = False
 ) -> Dict[str, Any]:
     """
     Calculate NDVI (Normalized Difference Vegetation Index) from satellite bands.
-    
+
     NDVI = (NIR - RED) / (NIR + RED)
-    
+
     Values range from -1 to 1:
     - Dense vegetation: 0.6 to 0.9
     - Sparse vegetation: 0.2 to 0.5
     - Bare soil/rock: -0.1 to 0.1
-    
+
     Args:
         red_band: Red band data (B04) - mock identifier
         nir_band: NIR band data (B08) - mock identifier
         simulate_deforestation: If True, return low NDVI values (fraud scenario)
-        
+
     Returns:
         Dictionary with NDVI statistics
     """
@@ -361,6 +359,7 @@ def calculate_ndvi(
 # =============================================================================
 # Tool Discovery Helpers
 # =============================================================================
+
 
 def get_claims_tools() -> list:
     """Get tools for the claims agent."""

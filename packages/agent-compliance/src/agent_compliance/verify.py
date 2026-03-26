@@ -276,9 +276,7 @@ class GovernanceVerifier:
             },
             sort_keys=True,
         )
-        attestation.attestation_hash = hashlib.sha256(
-            hash_payload.encode()
-        ).hexdigest()
+        attestation.attestation_hash = hashlib.sha256(hash_payload.encode()).hexdigest()
 
         return attestation
 

@@ -15,14 +15,13 @@ from agentmesh.identity.agent_id import AgentIdentity, IdentityRegistry
 from agentmesh.trust.bridge import TrustBridge
 from agentmesh.trust.handshake import (
     HandshakeChallenge,
-    HandshakeResult,
     TrustHandshake,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_registry(*identities: AgentIdentity) -> IdentityRegistry:
     """Create a registry pre-populated with the given identities."""
@@ -43,6 +42,7 @@ def _make_identity(name: str, capabilities: list[str] | None = None) -> AgentIde
 # ---------------------------------------------------------------------------
 # Core MSRC PoC — fabricated DID must be rejected
 # ---------------------------------------------------------------------------
+
 
 class TestFabricatedDIDRejection:
     """Reproduce the exact MSRC PoC scenario and verify it is now blocked."""
@@ -112,6 +112,7 @@ class TestFabricatedDIDRejection:
 # Registry-backed handshake — registered identity passes
 # ---------------------------------------------------------------------------
 
+
 class TestRegisteredIdentityHandshake:
     """Registered identities with valid Ed25519 keys pass the handshake."""
 
@@ -145,19 +146,11 @@ class TestRegisteredIdentityHandshake:
         agent_b = _make_identity("mutual-b")
         registry = _make_registry(agent_a, agent_b)
 
-        hs_a = TrustHandshake(
-            agent_did=str(agent_a.did), identity=agent_a, registry=registry
-        )
-        hs_b = TrustHandshake(
-            agent_did=str(agent_b.did), identity=agent_b, registry=registry
-        )
+        hs_a = TrustHandshake(agent_did=str(agent_a.did), identity=agent_a, registry=registry)
+        hs_b = TrustHandshake(agent_did=str(agent_b.did), identity=agent_b, registry=registry)
 
-        result_ab = await hs_a.initiate(
-            peer_did=str(agent_b.did), required_trust_score=500
-        )
-        result_ba = await hs_b.initiate(
-            peer_did=str(agent_a.did), required_trust_score=500
-        )
+        result_ab = await hs_a.initiate(peer_did=str(agent_b.did), required_trust_score=500)
+        result_ba = await hs_b.initiate(peer_did=str(agent_a.did), required_trust_score=500)
 
         assert result_ab.verified
         assert result_ba.verified
@@ -188,6 +181,7 @@ class TestRegisteredIdentityHandshake:
 # Revoked / suspended identity rejection
 # ---------------------------------------------------------------------------
 
+
 class TestRevokedIdentityRejection:
     """Revoked or suspended identities must be rejected."""
 
@@ -201,13 +195,9 @@ class TestRevokedIdentityRejection:
         # Revoke agent_b
         agent_b.revoke("Compromised")
 
-        hs = TrustHandshake(
-            agent_did=str(agent_a.did), identity=agent_a, registry=registry
-        )
+        hs = TrustHandshake(agent_did=str(agent_a.did), identity=agent_a, registry=registry)
 
-        result = await hs.initiate(
-            peer_did=str(agent_b.did), required_trust_score=500
-        )
+        result = await hs.initiate(peer_did=str(agent_b.did), required_trust_score=500)
 
         assert not result.verified
 
@@ -220,13 +210,9 @@ class TestRevokedIdentityRejection:
 
         agent_b.suspend("Under investigation")
 
-        hs = TrustHandshake(
-            agent_did=str(agent_a.did), identity=agent_a, registry=registry
-        )
+        hs = TrustHandshake(agent_did=str(agent_a.did), identity=agent_a, registry=registry)
 
-        result = await hs.initiate(
-            peer_did=str(agent_b.did), required_trust_score=500
-        )
+        result = await hs.initiate(peer_did=str(agent_b.did), required_trust_score=500)
 
         assert not result.verified
 
@@ -234,6 +220,7 @@ class TestRevokedIdentityRejection:
 # ---------------------------------------------------------------------------
 # No-registry rejects all peers
 # ---------------------------------------------------------------------------
+
 
 class TestNoRegistryRejectsAll:
     """Without a registry, all peers must be rejected."""
@@ -265,6 +252,7 @@ class TestNoRegistryRejectsAll:
 # Signature tampering detection
 # ---------------------------------------------------------------------------
 
+
 class TestSignatureTampering:
     """Tampered signatures must be detected and rejected."""
 
@@ -275,15 +263,11 @@ class TestSignatureTampering:
         agent_b = _make_identity("responder")
         registry = _make_registry(agent_a, agent_b)
 
-        hs = TrustHandshake(
-            agent_did=str(agent_a.did), identity=agent_a, registry=registry
-        )
+        hs = TrustHandshake(agent_did=str(agent_a.did), identity=agent_a, registry=registry)
 
         # Manually create a challenge and get a valid response
         challenge = HandshakeChallenge.generate()
-        peer_hs = TrustHandshake(
-            agent_did=str(agent_b.did), identity=agent_b, registry=registry
-        )
+        peer_hs = TrustHandshake(agent_did=str(agent_b.did), identity=agent_b, registry=registry)
         response = await peer_hs.respond(
             challenge=challenge,
             my_capabilities=["read:data"],
@@ -296,9 +280,7 @@ class TestSignatureTampering:
         tampered = bytes([b ^ 0xFF for b in sig_bytes[:8]]) + sig_bytes[8:]
         response.signature = base64.b64encode(tampered).decode()
 
-        verification = await hs._verify_response(
-            response, challenge, 500, None
-        )
+        verification = await hs._verify_response(response, challenge, 500, None)
 
         assert not verification["valid"]
         assert "signature" in verification["reason"].lower()
@@ -311,19 +293,19 @@ class TestSignatureTampering:
         agent_c = _make_identity("impersonator")
         registry = _make_registry(agent_a, agent_b, agent_c)
 
-        hs = TrustHandshake(
-            agent_did=str(agent_a.did), identity=agent_a, registry=registry
-        )
+        hs = TrustHandshake(agent_did=str(agent_a.did), identity=agent_a, registry=registry)
 
         # Agent C tries to impersonate B by signing a response for B's DID
         challenge = HandshakeChallenge.generate()
 
         import secrets as _secrets
+
         response_nonce = _secrets.token_hex(16)
         payload = f"{challenge.challenge_id}:{challenge.nonce}:{response_nonce}:{str(agent_b.did)}"
         wrong_signature = agent_c.sign(payload.encode())
 
         from agentmesh.trust.handshake import HandshakeResponse
+
         fake_response = HandshakeResponse(
             challenge_id=challenge.challenge_id,
             response_nonce=response_nonce,
@@ -334,8 +316,6 @@ class TestSignatureTampering:
             public_key=agent_c.public_key,  # wrong key
         )
 
-        verification = await hs._verify_response(
-            fake_response, challenge, 500, None
-        )
+        verification = await hs._verify_response(fake_response, challenge, 500, None)
 
         assert not verification["valid"]

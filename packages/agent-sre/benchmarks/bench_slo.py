@@ -11,7 +11,6 @@ Measures throughput and latency of:
 
 from __future__ import annotations
 
-import statistics
 import time
 from dataclasses import dataclass, field
 
@@ -24,7 +23,7 @@ from agent_sre.slo.indicators import (
     TaskSuccessRate,
     ToolCallAccuracy,
 )
-from agent_sre.slo.objectives import ErrorBudget, SLO
+from agent_sre.slo.objectives import SLO, ErrorBudget
 
 
 @dataclass

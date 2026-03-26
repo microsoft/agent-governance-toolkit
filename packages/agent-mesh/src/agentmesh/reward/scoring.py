@@ -7,9 +7,9 @@ Multi-dimensional scoring with trust scores and reward signals.
 """
 
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field, field_validator
 from enum import Enum
+
+from pydantic import BaseModel, Field, field_validator
 
 from agentmesh.constants import (
     TIER_PROBATIONARY_THRESHOLD,
@@ -25,6 +25,7 @@ from agentmesh.exceptions import TrustError
 
 class DimensionType(str, Enum):
     """The 5 reward dimensions."""
+
     POLICY_COMPLIANCE = "policy_compliance"
     RESOURCE_EFFICIENCY = "resource_efficiency"
     OUTPUT_QUALITY = "output_quality"
@@ -46,8 +47,8 @@ class RewardSignal(BaseModel):
     source: str = Field(..., description="Where this signal came from")
 
     # Context
-    details: Optional[str] = None
-    trace_id: Optional[str] = None
+    details: str | None = None
+    trace_id: str | None = None
 
     # Timing
     timestamp: datetime = Field(default_factory=datetime.utcnow)
@@ -68,7 +69,7 @@ class RewardDimension(BaseModel):
     negative_signals: int = Field(default=0)
 
     # Trend
-    previous_score: Optional[float] = None
+    previous_score: float | None = None
     trend: str = "stable"  # improving, degrading, stable
 
     # Last update
@@ -123,7 +124,7 @@ class TrustScore(BaseModel):
     calculated_at: datetime = Field(default_factory=datetime.utcnow)
 
     # History
-    previous_score: Optional[int] = None
+    previous_score: int | None = None
     score_change: int = 0
 
     model_config = {"validate_assignment": True}
@@ -134,9 +135,7 @@ class TrustScore(BaseModel):
         if not v or not v.strip():
             raise TrustError("agent_did must not be empty")
         if not v.startswith("did:mesh:"):
-            raise TrustError(
-                f"agent_did must match 'did:mesh:' pattern, got: {v}"
-            )
+            raise TrustError(f"agent_did must match 'did:mesh:' pattern, got: {v}")
         return v
 
     def __init__(self, **data):

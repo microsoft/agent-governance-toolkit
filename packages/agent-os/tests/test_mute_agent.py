@@ -7,18 +7,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-import pytest
-
 from agent_os.mute_agent import (
     BUILTIN_PATTERNS,
     MuteAgent,
     MutePolicy,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers — lightweight stand-in for ExecutionResult
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class FakeResult:
@@ -31,6 +29,7 @@ class FakeResult:
 # ---------------------------------------------------------------------------
 # MutePolicy defaults
 # ---------------------------------------------------------------------------
+
 
 class TestMutePolicy:
     def test_defaults_enable_all_builtins(self):
@@ -46,6 +45,7 @@ class TestMutePolicy:
 # ---------------------------------------------------------------------------
 # MuteAgent — built-in patterns
 # ---------------------------------------------------------------------------
+
 
 class TestMuteAgentBuiltins:
     def test_redact_email(self):
@@ -85,6 +85,7 @@ class TestMuteAgentBuiltins:
 # MuteAgent — custom patterns & keywords
 # ---------------------------------------------------------------------------
 
+
 class TestMuteAgentCustom:
     def test_custom_regex(self):
         policy = MutePolicy(
@@ -120,6 +121,7 @@ class TestMuteAgentCustom:
 # ---------------------------------------------------------------------------
 # MuteAgent — recursive scrubbing
 # ---------------------------------------------------------------------------
+
 
 class TestMuteAgentRecursive:
     def test_dict_data(self):

@@ -1,10 +1,10 @@
 # RFC: AI-BOM — AI Bill of Materials for Agentic Systems
 
-**Status:** Draft v2.0  
-**Author:** Imran Siddique (Microsoft)  
-**Created:** 2026-02-03  
-**Updated:** 2026-03-04  
-**Target:** LF AI & Data Foundation, OWASP AI SBOM Initiative  
+**Status:** Draft v2.0
+**Author:** Imran Siddique (Microsoft)
+**Created:** 2026-02-03
+**Updated:** 2026-03-04
+**Target:** LF AI & Data Foundation, OWASP AI SBOM Initiative
 **Supersedes:** Agent-SBOM v1.0
 
 ## Abstract
@@ -67,7 +67,7 @@ Modern AI agents are opaque at every layer. When an organization deploys an agen
   "agentName": "CustomerServiceBot",
   "version": "2.1.0",
   "created": "2026-03-04T12:00:00Z",
-  
+
   "sponsor": {
     "type": "organization",
     "name": "Acme Corp",
@@ -76,7 +76,7 @@ Modern AI agents are opaque at every layer. When an organization deploys an agen
     "entraObjectId": "00000000-0000-0000-0000-000000000001",
     "tenantId": "contoso.onmicrosoft.com"
   },
-  
+
   "modelProvenance": {
     "primary": {
       "provider": "anthropic",
@@ -114,7 +114,7 @@ Modern AI agents are opaque at every layer. When an organization deploys an agen
       }
     ]
   },
-  
+
   "datasets": [
     {
       "id": "ds-customer-faq",
@@ -173,7 +173,7 @@ Modern AI agents are opaque at every layer. When an organization deploys an agen
       }
     }
   ],
-  
+
   "weights": {
     "format": "safetensors",
     "precision": "bf16",
@@ -198,7 +198,7 @@ Modern AI agents are opaque at every layer. When an organization deploys an agen
       "materials": ["ds-customer-faq@v3.2"]
     }
   },
-  
+
   "capabilities": {
     "tools": [
       {
@@ -223,7 +223,7 @@ Modern AI agents are opaque at every layer. When an organization deploys an agen
       "timeout": "5m"
     }
   },
-  
+
   "policies": [
     {
       "id": "policy-no-pii",
@@ -232,7 +232,7 @@ Modern AI agents are opaque at every layer. When an organization deploys an agen
       "hash": "sha256:abc123..."
     }
   ],
-  
+
   "trust": {
     "initialScore": 800,
     "tier": "Verified",
@@ -245,7 +245,7 @@ Modern AI agents are opaque at every layer. When an organization deploys an agen
       }
     ]
   },
-  
+
   "compliance": {
     "frameworks": [
       {
@@ -265,7 +265,7 @@ Modern AI agents are opaque at every layer. When an organization deploys an agen
       }
     ]
   },
-  
+
   "dependencies": {
     "agents": [
       {
@@ -290,7 +290,7 @@ Modern AI agents are opaque at every layer. When an organization deploys an agen
       }
     ]
   },
-  
+
   "riskProfile": {
     "dataAccess": ["internal", "confidential"],
     "networkAccess": true,
@@ -301,7 +301,7 @@ Modern AI agents are opaque at every layer. When an organization deploys an agen
     "modelInversionRisk": "low",
     "promptInjectionMitigations": ["input-filtering", "output-guardrails"]
   },
-  
+
   "signatures": {
     "sponsor": "base64:...",
     "platform": "base64:...",
@@ -401,7 +401,7 @@ Security Team receives Agent-SBOM
 ```
 Agent attempts to call tool
 → Platform checks Agent-SBOM
-→ Tool in capabilities list? 
+→ Tool in capabilities list?
 → Constraints satisfied?
 → Allow/Block execution
 ```

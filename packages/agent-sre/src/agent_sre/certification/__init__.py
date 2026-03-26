@@ -49,17 +49,19 @@ if TYPE_CHECKING:
 # Tiers
 # ---------------------------------------------------------------------------
 
+
 class CertificationTier(Enum):
     """Certification levels for agent reliability."""
 
-    BRONZE = "bronze"    # Basic reliability
-    SILVER = "silver"    # Production-grade
-    GOLD = "gold"        # Enterprise-ready
+    BRONZE = "bronze"  # Basic reliability
+    SILVER = "silver"  # Production-grade
+    GOLD = "gold"  # Enterprise-ready
 
 
 # ---------------------------------------------------------------------------
 # Criterion
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Criterion:
@@ -70,7 +72,7 @@ class Criterion:
     tier: CertificationTier
     check_fn: Callable[[dict[str, Any]], bool]
     evidence_key: str = ""  # Key to look up in evidence dict
-    required: bool = True   # If False, failure is advisory only
+    required: bool = True  # If False, failure is advisory only
 
     def check(self, evidence: dict[str, Any]) -> bool:
         """Evaluate this criterion against provided evidence."""
@@ -98,6 +100,7 @@ class CriterionResult:
 # ---------------------------------------------------------------------------
 # Certification result
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class CertificationResult:
@@ -144,100 +147,125 @@ class CertificationResult:
 # Default criteria
 # ---------------------------------------------------------------------------
 
+
 def _default_criteria() -> list[Criterion]:
     """Build the default certification criteria for all tiers."""
     criteria: list[Criterion] = []
 
     # -- BRONZE: Basic reliability --
-    criteria.append(Criterion(
-        name="slo-defined",
-        description="At least one SLO is defined",
-        tier=CertificationTier.BRONZE,
-        evidence_key="has_slo",
-        check_fn=lambda e: bool(e.get("has_slo", False)),
-    ))
-    criteria.append(Criterion(
-        name="tests-exist",
-        description="Agent has automated tests",
-        tier=CertificationTier.BRONZE,
-        evidence_key="has_tests",
-        check_fn=lambda e: bool(e.get("has_tests", False)),
-    ))
-    criteria.append(Criterion(
-        name="cost-tracking",
-        description="Cost tracking is enabled",
-        tier=CertificationTier.BRONZE,
-        evidence_key="has_cost_tracking",
-        check_fn=lambda e: bool(e.get("has_cost_tracking", False)),
-    ))
-    criteria.append(Criterion(
-        name="error-handling",
-        description="Agent handles errors gracefully",
-        tier=CertificationTier.BRONZE,
-        evidence_key="has_error_handling",
-        check_fn=lambda e: bool(e.get("has_error_handling", False)),
-    ))
+    criteria.append(
+        Criterion(
+            name="slo-defined",
+            description="At least one SLO is defined",
+            tier=CertificationTier.BRONZE,
+            evidence_key="has_slo",
+            check_fn=lambda e: bool(e.get("has_slo", False)),
+        )
+    )
+    criteria.append(
+        Criterion(
+            name="tests-exist",
+            description="Agent has automated tests",
+            tier=CertificationTier.BRONZE,
+            evidence_key="has_tests",
+            check_fn=lambda e: bool(e.get("has_tests", False)),
+        )
+    )
+    criteria.append(
+        Criterion(
+            name="cost-tracking",
+            description="Cost tracking is enabled",
+            tier=CertificationTier.BRONZE,
+            evidence_key="has_cost_tracking",
+            check_fn=lambda e: bool(e.get("has_cost_tracking", False)),
+        )
+    )
+    criteria.append(
+        Criterion(
+            name="error-handling",
+            description="Agent handles errors gracefully",
+            tier=CertificationTier.BRONZE,
+            evidence_key="has_error_handling",
+            check_fn=lambda e: bool(e.get("has_error_handling", False)),
+        )
+    )
 
     # -- SILVER: Production-grade --
-    criteria.append(Criterion(
-        name="slo-compliance-95",
-        description="SLO compliance >= 95%",
-        tier=CertificationTier.SILVER,
-        evidence_key="slo_compliance",
-        check_fn=lambda e: e.get("slo_compliance", 0) >= 0.95,
-    ))
-    criteria.append(Criterion(
-        name="chaos-tested",
-        description="Agent has passed chaos/resilience testing",
-        tier=CertificationTier.SILVER,
-        evidence_key="chaos_tested",
-        check_fn=lambda e: bool(e.get("chaos_tested", False)),
-    ))
-    criteria.append(Criterion(
-        name="incidents-low",
-        description="Fewer than 5 incidents in last 30 days",
-        tier=CertificationTier.SILVER,
-        evidence_key="incident_count_30d",
-        check_fn=lambda e: e.get("incident_count_30d", 999) < 5,
-    ))
-    criteria.append(Criterion(
-        name="observability",
-        description="Observability integration is configured",
-        tier=CertificationTier.SILVER,
-        evidence_key="has_observability",
-        check_fn=lambda e: bool(e.get("has_observability", False)),
-    ))
+    criteria.append(
+        Criterion(
+            name="slo-compliance-95",
+            description="SLO compliance >= 95%",
+            tier=CertificationTier.SILVER,
+            evidence_key="slo_compliance",
+            check_fn=lambda e: e.get("slo_compliance", 0) >= 0.95,
+        )
+    )
+    criteria.append(
+        Criterion(
+            name="chaos-tested",
+            description="Agent has passed chaos/resilience testing",
+            tier=CertificationTier.SILVER,
+            evidence_key="chaos_tested",
+            check_fn=lambda e: bool(e.get("chaos_tested", False)),
+        )
+    )
+    criteria.append(
+        Criterion(
+            name="incidents-low",
+            description="Fewer than 5 incidents in last 30 days",
+            tier=CertificationTier.SILVER,
+            evidence_key="incident_count_30d",
+            check_fn=lambda e: e.get("incident_count_30d", 999) < 5,
+        )
+    )
+    criteria.append(
+        Criterion(
+            name="observability",
+            description="Observability integration is configured",
+            tier=CertificationTier.SILVER,
+            evidence_key="has_observability",
+            check_fn=lambda e: bool(e.get("has_observability", False)),
+        )
+    )
 
     # -- GOLD: Enterprise-ready --
-    criteria.append(Criterion(
-        name="slo-compliance-99",
-        description="SLO compliance >= 99%",
-        tier=CertificationTier.GOLD,
-        evidence_key="slo_compliance",
-        check_fn=lambda e: e.get("slo_compliance", 0) >= 0.99,
-    ))
-    criteria.append(Criterion(
-        name="error-budget-managed",
-        description="Error budget is actively managed with burn rate alerts",
-        tier=CertificationTier.GOLD,
-        evidence_key="error_budget_managed",
-        check_fn=lambda e: bool(e.get("error_budget_managed", False)),
-    ))
-    criteria.append(Criterion(
-        name="canary-deployments",
-        description="Uses canary or shadow deployment strategy",
-        tier=CertificationTier.GOLD,
-        evidence_key="has_canary",
-        check_fn=lambda e: bool(e.get("has_canary", False)),
-    ))
-    criteria.append(Criterion(
-        name="postmortem-process",
-        description="Postmortem template generation for incidents",
-        tier=CertificationTier.GOLD,
-        evidence_key="has_postmortem",
-        check_fn=lambda e: bool(e.get("has_postmortem", False)),
-        required=False,  # Advisory for Gold
-    ))
+    criteria.append(
+        Criterion(
+            name="slo-compliance-99",
+            description="SLO compliance >= 99%",
+            tier=CertificationTier.GOLD,
+            evidence_key="slo_compliance",
+            check_fn=lambda e: e.get("slo_compliance", 0) >= 0.99,
+        )
+    )
+    criteria.append(
+        Criterion(
+            name="error-budget-managed",
+            description="Error budget is actively managed with burn rate alerts",
+            tier=CertificationTier.GOLD,
+            evidence_key="error_budget_managed",
+            check_fn=lambda e: bool(e.get("error_budget_managed", False)),
+        )
+    )
+    criteria.append(
+        Criterion(
+            name="canary-deployments",
+            description="Uses canary or shadow deployment strategy",
+            tier=CertificationTier.GOLD,
+            evidence_key="has_canary",
+            check_fn=lambda e: bool(e.get("has_canary", False)),
+        )
+    )
+    criteria.append(
+        Criterion(
+            name="postmortem-process",
+            description="Postmortem template generation for incidents",
+            tier=CertificationTier.GOLD,
+            evidence_key="has_postmortem",
+            check_fn=lambda e: bool(e.get("has_postmortem", False)),
+            required=False,  # Advisory for Gold
+        )
+    )
 
     return criteria
 
@@ -245,6 +273,7 @@ def _default_criteria() -> list[Criterion]:
 # ---------------------------------------------------------------------------
 # Evaluator
 # ---------------------------------------------------------------------------
+
 
 class CertificationEvaluator:
     """Evaluates an agent against certification criteria.
@@ -297,12 +326,14 @@ class CertificationEvaluator:
             elif not passed:
                 msg = f"Advisory: {criterion.description}"
 
-            results.append(CriterionResult(
-                name=criterion.name,
-                passed=passed,
-                required=criterion.required,
-                message=msg,
-            ))
+            results.append(
+                CriterionResult(
+                    name=criterion.name,
+                    passed=passed,
+                    required=criterion.required,
+                    message=msg,
+                )
+            )
 
         # Pass only if ALL required criteria pass
         all_required_pass = all(r.passed for r in results if r.required)

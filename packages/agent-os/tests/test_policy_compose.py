@@ -6,15 +6,15 @@ import pytest
 
 from agent_os.integrations.base import GovernancePolicy
 from agent_os.integrations.policy_compose import (
+    PolicyHierarchy,
     compose_policies,
     override_policy,
-    PolicyHierarchy,
 )
-
 
 # ---------------------------------------------------------------------------
 # override_policy
 # ---------------------------------------------------------------------------
+
 
 class TestOverridePolicy:
     def test_basic_override(self):
@@ -35,7 +35,9 @@ class TestOverridePolicy:
 
     def test_override_multiple_fields(self):
         base = GovernancePolicy()
-        result = override_policy(base, max_tokens=1000, max_tool_calls=5, require_human_approval=True)
+        result = override_policy(
+            base, max_tokens=1000, max_tool_calls=5, require_human_approval=True
+        )
         assert result.max_tokens == 1000
         assert result.max_tool_calls == 5
         assert result.require_human_approval is True
@@ -44,6 +46,7 @@ class TestOverridePolicy:
 # ---------------------------------------------------------------------------
 # compose_policies
 # ---------------------------------------------------------------------------
+
 
 class TestComposePolicies:
     def test_single_policy_returns_copy(self):
@@ -126,6 +129,7 @@ class TestComposePolicies:
 # PolicyHierarchy
 # ---------------------------------------------------------------------------
 
+
 class TestPolicyHierarchy:
     def test_extend_returns_new_policy(self):
         base = GovernancePolicy(name="parent", max_tokens=4096)
@@ -199,9 +203,11 @@ class TestPolicyHierarchy:
 # Import from __init__
 # ---------------------------------------------------------------------------
 
+
 class TestExports:
     def test_importable_from_integrations(self):
-        from agent_os.integrations import compose_policies, PolicyHierarchy, override_policy
+        from agent_os.integrations import PolicyHierarchy, compose_policies, override_policy
+
         assert callable(compose_policies)
         assert callable(override_policy)
         assert PolicyHierarchy is not None

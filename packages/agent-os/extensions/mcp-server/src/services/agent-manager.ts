@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Agent Manager Service
- * 
+ *
  * Handles agent lifecycle: creation, storage, retrieval, and status management.
  */
 
@@ -19,31 +19,31 @@ import {
 export class AgentManager {
   private dataDir: string;
   private agentsDir: string;
-  
+
   constructor(dataDir: string) {
     this.dataDir = dataDir;
     this.agentsDir = path.join(dataDir, 'agents');
   }
-  
+
   /**
    * Ensure data directory exists.
    */
   private async ensureDir(): Promise<void> {
     await fs.mkdir(this.agentsDir, { recursive: true });
   }
-  
+
   /**
    * Create a new agent from natural language description.
    */
   async createAgent(input: CreateAgentInput): Promise<AgentSpec> {
     await this.ensureDir();
-    
+
     const now = new Date().toISOString();
     const id = uuidv4();
-    
+
     // Parse the description to extract agent details
     const { name, task } = this.parseDescription(input.description);
-    
+
     const config: AgentConfig = {
       id,
       name,
@@ -58,22 +58,22 @@ export class AgentManager {
       status: 'draft',
       metadata: {},
     };
-    
+
     // Generate workflow based on task
     const workflow = this.generateWorkflow(task, config.language);
-    
+
     const spec: AgentSpec = {
       config,
       workflow,
       integrations: [],
     };
-    
+
     // Save agent
     await this.saveAgent(spec);
-    
+
     return spec;
   }
-  
+
   /**
    * Parse natural language description into structured data.
    */
@@ -81,20 +81,20 @@ export class AgentManager {
     // Extract a short name from description
     const words = description.split(' ').slice(0, 4);
     const name = words.join('-').toLowerCase().replace(/[^a-z0-9-]/g, '');
-    
+
     return {
       name: name || 'agent-' + Date.now(),
       task: description,
     };
   }
-  
+
   /**
    * Generate a basic workflow from task description.
    */
   private generateWorkflow(task: string, language: string): AgentSpec['workflow'] {
     // This would be enhanced with AI-based workflow generation
     const steps = [];
-    
+
     // Detect common patterns and generate steps
     if (task.toLowerCase().includes('email')) {
       steps.push({
@@ -103,7 +103,7 @@ export class AgentManager {
         params: { protocol: 'imap' },
       });
     }
-    
+
     if (task.toLowerCase().includes('database') || task.toLowerCase().includes('query')) {
       steps.push({
         name: 'connect_database',
@@ -111,7 +111,7 @@ export class AgentManager {
         params: { type: 'postgresql' },
       });
     }
-    
+
     if (task.toLowerCase().includes('slack')) {
       steps.push({
         name: 'connect_slack',
@@ -119,24 +119,24 @@ export class AgentManager {
         params: {},
       });
     }
-    
+
     // Add main processing step
     steps.push({
       name: 'process_data',
       action: 'execute',
       params: { task },
     });
-    
+
     // Add output step
     steps.push({
       name: 'output_results',
       action: 'output',
       params: { format: 'json' },
     });
-    
+
     return { steps };
   }
-  
+
   /**
    * Save agent to disk.
    */
@@ -144,7 +144,7 @@ export class AgentManager {
     const filePath = path.join(this.agentsDir, `${spec.config.id}.json`);
     await fs.writeFile(filePath, JSON.stringify(spec, null, 2));
   }
-  
+
   /**
    * Get agent by ID.
    */
@@ -157,17 +157,17 @@ export class AgentManager {
       return null;
     }
   }
-  
+
   /**
    * List all agents.
    */
   async listAgents(): Promise<AgentConfig[]> {
     await this.ensureDir();
-    
+
     try {
       const files = await fs.readdir(this.agentsDir);
       const agents: AgentConfig[] = [];
-      
+
       for (const file of files) {
         if (file.endsWith('.json')) {
           const content = await fs.readFile(path.join(this.agentsDir, file), 'utf-8');
@@ -175,13 +175,13 @@ export class AgentManager {
           agents.push(spec.config);
         }
       }
-      
+
       return agents;
     } catch {
       return [];
     }
   }
-  
+
   /**
    * Update agent status.
    */
@@ -190,13 +190,13 @@ export class AgentManager {
     if (!spec) {
       throw new Error(`Agent not found: ${id}`);
     }
-    
+
     spec.config.status = status;
     spec.config.updatedAt = new Date().toISOString();
-    
+
     await this.saveAgent(spec);
   }
-  
+
   /**
    * Update agent configuration.
    */
@@ -205,19 +205,19 @@ export class AgentManager {
     if (!spec) {
       throw new Error(`Agent not found: ${id}`);
     }
-    
+
     spec.config = {
       ...spec.config,
       ...updates,
       id, // Preserve ID
       updatedAt: new Date().toISOString(),
     };
-    
+
     await this.saveAgent(spec);
-    
+
     return spec;
   }
-  
+
   /**
    * Delete agent.
    */
@@ -225,7 +225,7 @@ export class AgentManager {
     const filePath = path.join(this.agentsDir, `${id}.json`);
     await fs.unlink(filePath);
   }
-  
+
   /**
    * Attach policies to agent.
    */
@@ -234,18 +234,18 @@ export class AgentManager {
     if (!spec) {
       throw new Error(`Agent not found: ${id}`);
     }
-    
+
     // Merge policies (avoid duplicates)
     const existingPolicies = new Set(spec.config.policies);
     for (const policyId of policyIds) {
       existingPolicies.add(policyId);
     }
-    
+
     spec.config.policies = Array.from(existingPolicies);
     spec.config.updatedAt = new Date().toISOString();
-    
+
     await this.saveAgent(spec);
-    
+
     return spec;
   }
 }

@@ -98,9 +98,9 @@ from model_upgrade import ModelUpgradeManager
 manager = ModelUpgradeManager()
 
 # Define baseline instructions for the new model
-baseline_instructions = """You are a helpful AI assistant. Your goal is to 
-provide accurate and useful responses to user queries. You have access to 
-tools that you can use to help answer questions. Always think step-by-step 
+baseline_instructions = """You are a helpful AI assistant. Your goal is to
+provide accurate and useful responses to user queries. You have access to
+tools that you can use to help answer questions. Always think step-by-step
 and provide clear, concise answers."""
 
 # Perform upgrade audit and purge

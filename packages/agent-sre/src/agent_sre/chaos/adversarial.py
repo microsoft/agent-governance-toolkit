@@ -97,9 +97,7 @@ class AdversarialRunner:
 
     def __init__(self, experiment: ChaosExperiment) -> None:
         self.experiment = experiment
-        self._registered_fault_types: set[FaultType] = {
-            f.fault_type for f in experiment.faults
-        }
+        self._registered_fault_types: set[FaultType] = {f.fault_type for f in experiment.faults}
 
     def _simulate_step(self, step: PlaybookStep) -> AttackResult:
         """Simulate a single attack step against the experiment's defences."""

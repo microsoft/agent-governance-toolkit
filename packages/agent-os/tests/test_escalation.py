@@ -9,13 +9,11 @@ import pytest
 
 from agent_os.integrations.base import BaseIntegration, ExecutionContext, GovernancePolicy
 from agent_os.integrations.escalation import (
-    ApprovalBackend,
     DefaultTimeoutAction,
     EscalationDecision,
     EscalationHandler,
     EscalationPolicy,
     EscalationRequest,
-    EscalationResult,
     InMemoryApprovalQueue,
 )
 
@@ -44,6 +42,7 @@ def policy_no_approval():
 def make_context():
     def _make(policy):
         return ExecutionContext(agent_id="agent-1", session_id="sess-1", policy=policy)
+
     return _make
 
 

@@ -3,13 +3,13 @@
 """Tests for Context Budget Scheduler."""
 
 import pytest
+
 from agent_os.context_budget import (
     AgentSignal,
     BudgetExceeded,
     ContextPriority,
     ContextScheduler,
     ContextWindow,
-    UsageRecord,
 )
 
 
@@ -178,16 +178,22 @@ class TestSchedulerGlobal:
 class TestContextWindow:
     def test_ratios(self):
         w = ContextWindow(
-            agent_id="a", task="t",
-            lookup_budget=900, reasoning_budget=100, total=1000,
+            agent_id="a",
+            task="t",
+            lookup_budget=900,
+            reasoning_budget=100,
+            total=1000,
         )
         assert abs(w.lookup_ratio - 0.9) < 0.01
         assert abs(w.reasoning_ratio - 0.1) < 0.01
 
     def test_frozen(self):
         w = ContextWindow(
-            agent_id="a", task="t",
-            lookup_budget=900, reasoning_budget=100, total=1000,
+            agent_id="a",
+            task="t",
+            lookup_budget=900,
+            reasoning_budget=100,
+            total=1000,
         )
         with pytest.raises(AttributeError):
             w.total = 2000

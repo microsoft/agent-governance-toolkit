@@ -2,14 +2,12 @@
 # Licensed under the MIT License.
 """Tests for MCP Kernel Server CLI."""
 
-import sys
 import os
-import pytest
-from io import StringIO
+import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from mcp_kernel_server.cli import parse_args, print_tools, print_prompts
+from mcp_kernel_server.cli import parse_args, print_prompts, print_tools
 
 
 class TestParseArgs:
@@ -36,17 +34,23 @@ class TestParseArgs:
         assert args.host == "127.0.0.1"
 
     def test_policy_mode_strict(self, monkeypatch):
-        monkeypatch.setattr(sys, "argv", ["mcp-kernel-server", "--stdio", "--policy-mode", "strict"])
+        monkeypatch.setattr(
+            sys, "argv", ["mcp-kernel-server", "--stdio", "--policy-mode", "strict"]
+        )
         args = parse_args()
         assert args.policy_mode == "strict"
 
     def test_policy_mode_permissive(self, monkeypatch):
-        monkeypatch.setattr(sys, "argv", ["mcp-kernel-server", "--stdio", "--policy-mode", "permissive"])
+        monkeypatch.setattr(
+            sys, "argv", ["mcp-kernel-server", "--stdio", "--policy-mode", "permissive"]
+        )
         args = parse_args()
         assert args.policy_mode == "permissive"
 
     def test_cmvk_threshold(self, monkeypatch):
-        monkeypatch.setattr(sys, "argv", ["mcp-kernel-server", "--stdio", "--cmvk-threshold", "0.90"])
+        monkeypatch.setattr(
+            sys, "argv", ["mcp-kernel-server", "--stdio", "--cmvk-threshold", "0.90"]
+        )
         args = parse_args()
         assert args.cmvk_threshold == 0.90
 

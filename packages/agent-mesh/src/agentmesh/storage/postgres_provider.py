@@ -6,7 +6,6 @@ PostgreSQL Storage Provider.
 Enterprise-grade PostgreSQL backend with async SQLAlchemy ORM.
 """
 
-from typing import Optional
 import logging
 
 from .provider import AbstractStorageProvider, StorageConfig
@@ -37,8 +36,8 @@ class PostgresStorageProvider(AbstractStorageProvider):
         """Establish connection to PostgreSQL."""
         try:
             from sqlalchemy.ext.asyncio import (
-                create_async_engine,
                 async_sessionmaker,
+                create_async_engine,
             )
         except ImportError:
             raise ImportError(
@@ -51,9 +50,7 @@ class PostgresStorageProvider(AbstractStorageProvider):
             conn_str = self.config.connection_string
         else:
             password_part = (
-                f":{self.config.postgres_password}"
-                if self.config.postgres_password
-                else ""
+                f":{self.config.postgres_password}" if self.config.postgres_password else ""
             )
             conn_str = (
                 f"postgresql+asyncpg://{self.config.postgres_user}"
@@ -87,8 +84,9 @@ class PostgresStorageProvider(AbstractStorageProvider):
 
         # Create tables for key-value, hashes, lists, etc.
         async with self._engine.begin() as conn:
-            await conn.execute(text(
-                """
+            await conn.execute(
+                text(
+                    """
                 CREATE TABLE IF NOT EXISTS agentmesh_kv (
                     key VARCHAR(512) PRIMARY KEY,
                     value TEXT NOT NULL,
@@ -119,7 +117,8 @@ class PostgresStorageProvider(AbstractStorageProvider):
                 );
                 CREATE INDEX IF NOT EXISTS idx_zset_score ON agentmesh_zset(key, score);
                 """
-            ))
+                )
+            )
 
     async def disconnect(self) -> None:
         """Close connection to PostgreSQL."""
@@ -131,6 +130,7 @@ class PostgresStorageProvider(AbstractStorageProvider):
         try:
             if self._engine:
                 from sqlalchemy import text
+
                 async with self._engine.begin() as conn:
                     await conn.execute(text("SELECT 1"))
                 return True
@@ -140,7 +140,7 @@ class PostgresStorageProvider(AbstractStorageProvider):
 
     # Key-Value Operations
 
-    async def get(self, key: str) -> Optional[str]:
+    async def get(self, key: str) -> str | None:
         """Get value by key."""
         async with self._session_factory() as session:
             result = await session.execute(
@@ -155,7 +155,7 @@ class PostgresStorageProvider(AbstractStorageProvider):
         self,
         key: str,
         value: str,
-        ttl_seconds: Optional[int] = None,
+        ttl_seconds: int | None = None,
     ) -> bool:
         """Set value with optional TTL."""
         async with self._session_factory() as session:
@@ -193,7 +193,7 @@ class PostgresStorageProvider(AbstractStorageProvider):
 
     # Hash Operations
 
-    async def hget(self, key: str, field: str) -> Optional[str]:
+    async def hget(self, key: str, field: str) -> str | None:
         """Get hash field value."""
         async with self._session_factory() as session:
             result = await session.execute(
@@ -321,7 +321,7 @@ class PostgresStorageProvider(AbstractStorageProvider):
             await session.commit()
         return True
 
-    async def zscore(self, key: str, member: str) -> Optional[float]:
+    async def zscore(self, key: str, member: str) -> float | None:
         """Get score of member in sorted set."""
         async with self._session_factory() as session:
             result = await session.execute(
@@ -402,7 +402,7 @@ class PostgresStorageProvider(AbstractStorageProvider):
 
     # Batch Operations
 
-    async def mget(self, keys: list[str]) -> list[Optional[str]]:
+    async def mget(self, keys: list[str]) -> list[str | None]:
         """Get multiple values."""
         async with self._session_factory() as session:
             result = await session.execute(
@@ -442,7 +442,7 @@ class PostgresStorageProvider(AbstractStorageProvider):
     async def scan(
         self,
         cursor: int = 0,
-        match: Optional[str] = None,
+        match: str | None = None,
         count: int = 100,
     ) -> tuple[int, list[str]]:
         """Scan keys with cursor."""

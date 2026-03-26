@@ -4,7 +4,7 @@
 
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 
@@ -12,7 +12,7 @@ _nexus_parent = os.path.join(os.path.dirname(__file__), "..", "..")
 if _nexus_parent not in sys.path:
     sys.path.insert(0, _nexus_parent)
 
-from nexus.dmz import DMZProtocol, DataHandlingPolicy, DMZRequest, SignedPolicy, DMZTransfer
+from nexus.dmz import DataHandlingPolicy, DMZProtocol, DMZRequest, SignedPolicy
 
 
 @pytest.fixture
@@ -41,7 +41,12 @@ class TestInitiateTransfer:
     @pytest.mark.asyncio
     async def test_initiate_returns_request(self, dmz, policy):
         request = await dmz.initiate_transfer(
-            SENDER, RECEIVER, DATA, "internal", policy, expiry_hours=24,
+            SENDER,
+            RECEIVER,
+            DATA,
+            "internal",
+            policy,
+            expiry_hours=24,
         )
         assert isinstance(request, DMZRequest)
         assert request.sender_did == SENDER
@@ -52,7 +57,11 @@ class TestInitiateTransfer:
     @pytest.mark.asyncio
     async def test_initiate_creates_audit_entry(self, dmz, policy):
         request = await dmz.initiate_transfer(
-            SENDER, RECEIVER, DATA, "confidential", policy,
+            SENDER,
+            RECEIVER,
+            DATA,
+            "confidential",
+            policy,
         )
         trail = dmz.get_audit_trail(request.request_id)
         assert len(trail) == 1
@@ -61,7 +70,12 @@ class TestInitiateTransfer:
     @pytest.mark.asyncio
     async def test_initiate_sets_expiry(self, dmz, policy):
         request = await dmz.initiate_transfer(
-            SENDER, RECEIVER, DATA, "internal", policy, expiry_hours=12,
+            SENDER,
+            RECEIVER,
+            DATA,
+            "internal",
+            policy,
+            expiry_hours=12,
         )
         assert request.expires_at is not None
         assert request.expires_at > datetime.now(timezone.utc)
@@ -69,6 +83,7 @@ class TestInitiateTransfer:
     @pytest.mark.asyncio
     async def test_initiate_computes_data_hash(self, dmz, policy):
         import hashlib
+
         expected_hash = hashlib.sha256(DATA).hexdigest()
         request = await dmz.initiate_transfer(SENDER, RECEIVER, DATA, "internal", policy)
         assert request.data_hash == expected_hash

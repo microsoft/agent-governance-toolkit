@@ -4,9 +4,9 @@ version: '3.8'
 # IATP Demo Environment
 # =============================================================================
 # This docker-compose file sets up a complete IATP demonstration environment:
-# 
+#
 # 1. Secure Bank Agent (trusted) with IATP Sidecar
-# 2. Honeypot Agent (untrusted) with IATP Sidecar  
+# 2. Honeypot Agent (untrusted) with IATP Sidecar
 # 3. Redis for state management
 #
 # Quick Start:
@@ -51,7 +51,7 @@ services:
   # ===========================================================================
   # SECURE BANK AGENT (The "Good" Agent)
   # ===========================================================================
-  
+
   # The actual bank agent (internal, not directly exposed to clients)
   bank-agent:
     build:
@@ -99,7 +99,7 @@ services:
   # ===========================================================================
   # HONEYPOT/ROGUE AGENT (The "Bad" Agent)
   # ===========================================================================
-  
+
   # The untrusted honeypot agent
   honeypot-agent:
     build:
@@ -136,7 +136,7 @@ services:
   # ===========================================================================
   # LEGACY SIDECARS (for compatibility)
   # ===========================================================================
-  
+
   # IATP Sidecar (Python version - legacy)
   iatp-sidecar-python:
     build:

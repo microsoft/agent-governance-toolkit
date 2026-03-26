@@ -103,17 +103,17 @@ controller = CircuitBreakerController(config=config)
 for request in requests:
     # Determine version based on traffic split
     version = "new" if controller.should_use_new_version(request.id) else "old"
-    
+
     # Execute with selected version
     success, latency_ms = execute_request(request, version)
-    
+
     # Record metrics
     controller.record_execution(version, success, latency_ms)
-    
+
     # Periodically evaluate (or run in separate process)
     if should_evaluate():
         decision = controller.evaluate_and_decide()
-        
+
         if decision["action"] == "rollback":
             alert_team(decision["reason"])
 ```
@@ -196,12 +196,12 @@ CircuitBreakerConfig(
     # Metric thresholds
     min_task_completion_rate=0.85,    # Must stay above 85%
     max_latency_ms=2000.0,            # Must stay below 2000ms
-    
+
     # Rollout parameters
     initial_phase=RolloutPhase.PROBE, # Start at PROBE (1%)
     min_samples_per_phase=10,         # Min samples before advancing
     monitoring_window_minutes=5,       # Time window for calculations
-    
+
     # Decision thresholds
     advancement_threshold=0.95,        # Must be 95% good to advance
     rollback_threshold=0.80            # Trip if below 80%

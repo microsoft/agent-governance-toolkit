@@ -10,9 +10,9 @@ CrewAI is an optional dependency.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from datetime import UTC, datetime
+from typing import Any, Protocol, runtime_checkable
 
 from agentmesh.exceptions import TrustViolationError
 
@@ -41,7 +41,7 @@ class InteractionRecord:
     timestamp: datetime
     success: bool
     event: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class InMemoryTrustStore:
@@ -51,9 +51,9 @@ class InMemoryTrustStore:
     MAX_UPDATES_PER_MINUTE = 10
 
     def __init__(self, default_score: int = 500) -> None:
-        self._scores: Dict[str, int] = {}
+        self._scores: dict[str, int] = {}
         self._default_score = default_score
-        self._update_times: Dict[str, list] = {}
+        self._update_times: dict[str, list] = {}
 
     def get_trust_score(self, agent_did: str) -> int:
         return self._scores.get(agent_did, self._default_score)
@@ -63,6 +63,7 @@ class InMemoryTrustStore:
 
     def record_interaction(self, agent_did: str, *, success: bool) -> None:
         from datetime import datetime as _dt
+
         now = _dt.utcnow()
         # V33: Enforce rate limit on score updates
         times = self._update_times.setdefault(agent_did, [])
@@ -106,13 +107,13 @@ class TrustAwareAgent:
         self,
         agent_did: str,
         min_trust_score: int = 500,
-        trust_store: Optional[Any] = None,
+        trust_store: Any | None = None,
         **kwargs: Any,
     ) -> None:
         self.agent_did = agent_did
         self.min_trust_score = min_trust_score
         self.trust_store: Any = trust_store or InMemoryTrustStore()
-        self._interactions: List[InteractionRecord] = []
+        self._interactions: list[InteractionRecord] = []
         self._crewai_kwargs = kwargs
         self.crewai_agent: Any = None
 
@@ -222,15 +223,13 @@ class TrustAwareAgent:
             ],
         }
 
-    def _record(
-        self, from_did: str, to_did: str, event: str, *, success: bool
-    ) -> None:
+    def _record(self, from_did: str, to_did: str, event: str, *, success: bool) -> None:
         """Record an interaction and update the trust store."""
         self._interactions.append(
             InteractionRecord(
                 from_did=from_did,
                 to_did=to_did,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 success=success,
                 event=event,
             )

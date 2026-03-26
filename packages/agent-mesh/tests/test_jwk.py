@@ -3,12 +3,11 @@
 """Tests for JWK (JSON Web Key) export/import of AgentIdentity."""
 
 import base64
-import re
 
 import pytest
 
-from agentmesh.identity import AgentIdentity
 from agentmesh.exceptions import IdentityError
+from agentmesh.identity import AgentIdentity
 
 
 @pytest.fixture

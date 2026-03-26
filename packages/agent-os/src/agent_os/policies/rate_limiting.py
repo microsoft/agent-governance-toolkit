@@ -44,9 +44,7 @@ class RateLimitConfig:
         if self.refill_rate < 0:
             raise ValueError("refill_rate must be non-negative")
         if self.initial_tokens is not None and not 0 <= self.initial_tokens <= self.capacity:
-            raise ValueError(
-                "initial_tokens must be between 0 and capacity"
-            )
+            raise ValueError("initial_tokens must be between 0 and capacity")
 
     @property
     def rate(self) -> float:
@@ -78,11 +76,9 @@ class TokenBucket:
             raise ValueError("tokens must be between 0 and capacity")
 
     @classmethod
-    def from_config(cls, config: RateLimitConfig) -> "TokenBucket":
+    def from_config(cls, config: RateLimitConfig) -> TokenBucket:
         """Build a token bucket from a :class:`RateLimitConfig`."""
-        initial_tokens = (
-            config.capacity if config.initial_tokens is None else config.initial_tokens
-        )
+        initial_tokens = config.capacity if config.initial_tokens is None else config.initial_tokens
         return cls(
             capacity=config.capacity,
             tokens=initial_tokens,

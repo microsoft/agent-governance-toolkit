@@ -262,7 +262,7 @@ graph LR
     B -->|"Score rises"| C["500–699<br/>Standard"]
     C -->|"Score rises"| D["700–899<br/>Trusted"]
     D -->|"Score rises"| E["900–1000<br/>Verified Partner"]
-    
+
     E -->|"Score drops"| D
     D -->|"Score drops"| C
     C -->|"Score drops"| B
@@ -383,10 +383,10 @@ graph TD
     A[Trust Violation Detected] --> B{Score < 300?}
     B -->|Yes| C[Credentials Revoked]
     B -->|No| D[Capabilities Restricted]
-    
+
     C --> E[Manual Re-registration]
     E --> F[Starts at Default Score 500]
-    
+
     D --> G[Agent Continues with Limits]
     G --> H[Positive Signals Accumulate]
     H --> I{Score Trend Improving?}
@@ -565,14 +565,14 @@ thresholds = ScoreThresholds()
 def can_execute(agent_did: str, operation: str) -> bool:
     """Check if an agent is trusted enough for an operation."""
     score = engine.get_agent_score(agent_did)
-    
+
     required_scores = {
         "read_public_data": 300,   # Probationary+
         "write_data": 500,         # Standard+
         "delegate_task": 700,      # Trusted+
         "manage_credentials": 900, # Verified Partner only
     }
-    
+
     required = required_scores.get(operation, 500)
     return score.meets_threshold(required)
 ```
@@ -679,10 +679,10 @@ sequenceDiagram
     Policy-->>RE: Compliance signal (0.0–1.0)
     Mesh->>RE: Resource usage signal
     Mesh->>RE: Security posture signal
-    
+
     Note over RE: EMA update per dimension
     RE->>RE: Recalculate composite score
-    
+
     alt Score < 300
         RE->>Agent: 🔴 Credentials revoked
     else Score < 500
@@ -726,20 +726,20 @@ flowchart TD
 ```mermaid
 stateDiagram-v2
     [*] --> Standard: Agent registers (default 500)
-    
+
     Standard --> Trusted: Score ≥ 700
     Standard --> Probationary: Score < 500
-    
+
     Trusted --> VerifiedPartner: Score ≥ 900
     Trusted --> Standard: Score < 700
-    
+
     VerifiedPartner --> Trusted: Score < 900
-    
+
     Probationary --> Standard: Score ≥ 500
     Probationary --> Untrusted: Score < 300
-    
+
     Untrusted --> Probationary: Re-registration (reset to 500)
-    
+
     state Untrusted {
         [*] --> Revoked: Credentials auto-revoked
         Revoked --> [*]: Manual re-registration

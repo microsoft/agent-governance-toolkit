@@ -9,11 +9,10 @@ Tests validate:
 - Integration with PolicyEngine
 """
 
-import os
-import yaml
-import pytest
 from pathlib import Path
 
+import pytest
+import yaml
 
 # Path to templates directory - use absolute path from workspace root
 WORKSPACE_ROOT = Path(__file__).parent.parent
@@ -60,7 +59,7 @@ class TestRateLimitingTemplate:
         """Test global rate limits are configured."""
         assert "global_limits" in template
         limits = template["global_limits"]
-        
+
         # Required limit fields
         assert "max_requests_per_minute" in limits
         assert "max_requests_per_hour" in limits
@@ -75,10 +74,10 @@ class TestRateLimitingTemplate:
     def test_openai_policy_exists(self, template):
         """Test OpenAI API rate limit policy exists."""
         policies = {p["name"]: p for p in template["policies"]}
-        
+
         assert "openai_api_limits" in policies
         policy = policies["openai_api_limits"]
-        
+
         assert any(d == "api.openai.com" for d in policy["domains"])
         assert "limits" in policy
         assert "max_requests_per_minute" in policy["limits"]
@@ -87,44 +86,40 @@ class TestRateLimitingTemplate:
     def test_anthropic_policy_exists(self, template):
         """Test Anthropic API rate limit policy exists."""
         policies = {p["name"]: p for p in template["policies"]}
-        
+
         assert "anthropic_api_limits" in policies
         policy = policies["anthropic_api_limits"]
-        
+
         assert any(d == "api.anthropic.com" for d in policy["domains"])
 
     def test_google_policy_exists(self, template):
         """Test Google API rate limit policy exists."""
         policies = {p["name"]: p for p in template["policies"]}
-        
+
         assert "google_api_limits" in policies
         policy = policies["google_api_limits"]
-        
+
         # Check for Google AI domains
         assert any(
-            d == "googleapis.com" or d.endswith(".googleapis.com")
-            for d in policy["domains"]
+            d == "googleapis.com" or d.endswith(".googleapis.com") for d in policy["domains"]
         )
 
     def test_azure_policy_exists(self, template):
         """Test Azure OpenAI rate limit policy exists."""
         policies = {p["name"]: p for p in template["policies"]}
-        
+
         assert "azure_openai_limits" in policies
         policy = policies["azure_openai_limits"]
-        
-        assert any(
-            d == "azure.com" or d.endswith(".azure.com")
-            for d in policy["domains"]
-        )
+
+        assert any(d == "azure.com" or d.endswith(".azure.com") for d in policy["domains"])
 
     def test_default_external_api_policy(self, template):
         """Test catch-all external API policy exists."""
         policies = {p["name"]: p for p in template["policies"]}
-        
+
         assert "external_api_default" in policies
         policy = policies["external_api_default"]
-        
+
         assert "*" in policy["domains"]
         assert "exclude_domains" in policy
         assert "localhost" in policy["exclude_domains"]
@@ -132,19 +127,19 @@ class TestRateLimitingTemplate:
     def test_database_rate_limits(self, template):
         """Test database rate limit policy exists."""
         policies = {p["name"]: p for p in template["policies"]}
-        
+
         assert "database_rate_limits" in policies
         policy = policies["database_rate_limits"]
-        
+
         assert "database_query" in policy["actions"]
 
     def test_cost_based_limits(self, template):
         """Test cost-based limits are configured."""
         policies = {p["name"]: p for p in template["policies"]}
-        
+
         assert "cost_based_limits" in policies
         policy = policies["cost_based_limits"]
-        
+
         assert "cost_tracking" in policy
         assert policy["cost_tracking"]["enabled"] is True
         assert "max_cost_per_day" in policy["limits"]
@@ -152,21 +147,21 @@ class TestRateLimitingTemplate:
     def test_per_agent_limits(self, template):
         """Test per-agent limits are configured."""
         policies = {p["name"]: p for p in template["policies"]}
-        
+
         assert "per_agent_limits" in policies
         policy = policies["per_agent_limits"]
-        
+
         assert "per_agent" in policy
         assert policy["per_agent"]["enabled"] is True
 
     def test_all_policies_have_required_fields(self, template):
         """Test all policies have required fields."""
         required_fields = ["name", "description", "severity"]
-        
+
         for policy in template["policies"]:
             for field in required_fields:
                 assert field in policy, f"Policy missing field: {field}"
-            
+
             # Severity must be valid
             assert policy["severity"] in ["low", "medium", "high", "critical"]
 
@@ -179,11 +174,11 @@ class TestRateLimitingTemplate:
     def test_limits_are_reasonable(self, template):
         """Test that configured limits are reasonable values."""
         global_limits = template["global_limits"]
-        
+
         # Minute < Hour < Day
         assert global_limits["max_requests_per_minute"] < global_limits["max_requests_per_hour"]
         assert global_limits["max_requests_per_hour"] < global_limits["max_requests_per_day"]
-        
+
         # Concurrent requests should be reasonable
         assert 1 <= global_limits["max_concurrent_requests"] <= 100
 
@@ -208,6 +203,6 @@ class TestAllTemplatesValid:
         """Test rate-limiting template has a kernel section."""
         with open(RATE_LIMITING_TEMPLATE) as f:
             data = yaml.safe_load(f)
-        
+
         assert "kernel" in data, "rate-limiting.yaml missing kernel section"
         assert "version" in data["kernel"], "rate-limiting.yaml missing kernel version"

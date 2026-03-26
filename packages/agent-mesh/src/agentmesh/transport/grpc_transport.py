@@ -19,7 +19,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from .base import Transport, TransportConfig, TransportState
 
@@ -265,7 +265,7 @@ class GRPCTransport(Transport):
         await self._receive_queue.put({"topic": topic, "payload": payload, "_echo": True})
         logger.debug("gRPC sent message on topic=%s", topic)
 
-    async def receive(self, timeout: Optional[float] = None) -> dict[str, Any]:
+    async def receive(self, timeout: float | None = None) -> dict[str, Any]:
         """Receive the next message from the internal queue.
 
         Args:
@@ -278,7 +278,7 @@ class GRPCTransport(Transport):
             raise ConnectionError("gRPC channel is not connected")
         try:
             return await asyncio.wait_for(self._receive_queue.get(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise TimeoutError("No gRPC message received within timeout")
 
     # -- Typed RPC helpers -----------------------------------------------------

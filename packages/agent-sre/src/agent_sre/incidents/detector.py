@@ -58,7 +58,11 @@ class Signal:
     @property
     def severity_hint(self) -> IncidentSeverity:
         """Suggest severity based on signal type."""
-        critical = {SignalType.ERROR_BUDGET_EXHAUSTED, SignalType.POLICY_VIOLATION, SignalType.TRUST_REVOCATION}
+        critical = {
+            SignalType.ERROR_BUDGET_EXHAUSTED,
+            SignalType.POLICY_VIOLATION,
+            SignalType.TRUST_REVOCATION,
+        }
         warning = {SignalType.SLO_BREACH, SignalType.COST_ANOMALY, SignalType.LATENCY_SPIKE}
         if self.signal_type in critical:
             return IncidentSeverity.P1
@@ -136,7 +140,9 @@ class Incident:
         if note:
             self.notes.append(note)
 
-    def add_action(self, action_type: str, result: str = "", executed: bool = True) -> ResponseAction:
+    def add_action(
+        self, action_type: str, result: str = "", executed: bool = True
+    ) -> ResponseAction:
         action = ResponseAction(action_type=action_type, executed=executed, result=result)
         self.actions.append(action)
         return action
@@ -219,9 +225,7 @@ class IncidentDetector:
 
     def _create_correlated_incident(self, signals: list[Signal]) -> Incident:
         """Alert grouping — not available in Community Edition."""
-        raise NotImplementedError(
-            "Not available in Community Edition"
-        )
+        raise NotImplementedError("Not available in Community Edition")
 
     def _is_duplicate(self, signal: Signal) -> bool:
         """Check if a similar incident was recently created."""
@@ -229,16 +233,15 @@ class IncidentDetector:
         for incident in reversed(self._incidents):
             if incident.detected_at < cutoff:
                 break
-            if (incident.agent_id == signal.source
-                    and any(s.signal_type == signal.signal_type for s in incident.signals)):
+            if incident.agent_id == signal.source and any(
+                s.signal_type == signal.signal_type for s in incident.signals
+            ):
                 return True
         return False
 
     def _find_correlated(self, signal: Signal) -> list[Signal]:
         """Alert grouping — not available in Community Edition."""
-        raise NotImplementedError(
-            "Not available in Community Edition"
-        )
+        raise NotImplementedError("Not available in Community Edition")
 
     def _prune_old_signals(self) -> None:
         """Remove signals outside the correlation window."""

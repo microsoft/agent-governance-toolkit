@@ -13,13 +13,15 @@ Every action is mapped to relevant controls automatically.
 """
 
 from datetime import datetime
-from typing import Optional, Literal
-from pydantic import BaseModel, Field
 from enum import Enum
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class ComplianceFramework(str, Enum):
     """Supported compliance frameworks."""
+
     EU_AI_ACT = "eu_ai_act"
     SOC2 = "soc2"
     HIPAA = "hipaa"
@@ -47,7 +49,7 @@ class ComplianceControl(BaseModel):
 
     # Categorization
     category: str
-    subcategory: Optional[str] = None
+    subcategory: str | None = None
 
     # Requirements
     requirements: list[str] = Field(default_factory=list)
@@ -114,8 +116,8 @@ class ComplianceViolation(BaseModel):
 
     # Remediation
     remediated: bool = False
-    remediated_at: Optional[datetime] = None
-    remediation_notes: Optional[str] = None
+    remediated_at: datetime | None = None
+    remediation_notes: str | None = None
 
 
 class ComplianceReport(BaseModel):
@@ -148,7 +150,7 @@ class ComplianceReport(BaseModel):
     period_end: datetime
 
     # Organization
-    organization_id: Optional[str] = None
+    organization_id: str | None = None
     agents_covered: list[str] = Field(default_factory=list)
 
     # Summary
@@ -176,7 +178,7 @@ class ComplianceEngine:
     and generates audit-ready reports.
     """
 
-    def __init__(self, frameworks: Optional[list[ComplianceFramework]] = None):
+    def __init__(self, frameworks: list[ComplianceFramework] | None = None):
         """Initialise the compliance engine.
 
         Args:
@@ -196,119 +198,135 @@ class ComplianceEngine:
 
         # SOC 2 Controls
         if ComplianceFramework.SOC2 in self.frameworks:
-            self._add_control(ComplianceControl(
-                control_id="SOC2-CC6.1",
-                framework=ComplianceFramework.SOC2,
-                name="Logical Access Security",
-                description="Logical access security software, infrastructure, and architectures have been implemented",
-                category="Common Criteria",
-                requirements=[
-                    "Identity verification",
-                    "Access logging",
-                    "Credential management",
-                ],
-                evidence_types=["access_logs", "identity_records"],
-            ))
-            self._add_control(ComplianceControl(
-                control_id="SOC2-CC7.2",
-                framework=ComplianceFramework.SOC2,
-                name="System Monitoring",
-                description="System components are monitored for anomalies",
-                category="Common Criteria",
-                requirements=[
-                    "Activity monitoring",
-                    "Anomaly detection",
-                    "Alerting",
-                ],
-                evidence_types=["monitoring_logs", "alerts"],
-            ))
+            self._add_control(
+                ComplianceControl(
+                    control_id="SOC2-CC6.1",
+                    framework=ComplianceFramework.SOC2,
+                    name="Logical Access Security",
+                    description="Logical access security software, infrastructure, and architectures have been implemented",
+                    category="Common Criteria",
+                    requirements=[
+                        "Identity verification",
+                        "Access logging",
+                        "Credential management",
+                    ],
+                    evidence_types=["access_logs", "identity_records"],
+                )
+            )
+            self._add_control(
+                ComplianceControl(
+                    control_id="SOC2-CC7.2",
+                    framework=ComplianceFramework.SOC2,
+                    name="System Monitoring",
+                    description="System components are monitored for anomalies",
+                    category="Common Criteria",
+                    requirements=[
+                        "Activity monitoring",
+                        "Anomaly detection",
+                        "Alerting",
+                    ],
+                    evidence_types=["monitoring_logs", "alerts"],
+                )
+            )
 
         # HIPAA Controls
         if ComplianceFramework.HIPAA in self.frameworks:
-            self._add_control(ComplianceControl(
-                control_id="HIPAA-164.312(a)(1)",
-                framework=ComplianceFramework.HIPAA,
-                name="Access Control",
-                description="Implement technical policies and procedures for electronic PHI access",
-                category="Technical Safeguards",
-                requirements=[
-                    "Unique user identification",
-                    "Automatic logoff",
-                    "Encryption",
-                ],
-                evidence_types=["access_logs", "encryption_records"],
-            ))
-            self._add_control(ComplianceControl(
-                control_id="HIPAA-164.312(b)",
-                framework=ComplianceFramework.HIPAA,
-                name="Audit Controls",
-                description="Implement hardware, software, and procedural mechanisms for audit trails",
-                category="Technical Safeguards",
-                requirements=[
-                    "Audit logging",
-                    "Log retention",
-                    "Log review",
-                ],
-                evidence_types=["audit_logs"],
-            ))
+            self._add_control(
+                ComplianceControl(
+                    control_id="HIPAA-164.312(a)(1)",
+                    framework=ComplianceFramework.HIPAA,
+                    name="Access Control",
+                    description="Implement technical policies and procedures for electronic PHI access",
+                    category="Technical Safeguards",
+                    requirements=[
+                        "Unique user identification",
+                        "Automatic logoff",
+                        "Encryption",
+                    ],
+                    evidence_types=["access_logs", "encryption_records"],
+                )
+            )
+            self._add_control(
+                ComplianceControl(
+                    control_id="HIPAA-164.312(b)",
+                    framework=ComplianceFramework.HIPAA,
+                    name="Audit Controls",
+                    description="Implement hardware, software, and procedural mechanisms for audit trails",
+                    category="Technical Safeguards",
+                    requirements=[
+                        "Audit logging",
+                        "Log retention",
+                        "Log review",
+                    ],
+                    evidence_types=["audit_logs"],
+                )
+            )
 
         # EU AI Act Controls
         if ComplianceFramework.EU_AI_ACT in self.frameworks:
-            self._add_control(ComplianceControl(
-                control_id="EUAI-ART9",
-                framework=ComplianceFramework.EU_AI_ACT,
-                name="Risk Management System",
-                description="High-risk AI systems shall have a risk management system",
-                category="High-Risk AI",
-                requirements=[
-                    "Risk identification",
-                    "Risk mitigation",
-                    "Continuous monitoring",
-                ],
-                evidence_types=["risk_assessments", "mitigation_logs"],
-            ))
-            self._add_control(ComplianceControl(
-                control_id="EUAI-ART13",
-                framework=ComplianceFramework.EU_AI_ACT,
-                name="Transparency",
-                description="High-risk AI systems shall be designed to allow appropriate transparency",
-                category="High-Risk AI",
-                requirements=[
-                    "Explainability",
-                    "Documentation",
-                    "User notification",
-                ],
-                evidence_types=["decision_logs", "explanations"],
-            ))
+            self._add_control(
+                ComplianceControl(
+                    control_id="EUAI-ART9",
+                    framework=ComplianceFramework.EU_AI_ACT,
+                    name="Risk Management System",
+                    description="High-risk AI systems shall have a risk management system",
+                    category="High-Risk AI",
+                    requirements=[
+                        "Risk identification",
+                        "Risk mitigation",
+                        "Continuous monitoring",
+                    ],
+                    evidence_types=["risk_assessments", "mitigation_logs"],
+                )
+            )
+            self._add_control(
+                ComplianceControl(
+                    control_id="EUAI-ART13",
+                    framework=ComplianceFramework.EU_AI_ACT,
+                    name="Transparency",
+                    description="High-risk AI systems shall be designed to allow appropriate transparency",
+                    category="High-Risk AI",
+                    requirements=[
+                        "Explainability",
+                        "Documentation",
+                        "User notification",
+                    ],
+                    evidence_types=["decision_logs", "explanations"],
+                )
+            )
 
         # GDPR Controls
         if ComplianceFramework.GDPR in self.frameworks:
-            self._add_control(ComplianceControl(
-                control_id="GDPR-ART5",
-                framework=ComplianceFramework.GDPR,
-                name="Data Processing Principles",
-                description="Personal data shall be processed lawfully, fairly and transparently",
-                category="Principles",
-                requirements=[
-                    "Lawful basis",
-                    "Purpose limitation",
-                    "Data minimization",
-                ],
-                evidence_types=["processing_records", "consent_logs"],
-            ))
-            self._add_control(ComplianceControl(
-                control_id="GDPR-ART22",
-                framework=ComplianceFramework.GDPR,
-                name="Automated Decision-Making",
-                description="Right not to be subject to solely automated decision-making",
-                category="Individual Rights",
-                requirements=[
-                    "Human oversight",
-                    "Explanation of logic",
-                    "Right to contest",
-                ],
-                evidence_types=["decision_logs", "human_review_records"],
-            ))
+            self._add_control(
+                ComplianceControl(
+                    control_id="GDPR-ART5",
+                    framework=ComplianceFramework.GDPR,
+                    name="Data Processing Principles",
+                    description="Personal data shall be processed lawfully, fairly and transparently",
+                    category="Principles",
+                    requirements=[
+                        "Lawful basis",
+                        "Purpose limitation",
+                        "Data minimization",
+                    ],
+                    evidence_types=["processing_records", "consent_logs"],
+                )
+            )
+            self._add_control(
+                ComplianceControl(
+                    control_id="GDPR-ART22",
+                    framework=ComplianceFramework.GDPR,
+                    name="Automated Decision-Making",
+                    description="Right not to be subject to solely automated decision-making",
+                    category="Individual Rights",
+                    requirements=[
+                        "Human oversight",
+                        "Explanation of logic",
+                        "Right to contest",
+                    ],
+                    evidence_types=["decision_logs", "human_review_records"],
+                )
+            )
 
         # Set up default mappings
         self._setup_default_mappings()
@@ -335,14 +353,16 @@ class ComplianceEngine:
             action_type="automated_decision",
             controls=["EUAI-ART13", "GDPR-ART22"],
             evidence_generated=["decision_log", "explanation"],
-            evidence_required=["human_review"] if ComplianceFramework.GDPR in self.frameworks else [],
+            evidence_required=["human_review"]
+            if ComplianceFramework.GDPR in self.frameworks
+            else [],
         )
 
     def _add_control(self, control: ComplianceControl) -> None:
         """Add a control to the registry."""
         self._controls[control.control_id] = control
 
-    def map_action(self, action_type: str) -> Optional[ComplianceMapping]:
+    def map_action(self, action_type: str) -> ComplianceMapping | None:
         """Get the compliance mapping for an action type.
 
         Args:
@@ -397,7 +417,7 @@ class ComplianceEngine:
         action_type: str,
         control: ComplianceControl,
         context: dict,
-    ) -> Optional[ComplianceViolation]:
+    ) -> ComplianceViolation | None:
         """Check if an action violates a specific control."""
         import uuid
 
@@ -437,7 +457,7 @@ class ComplianceEngine:
         framework: ComplianceFramework,
         period_start: datetime,
         period_end: datetime,
-        agent_ids: Optional[list[str]] = None,
+        agent_ids: list[str] | None = None,
     ) -> ComplianceReport:
         """Generate a compliance report for a framework and time period.
 
@@ -455,17 +475,15 @@ class ComplianceEngine:
 
         # Filter violations
         violations = [
-            v for v in self._violations
+            v
+            for v in self._violations
             if v.framework == framework
             and period_start <= v.timestamp <= period_end
             and (not agent_ids or v.agent_did in agent_ids)
         ]
 
         # Get controls for framework
-        framework_controls = [
-            c for c in self._controls.values()
-            if c.framework == framework
-        ]
+        framework_controls = [c for c in self._controls.values() if c.framework == framework]
 
         # Calculate compliance score
         violated_controls = set(v.control_id for v in violations)
@@ -479,9 +497,7 @@ class ComplianceEngine:
         recommendations = []
         for v in violations:
             if not v.remediated:
-                recommendations.append(
-                    f"Remediate {v.control_id}: {v.description}"
-                )
+                recommendations.append(f"Remediate {v.control_id}: {v.description}")
 
         return ComplianceReport(
             report_id=f"report_{uuid.uuid4().hex[:12]}",
@@ -522,9 +538,9 @@ class ComplianceEngine:
 
     def get_violations(
         self,
-        framework: Optional[ComplianceFramework] = None,
-        agent_did: Optional[str] = None,
-        remediated: Optional[bool] = None,
+        framework: ComplianceFramework | None = None,
+        agent_did: str | None = None,
+        remediated: bool | None = None,
     ) -> list[ComplianceViolation]:
         """Get recorded violations with optional filters.
 

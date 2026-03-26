@@ -84,7 +84,9 @@ class TestIncidentDetector:
 
     def test_warning_signal_creates_incident(self) -> None:
         detector = IncidentDetector()
-        signal = Signal(signal_type=SignalType.SLO_BREACH, source="bot-1", message="success rate < 99%")
+        signal = Signal(
+            signal_type=SignalType.SLO_BREACH, source="bot-1", message="success rate < 99%"
+        )
         incident = detector.ingest_signal(signal)
         assert incident is not None
         assert incident.severity == IncidentSeverity.P2

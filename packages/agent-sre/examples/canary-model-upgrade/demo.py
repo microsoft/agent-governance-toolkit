@@ -38,10 +38,10 @@ from agent_sre.slo.indicators import (
 
 BOLD = "\033[1m"
 HEADER = "\033[1;36m"  # bold cyan
-OK = "\033[32m"        # green
-WARN = "\033[33m"      # yellow
-ERR = "\033[31m"       # red
-DIM = "\033[2m"        # dim
+OK = "\033[32m"  # green
+WARN = "\033[33m"  # yellow
+ERR = "\033[31m"  # red
+DIM = "\033[2m"  # dim
 RESET = "\033[0m"
 
 STATUS_COLOR = {
@@ -132,7 +132,9 @@ GPT4_BAD = SimulatedModel(
 # ── SLO setup ────────────────────────────────────────────────────────
 
 
-def build_slo(name: str) -> tuple[SLO, TaskSuccessRate, ResponseLatency, CostPerTask, HallucinationRate]:
+def build_slo(
+    name: str,
+) -> tuple[SLO, TaskSuccessRate, ResponseLatency, CostPerTask, HallucinationRate]:
     success = TaskSuccessRate(target=0.95, window="1h")
     latency = ResponseLatency(target_ms=2000.0, percentile=0.95, window="1h")
     cost = CostPerTask(target_usd=0.10, window="1h")
@@ -203,8 +205,10 @@ def print_metrics(stats: dict, model_name: str) -> None:
     hall_color = OK if hall < 0.05 else (WARN if hall < 0.08 else ERR)
 
     print(f"    {DIM}Model:{RESET}  {model_name}")
-    print(f"    {DIM}Reqs:{RESET}   {stats['total']:>4}   {DIM}OK:{RESET} {stats['ok']:>4}  "
-          f"({sr_color}{sr:.1%}{RESET})")
+    print(
+        f"    {DIM}Reqs:{RESET}   {stats['total']:>4}   {DIM}OK:{RESET} {stats['ok']:>4}  "
+        f"({sr_color}{sr:.1%}{RESET})"
+    )
     print(f"    {DIM}Latency:{RESET}        {lat_color}{lat:>8.0f} ms{RESET}  (target < 2 000 ms)")
     print(f"    {DIM}Cost/call:{RESET}      {cost_color}${cost:>7.4f}{RESET}    (target < $0.10)")
     print(f"    {DIM}Hallucination:{RESET}  {hall_color}{hall:>8.1%}{RESET}    (target < 5%)")
@@ -214,8 +218,7 @@ def slo_status_line(slo: SLO) -> None:
     status = slo.evaluate()
     color = STATUS_COLOR.get(status.value, RESET)
     budget = slo.error_budget.remaining_percent
-    print(f"    SLO: {color}{status.value:>10}{RESET}  "
-          f"error budget: {budget:5.1f}% remaining")
+    print(f"    SLO: {color}{status.value:>10}{RESET}  error budget: {budget:5.1f}% remaining")
 
 
 # ── Canary rollout engine ────────────────────────────────────────────
@@ -303,7 +306,7 @@ def run_canary_scenario(
 
     state = RolloutState.CANARY
     step = steps[0]
-    print(f"    Rollout started")
+    print("    Rollout started")
     print(f"    Current step:    {step.name} ({step.weight:.0%} traffic)")
     print(f"    {progress_bar(step.weight)}")
     print()

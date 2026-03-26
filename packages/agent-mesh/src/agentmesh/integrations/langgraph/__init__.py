@@ -37,10 +37,11 @@ Example:
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, TypeVar, Generic
 from enum import Enum
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ StateType = TypeVar("StateType")
 
 class TrustLevel(Enum):
     """Trust levels for graph execution."""
+
     VERIFIED_PARTNER = "verified_partner"
     TRUSTED = "trusted"
     STANDARD = "standard"
@@ -59,19 +61,20 @@ class TrustLevel(Enum):
 @dataclass
 class NodeTrustContext:
     """Trust context passed through graph state."""
+
     agent_did: str
     trust_score: int
     trust_level: TrustLevel
-    capabilities: List[str]
+    capabilities: list[str]
     verified_at: datetime
     sponsor_id: str = ""
 
     # Audit trail
-    nodes_visited: List[str] = field(default_factory=list)
+    nodes_visited: list[str] = field(default_factory=list)
     trust_checks_passed: int = 0
     trust_checks_failed: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "agent_did": self.agent_did,
             "trust_score": self.trust_score,
@@ -96,7 +99,7 @@ class TrustedGraphNode(Generic[StateType]):
         self,
         name: str,
         handler: Callable[[StateType], StateType],
-        required_capabilities: Optional[List[str]] = None,
+        required_capabilities: list[str] | None = None,
         min_trust_score: int = 300,
         min_trust_level: TrustLevel = TrustLevel.STANDARD,
         fail_action: str = "block",  # "block" | "warn" | "audit"
@@ -112,7 +115,7 @@ class TrustedGraphNode(Generic[StateType]):
         self.total_executions = 0
         self.blocked_executions = 0
 
-    def _get_trust_context(self, state: StateType) -> Optional[NodeTrustContext]:
+    def _get_trust_context(self, state: StateType) -> NodeTrustContext | None:
         """Extract trust context from state."""
         if isinstance(state, dict):
             ctx_data = state.get("_trust_context")
@@ -207,6 +210,7 @@ class TrustedGraphNode(Generic[StateType]):
 
         # Handle both sync and async handlers
         import asyncio
+
         if asyncio.iscoroutinefunction(self.handler):
             result = await self.handler(state)
         else:
@@ -214,7 +218,7 @@ class TrustedGraphNode(Generic[StateType]):
 
         return result
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get node execution statistics."""
         return {
             "name": self.name,
@@ -240,7 +244,7 @@ class TrustCheckpoint:
     ):
         self.identity = identity
         self.trust_bridge = trust_bridge
-        self._checkpoints: Dict[str, Dict[str, Any]] = {}
+        self._checkpoints: dict[str, dict[str, Any]] = {}
 
     def create_initial_context(self) -> NodeTrustContext:
         """Create initial trust context from identity."""
@@ -248,18 +252,20 @@ class TrustCheckpoint:
             agent_did=str(self.identity.did) if hasattr(self.identity, "did") else "",
             trust_score=self.identity.trust_score if hasattr(self.identity, "trust_score") else 500,
             trust_level=TrustLevel.STANDARD,
-            capabilities=list(self.identity.capabilities) if hasattr(self.identity, "capabilities") else [],
+            capabilities=list(self.identity.capabilities)
+            if hasattr(self.identity, "capabilities")
+            else [],
             verified_at=datetime.utcnow(),
             sponsor_id=self.identity.sponsor_id if hasattr(self.identity, "sponsor_id") else "",
         )
 
-    def inject_context(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    def inject_context(self, state: dict[str, Any]) -> dict[str, Any]:
         """Inject trust context into state."""
         if "_trust_context" not in state:
             state["_trust_context"] = self.create_initial_context()
         return state
 
-    def save(self, checkpoint_id: str, state: Dict[str, Any]) -> None:
+    def save(self, checkpoint_id: str, state: dict[str, Any]) -> None:
         """Save checkpoint with trust metadata."""
         context = state.get("_trust_context")
         self._checkpoints[checkpoint_id] = {
@@ -269,7 +275,7 @@ class TrustCheckpoint:
         }
         logger.info(f"Saved trust checkpoint: {checkpoint_id}")
 
-    def load(self, checkpoint_id: str) -> Optional[Dict[str, Any]]:
+    def load(self, checkpoint_id: str) -> dict[str, Any] | None:
         """Load checkpoint."""
         checkpoint = self._checkpoints.get(checkpoint_id)
         if checkpoint:
@@ -277,52 +283,53 @@ class TrustCheckpoint:
             return checkpoint["state"]
         return None
 
-    def create_gate(self) -> Callable[[Dict[str, Any]], Dict[str, Any]]:
+    def create_gate(self) -> Callable[[dict[str, Any]], dict[str, Any]]:
         """
         Create a trust gate node for the graph.
 
         Use as: graph.add_node("trust_gate", checkpoint.create_gate())
         """
-        def gate(state: Dict[str, Any]) -> Dict[str, Any]:
+
+        def gate(state: dict[str, Any]) -> dict[str, Any]:
             return self.inject_context(state)
+
         return gate
 
     def create_verifier(
         self,
         min_score: int = 300,
         required_level: TrustLevel = TrustLevel.STANDARD,
-    ) -> Callable[[Dict[str, Any]], Dict[str, Any]]:
+    ) -> Callable[[dict[str, Any]], dict[str, Any]]:
         """
         Create a trust verification node.
 
         Raises TrustVerificationError if trust requirements not met.
         """
-        def verify(state: Dict[str, Any]) -> Dict[str, Any]:
+
+        def verify(state: dict[str, Any]) -> dict[str, Any]:
             context = state.get("_trust_context")
             if not context:
                 raise TrustVerificationError("No trust context in state")
 
             if isinstance(context, NodeTrustContext):
                 if context.trust_score < min_score:
-                    raise TrustVerificationError(
-                        f"Trust score {context.trust_score} < {min_score}"
-                    )
+                    raise TrustVerificationError(f"Trust score {context.trust_score} < {min_score}")
 
             return state
+
         return verify
 
 
 from agentmesh.exceptions import TrustVerificationError  # noqa: E402
-
 
 # Backward compatibility: TrustVerificationError is re-exported from agentmesh.exceptions
 
 
 def create_trusted_graph(
     identity: Any,
-    nodes: Dict[str, Callable],
-    trust_requirements: Optional[Dict[str, Dict[str, Any]]] = None,
-) -> Dict[str, TrustedGraphNode]:
+    nodes: dict[str, Callable],
+    trust_requirements: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, TrustedGraphNode]:
     """
     Convenience function to wrap multiple nodes with trust verification.
 

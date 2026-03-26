@@ -4,12 +4,10 @@
 
 import json
 import os
-import tempfile
 
 import pytest
 
 from agent_os.base_agent import AgentConfig
-
 
 # ---------------------------------------------------------------------------
 # agent_id validation (#120)
@@ -112,9 +110,7 @@ class TestFromFile:
 
     def test_load_example_config(self):
         """Verify the bundled example config loads correctly."""
-        example = os.path.join(
-            os.path.dirname(__file__), "..", "examples", "agent_config.yaml"
-        )
+        example = os.path.join(os.path.dirname(__file__), "..", "examples", "agent_config.yaml")
         config = AgentConfig.from_file(example)
         assert config.agent_id == "my-example-agent"
         assert "read_only" in config.policies

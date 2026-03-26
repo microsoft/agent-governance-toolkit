@@ -50,6 +50,7 @@ _DEFAULT_BLOCKED_BUILTINS: list[str] = [
 # Externalised configuration dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SandboxSecurityConfig:
     """Structured configuration for sandbox security rules, loadable from YAML.
@@ -83,7 +84,7 @@ def load_sandbox_config(path: str) -> SandboxSecurityConfig:
     if not os.path.exists(path):
         raise FileNotFoundError(f"Sandbox config not found: {path}")
 
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         data = yaml.safe_load(fh.read())
 
     if not isinstance(data, dict) or "sandbox" not in data:
@@ -232,8 +233,7 @@ class _ASTSecurityVisitor(ast.NodeVisitor):
                             column=node.col_offset,
                             violation_type="blocked_module_call",
                             description=(
-                                f"Call to blocked module "
-                                f"'{node.func.value.id}.{node.func.attr}'"
+                                f"Call to blocked module '{node.func.value.id}.{node.func.attr}'"
                             ),
                         )
                     )
@@ -245,9 +245,7 @@ class _ASTSecurityVisitor(ast.NodeVisitor):
                     and node.args
                 ):
                     arg = node.args[0]
-                    if isinstance(arg, ast.Constant) and isinstance(
-                        arg.value, str
-                    ):
+                    if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
                         top_level = arg.value.split(".")[0]
                         if top_level in self._blocked_modules:
                             self.violations.append(
@@ -337,9 +335,7 @@ class ExecutionSandbox:
             except (OSError, ValueError):
                 continue
             # Use is_relative_to for safe containment check
-            if resolved == allowed_resolved or resolved.is_relative_to(
-                allowed_resolved
-            ):
+            if resolved == allowed_resolved or resolved.is_relative_to(allowed_resolved):
                 return True
         return False
 

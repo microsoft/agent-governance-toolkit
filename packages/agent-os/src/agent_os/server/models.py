@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 # Request models
 # ---------------------------------------------------------------------------
 
+
 class ExecuteRequest(BaseModel):
     """Request to execute an action through the stateless kernel."""
 
@@ -50,6 +51,7 @@ class PolicyEvalRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Response models
 # ---------------------------------------------------------------------------
+
 
 class ExecuteResponse(BaseModel):
     """Response from stateless kernel execution."""

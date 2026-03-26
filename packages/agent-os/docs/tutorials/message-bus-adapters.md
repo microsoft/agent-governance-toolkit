@@ -50,10 +50,10 @@ await bus.connect()
 # Subscribe to messages
 async def handle_task(msg: Message):
     print(f"Received task: {msg.payload}")
-    
+
     # Process and respond
     result = await process_task(msg.payload)
-    
+
     # Send response
     await bus.publish(Message(
         topic="results",
@@ -300,13 +300,13 @@ kafka_bus = AgentMessageBus(
 async def my_agent(task: str):
     # Process task
     result = await process(task)
-    
+
     # Fast response via Redis
     await redis_bus.publish(Message(
         topic="responses",
         payload=result
     ))
-    
+
     # Durable event via Kafka
     await kafka_bus.publish(Message(
         topic="events",
@@ -325,7 +325,7 @@ services:
     image: redis:7
     ports:
       - "6379:6379"
-  
+
   kafka:
     image: confluentinc/cp-kafka:latest
     ports:
@@ -333,18 +333,18 @@ services:
     environment:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-  
+
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
-  
+
   nats:
     image: nats:latest
     ports:
       - "4222:4222"
     command: ["--js"]  # Enable JetStream
-  
+
   agent:
     build: .
     depends_on:

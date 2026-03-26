@@ -4,7 +4,7 @@
 
 import pytest
 
-from agentmesh.identity import AgentNamespace, NamespaceRule, NamespaceManager
+from agentmesh.identity import AgentNamespace, NamespaceManager, NamespaceRule
 
 
 class TestAgentNamespace:

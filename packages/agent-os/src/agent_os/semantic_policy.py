@@ -47,15 +47,16 @@ _SAMPLE_DISCLAIMER = (
 
 class IntentCategory(str, Enum):
     """Semantic intent categories for agent actions."""
-    DESTRUCTIVE_DATA = "destructive_data"       # DROP, DELETE, TRUNCATE, wipe
-    DATA_EXFILTRATION = "data_exfiltration"     # bulk export, dump, copy-to-external
+
+    DESTRUCTIVE_DATA = "destructive_data"  # DROP, DELETE, TRUNCATE, wipe
+    DATA_EXFILTRATION = "data_exfiltration"  # bulk export, dump, copy-to-external
     PRIVILEGE_ESCALATION = "privilege_escalation"  # grant, sudo, chmod, admin
     SYSTEM_MODIFICATION = "system_modification"  # rm, shutdown, reboot, kill
-    CODE_EXECUTION = "code_execution"           # exec, eval, subprocess, shell
-    NETWORK_ACCESS = "network_access"           # fetch, curl, http, connect
-    DATA_READ = "data_read"                     # SELECT, get, read, list
-    DATA_WRITE = "data_write"                   # INSERT, UPDATE, create, write
-    BENIGN = "benign"                           # no risk signals detected
+    CODE_EXECUTION = "code_execution"  # exec, eval, subprocess, shell
+    NETWORK_ACCESS = "network_access"  # fetch, curl, http, connect
+    DATA_READ = "data_read"  # SELECT, get, read, list
+    DATA_WRITE = "data_write"  # INSERT, UPDATE, create, write
+    BENIGN = "benign"  # no risk signals detected
 
 
 # =============================================================================
@@ -66,6 +67,7 @@ class IntentCategory(str, Enum):
 @dataclass(frozen=True)
 class IntentClassification:
     """Result of semantic intent classification."""
+
     category: IntentCategory
     confidence: float  # 0.0 to 1.0
     matched_signals: tuple  # signal keywords that matched
@@ -195,8 +197,7 @@ class SemanticPolicyConfig:
 
     signals: dict[str, list[tuple[str, float, str]]] = field(
         default_factory=lambda: {
-            cat.value: [(p, w, e) for p, w, e in sigs]
-            for cat, sigs in _SIGNALS.items()
+            cat.value: [(p, w, e) for p, w, e in sigs] for cat, sigs in _SIGNALS.items()
         }
     )
     disclaimer: str = ""
@@ -220,7 +221,7 @@ def load_semantic_policy_config(path: str) -> SemanticPolicyConfig:
     if not os.path.exists(path):
         raise FileNotFoundError(f"Semantic policy config not found: {path}")
 
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         data = yaml.safe_load(fh.read())
 
     if not isinstance(data, dict) or "signals" not in data:
@@ -279,13 +280,17 @@ class SemanticPolicyEngine:
                 "See examples/policies/semantic-policy.yaml for a sample configuration.",
                 stacklevel=2,
             )
-        self.deny_categories: set[IntentCategory] = set(deny) if deny else {
-            IntentCategory.DESTRUCTIVE_DATA,
-            IntentCategory.DATA_EXFILTRATION,
-            IntentCategory.PRIVILEGE_ESCALATION,
-            IntentCategory.SYSTEM_MODIFICATION,
-            IntentCategory.CODE_EXECUTION,
-        }
+        self.deny_categories: set[IntentCategory] = (
+            set(deny)
+            if deny
+            else {
+                IntentCategory.DESTRUCTIVE_DATA,
+                IntentCategory.DATA_EXFILTRATION,
+                IntentCategory.PRIVILEGE_ESCALATION,
+                IntentCategory.SYSTEM_MODIFICATION,
+                IntentCategory.CODE_EXECUTION,
+            }
+        )
         self.confidence_threshold = confidence_threshold
 
         # Build signals from config or defaults
@@ -311,9 +316,7 @@ class SemanticPolicyEngine:
                 for pattern, weight, explanation in sigs
             ]
 
-    def classify(
-        self, action: str, params: dict[str, Any]
-    ) -> IntentClassification:
+    def classify(self, action: str, params: dict[str, Any]) -> IntentClassification:
         """
         Classify the semantic intent of an action+params.
 

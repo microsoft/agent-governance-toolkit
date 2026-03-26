@@ -3,10 +3,7 @@
 """Tests for identity revocation list."""
 
 import time
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-
-import pytest
+from datetime import UTC, datetime, timedelta
 
 from agentmesh.identity.revocation import RevocationEntry, RevocationList
 
@@ -21,7 +18,7 @@ class TestRevocationEntry:
         assert entry.revoked_at is not None
 
     def test_entry_with_all_fields(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         entry = RevocationEntry(
             agent_did="did:mesh:abc123",
             reason="policy violation",

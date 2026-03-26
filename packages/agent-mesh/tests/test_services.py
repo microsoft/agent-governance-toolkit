@@ -7,18 +7,15 @@ Tests AuditService and RewardService convenience methods,
 service composition, and cross-module integration flows.
 """
 
-import pytest
-
 from agentmesh.services import (
-    AuditService,
     AgentRegistry,
-    RewardService,
+    AuditService,
     RateLimiter,
+    RewardService,
     TokenBucket,
 )
 from agentmesh.services.audit import AuditEntry
-from agentmesh.services.reward_engine import TrustScore, DimensionType
-
+from agentmesh.services.reward_engine import TrustScore
 
 # ── AuditService Tests ──────────────────────────────────────────────
 
@@ -342,11 +339,9 @@ class TestServiceImports:
     def test_services_package_exports(self):
         from agentmesh.services import (
             AuditService,
-            AgentRegistry,
             RewardService,
-            RateLimiter,
-            TokenBucket,
         )
+
         assert AuditService is not None
         assert AgentRegistry is not None
         assert RewardService is not None
@@ -354,18 +349,18 @@ class TestServiceImports:
         assert TokenBucket is not None
 
     def test_audit_subpackage_exports(self):
-        from agentmesh.services.audit import AuditService, AuditEntry, AuditLog
+        from agentmesh.services.audit import AuditService
+
         assert AuditService is not None
 
     def test_reward_subpackage_exports(self):
         from agentmesh.services.reward_engine import (
             RewardService,
-            RewardEngine,
-            TrustScore,
-            DimensionType,
         )
+
         assert RewardService is not None
 
     def test_registry_subpackage_exports(self):
-        from agentmesh.services.registry import AgentRegistry, AgentRegistryEntry
+        from agentmesh.services.registry import AgentRegistry
+
         assert AgentRegistry is not None

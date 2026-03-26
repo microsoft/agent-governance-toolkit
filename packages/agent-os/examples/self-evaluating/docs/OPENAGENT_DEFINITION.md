@@ -285,7 +285,7 @@ else:
 # Agent 1: Data Fetcher
 #   Output: {"data": [...], "format": "json"}
 
-# Agent 2: Data Transformer  
+# Agent 2: Data Transformer
 #   Input: {"data": [...], "format": "..."}
 #   Output: {"cleaned_data": [...], "summary": {...}}
 
@@ -390,11 +390,11 @@ if review.approved:
 candidates = discover_agents(capability="data_analysis")
 
 # Filter by trust score
-reliable_agents = [a for a in candidates 
+reliable_agents = [a for a in candidates
                    if a.trust_score.success_rate > 0.90]
 
 # Select fastest agent
-fastest_agent = min(reliable_agents, 
+fastest_agent = min(reliable_agents,
                    key=lambda a: a.trust_score.avg_latency_ms)
 
 # Use selected agent
@@ -493,7 +493,7 @@ Pipeline Builder:
 ```
 Agent: GitHub Coder v2.3.1
 ├─ Capabilities: ✓ Verified
-├─ Constraints: ✓ Verified  
+├─ Constraints: ✓ Verified
 ├─ IO Contract: ✓ Validated
 └─ Trust Score: ✓ 1000+ executions
 ```
@@ -517,11 +517,11 @@ See the module docstrings in `agent_metadata.py` for complete API documentation:
 
 The OpenAgent Definition (OAD) system provides:
 
-✅ **Standard interface** for describing AI agents  
-✅ **Marketplace-ready** format for discovery  
-✅ **Composability** through IO contracts  
-✅ **Transparency** through capabilities and constraints  
-✅ **Trust** through real performance metrics  
+✅ **Standard interface** for describing AI agents
+✅ **Marketplace-ready** format for discovery
+✅ **Composability** through IO contracts
+✅ **Transparency** through capabilities and constraints
+✅ **Trust** through real performance metrics
 
 **This is the "USB Port" moment for AI.**
 

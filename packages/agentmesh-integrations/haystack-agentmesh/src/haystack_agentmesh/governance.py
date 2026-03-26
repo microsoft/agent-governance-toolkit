@@ -25,12 +25,14 @@ except ImportError:  # pragma: no cover
         def input_types(**kwargs):
             def decorator(func):
                 return func
+
             return decorator
 
         @staticmethod
         def output_types(**kwargs):
             def decorator(func):
                 return func
+
             return decorator
 
     component = _ComponentShim()  # type: ignore[assignment]
@@ -125,7 +127,11 @@ class GovernancePolicyChecker:
         if result is not None:
             return result
 
-        return {"decision": "allow", "reason": "All policy checks passed", "passed": True}
+        return {
+            "decision": "allow",
+            "reason": "All policy checks passed",
+            "passed": True,
+        }
 
     # ── Individual checks ─────────────────────────────────────────
 
@@ -147,7 +153,9 @@ class GovernancePolicyChecker:
             }
         return None
 
-    def _check_content(self, action: str, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _check_content(
+        self, action: str, params: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         text = f"{action} {' '.join(str(v) for v in params.values())}"
         for pattern, ptype, compiled in self._compiled_patterns:
             if compiled.search(text):

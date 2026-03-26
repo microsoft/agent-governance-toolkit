@@ -411,9 +411,14 @@ class SmolagentsKernel(BaseIntegration):
                     "agent_name": agent_name,
                     "timestamp": time.time(),
                 }
-                self._record("approval_required", agent_name, {
-                    "tool": tool_name, "call_id": call_id,
-                })
+                self._record(
+                    "approval_required",
+                    agent_name,
+                    {
+                        "tool": tool_name,
+                        "call_id": call_id,
+                    },
+                )
                 error = self._raise_violation(
                     "human_approval_required",
                     f"Tool '{tool_name}' requires human approval (call_id={call_id})",
@@ -442,10 +447,14 @@ class SmolagentsKernel(BaseIntegration):
         Inspects tool output for blocked patterns.
         Returns the (possibly modified) tool_result, or raises on violation.
         """
-        self._record("after_tool", agent_name, {
-            "tool": tool_name,
-            "result_type": type(tool_result).__name__,
-        })
+        self._record(
+            "after_tool",
+            agent_name,
+            {
+                "tool": tool_name,
+                "result_type": type(tool_result).__name__,
+            },
+        )
 
         if isinstance(tool_result, str):
             ok, reason = self._check_content(tool_result)
@@ -472,9 +481,14 @@ class SmolagentsKernel(BaseIntegration):
         if call_id in self._pending_approvals:
             self._approved_calls[call_id] = True
             info = self._pending_approvals.pop(call_id)
-            self._record("approval_granted", info.get("agent_name", "unknown"), {
-                "call_id": call_id, "tool": info.get("tool_name"),
-            })
+            self._record(
+                "approval_granted",
+                info.get("agent_name", "unknown"),
+                {
+                    "call_id": call_id,
+                    "tool": info.get("tool_name"),
+                },
+            )
             return True
         return False
 
@@ -482,9 +496,14 @@ class SmolagentsKernel(BaseIntegration):
         """Deny a pending tool call by its call_id."""
         if call_id in self._pending_approvals:
             info = self._pending_approvals.pop(call_id)
-            self._record("approval_denied", info.get("agent_name", "unknown"), {
-                "call_id": call_id, "tool": info.get("tool_name"),
-            })
+            self._record(
+                "approval_denied",
+                info.get("agent_name", "unknown"),
+                {
+                    "call_id": call_id,
+                    "tool": info.get("tool_name"),
+                },
+            )
             return True
         return False
 

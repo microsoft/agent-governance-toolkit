@@ -3,6 +3,7 @@
 """
 Unit tests for IATP telemetry module.
 """
+
 import shutil
 import tempfile
 from pathlib import Path
@@ -53,10 +54,7 @@ def test_flight_recorder_log_request(temp_log_dir):
     trace_id = "test-trace-123"
 
     recorder.log_request(
-        trace_id=trace_id,
-        agent_id="test-agent",
-        payload={"task": "test"},
-        quarantined=False
+        trace_id=trace_id, agent_id="test-agent", payload={"task": "test"}, quarantined=False
     )
 
     logs = recorder.get_trace_logs(trace_id)
@@ -76,7 +74,7 @@ def test_flight_recorder_log_response(temp_log_dir):
         agent_id="test-agent",
         response={"status": "success"},
         status_code=200,
-        latency_ms=123.45
+        latency_ms=123.45,
     )
 
     logs = recorder.get_trace_logs(trace_id)
@@ -95,7 +93,7 @@ def test_flight_recorder_log_error(temp_log_dir):
         trace_id=trace_id,
         agent_id="test-agent",
         error="Connection timeout",
-        details={"timeout": 30}
+        details={"timeout": 30},
     )
 
     logs = recorder.get_trace_logs(trace_id)
@@ -113,9 +111,7 @@ def test_flight_recorder_log_blocked(temp_log_dir):
     manifest = CapabilityManifest(
         agent_id="test-agent",
         capabilities=AgentCapabilities(),
-        privacy_contract=PrivacyContract(
-            retention=RetentionPolicy.FOREVER
-        )
+        privacy_contract=PrivacyContract(retention=RetentionPolicy.FOREVER),
     )
 
     recorder.log_blocked_request(
@@ -123,7 +119,7 @@ def test_flight_recorder_log_blocked(temp_log_dir):
         agent_id="test-agent",
         payload={"sensitive": "data"},
         reason="Privacy violation",
-        manifest=manifest
+        manifest=manifest,
     )
 
     logs = recorder.get_trace_logs(trace_id)
@@ -159,7 +155,7 @@ def test_flight_recorder_sensitive_data_scrubbed(temp_log_dir):
         trace_id=trace_id,
         agent_id="test-agent",
         payload={"card": "4532-1234-5678-9010"},
-        quarantined=False
+        quarantined=False,
     )
 
     logs = recorder.get_trace_logs(trace_id)

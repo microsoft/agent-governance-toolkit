@@ -17,18 +17,20 @@ from typing import Any
 
 class CircuitState(Enum):
     """Circuit breaker state."""
-    CLOSED = "closed"      # Normal operation
-    OPEN = "open"          # Failing, reject calls
+
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing, reject calls
     HALF_OPEN = "half_open"  # Testing recovery
 
 
 @dataclass
 class CircuitBreakerConfig:
     """Configuration for a circuit breaker."""
-    failure_threshold: int = 5          # Failures before opening
-    success_threshold: int = 3          # Successes in half-open to close
-    timeout_seconds: float = 60.0       # Time in open before half-open
-    half_open_max_calls: int = 3        # Max test calls in half-open
+
+    failure_threshold: int = 5  # Failures before opening
+    success_threshold: int = 3  # Successes in half-open to close
+    timeout_seconds: float = 60.0  # Time in open before half-open
+    half_open_max_calls: int = 3  # Max test calls in half-open
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -42,6 +44,7 @@ class CircuitBreakerConfig:
 @dataclass
 class CircuitEvent:
     """Record of a circuit breaker state change."""
+
     from_state: CircuitState
     to_state: CircuitState
     reason: str = ""
@@ -123,11 +126,13 @@ class CircuitBreaker:
         if old_state == new_state:
             return
 
-        self._events.append(CircuitEvent(
-            from_state=old_state,
-            to_state=new_state,
-            reason=reason,
-        ))
+        self._events.append(
+            CircuitEvent(
+                from_state=old_state,
+                to_state=new_state,
+                reason=reason,
+            )
+        )
         self._state = new_state
 
         if new_state == CircuitState.OPEN:
@@ -181,7 +186,11 @@ class CircuitBreakerRegistry:
     def summary(self) -> dict[str, Any]:
         return {
             "total_agents": len(self._breakers),
-            "open_circuits": len([b for b in self._breakers.values() if b.state == CircuitState.OPEN]),
-            "half_open_circuits": len([b for b in self._breakers.values() if b.state == CircuitState.HALF_OPEN]),
+            "open_circuits": len(
+                [b for b in self._breakers.values() if b.state == CircuitState.OPEN]
+            ),
+            "half_open_circuits": len(
+                [b for b in self._breakers.values() if b.state == CircuitState.HALF_OPEN]
+            ),
             "agents": {aid: b.to_dict() for aid, b in self._breakers.items()},
         }

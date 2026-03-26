@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Agent OS DevTools - Panel Registration
- * 
+ *
  * Creates the Agent OS panel in Chrome DevTools for monitoring
  * inter-agent communication and trust protocols.
  */
@@ -14,13 +14,13 @@ chrome.devtools.panels.create(
   "devtools/panel.html", // Panel HTML
   (panel) => {
     console.log("Agent OS DevTools panel created");
-    
+
     // Panel shown callback
     panel.onShown.addListener((window) => {
       console.log("Agent OS panel shown");
     });
-    
-    // Panel hidden callback  
+
+    // Panel hidden callback
     panel.onHidden.addListener(() => {
       console.log("Agent OS panel hidden");
     });

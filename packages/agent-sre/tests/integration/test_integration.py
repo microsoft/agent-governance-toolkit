@@ -59,7 +59,12 @@ class TestSLOPipeline:
 
         status = slo.evaluate()
         # Status depends on burn rate timing; any non-EXHAUSTED status is valid
-        assert status in (SLOStatus.HEALTHY, SLOStatus.UNKNOWN, SLOStatus.WARNING, SLOStatus.CRITICAL)
+        assert status in (
+            SLOStatus.HEALTHY,
+            SLOStatus.UNKNOWN,
+            SLOStatus.WARNING,
+            SLOStatus.CRITICAL,
+        )
 
         dashboard = SLODashboard()
         dashboard.register_slo(slo)
@@ -178,11 +183,13 @@ class TestIncidentFlow:
 
         detector = IncidentDetector()
         for _ in range(10):
-            detector.ingest_signal(Signal(
-                signal_type=SignalType.SLO_BREACH,
-                value=0.9,
-                source="test",
-            ))
+            detector.ingest_signal(
+                Signal(
+                    signal_type=SignalType.SLO_BREACH,
+                    value=0.9,
+                    source="test",
+                )
+            )
 
         gen = PostmortemGenerator()
 
@@ -287,10 +294,18 @@ class TestEvalsSLIPipeline:
 
         # Simulate 10 agent interactions
         tasks = [
-            ("What is Python?", "Python is a programming language.", "Python is a programming language"),
+            (
+                "What is Python?",
+                "Python is a programming language.",
+                "Python is a programming language",
+            ),
             ("What is Java?", "Java is a programming language.", "Java is a programming language"),
             ("What is Go?", "Go is a language by Google.", "Go is a programming language"),
-            ("What is Rust?", "Rust is a systems language.", "Rust is a systems programming language"),
+            (
+                "What is Rust?",
+                "Rust is a systems language.",
+                "Rust is a systems programming language",
+            ),
             ("What is C++?", "C++ is used for systems.", "C++ is a compiled language"),
         ]
 
@@ -302,9 +317,7 @@ class TestEvalsSLIPipeline:
             # Feed hallucination results
             hallu_results = [r for r in report.results if r.criterion.value == "hallucination"]
             if hallu_results:
-                hallucination_sli.record_evaluation(
-                    hallucinated=(hallu_results[0].score < 0.7)
-                )
+                hallucination_sli.record_evaluation(hallucinated=(hallu_results[0].score < 0.7))
 
         # Verify SLIs have data
         assert success_sli._total == 5
@@ -324,15 +337,20 @@ class TestObservabilityIntegrations:
 
         # Export SLO evaluation
         exporter.export_slo_evaluation(
-            "my-slo", "healthy", 0.95, 0.3,
+            "my-slo",
+            "healthy",
+            0.95,
+            0.3,
             indicators={"task_success_rate": 0.98},
         )
 
         # Import eval results
-        importer.import_batch([
-            {"eval_name": "hallucination", "score": 0.05},
-            {"eval_name": "relevance", "score": 0.92},
-        ])
+        importer.import_batch(
+            [
+                {"eval_name": "hallucination", "score": 0.05},
+                {"eval_name": "relevance", "score": 0.92},
+            ]
+        )
 
         sli_values = importer.get_sli_values()
         assert "hallucination_rate" in sli_values
@@ -345,7 +363,9 @@ class TestObservabilityIntegrations:
 
         # Simulate LLM calls
         cb.on_llm_start(serialized={"name": "gpt-4"}, prompts=["test"])
-        cb.on_llm_end(response=type("R", (), {"generations": [[type("G", (), {"text": "result"})()]]})())
+        cb.on_llm_end(
+            response=type("R", (), {"generations": [[type("G", (), {"text": "result"})()]]})()
+        )
 
         # Simulate chain
         cb.on_chain_start(serialized={"name": "chain"}, inputs={"q": "test"})

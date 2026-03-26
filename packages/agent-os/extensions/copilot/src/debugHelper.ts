@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Debug Helper
- * 
+ *
  * Provides debugging and troubleshooting capabilities for agents,
  * including error diagnosis, execution trace analysis, and fix suggestions.
  */
@@ -19,7 +19,7 @@ export interface ErrorDiagnosis {
     relatedDocs?: string[];
 }
 
-export type ErrorType = 
+export type ErrorType =
     | 'policy_violation'
     | 'authentication'
     | 'authorization'
@@ -87,22 +87,22 @@ export interface PerformanceIssue {
 }
 
 export class DebugHelper {
-    
+
     /**
      * Diagnose an error from error message/stack
      */
     diagnoseError(error: string | Error, context?: Record<string, any>): ErrorDiagnosis {
         const errorStr = typeof error === 'string' ? error : error.message;
         const stack = typeof error === 'object' && error.stack ? error.stack : '';
-        
+
         // Detect error type
         const errorType = this.detectErrorType(errorStr, stack);
-        
+
         // Generate diagnosis based on type
         const diagnosis = this.generateDiagnosis(errorType, errorStr, context);
-        
+
         logger.info('Error diagnosed', { type: errorType, summary: diagnosis.summary });
-        
+
         return diagnosis;
     }
 
@@ -120,7 +120,7 @@ export class DebugHelper {
         explanation += `### Execution Steps\n\n`;
         explanation += `| Step | Duration | Status |\n`;
         explanation += `|------|----------|--------|\n`;
-        
+
         for (const step of trace.steps) {
             const status = this.statusEmoji(step.status);
             explanation += `| ${step.name} | ${step.duration}ms | ${status} |\n`;
@@ -229,7 +229,7 @@ export class DebugHelper {
      */
     suggestOptimizations(code: string, language: string): string {
         const issues = this.detectPerformanceIssues(code, language);
-        
+
         if (issues.length === 0) {
             return `## ✅ No Performance Issues Detected
 
@@ -250,7 +250,7 @@ Your agent code looks well-optimized! Here are some general best practices:
             output += `### ${i + 1}. ${issue.description}\n\n`;
             output += `**Impact:** ${issue.impact}\n\n`;
             output += `**Suggestion:** ${issue.suggestion}\n\n`;
-            
+
             if (issue.location) {
                 output += `**Location:** ${issue.location}\n\n`;
             }
@@ -395,7 +395,7 @@ from functools import wraps
 def rate_limit(calls_per_minute):
     min_interval = 60.0 / calls_per_minute
     last_call = [0]
-    
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -428,7 +428,7 @@ def rate_limit(calls_per_minute):
 class InputData(BaseModel):
     id: int
     name: str
-    
+
     @validator('name')
     def name_not_empty(cls, v):
         if not v.strip():
@@ -527,7 +527,7 @@ class InputData(BaseModel):
         output += `**Severity:** ${severityEmoji[diagnosis.severity]} ${diagnosis.severity}\n`;
         output += `**Type:** ${diagnosis.errorType.replace(/_/g, ' ')}\n`;
         output += `**Component:** ${diagnosis.affectedComponent}\n\n`;
-        
+
         output += `### Summary\n${diagnosis.summary}\n\n`;
         output += `### Root Cause\n${diagnosis.rootCause}\n\n`;
 
@@ -538,7 +538,7 @@ class InputData(BaseModel):
             output += `${suggestion.description}\n\n`;
             output += `- **Effort:** ${suggestion.effort}\n`;
             output += `- **Automated:** ${suggestion.automated ? 'Yes' : 'No'}\n`;
-            
+
             if (suggestion.code) {
                 output += `\n\`\`\`python\n${suggestion.code}\n\`\`\`\n`;
             }

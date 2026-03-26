@@ -42,9 +42,7 @@ class TestHandoffStatus:
 
 class TestStepHandoff:
     def test_defaults(self):
-        handoff = StepHandoff(
-            step_id="step-1", saga_id="saga-1", from_agent="agent-1"
-        )
+        handoff = StepHandoff(step_id="step-1", saga_id="saga-1", from_agent="agent-1")
         assert handoff.to_agent is None
         assert handoff.status == HandoffStatus.COMPENSATED
 

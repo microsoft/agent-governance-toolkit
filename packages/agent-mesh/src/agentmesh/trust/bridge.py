@@ -7,15 +7,16 @@ Direct passthrough bridge.
 Maintains the same API surface for compatibility.
 """
 
-from datetime import datetime
-from typing import Optional, Any
-from pydantic import BaseModel, Field
 import hashlib
 import hmac
 import logging
 import os
+from datetime import datetime
+from typing import Any
 
-from .handshake import TrustHandshake, HandshakeResult
+from pydantic import BaseModel, Field
+
+from .handshake import HandshakeResult, TrustHandshake
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 try:
     from modules.iatp import IATPClient, IATPMessage, TrustLevel  # noqa: F401
     from modules.nexus import NexusClient, ReputationEngine  # noqa: F401
+
     AGENT_OS_AVAILABLE = True
 except ImportError:
     # Fallback if agent-os not installed yet (for development)
@@ -55,20 +57,20 @@ class PeerInfo(BaseModel):
     """
 
     peer_did: str
-    peer_name: Optional[str] = None
+    peer_name: str | None = None
     protocol: str  # "a2a", "mcp", "iatp", "acp"
 
     # Trust info
     trust_score: int = Field(default=0, ge=0, le=1000)
     trust_verified: bool = False
-    last_verified: Optional[datetime] = None
+    last_verified: datetime | None = None
 
     # Capabilities
     capabilities: list[str] = Field(default_factory=list)
 
     # Connection info
-    endpoint: Optional[str] = None
-    connected_at: Optional[datetime] = None
+    endpoint: str | None = None
+    connected_at: datetime | None = None
 
 
 class TrustBridge(BaseModel):
@@ -85,7 +87,7 @@ class TrustBridge(BaseModel):
     peers: dict[str, PeerInfo] = Field(default_factory=dict)
 
     # Handshake handler
-    _handshake: Optional[TrustHandshake] = None
+    _handshake: TrustHandshake | None = None
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -124,8 +126,8 @@ class TrustBridge(BaseModel):
         self,
         peer_did: str,
         protocol: str = "iatp",
-        required_trust_score: Optional[int] = None,
-        required_capabilities: Optional[list[str]] = None,
+        required_trust_score: int | None = None,
+        required_capabilities: list[str] | None = None,
     ) -> HandshakeResult:
         """
         Verify a peer before communication.
@@ -157,7 +159,7 @@ class TrustBridge(BaseModel):
     async def is_peer_trusted(
         self,
         peer_did: str,
-        required_score: Optional[int] = None,
+        required_score: int | None = None,
     ) -> bool:
         """Check whether a previously verified peer meets the trust threshold."""
         peer = self.peers.get(peer_did)
@@ -174,15 +176,16 @@ class TrustBridge(BaseModel):
         threshold = required_score or self.default_trust_threshold
         return peer.trust_score >= threshold
 
-    def get_peer(self, peer_did: str) -> Optional[PeerInfo]:
+    def get_peer(self, peer_did: str) -> PeerInfo | None:
         """Get information about a known peer."""
         return self.peers.get(peer_did)
 
-    def get_trusted_peers(self, min_score: Optional[int] = None) -> list[PeerInfo]:
+    def get_trusted_peers(self, min_score: int | None = None) -> list[PeerInfo]:
         """Get all peers that are verified and meet the trust threshold."""
         threshold = min_score or self.default_trust_threshold
         return [
-            peer for peer in self.peers.values()
+            peer
+            for peer in self.peers.values()
             if peer.trust_verified and peer.trust_score >= threshold
         ]
 
@@ -201,11 +204,9 @@ class ProtocolBridge(BaseModel):
     """
 
     agent_did: str
-    trust_bridge: Optional[TrustBridge] = None
+    trust_bridge: TrustBridge | None = None
 
-    supported_protocols: list[str] = Field(
-        default=["a2a", "mcp", "iatp", "acp"]
-    )
+    supported_protocols: list[str] = Field(default=["a2a", "mcp", "iatp", "acp"])
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -227,7 +228,7 @@ class ProtocolBridge(BaseModel):
         peer_did: str,
         message: Any,
         source_protocol: str,
-        target_protocol: Optional[str] = None,
+        target_protocol: str | None = None,
     ) -> Any:
         """Send a message to a peer, translating protocols if needed."""
         # Verify trust first
@@ -286,11 +287,7 @@ class ProtocolBridge(BaseModel):
         }
 
     def add_verification_footer(
-        self,
-        content: str,
-        trust_score: int,
-        agent_did: str,
-        metadata: Optional[dict] = None
+        self, content: str, trust_score: int, agent_did: str, metadata: dict | None = None
     ) -> str:
         """Add AgentMesh verification footer to content."""
         footer = (
@@ -316,7 +313,7 @@ class ProtocolBridge(BaseModel):
             "protocol": protocol,
         }
 
-    def get_protocol_for_peer(self, peer_did: str) -> Optional[str]:
+    def get_protocol_for_peer(self, peer_did: str) -> str | None:
         """Get the preferred communication protocol for a peer."""
         peer = self.trust_bridge.get_peer(peer_did)
         return peer.protocol if peer else None
@@ -331,7 +328,7 @@ class A2AAdapter:
         self.agent_did = agent_did
         self.trust_bridge = trust_bridge
 
-    async def discover_agent(self, endpoint: str) -> Optional[dict]:
+    async def discover_agent(self, endpoint: str) -> dict | None:
         """Discover an agent via A2A Agent Card."""
         return {
             "name": "discovered-agent",
@@ -378,7 +375,7 @@ class MCPAdapter:
         name: str,
         description: str,
         input_schema: dict,
-        required_capability: Optional[str] = None,
+        required_capability: str | None = None,
     ) -> None:
         """Register a tool with the MCP adapter."""
         self._registered_tools[name] = {
@@ -403,9 +400,7 @@ class MCPAdapter:
         tool = self._registered_tools.get(tool_name)
         if tool and tool.get("required_capability"):
             if tool["required_capability"] not in peer.capabilities:
-                raise PermissionError(
-                    f"Peer lacks capability: {tool['required_capability']}"
-                )
+                raise PermissionError(f"Peer lacks capability: {tool['required_capability']}")
 
         return {
             "tool": tool_name,

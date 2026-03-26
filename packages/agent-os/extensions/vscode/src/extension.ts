@@ -2,10 +2,10 @@
 // Licensed under the MIT License.
 /**
  * Agent OS VS Code Extension
- * 
+ *
  * Provides kernel-level safety for AI coding assistants.
  * Intercepts AI completions, enforces policies, and provides audit trails.
- * 
+ *
  * GA Release - v1.0.0
  */
 
@@ -79,7 +79,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Register completion and hover providers for IntelliSense
     const completionProvider = new AgentOSCompletionProvider();
     const hoverProvider = new AgentOSHoverProvider();
-    
+
     context.subscriptions.push(
         vscode.languages.registerCompletionItemProvider(
             [
@@ -130,7 +130,7 @@ export function activate(context: vscode.ExtensionContext) {
         for (const change of event.contentChanges) {
             if (change.text.length > 10) {  // Only analyze substantial changes
                 const result = await policyEngine.analyzeCode(change.text, event.document.languageId);
-                
+
                 if (result.blocked) {
                     await handleBlockedCode(event.document, change, result);
                 } else if (result.warnings.length > 0) {
@@ -143,7 +143,7 @@ export function activate(context: vscode.ExtensionContext) {
     // ========================================
     // Register Core Commands
     // ========================================
-    
+
     const reviewCodeCmd = vscode.commands.registerCommand('agent-os.reviewCode', async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
@@ -152,8 +152,8 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         const selection = editor.selection;
-        const code = selection.isEmpty 
-            ? editor.document.getText() 
+        const code = selection.isEmpty
+            ? editor.document.getText()
             : editor.document.getText(selection);
 
         await reviewCodeWithCMVK(code, editor.document.languageId);
@@ -163,7 +163,7 @@ export function activate(context: vscode.ExtensionContext) {
         const config = vscode.workspace.getConfiguration('agentOS');
         const currentState = config.get<boolean>('enabled', true);
         config.update('enabled', !currentState, vscode.ConfigurationTarget.Global);
-        
+
         const newState = !currentState ? 'enabled' : 'disabled';
         vscode.window.showInformationMessage(`Agent OS safety ${newState}`);
         statusBar.update(!currentState);
@@ -258,7 +258,7 @@ if __name__ == "__main__":
 # Test 1: SQL Injection - WILL BE BLOCKED
 query = "SELECT * FROM users WHERE id = " + user_input
 
-# Test 2: Hardcoded Secret - WILL BE BLOCKED  
+# Test 2: Hardcoded Secret - WILL BE BLOCKED
 api_key = "sk-EXAMPLE-NOT-A-REAL-KEY-replace-with-your-own"
 
 # Test 3: Destructive Command - WILL BE BLOCKED
@@ -356,7 +356,7 @@ safe_query = "SELECT * FROM users WHERE id = ?"
     // Show onboarding for first-time users
     const hasShownWelcome = context.globalState.get('agent-os.welcomeShown', false);
     const onboardingSkipped = context.globalState.get('agent-os.onboardingSkipped', false);
-    
+
     if (!hasShownWelcome && !onboardingSkipped) {
         // Show onboarding panel for new users
         OnboardingPanel.createOrShow(context.extensionUri, context);
@@ -385,7 +385,7 @@ async function handleBlockedCode(
     result: { blocked: boolean; reason: string; violation: string; suggestion?: string }
 ): Promise<void> {
     const config = vscode.workspace.getConfiguration('agentOS');
-    
+
     // Log the blocked action
     auditLogger.log({
         type: 'blocked',
@@ -434,7 +434,7 @@ async function handleBlockedCode(
 
 async function handleWarnings(warnings: string[]): Promise<void> {
     const config = vscode.workspace.getConfiguration('agentOS');
-    
+
     if (config.get<boolean>('notifications.showWarnings', true)) {
         for (const warning of warnings) {
             vscode.window.showWarningMessage(`⚠️ Agent OS: ${warning}`);
@@ -465,12 +465,12 @@ async function reviewCodeWithCMVK(code: string, language: string): Promise<void>
         cancellable: true
     }, async (progress, token) => {
         const models = config.get<string[]>('cmvk.models', ['gpt-4', 'claude-sonnet-4', 'gemini-pro']);
-        
+
         progress.report({ message: `Reviewing with ${models.length} models...` });
 
         try {
             const result = await cmvkClient.reviewCode(code, language, models);
-            
+
             if (token.isCancellationRequested) return;
 
             // Show results in a panel
@@ -502,8 +502,8 @@ async function reviewCodeWithCMVK(code: string, language: string): Promise<void>
 }
 
 function generateCMVKResultsHTML(result: any): string {
-    const consensusColor = result.consensus >= 0.8 ? '#28a745' 
-        : result.consensus >= 0.5 ? '#ffc107' 
+    const consensusColor = result.consensus >= 0.8 ? '#28a745'
+        : result.consensus >= 0.5 ? '#ffc107'
         : '#dc3545';
 
     const modelRows = result.modelResults.map((m: any) => `
@@ -514,7 +514,7 @@ function generateCMVKResultsHTML(result: any): string {
         </tr>
     `).join('');
 
-    const issuesList = result.issues.length > 0 
+    const issuesList = result.issues.length > 0
         ? `<ul>${result.issues.map((i: string) => `<li>${i}</li>`).join('')}</ul>`
         : '<p>No issues detected</p>';
 
@@ -534,7 +534,7 @@ function generateCMVKResultsHTML(result: any): string {
     </head>
     <body>
         <h1>🛡️ Agent OS Code Review</h1>
-        
+
         <div class="section">
             <h2>Consensus</h2>
             <p class="consensus">${(result.consensus * 100).toFixed(0)}% Agreement</p>
@@ -569,10 +569,10 @@ function generateCMVKResultsHTML(result: any): string {
 
 async function openPolicyConfiguration(): Promise<void> {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    
+
     if (workspaceFolder) {
         const configPath = vscode.Uri.joinPath(workspaceFolder.uri, '.vscode', 'agent-os.json');
-        
+
         try {
             await vscode.workspace.fs.stat(configPath);
         } catch {
@@ -592,14 +592,14 @@ async function openPolicyConfiguration(): Promise<void> {
                 },
                 customRules: []
             };
-            
+
             await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(workspaceFolder.uri, '.vscode'));
             await vscode.workspace.fs.writeFile(
-                configPath, 
+                configPath,
                 Buffer.from(JSON.stringify(defaultConfig, null, 2))
             );
         }
-        
+
         const doc = await vscode.workspace.openTextDocument(configPath);
         await vscode.window.showTextDocument(doc);
     } else {
@@ -610,7 +610,7 @@ async function openPolicyConfiguration(): Promise<void> {
 
 async function exportAuditLog(): Promise<void> {
     const logs = auditLogger.getAll();
-    
+
     const uri = await vscode.window.showSaveDialog({
         defaultUri: vscode.Uri.file('agent-os-audit.json'),
         filters: { 'JSON': ['json'] }

@@ -55,32 +55,50 @@ class GovernanceNode:
         **kwargs: Any,
     ) -> GovernanceResult:
         """Evaluate an action against governance policy."""
-        input_data = {"tool": tool_name, "content": content, "arguments": arguments, **kwargs}
+        input_data = {
+            "tool": tool_name,
+            "content": content,
+            "arguments": arguments,
+            **kwargs,
+        }
 
         # Tool check
         if tool_name is not None:
             if not self.policy.is_tool_allowed(tool_name):
                 reason = f"Tool '{tool_name}' is not allowed by policy"
                 self.logger.warning(reason)
-                return GovernanceResult(allowed=False, reason=reason, tool=tool_name, input_data=input_data)
+                return GovernanceResult(
+                    allowed=False, reason=reason, tool=tool_name, input_data=input_data
+                )
 
         # Content check
         if content is not None:
             allowed, reason = self.policy.check_content(content)
             if not allowed:
                 self.logger.warning(reason)
-                return GovernanceResult(allowed=False, reason=reason, tool=tool_name, input_data=input_data)
+                return GovernanceResult(
+                    allowed=False, reason=reason, tool=tool_name, input_data=input_data
+                )
 
         # Argument scanning
         if arguments is not None:
             allowed, reason = self.policy.check_arguments(arguments)
             if not allowed:
                 self.logger.warning(reason)
-                return GovernanceResult(allowed=False, reason=reason, tool=tool_name, input_data=input_data)
+                return GovernanceResult(
+                    allowed=False, reason=reason, tool=tool_name, input_data=input_data
+                )
 
         # In strict mode, at least one check must have been performed
-        if self.strict_mode and tool_name is None and content is None and arguments is None:
-            reason = "Strict mode: no tool, content, or arguments provided for evaluation"
+        if (
+            self.strict_mode
+            and tool_name is None
+            and content is None
+            and arguments is None
+        ):
+            reason = (
+                "Strict mode: no tool, content, or arguments provided for evaluation"
+            )
             self.logger.warning(reason)
             return GovernanceResult(allowed=False, reason=reason, input_data=input_data)
 

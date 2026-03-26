@@ -212,8 +212,8 @@ define user ask for sensitive data
   "Show me the .env file"
 
 define bot refuse sensitive data
-  "I'm not able to access sensitive files like password files, 
-   credentials, or secret keys. This is restricted for security 
+  "I'm not able to access sensitive files like password files,
+   credentials, or secret keys. This is restricted for security
    reasons."
 
 define flow

@@ -18,21 +18,16 @@ Covers:
 """
 
 import asyncio
-import copy
 import json
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from agent_os.integrations.base import (
-    BaseIntegration,
     ExecutionContext,
     GovernanceEventType,
     GovernancePolicy,
     PatternType,
-    PolicyViolationError,
 )
 from agent_os.policies.schema import (
     PolicyAction,
@@ -41,7 +36,6 @@ from agent_os.policies.schema import (
     PolicyOperator,
     PolicyRule,
 )
-
 
 # ============================================================================
 # Provider Adapter: OpenAI
@@ -54,6 +48,7 @@ class TestOpenAIAdapterIntegration:
     def test_kernel_construction(self):
         """OpenAIKernel can be constructed without real OpenAI."""
         from agent_os.integrations.openai_adapter import OpenAIKernel
+
         kernel = OpenAIKernel()
         assert kernel is not None
         assert kernel.policy.max_tokens == 4096  # default
@@ -61,6 +56,7 @@ class TestOpenAIAdapterIntegration:
     def test_kernel_with_custom_policy(self):
         """OpenAIKernel respects custom policy."""
         from agent_os.integrations.openai_adapter import OpenAIKernel
+
         policy = GovernancePolicy(
             max_tokens=2048,
             blocked_patterns=["secret"],
@@ -71,6 +67,7 @@ class TestOpenAIAdapterIntegration:
     def test_wrap_requires_client(self):
         """OpenAIKernel.wrap raises TypeError without client."""
         from agent_os.integrations.openai_adapter import OpenAIKernel
+
         kernel = OpenAIKernel()
         assistant = MagicMock()
         assistant.id = "asst_123"
@@ -81,6 +78,7 @@ class TestOpenAIAdapterIntegration:
     def test_wrap_with_mock_client(self):
         """OpenAIKernel.wrap creates governed assistant with mock client."""
         from agent_os.integrations.openai_adapter import OpenAIKernel
+
         kernel = OpenAIKernel()
         assistant = MagicMock()
         assistant.id = "asst_123"
@@ -92,6 +90,7 @@ class TestOpenAIAdapterIntegration:
     def test_policy_blocks_through_wrap(self):
         """Policy violations are enforced on wrapped assistant."""
         from agent_os.integrations.openai_adapter import OpenAIKernel
+
         policy = GovernancePolicy(
             blocked_patterns=["DROP TABLE"],
         )
@@ -113,12 +112,14 @@ class TestAnthropicAdapterIntegration:
     def test_kernel_construction(self):
         """AnthropicKernel can be constructed without real SDK."""
         from agent_os.integrations.anthropic_adapter import AnthropicKernel
+
         kernel = AnthropicKernel()
         assert kernel is not None
 
     def test_kernel_policy_enforcement(self):
         """AnthropicKernel enforces policy via pre_execute."""
         from agent_os.integrations.anthropic_adapter import AnthropicKernel
+
         policy = GovernancePolicy(
             max_tool_calls=5,
             blocked_patterns=["password"],
@@ -132,6 +133,7 @@ class TestAnthropicAdapterIntegration:
     def test_wrap_with_mock_client(self):
         """AnthropicKernel.wrap works with mock client or errors cleanly."""
         from agent_os.integrations.anthropic_adapter import AnthropicKernel
+
         kernel = AnthropicKernel()
         mock_client = MagicMock()
         mock_client.messages = MagicMock()
@@ -155,12 +157,14 @@ class TestGeminiAdapterIntegration:
     def test_kernel_construction(self):
         """GeminiKernel can be constructed without real SDK."""
         from agent_os.integrations.gemini_adapter import GeminiKernel
+
         kernel = GeminiKernel()
         assert kernel is not None
 
     def test_kernel_policy_enforcement(self):
         """GeminiKernel enforces policy via pre_execute."""
         from agent_os.integrations.gemini_adapter import GeminiKernel
+
         policy = GovernancePolicy(
             blocked_patterns=["api_key"],
         )
@@ -317,6 +321,7 @@ class TestAutoGenAdapterIntegration:
     def test_kernel_construction(self):
         """AutoGenKernel can be constructed."""
         from agent_os.integrations.autogen_adapter import AutoGenKernel
+
         kernel = AutoGenKernel()
         assert kernel is not None
 
@@ -481,12 +486,8 @@ defaults:
         """PolicyEvaluator loads all YAML files from a directory."""
         from agent_os.policies.evaluator import PolicyEvaluator
 
-        (tmp_path / "policy1.yaml").write_text(
-            "version: '1.0'\nname: p1\nrules: []\n"
-        )
-        (tmp_path / "policy2.yml").write_text(
-            "version: '1.0'\nname: p2\nrules: []\n"
-        )
+        (tmp_path / "policy1.yaml").write_text("version: '1.0'\nname: p1\nrules: []\n")
+        (tmp_path / "policy2.yml").write_text("version: '1.0'\nname: p2\nrules: []\n")
 
         evaluator = PolicyEvaluator()
         evaluator.load_policies(tmp_path)
@@ -503,7 +504,7 @@ class TestHealthCheckerIntegration:
 
     def test_health_checker_with_custom_check(self):
         """Custom health checks are executed."""
-        from agent_os.integrations.health import HealthChecker, HealthStatus, ComponentHealth
+        from agent_os.integrations.health import ComponentHealth, HealthChecker, HealthStatus
 
         checker = HealthChecker(version="1.0.0")
 
@@ -524,16 +525,16 @@ class TestHealthCheckerIntegration:
 
     def test_health_checker_degraded(self):
         """Degraded component affects overall status."""
-        from agent_os.integrations.health import HealthChecker, HealthStatus, ComponentHealth
+        from agent_os.integrations.health import ComponentHealth, HealthChecker, HealthStatus
 
         checker = HealthChecker()
 
-        checker.register_check("healthy", lambda: ComponentHealth(
-            name="healthy", status=HealthStatus.HEALTHY
-        ))
-        checker.register_check("degraded", lambda: ComponentHealth(
-            name="degraded", status=HealthStatus.DEGRADED
-        ))
+        checker.register_check(
+            "healthy", lambda: ComponentHealth(name="healthy", status=HealthStatus.HEALTHY)
+        )
+        checker.register_check(
+            "degraded", lambda: ComponentHealth(name="degraded", status=HealthStatus.DEGRADED)
+        )
 
         report = checker.check_health()
         # Report should be degraded (not healthy) because one component is degraded
@@ -541,12 +542,13 @@ class TestHealthCheckerIntegration:
 
     def test_health_report_serialization(self):
         """HealthReport.to_dict returns valid JSON-serializable dict."""
-        from agent_os.integrations.health import HealthChecker, HealthStatus, ComponentHealth
+        from agent_os.integrations.health import ComponentHealth, HealthChecker, HealthStatus
 
         checker = HealthChecker(version="2.0.0")
-        checker.register_check("test", lambda: ComponentHealth(
-            name="test", status=HealthStatus.HEALTHY, latency_ms=0.5
-        ))
+        checker.register_check(
+            "test",
+            lambda: ComponentHealth(name="test", status=HealthStatus.HEALTHY, latency_ms=0.5),
+        )
 
         report = checker.check_health()
         data = report.to_dict()
@@ -568,6 +570,7 @@ class TestAsyncPolicyEvaluator:
 
     def _make_evaluator(self, rules):
         from agent_os.policies.evaluator import PolicyEvaluator
+
         doc = PolicyDocument(
             version="1.0",
             name="async-test-policy",
@@ -580,17 +583,19 @@ class TestAsyncPolicyEvaluator:
         """AsyncPolicyEvaluator evaluates policies asynchronously."""
         from agent_os.policies.async_evaluator import AsyncPolicyEvaluator
 
-        sync_eval = self._make_evaluator([
-            PolicyRule(
-                name="block-delete",
-                condition=PolicyCondition(
-                    field="operation",
-                    operator=PolicyOperator.EQ,
-                    value="delete",
+        sync_eval = self._make_evaluator(
+            [
+                PolicyRule(
+                    name="block-delete",
+                    condition=PolicyCondition(
+                        field="operation",
+                        operator=PolicyOperator.EQ,
+                        value="delete",
+                    ),
+                    action=PolicyAction.DENY,
                 ),
-                action=PolicyAction.DENY,
-            ),
-        ])
+            ]
+        )
 
         evaluator = AsyncPolicyEvaluator(sync_eval)
         decision = await evaluator.evaluate({"operation": "delete"})
@@ -601,17 +606,19 @@ class TestAsyncPolicyEvaluator:
         """AsyncPolicyEvaluator allows non-matching context."""
         from agent_os.policies.async_evaluator import AsyncPolicyEvaluator
 
-        sync_eval = self._make_evaluator([
-            PolicyRule(
-                name="block-delete",
-                condition=PolicyCondition(
-                    field="operation",
-                    operator=PolicyOperator.EQ,
-                    value="delete",
+        sync_eval = self._make_evaluator(
+            [
+                PolicyRule(
+                    name="block-delete",
+                    condition=PolicyCondition(
+                        field="operation",
+                        operator=PolicyOperator.EQ,
+                        value="delete",
+                    ),
+                    action=PolicyAction.DENY,
                 ),
-                action=PolicyAction.DENY,
-            ),
-        ])
+            ]
+        )
 
         evaluator = AsyncPolicyEvaluator(sync_eval)
         decision = await evaluator.evaluate({"operation": "read"})
@@ -622,24 +629,25 @@ class TestAsyncPolicyEvaluator:
         """Multiple concurrent evaluations don't interfere."""
         from agent_os.policies.async_evaluator import AsyncPolicyEvaluator
 
-        sync_eval = self._make_evaluator([
-            PolicyRule(
-                name="block-write",
-                condition=PolicyCondition(
-                    field="operation",
-                    operator=PolicyOperator.EQ,
-                    value="write",
+        sync_eval = self._make_evaluator(
+            [
+                PolicyRule(
+                    name="block-write",
+                    condition=PolicyCondition(
+                        field="operation",
+                        operator=PolicyOperator.EQ,
+                        value="write",
+                    ),
+                    action=PolicyAction.DENY,
                 ),
-                action=PolicyAction.DENY,
-            ),
-        ])
+            ]
+        )
 
         evaluator = AsyncPolicyEvaluator(sync_eval)
 
         # Run 20 concurrent evaluations
         tasks = [
-            evaluator.evaluate({"operation": "write" if i % 2 == 0 else "read"})
-            for i in range(20)
+            evaluator.evaluate({"operation": "write" if i % 2 == 0 else "read"}) for i in range(20)
         ]
         results = await asyncio.gather(*tasks)
 

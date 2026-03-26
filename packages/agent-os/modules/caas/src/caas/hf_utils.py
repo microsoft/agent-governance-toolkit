@@ -43,12 +43,12 @@ from typing import Any, Dict, List, Optional, Union
 try:
     from huggingface_hub import (
         HfApi,
+        RepoUrl,
+        create_repo,
         hf_hub_download,
         snapshot_download,
         upload_file,
         upload_folder,
-        create_repo,
-        RepoUrl,
     )
 
     HF_HUB_AVAILABLE = True
@@ -268,7 +268,7 @@ class CaaSHubClient:
 
         # If metadata provided, merge it into the results
         if metadata and results_path.suffix == ".json":
-            with open(results_path, "r", encoding="utf-8") as f:
+            with open(results_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             data["_metadata"] = metadata.to_dict()

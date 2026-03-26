@@ -130,7 +130,7 @@ We follow **Partner-level coding standards** (see `.github/copilot-instructions.
 4. **Pydantic Models**: Use Pydantic for data exchange
    ```python
    from pydantic import BaseModel
-   
+
    class PatchRequest(BaseModel):
        agent_id: str
        patch_content: str
@@ -183,19 +183,19 @@ from src.kernel.triage import FailureTriage, FixStrategy
 
 class TestFailureTriage:
     """Test the Failure Triage Engine."""
-    
+
     @pytest.fixture
     def triage(self):
         """Create triage instance."""
         return FailureTriage()
-    
+
     def test_critical_operations_go_sync(self, triage):
         """Test that critical operations route to SYNC_JIT."""
         strategy = triage.decide_strategy(
             user_prompt="Process refund for customer",
             context={"action": "execute_payment"}
         )
-        
+
         assert strategy == FixStrategy.SYNC_JIT, \
             "Payment operations must be sync for safety"
 ```
@@ -274,7 +274,7 @@ Then open a pull request on GitHub with:
 - **Title**: Clear, concise summary
 - **Description**: What changes, why, and how to test
 - **Linked Issues**: `Closes #123` or `Relates to #456`
-- **Checklist**: 
+- **Checklist**:
   - [ ] Tests pass
   - [ ] Documentation updated
   - [ ] Coding standards followed
@@ -331,9 +331,9 @@ To add a new paper citation:
 1. **Add to documentation**: In relevant section, add:
    ```markdown
    ### [Section Name]
-   
-   1. **Authors (Year).**  
-      *"Paper Title"*  
+
+   1. **Authors (Year).**
+      *"Paper Title"*
       Venue. DOI/arXiv
       - **Core Contribution**: What they did
       - **Our Implementation**: How we use it
@@ -366,18 +366,18 @@ def handle_failure(
 ) -> dict:
     """
     Handle agent failure with self-correction architecture.
-    
+
     Args:
         agent_id: Unique agent identifier
         error_message: Error description
         context: Additional context (tool trace, user prompt, etc.)
-    
+
     Returns:
         Dict with patch_applied, patch_id, strategy
-    
+
     Raises:
         ValueError: If agent_id is invalid
-    
+
     Example:
         >>> result = handle_failure("agent-001", "Timeout", {})
         >>> print(result["patch_applied"])
@@ -425,5 +425,5 @@ Contributors will be:
 
 Thank you for contributing to SCAK! 🚀
 
-**Last Updated:** 2026-01-18  
+**Last Updated:** 2026-01-18
 **Version:** 1.0

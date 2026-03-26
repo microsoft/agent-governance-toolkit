@@ -9,20 +9,18 @@ Validates that:
 - Full registration-to-rotation lifecycle
 """
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
-from cryptography.hazmat.primitives.asymmetric import ed25519
-from cryptography.hazmat.primitives import serialization
 from cryptography import x509
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
 
 from agentmesh.core.identity.ca import (
     CertificateAuthority,
     RegistrationRequest,
-    RegistrationResponse,
     SponsorRegistry,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -211,9 +209,7 @@ class TestRefreshTokenValidation:
         reg = self._register_agent(ca, sponsor_key, email)
         new_key = _make_agent_public_key()
         # Use the real refresh token from registration
-        rotated = ca.rotate_credentials(
-            reg.agent_did, reg.refresh_token, new_key
-        )
+        rotated = ca.rotate_credentials(reg.agent_did, reg.refresh_token, new_key)
         assert rotated.agent_did == reg.agent_did
         assert rotated.status == "success"
 
@@ -251,9 +247,7 @@ class TestRefreshTokenValidation:
         rotated = ca.rotate_credentials(reg.agent_did, reg.refresh_token, new_key)
         # The new refresh token should also work
         another_key = _make_agent_public_key()
-        rotated2 = ca.rotate_credentials(
-            rotated.agent_did, rotated.refresh_token, another_key
-        )
+        rotated2 = ca.rotate_credentials(rotated.agent_did, rotated.refresh_token, another_key)
         assert rotated2.agent_did == reg.agent_did
 
     def test_missing_public_key_raises(self):
@@ -367,7 +361,7 @@ class TestRegistrationLifecycle:
     def test_svid_expiry_in_future(self):
         ca, sponsor_key, email = _make_ca_with_sponsor()
         resp = self._register(ca, sponsor_key, email)
-        assert resp.svid_expires_at > datetime.now(timezone.utc)
+        assert resp.svid_expires_at > datetime.now(UTC)
 
     def test_registration_with_capabilities(self):
         ca, sponsor_key, email = _make_ca_with_sponsor()
@@ -412,9 +406,7 @@ class TestCertificateAuthorityInit:
 
     def test_ca_cert_is_ca(self):
         ca = CertificateAuthority()
-        bc = ca.ca_certificate.extensions.get_extension_for_class(
-            x509.BasicConstraints
-        )
+        bc = ca.ca_certificate.extensions.get_extension_for_class(x509.BasicConstraints)
         assert bc.value.ca is True
 
     def test_custom_keypair_accepted(self):
@@ -456,11 +448,12 @@ class TestRefreshTokenExpiration:
 
         # Find the token hash and force-expire it
         import hashlib
+
         token_hash = hashlib.sha256(reg.refresh_token.encode()).hexdigest()
         stored_did, _ = ca._issued_refresh_tokens[token_hash]
         ca._issued_refresh_tokens[token_hash] = (
             stored_did,
-            datetime.now(timezone.utc) - timedelta(hours=1),
+            datetime.now(UTC) - timedelta(hours=1),
         )
 
         new_key = _make_agent_public_key()

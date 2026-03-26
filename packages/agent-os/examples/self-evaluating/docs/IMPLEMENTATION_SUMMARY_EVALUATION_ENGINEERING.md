@@ -162,8 +162,8 @@ In Eval-DD, engineers enumerate edge cases from day one:
 
 ```python
 from evaluation_engineering import (
-    EvaluationDataset, 
-    ScoringRubric, 
+    EvaluationDataset,
+    ScoringRubric,
     EvaluationRunner
 )
 

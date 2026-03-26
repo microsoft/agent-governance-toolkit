@@ -7,16 +7,12 @@ from __future__ import annotations
 import subprocess
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from agent_os.integrations.scope_guard import (
     ScopeConfig,
-    ScopeEvaluation,
     ScopeGuard,
     _escalate,
     _get_diff_stats,
 )
-
 
 # ── ScopeConfig defaults ──────────────────────────────────────
 
@@ -67,9 +63,11 @@ class TestScopeGuardEvaluate:
     def test_mode_off_always_passes(self):
         cfg = ScopeConfig(max_files=1, max_lines=1, mode="off")
         result = self.guard.evaluate(
-            "agent-1", cfg,
+            "agent-1",
+            cfg,
             changed_files=["a.py", "b.py", "c.py"],
-            insertions=999, deletions=999,
+            insertions=999,
+            deletions=999,
         )
         assert result.decision == "PASS"
         assert "disabled" in result.reason.lower()
@@ -77,9 +75,11 @@ class TestScopeGuardEvaluate:
     def test_within_limits_passes(self):
         cfg = ScopeConfig(max_files=10, max_lines=500)
         result = self.guard.evaluate(
-            "agent-1", cfg,
+            "agent-1",
+            cfg,
             changed_files=["a.py"],
-            insertions=50, deletions=10,
+            insertions=50,
+            deletions=10,
         )
         assert result.decision == "PASS"
         assert result.files_changed == 1
@@ -88,9 +88,11 @@ class TestScopeGuardEvaluate:
     def test_files_exceed_soft_fail(self):
         cfg = ScopeConfig(max_files=2, max_lines=1000)
         result = self.guard.evaluate(
-            "agent-1", cfg,
+            "agent-1",
+            cfg,
             changed_files=["a.py", "b.py", "c.py"],
-            insertions=10, deletions=10,
+            insertions=10,
+            deletions=10,
         )
         assert result.decision == "SOFT_FAIL"
         assert result.excess_files == ["c.py"]
@@ -99,9 +101,11 @@ class TestScopeGuardEvaluate:
         cfg = ScopeConfig(max_files=2, max_lines=1000)
         files = [f"f{i}.py" for i in range(5)]
         result = self.guard.evaluate(
-            "agent-1", cfg,
+            "agent-1",
+            cfg,
             changed_files=files,
-            insertions=10, deletions=10,
+            insertions=10,
+            deletions=10,
         )
         assert result.decision == "HARD_FAIL"
         assert "2× limit" in result.reason
@@ -109,9 +113,11 @@ class TestScopeGuardEvaluate:
     def test_lines_exceed_soft_fail(self):
         cfg = ScopeConfig(max_files=100, max_lines=100)
         result = self.guard.evaluate(
-            "agent-1", cfg,
+            "agent-1",
+            cfg,
             changed_files=["a.py"],
-            insertions=100, deletions=50,
+            insertions=100,
+            deletions=50,
         )
         assert result.decision == "SOFT_FAIL"
         assert result.lines_changed == 150
@@ -119,9 +125,11 @@ class TestScopeGuardEvaluate:
     def test_lines_exceed_hard_fail(self):
         cfg = ScopeConfig(max_files=100, max_lines=100)
         result = self.guard.evaluate(
-            "agent-1", cfg,
+            "agent-1",
+            cfg,
             changed_files=["a.py"],
-            insertions=150, deletions=60,
+            insertions=150,
+            deletions=60,
         )
         assert result.decision == "HARD_FAIL"
         assert result.lines_changed == 210
@@ -130,9 +138,11 @@ class TestScopeGuardEvaluate:
         cfg = ScopeConfig(max_files=10, max_lines=500, drift_detection=True)
         drift = [{"severity": "warning", "type": "scope_creep"}]
         result = self.guard.evaluate(
-            "agent-1", cfg,
+            "agent-1",
+            cfg,
             changed_files=["a.py"],
-            insertions=10, deletions=0,
+            insertions=10,
+            deletions=0,
             drift_indicators=drift,
         )
         assert result.decision == "SOFT_FAIL"
@@ -142,9 +152,11 @@ class TestScopeGuardEvaluate:
         cfg = ScopeConfig(max_files=10, max_lines=500, drift_detection=True)
         drift = [{"severity": "info", "type": "minor"}]
         result = self.guard.evaluate(
-            "agent-1", cfg,
+            "agent-1",
+            cfg,
             changed_files=["a.py"],
-            insertions=10, deletions=0,
+            insertions=10,
+            deletions=0,
             drift_indicators=drift,
         )
         assert result.decision == "PASS"
@@ -153,9 +165,11 @@ class TestScopeGuardEvaluate:
         cfg = ScopeConfig(max_files=10, max_lines=500, drift_detection=False)
         drift = [{"severity": "warning", "type": "scope_creep"}]
         result = self.guard.evaluate(
-            "agent-1", cfg,
+            "agent-1",
+            cfg,
             changed_files=["a.py"],
-            insertions=10, deletions=0,
+            insertions=10,
+            deletions=0,
             drift_indicators=drift,
         )
         assert result.decision == "PASS"
@@ -163,9 +177,11 @@ class TestScopeGuardEvaluate:
     def test_combined_file_and_line_soft_fail(self):
         cfg = ScopeConfig(max_files=2, max_lines=100)
         result = self.guard.evaluate(
-            "agent-1", cfg,
+            "agent-1",
+            cfg,
             changed_files=["a.py", "b.py", "c.py"],
-            insertions=80, deletions=40,
+            insertions=80,
+            deletions=40,
         )
         assert result.decision == "SOFT_FAIL"
         assert "files" in result.reason
@@ -175,27 +191,33 @@ class TestScopeGuardEvaluate:
         cfg = ScopeConfig(max_files=2, max_lines=100)
         files = [f"f{i}.py" for i in range(5)]
         result = self.guard.evaluate(
-            "agent-1", cfg,
+            "agent-1",
+            cfg,
             changed_files=files,
-            insertions=120, deletions=0,
+            insertions=120,
+            deletions=0,
         )
         assert result.decision == "HARD_FAIL"
 
     def test_max_files_zero_disables_file_check(self):
         cfg = ScopeConfig(max_files=0, max_lines=500)
         result = self.guard.evaluate(
-            "agent-1", cfg,
+            "agent-1",
+            cfg,
             changed_files=["a.py"] * 100,
-            insertions=10, deletions=0,
+            insertions=10,
+            deletions=0,
         )
         assert result.decision == "PASS"
 
     def test_max_lines_zero_disables_line_check(self):
         cfg = ScopeConfig(max_files=10, max_lines=0)
         result = self.guard.evaluate(
-            "agent-1", cfg,
+            "agent-1",
+            cfg,
             changed_files=["a.py"],
-            insertions=99999, deletions=99999,
+            insertions=99999,
+            deletions=99999,
         )
         assert result.decision == "PASS"
 
@@ -243,7 +265,8 @@ class TestGetDiffStats:
     @patch("agent_os.integrations.scope_guard.subprocess.run")
     def test_parses_numstat(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0,
+            args=[],
+            returncode=0,
             stdout="10\t5\tsrc/main.py\n20\t3\tsrc/util.py\n",
         )
         files, ins, dels = _get_diff_stats("/repo", "main")
@@ -254,7 +277,8 @@ class TestGetDiffStats:
     @patch("agent_os.integrations.scope_guard.subprocess.run")
     def test_handles_binary_dashes(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0,
+            args=[],
+            returncode=0,
             stdout="-\t-\timage.png\n",
         )
         files, ins, dels = _get_diff_stats("/repo")
@@ -265,7 +289,9 @@ class TestGetDiffStats:
     @patch("agent_os.integrations.scope_guard.subprocess.run")
     def test_empty_output(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="",
+            args=[],
+            returncode=0,
+            stdout="",
         )
         files, ins, dels = _get_diff_stats("/repo")
         assert files == []

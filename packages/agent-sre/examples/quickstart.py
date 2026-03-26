@@ -11,10 +11,9 @@ Run:
 import random
 
 from agent_sre import SLO, ErrorBudget
-from agent_sre.slo.indicators import TaskSuccessRate, CostPerTask, HallucinationRate
-from agent_sre.slo.dashboard import SLODashboard
 from agent_sre.cost.guard import CostGuard
 from agent_sre.incidents.detector import IncidentDetector, Signal, SignalType
+from agent_sre.slo.indicators import CostPerTask, HallucinationRate, TaskSuccessRate
 
 # ── 1. Define what "reliable" means for your agent ──────────────────────
 
@@ -86,7 +85,9 @@ print()
 # Cost summary
 print(f"Cost Today:          ${guard.org_spent_month:.2f} / ${guard.org_monthly_budget:.2f}")
 budget_info = guard.get_budget("my-assistant")
-print(f"Agent Budget Left:   ${budget_info.remaining_today_usd:.2f} / ${budget_info.daily_limit_usd:.2f}")
+print(
+    f"Agent Budget Left:   ${budget_info.remaining_today_usd:.2f} / ${budget_info.daily_limit_usd:.2f}"
+)
 print()
 
 # Check for SLO breaches

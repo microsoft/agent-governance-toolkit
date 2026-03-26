@@ -66,9 +66,7 @@ class SharedPolicyRule:
 
     def __post_init__(self) -> None:
         if self.action not in VALID_ACTIONS:
-            raise ValueError(
-                f"Invalid action '{self.action}', must be one of {VALID_ACTIONS}"
-            )
+            raise ValueError(f"Invalid action '{self.action}', must be one of {VALID_ACTIONS}")
 
 
 # ---------------------------------------------------------------------------
@@ -88,9 +86,7 @@ class SharedPolicySchema(BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         if self.scope not in VALID_SCOPES:
-            raise ValueError(
-                f"Invalid scope '{self.scope}', must be one of {VALID_SCOPES}"
-            )
+            raise ValueError(f"Invalid scope '{self.scope}', must be one of {VALID_SCOPES}")
 
     def parsed_rules(self) -> list[SharedPolicyRule]:
         """Deserialize raw rule dicts into SharedPolicyRule objects."""
@@ -278,9 +274,7 @@ def shared_to_policy_document(schema: SharedPolicySchema) -> PolicyDocument:
                 name=rule.id,
                 condition=PolicyCondition(
                     field=first_cond.field,
-                    operator=_OPERATOR_MAP_TO_POLICY.get(
-                        first_cond.operator, PolicyOperator.EQ
-                    ),
+                    operator=_OPERATOR_MAP_TO_POLICY.get(first_cond.operator, PolicyOperator.EQ),
                     value=first_cond.value,
                 ),
                 action=_ACTION_MAP_TO_POLICY.get(rule.action, PolicyAction.DENY),
@@ -313,9 +307,7 @@ def policy_document_to_shared(
                 "conditions": [
                     {
                         "field": cond.field,
-                        "operator": _OPERATOR_MAP_FROM_POLICY.get(
-                            cond.operator, "eq"
-                        ),
+                        "operator": _OPERATOR_MAP_FROM_POLICY.get(cond.operator, "eq"),
                         "value": cond.value,
                     }
                 ],

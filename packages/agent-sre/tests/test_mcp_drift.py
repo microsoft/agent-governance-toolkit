@@ -6,7 +6,6 @@ Tests for MCP Tool Drift Detection.
 Covers: ToolSchema, ToolSnapshot, DriftDetector, DriftAlert, DriftReport.
 """
 
-
 from agent_sre.integrations.mcp import (
     DriftDetector,
     DriftSeverity,
@@ -113,9 +112,14 @@ class TestDriftDetector:
 
     def test_tool_removed(self):
         d = DriftDetector()
-        d.set_baseline(self._make_snapshot(tools=[
-            ToolSchema(name="search"), ToolSchema(name="calc"),
-        ]))
+        d.set_baseline(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(name="search"),
+                    ToolSchema(name="calc"),
+                ]
+            )
+        )
         report = d.compare(self._make_snapshot(tools=[ToolSchema(name="search")]))
         assert report.has_drift
         assert report.critical_count >= 1
@@ -126,9 +130,14 @@ class TestDriftDetector:
     def test_tool_added(self):
         d = DriftDetector()
         d.set_baseline(self._make_snapshot(tools=[ToolSchema(name="search")]))
-        report = d.compare(self._make_snapshot(tools=[
-            ToolSchema(name="search"), ToolSchema(name="new_tool"),
-        ]))
+        report = d.compare(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(name="search"),
+                    ToolSchema(name="new_tool"),
+                ]
+            )
+        )
         assert report.has_drift
         added = [a for a in report.alerts if a.drift_type == DriftType.TOOL_ADDED]
         assert len(added) == 1
@@ -136,12 +145,20 @@ class TestDriftDetector:
 
     def test_description_changed(self):
         d = DriftDetector()
-        d.set_baseline(self._make_snapshot(tools=[
-            ToolSchema(name="search", description="v1"),
-        ]))
-        report = d.compare(self._make_snapshot(tools=[
-            ToolSchema(name="search", description="v2"),
-        ]))
+        d.set_baseline(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(name="search", description="v1"),
+                ]
+            )
+        )
+        report = d.compare(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(name="search", description="v2"),
+                ]
+            )
+        )
         assert report.has_drift
         desc = [a for a in report.alerts if a.drift_type == DriftType.DESCRIPTION_CHANGED]
         assert len(desc) == 1
@@ -149,15 +166,23 @@ class TestDriftDetector:
 
     def test_parameter_added(self):
         d = DriftDetector()
-        d.set_baseline(self._make_snapshot(tools=[
-            ToolSchema(name="search", parameters={"q": {"type": "string"}}),
-        ]))
-        report = d.compare(self._make_snapshot(tools=[
-            ToolSchema(
-                name="search",
-                parameters={"q": {"type": "string"}, "limit": {"type": "number"}},
-            ),
-        ]))
+        d.set_baseline(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(name="search", parameters={"q": {"type": "string"}}),
+                ]
+            )
+        )
+        report = d.compare(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(
+                        name="search",
+                        parameters={"q": {"type": "string"}, "limit": {"type": "number"}},
+                    ),
+                ]
+            )
+        )
         assert report.has_drift
         added = [a for a in report.alerts if a.drift_type == DriftType.PARAMETER_ADDED]
         assert len(added) == 1
@@ -165,68 +190,118 @@ class TestDriftDetector:
 
     def test_required_parameter_added_is_critical(self):
         d = DriftDetector()
-        d.set_baseline(self._make_snapshot(tools=[
-            ToolSchema(name="search", parameters={"q": {"type": "string"}}, required=["q"]),
-        ]))
-        report = d.compare(self._make_snapshot(tools=[
-            ToolSchema(
-                name="search",
-                parameters={"q": {"type": "string"}, "api_key": {"type": "string"}},
-                required=["q", "api_key"],
-            ),
-        ]))
+        d.set_baseline(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(name="search", parameters={"q": {"type": "string"}}, required=["q"]),
+                ]
+            )
+        )
+        report = d.compare(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(
+                        name="search",
+                        parameters={"q": {"type": "string"}, "api_key": {"type": "string"}},
+                        required=["q", "api_key"],
+                    ),
+                ]
+            )
+        )
         critical_params = [
-            a for a in report.alerts
+            a
+            for a in report.alerts
             if a.drift_type == DriftType.PARAMETER_ADDED and a.severity == DriftSeverity.CRITICAL
         ]
         assert len(critical_params) >= 1
 
     def test_parameter_removed(self):
         d = DriftDetector()
-        d.set_baseline(self._make_snapshot(tools=[
-            ToolSchema(name="search", parameters={"q": {"type": "string"}, "limit": {"type": "number"}}),
-        ]))
-        report = d.compare(self._make_snapshot(tools=[
-            ToolSchema(name="search", parameters={"q": {"type": "string"}}),
-        ]))
+        d.set_baseline(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(
+                        name="search",
+                        parameters={"q": {"type": "string"}, "limit": {"type": "number"}},
+                    ),
+                ]
+            )
+        )
+        report = d.compare(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(name="search", parameters={"q": {"type": "string"}}),
+                ]
+            )
+        )
         removed = [a for a in report.alerts if a.drift_type == DriftType.PARAMETER_REMOVED]
         assert len(removed) == 1
         assert removed[0].severity == DriftSeverity.CRITICAL
 
     def test_type_changed(self):
         d = DriftDetector()
-        d.set_baseline(self._make_snapshot(tools=[
-            ToolSchema(name="calc", parameters={"x": {"type": "string"}}),
-        ]))
-        report = d.compare(self._make_snapshot(tools=[
-            ToolSchema(name="calc", parameters={"x": {"type": "number"}}),
-        ]))
+        d.set_baseline(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(name="calc", parameters={"x": {"type": "string"}}),
+                ]
+            )
+        )
+        report = d.compare(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(name="calc", parameters={"x": {"type": "number"}}),
+                ]
+            )
+        )
         type_changes = [a for a in report.alerts if a.drift_type == DriftType.TYPE_CHANGED]
         assert len(type_changes) == 1
         assert type_changes[0].severity == DriftSeverity.CRITICAL
 
     def test_required_changed(self):
         d = DriftDetector()
-        d.set_baseline(self._make_snapshot(tools=[
-            ToolSchema(name="search", parameters={"q": {}, "limit": {}}, required=["q"]),
-        ]))
-        report = d.compare(self._make_snapshot(tools=[
-            ToolSchema(name="search", parameters={"q": {}, "limit": {}}, required=["q", "limit"]),
-        ]))
+        d.set_baseline(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(name="search", parameters={"q": {}, "limit": {}}, required=["q"]),
+                ]
+            )
+        )
+        report = d.compare(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(
+                        name="search", parameters={"q": {}, "limit": {}}, required=["q", "limit"]
+                    ),
+                ]
+            )
+        )
         req_changes = [a for a in report.alerts if a.drift_type == DriftType.REQUIRED_CHANGED]
         assert len(req_changes) == 1
 
     def test_multiple_changes(self):
         d = DriftDetector()
-        d.set_baseline(self._make_snapshot(tools=[
-            ToolSchema(name="search", description="v1", parameters={"q": {"type": "string"}}),
-            ToolSchema(name="calc"),
-        ]))
-        report = d.compare(self._make_snapshot(tools=[
-            ToolSchema(name="search", description="v2", parameters={"q": {"type": "number"}}),
-            # calc removed, new_tool added
-            ToolSchema(name="new_tool"),
-        ]))
+        d.set_baseline(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(
+                        name="search", description="v1", parameters={"q": {"type": "string"}}
+                    ),
+                    ToolSchema(name="calc"),
+                ]
+            )
+        )
+        report = d.compare(
+            self._make_snapshot(
+                tools=[
+                    ToolSchema(
+                        name="search", description="v2", parameters={"q": {"type": "number"}}
+                    ),
+                    # calc removed, new_tool added
+                    ToolSchema(name="new_tool"),
+                ]
+            )
+        )
         assert report.has_drift
         assert len(report.alerts) >= 3  # description, type, removed, added
 

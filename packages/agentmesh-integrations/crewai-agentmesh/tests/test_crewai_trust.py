@@ -4,8 +4,6 @@ Tests for CrewAI AgentMesh trust integration.
 No real CrewAI dependency — tests the trust layer directly.
 """
 
-import pytest
-
 from crewai_agentmesh import (
     AgentProfile,
     CapabilityGate,
@@ -144,10 +142,31 @@ class TestTrustTracker:
 class TestTrustedCrew:
     def _make_crew(self):
         agents = [
-            AgentProfile(did="d1", name="Researcher", capabilities=["research", "analysis"], trust_score=800),
-            AgentProfile(did="d2", name="Writer", capabilities=["writing", "editing"], trust_score=700),
-            AgentProfile(did="d3", name="Coder", capabilities=["coding", "testing"], trust_score=300),
-            AgentProfile(did="d4", name="Suspended", capabilities=["research"], trust_score=900, status="suspended"),
+            AgentProfile(
+                did="d1",
+                name="Researcher",
+                capabilities=["research", "analysis"],
+                trust_score=800,
+            ),
+            AgentProfile(
+                did="d2",
+                name="Writer",
+                capabilities=["writing", "editing"],
+                trust_score=700,
+            ),
+            AgentProfile(
+                did="d3",
+                name="Coder",
+                capabilities=["coding", "testing"],
+                trust_score=300,
+            ),
+            AgentProfile(
+                did="d4",
+                name="Suspended",
+                capabilities=["research"],
+                trust_score=900,
+                status="suspended",
+            ),
         ]
         return TrustedCrew(agents=agents, min_trust_score=500)
 
@@ -161,7 +180,9 @@ class TestTrustedCrew:
 
     def test_trusted_agents(self):
         crew = self._make_crew()
-        assert len(crew.trusted_agents) == 2  # Researcher + Writer (Coder too low, Suspended inactive)
+        assert (
+            len(crew.trusted_agents) == 2
+        )  # Researcher + Writer (Coder too low, Suspended inactive)
 
     def test_select_by_capability(self):
         crew = self._make_crew()
@@ -239,11 +260,15 @@ class TestTrustedCrew:
 
     def test_record_task_result(self):
         crew = self._make_crew()
-        new_score = crew.record_task_result("d1", success=True, task_description="analysis")
+        new_score = crew.record_task_result(
+            "d1", success=True, task_description="analysis"
+        )
         assert new_score is not None
         assert new_score > 800  # Rewarded
 
-        new_score = crew.record_task_result("d2", success=False, task_description="writing", reason="timeout")
+        new_score = crew.record_task_result(
+            "d2", success=False, task_description="writing", reason="timeout"
+        )
         assert new_score is not None
         assert new_score < 700  # Penalized
 
@@ -272,8 +297,15 @@ class TestIntegration:
         """Simulate a full crew run: select → assign → execute → track trust."""
         crew = TrustedCrew(
             agents=[
-                AgentProfile(did="d1", name="Researcher", capabilities=["research"], trust_score=600),
-                AgentProfile(did="d2", name="Writer", capabilities=["writing"], trust_score=600),
+                AgentProfile(
+                    did="d1",
+                    name="Researcher",
+                    capabilities=["research"],
+                    trust_score=600,
+                ),
+                AgentProfile(
+                    did="d2", name="Writer", capabilities=["writing"], trust_score=600
+                ),
             ],
             min_trust_score=500,
         )
@@ -287,7 +319,9 @@ class TestIntegration:
         assert assignment.allowed
 
         # Execute (success)
-        crew.record_task_result("d1", success=True, task_description="Analyze market trends")
+        crew.record_task_result(
+            "d1", success=True, task_description="Analyze market trends"
+        )
         assert crew.get_agent("d1").trust_score > 600
 
         # Assign writing task to researcher (should fail)
@@ -295,7 +329,9 @@ class TestIntegration:
         assert not assignment.allowed
 
         # Writer fails a task
-        crew.record_task_result("d2", success=False, task_description="Draft blog", reason="poor quality")
+        crew.record_task_result(
+            "d2", success=False, task_description="Draft blog", reason="poor quality"
+        )
         assert crew.get_agent("d2").trust_score < 600
 
         # After many failures, writer might drop below threshold
@@ -305,5 +341,20 @@ class TestIntegration:
         assert len(crew.trusted_agents) == 1  # Only researcher
 
     def test_imports(self):
-        from crewai_agentmesh import AgentProfile, TrustedCrew, TrustTracker, CapabilityGate, TaskAssignment
-        assert all(cls is not None for cls in [AgentProfile, TrustedCrew, TrustTracker, CapabilityGate, TaskAssignment])
+        from crewai_agentmesh import (
+            AgentProfile,
+            TrustedCrew,
+            TrustTracker,
+            CapabilityGate,
+        )
+
+        assert all(
+            cls is not None
+            for cls in [
+                AgentProfile,
+                TrustedCrew,
+                TrustTracker,
+                CapabilityGate,
+                TaskAssignment,
+            ]
+        )

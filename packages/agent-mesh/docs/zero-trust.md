@@ -6,7 +6,7 @@ AgentMesh implements zero-trust principles for agent-to-agent communication. Thi
 
 Zero-trust assumes that **no agent, message, or connection should be implicitly trusted**, regardless of whether it originates from inside or outside the network boundary. Every interaction must be verified.
 
-Traditional security: "Trust but verify"  
+Traditional security: "Trust but verify"
 Zero-trust security: "**Never trust, always verify**"
 
 ## Zero-Trust Principles in AgentMesh
@@ -106,19 +106,19 @@ Every agent has a dynamic trust score based on behavior:
 ```python
 class TrustScore:
     """Trust score calculated from agent behavior."""
-    
+
     base_score: float = 0.5  # Start neutral
-    
+
     # Factors that increase trust
     successful_interactions: int
     policy_compliance_rate: float
     uptime: timedelta
-    
+
     # Factors that decrease trust
     policy_violations: int
     anomalous_behavior_count: int
     failed_authentications: int
-    
+
     def calculate(self) -> float:
         """Calculate current trust score (0.0 - 1.0)."""
         score = self.base_score
@@ -202,19 +202,19 @@ Enable zero-trust features in your AgentMesh configuration:
 security:
   zero_trust:
     enabled: true
-    
+
   identity:
     require_did: true
     did_method: "agentmesh"
-    
+
   tls:
     mtls_required: true
     min_tls_version: "1.3"
-    
+
   verification:
     continuous: true
     session_ttl_seconds: 300
-    
+
   segmentation:
     enabled: true
     default_segment: "internal"

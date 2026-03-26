@@ -126,7 +126,7 @@ python examples/example.py
   - Applies appropriate metrics for each conversation type
   - See [INTENT_DETECTION.md](docs/INTENT_DETECTION.md) for detailed documentation
 - **Silent Signals**: Implicit feedback mechanism that captures user friction
-  - **Undo Signal** (Critical Failure): User reverses agent action (Ctrl+Z, revert) 
+  - **Undo Signal** (Critical Failure): User reverses agent action (Ctrl+Z, revert)
   - **Abandonment Signal** (Loss): User stops responding mid-workflow
   - **Acceptance Signal** (Success): User moves to next task without follow-up
   - Eliminates blind spot of relying solely on explicit feedback
@@ -332,20 +332,20 @@ class PolymorphicDoerAgent(DoerAgent):
         super().__init__(*args, **kwargs)
         self.poly_engine = PolymorphicOutputEngine()
         self.ui_engine = GenerativeUIEngine()
-    
+
     def run_polymorphic(self, query, input_context, **kwargs):
         # Run standard agent
         result = self.run(query, **kwargs)
-        
+
         # Generate polymorphic response
         poly_response = self.poly_engine.generate_response(
             data=result['response'],
             input_context=input_context
         )
-        
+
         # Generate UI component
         ui_component = self.ui_engine.render(poly_response)
-        
+
         return {
             **result,
             'polymorphic_response': poly_response,
@@ -827,8 +827,8 @@ Manual usage:
 
 ```python
 from evaluation_engineering import (
-    EvaluationDataset, 
-    ScoringRubric, 
+    EvaluationDataset,
+    ScoringRubric,
     EvaluationRunner
 )
 

@@ -9,26 +9,27 @@ including resource quotas, access controls, and risk management.
 
 Research Foundations:
     - ABAC model based on NIST SP 800-162 (Attribute-Based Access Control)
-    - Risk scoring informed by "A Safety Framework for Real-World Agentic Systems" 
+    - Risk scoring informed by "A Safety Framework for Real-World Agentic Systems"
       (arXiv:2511.21990, 2024) - contextual risk management
-    - Governance patterns from "Practices for Governing Agentic AI Systems" 
+    - Governance patterns from "Practices for Governing Agentic AI Systems"
       (OpenAI, 2023) - pre/post-deployment checks
-    - Rate limiting patterns from "Fault-Tolerant Multi-Agent Systems" 
+    - Rate limiting patterns from "Fault-Tolerant Multi-Agent Systems"
       (IEEE Trans. SMC, 2024) - circuit breaker patterns
 
 See docs/RESEARCH_FOUNDATION.md for complete references.
 """
 
-from typing import Dict, List, Optional, Callable, Any, Tuple
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from types import MappingProxyType  # noqa: F401 — reserved for future immutable dict enforcement
-from .agent_kernel import ExecutionRequest, ActionType, PolicyRule
 import logging
-import uuid
 import os
 import re
+import uuid
 import warnings
+from dataclasses import dataclass, field
+from datetime import datetime
+from types import MappingProxyType  # noqa: F401 — reserved for future immutable dict enforcement
+from typing import Any, Dict, List, Optional, Tuple
+
+from .agent_kernel import ActionType, ExecutionRequest, PolicyRule
 
 logger = logging.getLogger(__name__)
 
@@ -252,8 +253,10 @@ class PolicyEngine:
             {k: frozenset(v) for k, v in self.state_permissions.items()}
         )
         self.agent_contexts = MappingProxyType(
-            {k: MappingProxyType(v) if isinstance(v, dict) else v
-             for k, v in self.agent_contexts.items()}
+            {
+                k: MappingProxyType(v) if isinstance(v, dict) else v
+                for k, v in self.agent_contexts.items()
+            }
         )
         self.conditional_permissions = MappingProxyType(
             {k: tuple(v) for k, v in self.conditional_permissions.items()}
@@ -280,9 +283,7 @@ class PolicyEngine:
                 "blocked": True,
             }
             self._mutation_log.append(violation)
-            logger.warning(
-                "Blocked mutation '%s' on frozen PolicyEngine", operation
-            )
+            logger.warning("Blocked mutation '%s' on frozen PolicyEngine", operation)
             raise RuntimeError(
                 f"PolicyEngine is frozen — cannot perform '{operation}'. "
                 "Call freeze() is irreversible to prevent runtime self-modification."
@@ -290,12 +291,14 @@ class PolicyEngine:
 
     def _log_mutation(self, operation: str, details: Dict[str, Any]) -> None:
         """Record a mutation in the audit log."""
-        self._mutation_log.append({
-            "operation": operation,
-            "details": details,
-            "timestamp": datetime.now().isoformat(),
-            "blocked": False,
-        })
+        self._mutation_log.append(
+            {
+                "operation": operation,
+                "details": details,
+                "timestamp": datetime.now().isoformat(),
+                "blocked": False,
+            }
+        )
 
     def set_quota(self, agent_id: str, quota: ResourceQuota):
         """Set resource quota for an agent"""
@@ -484,10 +487,14 @@ class PolicyEngine:
         if tool_name in ["database_query", "database_write"]:
             query = args.get("query", "")
             destructive_patterns = [
-                r"\bDROP\s+", r"\bDELETE\s+FROM\b", r"\bTRUNCATE\s+",
-                r"\bALTER\s+TABLE\b.*\bDROP\b", r"\bUPDATE\s+.*\bSET\b.*\bWHERE\s+1\s*=\s*1",
+                r"\bDROP\s+",
+                r"\bDELETE\s+FROM\b",
+                r"\bTRUNCATE\s+",
+                r"\bALTER\s+TABLE\b.*\bDROP\b",
+                r"\bUPDATE\s+.*\bSET\b.*\bWHERE\s+1\s*=\s*1",
             ]
             import re as _re
+
             for pat in destructive_patterns:
                 if _re.search(pat, query, _re.IGNORECASE):
                     return f"Destructive SQL blocked: {pat}"
@@ -620,24 +627,41 @@ class SQLPolicyConfig:
         blocked_patterns: Regex patterns for vendor-specific blocking.
         disclaimer: Disclaimer text shown in logs.
     """
-    blocked_statements: List[str] = field(default_factory=lambda: [
-        "DROP", "TRUNCATE", "ALTER", "GRANT", "REVOKE", "MERGE",
-    ])
-    require_where_clause: List[str] = field(default_factory=lambda: [
-        "DELETE", "UPDATE",
-    ])
-    blocked_create_types: List[str] = field(default_factory=lambda: [
-        "USER", "ROLE", "LOGIN",
-    ])
-    blocked_patterns: List[str] = field(default_factory=lambda: [
-        r'\bEXEC(UTE)?\s+XP_CMDSHELL\b',
-        r'\bEXEC(UTE)?\s+SP_CONFIGURE\b',
-        r'\bEXEC(UTE)?\s+SP_ADDROLEMEMBER\b',
-        r'\bLOAD_FILE\s*\(',
-        r'\bINTO\s+(OUT|DUMP)FILE\b',
-        r'\bLOAD\s+DATA\b',
-        r'\bMERGE\s+INTO\b',
-    ])
+
+    blocked_statements: List[str] = field(
+        default_factory=lambda: [
+            "DROP",
+            "TRUNCATE",
+            "ALTER",
+            "GRANT",
+            "REVOKE",
+            "MERGE",
+        ]
+    )
+    require_where_clause: List[str] = field(
+        default_factory=lambda: [
+            "DELETE",
+            "UPDATE",
+        ]
+    )
+    blocked_create_types: List[str] = field(
+        default_factory=lambda: [
+            "USER",
+            "ROLE",
+            "LOGIN",
+        ]
+    )
+    blocked_patterns: List[str] = field(
+        default_factory=lambda: [
+            r"\bEXEC(UTE)?\s+XP_CMDSHELL\b",
+            r"\bEXEC(UTE)?\s+SP_CONFIGURE\b",
+            r"\bEXEC(UTE)?\s+SP_ADDROLEMEMBER\b",
+            r"\bLOAD_FILE\s*\(",
+            r"\bINTO\s+(OUT|DUMP)FILE\b",
+            r"\bLOAD\s+DATA\b",
+            r"\bMERGE\s+INTO\b",
+        ]
+    )
     disclaimer: str = ""
 
 
@@ -664,13 +688,11 @@ def load_sql_policy_config(path: str) -> SQLPolicyConfig:
     if not os.path.exists(path):
         raise FileNotFoundError(f"SQL policy config not found: {path}")
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f.read())
 
     if not isinstance(data, dict) or "sql_policy" not in data:
-        raise ValueError(
-            f"YAML file must contain a 'sql_policy' section: {path}"
-        )
+        raise ValueError(f"YAML file must contain a 'sql_policy' section: {path}")
 
     sp = data["sql_policy"]
     return SQLPolicyConfig(
@@ -694,40 +716,42 @@ def _fallback_sql_check(query: str, config: Optional[SQLPolicyConfig] = None) ->
 
     query_upper = query.upper()
     # Remove comments to prevent bypass
-    query_clean = re.sub(r'/\*.*?\*/', '', query_upper, flags=re.DOTALL)
-    query_clean = re.sub(r'--.*$', '', query_clean, flags=re.MULTILINE)
+    query_clean = re.sub(r"/\*.*?\*/", "", query_upper, flags=re.DOTALL)
+    query_clean = re.sub(r"--.*$", "", query_clean, flags=re.MULTILINE)
 
     # Build patterns dynamically from config
     patterns: List[str] = []
 
     for stmt in config.blocked_statements:
         if stmt == "DROP":
-            patterns.append(r'\bDROP\s+(TABLE|DATABASE|INDEX|VIEW|SCHEMA|PROCEDURE|FUNCTION|TRIGGER)\b')
+            patterns.append(
+                r"\bDROP\s+(TABLE|DATABASE|INDEX|VIEW|SCHEMA|PROCEDURE|FUNCTION|TRIGGER)\b"
+            )
         elif stmt == "TRUNCATE":
-            patterns.append(r'\bTRUNCATE\s+(TABLE\s+)?\w+')
+            patterns.append(r"\bTRUNCATE\s+(TABLE\s+)?\w+")
         elif stmt == "ALTER":
-            patterns.append(r'\bALTER\s+(TABLE|DATABASE|SCHEMA)\b')
+            patterns.append(r"\bALTER\s+(TABLE|DATABASE|SCHEMA)\b")
         elif stmt == "GRANT":
-            patterns.append(r'\bGRANT\b')
+            patterns.append(r"\bGRANT\b")
         elif stmt == "REVOKE":
-            patterns.append(r'\bREVOKE\b')
+            patterns.append(r"\bREVOKE\b")
         elif stmt == "MERGE":
-            patterns.append(r'\bMERGE\s+INTO\b')
+            patterns.append(r"\bMERGE\s+INTO\b")
         elif stmt == "INSERT":
-            patterns.append(r'\bINSERT\s+INTO\b')
+            patterns.append(r"\bINSERT\s+INTO\b")
         elif stmt in ("UPDATE", "DELETE"):
-            patterns.append(rf'\b{stmt}\b')
+            patterns.append(rf"\b{stmt}\b")
 
     for stmt in config.require_where_clause:
         if stmt == "DELETE":
-            patterns.append(r'\bDELETE\s+FROM\s+\w+\s*(;|$)')
+            patterns.append(r"\bDELETE\s+FROM\s+\w+\s*(;|$)")
         elif stmt == "UPDATE":
-            patterns.append(r'\bUPDATE\s+\w+\s+SET\b(?!.*\bWHERE\b)')
+            patterns.append(r"\bUPDATE\s+\w+\s+SET\b(?!.*\bWHERE\b)")
 
     for ct in config.blocked_create_types:
-        patterns.append(rf'\bCREATE\s+{ct}\b')
-        patterns.append(rf'\bALTER\s+{ct}\b')
-        patterns.append(rf'\bDROP\s+{ct}\b')
+        patterns.append(rf"\bCREATE\s+{ct}\b")
+        patterns.append(rf"\bALTER\s+{ct}\b")
+        patterns.append(rf"\bDROP\s+{ct}\b")
 
     patterns.extend(config.blocked_patterns)
 
@@ -791,7 +815,6 @@ def create_default_policies() -> List[PolicyRule]:
 
 
 def _build_policy_rules(sql_config: SQLPolicyConfig) -> List[PolicyRule]:
-
     def no_system_file_access(request: ExecutionRequest) -> bool:
         """Prevent access to system files"""
         if request.action_type in [ActionType.FILE_READ, ActionType.FILE_WRITE]:
@@ -810,7 +833,7 @@ def _build_policy_rules(sql_config: SQLPolicyConfig) -> List[PolicyRule]:
     def no_destructive_sql(request: ExecutionRequest) -> bool:
         """
         Prevent destructive SQL operations using AST-level parsing.
-        
+
         Uses sqlglot for proper SQL parsing to detect:
         - DROP TABLE/DATABASE/INDEX/VIEW/USER/ROLE statements
         - TRUNCATE statements
@@ -822,7 +845,7 @@ def _build_policy_rules(sql_config: SQLPolicyConfig) -> List[PolicyRule]:
         - EXEC/EXECUTE xp_cmdshell and other dangerous procedures
         - MERGE INTO statements
         - Dangerous file functions (LOAD_FILE, INTO OUTFILE)
-        
+
         This prevents bypass attempts like:
         - Keywords in comments: /* DROP */ SELECT ...
         - Keywords in strings: SELECT 'DROP TABLE'
@@ -908,11 +931,11 @@ def _build_policy_rules(sql_config: SQLPolicyConfig) -> List[PolicyRule]:
                 # Check for EXEC xp_cmdshell and other dangerous procs
                 # in the full SQL text of the statement
                 stmt_sql = statement.sql().upper()
-                if re.search(r'\bEXEC(UTE)?\s+XP_CMDSHELL\b', stmt_sql):
+                if re.search(r"\bEXEC(UTE)?\s+XP_CMDSHELL\b", stmt_sql):
                     return False
-                if re.search(r'\bEXEC(UTE)?\s+SP_CONFIGURE\b', stmt_sql):
+                if re.search(r"\bEXEC(UTE)?\s+SP_CONFIGURE\b", stmt_sql):
                     return False
-                if re.search(r'\bEXEC(UTE)?\s+SP_ADDROLEMEMBER\b', stmt_sql):
+                if re.search(r"\bEXEC(UTE)?\s+SP_ADDROLEMEMBER\b", stmt_sql):
                     return False
 
             return True

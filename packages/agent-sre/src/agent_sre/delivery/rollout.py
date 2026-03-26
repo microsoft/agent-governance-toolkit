@@ -187,19 +187,25 @@ class ShadowResult:
     def avg_similarity(self) -> float:
         if not self.comparisons:
             return 0.0
-        return sum(comparison.similarity_score for comparison in self.comparisons) / len(self.comparisons)
+        return sum(comparison.similarity_score for comparison in self.comparisons) / len(
+            self.comparisons
+        )
 
     @property
     def avg_latency_delta_ms(self) -> float:
         if not self.comparisons:
             return 0.0
-        return sum(comparison.latency_delta_ms for comparison in self.comparisons) / len(self.comparisons)
+        return sum(comparison.latency_delta_ms for comparison in self.comparisons) / len(
+            self.comparisons
+        )
 
     @property
     def avg_cost_delta_usd(self) -> float:
         if not self.comparisons:
             return 0.0
-        return sum(comparison.cost_delta_usd for comparison in self.comparisons) / len(self.comparisons)
+        return sum(comparison.cost_delta_usd for comparison in self.comparisons) / len(
+            self.comparisons
+        )
 
     @property
     def confidence_score(self) -> float:
@@ -209,7 +215,9 @@ class ShadowResult:
         factors = [
             self.match_rate,
             self.avg_similarity,
-            1.0 if self.avg_latency_delta_ms <= 0 else max(0.0, 1.0 - self.avg_latency_delta_ms / 5000),
+            1.0
+            if self.avg_latency_delta_ms <= 0
+            else max(0.0, 1.0 - self.avg_latency_delta_ms / 5000),
             1.0 if self.avg_cost_delta_usd <= 0 else max(0.0, 1.0 - self.avg_cost_delta_usd / 1.0),
         ]
         return sum(factors) / len(factors)
@@ -546,11 +554,13 @@ class CanaryRollout:
         details: dict[str, Any] | None = None,
     ) -> None:
         idx = step_index if step_index >= 0 else self.current_step_index
-        self.events.append(RolloutEvent(
-            event_type=event_type,
-            step_index=idx,
-            details=details or {},
-        ))
+        self.events.append(
+            RolloutEvent(
+                event_type=event_type,
+                step_index=idx,
+                details=details or {},
+            )
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {

@@ -59,9 +59,7 @@ class GovernanceMetrics:
                 self.approvals += 1
             else:
                 self.violations += 1
-                self._adapter_violations[adapter] = (
-                    self._adapter_violations.get(adapter, 0) + 1
-                )
+                self._adapter_violations[adapter] = self._adapter_violations.get(adapter, 0) + 1
 
     def record_violation(self, adapter: str) -> None:
         """Record a standalone policy violation.
@@ -71,9 +69,7 @@ class GovernanceMetrics:
         """
         with self._lock:
             self.violations += 1
-            self._adapter_violations[adapter] = (
-                self._adapter_violations.get(adapter, 0) + 1
-            )
+            self._adapter_violations[adapter] = self._adapter_violations.get(adapter, 0) + 1
 
     def record_blocked(self, adapter: str) -> None:
         """Record a blocked tool call.
@@ -83,9 +79,7 @@ class GovernanceMetrics:
         """
         with self._lock:
             self.blocked += 1
-            self._adapter_blocked[adapter] = (
-                self._adapter_blocked.get(adapter, 0) + 1
-            )
+            self._adapter_blocked[adapter] = self._adapter_blocked.get(adapter, 0) + 1
 
     def snapshot(self) -> dict:
         """Return a JSON-serializable snapshot of all metrics.

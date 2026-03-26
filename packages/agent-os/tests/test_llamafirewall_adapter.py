@@ -18,10 +18,10 @@ from agent_os.integrations.llamafirewall import (
 )
 from agent_os.prompt_injection import DetectionConfig, DetectionResult, ThreatLevel
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _run_async(coro):
     """Run an async coroutine synchronously."""
@@ -53,6 +53,7 @@ def _mock_llama_module(verdict="safe", score=0.0):
 # FirewallMode enum
 # ---------------------------------------------------------------------------
 
+
 class TestFirewallMode:
     def test_all_modes_exist(self):
         assert FirewallMode.LLAMAFIREWALL_ONLY.value == "llamafirewall_only"
@@ -68,6 +69,7 @@ class TestFirewallMode:
 # FirewallVerdict enum
 # ---------------------------------------------------------------------------
 
+
 class TestFirewallVerdict:
     def test_all_verdicts_exist(self):
         assert FirewallVerdict.SAFE.value == "safe"
@@ -82,6 +84,7 @@ class TestFirewallVerdict:
 # ---------------------------------------------------------------------------
 # FirewallResult dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestFirewallResult:
     def test_fields_populated(self):
@@ -102,8 +105,10 @@ class TestFirewallResult:
 
     def test_all_optional_fields(self):
         aos = DetectionResult(
-            is_injection=False, threat_level=ThreatLevel.NONE,
-            injection_type=None, confidence=0.0,
+            is_injection=False,
+            threat_level=ThreatLevel.NONE,
+            injection_type=None,
+            confidence=0.0,
         )
         result = FirewallResult(
             verdict=FirewallVerdict.BLOCKED,
@@ -124,6 +129,7 @@ class TestFirewallResult:
 # ---------------------------------------------------------------------------
 # Fallback when llamafirewall is not installed
 # ---------------------------------------------------------------------------
+
 
 class TestFallbackBehaviour:
     def test_chain_both_falls_back_gracefully(self):
@@ -156,6 +162,7 @@ class TestFallbackBehaviour:
 # AGENT_OS_ONLY mode
 # ---------------------------------------------------------------------------
 
+
 class TestAgentOSOnly:
     def test_benign_prompt_safe(self):
         adapter = LlamaFirewallAdapter(mode=FirewallMode.AGENT_OS_ONLY)
@@ -182,6 +189,7 @@ class TestAgentOSOnly:
 # ---------------------------------------------------------------------------
 # CHAIN_BOTH mode with mocked LlamaFirewall
 # ---------------------------------------------------------------------------
+
 
 class TestChainBoth:
     def test_both_safe_returns_safe(self):
@@ -248,6 +256,7 @@ class TestChainBoth:
 # VOTE_MAJORITY mode
 # ---------------------------------------------------------------------------
 
+
 class TestVoteMajority:
     def test_both_block_returns_blocked(self):
         mock_module = _mock_llama_module(verdict="blocked", score=0.9)
@@ -300,6 +309,7 @@ class TestVoteMajority:
 # scan_code
 # ---------------------------------------------------------------------------
 
+
 class TestScanCode:
     def test_scan_code_without_llama_returns_safe_with_warning(self):
         adapter = LlamaFirewallAdapter(mode=FirewallMode.AGENT_OS_ONLY)
@@ -323,6 +333,7 @@ class TestScanCode:
 # ---------------------------------------------------------------------------
 # available_scanners property
 # ---------------------------------------------------------------------------
+
 
 class TestAvailableScanners:
     def test_agent_os_only_scanners(self):
@@ -349,6 +360,7 @@ class TestAvailableScanners:
 # scan_prompt_sync
 # ---------------------------------------------------------------------------
 
+
 class TestScanPromptSync:
     def test_sync_benign(self):
         adapter = LlamaFirewallAdapter(mode=FirewallMode.AGENT_OS_ONLY)
@@ -365,6 +377,7 @@ class TestScanPromptSync:
 # Internal helper coverage
 # ---------------------------------------------------------------------------
 
+
 class TestHelpers:
     def test_map_llama_verdict_safe(self):
         assert LlamaFirewallAdapter._map_llama_verdict("safe") == FirewallVerdict.SAFE
@@ -379,7 +392,9 @@ class TestHelpers:
         assert LlamaFirewallAdapter._map_llama_verdict("benign") == FirewallVerdict.SAFE
 
     def test_map_llama_verdict_unknown(self):
-        assert LlamaFirewallAdapter._map_llama_verdict("something_else") == FirewallVerdict.SUSPICIOUS
+        assert (
+            LlamaFirewallAdapter._map_llama_verdict("something_else") == FirewallVerdict.SUSPICIOUS
+        )
 
     def test_run_llamafirewall_import_error(self):
         adapter = LlamaFirewallAdapter(mode=FirewallMode.AGENT_OS_ONLY)

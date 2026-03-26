@@ -7,23 +7,25 @@ The central API service for the Nexus Trust Exchange.
 Provides REST endpoints for agent registration, reputation, escrow, and compliance.
 """
 
-from fastapi import FastAPI, HTTPException, Depends, Header
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
 import logging
-
-# Import routes
-from .routes import registry, reputation, escrow, arbiter, compliance
 
 # Import core components
 import sys
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+# Import routes
+from .routes import arbiter, compliance, escrow, registry, reputation
+
 sys.path.insert(0, "../..")  # Add modules to path
 from modules.nexus import (
     AgentRegistry,
-    ReputationEngine,
-    EscrowManager,
     Arbiter,
     DMZProtocol,
+    EscrowManager,
+    ReputationEngine,
 )
 
 # Configure logging
@@ -43,20 +45,20 @@ _dmz: DMZProtocol = None
 async def lifespan(app: FastAPI):
     """Initialize and cleanup resources."""
     global _registry, _reputation, _escrow, _arbiter, _dmz
-    
+
     logger.info("Initializing Nexus Cloud Board...")
-    
+
     # Initialize components
     _reputation = ReputationEngine()
     _registry = AgentRegistry(_reputation)
     _escrow = EscrowManager(_reputation)
     _arbiter = Arbiter(_reputation, _escrow)
     _dmz = DMZProtocol()
-    
+
     logger.info("Nexus Cloud Board initialized successfully")
-    
+
     yield
-    
+
     logger.info("Shutting down Nexus Cloud Board...")
 
 
@@ -155,4 +157,5 @@ async def get_stats():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

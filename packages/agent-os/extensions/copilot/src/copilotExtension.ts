@@ -2,10 +2,10 @@
 // Licensed under the MIT License.
 /**
  * Copilot Extension Handler
- * 
+ *
  * Main handler for GitHub Copilot Extension interactions.
  * Filters suggestions, handles chat commands, and provides annotations.
- * 
+ *
  * Supports commands:
  * - @agentos create agent for [task] - Generate agent from description
  * - @agentos design workflow to [goal] - Design multi-step workflow
@@ -97,7 +97,7 @@ export class CopilotExtension {
     private testSimulator: TestSimulator;
     private githubIntegration: GitHubIntegration;
     private debugHelper: DebugHelper;
-    
+
     // Store state for multi-turn conversations
     private pendingAgentSpec?: AgentSpec;
     private pendingLanguage: SupportedLanguage = 'python';
@@ -152,7 +152,7 @@ export class CopilotExtension {
                     code: suggestion.code.substring(0, 200),
                     violation: result.violation,
                     reason: result.reason,
-                    repository: context.repository ? 
+                    repository: context.repository ?
                         `${context.repository.owner}/${context.repository.name}` : undefined
                 });
 
@@ -196,7 +196,7 @@ export class CopilotExtension {
             command = parts[0];
             message = parts.slice(1).join(' ');
         }
-        
+
         // Also handle @agentos format
         if (!command && message.startsWith('@agentos')) {
             const parts = message.replace('@agentos', '').trim().split(' ');
@@ -207,45 +207,45 @@ export class CopilotExtension {
         switch (command?.toLowerCase()) {
             case 'create':
                 return this.handleCreateCommand(message, context);
-            
+
             case 'design':
                 return this.handleDesignCommand(message, context);
-                
+
             case 'test':
             case 'simulate':
                 return this.handleTestCommand(message, context);
-                
+
             case 'debug':
             case 'why':
                 return this.handleDebugCommand(message, context);
-                
+
             case 'templates':
             case 'template':
                 return this.handleTemplatesCommand(message, context);
-                
+
             case 'compliance':
             case 'framework':
                 return this.handleComplianceCommand(message, context);
-            
+
             case 'deploy':
                 return this.handleDeployCommand(message, context);
-            
+
             case 'review':
                 return this.handleReviewCommand(message, context);
-            
+
             case 'policy':
             case 'policies':
                 return this.handlePolicyCommand(message, context);
-            
+
             case 'audit':
                 return this.handleAuditCommand(context);
-                
+
             case 'security':
                 return this.handleSecurityCommand(message, context);
-                
+
             case 'optimize':
                 return this.handleOptimizeCommand(message, context);
-            
+
             case 'help':
             default:
                 return this.handleHelpCommand();
@@ -260,7 +260,7 @@ export class CopilotExtension {
         context: CopilotContext
     ): Promise<ChatResponse> {
         const code = context.selection?.text || message || context.file?.content;
-        
+
         if (!code || code.trim().length === 0) {
             return {
                 message: '⚠️ No code to review. Please select code or provide it in your message.',
@@ -272,7 +272,7 @@ export class CopilotExtension {
 
         // First, run local policy check
         const policyResult = await this.policyEngine.analyzeCode(code, language);
-        
+
         // Then, run CMVK verification
         let cmvkResult: CMVKResult | null = null;
         try {
@@ -303,15 +303,15 @@ export class CopilotExtension {
 
         // CMVK results
         if (cmvkResult) {
-            const consensusEmoji = cmvkResult.consensus >= 0.8 ? '✅' : 
+            const consensusEmoji = cmvkResult.consensus >= 0.8 ? '✅' :
                                    cmvkResult.consensus >= 0.5 ? '⚠️' : '❌';
-            
+
             response += `## ${consensusEmoji} CMVK Multi-Model Review\n\n`;
             response += `**Consensus:** ${(cmvkResult.consensus * 100).toFixed(0)}%\n\n`;
-            
+
             response += '| Model | Status | Assessment |\n';
             response += '|-------|--------|------------|\n';
-            
+
             for (const result of cmvkResult.modelResults) {
                 const status = result.passed ? '✅' : '⚠️';
                 response += `| ${result.model} | ${status} | ${result.summary} |\n`;
@@ -359,11 +359,11 @@ export class CopilotExtension {
      */
     private handlePolicyCommand(message: string, context: CopilotContext): ChatResponse {
         const policies = this.policyEngine.getActivePolicies();
-        
+
         let response = '# 🛡️ Agent OS Active Policies\n\n';
         response += '| Policy | Status | Severity |\n';
         response += '|--------|--------|----------|\n';
-        
+
         for (const policy of policies) {
             const status = policy.enabled ? '✅ Enabled' : '❌ Disabled';
             response += `| ${policy.name} | ${status} | ${policy.severity} |\n`;
@@ -389,9 +389,9 @@ export class CopilotExtension {
     private handleAuditCommand(context: CopilotContext): ChatResponse {
         const logs = this.auditLogger.getRecent(10);
         const stats = this.auditLogger.getStats();
-        
+
         let response = '# 📋 Agent OS Audit Log\n\n';
-        
+
         response += '## Summary\n';
         response += `- **Blocked Today:** ${stats.blockedToday}\n`;
         response += `- **Blocked This Week:** ${stats.blockedThisWeek}\n`;
@@ -401,10 +401,10 @@ export class CopilotExtension {
             response += '## Recent Activity\n\n';
             response += '| Time | Type | Details |\n';
             response += '|------|------|--------|\n';
-            
+
             for (const log of logs) {
                 const time = this.formatTime(log.timestamp);
-                const type = log.type === 'blocked' ? '🚫 Blocked' : 
+                const type = log.type === 'blocked' ? '🚫 Blocked' :
                             log.type === 'cmvk_review' ? '🔍 Review' : '⚠️ Warning';
                 const details = log.violation || log.reason || 'N/A';
                 response += `| ${time} | ${type} | ${details.substring(0, 30)}... |\n`;
@@ -519,10 +519,10 @@ Or browse templates: \`@agentos templates\`
 
         // Parse the task description
         const spec = this.agentGenerator.parseTaskDescription(taskDescription);
-        
+
         // Check if we need clarifying questions
         const questions = this.agentGenerator.generateClarifyingQuestions(taskDescription);
-        
+
         // Store spec for potential follow-up
         this.pendingAgentSpec = spec;
 
@@ -658,7 +658,7 @@ Please describe the goal for your workflow:
      */
     private async handleTestCommand(message: string, context: CopilotContext): Promise<ChatResponse> {
         const code = context.selection?.text || context.file?.content || '';
-        
+
         if (!code && !this.pendingAgentSpec) {
             return {
                 message: `## 🧪 Test Agent
@@ -677,16 +677,16 @@ Please select agent code or create an agent first:
         // Generate test scenarios
         const spec = this.pendingAgentSpec || this.agentGenerator.parseTaskDescription('generic agent');
         const scenarios = this.testSimulator.generateTestScenarios(spec);
-        
+
         // Run tests
         const results = await this.testSimulator.runTests(scenarios);
-        
+
         // Detect edge cases
         const edgeCases = this.testSimulator.detectEdgeCases(spec);
-        
+
         // Format results
         let response = this.testSimulator.formatTestResults(results);
-        
+
         // Add edge cases
         if (edgeCases.length > 0) {
             response += `\n### ⚠️ Potential Edge Cases\n\n`;
@@ -718,8 +718,8 @@ Please select agent code or create an agent first:
      */
     private async handleDebugCommand(message: string, context: CopilotContext): Promise<ChatResponse> {
         // Look for error in message or context
-        const errorMessage = message.replace(/^(why|debug)\s*/i, '').trim() || 
-                            context.selection?.text || 
+        const errorMessage = message.replace(/^(why|debug)\s*/i, '').trim() ||
+                            context.selection?.text ||
                             'Unknown error';
 
         const diagnosis = this.debugHelper.diagnoseError(errorMessage, {
@@ -747,7 +747,7 @@ Please select agent code or create an agent first:
         // Parse category if provided
         const categoryMatch = message.match(/(data|customer|devops|content|business|security|integration|automation)/i);
         const category = categoryMatch ? categoryMatch[1].toLowerCase() as TemplateCategory : undefined;
-        
+
         // Search templates
         const searchQuery = message.replace(/(templates?|browse)/gi, '').trim();
         const results = this.templateGallery.search(searchQuery || undefined, category as TemplateCategory);
@@ -795,25 +795,25 @@ Please select agent code or create an agent first:
     private handleComplianceCommand(message: string, context: CopilotContext): ChatResponse {
         const code = context.selection?.text || context.file?.content || '';
         const language = context.file?.language || 'python';
-        
+
         // Detect framework from message
         const frameworkMatch = message.match(/(gdpr|hipaa|soc2|pci-?dss|iso27001|ccpa)/i);
-        
+
         if (!frameworkMatch) {
             // Show available frameworks
             const frameworks = this.policyLibrary.getFrameworks();
-            
+
             let response = `## 📋 Compliance Frameworks\n\n`;
             response += `AgentOS supports the following compliance frameworks:\n\n`;
-            
+
             for (const fw of frameworks) {
                 response += `### ${fw.framework.toUpperCase()}\n`;
                 response += `${fw.description}\n\n`;
             }
-            
+
             response += `Use \`@agentos compliance [framework]\` to check compliance.\n`;
             response += `Example: \`@agentos compliance gdpr\`\n`;
-            
+
             return {
                 message: response,
                 markdown: true,
@@ -823,19 +823,19 @@ Please select agent code or create an agent first:
 
         const framework = frameworkMatch[1].toLowerCase().replace('-', '') as ComplianceFramework;
         const policyId = `${framework}-standard`;
-        
+
         // Validate code against policy
         const result = this.policyLibrary.validateAgainstPolicy(code, language, policyId);
-        
+
         // Format policy info
         let response = this.policyLibrary.formatPolicyForChat(policyId);
-        
+
         // Add validation results
         const scoreEmoji = result.score >= 80 ? '🟢' : result.score >= 60 ? '🟡' : '🔴';
         response += `\n### Compliance Check\n`;
         response += `**Score:** ${scoreEmoji} ${result.score}/100\n`;
         response += `**Status:** ${result.compliant ? '✅ Compliant' : '❌ Non-Compliant'}\n\n`;
-        
+
         if (result.violations.length > 0) {
             response += `### Violations (${result.violations.length})\n`;
             for (const v of result.violations) {
@@ -843,7 +843,7 @@ Please select agent code or create an agent first:
             }
             response += '\n';
         }
-        
+
         if (result.recommendations.length > 0) {
             response += `### Recommendations\n`;
             for (const rec of result.recommendations) {
@@ -889,19 +889,19 @@ Please create an agent first:
 
         // Generate agent code
         const agent = await this.agentGenerator.generateAgent(spec, 'python');
-        
+
         // Generate PR files
         const files = this.githubIntegration.generatePRFiles(agent, config);
-        
+
         // Generate workflow
         const workflow = this.githubIntegration.generateWorkflowYaml(spec, config);
-        
+
         // Generate secrets instructions
-        const secrets = config.secrets.length > 0 ? 
+        const secrets = config.secrets.length > 0 ?
             this.githubIntegration.generateSecretsInstructions(config.secrets) : '';
 
         let response = `## 🚀 Deploy ${spec.name}\n\n`;
-        
+
         // Show files to create
         response += `### Files to Create\n\n`;
         for (const file of files.agentCode) {
@@ -1020,7 +1020,7 @@ Please select code to optimize.
      */
     private createAnnotations(code: string, result: AnalysisResult): SafetyAnnotation[] {
         const annotations: SafetyAnnotation[] = [];
-        
+
         if (result.blocked) {
             // Find the line containing the violation (simple heuristic)
             const lines = code.split('\n');

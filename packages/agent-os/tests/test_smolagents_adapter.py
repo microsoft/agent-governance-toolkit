@@ -9,21 +9,18 @@ Run with: python -m pytest tests/test_smolagents_adapter.py -v --tb=short
 """
 
 import time
-from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock
 
 import pytest
 
 from agent_os.integrations.smolagents_adapter import (
-    AuditEvent,
+    _HAS_SMOLAGENTS,
     PolicyConfig,
     PolicyViolationError,
     SmolagentsKernel,
-    _HAS_SMOLAGENTS,
     _check_smolagents_available,
 )
-
 
 # =============================================================================
 # Fake smolagents objects (no real smolagents dependency)

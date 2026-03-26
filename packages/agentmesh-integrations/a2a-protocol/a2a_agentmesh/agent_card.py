@@ -150,7 +150,9 @@ class AgentCard:
         if self.organization:
             extensions["x-agentmesh-organization"] = self.organization
         if self.public_key_fingerprint:
-            extensions["x-agentmesh-public-key-fingerprint"] = self.public_key_fingerprint
+            extensions["x-agentmesh-public-key-fingerprint"] = (
+                self.public_key_fingerprint
+            )
         if self.supported_protocols:
             extensions["x-agentmesh-protocols"] = self.supported_protocols
         if extensions:

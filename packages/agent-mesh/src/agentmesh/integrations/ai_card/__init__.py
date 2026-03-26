@@ -30,6 +30,7 @@ Example:
     >>> card.to_json()  # Serve at /.well-known/ai-card.json
 """
 
+from .discovery import AICardDiscovery
 from .schema import (
     AICard,
     AICardIdentity,
@@ -38,7 +39,6 @@ from .schema import (
     CapabilityAttestation,
     DelegationRecord,
 )
-from .discovery import AICardDiscovery
 
 __all__ = [
     "AICard",

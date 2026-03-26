@@ -54,7 +54,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
-from .signals import AgentKernelPanic, AgentSignal, SignalDispatcher, SignalInfo
+from .signals import SignalDispatcher, SignalInfo
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +68,8 @@ class IsolationLevel(str, Enum):
     """Level of process isolation for agent execution."""
 
     COOPERATIVE = "cooperative"  # In-process, exception-based (current behaviour)
-    PROCESS = "process"          # Separate process via multiprocessing
-    SUBPROCESS = "subprocess"    # Separate process via subprocess.Popen
+    PROCESS = "process"  # Separate process via multiprocessing
+    SUBPROCESS = "subprocess"  # Separate process via subprocess.Popen
 
 
 class AgentProcessState(str, Enum):
@@ -115,30 +115,36 @@ def _agent_worker(
     start = time.monotonic()
     try:
         rv = target(*args, **(kwargs or {}))
-        result_queue.put({
-            "state": "completed",
-            "return_value": rv,
-            "error": None,
-            "exit_code": 0,
-            "duration": time.monotonic() - start,
-        })
+        result_queue.put(
+            {
+                "state": "completed",
+                "return_value": rv,
+                "error": None,
+                "exit_code": 0,
+                "duration": time.monotonic() - start,
+            }
+        )
     except SystemExit as exc:
         code = exc.code if isinstance(exc.code, int) else 1
-        result_queue.put({
-            "state": "failed",
-            "return_value": None,
-            "error": f"SystemExit({exc.code})",
-            "exit_code": code,
-            "duration": time.monotonic() - start,
-        })
+        result_queue.put(
+            {
+                "state": "failed",
+                "return_value": None,
+                "error": f"SystemExit({exc.code})",
+                "exit_code": code,
+                "duration": time.monotonic() - start,
+            }
+        )
     except BaseException as exc:
-        result_queue.put({
-            "state": "failed",
-            "return_value": None,
-            "error": f"{type(exc).__name__}: {exc}",
-            "exit_code": 1,
-            "duration": time.monotonic() - start,
-        })
+        result_queue.put(
+            {
+                "state": "failed",
+                "return_value": None,
+                "error": f"{type(exc).__name__}: {exc}",
+                "exit_code": 1,
+                "duration": time.monotonic() - start,
+            }
+        )
 
 
 # Bootstrap script executed inside a ``subprocess.Popen`` child.
@@ -237,16 +243,10 @@ class AgentProcessHandle:
                 duration_seconds=elapsed,
                 terminated_by_signal=True,
             )
-            logger.info(
-                f"[ProcessIsolation] SIGTERM -> agent {self.agent_id} "
-                f"(pid={self.pid})"
-            )
+            logger.info(f"[ProcessIsolation] SIGTERM -> agent {self.agent_id} (pid={self.pid})")
             return True
         except (OSError, ProcessLookupError) as exc:
-            logger.warning(
-                f"[ProcessIsolation] terminate failed for "
-                f"{self.agent_id}: {exc}"
-            )
+            logger.warning(f"[ProcessIsolation] terminate failed for {self.agent_id}: {exc}")
             return False
 
     def kill(self) -> bool:
@@ -288,15 +288,10 @@ class AgentProcessHandle:
                 duration_seconds=elapsed,
                 terminated_by_signal=True,
             )
-            logger.critical(
-                f"[ProcessIsolation] SIGKILL -> agent {self.agent_id} "
-                f"(pid={self.pid})"
-            )
+            logger.critical(f"[ProcessIsolation] SIGKILL -> agent {self.agent_id} (pid={self.pid})")
             return True
         except (OSError, ProcessLookupError) as exc:
-            logger.warning(
-                f"[ProcessIsolation] kill failed for {self.agent_id}: {exc}"
-            )
+            logger.warning(f"[ProcessIsolation] kill failed for {self.agent_id}: {exc}")
             return False
 
     def is_alive(self) -> bool:
@@ -444,7 +439,9 @@ class AgentProcessHandle:
         return self._result
 
     def _parse_subprocess_output(
-        self, stdout: bytes, stderr: bytes,
+        self,
+        stdout: bytes,
+        stderr: bytes,
     ) -> AgentProcessResult:
         """Parse JSON result from subprocess stdout."""
         exit_code = self._process.returncode
@@ -466,19 +463,11 @@ class AgentProcessHandle:
                 duration_seconds=data.get("duration", elapsed),
             )
         except (json.JSONDecodeError, UnicodeDecodeError):
-            stderr_txt = (
-                stderr.decode("utf-8", errors="replace") if stderr else ""
-            )
+            stderr_txt = stderr.decode("utf-8", errors="replace") if stderr else ""
             self._result = AgentProcessResult(
                 agent_id=self.agent_id,
-                state=(
-                    AgentProcessState.COMPLETED
-                    if exit_code == 0
-                    else AgentProcessState.FAILED
-                ),
-                return_value=(
-                    stdout.decode("utf-8", errors="replace") if stdout else None
-                ),
+                state=(AgentProcessState.COMPLETED if exit_code == 0 else AgentProcessState.FAILED),
+                return_value=(stdout.decode("utf-8", errors="replace") if stdout else None),
                 error=stderr_txt or None,
                 exit_code=exit_code,
                 duration_seconds=elapsed,
@@ -537,11 +526,17 @@ class ProcessIsolationManager:
 
         if level == IsolationLevel.PROCESS:
             handle = self._spawn_multiprocessing(
-                agent_id, target, args, kwargs,
+                agent_id,
+                target,
+                args,
+                kwargs,
             )
         elif level == IsolationLevel.SUBPROCESS:
             handle = self._spawn_subprocess(
-                agent_id, target, args, kwargs,
+                agent_id,
+                target,
+                args,
+                kwargs,
             )
         else:
             raise ValueError(f"Unsupported isolation level: {level}")
@@ -552,14 +547,15 @@ class ProcessIsolationManager:
         # Optional watchdog timer.
         if timeout is not None:
             timer = threading.Timer(
-                timeout, self._on_timeout, args=(agent_id,),
+                timeout,
+                self._on_timeout,
+                args=(agent_id,),
             )
             timer.daemon = True
             timer.start()
 
         logger.info(
-            f"[ProcessIsolation] Spawned {agent_id} "
-            f"(pid={handle.pid}, isolation={level.value})"
+            f"[ProcessIsolation] Spawned {agent_id} (pid={handle.pid}, isolation={level.value})"
         )
         return handle
 
@@ -571,9 +567,7 @@ class ProcessIsolationManager:
         """Send SIGKILL to agent process -- truly non-catchable."""
         handle = self.get_handle(agent_id)
         if handle is None:
-            logger.warning(
-                f"[ProcessIsolation] kill: unknown agent {agent_id}"
-            )
+            logger.warning(f"[ProcessIsolation] kill: unknown agent {agent_id}")
             return False
         logger.info(f"[ProcessIsolation] kill({agent_id}): {reason}")
         return handle.kill()
@@ -582,9 +576,7 @@ class ProcessIsolationManager:
         """Send SIGTERM for graceful shutdown."""
         handle = self.get_handle(agent_id)
         if handle is None:
-            logger.warning(
-                f"[ProcessIsolation] terminate: unknown agent {agent_id}"
-            )
+            logger.warning(f"[ProcessIsolation] terminate: unknown agent {agent_id}")
             return False
         logger.info(f"[ProcessIsolation] terminate({agent_id}): {reason}")
         return handle.terminate()
@@ -638,9 +630,7 @@ class ProcessIsolationManager:
             for aid in remove:
                 del self._handles[aid]
         if remove:
-            logger.debug(
-                f"[ProcessIsolation] Cleaned up {len(remove)} processes"
-            )
+            logger.debug(f"[ProcessIsolation] Cleaned up {len(remove)} processes")
 
     # ----------------------------------------------------------
     # Internal helpers
@@ -682,18 +672,20 @@ class ProcessIsolationManager:
         kwargs: Optional[dict],
     ) -> AgentProcessHandle:
         # Validate target is an importable function (not a lambda/closure)
-        if not hasattr(target, '__module__') or not hasattr(target, '__qualname__'):
+        if not hasattr(target, "__module__") or not hasattr(target, "__qualname__"):
             raise ValueError(
                 f"Target callable {target!r} must be a module-level function "
                 "with __module__ and __qualname__ for subprocess isolation"
             )
         # Serialize as JSON with function reference instead of pickling callables
-        payload = json.dumps({
-            "module": target.__module__,
-            "qualname": target.__qualname__,
-            "args": list(args),
-            "kwargs": kwargs or {},
-        }).encode('utf-8')
+        payload = json.dumps(
+            {
+                "module": target.__module__,
+                "qualname": target.__qualname__,
+                "args": list(args),
+                "kwargs": kwargs or {},
+            }
+        ).encode("utf-8")
         # Sign payload with HMAC to prevent tampering
         hmac_key = os.urandom(32)
         sig = hmac.new(hmac_key, payload, hashlib.sha256).digest()
@@ -704,8 +696,8 @@ class ProcessIsolationManager:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        proc.stdin.write(encoded)   # type: ignore[union-attr]
-        proc.stdin.close()          # type: ignore[union-attr]
+        proc.stdin.write(encoded)  # type: ignore[union-attr]
+        proc.stdin.close()  # type: ignore[union-attr]
         return AgentProcessHandle(
             agent_id=agent_id,
             pid=proc.pid,
@@ -718,9 +710,7 @@ class ProcessIsolationManager:
     def _on_timeout(self, agent_id: str) -> None:
         handle = self.get_handle(agent_id)
         if handle is not None and handle.is_alive():
-            logger.warning(
-                f"[ProcessIsolation] Timeout -> killing {agent_id}"
-            )
+            logger.warning(f"[ProcessIsolation] Timeout -> killing {agent_id}")
             handle.kill()
 
 

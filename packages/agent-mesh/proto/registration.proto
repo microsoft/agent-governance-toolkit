@@ -28,22 +28,22 @@ message RegistrationRequest {
   // Cryptographic identity
   bytes public_key = 5;                     // Ed25519 public key (32 bytes)
   string key_algorithm = 6;                 // "Ed25519" (for extensibility)
-  
+
   // Human sponsor (accountability chain)
   string sponsor_email = 7;                 // Email of human sponsor
   string sponsor_id = 8;                    // Unique sponsor identifier
   bytes sponsor_signature = 9;              // Sponsor's signature over agent details
-  
+
   // Capabilities (what this agent is allowed to do)
   repeated string capabilities = 10;        // e.g., ["read:data", "write:reports"]
-  
+
   // Protocol support
   repeated string supported_protocols = 11; // e.g., ["a2a", "mcp", "iatp"]
-  
+
   // Delegation (if this is a child agent)
   string parent_did = 12;                   // Parent agent DID if delegated
   bytes parent_signature = 13;              // Parent's signature for delegation
-  
+
   // Metadata
   map<string, string> metadata = 14;        // Custom metadata
   google.protobuf.Timestamp requested_at = 15;
@@ -59,26 +59,26 @@ message RegistrationResponse {
   // Agent identity
   string agent_did = 1;                     // did:mesh:<unique-id>
   string agent_name = 2;                    // Confirmed agent name
-  
+
   // SVID (SPIFFE Verifiable Identity Document)
   bytes svid_certificate = 3;               // X.509 certificate in DER format
   bytes svid_private_key = 4;               // Private key (encrypted)
   string svid_key_id = 5;                   // Key identifier
   google.protobuf.Timestamp svid_expires_at = 6;  // Certificate expiration (15 min default)
-  
+
   // Trust score
   int32 initial_trust_score = 7;            // 0-1000 scale (default: 500)
   TrustScoreDimensions trust_dimensions = 8;
-  
+
   // Credentials
   string access_token = 9;                  // Short-lived access token
   string refresh_token = 10;                // For credential rotation
   int32 token_ttl_seconds = 11;             // Token time-to-live (900 seconds default)
-  
+
   // Registry info
   string registry_endpoint = 12;            // AgentMesh registry endpoint
   string ca_certificate = 13;               // CA certificate for mTLS
-  
+
   // Status
   RegistrationStatus status = 14;
   google.protobuf.Timestamp registered_at = 15;
@@ -153,10 +153,10 @@ message TrustVerificationResponse {
 service AgentMeshIdentityService {
   // Register a new agent with AgentMesh
   rpc Register(RegistrationRequest) returns (RegistrationResponse);
-  
+
   // Rotate expiring credentials
   rpc RotateCredentials(CredentialRotationRequest) returns (CredentialRotationResponse);
-  
+
   // Verify trust of a peer agent
   rpc VerifyPeerTrust(TrustVerificationRequest) returns (TrustVerificationResponse);
 }

@@ -129,14 +129,14 @@ spiffe://company.com/agent/did:mesh:a1b2c3d4e5f6
 # SPIRE server configuration for AgentMesh
 server:
   trust_domain: "company.com"
-  
+
   # Custom attestor for AgentMesh agents
   plugins:
     NodeAttestor:
       agentmesh:
         plugin_data:
           mesh_api: "https://mesh.company.com/api"
-          
+
     WorkloadAttestor:
       agentmesh:
         plugin_data:
@@ -328,10 +328,10 @@ config = RevocationConfig(
     check_crl=True,
     crl_url="https://mesh.company.com/crl",
     crl_cache_ttl=300,  # 5 minutes
-    
+
     check_ocsp=True,
     ocsp_url="https://mesh.company.com/ocsp",
-    
+
     fail_open=False,  # Deny if revocation check fails
 )
 ```
@@ -505,18 +505,18 @@ class AgentIdentity:
     expires_at: datetime        # Expiration timestamp
     parent_did: Optional[str]   # Parent agent (if delegated)
     scope_chain: List[Dict]  # Full chain of custody
-    
+
     @classmethod
     def create(cls, name: str, sponsor: str, capabilities: List[str], **kwargs) -> "AgentIdentity"
-    
+
     def delegate(self, name: str, capabilities: List[str], ttl_seconds: int = None) -> "AgentIdentity"
-    
+
     def sign(self, data: bytes) -> bytes
-    
+
     def verify(self, data: bytes, signature: bytes) -> bool
-    
+
     def to_dict(self) -> Dict[str, Any]
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "AgentIdentity"
 ```

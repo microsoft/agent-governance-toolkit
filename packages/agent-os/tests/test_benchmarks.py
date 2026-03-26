@@ -13,9 +13,11 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from agent_os.base_agent import AgentConfig, AuditEntry, BaseAgent
+from agent_os.base_agent import AgentConfig, BaseAgent
 from agent_os.integrations.base import (
     ExecutionContext as GovExecutionContext,
+)
+from agent_os.integrations.base import (
     GovernancePolicy,
     PatternType,
     PolicyInterceptor,
@@ -98,6 +100,7 @@ def _row(name: str, iterations: int, stats: Dict[str, float]) -> tuple:
 # Stub adapter for benchmarking BaseIntegration wrap/unwrap
 # ---------------------------------------------------------------------------
 
+
 class _StubIntegration:
     """Minimal integration stub for benchmarking wrap/unwrap overhead."""
 
@@ -126,6 +129,7 @@ class _StubIntegration:
 # ---------------------------------------------------------------------------
 # Stub agent for audit log benchmarking
 # ---------------------------------------------------------------------------
+
 
 class _BenchAgent(BaseAgent):
     async def run(self, *args: Any, **kwargs: Any) -> ExecutionResult:
@@ -178,10 +182,12 @@ class TestKernelBenchmarks:
 
         s_set = _stats(set_timings)
         s_get = _stats(get_timings)
-        _print_table([
-            _row("MemoryBackend.set()", ITERATIONS_KERNEL, s_set),
-            _row("MemoryBackend.get()", ITERATIONS_KERNEL, s_get),
-        ])
+        _print_table(
+            [
+                _row("MemoryBackend.set()", ITERATIONS_KERNEL, s_set),
+                _row("MemoryBackend.get()", ITERATIONS_KERNEL, s_get),
+            ]
+        )
         assert s_set["avg"] < MEMORY_BACKEND_OP_MAX_NS, (
             f"MemoryBackend.set avg {_ns_to_us(s_set['avg']):.1f}µs exceeds threshold"
         )
@@ -339,10 +345,12 @@ class TestAdapterBenchmarks:
 
         s_wrap = _stats(timings_wrap)
         s_unwrap = _stats(timings_unwrap)
-        _print_table([
-            _row("adapter.wrap()", ITERATIONS_ADAPTER, s_wrap),
-            _row("adapter.unwrap()", ITERATIONS_ADAPTER, s_unwrap),
-        ])
+        _print_table(
+            [
+                _row("adapter.wrap()", ITERATIONS_ADAPTER, s_wrap),
+                _row("adapter.unwrap()", ITERATIONS_ADAPTER, s_unwrap),
+            ]
+        )
         assert s_wrap["avg"] < ADAPTER_CONTEXT_MAX_NS
         assert s_unwrap["avg"] < ADAPTER_CONTEXT_MAX_NS
 
@@ -446,10 +454,12 @@ class TestConcurrencyBenchmarks:
 
         s_seq = _stats(seq_timings)
         s_conc = _stats(conc_timings)
-        _print_table([
-            _row("sequential.execute()", CONCURRENT_TASKS, s_seq),
-            _row("concurrent.execute()", CONCURRENT_TASKS, s_conc),
-        ])
+        _print_table(
+            [
+                _row("sequential.execute()", CONCURRENT_TASKS, s_seq),
+                _row("concurrent.execute()", CONCURRENT_TASKS, s_conc),
+            ]
+        )
 
         # Allow up to 10x degradation under contention (generous for CI)
         degradation_factor = conc_avg / seq_avg if seq_avg > 0 else 1.0

@@ -10,19 +10,19 @@ each other, negotiate contracts via IATP, and settle rewards for successful task
 The "Visa Network" for AI Agents.
 """
 
+from .arbiter import Arbiter, DisputeResolution
 from .client import NexusClient
+from .dmz import DataHandlingPolicy, DMZProtocol
+from .escrow import EscrowManager, ProofOfOutcome
+from .exceptions import (
+    DisputeError,
+    EscrowError,
+    IATPInsufficientTrustException,
+    IATPUnverifiedPeerException,
+    NexusError,
+)
 from .registry import AgentRegistry
 from .reputation import ReputationEngine, TrustScore
-from .escrow import ProofOfOutcome, EscrowManager
-from .arbiter import Arbiter, DisputeResolution
-from .dmz import DMZProtocol, DataHandlingPolicy
-from .exceptions import (
-    NexusError,
-    IATPUnverifiedPeerException,
-    IATPInsufficientTrustException,
-    EscrowError,
-    DisputeError,
-)
 
 __version__ = "0.1.0"
 __all__ = [

@@ -13,10 +13,10 @@ import asyncio
 import fnmatch
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable
-
+from datetime import UTC, datetime
+from typing import Any
 
 # Standard event types
 EVENT_TRUST_VERIFIED = "trust.verified"
@@ -51,7 +51,7 @@ class Event:
     event_type: str
     source: str
     payload: dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     event_id: str = field(default_factory=lambda: f"evt-{time.monotonic_ns()}")
 
 
@@ -94,9 +94,7 @@ class InMemoryEventBus(EventBus):
         self._subscriptions.append((pattern, handler))
 
     def unsubscribe(self, handler: EventHandler) -> None:
-        self._subscriptions = [
-            (p, h) for p, h in self._subscriptions if h is not handler
-        ]
+        self._subscriptions = [(p, h) for p, h in self._subscriptions if h is not handler]
 
 
 class AsyncEventBus(EventBus):
@@ -122,9 +120,7 @@ class AsyncEventBus(EventBus):
         self._subscriptions.append((pattern, handler))
 
     def unsubscribe(self, handler: EventHandler) -> None:
-        self._subscriptions = [
-            (p, h) for p, h in self._subscriptions if h is not handler
-        ]
+        self._subscriptions = [(p, h) for p, h in self._subscriptions if h is not handler]
 
     async def start(self) -> None:
         """Start the background consumer task."""
@@ -160,7 +156,7 @@ class AsyncEventBus(EventBus):
             try:
                 event = await asyncio.wait_for(self._queue.get(), timeout=0.1)
                 self._dispatch(event)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except asyncio.CancelledError:
                 break

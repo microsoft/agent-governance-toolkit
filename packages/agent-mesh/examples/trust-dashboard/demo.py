@@ -27,16 +27,16 @@ from dashboard import start_server, update_data
 # ---------------------------------------------------------------------------
 
 DEMO_AGENTS: dict[str, dict] = {
-    "payment-agent":     {"score": 920, "protocol": "A2A",  "did": "did:web:payments.mesh.io"},
-    "customer-service":  {"score": 870, "protocol": "A2A",  "did": "did:web:cs.mesh.io"},
-    "data-analyst":      {"score": 810, "protocol": "MCP",  "did": "did:web:analytics.mesh.io"},
-    "fraud-detector":    {"score": 940, "protocol": "IATP", "did": "did:web:fraud.mesh.io"},
-    "inventory-manager": {"score": 720, "protocol": "MCP",  "did": "did:web:inventory.mesh.io"},
-    "email-dispatcher":  {"score": 650, "protocol": "A2A",  "did": "did:web:email.mesh.io"},
-    "auth-gateway":      {"score": 950, "protocol": "IATP", "did": "did:web:auth.mesh.io"},
-    "report-generator":  {"score": 580, "protocol": "MCP",  "did": "did:web:reports.mesh.io"},
-    "scheduler":         {"score": 780, "protocol": "A2A",  "did": "did:web:scheduler.mesh.io"},
-    "compliance-bot":    {"score": 890, "protocol": "IATP", "did": "did:web:compliance.mesh.io"},
+    "payment-agent": {"score": 920, "protocol": "A2A", "did": "did:web:payments.mesh.io"},
+    "customer-service": {"score": 870, "protocol": "A2A", "did": "did:web:cs.mesh.io"},
+    "data-analyst": {"score": 810, "protocol": "MCP", "did": "did:web:analytics.mesh.io"},
+    "fraud-detector": {"score": 940, "protocol": "IATP", "did": "did:web:fraud.mesh.io"},
+    "inventory-manager": {"score": 720, "protocol": "MCP", "did": "did:web:inventory.mesh.io"},
+    "email-dispatcher": {"score": 650, "protocol": "A2A", "did": "did:web:email.mesh.io"},
+    "auth-gateway": {"score": 950, "protocol": "IATP", "did": "did:web:auth.mesh.io"},
+    "report-generator": {"score": 580, "protocol": "MCP", "did": "did:web:reports.mesh.io"},
+    "scheduler": {"score": 780, "protocol": "A2A", "did": "did:web:scheduler.mesh.io"},
+    "compliance-bot": {"score": 890, "protocol": "IATP", "did": "did:web:compliance.mesh.io"},
 }
 
 
@@ -46,7 +46,7 @@ def _build_initial_history(
 ) -> dict[str, list]:
     """Generate synthetic history (12 hours at 15-min intervals)."""
     random.seed(42)
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     history: dict[str, list] = {}
     for name, info in agents.items():
         pts = []
@@ -81,7 +81,7 @@ def main() -> None:
 
             # Pick 2-4 agents and nudge their scores
             names = random.sample(list(agents.keys()), k=random.randint(2, 4))
-            now_str = dt.datetime.now(dt.timezone.utc).strftime("%H:%M")
+            now_str = dt.datetime.now(dt.UTC).strftime("%H:%M")
 
             for name in names:
                 delta = random.randint(-25, 25)

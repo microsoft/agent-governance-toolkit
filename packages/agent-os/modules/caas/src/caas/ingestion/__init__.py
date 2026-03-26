@@ -6,9 +6,9 @@ Ingestion module initialization.
 
 from caas.ingestion.processors import (
     BaseProcessor,
-    PDFProcessor,
-    HTMLProcessor,
     CodeProcessor,
+    HTMLProcessor,
+    PDFProcessor,
     ProcessorFactory,
 )
 from caas.ingestion.structure_parser import StructureParser

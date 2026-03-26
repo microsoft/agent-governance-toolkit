@@ -37,28 +37,30 @@ from typing import Any, Dict, List, Optional, Set
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class AgentState(Enum):
     """Operational state of an agent in the fleet."""
 
-    ACTIVE = "active"          # Running and reporting
-    DEGRADED = "degraded"      # Running but SLO violations
+    ACTIVE = "active"  # Running and reporting
+    DEGRADED = "degraded"  # Running but SLO violations
     UNRESPONSIVE = "unresponsive"  # No heartbeat within threshold
-    DRAINING = "draining"      # Scheduled for removal
-    REMOVED = "removed"        # No longer in fleet
+    DRAINING = "draining"  # Scheduled for removal
+    REMOVED = "removed"  # No longer in fleet
 
 
 class FleetHealth(Enum):
     """Aggregate fleet health level."""
 
-    HEALTHY = "healthy"      # All agents healthy
-    DEGRADED = "degraded"    # Some agents have issues
-    CRITICAL = "critical"    # Majority of agents unhealthy
-    UNKNOWN = "unknown"      # No agents registered
+    HEALTHY = "healthy"  # All agents healthy
+    DEGRADED = "degraded"  # Some agents have issues
+    CRITICAL = "critical"  # Majority of agents unhealthy
+    UNKNOWN = "unknown"  # No agents registered
 
 
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class AgentEvent:
@@ -185,6 +187,7 @@ class FleetStatus:
 # ---------------------------------------------------------------------------
 # Fleet manager
 # ---------------------------------------------------------------------------
+
 
 class FleetManager:
     """Central registry and health aggregator for an agent fleet.
@@ -400,10 +403,7 @@ class FleetManager:
 
     def agents_by_tag(self, key: str, value: str) -> list[str]:
         """Find agent IDs matching a tag key-value pair."""
-        return [
-            aid for aid, reg in self._agents.items()
-            if reg.tags.get(key) == value
-        ]
+        return [aid for aid, reg in self._agents.items() if reg.tags.get(key) == value]
 
     def agents_by_state(self, state: AgentState) -> list[str]:
         """Find agent IDs in a given state."""

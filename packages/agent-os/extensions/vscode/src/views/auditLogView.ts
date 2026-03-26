@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Audit Log Tree View Provider
- * 
+ *
  * Displays audit log entries in the sidebar.
  */
 
@@ -44,7 +44,7 @@ class AuditLogItem extends vscode.TreeItem {
         this.tooltip = AuditLogItem.formatTooltip(entry);
         this.description = AuditLogItem.formatTime(entry.timestamp);
         this.iconPath = AuditLogItem.getIcon(entry.type);
-        
+
         if (entry.file) {
             this.command = {
                 command: 'vscode.open',

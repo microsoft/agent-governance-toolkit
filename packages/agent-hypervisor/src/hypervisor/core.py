@@ -276,10 +276,7 @@ class Hypervisor:
             managed = self._get_session(session_id)
             participant = managed.sso.get_participant(agent_did)
             # Build scores dict only for the slash path (avoid on healthy agents)
-            agent_scores = {
-                p.agent_did: p.eff_score
-                for p in managed.sso.participants
-            }
+            agent_scores = {p.agent_did: p.eff_score for p in managed.sso.participants}
             self.slashing.slash(
                 vouchee_did=agent_did,
                 session_id=session_id,
@@ -303,8 +300,7 @@ class Hypervisor:
     @property
     def active_sessions(self) -> list[ManagedSession]:
         # Use the active index to skip archived/terminated sessions
-        return [self._sessions[sid] for sid in self._active_ids
-                if sid in self._sessions]
+        return [self._sessions[sid] for sid in self._active_ids if sid in self._sessions]
 
     def _get_session(self, session_id: str) -> ManagedSession:
         managed = self._sessions.get(session_id)
@@ -342,11 +338,13 @@ class Hypervisor:
                 if p.eff_score >= drift_threshold:
                     continue
                 # Only flag agents below threshold
-                issues.append({
-                    "session_id": sid,
-                    "agent_did": p.agent_did,
-                    "eff_score": p.eff_score,
-                    "ring": p.ring,
-                    "state": state.value,
-                })
+                issues.append(
+                    {
+                        "session_id": sid,
+                        "agent_did": p.agent_did,
+                        "eff_score": p.eff_score,
+                        "ring": p.ring,
+                        "state": state.value,
+                    }
+                )
         return issues

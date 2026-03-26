@@ -92,13 +92,17 @@ class TestCostGuard:
         assert budget.killed is False
 
     def test_anomaly_detection(self) -> None:
-        guard = CostGuard(anomaly_detection=True, per_task_limit=100.0, per_agent_daily_limit=1000.0)
+        guard = CostGuard(
+            anomaly_detection=True, per_task_limit=100.0, per_agent_daily_limit=1000.0
+        )
         # Build baseline
         for i in range(20):
             guard.record_cost("bot-1", f"t{i}", 0.10)
         # Spike
         alerts = guard.record_cost("bot-1", "spike", 5.0)
-        anomaly_alerts = [a for a in alerts if "anomal" in a.message.lower() or "Anomal" in a.message]
+        anomaly_alerts = [
+            a for a in alerts if "anomal" in a.message.lower() or "Anomal" in a.message
+        ]
         assert len(anomaly_alerts) > 0
 
     def test_reset_daily(self) -> None:
@@ -113,7 +117,9 @@ class TestCostGuard:
         assert budget.spent_today_usd == 0.0
 
     def test_org_budget(self) -> None:
-        guard = CostGuard(org_monthly_budget=100.0, per_task_limit=100.0, per_agent_daily_limit=1000.0)
+        guard = CostGuard(
+            org_monthly_budget=100.0, per_task_limit=100.0, per_agent_daily_limit=1000.0
+        )
         guard.record_cost("bot-1", "t1", 30.0)
         guard.record_cost("bot-2", "t2", 20.0)
         assert guard.org_spent_month == 50.0
@@ -158,7 +164,9 @@ class TestCostGuard:
             kill_switch_threshold=0.95,
         )
         alerts = guard.record_cost("bot-1", "t1", 96.0)  # 96% of org budget
-        kill_alerts = [a for a in alerts if "org budget" in a.message.lower() and "kill" in a.message.lower()]
+        kill_alerts = [
+            a for a in alerts if "org budget" in a.message.lower() and "kill" in a.message.lower()
+        ]
         assert len(kill_alerts) >= 1
 
     def test_org_budget_multi_agent_aggregate(self) -> None:
@@ -187,11 +195,14 @@ class TestCostGuardOrgBudgetAdversarial:
     # NOTE: Implementation uses strict inequality (spent + estimated > budget),
     # so estimated==budget with spent==0 is allowed (equal is not exceeding).
     # The boundary that denies is any value strictly above the budget.
-    @pytest.mark.parametrize("estimated,expected", [
-        (49.99, True),   # below limit -- allowed
-        (50.00, True),   # at limit exactly -- allowed (0 + 50.0 > 50.0 is False)
-        (50.01, False),  # above limit -- denied
-    ])
+    @pytest.mark.parametrize(
+        "estimated,expected",
+        [
+            (49.99, True),  # below limit -- allowed
+            (50.00, True),  # at limit exactly -- allowed (0 + 50.0 > 50.0 is False)
+            (50.01, False),  # above limit -- denied
+        ],
+    )
     def test_org_budget_boundary_triple(self, estimated: float, expected: bool) -> None:
         guard = CostGuard(
             per_task_limit=100.0,
@@ -206,6 +217,7 @@ class TestCostGuardOrgBudgetAdversarial:
     @pytest.mark.parametrize("bad_budget", [float("nan"), float("inf"), float("-inf")])
     def test_nan_inf_budget_does_not_crash(self, bad_budget: float) -> None:
         import pytest as _pytest
+
         with _pytest.raises(ValueError, match="org_monthly_budget must be finite"):
             CostGuard(
                 per_task_limit=100.0,
@@ -274,6 +286,7 @@ class TestCostGuardOrgBudgetAdversarial:
     # Multiple threads recording costs simultaneously must not corrupt state or crash.
     def test_concurrent_record_cost_no_crash(self) -> None:
         import threading
+
         guard = CostGuard(
             per_task_limit=100.0,
             per_agent_daily_limit=10000.0,
@@ -301,6 +314,7 @@ class TestCostGuardOrgBudgetAdversarial:
     # Input validation now rejects negative budgets at __init__ time.
     def test_negative_org_budget_treated_as_disabled(self) -> None:
         import pytest as _pytest
+
         with _pytest.raises(ValueError, match="org_monthly_budget must be finite and non-negative"):
             CostGuard(
                 per_task_limit=100.0,
@@ -321,10 +335,14 @@ class TestCostGuardOrgBudgetAdversarial:
         )
         # First call crosses threshold (0.0 -> 0.96, crosses 0.95)
         alerts1 = guard.record_cost("bot-1", "t1", 96.0)
-        kill1 = [a for a in alerts1 if "org budget" in a.message.lower() and "kill" in a.message.lower()]
+        kill1 = [
+            a for a in alerts1 if "org budget" in a.message.lower() and "kill" in a.message.lower()
+        ]
         # Second call is already above threshold (0.96 -> 0.97, prev >= threshold -> no crossing)
         alerts2 = guard.record_cost("bot-1", "t2", 1.0)
-        kill2 = [a for a in alerts2 if "org budget" in a.message.lower() and "kill" in a.message.lower()]
+        kill2 = [
+            a for a in alerts2 if "org budget" in a.message.lower() and "kill" in a.message.lower()
+        ]
         assert len(kill1) >= 1
         assert len(kill2) == 0  # must not fire again
 

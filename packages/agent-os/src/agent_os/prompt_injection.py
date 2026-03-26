@@ -57,8 +57,10 @@ _SAMPLE_DISCLAIMER = (
 # Data models
 # ---------------------------------------------------------------------------
 
+
 class InjectionType(Enum):
     """Classification of a prompt injection attack."""
+
     DIRECT_OVERRIDE = "direct_override"
     DELIMITER_ATTACK = "delimiter_attack"
     ENCODING_ATTACK = "encoding_attack"
@@ -70,6 +72,7 @@ class InjectionType(Enum):
 
 class ThreatLevel(Enum):
     """Severity of a detected prompt injection threat."""
+
     NONE = "none"
     LOW = "low"
     MEDIUM = "medium"
@@ -99,6 +102,7 @@ class DetectionResult:
         matched_patterns: List of pattern descriptions that matched.
         explanation: Human-readable summary.
     """
+
     is_injection: bool
     threat_level: ThreatLevel
     injection_type: InjectionType | None
@@ -118,6 +122,7 @@ class DetectionConfig:
         blocklist: Exact strings that always trigger detection.
         allowlist: Exact strings that suppress detection.
     """
+
     sensitivity: str = "balanced"
     custom_patterns: list[re.Pattern[str]] = field(default_factory=list)
     blocklist: list[str] = field(default_factory=list)
@@ -134,6 +139,7 @@ class AuditRecord:
         source: Identifier of the component that submitted the input.
         result: The detection result.
     """
+
     timestamp: datetime
     input_hash: str
     source: str
@@ -197,9 +203,7 @@ _MULTI_TURN_PATTERNS: list[re.Pattern[str]] = [
 ]
 
 # Base64 detection: 20+ chars of valid base64 alphabet
-_BASE64_PATTERN: re.Pattern[str] = re.compile(
-    r"[A-Za-z0-9+/]{20,}={0,2}"
-)
+_BASE64_PATTERN: re.Pattern[str] = re.compile(r"[A-Za-z0-9+/]{20,}={0,2}")
 
 _ENCODING_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\\x[0-9a-fA-F]{2}(?:\\x[0-9a-fA-F]{2}){3,}", re.IGNORECASE),
@@ -211,8 +215,16 @@ _ENCODING_PATTERNS: list[re.Pattern[str]] = [
 
 # Suspicious keywords that may appear in decoded base64 payloads
 _SUSPICIOUS_DECODED_KEYWORDS: list[str] = [
-    "ignore", "override", "system", "password", "secret",
-    "admin", "root", "exec", "eval", "import os",
+    "ignore",
+    "override",
+    "system",
+    "password",
+    "secret",
+    "admin",
+    "root",
+    "exec",
+    "eval",
+    "import os",
 ]
 
 
@@ -237,6 +249,7 @@ _SENSITIVITY_MIN_THREAT = {
 # Externalised configuration dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PromptInjectionConfig:
     """Structured configuration for prompt injection detection, loadable from YAML.
@@ -255,16 +268,34 @@ class PromptInjectionConfig:
         disclaimer: Disclaimer text shown in logs.
     """
 
-    direct_override_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _DIRECT_OVERRIDE_PATTERNS])
-    delimiter_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _DELIMITER_PATTERNS])
-    role_play_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _ROLE_PLAY_PATTERNS])
-    context_manipulation_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _CONTEXT_MANIPULATION_PATTERNS])
-    multi_turn_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _MULTI_TURN_PATTERNS])
-    encoding_patterns: list[str] = field(default_factory=lambda: [p.pattern for p in _ENCODING_PATTERNS])
+    direct_override_patterns: list[str] = field(
+        default_factory=lambda: [p.pattern for p in _DIRECT_OVERRIDE_PATTERNS]
+    )
+    delimiter_patterns: list[str] = field(
+        default_factory=lambda: [p.pattern for p in _DELIMITER_PATTERNS]
+    )
+    role_play_patterns: list[str] = field(
+        default_factory=lambda: [p.pattern for p in _ROLE_PLAY_PATTERNS]
+    )
+    context_manipulation_patterns: list[str] = field(
+        default_factory=lambda: [p.pattern for p in _CONTEXT_MANIPULATION_PATTERNS]
+    )
+    multi_turn_patterns: list[str] = field(
+        default_factory=lambda: [p.pattern for p in _MULTI_TURN_PATTERNS]
+    )
+    encoding_patterns: list[str] = field(
+        default_factory=lambda: [p.pattern for p in _ENCODING_PATTERNS]
+    )
     base64_pattern: str = field(default_factory=lambda: _BASE64_PATTERN.pattern)
-    suspicious_decoded_keywords: list[str] = field(default_factory=lambda: list(_SUSPICIOUS_DECODED_KEYWORDS))
-    sensitivity_thresholds: dict[str, float] = field(default_factory=lambda: dict(_SENSITIVITY_THRESHOLDS))
-    sensitivity_min_threat: dict[str, str] = field(default_factory=lambda: {k: v.value for k, v in _SENSITIVITY_MIN_THREAT.items()})
+    suspicious_decoded_keywords: list[str] = field(
+        default_factory=lambda: list(_SUSPICIOUS_DECODED_KEYWORDS)
+    )
+    sensitivity_thresholds: dict[str, float] = field(
+        default_factory=lambda: dict(_SENSITIVITY_THRESHOLDS)
+    )
+    sensitivity_min_threat: dict[str, str] = field(
+        default_factory=lambda: {k: v.value for k, v in _SENSITIVITY_MIN_THREAT.items()}
+    )
     disclaimer: str = ""
 
 
@@ -286,7 +317,7 @@ def load_prompt_injection_config(path: str) -> PromptInjectionConfig:
     if not os.path.exists(path):
         raise FileNotFoundError(f"Prompt injection config not found: {path}")
 
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         data = yaml.safe_load(fh.read())
 
     if not isinstance(data, dict) or "detection_patterns" not in data:
@@ -294,16 +325,24 @@ def load_prompt_injection_config(path: str) -> PromptInjectionConfig:
 
     dp = data["detection_patterns"]
     return PromptInjectionConfig(
-        direct_override_patterns=dp.get("direct_override", [p.pattern for p in _DIRECT_OVERRIDE_PATTERNS]),
+        direct_override_patterns=dp.get(
+            "direct_override", [p.pattern for p in _DIRECT_OVERRIDE_PATTERNS]
+        ),
         delimiter_patterns=dp.get("delimiter", [p.pattern for p in _DELIMITER_PATTERNS]),
         role_play_patterns=dp.get("role_play", [p.pattern for p in _ROLE_PLAY_PATTERNS]),
-        context_manipulation_patterns=dp.get("context_manipulation", [p.pattern for p in _CONTEXT_MANIPULATION_PATTERNS]),
+        context_manipulation_patterns=dp.get(
+            "context_manipulation", [p.pattern for p in _CONTEXT_MANIPULATION_PATTERNS]
+        ),
         multi_turn_patterns=dp.get("multi_turn", [p.pattern for p in _MULTI_TURN_PATTERNS]),
         encoding_patterns=dp.get("encoding", [p.pattern for p in _ENCODING_PATTERNS]),
         base64_pattern=dp.get("base64_pattern", _BASE64_PATTERN.pattern),
-        suspicious_decoded_keywords=data.get("suspicious_decoded_keywords", list(_SUSPICIOUS_DECODED_KEYWORDS)),
+        suspicious_decoded_keywords=data.get(
+            "suspicious_decoded_keywords", list(_SUSPICIOUS_DECODED_KEYWORDS)
+        ),
         sensitivity_thresholds=data.get("sensitivity_thresholds", dict(_SENSITIVITY_THRESHOLDS)),
-        sensitivity_min_threat=data.get("sensitivity_min_threat", {k: v.value for k, v in _SENSITIVITY_MIN_THREAT.items()}),
+        sensitivity_min_threat=data.get(
+            "sensitivity_min_threat", {k: v.value for k, v in _SENSITIVITY_MIN_THREAT.items()}
+        ),
         disclaimer=data.get("disclaimer", ""),
     )
 
@@ -311,6 +350,7 @@ def load_prompt_injection_config(path: str) -> PromptInjectionConfig:
 # ---------------------------------------------------------------------------
 # PromptInjectionDetector
 # ---------------------------------------------------------------------------
+
 
 class PromptInjectionDetector:
     """Screens agent inputs for prompt injection attacks (OWASP LLM01 / ASI01).
@@ -359,7 +399,8 @@ class PromptInjectionDetector:
             # Fail closed: treat errors as CRITICAL
             logger.error(
                 "Prompt injection detection error — failing closed | source=%s",
-                source, exc_info=True,
+                source,
+                exc_info=True,
             )
             result = DetectionResult(
                 is_injection=True,
@@ -386,10 +427,7 @@ class PromptInjectionDetector:
         Returns:
             List of ``DetectionResult`` in the same order as *inputs*.
         """
-        return [
-            self.detect(text, source, canary_tokens)
-            for text, source in inputs
-        ]
+        return [self.detect(text, source, canary_tokens) for text, source in inputs]
 
     @property
     def audit_log(self) -> list[AuditRecord]:
@@ -447,24 +485,29 @@ class PromptInjectionDetector:
         # Check custom patterns
         for pattern in self._config.custom_patterns:
             if pattern.search(text):
-                findings.append((
-                    InjectionType.DIRECT_OVERRIDE,
-                    ThreatLevel.HIGH,
-                    0.8,
-                    f"custom:{pattern.pattern}",
-                ))
+                findings.append(
+                    (
+                        InjectionType.DIRECT_OVERRIDE,
+                        ThreatLevel.HIGH,
+                        0.8,
+                        f"custom:{pattern.pattern}",
+                    )
+                )
 
         # Apply sensitivity filter
         threshold = _SENSITIVITY_THRESHOLDS.get(
-            self._config.sensitivity, 0.5,
+            self._config.sensitivity,
+            0.5,
         )
         min_threat = _SENSITIVITY_MIN_THREAT.get(
-            self._config.sensitivity, ThreatLevel.LOW,
+            self._config.sensitivity,
+            ThreatLevel.LOW,
         )
 
         # Filter findings by sensitivity
         filtered = [
-            f for f in findings
+            f
+            for f in findings
             if f[2] >= threshold and _THREAT_ORDER[f[1]] >= _THREAT_ORDER[min_threat]
         ]
 
@@ -502,47 +545,56 @@ class PromptInjectionDetector:
     # -- check methods ------------------------------------------------------
 
     def _check_direct_override(
-        self, text: str,
+        self,
+        text: str,
     ) -> list[tuple[InjectionType, ThreatLevel, float, str]]:
         findings: list[tuple[InjectionType, ThreatLevel, float, str]] = []
         for pattern in _DIRECT_OVERRIDE_PATTERNS:
             if pattern.search(text):
-                findings.append((
-                    InjectionType.DIRECT_OVERRIDE,
-                    ThreatLevel.HIGH,
-                    0.9,
-                    f"direct_override:{pattern.pattern}",
-                ))
+                findings.append(
+                    (
+                        InjectionType.DIRECT_OVERRIDE,
+                        ThreatLevel.HIGH,
+                        0.9,
+                        f"direct_override:{pattern.pattern}",
+                    )
+                )
         return findings
 
     def _check_delimiter_attacks(
-        self, text: str,
+        self,
+        text: str,
     ) -> list[tuple[InjectionType, ThreatLevel, float, str]]:
         findings: list[tuple[InjectionType, ThreatLevel, float, str]] = []
         for pattern in _DELIMITER_PATTERNS:
             if pattern.search(text):
-                findings.append((
-                    InjectionType.DELIMITER_ATTACK,
-                    ThreatLevel.MEDIUM,
-                    0.7,
-                    f"delimiter:{pattern.pattern}",
-                ))
+                findings.append(
+                    (
+                        InjectionType.DELIMITER_ATTACK,
+                        ThreatLevel.MEDIUM,
+                        0.7,
+                        f"delimiter:{pattern.pattern}",
+                    )
+                )
         return findings
 
     def _check_encoding_attacks(
-        self, text: str,
+        self,
+        text: str,
     ) -> list[tuple[InjectionType, ThreatLevel, float, str]]:
         findings: list[tuple[InjectionType, ThreatLevel, float, str]] = []
 
         # Check explicit encoding references
         for pattern in _ENCODING_PATTERNS:
             if pattern.search(text):
-                findings.append((
-                    InjectionType.ENCODING_ATTACK,
-                    ThreatLevel.HIGH,
-                    0.8,
-                    f"encoding:{pattern.pattern}",
-                ))
+                findings.append(
+                    (
+                        InjectionType.ENCODING_ATTACK,
+                        ThreatLevel.HIGH,
+                        0.8,
+                        f"encoding:{pattern.pattern}",
+                    )
+                )
 
         # Check for base64-encoded suspicious content
         for match in _BASE64_PATTERN.finditer(text):
@@ -552,12 +604,14 @@ class PromptInjectionDetector:
                 decoded_lower = decoded.lower()
                 for keyword in _SUSPICIOUS_DECODED_KEYWORDS:
                     if keyword in decoded_lower:
-                        findings.append((
-                            InjectionType.ENCODING_ATTACK,
-                            ThreatLevel.HIGH,
-                            0.85,
-                            f"base64_payload:{keyword}",
-                        ))
+                        findings.append(
+                            (
+                                InjectionType.ENCODING_ATTACK,
+                                ThreatLevel.HIGH,
+                                0.85,
+                                f"base64_payload:{keyword}",
+                            )
+                        )
                         break
             except Exception:
                 pass  # Not valid base64 — skip
@@ -565,31 +619,37 @@ class PromptInjectionDetector:
         return findings
 
     def _check_role_play(
-        self, text: str,
+        self,
+        text: str,
     ) -> list[tuple[InjectionType, ThreatLevel, float, str]]:
         findings: list[tuple[InjectionType, ThreatLevel, float, str]] = []
         for pattern in _ROLE_PLAY_PATTERNS:
             if pattern.search(text):
-                findings.append((
-                    InjectionType.ROLE_PLAY,
-                    ThreatLevel.HIGH,
-                    0.85,
-                    f"role_play:{pattern.pattern}",
-                ))
+                findings.append(
+                    (
+                        InjectionType.ROLE_PLAY,
+                        ThreatLevel.HIGH,
+                        0.85,
+                        f"role_play:{pattern.pattern}",
+                    )
+                )
         return findings
 
     def _check_context_manipulation(
-        self, text: str,
+        self,
+        text: str,
     ) -> list[tuple[InjectionType, ThreatLevel, float, str]]:
         findings: list[tuple[InjectionType, ThreatLevel, float, str]] = []
         for pattern in _CONTEXT_MANIPULATION_PATTERNS:
             if pattern.search(text):
-                findings.append((
-                    InjectionType.CONTEXT_MANIPULATION,
-                    ThreatLevel.MEDIUM,
-                    0.8,
-                    f"context_manipulation:{pattern.pattern}",
-                ))
+                findings.append(
+                    (
+                        InjectionType.CONTEXT_MANIPULATION,
+                        ThreatLevel.MEDIUM,
+                        0.8,
+                        f"context_manipulation:{pattern.pattern}",
+                    )
+                )
         return findings
 
     def _check_canary_leak(
@@ -603,32 +663,40 @@ class PromptInjectionDetector:
         text_lower = text.lower()
         for canary in canary_tokens:
             if canary.lower() in text_lower:
-                findings.append((
-                    InjectionType.CANARY_LEAK,
-                    ThreatLevel.CRITICAL,
-                    1.0,
-                    f"canary_leak:{canary}",
-                ))
+                findings.append(
+                    (
+                        InjectionType.CANARY_LEAK,
+                        ThreatLevel.CRITICAL,
+                        1.0,
+                        f"canary_leak:{canary}",
+                    )
+                )
         return findings
 
     def _check_multi_turn(
-        self, text: str,
+        self,
+        text: str,
     ) -> list[tuple[InjectionType, ThreatLevel, float, str]]:
         findings: list[tuple[InjectionType, ThreatLevel, float, str]] = []
         for pattern in _MULTI_TURN_PATTERNS:
             if pattern.search(text):
-                findings.append((
-                    InjectionType.MULTI_TURN_ESCALATION,
-                    ThreatLevel.MEDIUM,
-                    0.75,
-                    f"multi_turn:{pattern.pattern}",
-                ))
+                findings.append(
+                    (
+                        InjectionType.MULTI_TURN_ESCALATION,
+                        ThreatLevel.MEDIUM,
+                        0.75,
+                        f"multi_turn:{pattern.pattern}",
+                    )
+                )
         return findings
 
     # -- audit trail --------------------------------------------------------
 
     def _record_audit(
-        self, text: str, source: str, result: DetectionResult,
+        self,
+        text: str,
+        source: str,
+        result: DetectionResult,
     ) -> None:
         record = AuditRecord(
             timestamp=datetime.now(timezone.utc),

@@ -62,15 +62,13 @@ import agent_os.integrations.mistral_adapter as _mistral_mod
 
 _mistral_mod._HAS_MISTRAL = True
 
-from agent_os.integrations.langchain_adapter import LangChainKernel
-from agent_os.integrations.langchain_adapter import PolicyViolationError as LangChainPolicyViolation
-from agent_os.integrations.crewai_adapter import CrewAIKernel
+from agent_os.exceptions import PolicyViolationError
+from agent_os.integrations.anthropic_adapter import AnthropicKernel
 from agent_os.integrations.autogen_adapter import AutoGenKernel
 from agent_os.integrations.gemini_adapter import GeminiKernel
-from agent_os.integrations.anthropic_adapter import AnthropicKernel
+from agent_os.integrations.langchain_adapter import LangChainKernel
+from agent_os.integrations.langchain_adapter import PolicyViolationError as LangChainPolicyViolation
 from agent_os.integrations.mistral_adapter import MistralKernel
-from agent_os.exceptions import PolicyViolationError
-
 
 # ============================================================================
 # PolicyInterceptor — tool-call-level enforcement

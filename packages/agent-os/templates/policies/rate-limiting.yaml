@@ -9,7 +9,7 @@ kernel:
 description: |
   Policy template for rate-limiting external API calls.
   Prevents abuse, controls costs, and ensures fair resource usage.
-  
+
   Features:
   - Configurable requests per minute/hour/day
   - Per-domain rate limits
@@ -30,7 +30,7 @@ global_limits:
   max_requests_per_minute: 60
   max_requests_per_hour: 1000
   max_requests_per_day: 10000
-  
+
   # Concurrent request limits
   max_concurrent_requests: 10
 
@@ -38,7 +38,7 @@ policies:
   # ============================================
   # DOMAIN-SPECIFIC RATE LIMITS
   # ============================================
-  
+
   - name: openai_api_limits
     description: Rate limits for OpenAI API calls
     severity: high
@@ -192,4 +192,3 @@ policies:
       max_concurrent_requests: 5
     action: SIGSTOP
     message: "Agent rate limit reached"
-

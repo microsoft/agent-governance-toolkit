@@ -2,28 +2,29 @@
 # Licensed under the MIT License.
 """Tests for MCP Kernel Server tools."""
 
-import sys
 import os
+import sys
+
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from mcp_kernel_server.tools import (
-    VerifyCodeSafetyTool,
+    CMVKReviewCodeTool,
     CMVKVerifyTool,
-    KernelExecuteTool,
+    GetAuditLogTool,
+    IATPReputationTool,
     IATPSignTool,
     IATPVerifyTool,
-    IATPReputationTool,
-    CMVKReviewCodeTool,
-    GetAuditLogTool,
+    KernelExecuteTool,
     ToolResult,
+    VerifyCodeSafetyTool,
 )
-
 
 # =============================================================================
 # VerifyCodeSafetyTool Tests
 # =============================================================================
+
 
 class TestVerifyCodeSafetyTool:
     def setup_method(self):
@@ -114,6 +115,7 @@ class TestVerifyCodeSafetyTool:
 # CMVKVerifyTool Tests
 # =============================================================================
 
+
 class TestCMVKVerifyTool:
     def setup_method(self):
         self.tool = CMVKVerifyTool({"threshold": 0.85})
@@ -168,104 +170,123 @@ class TestCMVKVerifyTool:
 # KernelExecuteTool Tests
 # =============================================================================
 
+
 class TestKernelExecuteTool:
     def setup_method(self):
         self.tool = KernelExecuteTool({"policy_mode": "strict"})
 
     @pytest.mark.asyncio
     async def test_allowed_database_query(self):
-        result = await self.tool.execute({
-            "action": "database_query",
-            "params": {"query": "SELECT 1"},
-            "agent_id": "test-agent",
-            "policies": [],
-        })
+        result = await self.tool.execute(
+            {
+                "action": "database_query",
+                "params": {"query": "SELECT 1"},
+                "agent_id": "test-agent",
+                "policies": [],
+            }
+        )
         assert result.success is True
         assert result.data["action"] == "database_query"
 
     @pytest.mark.asyncio
     async def test_allowed_api_call(self):
-        result = await self.tool.execute({
-            "action": "api_call",
-            "params": {"url": "https://example.com"},
-            "agent_id": "test-agent",
-            "policies": [],
-        })
+        result = await self.tool.execute(
+            {
+                "action": "api_call",
+                "params": {"url": "https://example.com"},
+                "agent_id": "test-agent",
+                "policies": [],
+            }
+        )
         assert result.success is True
 
     @pytest.mark.asyncio
     async def test_read_only_blocks_file_write(self):
-        result = await self.tool.execute({
-            "action": "file_write",
-            "params": {"path": "/tmp/test.txt"},
-            "agent_id": "test-agent",
-            "policies": ["read_only"],
-        })
+        result = await self.tool.execute(
+            {
+                "action": "file_write",
+                "params": {"path": "/tmp/test.txt"},
+                "agent_id": "test-agent",
+                "policies": ["read_only"],
+            }
+        )
         assert result.success is False
         assert "SIGKILL" in result.error
         assert result.metadata["signal"] == "SIGKILL"
 
     @pytest.mark.asyncio
     async def test_read_only_blocks_send_email(self):
-        result = await self.tool.execute({
-            "action": "send_email",
-            "params": {},
-            "agent_id": "test-agent",
-            "policies": ["read_only"],
-        })
+        result = await self.tool.execute(
+            {
+                "action": "send_email",
+                "params": {},
+                "agent_id": "test-agent",
+                "policies": ["read_only"],
+            }
+        )
         assert result.success is False
         assert "read_only" in result.error
 
     @pytest.mark.asyncio
     async def test_read_only_blocks_write_query(self):
-        result = await self.tool.execute({
-            "action": "database_query",
-            "params": {"query": "INSERT INTO users VALUES (1)"},
-            "agent_id": "test-agent",
-            "policies": ["read_only"],
-        })
+        result = await self.tool.execute(
+            {
+                "action": "database_query",
+                "params": {"query": "INSERT INTO users VALUES (1)"},
+                "agent_id": "test-agent",
+                "policies": ["read_only"],
+            }
+        )
         assert result.success is False
 
     @pytest.mark.asyncio
     async def test_no_pii_blocks_ssn(self):
-        result = await self.tool.execute({
-            "action": "api_call",
-            "params": {"data": "ssn: 123-45-6789"},
-            "agent_id": "test-agent",
-            "policies": ["no_pii"],
-        })
+        result = await self.tool.execute(
+            {
+                "action": "api_call",
+                "params": {"data": "ssn: 123-45-6789"},
+                "agent_id": "test-agent",
+                "policies": ["no_pii"],
+            }
+        )
         assert result.success is False
         assert "PII" in result.error or "pii" in result.error.lower()
 
     @pytest.mark.asyncio
     async def test_no_pii_blocks_credit_card(self):
-        result = await self.tool.execute({
-            "action": "api_call",
-            "params": {"credit_card": "4111111111111111"},
-            "agent_id": "test-agent",
-            "policies": ["no_pii"],
-        })
+        result = await self.tool.execute(
+            {
+                "action": "api_call",
+                "params": {"credit_card": "4111111111111111"},
+                "agent_id": "test-agent",
+                "policies": ["no_pii"],
+            }
+        )
         assert result.success is False
 
     @pytest.mark.asyncio
     async def test_requires_approval_blocks_unapproved(self):
-        result = await self.tool.execute({
-            "action": "file_write",
-            "params": {"path": "/tmp/test.txt"},
-            "agent_id": "test-agent",
-            "policies": [],
-        })
+        result = await self.tool.execute(
+            {
+                "action": "file_write",
+                "params": {"path": "/tmp/test.txt"},
+                "agent_id": "test-agent",
+                "policies": [],
+            }
+        )
         assert result.success is False
         assert "requires approval" in result.error
 
     @pytest.mark.asyncio
     async def test_requires_approval_passes_with_approval(self):
-        result = await self.tool.execute({
-            "action": "file_write",
-            "params": {"path": "/tmp/test.txt", "approved": True},
-            "agent_id": "test-agent",
-            "policies": [],
-        })
+        result = await self.tool.execute(
+            {
+                "action": "file_write",
+                "params": {"path": "/tmp/test.txt", "approved": True},
+                "agent_id": "test-agent",
+                "policies": [],
+            }
+        )
         assert result.success is True
 
     def test_check_policies_read_only(self):
@@ -282,12 +303,14 @@ class TestKernelExecuteTool:
 
     @pytest.mark.asyncio
     async def test_metadata_includes_agent_id(self):
-        result = await self.tool.execute({
-            "action": "database_query",
-            "params": {"query": "SELECT 1"},
-            "agent_id": "agent-42",
-            "policies": [],
-        })
+        result = await self.tool.execute(
+            {
+                "action": "database_query",
+                "params": {"query": "SELECT 1"},
+                "agent_id": "agent-42",
+                "policies": [],
+            }
+        )
         assert result.metadata["agent_id"] == "agent-42"
 
 
@@ -295,17 +318,20 @@ class TestKernelExecuteTool:
 # IATPSignTool Tests
 # =============================================================================
 
+
 class TestIATPSignTool:
     def setup_method(self):
         self.tool = IATPSignTool()
 
     @pytest.mark.asyncio
     async def test_sign_content(self):
-        result = await self.tool.execute({
-            "content": "hello world",
-            "agent_id": "agent-1",
-            "capabilities": ["reversible"],
-        })
+        result = await self.tool.execute(
+            {
+                "content": "hello world",
+                "agent_id": "agent-1",
+                "capabilities": ["reversible"],
+            }
+        )
         assert result.success is True
         assert "signature" in result.data
         assert "content_hash" in result.data
@@ -338,74 +364,93 @@ class TestIATPSignTool:
 # IATPVerifyTool Tests
 # =============================================================================
 
+
 class TestIATPVerifyTool:
     def setup_method(self):
         self.tool = IATPVerifyTool()
 
     @pytest.mark.asyncio
     async def test_verify_standard_agent(self):
-        result = await self.tool.execute({
-            "remote_agent_id": "remote-agent-1",
-            "required_trust_level": "standard",
-        })
+        result = await self.tool.execute(
+            {
+                "remote_agent_id": "remote-agent-1",
+                "required_trust_level": "standard",
+            }
+        )
         assert result.success is True
         assert result.data["verified"] is True
 
     @pytest.mark.asyncio
     async def test_verify_any_trust_level(self):
-        result = await self.tool.execute({
-            "remote_agent_id": "remote-agent-1",
-            "required_trust_level": "any",
-        })
+        result = await self.tool.execute(
+            {
+                "remote_agent_id": "remote-agent-1",
+                "required_trust_level": "any",
+            }
+        )
         assert result.success is True
 
     @pytest.mark.asyncio
     async def test_verify_trusted_requires_higher_score(self):
         # Default simulated manifest has trust_level="standard" (score=5) + modifiers
         # Need trust score >= 7 for "trusted"
-        result = await self.tool.execute({
-            "remote_agent_id": "test-agent",
-            "required_trust_level": "trusted",
-        })
+        result = await self.tool.execute(
+            {
+                "remote_agent_id": "test-agent",
+                "required_trust_level": "trusted",
+            }
+        )
         # Default manifest gives standard(5) + reversibility(2) + ephemeral(1) = 8
         assert result.success is True
 
     @pytest.mark.asyncio
     async def test_verify_verified_partner_default_manifest(self):
         # verified_partner requires score >= 10
-        result = await self.tool.execute({
-            "remote_agent_id": "test-agent",
-            "required_trust_level": "verified_partner",
-        })
+        result = await self.tool.execute(
+            {
+                "remote_agent_id": "test-agent",
+                "required_trust_level": "verified_partner",
+            }
+        )
         # Default: standard(5) + reversibility(2) + ephemeral(1) = 8 < 10
         assert result.success is False
 
     @pytest.mark.asyncio
     async def test_pii_requires_ephemeral(self):
         # Default manifest has ephemeral retention, so PII should pass
-        result = await self.tool.execute({
-            "remote_agent_id": "test-agent",
-            "data_classification": "pii",
-        })
+        result = await self.tool.execute(
+            {
+                "remote_agent_id": "test-agent",
+                "data_classification": "pii",
+            }
+        )
         assert result.success is True
 
     @pytest.mark.asyncio
     async def test_pii_blocked_non_ephemeral(self):
-        tool = IATPVerifyTool({
-            "agent_registry": {
-                "non-ephemeral-agent": {
-                    "agent_id": "non-ephemeral-agent",
-                    "trust_level": "trusted",
-                    "scopes": ["data:read"],
-                    "reversibility": {"level": "full"},
-                    "privacy": {"retention_policy": "permanent", "human_in_loop": False, "training_consent": False},
+        tool = IATPVerifyTool(
+            {
+                "agent_registry": {
+                    "non-ephemeral-agent": {
+                        "agent_id": "non-ephemeral-agent",
+                        "trust_level": "trusted",
+                        "scopes": ["data:read"],
+                        "reversibility": {"level": "full"},
+                        "privacy": {
+                            "retention_policy": "permanent",
+                            "human_in_loop": False,
+                            "training_consent": False,
+                        },
+                    }
                 }
             }
-        })
-        result = await tool.execute({
-            "remote_agent_id": "non-ephemeral-agent",
-            "data_classification": "pii",
-        })
+        )
+        result = await tool.execute(
+            {
+                "remote_agent_id": "non-ephemeral-agent",
+                "data_classification": "pii",
+            }
+        )
         assert result.success is False
         assert "PII" in result.error or "ephemeral" in result.error
 
@@ -413,7 +458,11 @@ class TestIATPVerifyTool:
         manifest = {
             "trust_level": "standard",
             "reversibility": {"level": "none"},
-            "privacy": {"retention_policy": "temporary", "human_in_loop": False, "training_consent": False},
+            "privacy": {
+                "retention_policy": "temporary",
+                "human_in_loop": False,
+                "training_consent": False,
+            },
         }
         score = self.tool._calculate_trust_score(manifest)
         assert score == 5  # standard base
@@ -422,7 +471,11 @@ class TestIATPVerifyTool:
         manifest = {
             "trust_level": "standard",
             "reversibility": {"level": "full"},
-            "privacy": {"retention_policy": "temporary", "human_in_loop": False, "training_consent": False},
+            "privacy": {
+                "retention_policy": "temporary",
+                "human_in_loop": False,
+                "training_consent": False,
+            },
         }
         score = self.tool._calculate_trust_score(manifest)
         assert score == 7  # standard(5) + reversibility(2)
@@ -431,17 +484,23 @@ class TestIATPVerifyTool:
         manifest = {
             "trust_level": "verified_partner",
             "reversibility": {"level": "full"},
-            "privacy": {"retention_policy": "ephemeral", "human_in_loop": False, "training_consent": False},
+            "privacy": {
+                "retention_policy": "ephemeral",
+                "human_in_loop": False,
+                "training_consent": False,
+            },
         }
         score = self.tool._calculate_trust_score(manifest)
         assert score <= 10
 
     @pytest.mark.asyncio
     async def test_missing_scopes_rejected(self):
-        result = await self.tool.execute({
-            "remote_agent_id": "test-agent",
-            "required_scopes": ["admin:delete"],
-        })
+        result = await self.tool.execute(
+            {
+                "remote_agent_id": "test-agent",
+                "required_scopes": ["admin:delete"],
+            }
+        )
         assert result.success is False
         assert "scopes" in result.error.lower()
 
@@ -449,6 +508,7 @@ class TestIATPVerifyTool:
 # =============================================================================
 # IATPReputationTool Tests
 # =============================================================================
+
 
 class TestIATPReputationTool:
     def setup_method(self):
@@ -463,57 +523,67 @@ class TestIATPReputationTool:
 
     @pytest.mark.asyncio
     async def test_slash_high_severity(self):
-        result = await self.tool.execute({
-            "action": "slash",
-            "agent_id": "bad-agent",
-            "slash_reason": "hallucination",
-            "slash_severity": "high",
-        })
+        result = await self.tool.execute(
+            {
+                "action": "slash",
+                "agent_id": "bad-agent",
+                "slash_reason": "hallucination",
+                "slash_severity": "high",
+            }
+        )
         assert result.success is True
         assert result.data["penalty_applied"] == 1.0
         assert result.data["new_score"] == 4.0  # 5.0 - 1.0
 
     @pytest.mark.asyncio
     async def test_slash_critical_severity(self):
-        result = await self.tool.execute({
-            "action": "slash",
-            "agent_id": "very-bad-agent",
-            "slash_reason": "data breach",
-            "slash_severity": "critical",
-        })
+        result = await self.tool.execute(
+            {
+                "action": "slash",
+                "agent_id": "very-bad-agent",
+                "slash_reason": "data breach",
+                "slash_severity": "critical",
+            }
+        )
         assert result.data["penalty_applied"] == 2.0
         assert result.data["new_score"] == 3.0  # 5.0 - 2.0
 
     @pytest.mark.asyncio
     async def test_slash_medium_severity(self):
-        result = await self.tool.execute({
-            "action": "slash",
-            "agent_id": "med-agent",
-            "slash_reason": "minor issue",
-            "slash_severity": "medium",
-        })
+        result = await self.tool.execute(
+            {
+                "action": "slash",
+                "agent_id": "med-agent",
+                "slash_reason": "minor issue",
+                "slash_severity": "medium",
+            }
+        )
         assert result.data["penalty_applied"] == 0.5
 
     @pytest.mark.asyncio
     async def test_slash_low_severity(self):
-        result = await self.tool.execute({
-            "action": "slash",
-            "agent_id": "low-agent",
-            "slash_reason": "typo",
-            "slash_severity": "low",
-        })
+        result = await self.tool.execute(
+            {
+                "action": "slash",
+                "agent_id": "low-agent",
+                "slash_reason": "typo",
+                "slash_severity": "low",
+            }
+        )
         assert result.data["penalty_applied"] == 0.25
 
     @pytest.mark.asyncio
     async def test_slash_score_floor_at_zero(self):
         # Slash multiple times to drive below zero
         for _ in range(5):
-            await self.tool.execute({
-                "action": "slash",
-                "agent_id": "floor-agent",
-                "slash_reason": "repeated",
-                "slash_severity": "critical",
-            })
+            await self.tool.execute(
+                {
+                    "action": "slash",
+                    "agent_id": "floor-agent",
+                    "slash_reason": "repeated",
+                    "slash_severity": "critical",
+                }
+            )
         result = await self.tool.execute({"action": "query", "agent_id": "floor-agent"})
         assert result.data["reputation_score"] >= 0.0
 
@@ -524,12 +594,14 @@ class TestIATPReputationTool:
 
     @pytest.mark.asyncio
     async def test_query_after_slash_reflects_change(self):
-        await self.tool.execute({
-            "action": "slash",
-            "agent_id": "tracked-agent",
-            "slash_reason": "test",
-            "slash_severity": "high",
-        })
+        await self.tool.execute(
+            {
+                "action": "slash",
+                "agent_id": "tracked-agent",
+                "slash_reason": "test",
+                "slash_severity": "high",
+            }
+        )
         result = await self.tool.execute({"action": "query", "agent_id": "tracked-agent"})
         assert result.data["reputation_score"] == 4.0
 
@@ -537,6 +609,7 @@ class TestIATPReputationTool:
 # =============================================================================
 # CMVKReviewCodeTool Tests
 # =============================================================================
+
 
 class TestCMVKReviewCodeTool:
     def setup_method(self):
@@ -551,27 +624,35 @@ class TestCMVKReviewCodeTool:
     @pytest.mark.asyncio
     async def test_detects_sql_injection(self):
         code = 'q = base + "SELECT+1"'
-        result = await self.tool.execute({"code": code, "language": "python", "focus": ["security"]})
+        result = await self.tool.execute(
+            {"code": code, "language": "python", "focus": ["security"]}
+        )
         issues = [i["issue"] for i in result.data["issues"]]
         assert any("SQL injection" in i for i in issues)
 
     @pytest.mark.asyncio
     async def test_detects_eval_usage(self):
-        result = await self.tool.execute({"code": "eval(user_input)", "language": "python", "focus": ["security"]})
+        result = await self.tool.execute(
+            {"code": "eval(user_input)", "language": "python", "focus": ["security"]}
+        )
         issues = [i["issue"] for i in result.data["issues"]]
         assert any("eval" in i.lower() for i in issues)
 
     @pytest.mark.asyncio
     async def test_detects_innerhtml(self):
-        code = 'element.innerHTML = userInput;'
-        result = await self.tool.execute({"code": code, "language": "javascript", "focus": ["security"]})
+        code = "element.innerHTML = userInput;"
+        result = await self.tool.execute(
+            {"code": code, "language": "javascript", "focus": ["security"]}
+        )
         issues = [i["issue"] for i in result.data["issues"]]
         assert any("innerHTML" in i or "XSS" in i for i in issues)
 
     @pytest.mark.asyncio
     async def test_focus_filtering_security_only(self):
-        code = 'x = 1'
-        result = await self.tool.execute({"code": code, "language": "python", "focus": ["security"]})
+        code = "x = 1"
+        result = await self.tool.execute(
+            {"code": code, "language": "python", "focus": ["security"]}
+        )
         assert result.data["focus_areas"] == ["security"]
 
     @pytest.mark.asyncio
@@ -583,6 +664,7 @@ class TestCMVKReviewCodeTool:
 # =============================================================================
 # GetAuditLogTool Tests
 # =============================================================================
+
 
 class TestGetAuditLogTool:
     def setup_method(self):
@@ -644,6 +726,7 @@ class TestGetAuditLogTool:
 # =============================================================================
 # ToolResult Tests
 # =============================================================================
+
 
 class TestToolResult:
     def test_tool_result_creation(self):

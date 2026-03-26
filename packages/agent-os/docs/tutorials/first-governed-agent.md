@@ -61,13 +61,13 @@ policies:
       - action: file_read
         paths:
           - "/**"  # Deny all other reads
-  
+
   # Block all writes
   - name: read_only
     deny:
       - action: file_write
       - action: file_delete
-  
+
   # Block network except allowed APIs
   - name: network_restricted
     allow:
@@ -77,7 +77,7 @@ policies:
           - "api.anthropic.com"
     deny:
       - action: http_request
-  
+
   # Block dangerous patterns in output
   - name: no_sensitive_data
     deny:
@@ -121,28 +121,28 @@ kernel = KernelSpace(
 async def analyze_document(file_path: str) -> Dict[str, Any]:
     """
     Analyze a document and return structured insights.
-    
+
     This function is governed by the kernel - any policy
     violations will result in automatic termination.
-    
+
     Args:
         file_path: Path to document (must be in ./data/)
-    
+
     Returns:
         Analysis results including summary, key points, and sentiment
     """
     # Read the document (kernel checks this against sandboxed_reads policy)
     path = Path(file_path)
-    
+
     if not path.exists():
         return {"error": f"File not found: {file_path}"}
-    
+
     content = path.read_text()
-    
+
     # Use LLM to analyze (kernel checks network policy)
     from openai import OpenAI
     client = OpenAI()
-    
+
     response = client.chat.completions.create(
         model="gpt-4",
         messages=[
@@ -153,7 +153,7 @@ async def analyze_document(file_path: str) -> Dict[str, Any]:
                 2. Key points (bullet list)
                 3. Sentiment (positive/negative/neutral)
                 4. Suggested actions
-                
+
                 Format as JSON."""
             },
             {
@@ -163,11 +163,11 @@ async def analyze_document(file_path: str) -> Dict[str, Any]:
         ],
         response_format={"type": "json_object"}
     )
-    
+
     # Parse and return results
     import json
     analysis = json.loads(response.choices[0].message.content)
-    
+
     return {
         "file": file_path,
         "analysis": analysis,
@@ -180,11 +180,11 @@ async def batch_analyze(directory: str) -> list:
     """Analyze all documents in a directory."""
     results = []
     dir_path = Path(directory)
-    
+
     for file_path in dir_path.glob("*.txt"):
         result = await analyze_document(str(file_path))
         results.append(result)
-    
+
     return results
 
 
@@ -192,13 +192,13 @@ async def main():
     """Run the document analyzer."""
     print("📄 Document Analyzer Agent")
     print("=" * 40)
-    
+
     # Analyze a single document
     result = await kernel.execute(
         analyze_document,
         "data/sample.txt"
     )
-    
+
     print("\n📊 Analysis Result:")
     print(json.dumps(result, indent=2))
 
@@ -216,8 +216,8 @@ Create `data/sample.txt`:
 Q3 2024 Performance Report
 
 Executive Summary:
-Our team exceeded quarterly targets by 15%, driven by strong 
-performance in the enterprise segment. Customer satisfaction 
+Our team exceeded quarterly targets by 15%, driven by strong
+performance in the enterprise segment. Customer satisfaction
 scores reached an all-time high of 94%.
 
 Key Achievements:
@@ -231,7 +231,7 @@ Challenges:
 - Increased competition in SMB segment
 
 Outlook:
-We remain optimistic about Q4 with a strong pipeline and 
+We remain optimistic about Q4 with a strong pipeline and
 positive customer feedback on upcoming releases.
 ```
 
@@ -280,7 +280,7 @@ async def analyze_document(file_path: str) -> Dict[str, Any]:
     with metrics.timer("llm_call"):
         # ... LLM call
         pass
-    
+
     metrics.increment("documents_analyzed")
     return result
 ```
@@ -348,9 +348,9 @@ kernel = KernelSpace(
 async def risky_operation(data: str):
     # Pause for human review
     kernel.signal(AgentSignal.SIGSTOP, reason="High-value operation")
-    
+
     # Human reviews in dashboard, sends SIGCONT to continue
-    
+
     return result
 ```
 
@@ -364,10 +364,10 @@ from agent_os.testing import PolicyTestKit
 def test_sandbox_enforcement():
     """Verify sandbox policy blocks unauthorized reads."""
     kit = PolicyTestKit(".agents/security.md")
-    
+
     # Should pass
     kit.assert_allowed("file_read", path="./data/test.txt")
-    
+
     # Should fail
     kit.assert_denied("file_read", path="/etc/passwd")
     kit.assert_denied("file_write", path="./data/test.txt")

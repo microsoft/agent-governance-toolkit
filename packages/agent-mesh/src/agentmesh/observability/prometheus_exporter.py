@@ -8,8 +8,6 @@ trust, policy, latency, and agent-activity metrics for Prometheus scraping.
 
 from __future__ import annotations
 
-
-
 try:
     from prometheus_client import Counter, Gauge, Histogram
     from prometheus_client import start_http_server as _start_http_server

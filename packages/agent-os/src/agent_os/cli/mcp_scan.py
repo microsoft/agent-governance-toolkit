@@ -33,6 +33,7 @@ from agent_os.mcp_security import (
 # Config loading & parsing
 # ---------------------------------------------------------------------------
 
+
 def load_config(path: str) -> dict[str, Any]:
     """Load an MCP configuration file (JSON or YAML).
 
@@ -49,6 +50,7 @@ def load_config(path: str) -> dict[str, Any]:
     if p.suffix in (".yaml", ".yml"):
         try:
             import yaml  # type: ignore[import-untyped]
+
             data = yaml.safe_load(text)
         except ImportError:
             raise ImportError("PyYAML is required to load YAML config files") from None
@@ -94,6 +96,7 @@ def parse_config(config: Any) -> dict[str, list[dict[str, Any]]]:
 # Scanning
 # ---------------------------------------------------------------------------
 
+
 def run_scan(
     servers: dict[str, list[dict[str, Any]]],
     *,
@@ -117,13 +120,11 @@ def run_scan(
         severity_order = {"info": 0, "warning": 1, "critical": 2}
         min_level = severity_order.get(min_severity, 0)
         all_threats = [
-            t for t in all_threats
-            if severity_order.get(t.severity.value, 0) >= min_level
+            t for t in all_threats if severity_order.get(t.severity.value, 0) >= min_level
         ]
         for sname, res in results.items():
             filtered = [
-                t for t in res.threats
-                if severity_order.get(t.severity.value, 0) >= min_level
+                t for t in res.threats if severity_order.get(t.severity.value, 0) >= min_level
             ]
             results[sname] = ScanResult(
                 safe=len(filtered) == 0,
@@ -139,11 +140,12 @@ def run_scan(
 # Formatting
 # ---------------------------------------------------------------------------
 
+
 def _threat_icon(severity: MCPSeverity) -> str:
     if severity == MCPSeverity.CRITICAL:
         return "\u274c"  # ❌
     if severity == MCPSeverity.WARNING:
-        return "\u26a0\ufe0f"   # ⚠️
+        return "\u26a0\ufe0f"  # ⚠️
     return "\u2139\ufe0f"  # ℹ️
 
 
@@ -215,13 +217,15 @@ def format_json_output(
         output["summary"]["tools_scanned"] += result.tools_scanned
         server_threats = []
         for threat in result.threats:
-            server_threats.append({
-                "tool_name": threat.tool_name,
-                "threat_type": threat.threat_type.value,
-                "severity": threat.severity.value,
-                "message": threat.message,
-                "matched_pattern": threat.matched_pattern,
-            })
+            server_threats.append(
+                {
+                    "tool_name": threat.tool_name,
+                    "threat_type": threat.threat_type.value,
+                    "severity": threat.severity.value,
+                    "message": threat.message,
+                    "matched_pattern": threat.matched_pattern,
+                }
+            )
             if threat.severity == MCPSeverity.WARNING:
                 output["summary"]["warnings"] += 1
             elif threat.severity == MCPSeverity.CRITICAL:
@@ -286,6 +290,7 @@ def format_markdown(
 # Fingerprinting (rug pull detection)
 # ---------------------------------------------------------------------------
 
+
 def compute_fingerprints(
     servers: dict[str, list[dict[str, Any]]],
 ) -> dict[str, dict[str, str]]:
@@ -300,9 +305,7 @@ def compute_fingerprints(
             fingerprints[key] = {
                 "tool_name": name,
                 "server_name": server_name,
-                "description_hash": hashlib.sha256(
-                    desc.encode("utf-8")
-                ).hexdigest(),
+                "description_hash": hashlib.sha256(desc.encode("utf-8")).hexdigest(),
                 "schema_hash": hashlib.sha256(
                     json.dumps(schema, sort_keys=True, default=str).encode("utf-8")
                     if schema
@@ -328,28 +331,34 @@ def compare_fingerprints(
             if old["schema_hash"] != fp["schema_hash"]:
                 changed_fields.append("schema")
             if changed_fields:
-                changes.append({
+                changes.append(
+                    {
+                        "key": key,
+                        "tool_name": fp["tool_name"],
+                        "server_name": fp["server_name"],
+                        "changed_fields": changed_fields,
+                    }
+                )
+        else:
+            changes.append(
+                {
                     "key": key,
                     "tool_name": fp["tool_name"],
                     "server_name": fp["server_name"],
-                    "changed_fields": changed_fields,
-                })
-        else:
-            changes.append({
-                "key": key,
-                "tool_name": fp["tool_name"],
-                "server_name": fp["server_name"],
-                "changed_fields": ["new_tool"],
-            })
+                    "changed_fields": ["new_tool"],
+                }
+            )
 
     for key in saved:
         if key not in current:
-            changes.append({
-                "key": key,
-                "tool_name": saved[key]["tool_name"],
-                "server_name": saved[key]["server_name"],
-                "changed_fields": ["removed"],
-            })
+            changes.append(
+                {
+                    "key": key,
+                    "tool_name": saved[key]["tool_name"],
+                    "server_name": saved[key]["server_name"],
+                    "changed_fields": ["removed"],
+                }
+            )
 
     return changes
 
@@ -357,6 +366,7 @@ def compare_fingerprints(
 # ---------------------------------------------------------------------------
 # CLI commands
 # ---------------------------------------------------------------------------
+
 
 def cmd_scan(args: argparse.Namespace) -> int:
     """Execute the ``scan`` sub-command."""
@@ -399,9 +409,7 @@ def cmd_fingerprint(args: argparse.Namespace) -> int:
     current_fps = compute_fingerprints(servers)
 
     if args.output:
-        Path(args.output).write_text(
-            json.dumps(current_fps, indent=2), encoding="utf-8"
-        )
+        Path(args.output).write_text(json.dumps(current_fps, indent=2), encoding="utf-8")
         print(f"Fingerprints saved to {args.output} ({len(current_fps)} tools)")
         return 0
 
@@ -421,8 +429,7 @@ def cmd_fingerprint(args: argparse.Namespace) -> int:
         for change in changes:
             fields = ", ".join(change["changed_fields"])
             print(
-                f"  \u274c {change['server_name']}::{change['tool_name']} "
-                f"\u2014 changed: {fields}"
+                f"  \u274c {change['server_name']}::{change['tool_name']} \u2014 changed: {fields}"
             )
         return 2
 
@@ -454,6 +461,7 @@ def cmd_report(args: argparse.Namespace) -> int:
 # Argument parser & entry point
 # ---------------------------------------------------------------------------
 
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -465,9 +473,7 @@ def build_parser() -> argparse.ArgumentParser:
     # -- scan ---------------------------------------------------------------
     scan_parser = subparsers.add_parser("scan", help="Scan MCP config for threats")
     scan_parser.add_argument("config", help="Path to MCP config file (JSON/YAML)")
-    scan_parser.add_argument(
-        "--server", default=None, help="Scan only this server"
-    )
+    scan_parser.add_argument("--server", default=None, help="Scan only this server")
     scan_parser.add_argument(
         "--format",
         choices=["json", "table", "markdown"],
@@ -482,21 +488,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # -- fingerprint --------------------------------------------------------
-    fp_parser = subparsers.add_parser(
-        "fingerprint", help="Register/compare tool fingerprints"
-    )
+    fp_parser = subparsers.add_parser("fingerprint", help="Register/compare tool fingerprints")
     fp_parser.add_argument("config", help="Path to MCP config file (JSON/YAML)")
-    fp_parser.add_argument(
-        "--output", default=None, help="Save fingerprints to this file"
-    )
-    fp_parser.add_argument(
-        "--compare", default=None, help="Compare against saved fingerprint file"
-    )
+    fp_parser.add_argument("--output", default=None, help="Save fingerprints to this file")
+    fp_parser.add_argument("--compare", default=None, help="Compare against saved fingerprint file")
 
     # -- report -------------------------------------------------------------
-    report_parser = subparsers.add_parser(
-        "report", help="Generate a full security report"
-    )
+    report_parser = subparsers.add_parser("report", help="Generate a full security report")
     report_parser.add_argument("config", help="Path to MCP config file (JSON/YAML)")
     report_parser.add_argument(
         "--format",

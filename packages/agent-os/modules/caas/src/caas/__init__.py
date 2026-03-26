@@ -15,42 +15,26 @@ __email__ = "agt@microsoft.com"
 __license__ = "MIT"
 
 # Core data models - always available
-from caas.models import (
-    # Enums
-    ContentTier,
-    ContextLayer,
-    DocumentType,
-    ContentFormat,
-    SourceType,
-    ModelTier,
-    FileType,
-    # Data classes
-    Section,
-    Document,
-    SourceCitation,
-    ContextRequest,
-    ContextResponse,
-    RoutingDecision,
-    ContextTriadItem,
-    ContextTriadState,
-    FileNode,
-    FileEdit,
-    VFSState,
-    FileResponse,
-    FileListResponse,
+# Context Caching - Cost optimization for LLM APIs (CAAS-008)
+from caas.caching import (
+    AnthropicCacheStrategy,
+    CacheConfig,
+    CacheProvider,
+    CacheResult,
+    CacheStats,
+    CacheStrategy,
+    CacheType,
+    ContextCache,
+    LocalCacheStrategy,
+    OpenAICacheStrategy,
+    create_cache,
 )
-
-# Tiered context - single-tier context management
-from caas.triad import ContextTriadManager
-
-# Decay functions for time-based retrieval
-from caas.decay import calculate_decay_factor, apply_decay_to_score, get_time_weighted_score
 
 # Conversation management
 from caas.conversation import ConversationManager
 
-# Heuristic Router - default-route query routing
-from caas.routing import HeuristicRouter
+# Decay functions for time-based retrieval
+from caas.decay import apply_decay_to_score, calculate_decay_factor, get_time_weighted_score
 
 # Document Detection
 from caas.detection import DocumentTypeDetector, StructureAnalyzer
@@ -58,35 +42,50 @@ from caas.detection import DocumentTypeDetector, StructureAnalyzer
 # Ingestion & Processing
 from caas.ingestion import (
     BaseProcessor,
-    PDFProcessor,
-    HTMLProcessor,
     CodeProcessor,
+    HTMLProcessor,
+    PDFProcessor,
     ProcessorFactory,
 )
+from caas.models import (
+    ContentFormat,
+    # Enums
+    ContentTier,
+    ContextLayer,
+    ContextRequest,
+    ContextResponse,
+    ContextTriadItem,
+    ContextTriadState,
+    Document,
+    DocumentType,
+    FileEdit,
+    FileListResponse,
+    FileNode,
+    FileResponse,
+    FileType,
+    ModelTier,
+    RoutingDecision,
+    # Data classes
+    Section,
+    SourceCitation,
+    SourceType,
+    VFSState,
+)
+
+# Heuristic Router - default-route query routing
+from caas.routing import HeuristicRouter
 
 # Storage & Extraction
-from caas.storage import DocumentStore, ContextExtractor
+from caas.storage import ContextExtractor, DocumentStore
+
+# Tiered context - single-tier context management
+from caas.triad import ContextTriadManager
 
 # Tuning
-from caas.tuning import WeightTuner, CorpusAnalyzer
+from caas.tuning import CorpusAnalyzer, WeightTuner
 
 # Virtual File System - Project state management for SDLC agents
 from caas.vfs import VirtualFileSystem
-
-# Context Caching - Cost optimization for LLM APIs (CAAS-008)
-from caas.caching import (
-    ContextCache,
-    CacheConfig,
-    CacheStrategy,
-    AnthropicCacheStrategy,
-    OpenAICacheStrategy,
-    LocalCacheStrategy,
-    CacheProvider,
-    CacheType,
-    CacheResult,
-    CacheStats,
-    create_cache,
-)
 
 # Public API - explicit exports for `from caas import *`
 __all__ = [

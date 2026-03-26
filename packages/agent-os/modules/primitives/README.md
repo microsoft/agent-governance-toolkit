@@ -11,7 +11,7 @@ This package provides foundational data models used across multiple Agent OS com
 ```
 Layer 1 (Primitives): cmvk, emk, caas, agent-primitives
 Layer 2 (Infrastructure): iatp, amb, atr
-Layer 3 (Kernel): agent-control-plane  
+Layer 3 (Kernel): agent-control-plane
 Layer 4/5 (Intelligence): scak, mute-agent
 ```
 

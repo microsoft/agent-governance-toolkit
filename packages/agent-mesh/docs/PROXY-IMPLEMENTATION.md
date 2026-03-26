@@ -102,12 +102,12 @@ rules:
     condition: "action.path == '/etc/passwd' or action.path == '/etc/shadow'"
     action: "deny"
     priority: 100
-  
+
   - name: "block-dangerous-ops"
     condition: "action.tool == 'filesystem_write' or action.tool == 'filesystem_delete'"
     action: "deny"
     priority: 90
-    
+
   - name: "allow-read-operations"
     condition: "action.tool == 'filesystem_read'"
     action: "allow"
@@ -264,7 +264,7 @@ Proxy → Target MCP Server (stdin/stdout)
 # All proxy tests
 pytest tests/test_proxy.py -v
 
-# All CLI tests  
+# All CLI tests
 pytest tests/test_cli.py -v
 
 # Specific test
@@ -293,7 +293,7 @@ def _eval_expression(expr, context):
     if " or " in expr:
         parts = expr.split(" or ")
         return any(self._eval_expression(p, context) for p in parts)
-    
+
     # Then check atomic conditions
     if eq_match: return ...
 ```

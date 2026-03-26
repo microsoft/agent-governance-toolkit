@@ -211,7 +211,7 @@ class PolymorphicDoerAgent(DoerAgent):
 
 All tests pass successfully:
 - ✅ Output modality detection
-- ✅ Data type detection  
+- ✅ Data type detection
 - ✅ Polymorphic output generation
 - ✅ Helper functions
 - ✅ UI component generation
@@ -251,7 +251,7 @@ Component: Table with columns, rows, pagination
    - Core polymorphic output system
    - Modality detection
    - Response generation
-   
+
 2. **generative_ui_engine.py** (483 lines)
    - UI component generation
    - React JSX pseudo-code
@@ -288,7 +288,7 @@ Component: Table with columns, rows, pagination
 
 **Product**: Generative UI Engine SDK
 
-**Value Proposition**: 
+**Value Proposition**:
 - Drop 3 lines of code into your app
 - AI responses automatically render as appropriate UI components
 - No more manual parsing and rendering

@@ -14,7 +14,7 @@ Common issues and solutions for Agent OS.
    ```bash
    # Linux/macOS
    export PATH="$HOME/.local/bin:$PATH"
-   
+
    # Or use Python module directly
    python -m agent_os.cli --help
    ```
@@ -145,7 +145,7 @@ kernel = KernelSpace(policy="strict", debug=True)
 1. **Limit response sizes:**
    ```python
    from atr.tools.safe import HttpClientTool
-   
+
    http = HttpClientTool(max_response_size=1_000_000)  # 1MB limit
    ```
 
@@ -173,7 +173,7 @@ kernel = KernelSpace(policy="strict", debug=True)
    ```bash
    # Redis
    redis-cli ping
-   
+
    # Kafka
    kafka-topics.sh --list --bootstrap-server localhost:9092
    ```
@@ -198,7 +198,7 @@ kernel = KernelSpace(policy="strict", debug=True)
    ```python
    # Publisher
    await bus.publish(Message(topic="tasks", ...))
-   
+
    # Subscriber - must match!
    await bus.subscribe("tasks", handler)
    ```

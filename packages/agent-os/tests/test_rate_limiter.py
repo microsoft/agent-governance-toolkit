@@ -13,7 +13,6 @@ import pytest
 from agent_os.integrations.base import GovernancePolicy
 from agent_os.integrations.rate_limiter import RateLimiter, RateLimitStatus
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -189,9 +188,7 @@ class TestValidation:
 
 class TestRateLimitStatus:
     def test_status_is_immutable(self):
-        status = RateLimitStatus(
-            allowed=True, remaining_calls=5, reset_at=100.0, wait_seconds=0.0
-        )
+        status = RateLimitStatus(allowed=True, remaining_calls=5, reset_at=100.0, wait_seconds=0.0)
         with pytest.raises(AttributeError):
             status.allowed = False
 

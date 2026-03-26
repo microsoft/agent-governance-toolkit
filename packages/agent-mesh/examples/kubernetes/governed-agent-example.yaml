@@ -19,23 +19,23 @@ metadata:
 spec:
   # Container image for the agent
   image: my-company/data-processor:v1.2.0
-  
+
   # Human sponsor responsible for this agent
   sponsor: "alice@company.com"
-  
+
   # Capabilities this agent is authorized to use
   capabilities:
     - "s3:read"
     - "s3:list"
     - "api:analytics"
     - "db:read"
-  
+
   # Policy to apply (standard, strict, permissive, or custom)
   policy: strict
-  
+
   # Number of replicas
   replicas: 3
-  
+
   # Resource requirements
   resources:
     limits:
@@ -44,7 +44,7 @@ spec:
     requests:
       cpu: "250m"
       memory: "256Mi"
-  
+
   # Environment variables
   env:
     - name: LOG_LEVEL
@@ -56,7 +56,7 @@ spec:
         secretKeyRef:
           name: api-credentials
           key: endpoint
-  
+
   # Sidecar configuration
   sidecar:
     enabled: true
@@ -68,12 +68,12 @@ spec:
       requests:
         cpu: "50m"
         memory: "64Mi"
-  
+
   # Trust score configuration
   trustScore:
     initialScore: 500
     minimumScore: 300
-  
+
   # Observability configuration
   observability:
     traces: true

@@ -315,9 +315,7 @@ class _GovernedMessages:
 
                 if self._kernel.policy.allowed_tools:
                     if tool_name not in self._kernel.policy.allowed_tools:
-                        raise PolicyViolationError(
-                            f"Tool not allowed: {tool_name}"
-                        )
+                        raise PolicyViolationError(f"Tool not allowed: {tool_name}")
 
                 if self._kernel.policy.require_human_approval:
                     raise PolicyViolationError(

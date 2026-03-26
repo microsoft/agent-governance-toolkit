@@ -93,6 +93,7 @@ except ImportError:  # pragma: no cover
 # third-party clients (e.g. DynamoDB, Cosmos DB) as backends.
 # =============================================================================
 
+
 class StateBackend(Protocol):
     """Protocol for external state storage.
 
@@ -280,6 +281,7 @@ class RedisBackend:
 # integrations layer where richer validation is needed.
 # =============================================================================
 
+
 @dataclass
 class ExecutionContext:
     """Complete context for a stateless execution request.
@@ -300,6 +302,7 @@ class ExecutionContext:
             execution and persists updates afterward.
         metadata: Arbitrary metadata passed through to the result.
     """
+
     agent_id: str
     policies: list[str] = field(default_factory=list)
     history: list[dict[str, Any]] = field(default_factory=list)
@@ -312,7 +315,7 @@ class ExecutionContext:
             "policies": self.policies,
             "history": self.history,
             "state_ref": self.state_ref,
-            "metadata": self.metadata
+            "metadata": self.metadata,
         }
 
 
@@ -325,6 +328,7 @@ class ExecutionRequest:
     a truncated SHA-256 hash to enable correlation in logs without
     requiring the caller to supply an ID.
     """
+
     action: str
     params: dict[str, Any]
     context: ExecutionContext
@@ -354,6 +358,7 @@ class ExecutionResult:
             context for subsequent requests.
         metadata: Request metadata including ``request_id`` and timestamp.
     """
+
     success: bool
     data: Any
     error: str | None = None
@@ -369,6 +374,7 @@ class ExecutionResult:
 # components.  This keeps the kernel testable and allows swapping backends
 # or policy engines without changing core logic.
 # =============================================================================
+
 
 class StatelessKernel:
     """
@@ -397,14 +403,10 @@ class StatelessKernel:
     DEFAULT_POLICIES = {
         "read_only": {
             "blocked_actions": ["file_write", "database_write", "send_email"],
-            "constraints": {"database_query": {"mode": "read"}}
+            "constraints": {"database_query": {"mode": "read"}},
         },
-        "no_pii": {
-            "blocked_patterns": ["ssn", "social_security", "credit_card", "password"]
-        },
-        "strict": {
-            "require_approval": ["send_email", "file_write", "code_execution"]
-        }
+        "no_pii": {"blocked_patterns": ["ssn", "social_security", "credit_card", "password"]},
+        "strict": {"require_approval": ["send_email", "file_write", "code_execution"]},
     }
 
     def __init__(
@@ -417,17 +419,12 @@ class StatelessKernel:
         self.backend = backend or MemoryBackend()
         self.policies = {**self.DEFAULT_POLICIES, **(policies or {})}
         self.enable_tracing = enable_tracing and _HAS_OTEL
-        self._tracer = (
-            _otel_trace.get_tracer("agent_os.stateless") if self.enable_tracing else None
-        )
+        self._tracer = _otel_trace.get_tracer("agent_os.stateless") if self.enable_tracing else None
         self._backend_type = type(self.backend).__name__
         self.circuit_breaker = CircuitBreaker(circuit_breaker_config)
 
     async def execute(
-        self,
-        action: str,
-        params: dict[str, Any],
-        context: ExecutionContext
+        self, action: str, params: dict[str, Any], context: ExecutionContext
     ) -> ExecutionResult:
         """
         Execute an action statelessly with full policy governance.
@@ -460,12 +457,15 @@ class StatelessKernel:
         """
         request = ExecutionRequest(action=action, params=params, context=context)
 
-        span_ctx = self._start_span("kernel.execute", {
-            "operation": "execute",
-            "action": action,
-            "agent_id": context.agent_id,
-            "backend_type": self._backend_type,
-        })
+        span_ctx = self._start_span(
+            "kernel.execute",
+            {
+                "operation": "execute",
+                "action": action,
+                "agent_id": context.agent_id,
+                "backend_type": self._backend_type,
+            },
+        )
         try:
             return await self._execute_inner(request, action, params, context)
         finally:
@@ -495,8 +495,8 @@ class StatelessKernel:
                 metadata={
                     "request_id": request.request_id,
                     "violation": policy_result["reason"],
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                }
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
             )
 
         # 3. Execute action
@@ -508,7 +508,7 @@ class StatelessKernel:
                 data=None,
                 error=str(e),
                 signal="SIGTERM",
-                metadata={"request_id": request.request_id}
+                metadata={"request_id": request.request_id},
             )
 
         # 4. Update external state if needed
@@ -522,13 +522,16 @@ class StatelessKernel:
         updated_context = ExecutionContext(
             agent_id=context.agent_id,
             policies=context.policies,
-            history=context.history + [{
-                "action": action,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "success": True
-            }],
+            history=context.history
+            + [
+                {
+                    "action": action,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "success": True,
+                }
+            ],
             state_ref=new_state_ref,
-            metadata=context.metadata
+            metadata=context.metadata,
         )
 
         return ExecutionResult(
@@ -537,15 +540,12 @@ class StatelessKernel:
             updated_context=updated_context,
             metadata={
                 "request_id": request.request_id,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
         )
 
     def _check_policies(
-        self,
-        action: str,
-        params: dict[str, Any],
-        policy_names: list[str]
+        self, action: str, params: dict[str, Any], policy_names: list[str]
     ) -> dict[str, Any]:
         """Check if action is allowed under policies.
 
@@ -565,13 +565,19 @@ class StatelessKernel:
 
             # Check blocked actions
             if action in policy.get("blocked_actions", []):
-                allowed_actions = [a for a in ["read", "query", "list"]
-                                   if a not in policy.get("blocked_actions", [])]
-                suggestion = (f"Try a read-only action instead (e.g., {', '.join(allowed_actions[:3])})"
-                              if allowed_actions else "Request policy exception from administrator")
+                allowed_actions = [
+                    a
+                    for a in ["read", "query", "list"]
+                    if a not in policy.get("blocked_actions", [])
+                ]
+                suggestion = (
+                    f"Try a read-only action instead (e.g., {', '.join(allowed_actions[:3])})"
+                    if allowed_actions
+                    else "Request policy exception from administrator"
+                )
                 return {
                     "allowed": False,
-                    "reason": f"Action '{action}' blocked by '{policy_name}' policy. {suggestion}."
+                    "reason": f"Action '{action}' blocked by '{policy_name}' policy. {suggestion}.",
                 }
 
             # Check blocked patterns in params
@@ -584,7 +590,7 @@ class StatelessKernel:
                             f"Content blocked: '{pattern}' detected in request parameters. "
                             f"Policy '{policy_name}' prohibits this pattern. "
                             f"Remove the sensitive content and retry."
-                        )
+                        ),
                     }
 
             # Check requires approval
@@ -596,23 +602,20 @@ class StatelessKernel:
                             f"Action '{action}' requires approval. "
                             f"Add approved=True to params after getting authorization, "
                             f"or use a non-restricted action instead."
-                        )
+                        ),
                     }
 
         return {"allowed": True, "reason": None}
 
     async def _execute_action(
-        self,
-        action: str,
-        params: dict[str, Any],
-        state: dict[str, Any]
+        self, action: str, params: dict[str, Any], state: dict[str, Any]
     ) -> dict[str, Any]:
         """Execute action (stub - real impl dispatches to handlers)."""
         return {
             "data": {
                 "status": "executed",
                 "action": action,
-                "result": f"Action '{action}' executed successfully"
+                "result": f"Action '{action}' executed successfully",
             }
         }
 
@@ -627,11 +630,14 @@ class StatelessKernel:
 
     async def _backend_get(self, key: str) -> dict[str, Any] | None:
         """Get from backend through circuit breaker with tracing."""
-        span_ctx = self._start_span("kernel.backend.get", {
-            "operation": "get",
-            "key": key,
-            "backend_type": self._backend_type,
-        })
+        span_ctx = self._start_span(
+            "kernel.backend.get",
+            {
+                "operation": "get",
+                "key": key,
+                "backend_type": self._backend_type,
+            },
+        )
         try:
             return await self.circuit_breaker.call(self.backend.get, key)
         except CircuitBreakerOpen:
@@ -639,15 +645,16 @@ class StatelessKernel:
         finally:
             self._end_span(span_ctx)
 
-    async def _backend_set(
-        self, key: str, value: dict[str, Any], ttl: int | None = None
-    ) -> None:
+    async def _backend_set(self, key: str, value: dict[str, Any], ttl: int | None = None) -> None:
         """Set in backend through circuit breaker with tracing."""
-        span_ctx = self._start_span("kernel.backend.set", {
-            "operation": "set",
-            "key": key,
-            "backend_type": self._backend_type,
-        })
+        span_ctx = self._start_span(
+            "kernel.backend.set",
+            {
+                "operation": "set",
+                "key": key,
+                "backend_type": self._backend_type,
+            },
+        )
         try:
             await self.circuit_breaker.call(self.backend.set, key, value, ttl)
         except CircuitBreakerOpen:
@@ -657,11 +664,14 @@ class StatelessKernel:
 
     async def _backend_delete(self, key: str) -> None:
         """Delete from backend through circuit breaker with tracing."""
-        span_ctx = self._start_span("kernel.backend.delete", {
-            "operation": "delete",
-            "key": key,
-            "backend_type": self._backend_type,
-        })
+        span_ctx = self._start_span(
+            "kernel.backend.delete",
+            {
+                "operation": "delete",
+                "key": key,
+                "backend_type": self._backend_type,
+            },
+        )
         try:
             await self.circuit_breaker.call(self.backend.delete, key)
         except CircuitBreakerOpen:
@@ -673,9 +683,7 @@ class StatelessKernel:
     # OpenTelemetry helpers
     # -----------------------------------------------------------------
 
-    def _start_span(
-        self, name: str, attributes: dict[str, str]
-    ) -> Any | None:
+    def _start_span(self, name: str, attributes: dict[str, str]) -> Any | None:
         """Start an OTel span if tracing is enabled. Returns a context token."""
         if not self._tracer:
             return None
@@ -698,13 +706,14 @@ class StatelessKernel:
 # Helper Functions
 # =============================================================================
 
+
 async def stateless_execute(
     action: str,
     params: dict,
     agent_id: str,
     policies: list[str] | None = None,
     history: list[dict] | None = None,
-    backend: StateBackend | None = None
+    backend: StateBackend | None = None,
 ) -> ExecutionResult:
     """Convenience function for one-shot stateless execution.
 
@@ -734,9 +743,5 @@ async def stateless_execute(
         True
     """
     kernel = StatelessKernel(backend=backend)
-    context = ExecutionContext(
-        agent_id=agent_id,
-        policies=policies or [],
-        history=history or []
-    )
+    context = ExecutionContext(agent_id=agent_id, policies=policies or [], history=history or [])
     return await kernel.execute(action, params, context)

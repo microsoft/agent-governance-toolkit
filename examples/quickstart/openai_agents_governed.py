@@ -30,8 +30,8 @@ from agent_os.integrations.openai_agents_sdk import (
 # ── 1. Define a strict governance policy ──────────────────────────────────
 policy = GovernancePolicy(
     allowed_tools=["file_search", "code_interpreter"],  # explicit allowlist
-    blocked_tools=["shell_exec", "network_request"],    # explicit blocklist
-    blocked_patterns=["DROP TABLE", "rm -rf"],           # ban dangerous strings
+    blocked_tools=["shell_exec", "network_request"],  # explicit blocklist
+    blocked_patterns=["DROP TABLE", "rm -rf"],  # ban dangerous strings
     max_tool_calls=10,
 )
 
@@ -56,7 +56,13 @@ async def main() -> None:
         await web_search("AI governance news")
     except PolicyViolationError as exc:
         print(f"    🚫 BLOCKED — {exc}")
-        audit.append({"ts": datetime.now().isoformat(), "tool": "web_search", "status": "BLOCKED"})
+        audit.append(
+            {
+                "ts": datetime.now().isoformat(),
+                "tool": "web_search",
+                "status": "BLOCKED",
+            }
+        )
 
     # ── 3. Policy violation: blocked content in argument ──────────────────
     print("\n[2] Allowed tool called with a dangerous argument …")
@@ -69,7 +75,13 @@ async def main() -> None:
         await code_interpreter("import os; os.system('rm -rf /')")
     except PolicyViolationError as exc:
         print(f"    🚫 BLOCKED — {exc}")
-        audit.append({"ts": datetime.now().isoformat(), "tool": "code_interpreter", "status": "BLOCKED"})
+        audit.append(
+            {
+                "ts": datetime.now().isoformat(),
+                "tool": "code_interpreter",
+                "status": "BLOCKED",
+            }
+        )
 
     # ── 4. Compliant tool call succeeds ───────────────────────────────────
     print("\n[3] Allowed tool called with safe content …")
@@ -80,12 +92,16 @@ async def main() -> None:
 
     result = await file_search("Find Q4 financial reports")
     print(f"    ✅ ALLOWED — guardrails passed, found: {result}")
-    audit.append({"ts": datetime.now().isoformat(), "tool": "file_search", "status": "ALLOWED"})
+    audit.append(
+        {"ts": datetime.now().isoformat(), "tool": "file_search", "status": "ALLOWED"}
+    )
 
     # ── 5. Audit trail ────────────────────────────────────────────────────
     print("\n── Audit Trail ──────────────────────────────────────────")
     for i, entry in enumerate(audit, 1):
-        print(f"  [{i}] {entry['ts']}  tool={entry['tool']!r}  status={entry['status']}")
+        print(
+            f"  [{i}] {entry['ts']}  tool={entry['tool']!r}  status={entry['status']}"
+        )
     print("\n🎉 OpenAI Agents SDK governance demo complete.")
 
 

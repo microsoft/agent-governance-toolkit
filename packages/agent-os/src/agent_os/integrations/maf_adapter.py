@@ -36,12 +36,14 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Awaitable
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
+
+from agent_sre.anomaly import RiskLevel, RogueAgentDetector, RogueDetectorConfig
+from agentmesh.governance import AuditEntry, AuditLog
 
 from agent_os.policies import PolicyDecision, PolicyEvaluator
-from agentmesh.governance import AuditEntry, AuditLog
-from agent_sre.anomaly import RiskLevel, RogueAgentDetector, RogueDetectorConfig
 
 logger = logging.getLogger(__name__)
 
@@ -136,9 +138,7 @@ class GovernancePolicyMiddleware(AgentMiddleware):
         if messages:
             last_msg = messages[-1]
             # Message.text is the MAF accessor; fall back to str()
-            last_message_text = (
-                getattr(last_msg, "text", None) or str(last_msg)
-            )
+            last_message_text = getattr(last_msg, "text", None) or str(last_msg)
 
         # Build context dict for the policy evaluator.
         eval_context: dict[str, Any] = {
@@ -262,16 +262,12 @@ class CapabilityGuardMiddleware(FunctionMiddleware):
         call_next: Callable[[], Awaitable[None]],
     ) -> None:
         """Guard tool invocations against capability policy."""
-        func_name = getattr(
-            getattr(context, "function", None), "name", "unknown"
-        )
+        func_name = getattr(getattr(context, "function", None), "name", "unknown")
 
         if self._is_denied(func_name):
             logger.info("Capability DENY: tool '%s' blocked by policy", func_name)
 
-            context.result = (
-                f"⛔ Tool '{func_name}' is not permitted by governance policy"
-            )
+            context.result = f"⛔ Tool '{func_name}' is not permitted by governance policy"
 
             if self.audit_log:
                 self.audit_log.log(
@@ -283,9 +279,7 @@ class CapabilityGuardMiddleware(FunctionMiddleware):
                     outcome="denied",
                 )
 
-            raise MiddlewareTermination(
-                f"Tool '{func_name}' is not permitted by governance policy"
-            )
+            raise MiddlewareTermination(f"Tool '{func_name}' is not permitted by governance policy")
 
         # Tool is allowed — log start, execute, log completion.
         if self.audit_log:
@@ -455,9 +449,7 @@ class RogueDetectionMiddleware(FunctionMiddleware):
         call_next: Callable[[], Awaitable[None]],
     ) -> None:
         """Assess rogue risk before allowing tool execution."""
-        func_name = getattr(
-            getattr(context, "function", None), "name", "unknown"
-        )
+        func_name = getattr(getattr(context, "function", None), "name", "unknown")
         now = time.time()
 
         # Feed the observation into the detector's analyzers.
@@ -496,15 +488,13 @@ class RogueDetectionMiddleware(FunctionMiddleware):
                 )
 
             raise MiddlewareTermination(
-                f"Agent '{self.agent_id}' quarantined: "
-                f"risk={assessment.risk_level.value}"
+                f"Agent '{self.agent_id}' quarantined: risk={assessment.risk_level.value}"
             )
 
         # Log a warning for MEDIUM or above but allow execution.
         if assessment.risk_level in (RiskLevel.MEDIUM, RiskLevel.HIGH):
             logger.warning(
-                "Rogue WARNING for agent '%s': risk=%s score=%.2f "
-                "(tool=%s)",
+                "Rogue WARNING for agent '%s': risk=%s score=%.2f (tool=%s)",
                 self.agent_id,
                 assessment.risk_level.value,
                 assessment.composite_score,
@@ -599,9 +589,7 @@ def create_governance_middleware(
     if policy_directory is not None:
         evaluator = PolicyEvaluator()
         evaluator.load_policies(policy_directory)
-        stack.append(
-            GovernancePolicyMiddleware(evaluator=evaluator, audit_log=audit_log)
-        )
+        stack.append(GovernancePolicyMiddleware(evaluator=evaluator, audit_log=audit_log))
 
     # 3. Capability guard.
     if allowed_tools is not None or denied_tools is not None:

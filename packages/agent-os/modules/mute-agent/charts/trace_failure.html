@@ -1,12 +1,12 @@
 <html>
     <head>
         <meta charset="utf-8">
-        
+
             <script src="lib/bindings/utils.js"></script>
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
             <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-            
-        
+
+
 <center>
 <h1></h1>
 </center>
@@ -40,24 +40,24 @@
                  float: left;
              }
 
-             
 
-             
 
-             
+
+
+
         </style>
     </head>
 
 
     <body>
         <div class="card" style="width: 100%">
-            
-            
+
+
             <div id="mynetwork" class="card-body"></div>
         </div>
 
-        
-        
+
+
 
         <script type="text/javascript">
 
@@ -77,15 +77,15 @@
                   value : []
               };
 
-              
 
-              
+
+
 
               // This method is responsible for drawing the graph, returns the drawn network
               function drawGraph() {
                   var container = document.getElementById('mynetwork');
 
-                  
+
 
                   // parsing and collecting nodes and edges from the python
                   nodes = new vis.DataSet([{"borderWidth": 3, "borderWidthSelected": 4, "color": "#e74c3c", "font": {"color": "#000000"}, "id": "delete_db", "label": "delete_db", "shape": "dot", "size": 30, "title": "delete_db\n\u2717 FAILED\nMissing approval_token\nMissing backup_required"}, {"color": "#95a5a6", "font": {"color": "#000000"}, "id": "read_file", "label": "read_file", "shape": "dot", "size": 20, "title": "read_file\n\u25cb Unreachable (path severed)"}, {"color": "#95a5a6", "font": {"color": "#000000"}, "id": "write_file", "label": "write_file", "shape": "dot", "size": 20, "title": "write_file\n\u25cb Unreachable (path severed)"}, {"color": "#95a5a6", "font": {"color": "#000000"}, "id": "auth_check", "label": "auth_check", "shape": "dot", "size": 20, "title": "auth_check\n\u25cb Unreachable (path severed)"}, {"color": "#95a5a6", "font": {"color": "#000000"}, "id": "approval_token", "label": "approval_token", "shape": "dot", "size": 20, "title": "approval_token\n\u25cb Unreachable (path severed)"}, {"color": "#95a5a6", "font": {"color": "#000000"}, "id": "backup_required", "label": "backup_required", "shape": "dot", "size": 20, "title": "backup_required\n\u25cb Unreachable (path severed)"}]);
@@ -102,30 +102,30 @@
 
                   var options = {"physics": {"enabled": true, "barnesHut": {"gravitationalConstant": -8000, "centralGravity": 0.3, "springLength": 150, "springConstant": 0.04}}, "nodes": {"font": {"size": 16, "face": "arial"}}, "edges": {"arrows": {"to": {"enabled": true, "scaleFactor": 0.5}}, "smooth": {"type": "continuous"}}};
 
-                  
 
 
-                  
+
+
 
                   network = new vis.Network(container, data, options);
 
-                  
-
-                  
-
-                  
 
 
-                  
+
+
+
+
+
+
 
                   return network;
 
               }
               drawGraph();
         </script>
-    
-        <div style="position: absolute; top: 10px; right: 10px; background: white; 
-                    padding: 15px; border: 2px solid #ccc; border-radius: 5px; 
+
+        <div style="position: absolute; top: 10px; right: 10px; background: white;
+                    padding: 15px; border: 2px solid #ccc; border-radius: 5px;
                     font-family: Arial; max-width: 300px;">
             <h3 style="margin: 0 0 10px 0;">Execution Trace Legend</h3>
             <p style="margin: 5px 0;"><span style="color: #2ecc71;">●</span> <strong>Green:</strong> Traversed successfully (0)</p>

@@ -11,28 +11,25 @@ Run with: python -m pytest tests/test_adapter_quality.py -v --tb=short
 
 import asyncio
 import logging
-import time
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
+from agent_os.integrations.autogen_adapter import AutoGenKernel
 from agent_os.integrations.base import (
     BaseIntegration,
-    ExecutionContext,
     GovernancePolicy,
-)
-from agent_os.integrations.openai_adapter import (
-    OpenAIKernel,
-    retry_with_backoff,
-    _is_transient,
 )
 from agent_os.integrations.langchain_adapter import (
     LangChainKernel,
     PolicyViolationError,
 )
-from agent_os.integrations.autogen_adapter import AutoGenKernel
+from agent_os.integrations.openai_adapter import (
+    OpenAIKernel,
+    _is_transient,
+    retry_with_backoff,
+)
 from agent_os.integrations.semantic_kernel_adapter import SemanticKernelWrapper
-
 
 # =============================================================================
 # Retry Logic (OpenAI adapter — #181)

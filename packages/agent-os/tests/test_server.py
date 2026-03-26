@@ -5,7 +5,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from agent_os.server.app import GovServer, create_app
+from agent_os.server.app import GovServer
 
 
 @pytest.fixture
@@ -18,6 +18,7 @@ def client():
 # Root endpoint
 # =========================================================================
 
+
 class TestRootEndpoint:
     def test_root_returns_api_info(self, client):
         resp = client.get("/")
@@ -29,6 +30,7 @@ class TestRootEndpoint:
 
     def test_root_version_matches(self, client):
         from agent_os import __version__
+
         resp = client.get("/")
         assert resp.json()["version"] == __version__
 
@@ -36,6 +38,7 @@ class TestRootEndpoint:
 # =========================================================================
 # Health endpoints
 # =========================================================================
+
 
 class TestHealthEndpoints:
     def test_health_returns_200(self, client):
@@ -62,6 +65,7 @@ class TestHealthEndpoints:
 # =========================================================================
 # Injection detection
 # =========================================================================
+
 
 class TestInjectionDetection:
     def test_detect_benign_input(self, client):
@@ -136,6 +140,7 @@ class TestInjectionDetection:
 # Batch detection
 # =========================================================================
 
+
 class TestBatchDetection:
     def test_batch_detection(self, client):
         resp = client.post(
@@ -182,6 +187,7 @@ class TestBatchDetection:
 # Metrics
 # =========================================================================
 
+
 class TestMetrics:
     def test_metrics_returns_200(self, client):
         resp = client.get("/api/v1/metrics")
@@ -206,6 +212,7 @@ class TestMetrics:
 # =========================================================================
 # Audit endpoint
 # =========================================================================
+
 
 class TestAuditEndpoint:
     def test_audit_empty_initially(self, client):
@@ -244,6 +251,7 @@ class TestAuditEndpoint:
 # =========================================================================
 # Execute endpoint
 # =========================================================================
+
 
 class TestExecuteEndpoint:
     def test_execute_simple_action(self, client):
@@ -288,6 +296,7 @@ class TestExecuteEndpoint:
 # Error handling
 # =========================================================================
 
+
 class TestErrorHandling:
     def test_invalid_json_body(self, client):
         resp = client.post(
@@ -312,6 +321,7 @@ class TestErrorHandling:
 # =========================================================================
 # Response timing
 # =========================================================================
+
 
 class TestResponseTiming:
     def test_response_time_header_on_root(self, client):

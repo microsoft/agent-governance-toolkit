@@ -7,13 +7,15 @@ Credentials with configurable TTL (default 15 min).
 Expired credentials are rejected; rotation is automatic and zero-downtime.
 """
 
-from datetime import datetime, timedelta
-from typing import Callable, Optional, Literal
-from pydantic import BaseModel, Field
 import hashlib
 import logging
-import uuid
 import secrets
+import uuid
+from collections.abc import Callable
+from datetime import datetime, timedelta
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 from agentmesh.constants import CREDENTIAL_ROTATION_THRESHOLD_SECONDS
 
@@ -49,25 +51,25 @@ class Credential(BaseModel):
 
     # Status
     status: Literal["active", "rotated", "revoked", "expired"] = Field(default="active")
-    revoked_at: Optional[datetime] = Field(None)
-    revocation_reason: Optional[str] = Field(None)
+    revoked_at: datetime | None = Field(None)
+    revocation_reason: str | None = Field(None)
 
     # Rotation
-    previous_credential_id: Optional[str] = Field(None, description="Previous credential if rotated")
+    previous_credential_id: str | None = Field(None, description="Previous credential if rotated")
     rotation_count: int = Field(default=0)
 
     # Context
-    issued_for: Optional[str] = Field(None, description="Purpose/context for issuance")
-    client_ip: Optional[str] = Field(None, description="IP address of requester")
+    issued_for: str | None = Field(None, description="Purpose/context for issuance")
+    client_ip: str | None = Field(None, description="IP address of requester")
 
     @classmethod
     def issue(
         cls,
         agent_did: str,
-        capabilities: Optional[list[str]] = None,
-        resources: Optional[list[str]] = None,
+        capabilities: list[str] | None = None,
+        resources: list[str] | None = None,
         ttl_seconds: int = 900,  # 15 minutes default
-        issued_for: Optional[str] = None,
+        issued_for: str | None = None,
     ) -> "Credential":
         """Issue a new credential for an agent.
 
@@ -113,7 +115,9 @@ class Credential(BaseModel):
             return False
         return datetime.utcnow() < self.expires_at
 
-    def is_expiring_soon(self, threshold_seconds: int = CREDENTIAL_ROTATION_THRESHOLD_SECONDS) -> bool:
+    def is_expiring_soon(
+        self, threshold_seconds: int = CREDENTIAL_ROTATION_THRESHOLD_SECONDS
+    ) -> bool:
         """Check if credential is about to expire.
 
         Args:
@@ -262,10 +266,10 @@ class CredentialManager:
     def issue(
         self,
         agent_did: str,
-        capabilities: Optional[list[str]] = None,
-        resources: Optional[list[str]] = None,
-        ttl_seconds: Optional[int] = None,
-        issued_for: Optional[str] = None,
+        capabilities: list[str] | None = None,
+        resources: list[str] | None = None,
+        ttl_seconds: int | None = None,
+        issued_for: str | None = None,
     ) -> Credential:
         """Issue a new credential and store it in the manager.
 
@@ -290,7 +294,7 @@ class CredentialManager:
         self._store(cred)
         return cred
 
-    def validate(self, token: str) -> Optional[Credential]:
+    def validate(self, token: str) -> Credential | None:
         """Validate a token and return the credential if valid.
 
         Args:
@@ -310,7 +314,7 @@ class CredentialManager:
 
         return None  # Not found
 
-    def rotate(self, credential_id: str) -> Optional[Credential]:
+    def rotate(self, credential_id: str) -> Credential | None:
         """Rotate a credential, replacing it with a new one.
 
         Args:
@@ -418,7 +422,8 @@ class CredentialManager:
             The number of credentials removed.
         """
         expired = [
-            cid for cid, cred in self._credentials.items()
+            cid
+            for cid, cred in self._credentials.items()
             if not cred.is_valid() and cred.status != "active"
         ]
 

@@ -28,62 +28,62 @@
       .comment { fill: #6272a4; }
     </style>
   </defs>
-  
+
   <!-- Terminal window -->
   <rect width="800" height="500" rx="10" fill="#282a36"/>
-  
+
   <!-- Title bar -->
   <rect width="800" height="30" rx="10" fill="#44475a"/>
   <circle cx="20" cy="15" r="6" fill="#ff5555"/>
   <circle cx="40" cy="15" r="6" fill="#f1fa8c"/>
   <circle cx="60" cy="15" r="6" fill="#50fa7b"/>
   <text x="400" y="20" text-anchor="middle" fill="#f8f8f2" font-family="system-ui" font-size="13">Agent OS - Terminal Demo</text>
-  
+
   <!-- Terminal content -->
   <g class="terminal" transform="translate(20, 55)">
     <!-- Line 1: pip install -->
     <g class="line1">
       <text y="0"><tspan class="prompt">$ </tspan><tspan class="command">pip install agent-os-kernel</tspan></text>
     </g>
-    
+
     <!-- Line 2: install output -->
     <g class="line2">
       <text y="25" class="output">Successfully installed agent-os-1.1.0</text>
     </g>
-    
+
     <!-- Line 3: run example -->
     <g class="line3">
       <text y="60"><tspan class="prompt">$ </tspan><tspan class="command">python examples/hello-world/agent.py</tspan></text>
     </g>
-    
+
     <!-- Line 4: output header -->
     <g class="line4">
       <text y="95" class="output">🚀 Hello World Agent</text>
       <text y="115" class="output">====================</text>
     </g>
-    
+
     <!-- Line 5: success -->
     <g class="line5">
       <text y="145" class="success">✅ Agent executed successfully</text>
       <text y="165" class="output">📤 Result: Hello from a governed agent, World!</text>
     </g>
-    
+
     <!-- Line 6: dangerous command -->
     <g class="line6">
       <text y="200"><tspan class="prompt">$ </tspan><tspan class="command">python -c "from agent_os import KernelSpace; k=KernelSpace(); k.execute('DROP TABLE users')"</tspan></text>
     </g>
-    
+
     <!-- Line 7: blocked -->
     <g class="line7">
       <text y="235" class="error">❌ SIGKILL: Policy violation detected</text>
       <text y="255" class="error">   Action 'DROP TABLE' blocked by kernel policy</text>
     </g>
-    
+
     <!-- Line 8: final prompt -->
     <g class="line8">
       <text y="295"><tspan class="prompt">$ </tspan><tspan class="cursor" fill="#f8f8f2">▌</tspan></text>
     </g>
-    
+
     <!-- Info box -->
     <g transform="translate(0, 330)">
       <rect width="760" height="80" rx="5" fill="#44475a"/>

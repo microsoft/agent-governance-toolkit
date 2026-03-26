@@ -10,19 +10,19 @@ metadata:
 spec:
   image: my-company/customer-service-agent:v2.0.0
   sponsor: "support-lead@company.com"
-  
+
   capabilities:
     - "crm:read"
     - "crm:write"
     - "ticketing:read"
     - "ticketing:write"
     - "email:send"
-  
+
   policy: standard
-  
+
   # Higher replica count for customer-facing service
   replicas: 5
-  
+
   resources:
     limits:
       cpu: "500m"
@@ -30,7 +30,7 @@ spec:
     requests:
       cpu: "200m"
       memory: "256Mi"
-  
+
   env:
     - name: CRM_API_URL
       valueFrom:
@@ -44,11 +44,11 @@ spec:
           key: ticket-system-url
     - name: MAX_CONCURRENT_CHATS
       value: "10"
-  
+
   trustScore:
     initialScore: 600  # Higher initial score for customer-facing
     minimumScore: 400
-  
+
   observability:
     traces: true
     metrics: true

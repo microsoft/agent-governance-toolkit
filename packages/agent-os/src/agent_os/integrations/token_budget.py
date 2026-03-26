@@ -17,6 +17,7 @@ from .base import GovernancePolicy
 @dataclass(frozen=True)
 class TokenBudgetStatus:
     """Snapshot of an agent's token budget status."""
+
     used: int
     limit: int
     remaining: int
@@ -28,6 +29,7 @@ class TokenBudgetStatus:
 @dataclass
 class _AgentUsage:
     """Internal mutable record of per-agent token consumption."""
+
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0

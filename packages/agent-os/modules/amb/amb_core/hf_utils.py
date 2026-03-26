@@ -47,6 +47,7 @@ try:
         list_repo_files,
         upload_file,
     )
+
     HF_AVAILABLE = True
 except ImportError:
     HF_AVAILABLE = False
@@ -254,6 +255,7 @@ def push_message_logs(
 
     # Create temporary file
     import tempfile
+
     with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
         for msg in messages:
             f.write(json.dumps(msg, default=str) + "\n")
@@ -316,13 +318,13 @@ def create_dataset_card(
 {card_data.to_yaml()}
 ---
 
-# {repo_id.split('/')[-1]}
+# {repo_id.split("/")[-1]}
 
 {description}
 
 ## Dataset Description
 
-This dataset contains experiment results and message logs from the 
+This dataset contains experiment results and message logs from the
 [AMB (Agent Message Bus)](https://github.com/microsoft/agent-governance-toolkit) project.
 
 ### Supported Tasks
@@ -383,6 +385,7 @@ This dataset is released under the {license.upper()} License.
     api = HfApi(token=token)
 
     import tempfile
+
     with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
         f.write(card_content)
         temp_path = f.name

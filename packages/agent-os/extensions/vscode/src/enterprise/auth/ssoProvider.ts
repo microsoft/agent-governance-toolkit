@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Enterprise Authentication Module
- * 
+ *
  * Provides SSO integration (SAML, OAuth, OIDC) and authentication
  * management for enterprise deployments.
  */
@@ -40,7 +40,7 @@ export class EnterpriseAuthProvider {
     private _state: AuthState = { isAuthenticated: false };
     private _onAuthStateChanged = new vscode.EventEmitter<AuthState>();
     readonly onAuthStateChanged = this._onAuthStateChanged.event;
-    
+
     private _context: vscode.ExtensionContext;
     private _providers: Map<string, SSOProvider> = new Map();
 
@@ -118,7 +118,7 @@ export class EnterpriseAuthProvider {
     async signIn(providerId?: string): Promise<AuthenticatedUser | undefined> {
         const config = vscode.workspace.getConfiguration('agentOS.enterprise');
         const configuredProvider = config.get<string>('sso.provider');
-        
+
         const id = providerId || configuredProvider;
         if (!id) {
             const selected = await vscode.window.showQuickPick([
@@ -129,7 +129,7 @@ export class EnterpriseAuthProvider {
             ], {
                 placeHolder: 'Select authentication provider'
             });
-            
+
             if (!selected) return undefined;
             return this.signIn(selected.id);
         }

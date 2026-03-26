@@ -12,7 +12,6 @@ from __future__ import annotations
 import enum
 import logging
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -58,10 +57,10 @@ class PluginManifest(BaseModel):
     dependencies: list[str] = Field(
         default_factory=list, description="Required plugins (name>=version)"
     )
-    min_agentmesh_version: Optional[str] = Field(
+    min_agentmesh_version: str | None = Field(
         None, description="Minimum AgentMesh version required"
     )
-    signature: Optional[str] = Field(None, description="Base64-encoded Ed25519 signature")
+    signature: str | None = Field(None, description="Base64-encoded Ed25519 signature")
 
     @field_validator("name")
     @classmethod

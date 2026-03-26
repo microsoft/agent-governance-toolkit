@@ -21,18 +21,18 @@ class AgentMeshProvider(ToolProvider):
         cache_ttl = int(credentials.get("cache_ttl_seconds", "900") or "900")
         identity_name = credentials.get("identity_name", "dify-agent") or "dify-agent"
         capabilities_str = credentials.get("capabilities", "") or ""
-        
+
         # Parse capabilities
         capabilities = []
         if capabilities_str:
             capabilities = [c.strip() for c in capabilities_str.split(",") if c.strip()]
-        
+
         # Generate identity
         self._identity = VerificationIdentity.generate(
             name=identity_name,
             capabilities=capabilities,
         )
-        
+
         # Initialize trust manager
         self._trust_manager = TrustManager(
             identity=self._identity,

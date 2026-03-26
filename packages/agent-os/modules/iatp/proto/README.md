@@ -118,13 +118,13 @@ The main service for agent-to-agent communication:
 service TrustProtocol {
   // Initiate trust handshake between agents
   rpc Handshake(HandshakeRequest) returns (HandshakeResponse);
-  
+
   // Execute an action on the remote agent
   rpc ExecuteAction(ActionRequest) returns (ActionResponse);
-  
+
   // Undo a previous action
   rpc UndoAction(UndoRequest) returns (UndoResponse);
-  
+
   // Health check
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
 }

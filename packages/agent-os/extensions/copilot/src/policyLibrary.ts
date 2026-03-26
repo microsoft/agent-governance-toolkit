@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Policy Library
- * 
+ *
  * Provides compliance policy templates for common regulatory frameworks
  * including GDPR, HIPAA, SOC2, PCI DSS, and custom policies.
  */
@@ -21,7 +21,7 @@ export interface CompliancePolicy {
     auditRequirements: AuditRequirements;
 }
 
-export type ComplianceFramework = 
+export type ComplianceFramework =
     | 'gdpr'
     | 'hipaa'
     | 'soc2'
@@ -115,34 +115,34 @@ export class PolicyLibrary {
      */
     getFrameworks(): { framework: ComplianceFramework; name: string; description: string }[] {
         return [
-            { 
-                framework: 'gdpr', 
-                name: 'GDPR', 
+            {
+                framework: 'gdpr',
+                name: 'GDPR',
                 description: 'EU General Data Protection Regulation - Data privacy and protection for EU citizens'
             },
-            { 
-                framework: 'hipaa', 
-                name: 'HIPAA', 
+            {
+                framework: 'hipaa',
+                name: 'HIPAA',
                 description: 'Health Insurance Portability and Accountability Act - US healthcare data protection'
             },
-            { 
-                framework: 'soc2', 
-                name: 'SOC 2', 
+            {
+                framework: 'soc2',
+                name: 'SOC 2',
                 description: 'Service Organization Control 2 - Security, availability, and confidentiality'
             },
-            { 
-                framework: 'pci-dss', 
-                name: 'PCI DSS', 
+            {
+                framework: 'pci-dss',
+                name: 'PCI DSS',
                 description: 'Payment Card Industry Data Security Standard - Payment data protection'
             },
-            { 
-                framework: 'iso27001', 
-                name: 'ISO 27001', 
+            {
+                framework: 'iso27001',
+                name: 'ISO 27001',
                 description: 'Information Security Management System standard'
             },
-            { 
-                framework: 'ccpa', 
-                name: 'CCPA', 
+            {
+                framework: 'ccpa',
+                name: 'CCPA',
                 description: 'California Consumer Privacy Act - Data privacy for California residents'
             }
         ];
@@ -161,8 +161,8 @@ export class PolicyLibrary {
             return {
                 compliant: false,
                 framework: 'custom',
-                violations: [{ 
-                    controlId: 'unknown', 
+                violations: [{
+                    controlId: 'unknown',
                     controlName: 'Unknown Policy',
                     description: `Policy ${policyId} not found`,
                     severity: 'critical',
@@ -267,7 +267,7 @@ policy:
   name: "${policy.name}"
   framework: ${policy.framework}
   version: "${policy.version}"
-  
+
   data_handling:
     pii_redaction: ${policy.dataHandling.piiRedaction}
     encryption_required: ${policy.dataHandling.encryptionRequired}
@@ -333,7 +333,7 @@ ${policy.controls.map(c => `    - id: ${c.id}
      */
     createPolicyFromDescription(description: string): CompliancePolicy {
         const words = description.toLowerCase();
-        
+
         // Detect framework hints
         let framework: ComplianceFramework = 'custom';
         if (words.includes('gdpr') || words.includes('eu') || words.includes('european')) {
@@ -350,7 +350,7 @@ ${policy.controls.map(c => `    - id: ${c.id}
         const piiRedaction = words.includes('pii') || words.includes('personal') || words.includes('privacy');
         const encryption = words.includes('encrypt') || words.includes('secure');
         const consent = words.includes('consent') || words.includes('permission');
-        
+
         // Extract retention period if mentioned
         const retentionMatch = description.match(/(\d+)\s*(day|days|month|months|year|years)/i);
         let retentionDays = 365;  // Default
@@ -500,7 +500,7 @@ ${policy.controls.map(c => `    - id: ${c.id}
             /patient/i, /diagnosis/i, /treatment/i, /medical/i,
             /health[\s\S]{0,30}record/i, /insurance/i, /prescription/i
         ];
-        
+
         for (const pattern of phiPatterns) {
             if (pattern.test(code) && !this.hasEncryption(code, '')) {
                 violations.push({

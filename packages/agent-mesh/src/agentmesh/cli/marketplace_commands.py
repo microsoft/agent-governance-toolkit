@@ -146,8 +146,6 @@ def publish_plugin(path: str) -> None:
         manifest = load_manifest(Path(path))
         registry = _get_registry()
         registry.register(manifest)
-        console.print(
-            f"[green]✓[/green] Published {manifest.name}@{manifest.version} to registry"
-        )
+        console.print(f"[green]✓[/green] Published {manifest.name}@{manifest.version} to registry")
     except MarketplaceError as exc:
         console.print(f"[red]Error:[/red] {exc}")

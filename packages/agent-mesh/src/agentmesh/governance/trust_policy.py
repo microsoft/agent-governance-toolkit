@@ -10,7 +10,7 @@ priority ordering, and YAML configuration support.
 import re
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -40,7 +40,9 @@ class TrustCondition(BaseModel):
         value: Expected value to compare against.
     """
 
-    field: str = Field(..., description="Dot-notated field path (e.g. 'trust_score', 'agent.namespace')")
+    field: str = Field(
+        ..., description="Dot-notated field path (e.g. 'trust_score', 'agent.namespace')"
+    )
     operator: ConditionOperator = Field(..., description="Comparison operator")
     value: Any = Field(..., description="Value to compare against")
 
@@ -94,7 +96,7 @@ class TrustCondition(BaseModel):
         elif operator == ConditionOperator.matches:
             pattern = str(expected)
             # V31: Reject overly complex regex patterns to prevent ReDoS
-            if len(pattern) > 200 or any(c in pattern for c in ['{', '(+', '(.*)*', '(.+)+']):
+            if len(pattern) > 200 or any(c in pattern for c in ["{", "(+", "(.*)*", "(.+)+"]):
                 return False
             try:
                 return bool(re.search(pattern, str(actual), flags=re.DOTALL))
@@ -116,7 +118,7 @@ class TrustRule(BaseModel):
     """
 
     name: str = Field(..., description="Rule name")
-    description: Optional[str] = Field(None, description="Human-readable description")
+    description: str | None = Field(None, description="Human-readable description")
     condition: TrustCondition = Field(..., description="Condition to evaluate")
     action: Literal["allow", "deny", "warn", "require_approval"] = Field(
         default="deny", description="Action when condition matches"
@@ -144,7 +146,7 @@ class TrustPolicy(BaseModel):
 
     name: str = Field(..., description="Policy name")
     version: str = Field(default="1.0", description="Policy version")
-    description: Optional[str] = Field(None, description="Policy description")
+    description: str | None = Field(None, description="Policy description")
     rules: list[TrustRule] = Field(default_factory=list, description="Ordered list of trust rules")
     defaults: TrustDefaults = Field(
         default_factory=TrustDefaults, description="Default trust parameters"
@@ -161,7 +163,7 @@ class TrustPolicy(BaseModel):
             A fully-constructed ``TrustPolicy`` instance.
         """
         path = Path(path)
-        with open(path, "r") as f:
+        with open(path) as f:
             data = yaml.safe_load(f)
         return cls(**data)
 

@@ -17,10 +17,10 @@
       </feMerge>
     </filter>
   </defs>
-  
+
   <!-- Background -->
   <rect width="1200" height="628" fill="url(#bgGrad)"/>
-  
+
   <!-- Grid pattern -->
   <g opacity="0.1">
     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -28,20 +28,20 @@
     </pattern>
     <rect width="1200" height="628" fill="url(#grid)"/>
   </g>
-  
+
   <!-- Decorative circles -->
   <circle cx="100" cy="100" r="150" fill="none" stroke="#10b981" stroke-width="1" opacity="0.1"/>
   <circle cx="1100" cy="528" r="200" fill="none" stroke="#10b981" stroke-width="1" opacity="0.1"/>
-  
+
   <!-- Logo (left side) -->
   <g transform="translate(100, 180)">
     <!-- Shield hexagon -->
-    <path d="M80 0 L140 40 L140 120 L80 160 L20 120 L20 40 Z" 
-          fill="none" 
-          stroke="url(#emeraldGrad)" 
+    <path d="M80 0 L140 40 L140 120 L80 160 L20 120 L20 40 Z"
+          fill="none"
+          stroke="url(#emeraldGrad)"
           stroke-width="4"
           filter="url(#glow)"/>
-    
+
     <!-- Robot face -->
     <rect x="40" y="40" width="80" height="64" rx="8" fill="url(#emeraldGrad)" opacity="0.9"/>
     <circle cx="60" cy="64" r="10" fill="#0d1117"/>
@@ -49,18 +49,18 @@
     <circle cx="60" cy="64" r="4" fill="#6ee7b7"/>
     <circle cx="100" cy="64" r="4" fill="#6ee7b7"/>
     <rect x="55" y="84" width="50" height="8" rx="4" fill="#0d1117"/>
-    
+
     <!-- Antenna -->
     <line x1="80" y1="40" x2="80" y2="20" stroke="url(#emeraldGrad)" stroke-width="3"/>
     <circle cx="80" cy="14" r="6" fill="url(#emeraldGrad)"/>
-    
+
     <!-- Checkmark badge -->
     <g transform="translate(120, 112)">
       <circle r="16" fill="#0d1117" stroke="#10b981" stroke-width="2"/>
       <path d="M-6 0 L-2 4 L6 -5" stroke="#10b981" stroke-width="2.5" fill="none" stroke-linecap="round"/>
     </g>
   </g>
-  
+
   <!-- Text content -->
   <g transform="translate(320, 200)">
     <text font-family="Inter, system-ui, sans-serif" font-size="72" font-weight="800" fill="#ffffff">
@@ -70,7 +70,7 @@
       Build safe AI agents with natural language
     </text>
   </g>
-  
+
   <!-- Feature badges -->
   <g transform="translate(320, 340)">
     <!-- Template badge -->
@@ -79,14 +79,14 @@
       <rect width="180" height="50" rx="8" fill="none" stroke="#10b981" stroke-width="1"/>
       <text x="20" y="32" font-family="Inter, system-ui, sans-serif" font-size="16" font-weight="600" fill="#6ee7b7">📚 50+ Templates</text>
     </g>
-    
+
     <!-- Compliance badge -->
     <g transform="translate(200, 0)">
       <rect width="220" height="50" rx="8" fill="#10b981" opacity="0.2"/>
       <rect width="220" height="50" rx="8" fill="none" stroke="#10b981" stroke-width="1"/>
       <text x="20" y="32" font-family="Inter, system-ui, sans-serif" font-size="16" font-weight="600" fill="#6ee7b7">🛡️ GDPR • HIPAA • SOC2</text>
     </g>
-    
+
     <!-- Safety badge -->
     <g transform="translate(440, 0)">
       <rect width="200" height="50" rx="8" fill="#10b981" opacity="0.2"/>
@@ -94,33 +94,33 @@
       <text x="20" y="32" font-family="Inter, system-ui, sans-serif" font-size="16" font-weight="600" fill="#6ee7b7">✅ 0% Policy Violations</text>
     </g>
   </g>
-  
+
   <!-- Code preview mockup -->
   <g transform="translate(750, 180)">
     <rect width="380" height="280" rx="12" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
-    
+
     <!-- Title bar -->
     <rect width="380" height="36" rx="12" fill="#161b22"/>
     <circle cx="20" cy="18" r="6" fill="#ff5f57"/>
     <circle cx="40" cy="18" r="6" fill="#febc2e"/>
     <circle cx="60" cy="18" r="6" fill="#28c840"/>
     <text x="100" y="23" font-family="monospace" font-size="12" fill="#8b949e">Copilot Chat</text>
-    
+
     <!-- Chat content -->
     <text x="20" y="70" font-family="monospace" font-size="14" fill="#7ee787">User:</text>
     <text x="20" y="90" font-family="monospace" font-size="12" fill="#c9d1d9">@agentos create an agent that</text>
     <text x="20" y="108" font-family="monospace" font-size="12" fill="#c9d1d9">monitors my API endpoints</text>
-    
+
     <text x="20" y="145" font-family="monospace" font-size="14" fill="#10b981">AgentOS:</text>
     <text x="20" y="165" font-family="monospace" font-size="12" fill="#c9d1d9">🤖 Creating your agent...</text>
     <text x="20" y="185" font-family="monospace" font-size="12" fill="#c9d1d9">✅ Generated Python code</text>
     <text x="20" y="205" font-family="monospace" font-size="12" fill="#c9d1d9">✅ Added safety policies</text>
     <text x="20" y="225" font-family="monospace" font-size="12" fill="#c9d1d9">✅ Ready to deploy!</text>
-    
+
     <rect x="20" y="245" width="120" height="24" rx="4" fill="#238636"/>
     <text x="40" y="262" font-family="system-ui" font-size="12" font-weight="600" fill="#ffffff">Deploy Now</text>
   </g>
-  
+
   <!-- GitHub badge -->
   <g transform="translate(1050, 560)">
     <text font-family="Inter, system-ui, sans-serif" font-size="14" fill="#8b949e">Available on</text>

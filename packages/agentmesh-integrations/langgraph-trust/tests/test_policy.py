@@ -116,11 +116,13 @@ class TestPolicyCheckpoint:
             blocked_patterns=["password"],
         )
         cp = PolicyCheckpoint(policy=policy)
-        result = cp({
-            "total_tokens": 100,
-            "tool_calls": [{"name": "shell_exec"}],
-            "messages": ["my password is abc"],
-        })
+        result = cp(
+            {
+                "total_tokens": 100,
+                "tool_calls": [{"name": "shell_exec"}],
+                "messages": ["my password is abc"],
+            }
+        )
         assert result["trust_result"]["verdict"] == "fail"
         assert len(result["trust_result"]["policy_violations"]) == 3
 

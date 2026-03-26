@@ -70,15 +70,11 @@ class KillSwitch:
         self._kill_history: list[KillResult] = []
         self._substitutes: dict[str, list[str]] = {}
 
-    def register_substitute(
-        self, session_id: str, agent_did: str
-    ) -> None:
+    def register_substitute(self, session_id: str, agent_did: str) -> None:
         """Register a substitute (community edition: no-op, handoff not supported)."""
         self._substitutes.setdefault(session_id, []).append(agent_did)
 
-    def unregister_substitute(
-        self, session_id: str, agent_did: str
-    ) -> None:
+    def unregister_substitute(self, session_id: str, agent_did: str) -> None:
         subs = self._substitutes.get(session_id, [])
         if agent_did in subs:
             subs.remove(agent_did)
@@ -117,9 +113,7 @@ class KillSwitch:
         self.unregister_substitute(session_id, agent_did)
         return result
 
-    def _find_substitute(
-        self, session_id: str, exclude_did: str
-    ) -> str | None:
+    def _find_substitute(self, session_id: str, exclude_did: str) -> str | None:
         return None
 
     @property

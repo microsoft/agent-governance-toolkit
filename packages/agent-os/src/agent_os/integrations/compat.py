@@ -118,9 +118,7 @@ def check_compatibility(
         return True, f"No compatibility data for {pkg_a} + {pkg_b} (assumed OK)"
 
     for min_a, max_a, min_b, max_b in ranges:
-        if _version_in_range(ver_a, min_a, max_a) and _version_in_range(
-            ver_b, min_b, max_b
-        ):
+        if _version_in_range(ver_a, min_a, max_a) and _version_in_range(ver_b, min_b, max_b):
             return True, f"{pkg_a}=={ver_a} + {pkg_b}=={ver_b}: compatible"
 
     return (

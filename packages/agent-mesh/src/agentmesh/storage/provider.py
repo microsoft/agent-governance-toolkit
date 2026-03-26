@@ -7,7 +7,7 @@ Defines the contract that all storage backends must implement.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -15,23 +15,23 @@ class StorageConfig(BaseModel):
     """Configuration for storage provider."""
 
     backend: str = Field(default="memory", description="Storage backend type")
-    connection_string: Optional[str] = Field(default=None, description="Connection string")
+    connection_string: str | None = Field(default=None, description="Connection string")
     pool_size: int = Field(default=10, ge=1, le=100, description="Connection pool size")
     timeout_seconds: int = Field(default=30, ge=1, le=300, description="Operation timeout")
 
     # Redis-specific
-    redis_host: Optional[str] = Field(default="localhost")
+    redis_host: str | None = Field(default="localhost")
     redis_port: int = Field(default=6379, ge=1, le=65535)
     redis_db: int = Field(default=0, ge=0)
-    redis_password: Optional[str] = None
+    redis_password: str | None = None
     redis_ssl: bool = False
 
     # PostgreSQL-specific
-    postgres_host: Optional[str] = Field(default="localhost")
+    postgres_host: str | None = Field(default="localhost")
     postgres_port: int = Field(default=5432, ge=1, le=65535)
-    postgres_database: Optional[str] = Field(default="agentmesh")
-    postgres_user: Optional[str] = None
-    postgres_password: Optional[str] = None
+    postgres_database: str | None = Field(default="agentmesh")
+    postgres_user: str | None = None
+    postgres_password: str | None = None
     postgres_ssl_mode: str = Field(default="prefer")
 
     # Cache settings
@@ -74,7 +74,7 @@ class AbstractStorageProvider(ABC):
     # Key-Value Operations
 
     @abstractmethod
-    async def get(self, key: str) -> Optional[str]:
+    async def get(self, key: str) -> str | None:
         """Get value by key."""
         pass
 
@@ -83,7 +83,7 @@ class AbstractStorageProvider(ABC):
         self,
         key: str,
         value: str,
-        ttl_seconds: Optional[int] = None,
+        ttl_seconds: int | None = None,
     ) -> bool:
         """Set value with optional TTL."""
         pass
@@ -101,7 +101,7 @@ class AbstractStorageProvider(ABC):
     # Hash Operations (for structured data)
 
     @abstractmethod
-    async def hget(self, key: str, field: str) -> Optional[str]:
+    async def hget(self, key: str, field: str) -> str | None:
         """Get hash field value."""
         pass
 
@@ -160,7 +160,7 @@ class AbstractStorageProvider(ABC):
         pass
 
     @abstractmethod
-    async def zscore(self, key: str, member: str) -> Optional[float]:
+    async def zscore(self, key: str, member: str) -> float | None:
         """Get score of member in sorted set."""
         pass
 
@@ -206,7 +206,7 @@ class AbstractStorageProvider(ABC):
     # Batch Operations
 
     @abstractmethod
-    async def mget(self, keys: list[str]) -> list[Optional[str]]:
+    async def mget(self, keys: list[str]) -> list[str | None]:
         """Get multiple values."""
         pass
 
@@ -226,7 +226,7 @@ class AbstractStorageProvider(ABC):
     async def scan(
         self,
         cursor: int = 0,
-        match: Optional[str] = None,
+        match: str | None = None,
         count: int = 100,
     ) -> tuple[int, list[str]]:
         """Scan keys with cursor. Returns (new_cursor, keys)."""

@@ -53,14 +53,14 @@ BUILTIN_PATTERNS: dict[str, str] = {
 
 # Pre-compiled versions for performance
 _COMPILED: dict[str, re.Pattern[str]] = {
-    name: re.compile(pattern, re.IGNORECASE)
-    for name, pattern in BUILTIN_PATTERNS.items()
+    name: re.compile(pattern, re.IGNORECASE) for name, pattern in BUILTIN_PATTERNS.items()
 }
 
 
 # ---------------------------------------------------------------------------
 # Externalised configuration dataclass
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class PIIDetectionConfig:
@@ -93,7 +93,7 @@ def load_pii_config(path: str) -> PIIDetectionConfig:
     if not os.path.exists(path):
         raise FileNotFoundError(f"PII detection config not found: {path}")
 
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         data = yaml.safe_load(fh.read())
 
     if not isinstance(data, dict) or "builtin_patterns" not in data:
@@ -109,6 +109,7 @@ def load_pii_config(path: str) -> PIIDetectionConfig:
 # Data models
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class MutePolicy:
     """Rules for what to mute/redact in execution output.
@@ -120,6 +121,7 @@ class MutePolicy:
         sensitive_keywords: Exact substring keywords to redact.
         replacement: The string used to replace redacted content.
     """
+
     enabled_builtins: list[str] = field(default_factory=lambda: list(BUILTIN_PATTERNS.keys()))
     custom_patterns: list[str] = field(default_factory=list)
     sensitive_keywords: list[str] = field(default_factory=list)
@@ -129,6 +131,7 @@ class MutePolicy:
 # ---------------------------------------------------------------------------
 # Mute Agent
 # ---------------------------------------------------------------------------
+
 
 class MuteAgent:
     """Post-execution gate that redacts sensitive content from results.

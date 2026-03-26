@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * create_policy Tool
- * 
+ *
  * Creates a custom policy from natural language description.
  */
 
@@ -49,12 +49,12 @@ The policy engine will translate your description into enforceable rules.`,
       required: ['description', 'category'],
     },
   },
-  
+
   async execute(args: unknown, context: ServiceContext): Promise<string> {
     const input = CreatePolicyInputSchema.parse(args);
-    
+
     context.logger.info('Creating custom policy', { description: input.description });
-    
+
     // Check if based on existing policy
     let basePolicy = null;
     if (input.basedOn) {
@@ -66,10 +66,10 @@ The policy engine will translate your description into enforceable rules.`,
         );
       }
     }
-    
+
     // Create the policy
     const policy = context.policyEngine.createPolicy(input);
-    
+
     // Format response
     const severityColors: Record<string, string> = {
       info: '🔵',
@@ -77,12 +77,12 @@ The policy engine will translate your description into enforceable rules.`,
       high: '🟠',
       critical: '🔴',
     };
-    
+
     const rulesFormatted = policy.rules.map(r => {
       const emoji = severityColors[r.severity] || '⚪';
       return `${emoji} **${r.name}** [${r.severity}]\n   ${r.description || r.message || 'No description'}\n   Action: ${r.action}`;
     }).join('\n\n');
-    
+
     return `
 ✅ Custom Policy Created
 

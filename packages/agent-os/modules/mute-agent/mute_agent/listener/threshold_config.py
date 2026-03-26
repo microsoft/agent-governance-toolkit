@@ -12,29 +12,29 @@ This module provides:
 - ThresholdConfig: Configuration container
 """
 
-from typing import Dict, Any, Optional, List, Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import Any, Callable, Dict, List, Optional
 
 
 class ThresholdType(Enum):
     """Categories of conditions the Listener monitors."""
-    
+
     # Graph state thresholds
     CONSTRAINT_VIOLATION_COUNT = auto()
     DIMENSION_CONFLICT_RATIO = auto()
     ACTION_REJECTION_RATE = auto()
-    
+
     # Security thresholds (from iatp)
     TRUST_SCORE_MINIMUM = auto()
     PERMISSION_ESCALATION_COUNT = auto()
     ANOMALY_SCORE_MAXIMUM = auto()
-    
+
     # Context thresholds (from caas)
     CONTEXT_DRIFT_MAXIMUM = auto()
     STALE_CONTEXT_AGE_SECONDS = auto()
     AMBIGUITY_SCORE_MAXIMUM = auto()
-    
+
     # Performance thresholds
     GRAPH_TRAVERSAL_LATENCY_MS = auto()
     HANDSHAKE_TIMEOUT_MS = auto()
@@ -43,19 +43,19 @@ class ThresholdType(Enum):
 
 class InterventionLevel(Enum):
     """Severity levels for Listener intervention responses."""
-    
+
     # Passive observation only - log and continue
     OBSERVE = "observe"
-    
+
     # Warning - emit event but allow action to proceed
     WARN = "warn"
-    
+
     # Soft block - require confirmation before proceeding
     SOFT_BLOCK = "soft_block"
-    
+
     # Hard block - prevent action entirely
     HARD_BLOCK = "hard_block"
-    
+
     # Emergency - trigger system-wide alert/shutdown
     EMERGENCY = "emergency"
 
@@ -63,29 +63,29 @@ class InterventionLevel(Enum):
 @dataclass
 class ThresholdRule:
     """A single threshold rule configuration."""
-    
+
     threshold_type: ThresholdType
     value: float
     intervention_level: InterventionLevel
     description: str = ""
     enabled: bool = True
-    
+
     # Optional custom evaluation function
     # Signature: (current_value: float, threshold: float, context: Dict) -> bool
     custom_evaluator: Optional[Callable[[float, float, Dict], bool]] = None
-    
+
     def evaluate(self, current_value: float, context: Optional[Dict[str, Any]] = None) -> bool:
         """
         Evaluate if the threshold has been exceeded.
-        
+
         Returns True if threshold is exceeded (intervention needed).
         """
         if not self.enabled:
             return False
-        
+
         if self.custom_evaluator:
             return self.custom_evaluator(current_value, self.value, context or {})
-        
+
         # Default evaluation: current exceeds threshold
         # For MINIMUM thresholds, we check if current is below
         if "MINIMUM" in self.threshold_type.name:
@@ -98,52 +98,50 @@ class ThresholdRule:
 class ThresholdConfig:
     """
     Complete threshold configuration for the Listener Agent.
-    
+
     This configuration determines when the Listener transitions from
     passive observation to active intervention.
     """
-    
+
     rules: Dict[ThresholdType, ThresholdRule] = field(default_factory=dict)
-    
+
     # Global settings
     global_intervention_level: InterventionLevel = InterventionLevel.OBSERVE
     escalation_enabled: bool = True
     cooldown_seconds: float = 5.0
-    
+
     # Aggregation settings
     window_size_seconds: float = 60.0
     sample_rate_hz: float = 1.0
-    
+
     def add_rule(self, rule: ThresholdRule) -> None:
         """Add or update a threshold rule."""
         self.rules[rule.threshold_type] = rule
-    
+
     def remove_rule(self, threshold_type: ThresholdType) -> None:
         """Remove a threshold rule."""
         self.rules.pop(threshold_type, None)
-    
+
     def get_rule(self, threshold_type: ThresholdType) -> Optional[ThresholdRule]:
         """Get a threshold rule by type."""
         return self.rules.get(threshold_type)
-    
+
     def enable_rule(self, threshold_type: ThresholdType) -> None:
         """Enable a specific rule."""
         if threshold_type in self.rules:
             self.rules[threshold_type].enabled = True
-    
+
     def disable_rule(self, threshold_type: ThresholdType) -> None:
         """Disable a specific rule."""
         if threshold_type in self.rules:
             self.rules[threshold_type].enabled = False
-    
+
     def evaluate_all(
-        self,
-        metrics: Dict[ThresholdType, float],
-        context: Optional[Dict[str, Any]] = None
+        self, metrics: Dict[ThresholdType, float], context: Optional[Dict[str, Any]] = None
     ) -> List[ThresholdRule]:
         """
         Evaluate all rules against current metrics.
-        
+
         Returns list of rules that were triggered (threshold exceeded).
         """
         triggered = []
@@ -152,19 +150,18 @@ class ThresholdConfig:
             if rule and rule.evaluate(value, context):
                 triggered.append(rule)
         return triggered
-    
+
     def get_maximum_intervention_level(
-        self,
-        triggered_rules: List[ThresholdRule]
+        self, triggered_rules: List[ThresholdRule]
     ) -> InterventionLevel:
         """
         Get the highest intervention level from triggered rules.
-        
+
         Intervention levels ordered: OBSERVE < WARN < SOFT_BLOCK < HARD_BLOCK < EMERGENCY
         """
         if not triggered_rules:
             return self.global_intervention_level
-        
+
         level_order = [
             InterventionLevel.OBSERVE,
             InterventionLevel.WARN,
@@ -172,12 +169,12 @@ class ThresholdConfig:
             InterventionLevel.HARD_BLOCK,
             InterventionLevel.EMERGENCY,
         ]
-        
+
         max_level = self.global_intervention_level
         for rule in triggered_rules:
             if level_order.index(rule.intervention_level) > level_order.index(max_level):
                 max_level = rule.intervention_level
-        
+
         return max_level
 
 

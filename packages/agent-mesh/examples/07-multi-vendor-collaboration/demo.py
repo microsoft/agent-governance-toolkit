@@ -16,15 +16,11 @@ Usage:
 
 from __future__ import annotations
 
-import json
-import random
 import textwrap
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -43,6 +39,7 @@ TRUST_PENALTY_POLICY_VIOLATION = -200
 # ---------------------------------------------------------------------------
 # Domain types
 # ---------------------------------------------------------------------------
+
 
 class Vendor(Enum):
     OPENAI = "OpenAI"
@@ -67,7 +64,7 @@ class AuditEntry:
     timestamp: str
     event: str
     source: str
-    target: Optional[str]
+    target: str | None
     trust_score: int
     status: str
     detail: str
@@ -90,6 +87,7 @@ class AgentIdentity:
 # ---------------------------------------------------------------------------
 # Trust engine
 # ---------------------------------------------------------------------------
+
 
 class TrustEngine:
     """Manages trust scores and trust-gated handoff decisions."""
@@ -117,6 +115,7 @@ class TrustEngine:
 # Audit log
 # ---------------------------------------------------------------------------
 
+
 class AuditLog:
     """Cross-vendor audit trail for all handoffs and task outcomes."""
 
@@ -132,7 +131,7 @@ class AuditLog:
     ) -> None:
         self._entries.append(
             AuditEntry(
-                timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
                 event="HANDOFF",
                 source=source.agent_id,
                 target=target.agent_id,
@@ -151,7 +150,7 @@ class AuditLog:
     ) -> None:
         self._entries.append(
             AuditEntry(
-                timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
                 event="TASK_COMPLETE",
                 source=agent.agent_id,
                 target=None,
@@ -180,12 +179,13 @@ class AuditLog:
 # Mock vendor agents
 # ---------------------------------------------------------------------------
 
+
 class MockVendorAgent:
     """Simulates a vendor-specific LLM agent with configurable behaviour."""
 
     def __init__(self, identity: AgentIdentity) -> None:
         self.identity = identity
-        self._force_outcome: Optional[TaskOutcome] = None
+        self._force_outcome: TaskOutcome | None = None
 
     def force_outcome(self, outcome: TaskOutcome) -> None:
         self._force_outcome = outcome
@@ -213,6 +213,7 @@ class MockVendorAgent:
 # Orchestrator
 # ---------------------------------------------------------------------------
 
+
 class MultiVendorOrchestrator:
     """Orchestrates trust-gated handoffs across vendor agents."""
 
@@ -225,7 +226,7 @@ class MultiVendorOrchestrator:
         self.agents[agent.identity.agent_id] = agent
         _info(f"Registered {agent.identity.summary()}")
 
-    def handoff(self, source: MockVendorAgent, target: MockVendorAgent, task: str) -> Optional[str]:
+    def handoff(self, source: MockVendorAgent, target: MockVendorAgent, task: str) -> str | None:
         """Attempt a trust-gated handoff from source to target."""
         trusted = self.trust_engine.verify(target.identity)
         status = HandoffStatus.APPROVED if trusted else HandoffStatus.DENIED
@@ -255,7 +256,7 @@ class MultiVendorOrchestrator:
 
         return response
 
-    def run_pipeline(self, query: str, pipeline: list[str]) -> Optional[str]:
+    def run_pipeline(self, query: str, pipeline: list[str]) -> str | None:
         """Run a task through an ordered pipeline of agent IDs."""
         result = query
         for i in range(len(pipeline) - 1):
@@ -270,6 +271,7 @@ class MultiVendorOrchestrator:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _header(text: str) -> None:
     print(f"\n{'─' * 80}")
@@ -301,6 +303,7 @@ def _scores(agents: list[MockVendorAgent]) -> None:
 # ---------------------------------------------------------------------------
 # Main demo
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     print("=" * 80)

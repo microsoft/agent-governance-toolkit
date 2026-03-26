@@ -12,8 +12,6 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 )
 from cryptography.hazmat.primitives.serialization import (
     Encoding,
-    NoEncryption,
-    PrivateFormat,
     PublicFormat,
 )
 
@@ -66,9 +64,7 @@ class AgentIdentityManager:
     ) -> AgentID:
         """Generate a new Ed25519 identity for a named agent."""
         private_key = Ed25519PrivateKey.generate()
-        pub_bytes = private_key.public_key().public_bytes(
-            Encoding.Raw, PublicFormat.Raw
-        )
+        pub_bytes = private_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
         did = "did:langgraph:%s" % hashlib.sha256(pub_bytes).hexdigest()[:16]
         identity = AgentID(
             did=did,
@@ -84,9 +80,7 @@ class AgentIdentityManager:
         with self._lock:
             return self._identities.get(name)
 
-    def get_or_create(
-        self, name: str, capabilities: list[str] | None = None
-    ) -> AgentID:
+    def get_or_create(self, name: str, capabilities: list[str] | None = None) -> AgentID:
         existing = self.get_identity(name)
         if existing is not None:
             return existing

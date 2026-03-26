@@ -21,7 +21,14 @@ class TrustScore:
     last_updated: float = field(default_factory=time.time)
 
     def __post_init__(self):
-        for attr in ("overall", "reliability", "capability", "security", "compliance", "history"):
+        for attr in (
+            "overall",
+            "reliability",
+            "capability",
+            "security",
+            "compliance",
+            "history",
+        ):
             val = getattr(self, attr)
             if not 0.0 <= val <= 1.0:
                 raise ValueError(f"{attr} must be between 0.0 and 1.0, got {val}")
@@ -36,9 +43,9 @@ class TrustScore:
             "history": 0.10,
         }
         total_weight = sum(w.values())
-        self.overall = sum(
-            getattr(self, dim) * weight for dim, weight in w.items()
-        ) / total_weight
+        self.overall = (
+            sum(getattr(self, dim) * weight for dim, weight in w.items()) / total_weight
+        )
         self.last_updated = time.time()
         return self.overall
 
@@ -77,14 +84,18 @@ class TrustScorer:
             )
         return self._scores[agent_id]
 
-    def record_success(self, agent_id: str, dimension: str = "reliability", boost: float = 0.02):
+    def record_success(
+        self, agent_id: str, dimension: str = "reliability", boost: float = 0.02
+    ):
         """Record a successful interaction, boosting trust."""
         score = self.get_score(agent_id)
         current = getattr(score, dimension, score.reliability)
         setattr(score, dimension, min(1.0, current + boost))
         score.compute_overall()
 
-    def record_failure(self, agent_id: str, dimension: str = "reliability", penalty: float = 0.1):
+    def record_failure(
+        self, agent_id: str, dimension: str = "reliability", penalty: float = 0.1
+    ):
         """Record a failure, reducing trust."""
         score = self.get_score(agent_id)
         current = getattr(score, dimension, score.reliability)

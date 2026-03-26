@@ -130,7 +130,7 @@ Get consensus from multiple AI models:
 Consensus: 100% Agreement
 
 ✅ GPT-4:   No issues
-✅ Claude:  No issues  
+✅ Claude:  No issues
 ✅ Gemini:  No issues
 
 Code appears safe.

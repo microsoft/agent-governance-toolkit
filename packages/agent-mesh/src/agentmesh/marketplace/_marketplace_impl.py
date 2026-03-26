@@ -16,7 +16,7 @@ import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -50,8 +50,8 @@ class PluginManifest(BaseModel):
     plugin_type: PluginType = Field(..., description="Type of plugin")
     capabilities: list[str] = Field(default_factory=list)
     dependencies: list[str] = Field(default_factory=list)
-    min_agentmesh_version: Optional[str] = Field(None)
-    signature: Optional[str] = Field(None)
+    min_agentmesh_version: str | None = Field(None)
+    signature: str | None = Field(None)
 
     @field_validator("name")
     @classmethod
@@ -148,7 +148,7 @@ def _semver_tuple(version: str) -> tuple[int, ...]:
 class PluginRegistry:
     """Registry for plugin manifests."""
 
-    def __init__(self, storage_path: Optional[Path] = None) -> None:
+    def __init__(self, storage_path: Path | None = None) -> None:
         self._plugins: dict[str, dict[str, PluginManifest]] = {}
         self._storage_path = storage_path
         if storage_path and storage_path.exists():
@@ -163,7 +163,7 @@ class PluginRegistry:
         versions[manifest.version] = manifest
         self._persist()
 
-    def unregister(self, name: str, version: Optional[str] = None) -> None:
+    def unregister(self, name: str, version: str | None = None) -> None:
         if name not in self._plugins:
             raise MarketplaceError(f"Plugin not found: {name}")
         if version:
@@ -176,7 +176,7 @@ class PluginRegistry:
             del self._plugins[name]
         self._persist()
 
-    def get_plugin(self, name: str, version: Optional[str] = None) -> PluginManifest:
+    def get_plugin(self, name: str, version: str | None = None) -> PluginManifest:
         if name not in self._plugins:
             raise MarketplaceError(f"Plugin not found: {name}")
         versions = self._plugins[name]
@@ -196,7 +196,7 @@ class PluginRegistry:
                 results.append(latest)
         return results
 
-    def list_plugins(self, type_filter: Optional[PluginType] = None) -> list[PluginManifest]:
+    def list_plugins(self, type_filter: PluginType | None = None) -> list[PluginManifest]:
         results: list[PluginManifest] = []
         for versions in self._plugins.values():
             latest = max(versions.values(), key=lambda m: _semver_tuple(m.version))
@@ -235,7 +235,7 @@ class PluginInstaller:
         self,
         plugins_dir: Path,
         registry: PluginRegistry,
-        trusted_keys: Optional[dict[str, Any]] = None,
+        trusted_keys: dict[str, Any] | None = None,
     ) -> None:
         self._plugins_dir = plugins_dir
         self._registry = registry
@@ -245,10 +245,10 @@ class PluginInstaller:
     def install(
         self,
         name: str,
-        version: Optional[str] = None,
+        version: str | None = None,
         *,
         verify: bool = True,
-        _seen: Optional[set[str]] = None,
+        _seen: set[str] | None = None,
     ) -> Path:
         manifest = self._registry.get_plugin(name, version)
         if verify and manifest.signature and manifest.author in self._trusted_keys:
@@ -300,7 +300,7 @@ class PluginInstaller:
         return top_level not in RESTRICTED_MODULES
 
 
-def _parse_dependency(dep_spec: str) -> tuple[str, Optional[str]]:
+def _parse_dependency(dep_spec: str) -> tuple[str, str | None]:
     for op in (">=", "==", "<=", ">", "<"):
         if op in dep_spec:
             name, version = dep_spec.split(op, 1)

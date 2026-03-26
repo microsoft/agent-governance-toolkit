@@ -165,10 +165,10 @@ class CMVKIdentity:
     public_key: str             # Ed25519 public key (base64)
     private_key: str            # Ed25519 private key (base64)
     capabilities: List[str]     # Allowed capabilities
-    
+
     @classmethod
     def generate(cls, agent_name: str, capabilities: List[str]) -> "CMVKIdentity"
-    
+
     def sign(self, data: str) -> CMVKSignature
     def verify_signature(self, data: str, signature: CMVKSignature) -> bool
     def to_dict(self) -> Dict[str, Any]

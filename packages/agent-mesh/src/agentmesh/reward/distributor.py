@@ -64,10 +64,7 @@ class RewardDistributor:
         name = strategy_name or self._default_strategy
         strategy = self._strategies.get(name)
         if strategy is None:
-            raise ValueError(
-                f"Unknown strategy '{name}'. "
-                f"Registered: {sorted(self._strategies)}"
-            )
+            raise ValueError(f"Unknown strategy '{name}'. Registered: {sorted(self._strategies)}")
 
         result = strategy.distribute(pool)
 

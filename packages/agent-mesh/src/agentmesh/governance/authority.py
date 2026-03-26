@@ -27,9 +27,8 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Literal, Optional, Protocol, runtime_checkable
-
+from datetime import UTC, datetime
+from typing import Any, Literal, Protocol, runtime_checkable
 
 # ── Data types ────────────────────────────────────────────────
 
@@ -43,11 +42,11 @@ class DelegationInfo:
     """
 
     agent_did: str
-    parent_did: Optional[str] = None
+    parent_did: str | None = None
     delegation_depth: int = 0
     delegated_capabilities: list[str] = field(default_factory=list)
     chain_verified: bool = False
-    chain_id: Optional[str] = None
+    chain_id: str | None = None
 
 
 @dataclass
@@ -74,10 +73,10 @@ class ActionRequest:
     """
 
     action_type: str
-    tool_name: Optional[str] = None
-    resource: Optional[str] = None
+    tool_name: str | None = None
+    resource: str | None = None
     parameters: dict[str, Any] = field(default_factory=dict)
-    requested_spend: Optional[float] = None
+    requested_spend: float | None = None
 
 
 @dataclass
@@ -108,13 +107,11 @@ class AuthorityDecision:
 
     decision: Literal["allow", "allow_narrowed", "deny", "audit"]
     effective_scope: list[str] = field(default_factory=list)
-    effective_spend_limit: Optional[float] = None
-    narrowing_reason: Optional[str] = None
+    effective_spend_limit: float | None = None
+    narrowing_reason: str | None = None
     trust_tier: str = "unknown"
     matched_invariants: list[str] = field(default_factory=list)
-    timestamp: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass

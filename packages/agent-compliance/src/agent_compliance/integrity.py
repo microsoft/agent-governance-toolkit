@@ -229,6 +229,7 @@ class IntegrityVerifier:
                     self._manifest = json.load(f)
             except json.JSONDecodeError as e:
                 import logging
+
                 logging.getLogger(__name__).warning(
                     "Corrupted manifest at %s: %s", manifest_path, e
                 )

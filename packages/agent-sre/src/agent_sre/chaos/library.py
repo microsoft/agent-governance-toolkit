@@ -18,6 +18,7 @@ from agent_sre.chaos.engine import (
 @dataclass
 class ExperimentTemplate:
     """A reusable chaos experiment template."""
+
     template_id: str
     name: str
     description: str
@@ -110,7 +111,9 @@ class ChaosLibrary:
                 category="adversarial",
                 severity="high",
                 faults=[Fault.prompt_injection("target-agent", "direct_override")],
-                abort_conditions=[AbortCondition(metric="bypass_rate", threshold=0.3, comparator="gte")],
+                abort_conditions=[
+                    AbortCondition(metric="bypass_rate", threshold=0.3, comparator="gte")
+                ],
                 duration_seconds=900,
                 blast_radius=0.3,
                 tags=["adversarial", "injection", "owasp"],
@@ -122,7 +125,9 @@ class ChaosLibrary:
                 category="adversarial",
                 severity="critical",
                 faults=[Fault.privilege_escalation("target-agent", "admin")],
-                abort_conditions=[AbortCondition(metric="bypass_rate", threshold=0.2, comparator="gte")],
+                abort_conditions=[
+                    AbortCondition(metric="bypass_rate", threshold=0.2, comparator="gte")
+                ],
                 duration_seconds=900,
                 blast_radius=0.3,
                 tags=["adversarial", "escalation", "owasp"],
@@ -134,7 +139,9 @@ class ChaosLibrary:
                 category="adversarial",
                 severity="high",
                 faults=[Fault.data_exfiltration("target-agent", "pii")],
-                abort_conditions=[AbortCondition(metric="bypass_rate", threshold=0.1, comparator="gte")],
+                abort_conditions=[
+                    AbortCondition(metric="bypass_rate", threshold=0.1, comparator="gte")
+                ],
                 duration_seconds=900,
                 blast_radius=0.2,
                 tags=["adversarial", "exfiltration", "data-loss"],
@@ -224,7 +231,9 @@ class ChaosLibrary:
             result = [t for t in result if tag in t.tags]
         return result
 
-    def instantiate(self, template_id: str, target_agent: str, **overrides: Any) -> ChaosExperiment | None:
+    def instantiate(
+        self, template_id: str, target_agent: str, **overrides: Any
+    ) -> ChaosExperiment | None:
         """Create a concrete experiment from a template."""
         template = self.get(template_id)
         if template is None:

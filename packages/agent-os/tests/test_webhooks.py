@@ -4,16 +4,13 @@
 
 import json
 import threading
-import time
 import urllib.error
-from http.client import HTTPResponse
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from agent_os.integrations.webhooks import (
-    DeliveryRecord,
     WebhookConfig,
     WebhookEvent,
     WebhookNotifier,
@@ -55,15 +52,11 @@ class TestWebhookEvent:
 
     def test_invalid_severity(self):
         with pytest.raises(ValueError, match="severity must be"):
-            WebhookEvent(
-                event_type="test", agent_id="a1", action="run", severity="bad"
-            )
+            WebhookEvent(event_type="test", agent_id="a1", action="run", severity="bad")
 
     def test_valid_severities(self):
         for sev in ("info", "warning", "critical"):
-            ev = WebhookEvent(
-                event_type="test", agent_id="a1", action="run", severity=sev
-            )
+            ev = WebhookEvent(event_type="test", agent_id="a1", action="run", severity=sev)
             assert ev.severity == sev
 
 
@@ -171,8 +164,11 @@ class TestWebhookNotifier:
         )
         notifier = WebhookNotifier([cfg])
         event = WebhookEvent(
-            event_type="test", agent_id="a1", action="run",
-            details={"key": "value"}, severity="warning",
+            event_type="test",
+            agent_id="a1",
+            action="run",
+            details={"key": "value"},
+            severity="warning",
         )
 
         with patch("urllib.request.urlopen", return_value=_mock_response(200)) as mock_open:

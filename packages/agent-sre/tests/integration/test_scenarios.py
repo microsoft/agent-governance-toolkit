@@ -106,10 +106,13 @@ class TestPolicyViolationCascade:
     def test_policy_cascade_to_circuit_breaker(self):
         """Repeated policy violations trip the circuit breaker."""
         bridge = AgentOSBridge()
-        cb = CircuitBreaker("bad-agent", CircuitBreakerConfig(
-            failure_threshold=3,
-            timeout_seconds=60,
-        ))
+        cb = CircuitBreaker(
+            "bad-agent",
+            CircuitBreakerConfig(
+                failure_threshold=3,
+                timeout_seconds=60,
+            ),
+        )
 
         # Simulate policy violations triggering circuit breaker
         for i in range(5):
@@ -452,12 +455,14 @@ class TestFullGovernancePipeline:
             latency_sli.record_latency(200.0)
             agent_slo.record_event(True)
 
-            os_bridge.process_audit_entry(AuditLogEntry(
-                entry_type="allowed",
-                agent_id="did:mesh:alpha",
-                action="task",
-                policy_name="standard",
-            ))
+            os_bridge.process_audit_entry(
+                AuditLogEntry(
+                    entry_type="allowed",
+                    agent_id="did:mesh:alpha",
+                    action="task",
+                    policy_name="standard",
+                )
+            )
             policy_slo.record_event(True)
 
             mesh_bridge.trust_sli.record_trust(850, "did:mesh:alpha")
@@ -476,22 +481,26 @@ class TestFullGovernancePipeline:
 
         # Policy violations start
         for _ in range(3):
-            signal = os_bridge.process_audit_entry(AuditLogEntry(
-                entry_type="blocked",
-                agent_id="did:mesh:alpha",
-                action="unauthorized_write",
-                policy_name="data-guard",
-            ))
+            signal = os_bridge.process_audit_entry(
+                AuditLogEntry(
+                    entry_type="blocked",
+                    agent_id="did:mesh:alpha",
+                    action="unauthorized_write",
+                    policy_name="data-guard",
+                )
+            )
             policy_slo.record_event(False)
             assert signal is not None
 
         # Trust drops
         mesh_bridge.trust_sli.record_trust(200, "did:mesh:alpha")
-        trust_signal = mesh_bridge.process_event(MeshEvent(
-            event_type="trust_revocation",
-            agent_did="did:mesh:alpha",
-            details={"reason": "policy_violations"},
-        ))
+        trust_signal = mesh_bridge.process_event(
+            MeshEvent(
+                event_type="trust_revocation",
+                agent_did="did:mesh:alpha",
+                details={"reason": "policy_violations"},
+            )
+        )
         trust_slo.record_event(False)
         assert trust_signal is not None
 
@@ -513,12 +522,14 @@ class TestFullGovernancePipeline:
             latency_sli.record_latency(200.0)
             agent_slo.record_event(True)
 
-            os_bridge.process_audit_entry(AuditLogEntry(
-                entry_type="allowed",
-                agent_id="did:mesh:alpha",
-                action="task",
-                policy_name="standard",
-            ))
+            os_bridge.process_audit_entry(
+                AuditLogEntry(
+                    entry_type="allowed",
+                    agent_id="did:mesh:alpha",
+                    action="task",
+                    policy_name="standard",
+                )
+            )
             policy_slo.record_event(True)
 
             mesh_bridge.trust_sli.record_trust(750, "did:mesh:alpha")
@@ -534,19 +545,23 @@ class TestFullGovernancePipeline:
         mesh_bridge = AgentMeshBridge()
 
         # OS policy violation
-        os_signal = os_bridge.process_audit_entry(AuditLogEntry(
-            entry_type="blocked",
-            agent_id="did:mesh:suspicious",
-            action="exfiltrate_data",
-            policy_name="data-loss-prevention",
-        ))
+        os_signal = os_bridge.process_audit_entry(
+            AuditLogEntry(
+                entry_type="blocked",
+                agent_id="did:mesh:suspicious",
+                action="exfiltrate_data",
+                policy_name="data-loss-prevention",
+            )
+        )
 
         # Mesh trust revocation for same agent
-        mesh_signal = mesh_bridge.process_event(MeshEvent(
-            event_type="trust_revocation",
-            agent_did="did:mesh:suspicious",
-            details={"reason": "data_exfiltration_attempt"},
-        ))
+        mesh_signal = mesh_bridge.process_event(
+            MeshEvent(
+                event_type="trust_revocation",
+                agent_did="did:mesh:suspicious",
+                details={"reason": "data_exfiltration_attempt"},
+            )
+        )
 
         assert os_signal is not None
         assert mesh_signal is not None

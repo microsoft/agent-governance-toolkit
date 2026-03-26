@@ -11,20 +11,20 @@ First-class agent identity with:
 - Microsoft Entra Agent ID integration
 """
 
-from .agent_id import AgentIdentity, AgentDID
-from .entra import EntraAgentIdentity, EntraAgentRegistry, EntraAgentBlueprint
+from .agent_id import AgentDID, AgentIdentity
 from .credentials import Credential, CredentialManager
-from .delegation import ScopeChain, DelegationLink, UserContext
-from .sponsor import HumanSponsor
-from .risk import RiskScorer, RiskScore
-from .spiffe import SPIFFEIdentity, SVID
+from .delegation import DelegationLink, ScopeChain, UserContext
+from .entra import EntraAgentBlueprint, EntraAgentIdentity, EntraAgentRegistry
+from .jwk import from_jwk, from_jwks, to_jwk, to_jwks
+from .keystore import KeyStore, PKCS11KeyStore, SoftwareKeyStore
+from .mtls import MTLSConfig, MTLSIdentityVerifier
 from .namespace import AgentNamespace, NamespaceRule
 from .namespace_manager import NamespaceManager
-from .revocation import RevocationList, RevocationEntry
+from .revocation import RevocationEntry, RevocationList
+from .risk import RiskScore, RiskScorer
 from .rotation import KeyRotationManager
-from .jwk import to_jwk, from_jwk, to_jwks, from_jwks
-from .mtls import MTLSConfig, MTLSIdentityVerifier
-from .keystore import KeyStore, SoftwareKeyStore, PKCS11KeyStore
+from .spiffe import SVID, SPIFFEIdentity
+from .sponsor import HumanSponsor
 
 __all__ = [
     "AgentIdentity",

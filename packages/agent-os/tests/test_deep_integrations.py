@@ -15,17 +15,19 @@ All tests use mock objects — no real framework imports are required.
 Run with: python -m pytest tests/test_deep_integrations.py -v --tb=short
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
 import pytest
 
+from agent_os.integrations.autogen_adapter import AutoGenKernel
 from agent_os.integrations.base import GovernancePolicy, PolicyViolationError
+from agent_os.integrations.crewai_adapter import CrewAIKernel
 from agent_os.integrations.langchain_adapter import (
     LangChainKernel,
+)
+from agent_os.integrations.langchain_adapter import (
     PolicyViolationError as LangChainPolicyViolationError,
 )
-from agent_os.integrations.crewai_adapter import CrewAIKernel
-from agent_os.integrations.autogen_adapter import AutoGenKernel
-
 
 # =============================================================================
 # Helpers
@@ -385,9 +387,7 @@ class TestAutoGenFunctionCallPipeline:
         def my_func(x):
             return x * 2
 
-        agent = _make_autogen_agent(
-            "assistant", function_map={"my_func": my_func}
-        )
+        agent = _make_autogen_agent("assistant", function_map={"my_func": my_func})
 
         kernel = AutoGenKernel(deep_hooks_enabled=True)
         kernel.govern(agent)
@@ -404,9 +404,7 @@ class TestAutoGenFunctionCallPipeline:
         def dangerous_func():
             return "bad"
 
-        agent = _make_autogen_agent(
-            "assistant", function_map={"dangerous_func": dangerous_func}
-        )
+        agent = _make_autogen_agent("assistant", function_map={"dangerous_func": dangerous_func})
 
         policy = GovernancePolicy(allowed_tools=["safe_func"])
         kernel = AutoGenKernel(policy=policy, deep_hooks_enabled=True)
@@ -421,9 +419,7 @@ class TestAutoGenFunctionCallPipeline:
         def search_func(query):
             return query
 
-        agent = _make_autogen_agent(
-            "assistant", function_map={"search": search_func}
-        )
+        agent = _make_autogen_agent("assistant", function_map={"search": search_func})
 
         policy = GovernancePolicy(blocked_patterns=["DROP TABLE"])
         kernel = AutoGenKernel(policy=policy, deep_hooks_enabled=True)
@@ -512,9 +508,7 @@ class TestAutoGenStateInterception:
         kernel.govern(agent)
 
         agent.reset()
-        reset_entries = [
-            e for e in kernel._state_change_log if e["action"] == "reset"
-        ]
+        reset_entries = [e for e in kernel._state_change_log if e["action"] == "reset"]
         assert len(reset_entries) == 1
 
 
@@ -557,9 +551,7 @@ class TestDeepHooksDisabled:
         def my_func(x):
             return x
 
-        agent = _make_autogen_agent(
-            "assistant", function_map={"my_func": my_func}
-        )
+        agent = _make_autogen_agent("assistant", function_map={"my_func": my_func})
 
         kernel = AutoGenKernel(deep_hooks_enabled=False)
         kernel.govern(agent)

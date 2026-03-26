@@ -276,7 +276,7 @@ Testing Constraint Engine Module...
 ## Philosophy
 
 > **"Never let the AI touch the infrastructure directly."**
-> 
+>
 > **"The Human builds the walls; the AI plays inside them."**
 
 This implementation embodies the core principle: AI can be creative and powerful, but deterministic code provides the safety guardrails.

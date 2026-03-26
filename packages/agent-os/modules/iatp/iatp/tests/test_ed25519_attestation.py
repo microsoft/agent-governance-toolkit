@@ -3,6 +3,7 @@
 """Tests for Ed25519 cryptographic attestation in IATP."""
 
 import pytest
+
 from iatp.attestation import (
     AttestationValidator,
     generate_ed25519_keypair,
@@ -32,11 +33,12 @@ class TestGenerateKeypair:
 
     def test_keys_are_base64(self):
         import base64
+
         priv, pub = generate_ed25519_keypair()
         priv_bytes = base64.b64decode(priv)
         pub_bytes = base64.b64decode(pub)
         assert len(priv_bytes) == 32  # Ed25519 private key is 32 bytes
-        assert len(pub_bytes) == 32   # Ed25519 public key is 32 bytes
+        assert len(pub_bytes) == 32  # Ed25519 public key is 32 bytes
 
     def test_unique_each_call(self):
         _, pub1 = generate_ed25519_keypair()
@@ -65,6 +67,7 @@ class TestRealCryptoSignAndVerify:
     def test_tampered_signature_rejected(self, keypair, validator_with_key):
         """Tampered signature must be rejected."""
         import base64
+
         priv_b64, _ = keypair
         v = validator_with_key
 

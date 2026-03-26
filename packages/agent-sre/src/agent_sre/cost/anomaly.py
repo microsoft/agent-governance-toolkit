@@ -15,11 +15,13 @@ from typing import Any
 
 class AnomalyMethod(Enum):
     """Anomaly detection method."""
+
     THRESHOLD = "threshold"
 
 
 class AnomalySeverity(Enum):
     """Severity of a detected anomaly."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -29,6 +31,7 @@ class AnomalySeverity(Enum):
 @dataclass
 class CostDataPoint:
     """A single cost data point for analysis."""
+
     value: float
     timestamp: float = field(default_factory=time.time)
     agent_id: str = ""
@@ -46,6 +49,7 @@ class CostDataPoint:
 @dataclass
 class AnomalyResult:
     """Result of anomaly detection analysis."""
+
     is_anomaly: bool
     severity: AnomalySeverity
     method: AnomalyMethod
@@ -70,6 +74,7 @@ class AnomalyResult:
 @dataclass
 class BaselineStats:
     """Statistical baseline for cost analysis."""
+
     mean: float = 0.0
     std_dev: float = 0.0
     sample_count: int = 0

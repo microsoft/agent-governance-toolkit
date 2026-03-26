@@ -6,8 +6,6 @@ Prometheus Metrics Integration.
 Provides metrics collection and export for AgentMesh.
 """
 
-from typing import Optional
-
 
 class MetricsCollector:
     """
@@ -201,7 +199,7 @@ class MetricsCollector:
 
 
 # Global metrics collector instance
-_metrics_collector: Optional[MetricsCollector] = None
+_metrics_collector: MetricsCollector | None = None
 
 
 def setup_metrics() -> MetricsCollector:
@@ -219,7 +217,7 @@ def setup_metrics() -> MetricsCollector:
     return _metrics_collector
 
 
-def get_metrics() -> Optional[MetricsCollector]:
+def get_metrics() -> MetricsCollector | None:
     """Get metrics collector instance."""
     return _metrics_collector
 

@@ -3,7 +3,7 @@ policies:
     name: "API Access Control"
     version: "1.0.0"
     enabled: true
-    
+
     rules:
       - id: "rate-limit-per-endpoint"
         name: "Per-Endpoint Rate Limiting"
@@ -13,7 +13,7 @@ policies:
           - "count(tool='api_call', params.endpoint=params.endpoint, window='1h') > 50"
         message: "Per-endpoint rate limit exceeded (50 calls/hour)"
         severity: "medium"
-      
+
       - id: "block-internal-apis"
         name: "Block Internal API Access"
         action: "block"
@@ -25,7 +25,7 @@ policies:
           - "params.endpoint starts_with 'http://10.'"
         message: "Access to internal APIs is blocked"
         severity: "high"
-      
+
       - id: "require-https"
         name: "Require HTTPS for API Calls"
         action: "block"
@@ -35,7 +35,7 @@ policies:
           - "not params.endpoint starts_with 'https://'"
         message: "Only HTTPS endpoints are allowed"
         severity: "high"
-      
+
       - id: "validate-api-response"
         name: "Validate API Response Size"
         action: "block"
@@ -44,7 +44,7 @@ policies:
           - "response.size > 10485760"  # 10 MB
         message: "API response too large (>10MB)"
         severity: "medium"
-      
+
       - id: "log-external-api-calls"
         name: "Audit External API Calls"
         action: "audit"

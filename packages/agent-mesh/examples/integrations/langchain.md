@@ -49,19 +49,19 @@ def governed_tool(tool_func):
             tool=tool_func.__name__,
             params=kwargs
         )
-        
+
         if not result.allowed:
             audit_log.log("blocked", tool=tool_func.__name__, reason=result.reason)
             raise PermissionError(f"Policy violation: {result.reason}")
-        
+
         # Execute tool
         output = tool_func(*args, **kwargs)
-        
+
         # Audit
         audit_log.log("success", tool=tool_func.__name__, output=output)
-        
+
         return output
-    
+
     return wrapper
 
 # Define tools with governance
@@ -80,7 +80,7 @@ def calculator(expression: str) -> str:
         # Example with simpleeval: return str(simpleeval.simple_eval(expression))
         import ast
         import operator
-        
+
         # Define safe operations
         safe_ops = {
             ast.Add: operator.add,
@@ -89,7 +89,7 @@ def calculator(expression: str) -> str:
             ast.Div: operator.truediv,
             ast.Pow: operator.pow,
         }
-        
+
         def safe_eval(node):
             if isinstance(node, ast.Num):
                 return node.n
@@ -97,7 +97,7 @@ def calculator(expression: str) -> str:
                 return safe_ops[type(node.op)](safe_eval(node.left), safe_eval(node.right))
             else:
                 raise ValueError("Unsafe operation")
-        
+
         tree = ast.parse(expression, mode='eval')
         return str(safe_eval(tree.body))
     except Exception as e:
@@ -209,15 +209,15 @@ def governed_retrieval(query: str):
     result = policy_engine.check(action="query_vectordb", params={"query": query})
     if not result.allowed:
         raise PermissionError(result.reason)
-    
+
     # Perform retrieval
     embeddings = OpenAIEmbeddings()
     vectorstore = Chroma(embedding_function=embeddings)
     docs = vectorstore.similarity_search(query)
-    
+
     # Audit
     audit_log.log("retrieval", query=query, num_docs=len(docs))
-    
+
     return docs
 
 # Create RAG chain

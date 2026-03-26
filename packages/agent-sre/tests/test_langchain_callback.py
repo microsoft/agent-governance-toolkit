@@ -309,7 +309,9 @@ class TestIntegration:
         cb = AgentSRECallback(cost_per_1k_input=0.01, cost_per_1k_output=0.03)
 
         # Chain starts
-        cb.on_chain_start({"name": "AgentExecutor"}, {"input": "Search for Python tutorials"}, run_id="chain-main")
+        cb.on_chain_start(
+            {"name": "AgentExecutor"}, {"input": "Search for Python tutorials"}, run_id="chain-main"
+        )
 
         # LLM call 1: decide action
         _simulate_llm_call(cb, run_id="llm-1", prompt_tokens=500, completion_tokens=50)
@@ -334,7 +336,9 @@ class TestIntegration:
         assert len(cb.tool_calls) == 1
 
         # Check cost math
-        expected_cost = (500 / 1000 * 0.01 + 50 / 1000 * 0.03) + (800 / 1000 * 0.01 + 200 / 1000 * 0.03)
+        expected_cost = (500 / 1000 * 0.01 + 50 / 1000 * 0.03) + (
+            800 / 1000 * 0.01 + 200 / 1000 * 0.03
+        )
         assert abs(cb.total_cost_usd - expected_cost) < 0.0001
 
     def test_failed_agent_execution(self):
@@ -351,4 +355,5 @@ class TestIntegration:
     def test_imports_from_package(self):
         """Verify package exports."""
         from agent_sre.integrations.langchain import AgentSRECallback as Imported
+
         assert Imported is AgentSRECallback

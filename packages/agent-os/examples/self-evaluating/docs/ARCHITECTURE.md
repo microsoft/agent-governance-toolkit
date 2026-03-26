@@ -177,7 +177,7 @@ Processing:
 
 Output:
   • new_instructions: string
-  
+
 Side Effect:
   • Updates system_instructions.json
   • Increments version number
@@ -203,8 +203,8 @@ Side Effect:
 
 **Evolved Instructions (v2)**:
 ```
-"You are a helpful AI assistant with access to tools. When you have a 
-calculation tool available, always mention it explicitly and explain 
+"You are a helpful AI assistant with access to tools. When you have a
+calculation tool available, always mention it explicitly and explain
 that you would use it. Be clear about which tools apply to each query."
 ```
 

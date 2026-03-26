@@ -4,8 +4,6 @@
 
 import textwrap
 
-import pytest
-
 from agent_os.security_skills import (
     SecurityFinding,
     Severity,
@@ -23,10 +21,10 @@ from agent_os.security_skills import (
     scan_source,
 )
 
-
 # ---------------------------------------------------------------------------
 # SKILL-001: Stub security implementations
 # ---------------------------------------------------------------------------
+
 
 class TestStubSecurity:
     def test_detects_verify_stub(self):
@@ -80,6 +78,7 @@ class TestStubSecurity:
 # SKILL-002: Unsafe pickle
 # ---------------------------------------------------------------------------
 
+
 class TestUnsafePickle:
     def test_detects_bare_pickle_loads(self):
         src = "data = pickle.loads(raw_bytes)"
@@ -108,6 +107,7 @@ class TestUnsafePickle:
 # SKILL-003: Hardcoded deny-lists
 # ---------------------------------------------------------------------------
 
+
 class TestHardcodedDenylist:
     def test_detects_dangerous_patterns_list(self):
         src = 'dangerous_patterns = ["DROP TABLE", "DELETE FROM"]'
@@ -130,6 +130,7 @@ class TestHardcodedDenylist:
 # ---------------------------------------------------------------------------
 # SKILL-004: Unbounded collections
 # ---------------------------------------------------------------------------
+
 
 class TestUnboundedCollections:
     def test_detects_unbounded_cache(self):
@@ -166,6 +167,7 @@ class TestUnboundedCollections:
 # SKILL-005: SSRF URLs
 # ---------------------------------------------------------------------------
 
+
 class TestSsrfUrls:
     def test_detects_url_from_input(self):
         src = "server_url = config['endpoint']"
@@ -191,6 +193,7 @@ class TestSsrfUrls:
 # ---------------------------------------------------------------------------
 # SKILL-006: Missing circuit breaker
 # ---------------------------------------------------------------------------
+
 
 class TestMissingCircuitBreaker:
     def test_detects_bare_requests(self):
@@ -230,6 +233,7 @@ class TestMissingCircuitBreaker:
 # SKILL-007: ReDoS patterns
 # ---------------------------------------------------------------------------
 
+
 class TestRedosPatterns:
     def test_detects_nested_quantifiers(self):
         src = """pattern = re.compile(".+.+dangerous")"""
@@ -246,6 +250,7 @@ class TestRedosPatterns:
 # ---------------------------------------------------------------------------
 # SKILL-008: Hardcoded secrets
 # ---------------------------------------------------------------------------
+
 
 class TestHardcodedSecrets:
     def test_detects_api_key(self):
@@ -281,16 +286,17 @@ class TestHardcodedSecrets:
 # SKILL-009: Trust without crypto
 # ---------------------------------------------------------------------------
 
+
 class TestTrustWithoutCrypto:
     def test_detects_hardcoded_trust(self):
-        src = 'trust_score = 750'
+        src = "trust_score = 750"
         findings = check_trust_without_crypto(src)
         assert len(findings) == 1
         assert findings[0].rule_id == "SKILL-009"
         assert findings[0].severity == Severity.HIGH
 
     def test_detects_verified_true(self):
-        src = 'verified = True'
+        src = "verified = True"
         findings = check_trust_without_crypto(src)
         assert len(findings) == 1
 
@@ -314,6 +320,7 @@ class TestTrustWithoutCrypto:
 # ---------------------------------------------------------------------------
 # SKILL-010: Error info leak
 # ---------------------------------------------------------------------------
+
 
 class TestErrorInfoLeak:
     def test_detects_str_exception(self):
@@ -346,6 +353,7 @@ class TestErrorInfoLeak:
 # Aggregate scan
 # ---------------------------------------------------------------------------
 
+
 class TestScanSource:
     def test_finds_multiple_issues(self):
         src = textwrap.dedent("""\
@@ -372,6 +380,7 @@ class TestScanSource:
 # ---------------------------------------------------------------------------
 # Format output
 # ---------------------------------------------------------------------------
+
 
 class TestFormatFindings:
     def test_no_findings(self):

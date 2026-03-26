@@ -1,19 +1,17 @@
 """Tests for AgentMesh LangChain integration."""
 
-import pytest
 from datetime import datetime, timedelta, timezone
+
 from langchain_agentmesh import (
-    VerificationIdentity,
-    VerificationSignature,
+    AgentDirectory,
+    DelegationChain,
+    TrustCallbackHandler,
     TrustedAgentCard,
+    TrustGatedTool,
     TrustHandshake,
     TrustPolicy,
-    TrustGatedTool,
-    TrustedToolExecutor,
-    TrustCallbackHandler,
-    DelegationChain,
     UserContext,
-    AgentDirectory,
+    VerificationIdentity,
 )
 
 
@@ -23,10 +21,9 @@ class TestVerificationIdentity:
     def test_generate_identity(self):
         """Test identity generation."""
         identity = VerificationIdentity.generate(
-            agent_name="test-agent",
-            capabilities=["read", "write"]
+            agent_name="test-agent", capabilities=["read", "write"]
         )
-        
+
         assert identity.did.startswith("did:verification:")
         assert identity.agent_name == "test-agent"
         assert identity.public_key
@@ -37,9 +34,9 @@ class TestVerificationIdentity:
         """Test signing and verification."""
         identity = VerificationIdentity.generate("signer-agent")
         data = "test data to sign"
-        
+
         signature = identity.sign(data)
-        
+
         assert signature.public_key == identity.public_key
         assert signature.signature
         assert identity.verify_signature(data, signature)
@@ -48,7 +45,7 @@ class TestVerificationIdentity:
         """Test verification fails with wrong data."""
         identity = VerificationIdentity.generate("signer-agent")
         signature = identity.sign("original data")
-        
+
         # Verification should fail with different data
         assert not identity.verify_signature("tampered data", signature)
 
@@ -56,7 +53,7 @@ class TestVerificationIdentity:
         """Test public identity excludes private key."""
         identity = VerificationIdentity.generate("test-agent")
         public = identity.public_identity()
-        
+
         assert public.did == identity.did
         assert public.public_key == identity.public_key
         assert public.private_key is None
@@ -68,14 +65,14 @@ class TestTrustedAgentCard:
     def test_create_and_sign_card(self):
         """Test card creation and signing."""
         identity = VerificationIdentity.generate("card-agent", ["capability1"])
-        
+
         card = TrustedAgentCard(
             name="Test Agent",
             description="A test agent",
             capabilities=["capability1", "capability2"],
         )
         card.sign(identity)
-        
+
         assert card.identity is not None
         assert card.card_signature is not None
         assert card.verify_signature()
@@ -89,10 +86,10 @@ class TestTrustedAgentCard:
             capabilities=["serialize"],
         )
         card.sign(identity)
-        
+
         json_data = card.to_json()
         restored = TrustedAgentCard.from_json(json_data)
-        
+
         assert restored.name == card.name
         assert restored.capabilities == card.capabilities
         assert restored.identity.did == card.identity.did
@@ -105,20 +102,17 @@ class TestTrustHandshake:
         """Test verification of a valid peer."""
         my_identity = VerificationIdentity.generate("my-agent")
         peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
-        
+
         peer_card = TrustedAgentCard(
             name="Peer Agent",
             description="A peer",
             capabilities=["required_cap"],
         )
         peer_card.sign(peer_identity)
-        
+
         handshake = TrustHandshake(my_identity)
-        result = handshake.verify_peer(
-            peer_card,
-            required_capabilities=["required_cap"]
-        )
-        
+        result = handshake.verify_peer(peer_card, required_capabilities=["required_cap"])
+
         assert result.trusted
         assert result.trust_score == 1.0
 
@@ -126,20 +120,17 @@ class TestTrustHandshake:
         """Test verification fails for missing capability."""
         my_identity = VerificationIdentity.generate("my-agent")
         peer_identity = VerificationIdentity.generate("peer-agent", ["cap1"])
-        
+
         peer_card = TrustedAgentCard(
             name="Peer Agent",
             description="A peer",
             capabilities=["cap1"],
         )
         peer_card.sign(peer_identity)
-        
+
         handshake = TrustHandshake(my_identity)
-        result = handshake.verify_peer(
-            peer_card,
-            required_capabilities=["cap1", "cap2"]
-        )
-        
+        result = handshake.verify_peer(peer_card, required_capabilities=["cap1", "cap2"])
+
         assert not result.trusted
         assert "Missing required capabilities" in result.reason
 
@@ -147,21 +138,21 @@ class TestTrustHandshake:
         """Test that verification results are cached."""
         my_identity = VerificationIdentity.generate("my-agent")
         peer_identity = VerificationIdentity.generate("peer-agent")
-        
+
         peer_card = TrustedAgentCard(
             name="Peer Agent",
             description="A peer",
             capabilities=[],
         )
         peer_card.sign(peer_identity)
-        
+
         handshake = TrustHandshake(my_identity)
-        
+
         # First verification
         result1 = handshake.verify_peer(peer_card)
         # Second should use cache
         result2 = handshake.verify_peer(peer_card)
-        
+
         assert result1.trusted == result2.trusted
 
 
@@ -172,21 +163,21 @@ class TestDelegationChain:
         """Test adding a delegation."""
         root = VerificationIdentity.generate("root-agent")
         worker_identity = VerificationIdentity.generate("worker-agent")
-        
+
         worker_card = TrustedAgentCard(
             name="Worker",
             description="Worker agent",
             capabilities=[],
         )
         worker_card.sign(worker_identity)
-        
+
         chain = DelegationChain(root)
         delegation = chain.add_delegation(
             delegatee=worker_card,
             capabilities=["read", "write"],
             expires_in_hours=24,
         )
-        
+
         assert delegation.delegator == root.did
         assert delegation.delegatee == worker_identity.did
         assert "read" in delegation.capabilities
@@ -195,20 +186,20 @@ class TestDelegationChain:
         """Test chain verification."""
         root = VerificationIdentity.generate("root-agent")
         worker_identity = VerificationIdentity.generate("worker-agent")
-        
+
         worker_card = TrustedAgentCard(
             name="Worker",
             description="Worker agent",
             capabilities=[],
         )
         worker_card.sign(worker_identity)
-        
+
         chain = DelegationChain(root)
         chain.add_delegation(
             delegatee=worker_card,
             capabilities=["read"],
         )
-        
+
         assert chain.verify()
 
 
@@ -219,25 +210,25 @@ class TestTrustGatedTool:
         """Test capability check for tool invocation."""
         my_identity = VerificationIdentity.generate("executor")
         invoker_identity = VerificationIdentity.generate("invoker", ["database"])
-        
+
         def mock_tool(query: str) -> str:
             return f"Result: {query}"
-        
+
         gated_tool = TrustGatedTool(
             tool=mock_tool,
             required_capabilities=["database"],
         )
-        
+
         invoker_card = TrustedAgentCard(
             name="Invoker",
             description="Has database cap",
             capabilities=["database"],
         )
         invoker_card.sign(invoker_identity)
-        
+
         handshake = TrustHandshake(my_identity)
         result = gated_tool.can_invoke(invoker_card, handshake)
-        
+
         assert result.trusted
 
 
@@ -248,19 +239,20 @@ class TestTrustCallbackHandler:
         """Test that events are logged."""
         identity = VerificationIdentity.generate("callback-agent")
         policy = TrustPolicy(audit_all_calls=True)
-        
+
         handler = TrustCallbackHandler(identity, policy)
-        
+
         # Simulate some events
         from uuid import uuid4
+
         run_id = uuid4()
-        
+
         handler.on_llm_start(
             {"name": "test-model"},
             ["prompt"],
             run_id=run_id,
         )
-        
+
         events = handler.get_events()
         assert len(events) == 1
         assert events[0].event_type == "llm_start"
@@ -269,9 +261,9 @@ class TestTrustCallbackHandler:
         """Test trust summary generation."""
         identity = VerificationIdentity.generate("summary-agent")
         handler = TrustCallbackHandler(identity)
-        
+
         summary = handler.get_trust_summary()
-        
+
         assert "total_events" in summary
         assert "verified_events" in summary
         assert "verification_rate" in summary
@@ -409,7 +401,11 @@ class TestAgentDirectory:
         """Find agents by capability."""
         directory = AgentDirectory()
 
-        for name, caps in [("agent-a", ["read"]), ("agent-b", ["write"]), ("agent-c", ["read", "write"])]:
+        for name, caps in [
+            ("agent-a", ["read"]),
+            ("agent-b", ["write"]),
+            ("agent-c", ["read", "write"]),
+        ]:
             identity = VerificationIdentity.generate(name, caps)
             card = TrustedAgentCard(name=name, description="", capabilities=caps)
             card.sign(identity)

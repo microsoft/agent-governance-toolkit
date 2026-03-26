@@ -42,6 +42,7 @@ logger = logging.getLogger("agent_os.gemini")
 
 try:
     import warnings
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FutureWarning)
         import google.generativeai as _genai_mod  # noqa: F401
@@ -242,15 +243,12 @@ class GovernedGeminiModel:
         usage = getattr(response, "usage_metadata", None)
         if usage:
             self._ctx.prompt_tokens += getattr(usage, "prompt_token_count", 0)
-            self._ctx.completion_tokens += getattr(
-                usage, "candidates_token_count", 0
-            )
+            self._ctx.completion_tokens += getattr(usage, "candidates_token_count", 0)
 
             total = self._ctx.prompt_tokens + self._ctx.completion_tokens
             if total > self._kernel.policy.max_tokens:
                 raise PolicyViolationError(
-                    f"Token limit exceeded: {total} > "
-                    f"{self._kernel.policy.max_tokens}"
+                    f"Token limit exceeded: {total} > {self._kernel.policy.max_tokens}"
                 )
 
         # Check for function calls in candidates
@@ -282,9 +280,7 @@ class GovernedGeminiModel:
 
                 if self._kernel.policy.allowed_tools:
                     if fn_name not in self._kernel.policy.allowed_tools:
-                        raise PolicyViolationError(
-                            f"Tool not allowed: {fn_name}"
-                        )
+                        raise PolicyViolationError(f"Tool not allowed: {fn_name}")
 
                 if self._kernel.policy.require_human_approval:
                     raise PolicyViolationError(
@@ -334,7 +330,11 @@ class GovernedGeminiModel:
             declarations = getattr(tool, "function_declarations", None)
             if declarations:
                 for decl in declarations:
-                    name = getattr(decl, "name", "") if not isinstance(decl, dict) else decl.get("name", "")
+                    name = (
+                        getattr(decl, "name", "")
+                        if not isinstance(decl, dict)
+                        else decl.get("name", "")
+                    )
                     if name and name not in self._kernel.policy.allowed_tools:
                         raise PolicyViolationError(f"Tool not allowed: {name}")
 

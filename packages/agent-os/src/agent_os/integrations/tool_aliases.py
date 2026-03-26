@@ -173,11 +173,7 @@ class ToolAliasRegistry:
             List of alias names that map to this canonical name.
         """
         canonical_lower = canonical.lower()
-        return [
-            alias
-            for alias, canon in self._aliases.items()
-            if canon == canonical_lower
-        ]
+        return [alias for alias, canon in self._aliases.items() if canon == canonical_lower]
 
     def list_canonical_tools(self) -> list[str]:
         """List all unique canonical tool names."""

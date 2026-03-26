@@ -11,8 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime, timedelta
 
 from .schema import AICard
 
@@ -36,8 +35,8 @@ class AICardDiscovery:
     """
 
     def __init__(self, cache_ttl_seconds: int = 900):
-        self._cards: Dict[str, AICard] = {}  # keyed by DID
-        self._verified_cache: Dict[str, tuple[bool, datetime]] = {}
+        self._cards: dict[str, AICard] = {}  # keyed by DID
+        self._verified_cache: dict[str, tuple[bool, datetime]] = {}
         self._cache_ttl = timedelta(seconds=cache_ttl_seconds)
 
     def register(self, card: AICard, verify: bool = True) -> bool:
@@ -59,15 +58,15 @@ class AICardDiscovery:
             return False
 
         self._cards[card.identity.did] = card
-        self._verified_cache[card.identity.did] = (True, datetime.now(timezone.utc))
+        self._verified_cache[card.identity.did] = (True, datetime.now(UTC))
         logger.info(f"Registered AI Card for {card.identity.did}")
         return True
 
-    def get(self, did: str) -> Optional[AICard]:
+    def get(self, did: str) -> AICard | None:
         """Get a card by agent DID."""
         return self._cards.get(did)
 
-    def get_card_json(self, did: str) -> Optional[str]:
+    def get_card_json(self, did: str) -> str | None:
         """Get AI Card JSON for serving at ``/.well-known/ai-card.json``.
 
         Args:
@@ -86,11 +85,9 @@ class AICardDiscovery:
             JSON string with all registered cards.
         """
         catalog = {
-            "cards": [
-                json.loads(card.to_json()) for card in self._cards.values()
-            ],
+            "cards": [json.loads(card.to_json()) for card in self._cards.values()],
             "total": len(self._cards),
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
         }
         return json.dumps(catalog, indent=indent)
 
@@ -98,7 +95,7 @@ class AICardDiscovery:
         """Check if a card is verified (with caching)."""
         if did in self._verified_cache:
             verified, timestamp = self._verified_cache[did]
-            if datetime.now(timezone.utc) - timestamp < self._cache_ttl:
+            if datetime.now(UTC) - timestamp < self._cache_ttl:
                 return verified
 
         card = self._cards.get(did)
@@ -106,24 +103,26 @@ class AICardDiscovery:
             return False
 
         verified = card.verify_signature()
-        self._verified_cache[did] = (verified, datetime.now(timezone.utc))
+        self._verified_cache[did] = (verified, datetime.now(UTC))
         return verified
 
-    def find_by_capability(self, capability: str) -> List[AICard]:
+    def find_by_capability(self, capability: str) -> list[AICard]:
         """Find cards that have a specific capability attestation."""
         return [
-            card for card in self._cards.values()
+            card
+            for card in self._cards.values()
             if capability in card.verifiable.capability_attestations
         ]
 
-    def find_by_protocol(self, protocol: str) -> List[AICard]:
+    def find_by_protocol(self, protocol: str) -> list[AICard]:
         """Find cards that support a specific protocol."""
         return [
-            card for card in self._cards.values()
+            card
+            for card in self._cards.values()
             if any(s.protocol == protocol for s in card.services)
         ]
 
-    def list_cards(self) -> List[AICard]:
+    def list_cards(self) -> list[AICard]:
         """List all registered cards."""
         return list(self._cards.values())
 

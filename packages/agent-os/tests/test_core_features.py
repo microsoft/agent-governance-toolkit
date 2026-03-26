@@ -16,7 +16,6 @@ from agent_os.base_agent import AgentConfig, AuditEntry, BaseAgent, PolicyDecisi
 from agent_os.integrations.base import GovernancePolicy, PatternType
 from agent_os.stateless import ExecutionResult
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -201,6 +200,7 @@ class TestAuditLogQuery:
 class TestHealthReExport:
     def test_import_from_health_module(self) -> None:
         from agent_os.health import HealthChecker, HealthStatus
+
         checker = HealthChecker(version="test")
         report = checker.check_health()
         assert report.status == HealthStatus.HEALTHY
@@ -210,6 +210,7 @@ class TestHealthCLI:
     def test_cmd_health_json(self, capsys: pytest.CaptureFixture[str]) -> None:
         import argparse
         import json as _json
+
         from agent_os.cli import cmd_health
 
         ns = argparse.Namespace(format="json")
@@ -222,6 +223,7 @@ class TestHealthCLI:
 
     def test_cmd_health_text(self, capsys: pytest.CaptureFixture[str]) -> None:
         import argparse
+
         from agent_os.cli import cmd_health
 
         ns = argparse.Namespace(format="text")

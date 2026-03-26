@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Agent OS Chrome Extension - Background Service Worker
- * 
+ *
  * Handles communication between DevTools panel and content scripts.
  */
 
@@ -16,13 +16,13 @@ const contentScriptPorts = new Map();
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name === 'devtools-panel') {
     let tabId = null;
-    
+
     port.onMessage.addListener((message) => {
       if (message.type === 'init') {
         tabId = message.tabId;
         devtoolsConnections.set(tabId, port);
         console.log(`DevTools connected for tab ${tabId}`);
-        
+
         // If we have a content script connection, relay messages
         const contentPort = contentScriptPorts.get(tabId);
         if (contentPort) {
@@ -36,7 +36,7 @@ chrome.runtime.onConnect.addListener((port) => {
         }
       }
     });
-    
+
     port.onDisconnect.addListener(() => {
       if (tabId !== null) {
         devtoolsConnections.delete(tabId);
@@ -44,13 +44,13 @@ chrome.runtime.onConnect.addListener((port) => {
       }
     });
   }
-  
+
   if (port.name === 'content-script') {
     const tabId = port.sender?.tab?.id;
     if (tabId) {
       contentScriptPorts.set(tabId, port);
       console.log(`Content script connected for tab ${tabId}`);
-      
+
       port.onMessage.addListener((message) => {
         // Forward to DevTools panel
         const devtoolsPort = devtoolsConnections.get(tabId);
@@ -58,7 +58,7 @@ chrome.runtime.onConnect.addListener((port) => {
           devtoolsPort.postMessage(message);
         }
       });
-      
+
       port.onDisconnect.addListener(() => {
         contentScriptPorts.delete(tabId);
         console.log(`Content script disconnected for tab ${tabId}`);

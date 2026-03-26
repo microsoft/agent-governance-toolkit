@@ -121,12 +121,12 @@ class Span:
 
 # Patterns for PII/credential redaction (basic regex: passwords, emails, phones)
 _REDACT_PATTERNS = [
-    (re.compile(r'"(password|secret|token|api_key|apikey|authorization)":\s*"[^"]*"', re.I),
-     r'"\1": "[REDACTED]"'),
-    (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
-     "[EMAIL_REDACTED]"),
-    (re.compile(r'\b(?:\+?1[-.\s])?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b'),
-     "[PHONE_REDACTED]"),
+    (
+        re.compile(r'"(password|secret|token|api_key|apikey|authorization)":\s*"[^"]*"', re.I),
+        r'"\1": "[REDACTED]"',
+    ),
+    (re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"), "[EMAIL_REDACTED]"),
+    (re.compile(r"\b(?:\+?1[-.\s])?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b"), "[PHONE_REDACTED]"),
 ]
 
 
@@ -242,7 +242,9 @@ class TraceCapture:
         trace = capture.trace
     """
 
-    def __init__(self, agent_id: str, task_input: str = "", metadata: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, agent_id: str, task_input: str = "", metadata: dict[str, Any] | None = None
+    ) -> None:
         self.trace = Trace(agent_id=agent_id, task_input=task_input, metadata=metadata or {})
         self._span_stack: list[Span] = []
 
@@ -324,15 +326,17 @@ class TraceStore:
                 data = json.load(f)
             if agent_id and data.get("agent_id") != agent_id:
                 continue
-            traces.append({
-                "trace_id": data["trace_id"],
-                "agent_id": data.get("agent_id"),
-                "task_input": data.get("task_input", "")[:100],
-                "success": data.get("success"),
-                "duration_ms": data.get("duration_ms"),
-                "span_count": data.get("span_count", 0),
-                "total_cost_usd": data.get("total_cost_usd", 0),
-            })
+            traces.append(
+                {
+                    "trace_id": data["trace_id"],
+                    "agent_id": data.get("agent_id"),
+                    "task_input": data.get("task_input", "")[:100],
+                    "success": data.get("success"),
+                    "duration_ms": data.get("duration_ms"),
+                    "span_count": data.get("span_count", 0),
+                    "total_cost_usd": data.get("total_cost_usd", 0),
+                }
+            )
         return traces
 
     def delete(self, trace_id: str) -> bool:

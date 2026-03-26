@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import json
 import threading
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 try:
     import redis
@@ -160,9 +161,7 @@ class RedisTrustStore:
 
     # -- Pub/sub --------------------------------------------------------------
 
-    def publish_update(
-        self, agent_did: str, update_type: str, data: dict[str, Any]
-    ) -> None:
+    def publish_update(self, agent_did: str, update_type: str, data: dict[str, Any]) -> None:
         """Publish a trust update event.
 
         Args:
@@ -170,9 +169,7 @@ class RedisTrustStore:
             update_type: Type of update (e.g. ``"score_changed"``).
             data: Arbitrary event payload.
         """
-        message = json.dumps(
-            {"agent_did": agent_did, "update_type": update_type, "data": data}
-        )
+        message = json.dumps({"agent_did": agent_did, "update_type": update_type, "data": data})
         self._client.publish(self._channel(), message)
 
     def subscribe_updates(self, callback: Callable[[dict[str, Any]], None]) -> None:

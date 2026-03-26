@@ -1,5 +1,5 @@
 # Agent OS Observability Stack
-# 
+#
 # Full production-ready observability with:
 # - Prometheus (metrics collection)
 # - Grafana (dashboards)
@@ -9,7 +9,7 @@
 # Usage:
 #   cd packages/observability
 #   docker-compose up -d
-#   
+#
 #   Open: http://localhost:3000 (Grafana, admin/admin)
 #   Open: http://localhost:16686 (Jaeger)
 #   Open: http://localhost:9090 (Prometheus)

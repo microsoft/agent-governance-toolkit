@@ -3,6 +3,7 @@
 """
 Integration tests for the IATP Sidecar.
 """
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -28,13 +29,11 @@ def trusted_manifest():
             idempotency=True,
             reversibility=ReversibilityLevel.FULL,
             undo_window="24h",
-            sla_latency="1000ms"
+            sla_latency="1000ms",
         ),
         privacy_contract=PrivacyContract(
-            retention=RetentionPolicy.EPHEMERAL,
-            storage_location="us-east",
-            human_review=False
-        )
+            retention=RetentionPolicy.EPHEMERAL, storage_location="us-east", human_review=False
+        ),
     )
 
 
@@ -45,24 +44,16 @@ def untrusted_manifest():
         agent_id="test-untrusted-agent",
         agent_version="0.1.0",
         trust_level=TrustLevel.UNTRUSTED,
-        capabilities=AgentCapabilities(
-            idempotency=False,
-            reversibility=ReversibilityLevel.NONE
-        ),
+        capabilities=AgentCapabilities(idempotency=False, reversibility=ReversibilityLevel.NONE),
         privacy_contract=PrivacyContract(
-            retention=RetentionPolicy.FOREVER,
-            storage_location="unknown",
-            human_review=True
-        )
+            retention=RetentionPolicy.FOREVER, storage_location="unknown", human_review=True
+        ),
     )
 
 
 def test_health_check(trusted_manifest):
     """Test the health check endpoint."""
-    sidecar = create_sidecar(
-        agent_url="http://localhost:9999",
-        manifest=trusted_manifest
-    )
+    sidecar = create_sidecar(agent_url="http://localhost:9999", manifest=trusted_manifest)
     client = TestClient(sidecar.app)
 
     response = client.get("/health")
@@ -74,10 +65,7 @@ def test_health_check(trusted_manifest):
 
 def test_get_manifest(trusted_manifest):
     """Test getting the capability manifest."""
-    sidecar = create_sidecar(
-        agent_url="http://localhost:9999",
-        manifest=trusted_manifest
-    )
+    sidecar = create_sidecar(agent_url="http://localhost:9999", manifest=trusted_manifest)
     client = TestClient(sidecar.app)
 
     response = client.get("/.well-known/agent-manifest")
@@ -90,16 +78,11 @@ def test_get_manifest(trusted_manifest):
 
 def test_invalid_json_payload(trusted_manifest):
     """Test that invalid JSON is rejected."""
-    sidecar = create_sidecar(
-        agent_url="http://localhost:9999",
-        manifest=trusted_manifest
-    )
+    sidecar = create_sidecar(agent_url="http://localhost:9999", manifest=trusted_manifest)
     client = TestClient(sidecar.app)
 
     response = client.post(
-        "/proxy",
-        content="invalid json",
-        headers={"Content-Type": "application/json"}
+        "/proxy", content="invalid json", headers={"Content-Type": "application/json"}
     )
     assert response.status_code == 400
     data = response.json()
@@ -108,18 +91,15 @@ def test_invalid_json_payload(trusted_manifest):
 
 def test_blocked_credit_card_permanent_storage(untrusted_manifest):
     """Test that credit cards are blocked for permanent storage."""
-    sidecar = create_sidecar(
-        agent_url="http://localhost:9999",
-        manifest=untrusted_manifest
-    )
+    sidecar = create_sidecar(agent_url="http://localhost:9999", manifest=untrusted_manifest)
     client = TestClient(sidecar.app)
 
     response = client.post(
         "/proxy",
         json={
             "task": "purchase",
-            "card": "4532-0151-1283-0366"  # Valid test card
-        }
+            "card": "4532-0151-1283-0366",  # Valid test card
+        },
     )
     assert response.status_code == 403
     data = response.json()
@@ -129,16 +109,10 @@ def test_blocked_credit_card_permanent_storage(untrusted_manifest):
 
 def test_warning_without_override(untrusted_manifest):
     """Test that untrusted agents trigger warnings."""
-    sidecar = create_sidecar(
-        agent_url="http://localhost:9999",
-        manifest=untrusted_manifest
-    )
+    sidecar = create_sidecar(agent_url="http://localhost:9999", manifest=untrusted_manifest)
     client = TestClient(sidecar.app)
 
-    response = client.post(
-        "/proxy",
-        json={"task": "test", "data": {}}
-    )
+    response = client.post("/proxy", json={"task": "test", "data": {}})
     assert response.status_code == 449
     data = response.json()
     assert "warning" in data
@@ -148,18 +122,13 @@ def test_warning_without_override(untrusted_manifest):
 
 def test_trace_id_injection(trusted_manifest):
     """Test that trace IDs are properly handled."""
-    sidecar = create_sidecar(
-        agent_url="http://localhost:9999",
-        manifest=trusted_manifest
-    )
+    sidecar = create_sidecar(agent_url="http://localhost:9999", manifest=trusted_manifest)
     client = TestClient(sidecar.app)
 
     # Provide a custom trace ID
     custom_trace_id = "custom-trace-123"
     response = client.post(
-        "/proxy",
-        json={"task": "test"},
-        headers={"X-Agent-Trace-ID": custom_trace_id}
+        "/proxy", json={"task": "test"}, headers={"X-Agent-Trace-ID": custom_trace_id}
     )
 
     # Even if backend fails, trace ID should be in error response

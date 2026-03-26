@@ -39,8 +39,7 @@ class AdapterRegistry:
         """
         if not (isinstance(adapter_class, type) and issubclass(adapter_class, BaseIntegration)):
             raise TypeError(
-                f"adapter_class must be a subclass of BaseIntegration, "
-                f"got {adapter_class!r}"
+                f"adapter_class must be a subclass of BaseIntegration, got {adapter_class!r}"
             )
         if name in self._adapters:
             raise ValueError(f"Adapter '{name}' is already registered")

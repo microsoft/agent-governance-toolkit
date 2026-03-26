@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -46,10 +46,17 @@ class AuditNode:
         self._chain: list[AuditEntry] = []
 
     @staticmethod
-    def _compute_hash(index: int, timestamp: float, data: dict, previous_hash: str) -> str:
+    def _compute_hash(
+        index: int, timestamp: float, data: dict, previous_hash: str
+    ) -> str:
         """Compute SHA-256 hash for a chain entry."""
         payload = json.dumps(
-            {"index": index, "timestamp": timestamp, "data": data, "previous_hash": previous_hash},
+            {
+                "index": index,
+                "timestamp": timestamp,
+                "data": data,
+                "previous_hash": previous_hash,
+            },
             sort_keys=True,
             default=str,
         )
@@ -98,7 +105,9 @@ class AuditNode:
             expected_prev = self._chain[i - 1].hash if i > 0 else "0" * 64
             if entry.previous_hash != expected_prev:
                 return False
-            expected_hash = self._compute_hash(entry.index, entry.timestamp, entry.data, entry.previous_hash)
+            expected_hash = self._compute_hash(
+                entry.index, entry.timestamp, entry.data, entry.previous_hash
+            )
             if entry.hash != expected_hash:
                 return False
         return True

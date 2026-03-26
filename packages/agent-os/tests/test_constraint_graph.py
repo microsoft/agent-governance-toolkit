@@ -4,8 +4,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from agent_os.constraint_graph import (
     ConstraintEdge,
     ConstraintGraph,
@@ -16,10 +14,10 @@ from agent_os.constraint_graph import (
 )
 from agent_os.integrations.base import ToolCallRequest
 
-
 # ---------------------------------------------------------------------------
 # ResourceNode
 # ---------------------------------------------------------------------------
+
 
 class TestResourceNode:
     def test_defaults(self):
@@ -37,6 +35,7 @@ class TestResourceNode:
 # ---------------------------------------------------------------------------
 # ConstraintGraph — basic resolution
 # ---------------------------------------------------------------------------
+
 
 class TestConstraintGraphResolve:
     def _graph_with_edges(self, *edges: ConstraintEdge) -> ConstraintGraph:
@@ -139,6 +138,7 @@ class TestConstraintGraphResolve:
 # ---------------------------------------------------------------------------
 # ConstraintGraphEnforcer
 # ---------------------------------------------------------------------------
+
 
 class TestConstraintGraphEnforcer:
     def test_allowed(self):

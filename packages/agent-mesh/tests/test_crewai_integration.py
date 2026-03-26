@@ -11,7 +11,6 @@ from agentmesh.integrations.crewai import (
     TrustAwareCrew,
 )
 
-
 # ── Helpers ─────────────────────────────────────────────────────────
 
 
@@ -207,7 +206,7 @@ class TestCrewAINotInstalled:
     def test_import_succeeds_without_crewai(self):
         """Package import should not fail when crewai is not installed."""
         from agentmesh.integrations.crewai import (  # noqa: F401
+            InMemoryTrustStore,
             TrustAwareAgent,
             TrustAwareCrew,
-            InMemoryTrustStore,
         )

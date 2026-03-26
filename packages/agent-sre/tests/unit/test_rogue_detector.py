@@ -14,7 +14,6 @@ from agent_sre.anomaly.rogue_detector import (
     ToolCallFrequencyAnalyzer,
 )
 
-
 # ── ToolCallFrequencyAnalyzer ───────────────────────────────────────
 
 

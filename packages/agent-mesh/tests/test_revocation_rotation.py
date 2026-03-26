@@ -3,11 +3,10 @@
 """Tests for revocation integration with CardRegistry."""
 
 import pytest
-from datetime import datetime, timezone
 
 from agentmesh.identity.agent_id import AgentIdentity
-from agentmesh.identity.revocation import RevocationList, RevocationEntry
-from agentmesh.trust.cards import TrustedAgentCard, CardRegistry
+from agentmesh.identity.revocation import RevocationList
+from agentmesh.trust.cards import CardRegistry, TrustedAgentCard
 
 
 @pytest.fixture

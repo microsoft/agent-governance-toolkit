@@ -3,6 +3,7 @@
 """
 Unit tests for IATP security module.
 """
+
 from iatp.models import (
     AgentCapabilities,
     CapabilityManifest,
@@ -63,9 +64,7 @@ def test_validate_privacy_policy_blocks_credit_card_forever():
         agent_id="bad-agent",
         trust_level=TrustLevel.UNTRUSTED,
         capabilities=AgentCapabilities(),
-        privacy_contract=PrivacyContract(
-            retention=RetentionPolicy.FOREVER
-        )
+        privacy_contract=PrivacyContract(retention=RetentionPolicy.FOREVER),
     )
 
     payload = {"credit_card": "4532-0151-1283-0366"}  # Valid test card
@@ -83,9 +82,7 @@ def test_validate_privacy_policy_allows_credit_card_ephemeral():
         agent_id="good-agent",
         trust_level=TrustLevel.VERIFIED_PARTNER,
         capabilities=AgentCapabilities(),
-        privacy_contract=PrivacyContract(
-            retention=RetentionPolicy.EPHEMERAL
-        )
+        privacy_contract=PrivacyContract(retention=RetentionPolicy.EPHEMERAL),
     )
 
     payload = {"credit_card": "4532-0151-1283-0366"}  # Valid test card
@@ -102,9 +99,7 @@ def test_validate_privacy_policy_blocks_ssn_non_ephemeral():
         agent_id="medium-agent",
         trust_level=TrustLevel.STANDARD,
         capabilities=AgentCapabilities(),
-        privacy_contract=PrivacyContract(
-            retention=RetentionPolicy.TEMPORARY
-        )
+        privacy_contract=PrivacyContract(retention=RetentionPolicy.TEMPORARY),
     )
 
     payload = {"ssn": "123-45-6789"}
@@ -120,14 +115,8 @@ def test_generate_warning_low_trust():
     manifest = CapabilityManifest(
         agent_id="sketchy-agent",
         trust_level=TrustLevel.UNTRUSTED,
-        capabilities=AgentCapabilities(
-            idempotency=False,
-            reversibility=ReversibilityLevel.NONE
-        ),
-        privacy_contract=PrivacyContract(
-            retention=RetentionPolicy.FOREVER,
-            human_review=True
-        )
+        capabilities=AgentCapabilities(idempotency=False, reversibility=ReversibilityLevel.NONE),
+        privacy_contract=PrivacyContract(retention=RetentionPolicy.FOREVER, human_review=True),
     )
 
     warning = validator.generate_warning_message(manifest, {})
@@ -145,14 +134,8 @@ def test_generate_warning_trusted_agent():
     manifest = CapabilityManifest(
         agent_id="trusted-agent",
         trust_level=TrustLevel.VERIFIED_PARTNER,
-        capabilities=AgentCapabilities(
-            idempotency=True,
-            reversibility=ReversibilityLevel.FULL
-        ),
-        privacy_contract=PrivacyContract(
-            retention=RetentionPolicy.EPHEMERAL,
-            human_review=False
-        )
+        capabilities=AgentCapabilities(idempotency=True, reversibility=ReversibilityLevel.FULL),
+        privacy_contract=PrivacyContract(retention=RetentionPolicy.EPHEMERAL, human_review=False),
     )
 
     warning = validator.generate_warning_message(manifest, {})
@@ -166,9 +149,7 @@ def test_should_quarantine_untrusted():
         agent_id="untrusted-agent",
         trust_level=TrustLevel.UNTRUSTED,
         capabilities=AgentCapabilities(),
-        privacy_contract=PrivacyContract(
-            retention=RetentionPolicy.EPHEMERAL
-        )
+        privacy_contract=PrivacyContract(retention=RetentionPolicy.EPHEMERAL),
     )
 
     assert validator.should_quarantine(manifest)
@@ -180,12 +161,8 @@ def test_should_quarantine_no_reversibility_permanent():
     manifest = CapabilityManifest(
         agent_id="risky-agent",
         trust_level=TrustLevel.STANDARD,
-        capabilities=AgentCapabilities(
-            reversibility=ReversibilityLevel.NONE
-        ),
-        privacy_contract=PrivacyContract(
-            retention=RetentionPolicy.FOREVER
-        )
+        capabilities=AgentCapabilities(reversibility=ReversibilityLevel.NONE),
+        privacy_contract=PrivacyContract(retention=RetentionPolicy.FOREVER),
     )
 
     assert validator.should_quarantine(manifest)
@@ -197,8 +174,8 @@ def test_scrub_credit_card():
         "user": "john",
         "payment": {
             "card": "4532-0151-1283-0366",  # Valid test card
-            "cvv": "123"
-        }
+            "cvv": "123",
+        },
     }
 
     scrubbed = PrivacyScrubber.scrub_payload(payload)
@@ -210,10 +187,7 @@ def test_scrub_credit_card():
 
 def test_scrub_ssn():
     """Test scrubbing SSN from payload."""
-    payload = {
-        "user": "john",
-        "ssn": "123-45-6789"
-    }
+    payload = {"user": "john", "ssn": "123-45-6789"}
 
     scrubbed = PrivacyScrubber.scrub_payload(payload)
 

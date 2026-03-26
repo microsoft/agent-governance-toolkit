@@ -7,11 +7,7 @@ from amb_core.models import Message, MessagePriority
 
 def test_message_creation():
     """Test basic message creation."""
-    msg = Message(
-        id="test-123",
-        topic="test.topic",
-        payload={"key": "value"}
-    )
+    msg = Message(id="test-123", topic="test.topic", payload={"key": "value"})
 
     assert msg.id == "test-123"
     assert msg.topic == "test.topic"
@@ -21,12 +17,7 @@ def test_message_creation():
 
 def test_message_with_priority():
     """Test message with different priority levels."""
-    msg = Message(
-        id="test-123",
-        topic="test.topic",
-        payload={},
-        priority=MessagePriority.HIGH
-    )
+    msg = Message(id="test-123", topic="test.topic", payload={}, priority=MessagePriority.HIGH)
 
     assert msg.priority == MessagePriority.HIGH
 
@@ -40,7 +31,7 @@ def test_message_with_metadata():
         sender="agent-1",
         correlation_id="corr-123",
         reply_to="reply.topic",
-        metadata={"custom": "data"}
+        metadata={"custom": "data"},
     )
 
     assert msg.sender == "agent-1"
@@ -51,11 +42,7 @@ def test_message_with_metadata():
 
 def test_message_serialization():
     """Test message JSON serialization."""
-    msg = Message(
-        id="test-123",
-        topic="test.topic",
-        payload={"key": "value"}
-    )
+    msg = Message(id="test-123", topic="test.topic", payload={"key": "value"})
 
     # Serialize
     json_str = msg.model_dump_json()

@@ -15,10 +15,10 @@ from agentmesh.reward.distribution import (
 )
 from agentmesh.reward.distributor import RewardDistributor
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _pool(participants: list[ParticipantInfo], reward: float = 100.0) -> RewardPool:
     return RewardPool(total_reward=reward, task_id="task-1", participants=participants)
@@ -36,6 +36,7 @@ def _agents_3() -> list[ParticipantInfo]:
 # Equal split
 # ---------------------------------------------------------------------------
 
+
 class TestEqualSplitStrategy:
     def test_three_agents(self):
         result = EqualSplitStrategy().distribute(_pool(_agents_3()))
@@ -46,7 +47,9 @@ class TestEqualSplitStrategy:
         assert pytest.approx(result.total_distributed) == 100.0
 
     def test_single_participant(self):
-        pool = _pool([ParticipantInfo(agent_did="did:mesh:solo", trust_score=500, delegation_depth=0)])
+        pool = _pool(
+            [ParticipantInfo(agent_did="did:mesh:solo", trust_score=500, delegation_depth=0)]
+        )
         result = EqualSplitStrategy().distribute(pool)
         assert result.allocations[0].amount == pytest.approx(100.0)
 
@@ -60,6 +63,7 @@ class TestEqualSplitStrategy:
 # ---------------------------------------------------------------------------
 # Trust-weighted
 # ---------------------------------------------------------------------------
+
 
 class TestTrustWeightedStrategy:
     def test_proportional_shares(self):
@@ -89,6 +93,7 @@ class TestTrustWeightedStrategy:
 # Hierarchical
 # ---------------------------------------------------------------------------
 
+
 class TestHierarchicalStrategy:
     def test_root_gets_most(self):
         result = HierarchicalStrategy().distribute(_pool(_agents_3()))
@@ -105,7 +110,9 @@ class TestHierarchicalStrategy:
         assert amounts["did:mesh:a2"] == pytest.approx(0.5 / 1.75 * 100)
 
     def test_single_participant(self):
-        pool = _pool([ParticipantInfo(agent_did="did:mesh:solo", trust_score=500, delegation_depth=0)])
+        pool = _pool(
+            [ParticipantInfo(agent_did="did:mesh:solo", trust_score=500, delegation_depth=0)]
+        )
         result = HierarchicalStrategy().distribute(pool)
         assert result.allocations[0].amount == pytest.approx(100.0)
 
@@ -114,19 +121,26 @@ class TestHierarchicalStrategy:
 # Contribution-weighted
 # ---------------------------------------------------------------------------
 
+
 class TestContributionWeightedStrategy:
     def test_explicit_weights(self):
         participants = [
             ParticipantInfo(
-                agent_did="did:mesh:a1", trust_score=500, delegation_depth=0,
+                agent_did="did:mesh:a1",
+                trust_score=500,
+                delegation_depth=0,
                 contribution_weight=0.5,
             ),
             ParticipantInfo(
-                agent_did="did:mesh:a2", trust_score=500, delegation_depth=0,
+                agent_did="did:mesh:a2",
+                trust_score=500,
+                delegation_depth=0,
                 contribution_weight=0.3,
             ),
             ParticipantInfo(
-                agent_did="did:mesh:a3", trust_score=500, delegation_depth=0,
+                agent_did="did:mesh:a3",
+                trust_score=500,
+                delegation_depth=0,
                 contribution_weight=0.2,
             ),
         ]
@@ -139,11 +153,15 @@ class TestContributionWeightedStrategy:
     def test_missing_weights_get_zero(self):
         participants = [
             ParticipantInfo(
-                agent_did="did:mesh:a1", trust_score=500, delegation_depth=0,
+                agent_did="did:mesh:a1",
+                trust_score=500,
+                delegation_depth=0,
                 contribution_weight=1.0,
             ),
             ParticipantInfo(
-                agent_did="did:mesh:a2", trust_score=500, delegation_depth=0,
+                agent_did="did:mesh:a2",
+                trust_score=500,
+                delegation_depth=0,
             ),
         ]
         result = ContributionWeightedStrategy().distribute(_pool(participants))
@@ -155,6 +173,7 @@ class TestContributionWeightedStrategy:
 # ---------------------------------------------------------------------------
 # RewardDistributor
 # ---------------------------------------------------------------------------
+
 
 class TestRewardDistributor:
     def test_default_strategy(self):
@@ -181,8 +200,10 @@ class TestRewardDistributor:
 
                 if not pool.participants:
                     return DistributionResult(
-                        task_id=pool.task_id, strategy="fixed",
-                        allocations=[], total_distributed=0.0,
+                        task_id=pool.task_id,
+                        strategy="fixed",
+                        allocations=[],
+                        total_distributed=0.0,
                     )
                 allocs = [
                     RewardAllocation(
@@ -193,13 +214,16 @@ class TestRewardDistributor:
                     ),
                 ] + [
                     RewardAllocation(
-                        agent_did=p.agent_did, amount=0.0,
-                        percentage=0.0, strategy_used="fixed",
+                        agent_did=p.agent_did,
+                        amount=0.0,
+                        percentage=0.0,
+                        strategy_used="fixed",
                     )
                     for p in pool.participants[1:]
                 ]
                 return DistributionResult(
-                    task_id=pool.task_id, strategy="fixed",
+                    task_id=pool.task_id,
+                    strategy="fixed",
                     allocations=allocs,
                     total_distributed=pool.total_reward,
                 )
@@ -218,11 +242,14 @@ class TestRewardDistributor:
                 from agentmesh.reward.distribution import RewardAllocation
 
                 return DistributionResult(
-                    task_id=pool.task_id, strategy="broken",
+                    task_id=pool.task_id,
+                    strategy="broken",
                     allocations=[
                         RewardAllocation(
-                            agent_did="did:mesh:x", amount=999.0,
-                            percentage=100.0, strategy_used="broken",
+                            agent_did="did:mesh:x",
+                            amount=999.0,
+                            percentage=100.0,
+                            strategy_used="broken",
                         ),
                     ],
                     total_distributed=999.0,
@@ -237,6 +264,7 @@ class TestRewardDistributor:
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     def test_no_participants(self):

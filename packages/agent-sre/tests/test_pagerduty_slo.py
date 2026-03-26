@@ -17,7 +17,7 @@ from agent_sre.alerts import (
     ChannelConfig,
 )
 from agent_sre.integrations.pagerduty import PagerDutyAlertConfig
-from agent_sre.slo.objectives import ErrorBudget, SLO, SLOStatus
+from agent_sre.slo.objectives import SLO, ErrorBudget, SLOStatus
 
 
 def _make_slo(
@@ -56,12 +56,14 @@ class TestPagerDutyAlertConfig:
         manager = AlertManager()
 
         # Use a callback channel to capture alerts
-        manager.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test-capture",
-            callback=lambda a: sent_alerts.append(a),
-            min_severity=AlertSeverity.WARNING,
-        ))
+        manager.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test-capture",
+                callback=lambda a: sent_alerts.append(a),
+                min_severity=AlertSeverity.WARNING,
+            )
+        )
 
         pd = PagerDutyAlertConfig(
             alert_manager=manager,
@@ -86,12 +88,14 @@ class TestPagerDutyAlertConfig:
         """SLO recovering to HEALTHY sends a resolve event."""
         sent_alerts: list[Alert] = []
         manager = AlertManager()
-        manager.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test-capture",
-            callback=lambda a: sent_alerts.append(a),
-            min_severity=AlertSeverity.INFO,
-        ))
+        manager.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test-capture",
+                callback=lambda a: sent_alerts.append(a),
+                min_severity=AlertSeverity.INFO,
+            )
+        )
 
         pd = PagerDutyAlertConfig(
             alert_manager=manager,
@@ -122,12 +126,14 @@ class TestPagerDutyAlertConfig:
         """Same SLO breach doesn't re-fire alerts within dedup window."""
         sent_alerts: list[Alert] = []
         manager = AlertManager(dedup_window_seconds=300.0)
-        manager.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test-capture",
-            callback=lambda a: sent_alerts.append(a),
-            min_severity=AlertSeverity.WARNING,
-        ))
+        manager.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test-capture",
+                callback=lambda a: sent_alerts.append(a),
+                min_severity=AlertSeverity.WARNING,
+            )
+        )
 
         pd = PagerDutyAlertConfig(
             alert_manager=manager,
@@ -172,12 +178,14 @@ class TestPagerDutyAlertConfig:
         """A healthy SLO returns HEALTHY and doesn't fire."""
         sent_alerts: list[Alert] = []
         manager = AlertManager()
-        manager.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test-capture",
-            callback=lambda a: sent_alerts.append(a),
-            min_severity=AlertSeverity.WARNING,
-        ))
+        manager.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test-capture",
+                callback=lambda a: sent_alerts.append(a),
+                min_severity=AlertSeverity.WARNING,
+            )
+        )
 
         pd = PagerDutyAlertConfig(
             alert_manager=manager,

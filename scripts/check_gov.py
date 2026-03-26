@@ -59,6 +59,7 @@ def verify_installation() -> int:
     print("Governance CLI:")
     try:
         from agent_compliance.cli.main import cmd_verify  # noqa: F401
+
         print("  ✅  agent-governance verify............ available")
         results.append(True)
     except ImportError:

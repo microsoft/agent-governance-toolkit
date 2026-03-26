@@ -18,19 +18,19 @@ from __future__ import annotations
 
 try:
     from agent_os.policies.conflict_resolution import (  # noqa: F401
-        ConflictResolutionStrategy,
-        PolicyScope,
         CandidateDecision,
-        ResolutionResult,
+        ConflictResolutionStrategy,
         PolicyConflictResolver,
+        PolicyScope,
+        ResolutionResult,
     )
 except ImportError:
     from agentmesh.governance._conflict_resolution_impl import (  # noqa: F401
-        ConflictResolutionStrategy,
-        PolicyScope,
         CandidateDecision,
-        ResolutionResult,
+        ConflictResolutionStrategy,
         PolicyConflictResolver,
+        PolicyScope,
+        ResolutionResult,
     )
 
 __all__ = [

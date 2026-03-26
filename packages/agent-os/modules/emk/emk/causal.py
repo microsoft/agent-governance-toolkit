@@ -15,14 +15,13 @@ import json
 import sqlite3
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional
 
 
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class CausalEpisode:
@@ -294,9 +293,7 @@ class CausalMemoryStore:
         deduped.sort(key=lambda e: e.timestamp)
         return deduped
 
-    def query_by_agent(
-        self, agent_id: str, *, limit: int = 100
-    ) -> List[CausalEpisode]:
+    def query_by_agent(self, agent_id: str, *, limit: int = 100) -> List[CausalEpisode]:
         """Get recent episodes for an agent."""
         rows = self._conn.execute(
             "SELECT * FROM episodes WHERE agent_id = ? ORDER BY ts DESC LIMIT ?",
@@ -304,9 +301,7 @@ class CausalMemoryStore:
         ).fetchall()
         return [self._row_to_episode(r) for r in rows]
 
-    def query_by_action(
-        self, action: str, *, limit: int = 100
-    ) -> List[CausalEpisode]:
+    def query_by_action(self, action: str, *, limit: int = 100) -> List[CausalEpisode]:
         """Get recent episodes matching an action type."""
         rows = self._conn.execute(
             "SELECT * FROM episodes WHERE action = ? ORDER BY ts DESC LIMIT ?",
@@ -330,8 +325,17 @@ class CausalMemoryStore:
     # -- Internal helpers -----------------------------------------------------
 
     def _row_to_episode(self, row: tuple) -> CausalEpisode:
-        (eid, action, params_json, result_json, caused_by,
-         policy_json, trust_json, agent_id, ts) = row
+        (
+            eid,
+            action,
+            params_json,
+            result_json,
+            caused_by,
+            policy_json,
+            trust_json,
+            agent_id,
+            ts,
+        ) = row
 
         # Fetch forward edges
         effects = self._conn.execute(

@@ -23,6 +23,7 @@ from agent_os.integrations.base import GovernancePolicy
 @dataclass
 class AgentSkill:
     """Parsed agent skill/capability."""
+
     name: str
     description: str
     allowed: bool = True
@@ -34,6 +35,7 @@ class AgentSkill:
 @dataclass
 class AgentConfig:
     """Parsed agent configuration from AGENTS.md."""
+
     name: str
     description: str
     skills: list[AgentSkill]
@@ -77,12 +79,12 @@ class AgentsParser:
         if not agents_md.exists():
             agents_md = agents_dir / "AGENTS.md"
 
-        config = self._parse_agents_md(agents_md) if agents_md.exists() else AgentConfig(
-            name="default",
-            description="",
-            skills=[],
-            policies=[],
-            instructions=""
+        config = (
+            self._parse_agents_md(agents_md)
+            if agents_md.exists()
+            else AgentConfig(
+                name="default", description="", skills=[], policies=[], instructions=""
+            )
         )
 
         # Parse security.md (Agent OS extension)
@@ -103,7 +105,7 @@ class AgentsParser:
             if end != -1:
                 yaml_content = content[3:end]
                 front_matter = yaml.safe_load(yaml_content) or {}
-                content = content[end + 3:].strip()
+                content = content[end + 3 :].strip()
 
         # Parse sections
         name = front_matter.get("name", "agent")
@@ -112,7 +114,9 @@ class AgentsParser:
         instructions = content
 
         # Find "You can:" or "Capabilities:" section
-        can_match = re.search(r"(?:You can|Capabilities|Skills):\s*\n((?:[-*\d].*\n?)+)", content, re.IGNORECASE)
+        can_match = re.search(
+            r"(?:You can|Capabilities|Skills):\s*\n((?:[-*\d].*\n?)+)", content, re.IGNORECASE
+        )
         if can_match:
             skills_text = can_match.group(1)
             skills = self._parse_skills(skills_text)
@@ -131,7 +135,7 @@ class AgentsParser:
             skills=skills,
             policies=front_matter.get("policies", []),
             instructions=instructions,
-            security_config=front_matter.get("security", {})
+            security_config=front_matter.get("security", {}),
         )
 
     def _parse_skills(self, text: str) -> list[AgentSkill]:
@@ -158,15 +162,19 @@ class AgentsParser:
 
             if "(requires approval)" in skill_text.lower():
                 requires_approval = True
-                skill_text = re.sub(r"\s*\(requires approval\)", "", skill_text, flags=re.IGNORECASE)
+                skill_text = re.sub(
+                    r"\s*\(requires approval\)", "", skill_text, flags=re.IGNORECASE
+                )
 
-            skills.append(AgentSkill(
-                name=self._skill_to_action(skill_text),
-                description=skill_text.strip(),
-                read_only=read_only,
-                requires_approval=requires_approval,
-                constraints=constraints
-            ))
+            skills.append(
+                AgentSkill(
+                    name=self._skill_to_action(skill_text),
+                    description=skill_text.strip(),
+                    read_only=read_only,
+                    requires_approval=requires_approval,
+                    constraints=constraints,
+                )
+            )
 
         return skills
 
@@ -220,11 +228,7 @@ class AgentsParser:
 
         Returns policy configuration for Control Plane.
         """
-        policies = {
-            "name": config.name,
-            "version": "1.0",
-            "rules": []
-        }
+        policies = {"name": config.name, "version": "1.0", "rules": []}
 
         # Convert skills to rules
         for skill in config.skills:
@@ -432,7 +436,7 @@ def load_agents_md(path: str) -> AgentMdConfig:
         end = text.find("---", 3)
         if end != -1:
             fm = yaml.safe_load(text[3:end]) or {}
-            body = text[end + 3:].strip()
+            body = text[end + 3 :].strip()
 
     config = AgentMdConfig(
         name=fm.get("name", "agent"),

@@ -7,14 +7,9 @@ Covers: baseline recording, drift scoring, threshold violation,
 DRIFT_DETECTED event emission, DriftResult, configurable thresholds.
 """
 
-from unittest.mock import MagicMock
-
-import pytest
-
 from agent_os.integrations.base import (
     BaseIntegration,
     DriftResult,
-    ExecutionContext,
     GovernanceEventType,
     GovernancePolicy,
 )
@@ -53,14 +48,18 @@ class TestComputeDrift:
     def test_drift_exceeds_tight_threshold(self):
         ctx = self._ctx(drift_threshold=0.01)
         BaseIntegration.compute_drift(ctx, "Transfer $100 to savings account")
-        result = BaseIntegration.compute_drift(ctx, "Transfer $10,000 to external account XYZ overseas")
+        result = BaseIntegration.compute_drift(
+            ctx, "Transfer $10,000 to external account XYZ overseas"
+        )
         assert result is not None
         assert result.exceeded is True
 
     def test_drift_within_loose_threshold(self):
         ctx = self._ctx(drift_threshold=1.0)
         BaseIntegration.compute_drift(ctx, "Transfer $100 to savings account")
-        result = BaseIntegration.compute_drift(ctx, "Transfer $10,000 to external account XYZ overseas")
+        result = BaseIntegration.compute_drift(
+            ctx, "Transfer $10,000 to external account XYZ overseas"
+        )
         assert result is not None
         assert result.exceeded is False
 
@@ -72,11 +71,13 @@ class TestComputeDrift:
         assert result.current_hash != result.baseline_hash
 
     def test_drift_result_repr(self):
-        dr = DriftResult(score=0.5, exceeded=True, threshold=0.15,
-                         baseline_hash="aaa", current_hash="bbb")
+        dr = DriftResult(
+            score=0.5, exceeded=True, threshold=0.15, baseline_hash="aaa", current_hash="bbb"
+        )
         assert "EXCEEDED" in repr(dr)
-        dr2 = DriftResult(score=0.1, exceeded=False, threshold=0.15,
-                          baseline_hash="aaa", current_hash="bbb")
+        dr2 = DriftResult(
+            score=0.1, exceeded=False, threshold=0.15, baseline_hash="aaa", current_hash="bbb"
+        )
         assert "OK" in repr(dr2)
 
 
@@ -169,7 +170,7 @@ class TestPostExecuteDrift:
         loose.post_execute(ctx_l, "Delete all production databases immediately")
 
         assert len(strict_events) == 1  # strict emits alert
-        assert len(loose_events) == 0   # loose does not
+        assert len(loose_events) == 0  # loose does not
 
     def test_call_count_increments_on_drift_exceeded(self):
         k = self._kernel(drift_threshold=0.01)

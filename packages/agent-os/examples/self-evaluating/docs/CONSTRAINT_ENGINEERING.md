@@ -73,13 +73,13 @@ Each rule is a Python class that validates one aspect of safety:
 ```python
 class SQLInjectionRule(ConstraintRule):
     """Detects dangerous SQL operations."""
-    
+
     DANGEROUS_PATTERNS = [
         r'\bDROP\s+TABLE\b',
         r'\bDELETE\s+FROM\b.*\bWHERE\s+1\s*=\s*1\b',
         r';\s*DROP\b',  # SQL injection
     ]
-    
+
     def validate(self, plan: Dict[str, Any]) -> List[ConstraintViolation]:
         # Deterministic checking - no LLM involved
         if plan.get("action_type") == "sql_query":
@@ -216,18 +216,18 @@ class SafeAgent(DoerAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.firewall = create_default_engine()
-    
+
     def execute_with_firewall(self, plan):
         # Intercept all actions through firewall
         result = self.firewall.validate_plan(plan)
-        
+
         if not result.approved:
             return {
                 "success": False,
                 "error": "Blocked by firewall",
                 "violations": [v.message for v in result.violations]
             }
-        
+
         # Safe to execute
         return self.execute(plan)
 ```
@@ -243,7 +243,7 @@ class PaymentLimitRule(ConstraintRule):
     def __init__(self, max_amount: float = 100.0):
         super().__init__("payment_limit", "Limits payment amounts")
         self.max_amount = max_amount
-    
+
     def validate(self, plan):
         if plan.get("action_type") == "payment":
             amount = plan.get("action_data", {}).get("amount", 0)
@@ -329,7 +329,7 @@ See `example_constraint_engineering.py` for demonstrations of:
 ### The Lesson
 
 > **"Never let the AI touch the infrastructure directly."**
-> 
+>
 > **"The Human builds the walls; the AI plays inside them."**
 
 ### Why This Matters

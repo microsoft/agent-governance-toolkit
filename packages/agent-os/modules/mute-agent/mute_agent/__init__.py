@@ -9,39 +9,39 @@ without interfering until configured thresholds are exceeded.
 Consolidated Stack:
 - agent-control-plane: Base orchestration
 - scak: Intelligence/Knowledge layer
-- iatp: Security/Trust layer  
+- iatp: Security/Trust layer
 - caas: Context-as-a-Service layer
 """
 
 __version__ = "0.3.0"
 
 # Core components
-from .core.reasoning_agent import ReasoningAgent
 from .core.execution_agent import ExecutionAgent
 from .core.handshake_protocol import HandshakeProtocol
+from .core.reasoning_agent import ReasoningAgent
 from .knowledge_graph.multidimensional_graph import MultidimensionalKnowledgeGraph
-from .super_system.router import SuperSystemRouter
 
 # Layer 5: Listener Agent
 from .listener import (
+    DEFAULT_THRESHOLDS,
+    InterventionEvent,
+    InterventionLevel,
     ListenerAgent,
     ListenerState,
-    InterventionEvent,
+    ObservationResult,
+    StateObserver,
     ThresholdConfig,
     ThresholdType,
-    InterventionLevel,
-    DEFAULT_THRESHOLDS,
-    StateObserver,
-    ObservationResult,
 )
 
 # Layer adapters
 from .listener.adapters import (
+    ContextAdapter,
     ControlPlaneAdapter,
     IntelligenceAdapter,
     SecurityAdapter,
-    ContextAdapter,
 )
+from .super_system.router import SuperSystemRouter
 
 __all__ = [
     # Core

@@ -88,14 +88,16 @@ class PagerDutyAlertConfig:
         self._last_statuses: dict[str, SLOStatus] = {}
 
         # Register PagerDuty channel with the AlertManager
-        self._alert_manager.add_channel(ChannelConfig(
-            channel_type=AlertChannel.PAGERDUTY,
-            name=channel_name,
-            url=url,
-            token=routing_key,
-            min_severity=AlertSeverity.WARNING,
-            enabled=True,
-        ))
+        self._alert_manager.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.PAGERDUTY,
+                name=channel_name,
+                url=url,
+                token=routing_key,
+                min_severity=AlertSeverity.WARNING,
+                enabled=True,
+            )
+        )
 
     @property
     def channel_name(self) -> str:
@@ -131,44 +133,48 @@ class PagerDutyAlertConfig:
         if status in _ALERT_STATUSES and prev_status != status:
             # Breach — fire alert
             severity = self._severity_map.get(status, AlertSeverity.CRITICAL)
-            self._alert_manager.send(Alert(
-                title=f"SLO Breach: {slo.name}",
-                message=(
-                    f"SLO '{slo.name}' status changed to {status.value}. "
-                    f"Error budget remaining: {slo.error_budget.remaining_percent:.1f}%"
-                ),
-                severity=severity,
-                source="pagerduty-slo-watcher",
-                agent_id=agent_id,
-                slo_name=slo.name,
-                dedup_key=dedup_key,
-                metadata={
-                    "slo_name": slo.name,
-                    "status": status.value,
-                    "remaining_percent": slo.error_budget.remaining_percent,
-                    "burn_rate": slo.error_budget.burn_rate(),
-                },
-            ))
+            self._alert_manager.send(
+                Alert(
+                    title=f"SLO Breach: {slo.name}",
+                    message=(
+                        f"SLO '{slo.name}' status changed to {status.value}. "
+                        f"Error budget remaining: {slo.error_budget.remaining_percent:.1f}%"
+                    ),
+                    severity=severity,
+                    source="pagerduty-slo-watcher",
+                    agent_id=agent_id,
+                    slo_name=slo.name,
+                    dedup_key=dedup_key,
+                    metadata={
+                        "slo_name": slo.name,
+                        "status": status.value,
+                        "remaining_percent": slo.error_budget.remaining_percent,
+                        "burn_rate": slo.error_budget.burn_rate(),
+                    },
+                )
+            )
         elif (
             status == SLOStatus.HEALTHY
             and prev_status is not None
             and prev_status != SLOStatus.HEALTHY
         ):
             # Recovery — send resolve
-            self._alert_manager.send(Alert(
-                title=f"SLO Recovered: {slo.name}",
-                message=f"SLO '{slo.name}' recovered to healthy.",
-                severity=AlertSeverity.RESOLVED,
-                source="pagerduty-slo-watcher",
-                agent_id=agent_id,
-                slo_name=slo.name,
-                dedup_key=dedup_key,
-                metadata={
-                    "slo_name": slo.name,
-                    "status": status.value,
-                    "remaining_percent": slo.error_budget.remaining_percent,
-                },
-            ))
+            self._alert_manager.send(
+                Alert(
+                    title=f"SLO Recovered: {slo.name}",
+                    message=f"SLO '{slo.name}' recovered to healthy.",
+                    severity=AlertSeverity.RESOLVED,
+                    source="pagerduty-slo-watcher",
+                    agent_id=agent_id,
+                    slo_name=slo.name,
+                    dedup_key=dedup_key,
+                    metadata={
+                        "slo_name": slo.name,
+                        "status": status.value,
+                        "remaining_percent": slo.error_budget.remaining_percent,
+                    },
+                )
+            )
 
         self._last_statuses[slo.name] = status
         return status

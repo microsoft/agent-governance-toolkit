@@ -24,7 +24,7 @@ Our initial strategy was textbook growth hacking:
 
 We even had a content calendar:
 - Monday: Educational post
-- Tuesday: Challenge post  
+- Tuesday: Challenge post
 - Wednesday: Leaderboard update
 - Thursday: Security tip
 - Friday: Discussion starter
@@ -150,7 +150,7 @@ As of writing:
 We're building a platform about **trust** for AI agents. And we violated the most basic trust principles in our own community engagement:
 
 - We didn't earn trust before asking for attention
-- We prioritized our goals over community value  
+- We prioritized our goals over community value
 - We ignored negative signals until they were catastrophic
 
 The lesson? Trust isn't a feature you build. It's a behavior you practice. Every interaction. Every day.

@@ -3,7 +3,6 @@
 """Tests for KeyRotationManager — automatic key rotation for long-lived agents."""
 
 import time
-from unittest.mock import patch
 
 import pytest
 
@@ -11,10 +10,10 @@ from agentmesh.exceptions import IdentityError
 from agentmesh.identity.agent_id import AgentIdentity
 from agentmesh.identity.rotation import KeyRotationManager
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _create_identity() -> AgentIdentity:
     return AgentIdentity.create(
@@ -74,8 +73,9 @@ class TestKeyRotationManager:
         history = mgr.get_key_history()
         old_pub = history[0]["public_key"]
 
-        from cryptography.hazmat.primitives.asymmetric import ed25519
         import base64
+
+        from cryptography.hazmat.primitives.asymmetric import ed25519
 
         pub_bytes = base64.b64decode(old_pub)
         pub_key = ed25519.Ed25519PublicKey.from_public_bytes(pub_bytes)
@@ -145,7 +145,10 @@ class TestKeyRotationManager:
         proof = mgr.get_rotation_proof()
 
         other = _create_identity()
-        assert KeyRotationManager.verify_rotation(other.public_key, identity.public_key, proof) is False
+        assert (
+            KeyRotationManager.verify_rotation(other.public_key, identity.public_key, proof)
+            is False
+        )
 
     def test_get_rotation_proof_before_rotation_raises(self) -> None:
         identity = _create_identity()

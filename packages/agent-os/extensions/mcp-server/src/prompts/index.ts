@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * MCP Prompts for AgentOS
- * 
+ *
  * Standard conversation templates for common workflows.
  */
 
@@ -52,7 +52,7 @@ I want to ensure the agent follows best practices for:
 
 Please start by creating the agent and explaining what policies you recommend.`,
   },
-  
+
   compliance_setup: {
     name: 'compliance_setup',
     description: 'Set up an agent for regulatory compliance',
@@ -85,7 +85,7 @@ Framework requirements for {framework}:
 
 Start by checking the current compliance status and recommending specific policies.`,
   },
-  
+
   troubleshoot_agent: {
     name: 'troubleshoot_agent',
     description: 'Diagnose and fix issues with an agent',
@@ -121,7 +121,7 @@ Common issues to check:
 
 Start by getting the agent status and recent audit logs.`,
   },
-  
+
   batch_policy_update: {
     name: 'batch_policy_update',
     description: 'Apply policies to multiple agents',
@@ -156,7 +156,7 @@ This is important for:
 
 Start by listing the agents and checking policy compatibility.`,
   },
-  
+
   security_review: {
     name: 'security_review',
     description: 'Comprehensive security review of agents',
@@ -188,7 +188,7 @@ Security checklist:
 
 Provide a security posture summary and actionable recommendations.`,
   },
-  
+
   onboarding: {
     name: 'onboarding',
     description: 'Introduction to AgentOS for new users',
@@ -198,7 +198,7 @@ Provide a security posture summary and actionable recommendations.`,
 **What I can help you with:**
 
 🤖 **Create Agents** - Build autonomous agents from natural language descriptions
-🛡️ **Apply Policies** - Enforce safety rules and compliance requirements  
+🛡️ **Apply Policies** - Enforce safety rules and compliance requirements
 ✅ **Manage Approvals** - Set up human-in-the-loop for sensitive actions
 📊 **Monitor & Audit** - Track agent activity and generate compliance reports
 📋 **Use Templates** - Start from pre-built agent and policy templates

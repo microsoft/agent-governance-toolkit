@@ -13,7 +13,8 @@ SPIFFE/SVID provides:
 """
 
 from datetime import datetime, timedelta
-from typing import Optional, Literal
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -29,11 +30,11 @@ class SVID(BaseModel):
     svid_type: Literal["x509", "jwt"] = Field(default="x509")
 
     # Certificate data (X.509-SVID)
-    certificate_chain: Optional[list[str]] = Field(None, description="PEM-encoded cert chain")
-    private_key_type: Optional[str] = Field(None, description="Key type (e.g., 'EC P-256')")
+    certificate_chain: list[str] | None = Field(None, description="PEM-encoded cert chain")
+    private_key_type: str | None = Field(None, description="Key type (e.g., 'EC P-256')")
 
     # JWT-SVID fields
-    jwt_token: Optional[str] = Field(None, description="JWT-SVID token")
+    jwt_token: str | None = Field(None, description="JWT-SVID token")
 
     # Metadata
     trust_domain: str = Field(..., description="SPIFFE trust domain")
@@ -103,7 +104,7 @@ class SPIFFEIdentity(BaseModel):
     workload_path: str = Field(...)
 
     # Current SVID
-    current_svid: Optional[SVID] = Field(None)
+    current_svid: SVID | None = Field(None)
 
     # Metadata
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -114,7 +115,7 @@ class SPIFFEIdentity(BaseModel):
         agent_did: str,
         agent_name: str,
         trust_domain: str = "agentmesh.local",
-        organization: Optional[str] = None,
+        organization: str | None = None,
     ) -> "SPIFFEIdentity":
         """Create SPIFFE identity for an agent.
 
@@ -173,7 +174,7 @@ class SPIFFEIdentity(BaseModel):
         self.current_svid = svid
         return svid
 
-    def get_valid_svid(self) -> Optional[SVID]:
+    def get_valid_svid(self) -> SVID | None:
         """Get current SVID if valid, None otherwise.
 
         Returns:
@@ -208,7 +209,7 @@ class SPIFFERegistry:
 
     DEFAULT_TRUST_DOMAIN = "agentmesh.local"
 
-    def __init__(self, trust_domain: Optional[str] = None):
+    def __init__(self, trust_domain: str | None = None):
         """Initialize the SPIFFE registry.
 
         Args:
@@ -221,7 +222,7 @@ class SPIFFERegistry:
         self,
         agent_did: str,
         agent_name: str,
-        organization: Optional[str] = None,
+        organization: str | None = None,
     ) -> SPIFFEIdentity:
         """Register an agent and create SPIFFE identity.
 
@@ -248,7 +249,7 @@ class SPIFFERegistry:
         self._identities[agent_did] = identity
         return identity
 
-    def get(self, agent_did: str) -> Optional[SPIFFEIdentity]:
+    def get(self, agent_did: str) -> SPIFFEIdentity | None:
         """Get SPIFFE identity for an agent.
 
         Args:
@@ -259,7 +260,7 @@ class SPIFFERegistry:
         """
         return self._identities.get(agent_did)
 
-    def get_by_spiffe_id(self, spiffe_id: str) -> Optional[SPIFFEIdentity]:
+    def get_by_spiffe_id(self, spiffe_id: str) -> SPIFFEIdentity | None:
         """Get identity by SPIFFE ID.
 
         Args:
@@ -273,7 +274,7 @@ class SPIFFERegistry:
                 return identity
         return None
 
-    def issue_svid(self, agent_did: str) -> Optional[SVID]:
+    def issue_svid(self, agent_did: str) -> SVID | None:
         """Issue an SVID for an agent.
 
         Args:

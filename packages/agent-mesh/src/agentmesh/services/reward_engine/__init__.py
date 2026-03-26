@@ -14,10 +14,11 @@ Wraps the core RewardEngine to provide:
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any, Optional
 
-from agentmesh.reward.engine import RewardEngine, RewardConfig, AgentRewardState  # noqa: F401
-from agentmesh.reward.scoring import DimensionType, TrustScore, RewardSignal
+from agentmesh.reward.engine import AgentRewardState, RewardConfig, RewardEngine  # noqa: F401
+from agentmesh.reward.scoring import DimensionType, RewardSignal, TrustScore
 
 
 class RewardService:
@@ -31,7 +32,7 @@ class RewardService:
     - Batch score recalculation
     """
 
-    def __init__(self, config: Optional[RewardConfig] = None) -> None:
+    def __init__(self, config: RewardConfig | None = None) -> None:
         self._engine = RewardEngine(config)
 
     @property
@@ -55,7 +56,10 @@ class RewardService:
     def record_task_failure(self, agent_did: str, reason: str = "") -> None:
         """Record a task failure."""
         self._engine.record_output_quality(
-            agent_did, accepted=False, consumer="system", rejection_reason=reason,
+            agent_did,
+            accepted=False,
+            consumer="system",
+            rejection_reason=reason,
         )
 
     def record_policy_violation(self, agent_did: str, policy_name: str = "") -> None:
@@ -66,9 +70,13 @@ class RewardService:
         """Record a trust handshake outcome."""
         self._engine.record_collaboration(agent_did, handoff_successful=success, peer_did=peer_did)
 
-    def record_security_event(self, agent_did: str, within_boundary: bool, event_type: str = "") -> None:
+    def record_security_event(
+        self, agent_did: str, within_boundary: bool, event_type: str = ""
+    ) -> None:
         """Record a security posture signal."""
-        self._engine.record_security_event(agent_did, within_boundary=within_boundary, event_type=event_type)
+        self._engine.record_security_event(
+            agent_did, within_boundary=within_boundary, event_type=event_type
+        )
 
     def on_revocation(self, callback: Callable) -> None:
         """Register a callback for when an agent's trust is revoked."""
@@ -81,7 +89,8 @@ class RewardService:
     def agents_below_threshold(self, threshold: float = 300.0) -> list[str]:
         """Get agents with trust scores below a threshold."""
         return [
-            did for did, state in self._engine._agents.items()
+            did
+            for did, state in self._engine._agents.items()
             if state.trust_score.total_score < threshold
         ]
 

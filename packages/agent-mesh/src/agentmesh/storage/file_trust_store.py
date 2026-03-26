@@ -23,9 +23,9 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -63,12 +63,12 @@ class FileTrustStore:
         with self._lock:
             self._scores[agent_did] = score
             self._metadata[agent_did] = {
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }
             if self._auto_save:
                 self._save()
 
-    def get_trust_score(self, agent_did: str) -> Optional[dict[str, Any]]:
+    def get_trust_score(self, agent_did: str) -> dict[str, Any] | None:
         """Retrieve the trust score for an agent.
 
         Args:
@@ -117,7 +117,7 @@ class FileTrustStore:
         """Write scores to disk atomically."""
         data = {
             "version": "1.0",
-            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "saved_at": datetime.now(UTC).isoformat(),
             "scores": self._scores,
             "metadata": self._metadata,
         }
@@ -138,9 +138,7 @@ class FileTrustStore:
             self._scores = raw.get("scores", {})
             self._metadata = raw.get("metadata", {})
             count = len(self._scores)
-            logger.info(
-                "Loaded %d trust scores from %s", count, self._path
-            )
+            logger.info("Loaded %d trust scores from %s", count, self._path)
         except Exception:
             logger.warning(
                 "Failed to load trust scores from %s, starting fresh",

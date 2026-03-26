@@ -16,24 +16,24 @@ import asyncio
 import os
 import sys
 import tempfile
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # Add the control-plane module to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "modules" / "control-plane" / "src"))
 
+from agent_control_plane.flight_recorder import FlightRecorder
 from agent_control_plane.kernel_space import KernelSpace, SyscallRequest, SyscallType
 from agent_control_plane.policy_engine import PolicyEngine
-from agent_control_plane.flight_recorder import FlightRecorder
-
 
 # =============================================================================
 # REAL FILE SYSTEM EXECUTORS (Not Mocks!)
 # =============================================================================
 
+
 def real_file_read(path: str) -> str:
     """Actually read a file from disk."""
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding="utf-8") as f:
         return f.read()
 
 
@@ -41,7 +41,7 @@ def real_file_write(path: str, content: str) -> int:
     """Actually write content to a file."""
     # Create parent directories if needed
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, "w", encoding="utf-8") as f:
         bytes_written = f.write(content)
     return bytes_written
 
@@ -76,48 +76,52 @@ def real_file_mkdir(path: str) -> bool:
 # COPILOT GOVERNANCE SETUP
 # =============================================================================
 
+
 def create_copilot_governance(workspace_path: str, audit_db: str = "copilot_audit.db"):
     """
     Create a governance setup for GitHub Copilot.
-    
+
     This allows ALL file operations within the workspace without prompting,
     but logs everything for audit purposes.
-    
+
     Args:
         workspace_path: The root directory where Copilot can operate
         audit_db: Path to SQLite audit database
-        
+
     Returns:
         Tuple of (kernel, agent_context)
     """
     # 1. Create Policy Engine - Allow all file operations for copilot
     policy = PolicyEngine()
-    
+
     # Allow all file operations for the copilot agent
-    policy.add_constraint("github-copilot", [
-        "file_read",
-        "file_write", 
-        "file_delete",
-        "file_list",
-        "file_exists",
-        "file_mkdir",
-        # Add more as needed
-        "code_search",
-        "code_analyze",
-    ])
-    
+    policy.add_constraint(
+        "github-copilot",
+        [
+            "file_read",
+            "file_write",
+            "file_delete",
+            "file_list",
+            "file_exists",
+            "file_mkdir",
+            # Add more as needed
+            "code_search",
+            "code_analyze",
+        ],
+    )
+
     # 2. Create Flight Recorder for audit trail
     recorder = FlightRecorder(
         db_path=audit_db,
         enable_batching=False,  # Immediate writes for demo
     )
-    
+
     # 3. Create Kernel with governance
     kernel = KernelSpace(
         policy_engine=policy,
         flight_recorder=recorder,
     )
-    
+
     # 4. Register REAL file system executors (not mocks!)
     kernel.register_tool("file_read", real_file_read)
     kernel.register_tool("file_write", real_file_write)
@@ -125,20 +129,21 @@ def create_copilot_governance(workspace_path: str, audit_db: str = "copilot_audi
     kernel.register_tool("file_list", real_file_list)
     kernel.register_tool("file_exists", real_file_exists)
     kernel.register_tool("file_mkdir", real_file_mkdir)
-    
+
     # 5. Create agent context
     ctx = kernel.create_agent_context("github-copilot")
-    
+
     print(f"✓ Governance initialized for workspace: {workspace_path}")
     print(f"✓ Audit log: {audit_db}")
     print(f"✓ Registered tools: {kernel.list_tools()}")
-    
+
     return kernel, ctx, recorder
 
 
 # =============================================================================
 # GOVERNED OPERATIONS
 # =============================================================================
+
 
 async def governed_read(kernel, ctx, path: str) -> str:
     """Read a file through the governed kernel."""
@@ -196,25 +201,26 @@ async def governed_delete(kernel, ctx, path: str) -> bool:
 # DEMO: Simulate Copilot Operations
 # =============================================================================
 
+
 async def demo_copilot_session(workspace: str):
     """
     Demonstrate a Copilot session with full governance.
-    
+
     All operations go through the kernel:
     - Policy is checked (allow-list)
     - Actions are logged to FlightRecorder
     - Real file operations happen
     """
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("GitHub Copilot under Agent-OS Governance - LIVE DEMO")
-    print("="*60 + "\n")
-    
+    print("=" * 60 + "\n")
+
     # Setup governance
     audit_db = os.path.join(workspace, "audit.db")
     kernel, ctx, recorder = create_copilot_governance(workspace, audit_db)
-    
+
     print("\n--- Starting Copilot Session ---\n")
-    
+
     # 1. Create a new Python file
     py_file = os.path.join(workspace, "hello.py")
     code = '''#!/usr/bin/env python3
@@ -227,17 +233,17 @@ def greet(name: str) -> str:
 if __name__ == "__main__":
     print(greet("World"))
 '''
-    
+
     print(f"1. Writing {py_file}...")
     bytes_written = await governed_write(kernel, ctx, py_file, code)
     print(f"   ✓ Wrote {bytes_written} bytes")
-    
+
     # 2. Read it back
     print(f"\n2. Reading {py_file}...")
     content = await governed_read(kernel, ctx, py_file)
     print(f"   ✓ Read {len(content)} characters")
     print(f"   Preview: {content[:50]}...")
-    
+
     # 3. Create a README
     readme = os.path.join(workspace, "README.md")
     readme_content = f"""# Demo Project
@@ -255,26 +261,26 @@ All file operations were:
 
 Generated at: {datetime.now().isoformat()}
 """
-    
+
     print(f"\n3. Writing {readme}...")
     await governed_write(kernel, ctx, readme, readme_content)
     print("   ✓ README.md created")
-    
+
     # 4. List the workspace
     print(f"\n4. Listing {workspace}...")
     files = await governed_list(kernel, ctx, workspace)
     print(f"   ✓ Found {len(files)} items: {files}")
-    
+
     # 5. Show audit log
     print("\n--- Audit Log (FlightRecorder) ---\n")
     recorder.flush()
     logs = recorder.query_logs(agent_id="github-copilot", limit=10)
     for log in logs:
-        verdict = log.get('policy_verdict', 'unknown')
-        tool = log.get('tool_name', 'unknown')
+        verdict = log.get("policy_verdict", "unknown")
+        tool = log.get("tool_name", "unknown")
         emoji = "✓" if verdict == "allowed" else "✗"
         print(f"   {emoji} [{verdict}] {tool}")
-    
+
     # 6. Verify integrity
     print("\n--- Integrity Check (Hash Chain) ---\n")
     integrity = recorder.verify_integrity()
@@ -282,7 +288,7 @@ Generated at: {datetime.now().isoformat()}
         print(f"   ✓ Audit log integrity verified ({integrity.get('total_entries')} entries)")
     else:
         print(f"   ✗ Integrity check failed: {integrity.get('error')}")
-    
+
     # 7. Show statistics
     print("\n--- Kernel Metrics ---\n")
     metrics = kernel.metrics
@@ -290,14 +296,14 @@ Generated at: {datetime.now().isoformat()}
     print(f"   Policy checks: {metrics.policy_checks}")
     print(f"   Policy violations: {metrics.policy_violations}")
     print(f"   Active agents: {metrics.active_agents}")
-    
+
     # Cleanup - close recorder
     recorder.close()
-    
-    print("\n" + "="*60)
+
+    print("\n" + "=" * 60)
     print("Demo complete! All operations were governed and logged.")
-    print("="*60 + "\n")
-    
+    print("=" * 60 + "\n")
+
     return True
 
 
@@ -305,12 +311,13 @@ Generated at: {datetime.now().isoformat()}
 # MAIN
 # =============================================================================
 
+
 async def main():
     # Create a temporary workspace
     with tempfile.TemporaryDirectory(prefix="copilot_governed_") as workspace:
         print(f"Workspace: {workspace}")
         success = await demo_copilot_session(workspace)
-        
+
         if success:
             print("\n✓ All tests passed! Agent-OS governance is REAL and WORKING.")
         else:

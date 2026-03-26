@@ -17,17 +17,16 @@ Security features:
 - Hash verification on reads
 """
 
-import sqlite3
-import uuid
-import hashlib
-import threading
 import atexit
-from typing import Dict, Any, Optional, List
-from datetime import datetime
-from pathlib import Path
-from collections import deque
+import hashlib
 import json
 import logging
+import sqlite3
+import threading
+import uuid
+from collections import deque
+from datetime import datetime
+from typing import Any, Dict, Optional
 
 
 class FlightRecorder:
@@ -79,11 +78,11 @@ class FlightRecorder:
     """
 
     def __init__(
-        self, 
+        self,
         db_path: str = "flight_recorder.db",
         batch_size: int = 100,
         flush_interval_seconds: float = 5.0,
-        enable_batching: bool = True
+        enable_batching: bool = True,
     ):
         """Initialize the Flight Recorder.
 
@@ -112,24 +111,24 @@ class FlightRecorder:
         self.batch_size = batch_size
         self.flush_interval = flush_interval_seconds
         self.enable_batching = enable_batching
-        
+
         # Batching state
         self._write_buffer: deque = deque()
         self._buffer_lock = threading.Lock()
         self._last_flush = datetime.utcnow()
         self._last_hash: Optional[str] = None
-        
+
         # Thread-local connections for better performance
         self._local = threading.local()
-        
+
         self._init_database()
-        
+
         # Register cleanup on exit
         atexit.register(self._flush_and_close)
 
     def _get_connection(self) -> sqlite3.Connection:
         """Get a thread-local database connection with WAL mode."""
-        if not hasattr(self._local, 'conn') or self._local.conn is None:
+        if not hasattr(self._local, "conn") or self._local.conn is None:
             conn = sqlite3.connect(self.db_path, check_same_thread=False)
             # Enable WAL mode for better concurrent performance
             conn.execute("PRAGMA journal_mode=WAL")
@@ -148,18 +147,18 @@ class FlightRecorder:
         with self._buffer_lock:
             if not self._write_buffer:
                 return
-            
+
             conn = self._get_connection()
             cursor = conn.cursor()
-            
+
             try:
                 while self._write_buffer:
                     operation = self._write_buffer.popleft()
-                    cursor.execute(operation['sql'], operation['params'])
-                
+                    cursor.execute(operation["sql"], operation["params"])
+
                 conn.commit()
                 self._last_flush = datetime.utcnow()
-                self.logger.debug(f"Flushed write buffer")
+                self.logger.debug("Flushed write buffer")
             except Exception as e:
                 conn.rollback()
                 self.logger.error(f"Failed to flush buffer: {e}")
@@ -170,10 +169,10 @@ class FlightRecorder:
         if not self.enable_batching:
             self._flush_buffer()
             return
-            
+
         should_flush = (
-            len(self._write_buffer) >= self.batch_size or
-            (datetime.utcnow() - self._last_flush).total_seconds() >= self.flush_interval
+            len(self._write_buffer) >= self.batch_size
+            or (datetime.utcnow() - self._last_flush).total_seconds() >= self.flush_interval
         )
         if should_flush:
             self._flush_buffer()
@@ -181,14 +180,14 @@ class FlightRecorder:
     def _queue_write(self, sql: str, params: tuple):
         """Queue a write operation."""
         with self._buffer_lock:
-            self._write_buffer.append({'sql': sql, 'params': params})
+            self._write_buffer.append({"sql": sql, "params": params})
         self._maybe_flush()
 
     def _flush_and_close(self):
         """Flush buffer and close connections on exit."""
         try:
             self._flush_buffer()
-            if hasattr(self._local, 'conn') and self._local.conn:
+            if hasattr(self._local, "conn") and self._local.conn:
                 self._local.conn.close()
                 self._local.conn = None
         except Exception as e:
@@ -198,7 +197,7 @@ class FlightRecorder:
         """Initialize the SQLite database schema with WAL mode."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        
+
         # Enable WAL mode for concurrent reads during writes
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
@@ -224,7 +223,7 @@ class FlightRecorder:
             )
         """
         )
-        
+
         # Add hash columns if they don't exist (migration for existing DBs)
         try:
             cursor.execute("ALTER TABLE audit_log ADD COLUMN entry_hash TEXT")
@@ -302,7 +301,7 @@ class FlightRecorder:
         trace_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().isoformat()
         tool_args_json = json.dumps(tool_args) if tool_args else None
-        
+
         # Compute hash for Merkle chain
         data = f"{trace_id}:{timestamp}:{agent_id}:{tool_name}:{tool_args_json}:pending"
         entry_hash = self._compute_hash(data, self._last_hash)
@@ -311,11 +310,20 @@ class FlightRecorder:
 
         self._queue_write(
             """
-            INSERT INTO audit_log 
+            INSERT INTO audit_log
             (trace_id, timestamp, agent_id, tool_name, tool_args, input_prompt, policy_verdict, entry_hash, previous_hash)
             VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
             """,
-            (trace_id, timestamp, agent_id, tool_name, tool_args_json, input_prompt, entry_hash, previous_hash)
+            (
+                trace_id,
+                timestamp,
+                agent_id,
+                tool_name,
+                tool_args_json,
+                input_prompt,
+                entry_hash,
+                previous_hash,
+            ),
         )
 
         return trace_id
@@ -333,12 +341,12 @@ class FlightRecorder:
         """
         self._queue_write(
             """
-            UPDATE audit_log 
-            SET policy_verdict = 'blocked', 
+            UPDATE audit_log
+            SET policy_verdict = 'blocked',
                 violation_reason = ?
             WHERE trace_id = ?
             """,
-            (violation_reason, trace_id)
+            (violation_reason, trace_id),
         )
 
         self.logger.warning(f"BLOCKED: {trace_id} - {violation_reason}")
@@ -358,12 +366,12 @@ class FlightRecorder:
         """
         self._queue_write(
             """
-            UPDATE audit_log 
-            SET policy_verdict = 'shadow', 
+            UPDATE audit_log
+            SET policy_verdict = 'shadow',
                 result = ?
             WHERE trace_id = ?
             """,
-            (simulated_result or "Simulated success", trace_id)
+            (simulated_result or "Simulated success", trace_id),
         )
 
         self.logger.info(f"SHADOW: {trace_id}")
@@ -387,18 +395,20 @@ class FlightRecorder:
         result_str = (
             json.dumps(result)
             if result and not isinstance(result, str)
-            else str(result) if result else None
+            else str(result)
+            if result
+            else None
         )
 
         self._queue_write(
             """
-            UPDATE audit_log 
-            SET policy_verdict = 'allowed', 
+            UPDATE audit_log
+            SET policy_verdict = 'allowed',
                 result = ?,
                 execution_time_ms = ?
             WHERE trace_id = ?
             """,
-            (result_str, execution_time_ms, trace_id)
+            (result_str, execution_time_ms, trace_id),
         )
 
         self.logger.info(f"ALLOWED: {trace_id}")
@@ -416,12 +426,12 @@ class FlightRecorder:
         """
         self._queue_write(
             """
-            UPDATE audit_log 
-            SET policy_verdict = 'error', 
+            UPDATE audit_log
+            SET policy_verdict = 'error',
                 violation_reason = ?
             WHERE trace_id = ?
             """,
-            (error, trace_id)
+            (error, trace_id),
         )
 
         self.logger.error(f"ERROR: {trace_id} - {error}")
@@ -525,8 +535,8 @@ class FlightRecorder:
         # By verdict
         cursor.execute(
             """
-            SELECT policy_verdict, COUNT(*) as count 
-            FROM audit_log 
+            SELECT policy_verdict, COUNT(*) as count
+            FROM audit_log
             GROUP BY policy_verdict
         """
         )
@@ -535,8 +545,8 @@ class FlightRecorder:
         # By agent
         cursor.execute(
             """
-            SELECT agent_id, COUNT(*) as count 
-            FROM audit_log 
+            SELECT agent_id, COUNT(*) as count
+            FROM audit_log
             GROUP BY agent_id
             ORDER BY count DESC
             LIMIT 10
@@ -547,8 +557,8 @@ class FlightRecorder:
         # Average execution time
         cursor.execute(
             """
-            SELECT AVG(execution_time_ms) 
-            FROM audit_log 
+            SELECT AVG(execution_time_ms)
+            FROM audit_log
             WHERE execution_time_ms IS NOT NULL
         """
         )
@@ -566,13 +576,13 @@ class FlightRecorder:
     def close(self):
         """Clean up resources by flushing the write buffer and closing connections."""
         self._flush_and_close()
-    
+
     def flush(self):
         """Manually flush the write buffer to disk."""
         self._flush_buffer()
-    
+
     # ===== Tamper Detection =====
-    
+
     def verify_integrity(self) -> Dict[str, Any]:
         """Verify the integrity of the audit log using the Merkle hash chain.
 
@@ -597,57 +607,57 @@ class FlightRecorder:
             ...     print(f"Tampered at entry {result['first_tampered_id']}")
         """
         self._flush_buffer()  # Ensure all writes are committed
-        
+
         conn = self._get_connection()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
+
         cursor.execute("""
-            SELECT id, trace_id, timestamp, agent_id, tool_name, tool_args, 
+            SELECT id, trace_id, timestamp, agent_id, tool_name, tool_args,
                    policy_verdict, entry_hash, previous_hash
-            FROM audit_log 
+            FROM audit_log
             ORDER BY id ASC
         """)
-        
+
         entries = cursor.fetchall()
-        
+
         if not entries:
             return {"valid": True, "total_entries": 0, "message": "No entries to verify"}
-        
+
         expected_previous_hash = None
-        
+
         for entry in entries:
             # Verify previous_hash matches what we expect
-            if entry['previous_hash'] != expected_previous_hash:
+            if entry["previous_hash"] != expected_previous_hash:
                 # First entry should have None/null previous_hash
-                if entry['id'] == 1 and entry['previous_hash'] is None:
+                if entry["id"] == 1 and entry["previous_hash"] is None:
                     pass  # OK - genesis entry
                 else:
                     return {
                         "valid": False,
                         "total_entries": len(entries),
-                        "first_tampered_id": entry['id'],
-                        "error": f"Hash chain broken at entry {entry['id']}: expected previous_hash {expected_previous_hash}, got {entry['previous_hash']}"
+                        "first_tampered_id": entry["id"],
+                        "error": f"Hash chain broken at entry {entry['id']}: expected previous_hash {expected_previous_hash}, got {entry['previous_hash']}",
                     }
-            
+
             # Recompute hash and verify
-            if entry['entry_hash']:
+            if entry["entry_hash"]:
                 data = f"{entry['trace_id']}:{entry['timestamp']}:{entry['agent_id']}:{entry['tool_name']}:{entry['tool_args']}:{entry['policy_verdict']}"
-                expected_hash = self._compute_hash(data, entry['previous_hash'])
-                
+                expected_hash = self._compute_hash(data, entry["previous_hash"])
+
                 # Note: We only verify structure, not exact hash since UPDATE changes verdict
                 # Full verification would require storing hash at INSERT time only
-            
-            expected_previous_hash = entry['entry_hash']
-        
+
+            expected_previous_hash = entry["entry_hash"]
+
         return {
             "valid": True,
             "total_entries": len(entries),
-            "message": "Hash chain integrity verified"
+            "message": "Hash chain integrity verified",
         }
-    
+
     # ===== Time-Travel Debugging Support =====
-    
+
     def get_log(self) -> list:
         """Get the complete audit log for time-travel debugging.
 
@@ -661,24 +671,21 @@ class FlightRecorder:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
+
         cursor.execute(
             """
-            SELECT * FROM audit_log 
+            SELECT * FROM audit_log
             ORDER BY timestamp ASC
             """
         )
         results = [dict(row) for row in cursor.fetchall()]
-        
+
         conn.close()
-        
+
         return results
-    
+
     def get_events_in_time_range(
-        self,
-        start_time: datetime,
-        end_time: datetime,
-        agent_id: Optional[str] = None
+        self, start_time: datetime, end_time: datetime, agent_id: Optional[str] = None
     ) -> list:
         """Get events within a specific time range for time-travel replay.
 
@@ -698,23 +705,22 @@ class FlightRecorder:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
+
         query = """
-            SELECT * FROM audit_log 
+            SELECT * FROM audit_log
             WHERE timestamp >= ? AND timestamp <= ?
         """
         params = [start_time.isoformat(), end_time.isoformat()]
-        
+
         if agent_id:
             query += " AND agent_id = ?"
             params.append(agent_id)
-        
+
         query += " ORDER BY timestamp ASC"
-        
+
         cursor.execute(query, params)
         results = [dict(row) for row in cursor.fetchall()]
-        
-        conn.close()
-        
-        return results
 
+        conn.close()
+
+        return results

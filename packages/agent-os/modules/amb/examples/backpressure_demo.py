@@ -35,25 +35,33 @@ async def main():
         await bus.subscribe("agent.tasks", priority_handler)
 
         # Publish mixed priority messages
-        await bus.publish("agent.tasks",
-                         {"task": "Memory consolidation (background)"},
-                         priority=MessagePriority.BACKGROUND)
+        await bus.publish(
+            "agent.tasks",
+            {"task": "Memory consolidation (background)"},
+            priority=MessagePriority.BACKGROUND,
+        )
 
-        await bus.publish("agent.tasks",
-                         {"task": "Log analytics (background)"},
-                         priority=MessagePriority.BACKGROUND)
+        await bus.publish(
+            "agent.tasks",
+            {"task": "Log analytics (background)"},
+            priority=MessagePriority.BACKGROUND,
+        )
 
-        await bus.publish("agent.tasks",
-                         {"task": "Security audit detected anomaly!"},
-                         priority=MessagePriority.CRITICAL)
+        await bus.publish(
+            "agent.tasks",
+            {"task": "Security audit detected anomaly!"},
+            priority=MessagePriority.CRITICAL,
+        )
 
-        await bus.publish("agent.tasks",
-                         {"task": "Governance policy violation!"},
-                         priority=MessagePriority.CRITICAL)
+        await bus.publish(
+            "agent.tasks",
+            {"task": "Governance policy violation!"},
+            priority=MessagePriority.CRITICAL,
+        )
 
-        await bus.publish("agent.tasks",
-                         {"task": "Regular data sync (normal)"},
-                         priority=MessagePriority.NORMAL)
+        await bus.publish(
+            "agent.tasks", {"task": "Regular data sync (normal)"}, priority=MessagePriority.NORMAL
+        )
 
         await asyncio.sleep(0.2)
 
@@ -70,7 +78,7 @@ async def main():
     broker = InMemoryBroker(
         max_queue_size=20,
         backpressure_threshold=0.5,  # Activate at 50% capacity
-        backpressure_delay=0.01       # 10ms delay when backpressure active
+        backpressure_delay=0.01,  # 10ms delay when backpressure active
     )
 
     async with MessageBus(adapter=broker) as bus:
@@ -111,10 +119,7 @@ async def main():
     print("\nExample 3: Scale by Subtraction - 100 Agents, No Crashes")
     print("-" * 60)
 
-    broker = InMemoryBroker(
-        max_queue_size=500,
-        backpressure_threshold=0.7
-    )
+    broker = InMemoryBroker(max_queue_size=500, backpressure_threshold=0.7)
 
     async with MessageBus(adapter=broker) as bus:
         mute_agent_received = []
@@ -136,9 +141,9 @@ async def main():
                     {
                         "agent_id": f"agent-{agent_id}",
                         "event": f"thinking-{event_num}",
-                        "timestamp": asyncio.get_event_loop().time()
+                        "timestamp": asyncio.get_event_loop().time(),
                     },
-                    priority=MessagePriority.NORMAL
+                    priority=MessagePriority.NORMAL,
                 )
 
         stats = broker.get_backpressure_stats("agent.events")
@@ -158,10 +163,7 @@ async def main():
     print("\nExample 4: Real-World Mix - Security + Background Tasks")
     print("-" * 60)
 
-    broker = InMemoryBroker(
-        max_queue_size=50,
-        backpressure_threshold=0.6
-    )
+    broker = InMemoryBroker(max_queue_size=50, backpressure_threshold=0.6)
 
     async with MessageBus(adapter=broker) as bus:
         security_processed = []
@@ -182,23 +184,19 @@ async def main():
             await bus.publish(
                 "agent.workload",
                 {"task": f"memory-consolidation-{i}"},
-                priority=MessagePriority.BACKGROUND
+                priority=MessagePriority.BACKGROUND,
             )
 
         for i in range(5):
             # Critical security tasks
             await bus.publish(
-                "agent.workload",
-                {"task": f"security-check-{i}"},
-                priority=MessagePriority.CRITICAL
+                "agent.workload", {"task": f"security-check-{i}"}, priority=MessagePriority.CRITICAL
             )
 
         for i in range(10):
             # More background tasks
             await bus.publish(
-                "agent.workload",
-                {"task": f"analytics-{i}"},
-                priority=MessagePriority.BACKGROUND
+                "agent.workload", {"task": f"analytics-{i}"}, priority=MessagePriority.BACKGROUND
             )
 
         await asyncio.sleep(0.5)

@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 """Tests for the declarative policy language, evaluator, and bridge."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -20,7 +19,6 @@ from agent_os.policies import (
     document_to_governance,
     governance_to_document,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -73,9 +71,7 @@ class TestPolicySchema:
     def test_rule_priority_default(self):
         rule = PolicyRule(
             name="r",
-            condition=PolicyCondition(
-                field="x", operator=PolicyOperator.EQ, value=1
-            ),
+            condition=PolicyCondition(field="x", operator=PolicyOperator.EQ, value=1),
             action=PolicyAction.ALLOW,
         )
         assert rule.priority == 0
@@ -193,9 +189,7 @@ class TestEvaluator:
                 rules=[
                     PolicyRule(
                         name="r",
-                        condition=PolicyCondition(
-                            field="f", operator=op, value=rule_val
-                        ),
+                        condition=PolicyCondition(field="f", operator=op, value=rule_val),
                         action=PolicyAction.DENY,
                     ),
                 ],

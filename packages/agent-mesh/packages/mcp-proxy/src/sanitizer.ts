@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Input Sanitizer
- * 
+ *
  * Detects and blocks common attack patterns:
  * - Prompt injection attempts
  * - Path traversal attacks

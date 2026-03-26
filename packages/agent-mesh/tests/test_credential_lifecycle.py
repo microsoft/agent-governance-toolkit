@@ -10,7 +10,6 @@ Closes #165
 
 from __future__ import annotations
 
-import hashlib
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -19,7 +18,6 @@ from datetime import datetime, timedelta
 import pytest
 
 from agentmesh.identity import (
-    AgentDID,
     AgentIdentity,
     Credential,
     CredentialManager,
@@ -30,10 +28,10 @@ from agentmesh.identity import (
 )
 from agentmesh.identity.keystore import SoftwareKeyStore
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_identity(name: str = "test-agent", capabilities: list[str] | None = None):
     return AgentIdentity.create(
@@ -291,9 +289,7 @@ class TestConcurrentAccess:
         results = []
 
         def issue_cred(i):
-            return mgr.issue(
-                agent_did=f"did:mesh:concurrent-{i}", capabilities=["read"]
-            )
+            return mgr.issue(agent_did=f"did:mesh:concurrent-{i}", capabilities=["read"])
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(issue_cred, i) for i in range(20)]
@@ -305,10 +301,7 @@ class TestConcurrentAccess:
 
     def test_concurrent_validate(self):
         mgr = CredentialManager()
-        creds = [
-            mgr.issue(agent_did=f"did:mesh:cv-{i}", capabilities=["read"])
-            for i in range(10)
-        ]
+        creds = [mgr.issue(agent_did=f"did:mesh:cv-{i}", capabilities=["read"]) for i in range(10)]
         results = []
 
         def validate(c):
@@ -323,10 +316,7 @@ class TestConcurrentAccess:
 
     def test_concurrent_rotation(self):
         mgr = CredentialManager()
-        creds = [
-            mgr.issue(agent_did=f"did:mesh:cr-{i}", capabilities=["read"])
-            for i in range(10)
-        ]
+        creds = [mgr.issue(agent_did=f"did:mesh:cr-{i}", capabilities=["read"]) for i in range(10)]
 
         def rotate(c):
             return mgr.rotate(c.credential_id)

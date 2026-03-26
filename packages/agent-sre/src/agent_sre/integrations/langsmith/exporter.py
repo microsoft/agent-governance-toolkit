@@ -221,36 +221,44 @@ class LangSmithExporter:
 
         feedbacks: list[FeedbackRecord] = []
 
-        feedbacks.append(self.add_feedback(
-            run_id=run_id,
-            key=f"slo.{slo.name}.status",
-            score=float(status_code),
-            comment=f"SLO status: {status.value}",
-        ))
+        feedbacks.append(
+            self.add_feedback(
+                run_id=run_id,
+                key=f"slo.{slo.name}.status",
+                score=float(status_code),
+                comment=f"SLO status: {status.value}",
+            )
+        )
 
-        feedbacks.append(self.add_feedback(
-            run_id=run_id,
-            key=f"slo.{slo.name}.budget_remaining",
-            score=slo.error_budget.remaining,
-            comment=f"Error budget: {slo.error_budget.remaining_percent:.1f}% remaining",
-        ))
+        feedbacks.append(
+            self.add_feedback(
+                run_id=run_id,
+                key=f"slo.{slo.name}.budget_remaining",
+                score=slo.error_budget.remaining,
+                comment=f"Error budget: {slo.error_budget.remaining_percent:.1f}% remaining",
+            )
+        )
 
-        feedbacks.append(self.add_feedback(
-            run_id=run_id,
-            key=f"slo.{slo.name}.burn_rate",
-            score=burn,
-            comment=f"Burn rate: {burn:.2f}x",
-        ))
+        feedbacks.append(
+            self.add_feedback(
+                run_id=run_id,
+                key=f"slo.{slo.name}.burn_rate",
+                score=burn,
+                comment=f"Burn rate: {burn:.2f}x",
+            )
+        )
 
         for indicator in slo.indicators:
             current = indicator.current_value()
             if current is not None:
-                feedbacks.append(self.add_feedback(
-                    run_id=run_id,
-                    key=f"sli.{indicator.name}",
-                    score=current,
-                    comment=f"SLI {indicator.name}: {current:.4f}",
-                ))
+                feedbacks.append(
+                    self.add_feedback(
+                        run_id=run_id,
+                        key=f"sli.{indicator.name}",
+                        score=current,
+                        comment=f"SLI {indicator.name}: {current:.4f}",
+                    )
+                )
 
         return feedbacks
 

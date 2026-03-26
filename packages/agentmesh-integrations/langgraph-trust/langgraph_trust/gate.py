@@ -6,7 +6,7 @@ import threading
 from datetime import datetime, timezone
 from typing import Any
 
-from langgraph_trust.identity import AgentID, AgentIdentityManager
+from langgraph_trust.identity import AgentIdentityManager
 from langgraph_trust.state import TrustState, TrustVerdict
 
 
@@ -33,8 +33,13 @@ class TrustScoreTracker:
             new = min(1.0, cur + delta)
             self._scores[agent] = new
             self._history.append(
-                {"agent": agent, "action": "success", "old": cur, "new": new,
-                 "ts": datetime.now(timezone.utc).isoformat()}
+                {
+                    "agent": agent,
+                    "action": "success",
+                    "old": cur,
+                    "new": new,
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                }
             )
             return new
 
@@ -44,9 +49,14 @@ class TrustScoreTracker:
             new = max(0.0, cur - severity)
             self._scores[agent] = new
             self._history.append(
-                {"agent": agent, "action": "failure", "old": cur, "new": new,
-                 "severity": severity,
-                 "ts": datetime.now(timezone.utc).isoformat()}
+                {
+                    "agent": agent,
+                    "action": "failure",
+                    "old": cur,
+                    "new": new,
+                    "severity": severity,
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                }
             )
             return new
 
@@ -115,7 +125,10 @@ class TrustGate:
             identity = self.identity_manager.get_identity(agent)
             if identity is None:
                 return self._verdict(
-                    TrustVerdict.FAIL, score, agent, "",
+                    TrustVerdict.FAIL,
+                    score,
+                    agent,
+                    "",
                     "No identity registered for agent",
                     cap_violations=["identity_missing"],
                 )
@@ -126,26 +139,38 @@ class TrustGate:
 
         if cap_violations:
             return self._verdict(
-                TrustVerdict.FAIL, score, agent, did,
+                TrustVerdict.FAIL,
+                score,
+                agent,
+                did,
                 "Missing capabilities: %s" % cap_violations,
                 cap_violations=cap_violations,
             )
 
         if score < self.min_score:
             return self._verdict(
-                TrustVerdict.FAIL, score, agent, did,
+                TrustVerdict.FAIL,
+                score,
+                agent,
+                did,
                 "Trust score %.3f below minimum %.3f" % (score, self.min_score),
             )
 
         if self.review_threshold is not None and score < self.review_threshold:
             return self._verdict(
-                TrustVerdict.REVIEW, score, agent, did,
-                "Trust score %.3f below review threshold %.3f"
-                % (score, self.review_threshold),
+                TrustVerdict.REVIEW,
+                score,
+                agent,
+                did,
+                "Trust score %.3f below review threshold %.3f" % (score, self.review_threshold),
             )
 
         return self._verdict(
-            TrustVerdict.PASS, score, agent, did, "Trust gate passed",
+            TrustVerdict.PASS,
+            score,
+            agent,
+            did,
+            "Trust gate passed",
         )
 
     def _verdict(

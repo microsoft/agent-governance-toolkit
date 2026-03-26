@@ -235,12 +235,14 @@ class DatadogExporter:
 
         url = f"https://api.{self._site}/api/v2/series"
         payload = {
-            "series": [{
-                "metric": metric.name,
-                "type": 1 if metric.metric_type == "gauge" else 3,
-                "points": [{"timestamp": int(metric.timestamp), "value": metric.value}],
-                "tags": metric.tags,
-            }],
+            "series": [
+                {
+                    "metric": metric.name,
+                    "type": 1 if metric.metric_type == "gauge" else 3,
+                    "points": [{"timestamp": int(metric.timestamp), "value": metric.value}],
+                    "tags": metric.tags,
+                }
+            ],
         }
         data = json.dumps(payload).encode()
         req = urllib.request.Request(

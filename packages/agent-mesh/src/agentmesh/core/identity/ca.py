@@ -16,7 +16,7 @@ Features:
 import hashlib
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
@@ -40,9 +40,7 @@ class SponsorRegistry:
     def __init__(self) -> None:
         self._sponsors: dict[str, ed25519.Ed25519PublicKey] = {}
 
-    def register_sponsor(
-        self, email: str, public_key: ed25519.Ed25519PublicKey
-    ) -> None:
+    def register_sponsor(self, email: str, public_key: ed25519.Ed25519PublicKey) -> None:
         self._sponsors[email] = public_key
 
     def remove_sponsor(self, email: str) -> None:
@@ -156,11 +154,13 @@ class CertificateAuthority:
 
     def _generate_ca_certificate(self) -> x509.Certificate:
         """Generate a self-signed CA certificate."""
-        subject = issuer = x509.Name([
-            x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "AgentMesh"),
-            x509.NameAttribute(NameOID.COMMON_NAME, "AgentMesh CA"),
-        ])
+        subject = issuer = x509.Name(
+            [
+                x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "AgentMesh"),
+                x509.NameAttribute(NameOID.COMMON_NAME, "AgentMesh CA"),
+            ]
+        )
 
         cert = (
             x509.CertificateBuilder()
@@ -168,8 +168,8 @@ class CertificateAuthority:
             .issuer_name(issuer)
             .public_key(self.ca_public_key)
             .serial_number(x509.random_serial_number())
-            .not_valid_before(datetime.now(timezone.utc))
-            .not_valid_after(datetime.now(timezone.utc) + timedelta(days=3650))  # 10 years
+            .not_valid_before(datetime.now(UTC))
+            .not_valid_after(datetime.now(UTC) + timedelta(days=3650))  # 10 years
             .add_extension(
                 x509.BasicConstraints(ca=True, path_length=None),
                 critical=True,
@@ -242,9 +242,7 @@ class CertificateAuthority:
 
         # Store hash of token for later validation
         token_hash = hashlib.sha256(token.encode()).hexdigest()
-        expires_at = datetime.now(timezone.utc) + timedelta(
-            minutes=self.default_ttl_minutes * 2
-        )
+        expires_at = datetime.now(UTC) + timedelta(minutes=self.default_ttl_minutes * 2)
         self._issued_refresh_tokens[token_hash] = (agent_did, expires_at)
 
         return token
@@ -270,7 +268,7 @@ class CertificateAuthority:
             )
             return False
 
-        if datetime.now(timezone.utc) > expires_at:
+        if datetime.now(UTC) > expires_at:
             # Clean up expired token
             del self._issued_refresh_tokens[token_hash]
             logger.warning("Refresh token expired for %s", agent_did)
@@ -293,15 +291,17 @@ class CertificateAuthority:
             (certificate_der, key_id, expires_at)
         """
         ttl = ttl_minutes or self.default_ttl_minutes
-        expires_at = datetime.now(timezone.utc) + timedelta(minutes=ttl)
+        expires_at = datetime.now(UTC) + timedelta(minutes=ttl)
 
         # Generate key ID
         key_id = f"key_{hashlib.sha256(public_key).hexdigest()[:16]}"
 
         # Create subject
-        subject = x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, agent_did),
-        ])
+        subject = x509.Name(
+            [
+                x509.NameAttribute(NameOID.COMMON_NAME, agent_did),
+            ]
+        )
 
         # Reconstruct public key object
         public_key_obj = ed25519.Ed25519PublicKey.from_public_bytes(public_key)
@@ -313,7 +313,7 @@ class CertificateAuthority:
             .issuer_name(self.ca_certificate.subject)
             .public_key(public_key_obj)
             .serial_number(x509.random_serial_number())
-            .not_valid_before(datetime.now(timezone.utc))
+            .not_valid_before(datetime.now(UTC))
             .not_valid_after(expires_at)
             .add_extension(
                 x509.BasicConstraints(ca=False, path_length=None),
@@ -335,9 +335,11 @@ class CertificateAuthority:
             )
             # Add SPIFFE ID as SAN
             .add_extension(
-                x509.SubjectAlternativeName([
-                    x509.UniformResourceIdentifier(f"spiffe://agentmesh.io/{agent_did}"),
-                ]),
+                x509.SubjectAlternativeName(
+                    [
+                        x509.UniformResourceIdentifier(f"spiffe://agentmesh.io/{agent_did}"),
+                    ]
+                ),
                 critical=False,
             )
             .sign(self.ca_private_key, None)  # Ed25519 doesn't use a hash algorithm
@@ -355,11 +357,11 @@ class CertificateAuthority:
         New agents start with a score of 500/1000 with balanced dimensions.
         """
         dimensions = {
-            "policy_compliance": 80,      # No violations yet
-            "resource_efficiency": 50,    # No history
-            "output_quality": 50,         # No history
-            "security_posture": 70,       # Basic security
-            "collaboration_health": 50,   # No peer interactions
+            "policy_compliance": 80,  # No violations yet
+            "resource_efficiency": 50,  # No history
+            "output_quality": 50,  # No history
+            "security_posture": 70,  # Basic security
+            "collaboration_health": 50,  # No peer interactions
         }
 
         total = 500  # Standard starting score
@@ -403,9 +405,7 @@ class CertificateAuthority:
         trust_score, dimensions = self._calculate_initial_trust_score()
 
         # Get CA certificate in PEM format
-        ca_cert_pem = self.ca_certificate.public_bytes(
-            serialization.Encoding.PEM
-        ).decode()
+        ca_cert_pem = self.ca_certificate.public_bytes(serialization.Encoding.PEM).decode()
 
         # Build response
         response = RegistrationResponse(
@@ -447,9 +447,7 @@ class CertificateAuthority:
         """
         # Validate the refresh token against issued tokens
         if not self._validate_refresh_token(agent_did, refresh_token):
-            raise ValueError(
-                "Invalid or expired refresh token for credential rotation"
-            )
+            raise ValueError("Invalid or expired refresh token for credential rotation")
 
         # If no new key provided, we can't issue a new cert
         # In production, we'd retrieve the existing public key
@@ -470,9 +468,7 @@ class CertificateAuthority:
         trust_score, dimensions = self._calculate_initial_trust_score()
 
         # Get CA certificate
-        ca_cert_pem = self.ca_certificate.public_bytes(
-            serialization.Encoding.PEM
-        ).decode()
+        ca_cert_pem = self.ca_certificate.public_bytes(serialization.Encoding.PEM).decode()
 
         response = RegistrationResponse(
             agent_did=agent_did,

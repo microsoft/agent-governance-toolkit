@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Optional
 
 from agentmesh.marketplace.manifest import MarketplaceError, PluginManifest, PluginType
 
@@ -33,7 +32,7 @@ class PluginRegistry:
         >>> results = registry.search("governance")
     """
 
-    def __init__(self, storage_path: Optional[Path] = None) -> None:
+    def __init__(self, storage_path: Path | None = None) -> None:
         self._plugins: dict[str, dict[str, PluginManifest]] = {}
         self._storage_path = storage_path
         if storage_path and storage_path.exists():
@@ -61,7 +60,7 @@ class PluginRegistry:
         logger.info("Registered plugin %s@%s", manifest.name, manifest.version)
         self._persist()
 
-    def unregister(self, name: str, version: Optional[str] = None) -> None:
+    def unregister(self, name: str, version: str | None = None) -> None:
         """Remove a plugin from the registry.
 
         Args:
@@ -84,7 +83,7 @@ class PluginRegistry:
         logger.info("Unregistered plugin %s (version=%s)", name, version or "all")
         self._persist()
 
-    def get_plugin(self, name: str, version: Optional[str] = None) -> PluginManifest:
+    def get_plugin(self, name: str, version: str | None = None) -> PluginManifest:
         """Retrieve a specific plugin manifest.
 
         When *version* is ``None`` the latest version (highest semver) is returned.
@@ -131,7 +130,7 @@ class PluginRegistry:
                 results.append(latest)
         return results
 
-    def list_plugins(self, type_filter: Optional[PluginType] = None) -> list[PluginManifest]:
+    def list_plugins(self, type_filter: PluginType | None = None) -> list[PluginManifest]:
         """List all registered plugins (latest version of each).
 
         Args:

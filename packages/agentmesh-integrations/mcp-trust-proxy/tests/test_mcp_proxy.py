@@ -2,8 +2,6 @@
 Tests for MCP Trust Proxy.
 """
 
-import pytest
-
 from mcp_trust_proxy import AuthResult, ToolPolicy, TrustProxy
 
 
@@ -93,7 +91,9 @@ class TestToolPolicies:
 
     def test_tool_capabilities(self):
         proxy = TrustProxy()
-        proxy.set_tool_policy("file_write", ToolPolicy(required_capabilities=["fs_write"]))
+        proxy.set_tool_policy(
+            "file_write", ToolPolicy(required_capabilities=["fs_write"])
+        )
         # No caps
         r = _auth(proxy, tool="file_write", caps=[])
         assert not r.allowed
@@ -168,7 +168,9 @@ class TestIntegration:
         proxy = TrustProxy(
             default_min_trust=300,
             tool_policies={
-                "file_write": ToolPolicy(min_trust=700, required_capabilities=["fs_write"]),
+                "file_write": ToolPolicy(
+                    min_trust=700, required_capabilities=["fs_write"]
+                ),
                 "shell_exec": ToolPolicy(blocked=True),
                 "web_search": ToolPolicy(max_calls_per_minute=5),
             },
@@ -176,7 +178,9 @@ class TestIntegration:
         )
 
         # Agent 1: high trust, good caps
-        assert _auth(proxy, did="d1", score=800, tool="file_write", caps=["fs_write"]).allowed
+        assert _auth(
+            proxy, did="d1", score=800, tool="file_write", caps=["fs_write"]
+        ).allowed
         assert _auth(proxy, did="d1", score=800, tool="web_search").allowed
 
         # Agent 2: low trust
@@ -186,7 +190,9 @@ class TestIntegration:
         assert not _auth(proxy, did="d1", score=1000, tool="shell_exec").allowed
 
         # Malicious agent blocked
-        assert not _auth(proxy, did="did:mesh:malicious", score=1000, tool="web_search").allowed
+        assert not _auth(
+            proxy, did="did:mesh:malicious", score=1000, tool="web_search"
+        ).allowed
 
         stats = proxy.get_stats()
         assert stats["total_requests"] == 5
@@ -195,4 +201,5 @@ class TestIntegration:
 
     def test_imports(self):
         from mcp_trust_proxy import TrustProxy, ToolPolicy, AuthResult
+
         assert all(cls is not None for cls in [TrustProxy, ToolPolicy, AuthResult])

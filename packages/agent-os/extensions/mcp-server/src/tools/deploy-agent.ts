@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * deploy_agent Tool
- * 
+ *
  * Deploys an agent to local or cloud environment.
  */
 
@@ -45,18 +45,18 @@ For triggered agents, deployment enables the triggers.`,
       required: ['agentId'],
     },
   },
-  
+
   async execute(args: unknown, context: ServiceContext): Promise<string> {
     const input = DeployAgentInputSchema.parse(args);
-    
+
     context.logger.info('Deploying agent', { agentId: input.agentId, environment: input.environment });
-    
+
     // Get agent
     const agent = await context.agentManager.getAgent(input.agentId);
     if (!agent) {
       throw new Error(`Agent not found: ${input.agentId}`);
     }
-    
+
     // Check if already deployed
     if (agent.config.status === 'deployed') {
       return `
@@ -69,7 +69,7 @@ The agent is already deployed. Use \`get_agent_status\` to check its status,
 or stop it first if you want to redeploy with changes.
 `.trim();
     }
-    
+
     // Check cloud deployment requirements
     if (input.environment === 'cloud' && !context.config.apiKey) {
       return `
@@ -83,11 +83,11 @@ To deploy to AgentOS cloud, set your API key:
 Alternatively, deploy locally with environment: "local"
 `.trim();
     }
-    
+
     // Validate policies
     const testActions = [{ type: 'deploy', target: input.environment }];
     const evaluation = context.policyEngine.evaluate(testActions[0], agent.config.policies);
-    
+
     if (!evaluation.allowed) {
       const violations = evaluation.violations.map(v => `- ${v.message}`).join('\n');
       return `
@@ -100,7 +100,7 @@ ${violations}
 Fix the policy violations before deployment.
 `.trim();
     }
-    
+
     // Check if approval required
     if (evaluation.requiresApproval || agent.config.approvalRequired) {
       // Create approval request
@@ -111,7 +111,7 @@ Fix the policy violations before deployment.
         approvers: ['admin@example.com'], // Would come from config
         expiresInHours: 24,
       });
-      
+
       return `
 ⏳ Deployment Pending Approval
 
@@ -127,16 +127,16 @@ This deployment requires human approval.
 The agent will be deployed automatically once approved.
 `.trim();
     }
-    
+
     // Deploy the agent
     await context.agentManager.updateStatus(input.agentId, 'deployed');
-    
+
     // Generate deployment info
     const deploymentId = `deploy-${Date.now().toString(36)}`;
     const monitorUrl = input.environment === 'cloud'
       ? `https://agentos.dev/agents/${input.agentId}`
       : `http://localhost:8080/agents/${input.agentId}`;
-    
+
     return `
 ✅ Agent Deployed Successfully!
 
@@ -146,7 +146,7 @@ The agent will be deployed automatically once approved.
 **Deployment ID:** ${deploymentId}
 **Status:** ${input.autoStart ? 'Running' : 'Deployed (not started)'}
 
-${agent.config.schedule 
+${agent.config.schedule
   ? `**Schedule:** ${agent.config.schedule}\nThe agent will run according to this schedule.`
   : '**Trigger:** Manual\nUse the monitoring URL to trigger execution.'
 }

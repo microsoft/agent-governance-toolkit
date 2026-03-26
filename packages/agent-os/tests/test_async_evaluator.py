@@ -19,8 +19,7 @@ import tempfile
 import textwrap
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -38,7 +37,6 @@ from agent_os.policies.schema import (
     PolicyOperator,
     PolicyRule,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -220,10 +218,7 @@ class TestEvaluateSync:
         """10+ threads evaluating simultaneously produce correct results."""
         contexts = [{"token_count": i} for i in range(2000, 2020)]
         with ThreadPoolExecutor(max_workers=12) as pool:
-            futures = [
-                pool.submit(async_evaluator.evaluate_sync, ctx)
-                for ctx in contexts
-            ]
+            futures = [pool.submit(async_evaluator.evaluate_sync, ctx) for ctx in contexts]
             results = [f.result(timeout=5) for f in futures]
 
         # All should be denied (token_count > 1000 for every context)
@@ -239,13 +234,9 @@ class TestEvaluateSync:
 
         with ThreadPoolExecutor(max_workers=10) as pool:
             futures_allow = [
-                pool.submit(async_evaluator.evaluate_sync, allow_ctx)
-                for _ in range(10)
+                pool.submit(async_evaluator.evaluate_sync, allow_ctx) for _ in range(10)
             ]
-            futures_deny = [
-                pool.submit(async_evaluator.evaluate_sync, deny_ctx)
-                for _ in range(10)
-            ]
+            futures_deny = [pool.submit(async_evaluator.evaluate_sync, deny_ctx) for _ in range(10)]
 
         for f in futures_allow:
             assert f.result(timeout=5).allowed is True
@@ -391,20 +382,14 @@ class TestPolicyReload:
         assert result.allowed is True
 
         # Launch several reads then a reload then more reads
-        pre_reads = [
-            async_evaluator.evaluate({"tool_name": "read_file"})
-            for _ in range(10)
-        ]
+        pre_reads = [async_evaluator.evaluate({"tool_name": "read_file"}) for _ in range(10)]
 
         with tempfile.TemporaryDirectory() as tmpdir:
             Path(tmpdir, "new.yaml").write_text(
                 'version: "1.0"\nname: new\nrules: []\ndefaults:\n  action: deny\n'
             )
             reload_coro = async_evaluator.reload_policies(tmpdir)
-            post_reads = [
-                async_evaluator.evaluate({"unrelated": True})
-                for _ in range(10)
-            ]
+            post_reads = [async_evaluator.evaluate({"unrelated": True}) for _ in range(10)]
 
             # Gather all — some reads may see old or new policies
             all_tasks = pre_reads + [reload_coro] + post_reads
@@ -468,9 +453,7 @@ class TestErrorHandling:
         """When the underlying evaluator raises, error_count increments."""
         broken_evaluator = PolicyEvaluator(policies=[])
         # Monkey-patch evaluate to raise
-        broken_evaluator.evaluate = MagicMock(
-            side_effect=RuntimeError("boom")
-        )
+        broken_evaluator.evaluate = MagicMock(side_effect=RuntimeError("boom"))
         async_eval = AsyncPolicyEvaluator(broken_evaluator)
 
         with pytest.raises(RuntimeError, match="boom"):
@@ -484,9 +467,7 @@ class TestErrorHandling:
     def test_sync_error_increments_stats(self):
         """Synchronous path also tracks errors."""
         broken_evaluator = PolicyEvaluator(policies=[])
-        broken_evaluator.evaluate = MagicMock(
-            side_effect=ValueError("sync boom")
-        )
+        broken_evaluator.evaluate = MagicMock(side_effect=ValueError("sync boom"))
         async_eval = AsyncPolicyEvaluator(broken_evaluator)
 
         with pytest.raises(ValueError, match="sync boom"):
@@ -538,10 +519,9 @@ class TestErrorHandling:
 
         evaluator.evaluate = sometimes_fail
 
-        tasks = (
-            [async_eval.evaluate({"fail": True}) for _ in range(5)]
-            + [async_eval.evaluate({"tool_name": "read_file"}) for _ in range(5)]
-        )
+        tasks = [async_eval.evaluate({"fail": True}) for _ in range(5)] + [
+            async_eval.evaluate({"tool_name": "read_file"}) for _ in range(5)
+        ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         errors = [r for r in results if isinstance(r, RuntimeError)]

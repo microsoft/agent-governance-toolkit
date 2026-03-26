@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from agentmesh.observability.prometheus_exporter import MeshMetricsExporter, start_http_server
+from agentmesh.observability.prometheus_exporter import MeshMetricsExporter
 
 
 @pytest.fixture(autouse=True)
@@ -120,18 +120,14 @@ class TestPolicyViolations:
         e.record_policy_violation("no-external-calls")
         e.record_policy_violation("no-external-calls")
 
-        assert (
-            e.policy_violations_total.labels(policy_id="no-external-calls")._value.get() == 2.0
-        )
+        assert e.policy_violations_total.labels(policy_id="no-external-calls")._value.get() == 2.0
 
     def test_separate_policies(self):
         e = MeshMetricsExporter()
         e.record_policy_violation("no-external-calls")
         e.record_policy_violation("max-delegation-depth")
 
-        assert (
-            e.policy_violations_total.labels(policy_id="no-external-calls")._value.get() == 1.0
-        )
+        assert e.policy_violations_total.labels(policy_id="no-external-calls")._value.get() == 1.0
         assert (
             e.policy_violations_total.labels(policy_id="max-delegation-depth")._value.get() == 1.0
         )

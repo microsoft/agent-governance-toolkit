@@ -103,7 +103,7 @@ Right-click on code and select **"Agent OS: Review Code with CMVK"** to get a co
 Consensus: 66% Agreement
 
 ✅ GPT-4:     No issues
-✅ Claude:    No issues  
+✅ Claude:    No issues
 ⚠️  Gemini:   Potential SQL injection (Line 42)
 
 Recommendations:

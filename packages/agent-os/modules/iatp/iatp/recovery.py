@@ -6,6 +6,7 @@ Recovery Engine Integration with SCAK (Self-Correcting Agent Kernel).
 This module wraps the agent_kernel (scak) to provide failure recovery
 and rollback capabilities for IATP.
 """
+
 import asyncio
 import logging
 from datetime import datetime, timezone
@@ -15,7 +16,6 @@ from typing import Any, Callable, Dict, Optional
 from agent_primitives import (
     AgentFailure,
     FailureType,
-    FailureSeverity,
 )
 
 from iatp.models import CapabilityManifest
@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 class RecoveryStrategy(str, Enum):
     """Recovery strategies for IATP."""
+
     ROLLBACK = "rollback"  # Execute compensation transaction
     RETRY = "retry"  # Retry the operation
     GIVE_UP = "give_up"  # No recovery possible
@@ -50,7 +51,7 @@ class IATPRecoveryEngine:
         error: Exception,
         manifest: CapabilityManifest,
         payload: Dict[str, Any],
-        compensation_callback: Optional[Callable] = None
+        compensation_callback: Optional[Callable] = None,
     ) -> Dict[str, Any]:
         """
         Handle a failure in agent communication.
@@ -93,7 +94,7 @@ class IATPRecoveryEngine:
                 "payload": payload,
                 "reversibility": manifest.capabilities.reversibility.value,
             },
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Determine recovery strategy based on manifest and failure type
@@ -101,11 +102,7 @@ class IATPRecoveryEngine:
         # so we use a simplified diagnosis based on the failure record
         diagnosis = f"{failure_type.value}: {error_name}"
 
-        strategy = self._determine_strategy(
-            diagnosis,
-            manifest,
-            compensation_callback is not None
-        )
+        strategy = self._determine_strategy(diagnosis, manifest, compensation_callback is not None)
 
         # Execute recovery
         recovery_result = await self._execute_recovery(
@@ -113,7 +110,7 @@ class IATPRecoveryEngine:
             trace_id=trace_id,
             failure=failure,
             manifest=manifest,
-            compensation_callback=compensation_callback
+            compensation_callback=compensation_callback,
         )
 
         # Record in history
@@ -122,16 +119,13 @@ class IATPRecoveryEngine:
             "diagnosis": diagnosis,
             "strategy": strategy,
             "result": recovery_result,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         return recovery_result
 
     def _determine_strategy(
-        self,
-        diagnosis: str,
-        manifest: CapabilityManifest,
-        has_compensation: bool
+        self, diagnosis: str, manifest: CapabilityManifest, has_compensation: bool
     ) -> RecoveryStrategy:
         """
         Determine the appropriate recovery strategy.
@@ -166,7 +160,7 @@ class IATPRecoveryEngine:
         trace_id: str,
         failure: AgentFailure,
         manifest: CapabilityManifest,
-        compensation_callback: Optional[Callable] = None
+        compensation_callback: Optional[Callable] = None,
     ) -> Dict[str, Any]:
         """
         Execute the determined recovery strategy.
@@ -185,7 +179,7 @@ class IATPRecoveryEngine:
             "strategy": strategy.value,
             "success": False,
             "actions_taken": [],
-            "trace_id": trace_id
+            "trace_id": trace_id,
         }
 
         if strategy == RecoveryStrategy.ROLLBACK:
@@ -238,11 +232,7 @@ class IATPRecoveryEngine:
         """
         return self.recovery_history.get(trace_id)
 
-    def should_attempt_recovery(
-        self,
-        error: Exception,
-        manifest: CapabilityManifest
-    ) -> bool:
+    def should_attempt_recovery(self, error: Exception, manifest: CapabilityManifest) -> bool:
         """
         Determine if recovery should be attempted for this error.
 
@@ -259,12 +249,7 @@ class IATPRecoveryEngine:
 
         # Attempt recovery for certain error types
         error_name = type(error).__name__
-        recoverable_errors = [
-            "TimeoutError",
-            "ConnectionError",
-            "HTTPError",
-            "ServiceUnavailable"
-        ]
+        recoverable_errors = ["TimeoutError", "ConnectionError", "HTTPError", "ServiceUnavailable"]
 
         return any(err in error_name for err in recoverable_errors)
 
@@ -273,7 +258,7 @@ class IATPRecoveryEngine:
         trace_id: str,
         manifest: CapabilityManifest,
         compensation_endpoint: str,
-        compensation_payload: Dict[str, Any]
+        compensation_payload: Dict[str, Any],
     ) -> bool:
         """
         Execute a compensation transaction using the agent's compensation endpoint.
@@ -299,11 +284,8 @@ class IATPRecoveryEngine:
                 response = await client.post(
                     compensation_endpoint,
                     json=compensation_payload,
-                    headers={
-                        "X-Agent-Trace-ID": trace_id,
-                        "X-Compensation-Request": "true"
-                    },
-                    timeout=30.0
+                    headers={"X-Agent-Trace-ID": trace_id, "X-Compensation-Request": "true"},
+                    timeout=30.0,
                 )
 
                 if 200 <= response.status_code < 300:

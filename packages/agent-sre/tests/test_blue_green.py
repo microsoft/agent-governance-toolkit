@@ -12,7 +12,9 @@ from agent_sre.delivery.blue_green import (
 )
 
 # Config with zero timeouts for fast tests
-_FAST = BlueGreenConfig(drain_timeout_seconds=0, health_check_interval_seconds=0, validation_timeout_seconds=0)
+_FAST = BlueGreenConfig(
+    drain_timeout_seconds=0, health_check_interval_seconds=0, validation_timeout_seconds=0
+)
 
 
 class TestInitialState:

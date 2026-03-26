@@ -6,10 +6,12 @@ Reward Engine
 Single-dimension trust scoring with per-agent reward signals.
 """
 
-from datetime import datetime, timedelta
-from typing import Any, Optional, Callable
-from pydantic import BaseModel, Field
 import asyncio
+from collections.abc import Callable
+from datetime import datetime, timedelta
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 from agentmesh.constants import (
     REWARD_UPDATE_INTERVAL_SECONDS,
@@ -21,7 +23,8 @@ from agentmesh.constants import (
     WEIGHT_RESOURCE_EFFICIENCY,
     WEIGHT_SECURITY_POSTURE,
 )
-from .scoring import TrustScore, RewardDimension, RewardSignal, DimensionType
+
+from .scoring import DimensionType, RewardDimension, RewardSignal, TrustScore
 
 
 class RewardConfig(BaseModel):
@@ -71,8 +74,8 @@ class AgentRewardState(BaseModel):
     # Status
     last_updated: datetime = Field(default_factory=datetime.utcnow)
     revoked: bool = False
-    revoked_at: Optional[datetime] = None
-    revocation_reason: Optional[str] = None
+    revoked_at: datetime | None = None
+    revocation_reason: str | None = None
 
     def add_signal(self, signal: RewardSignal) -> None:
         """Add a reward signal."""
@@ -80,14 +83,14 @@ class AgentRewardState(BaseModel):
 
         # Trim if needed
         if len(self.recent_signals) > self.max_signals:
-            self.recent_signals = self.recent_signals[-self.max_signals:]
+            self.recent_signals = self.recent_signals[-self.max_signals :]
 
     def record_score(self, score: int) -> None:
         """Record score in history."""
         self.score_history.append((datetime.utcnow(), score))
 
         if len(self.score_history) > self.max_history:
-            self.score_history = self.score_history[-self.max_history:]
+            self.score_history = self.score_history[-self.max_history :]
 
 
 class RewardEngine:
@@ -108,7 +111,7 @@ class RewardEngine:
     - Fully explainable scores
     """
 
-    def __init__(self, config: Optional[RewardConfig] = None):
+    def __init__(self, config: RewardConfig | None = None):
         self.config = config or RewardConfig()
         self._agents: dict[str, AgentRewardState] = {}
         self._revocation_callbacks: list[Callable] = []
@@ -125,7 +128,7 @@ class RewardEngine:
         dimension: DimensionType,
         value: float,
         source: str,
-        details: Optional[str] = None,
+        details: str | None = None,
     ) -> None:
         """
         Record a reward signal for an agent.
@@ -156,7 +159,7 @@ class RewardEngine:
         self,
         agent_did: str,
         compliant: bool,
-        policy_name: Optional[str] = None,
+        policy_name: str | None = None,
     ) -> None:
         """Record a policy compliance signal."""
         self.record_signal(
@@ -195,7 +198,7 @@ class RewardEngine:
         agent_did: str,
         accepted: bool,
         consumer: str,
-        rejection_reason: Optional[str] = None,
+        rejection_reason: str | None = None,
     ) -> None:
         """Record output quality signal from downstream consumer."""
         self.record_signal(
@@ -279,10 +282,7 @@ class RewardEngine:
             DimensionType.COLLABORATION_HEALTH.value: self.config.collaboration_health_weight,
         }
 
-        total_score = sum(
-            dimension_scores.get(dim, 50) * weight
-            for dim, weight in weights.items()
-        )
+        total_score = sum(dimension_scores.get(dim, 50) * weight for dim, weight in weights.items())
 
         # Scale to 0-1000
         total_score = int(total_score * 10)
@@ -400,11 +400,11 @@ class RewardEngine:
 
     def update_weights(
         self,
-        policy_compliance: Optional[float] = None,
-        resource_efficiency: Optional[float] = None,
-        output_quality: Optional[float] = None,
-        security_posture: Optional[float] = None,
-        collaboration_health: Optional[float] = None,
+        policy_compliance: float | None = None,
+        resource_efficiency: float | None = None,
+        output_quality: float | None = None,
+        security_posture: float | None = None,
+        collaboration_health: float | None = None,
     ) -> bool:
         """
         Update dimension weights.

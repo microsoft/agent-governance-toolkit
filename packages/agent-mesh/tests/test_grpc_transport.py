@@ -2,8 +2,7 @@
 # Licensed under the MIT License.
 """Tests for the gRPC transport implementation."""
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -21,7 +20,6 @@ from agentmesh.transport.grpc_transport import (
     TrustResponse,
     _dataclass_to_dict,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -82,9 +80,7 @@ class TestMessageSchemas:
 
     def test_policy_check_request_defaults(self) -> None:
         """PolicyCheckRequest has correct defaults."""
-        req = PolicyCheckRequest(
-            agent_did="did:mesh:a", action="read", resource="/data"
-        )
+        req = PolicyCheckRequest(agent_did="did:mesh:a", action="read", resource="/data")
         assert req.action == "read"
         assert req.resource == "/data"
         assert req.context == {}

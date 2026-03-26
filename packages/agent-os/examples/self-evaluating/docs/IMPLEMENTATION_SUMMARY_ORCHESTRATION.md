@@ -34,13 +34,13 @@ class Orchestrator:
     The Hub - Central deterministic orchestrator.
     Manages routing, data transformation, and state tracking.
     """
-    
+
     def register_worker(self, worker: WorkerDefinition) -> None:
         """Register a probabilistic worker."""
-        
+
     def register_workflow(self, workflow: WorkflowDefinition) -> None:
         """Register a deterministic workflow."""
-        
+
     def execute_workflow(self, workflow_name: str, goal: str) -> WorkflowContext:
         """Execute a workflow using the deterministic state machine."""
 ```
@@ -84,10 +84,10 @@ class WorkflowDefinition:
     Deterministic workflow definition.
     This is the 'skeleton' - rigid and deterministic.
     """
-    
+
     def add_step(self, step: WorkflowStep) -> None:
         """Add a deterministic step to the workflow."""
-    
+
     def validate(self) -> Tuple[bool, Optional[str]]:
         """Validate workflow structure."""
 ```
@@ -158,7 +158,7 @@ def create_build_website_workflow() -> WorkflowDefinition:
         description="Build a website from requirements",
         goal="Create a functional website"
     )
-    
+
     # Step 1: Product Manager creates specs
     workflow.add_step(
         WorkflowStep(
@@ -168,7 +168,7 @@ def create_build_website_workflow() -> WorkflowDefinition:
         ),
         is_initial=True
     )
-    
+
     # Step 2: Coder implements
     workflow.add_step(
         WorkflowStep(
@@ -179,7 +179,7 @@ def create_build_website_workflow() -> WorkflowDefinition:
             max_retries=1
         )
     )
-    
+
     # Step 3: Reviewer reviews
     workflow.add_step(
         WorkflowStep(
@@ -189,7 +189,7 @@ def create_build_website_workflow() -> WorkflowDefinition:
             on_failure="implement_code"  # Loop back to coder
         )
     )
-    
+
     return workflow
 ```
 
@@ -201,7 +201,7 @@ Create custom linear pipelines:
 def create_generic_pipeline(steps: List[Tuple]) -> WorkflowDefinition:
     """
     Create a generic linear pipeline workflow.
-    
+
     Example:
         pipeline = create_generic_pipeline([
             ("analyze", WorkerType.PRODUCT_MANAGER, "Analyze requirements"),

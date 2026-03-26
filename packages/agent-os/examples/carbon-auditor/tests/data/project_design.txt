@@ -12,7 +12,7 @@ Date: 2024-01-15
 1. PROJECT DESCRIPTION
 ================================================================================
 
-This project aims to protect 10,000 hectares of primary rainforest in the 
+This project aims to protect 10,000 hectares of primary rainforest in the
 Amazon basin from planned deforestation activities. The project area consists
 of mature tropical moist forest with high biodiversity value.
 
@@ -53,7 +53,7 @@ NDVI Baseline: 0.82
 4. CLAIMED EMISSION REDUCTIONS
 ================================================================================
 
-Baseline Scenario: Without the project, 500 hectares would be deforested 
+Baseline Scenario: Without the project, 500 hectares would be deforested
 annually for cattle ranching.
 
 Project Scenario: Full protection of the forest area.

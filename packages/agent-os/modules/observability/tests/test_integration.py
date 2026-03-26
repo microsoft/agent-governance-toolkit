@@ -2,26 +2,22 @@
 # Licensed under the MIT License.
 """End-to-end integration tests for Agent OS observability module."""
 
-import sys
 import os
-import re
-import json
-import time
 import random
+import re
+import sys
 import threading
+import time
 import urllib.request
 from uuid import uuid4
 
-import pytest
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
-
-from agent_os_observability.metrics import KernelMetrics
-from agent_os_observability.tracer import KernelTracer
 from agent_os_observability.dashboards import get_grafana_dashboard
+from agent_os_observability.metrics import KernelMetrics
 from agent_os_observability.server import MetricsServer
+from agent_os_observability.tracer import KernelTracer
+from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 
 
 class InMemorySpanExporter(SpanExporter):
@@ -106,14 +102,12 @@ class TestTracerIntegration:
     """Create KernelTracer with InMemorySpanExporter, verify spans."""
 
     def test_trace_operations_produce_spans(self):
+        from opentelemetry.sdk.resources import Resource
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-        from opentelemetry.sdk.resources import Resource
 
         exporter = InMemorySpanExporter()
-        provider = TracerProvider(
-            resource=Resource.create({"service.name": "integ-test"})
-        )
+        provider = TracerProvider(resource=Resource.create({"service.name": "integ-test"}))
         provider.add_span_processor(SimpleSpanProcessor(exporter))
         tracer = KernelTracer.__new__(KernelTracer)
         tracer.tracer = provider.get_tracer(__name__)
@@ -156,14 +150,12 @@ class TestMetricsAndTracerTogether:
         metrics = KernelMetrics(namespace=ns)
 
         # Build tracer manually to avoid global provider issue
+        from opentelemetry.sdk.resources import Resource
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-        from opentelemetry.sdk.resources import Resource
 
         exporter = InMemorySpanExporter()
-        provider = TracerProvider(
-            resource=Resource.create({"service.name": "combined-test"})
-        )
+        provider = TracerProvider(resource=Resource.create({"service.name": "combined-test"}))
         provider.add_span_processor(SimpleSpanProcessor(exporter))
         tracer = KernelTracer.__new__(KernelTracer)
         tracer.tracer = provider.get_tracer(__name__)
@@ -248,8 +240,7 @@ class TestDashboardMetricConsistency:
                                 base = base[: -len(suffix)]
                                 break
                         found = any(
-                            em.startswith(base) or base.startswith(em)
-                            for em in exported_metrics
+                            em.startswith(base) or base.startswith(em) for em in exported_metrics
                         )
                         assert found, (
                             f"Dashboard '{dname}' panel '{panel['title']}' references "

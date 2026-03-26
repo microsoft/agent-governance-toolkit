@@ -12,14 +12,14 @@ scrape_configs:
       - targets: ['server:9090']
         labels:
           service: 'agentmesh-server'
-  
+
   # AgentMesh Sidecar
   - job_name: 'agentmesh-sidecar'
     static_configs:
       - targets: ['sidecar:9091']
         labels:
           service: 'agentmesh-sidecar'
-  
+
   # Kubernetes service discovery (for production)
   - job_name: 'kubernetes-pods'
     kubernetes_sd_configs:

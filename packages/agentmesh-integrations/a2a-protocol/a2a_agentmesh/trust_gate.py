@@ -94,7 +94,10 @@ class TrustGate:
             return result
 
         # 3. Allow list
-        if self.policy.allowed_dids and envelope.source_did not in self.policy.allowed_dids:
+        if (
+            self.policy.allowed_dids
+            and envelope.source_did not in self.policy.allowed_dids
+        ):
             result = TrustResult(
                 allowed=False,
                 reason=f"Agent {envelope.source_did} not in allow list",

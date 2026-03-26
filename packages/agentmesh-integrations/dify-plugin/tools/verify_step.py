@@ -18,16 +18,18 @@ class VerifyStepTool(Tool):
         step_id = tool_parameters.get("step_id", "")
         step_type = tool_parameters.get("step_type", "")
         required_capability = tool_parameters.get("required_capability")
-        
+
         # Get trust manager from provider
         trust_manager = self.runtime.credentials.get("_trust_manager")
         if not trust_manager:
-            yield self.create_json_message({
-                "verified": False,
-                "error": "Trust manager not initialized",
-            })
+            yield self.create_json_message(
+                {
+                    "verified": False,
+                    "error": "Trust manager not initialized",
+                }
+            )
             return
-        
+
         # Verify step
         result = trust_manager.verify_workflow_step(
             workflow_id=workflow_id,
@@ -35,5 +37,5 @@ class VerifyStepTool(Tool):
             step_type=step_type,
             required_capability=required_capability,
         )
-        
+
         yield self.create_json_message(result.to_dict())

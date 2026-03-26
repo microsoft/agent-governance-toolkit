@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 """Tests for Shapley-value fault attribution, quarantine, and liability ledger."""
 
-
 import pytest
 
 from hypervisor.liability.attribution import (
@@ -206,9 +205,7 @@ class TestLiabilityLedger:
     def test_risk_profile_risky_agent(self):
         ledger = LiabilityLedger()
         for i in range(5):
-            ledger.record(
-                "a1", LedgerEntryType.SLASH_RECEIVED, f"s{i}", severity=0.9
-            )
+            ledger.record("a1", LedgerEntryType.SLASH_RECEIVED, f"s{i}", severity=0.9)
         profile = ledger.compute_risk_profile("a1")
         # Community edition: no risk scoring, always admits
         assert profile.risk_score == 0.0

@@ -6,10 +6,11 @@ Reputation Routes
 API endpoints for reputation management and trust scoring.
 """
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
-from typing import Optional, Literal
 from datetime import datetime, timezone
+from typing import Literal, Optional
+
+from fastapi import APIRouter, Query
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -37,7 +38,9 @@ class TrustScoreResponse(BaseModel):
 
 
 class SlashRequest(BaseModel):
-    reason: Literal["hallucination", "policy_violation", "mute_triggered", "dispute_lost", "timeout", "fraud"]
+    reason: Literal[
+        "hallucination", "policy_violation", "mute_triggered", "dispute_lost", "timeout", "fraud"
+    ]
     severity: Literal["critical", "high", "medium", "low"]
     evidence_hash: Optional[str] = None
     trace_id: Optional[str] = None
@@ -71,17 +74,20 @@ _slash_events: list[dict] = []
 @router.get("/{agent_did}", response_model=TrustScoreResponse)
 async def get_reputation(agent_did: str):
     """Get detailed reputation for an agent."""
-    history = _reputation_history.get(agent_did, {
-        "successful_tasks": 0,
-        "failed_tasks": 0,
-        "disputes_won": 0,
-        "disputes_lost": 0,
-        "times_slashed": 0,
-    })
-    
+    history = _reputation_history.get(
+        agent_did,
+        {
+            "successful_tasks": 0,
+            "failed_tasks": 0,
+            "disputes_won": 0,
+            "disputes_lost": 0,
+            "times_slashed": 0,
+        },
+    )
+
     # Calculate score
     base_score = 400  # Would check verification level
-    
+
     behavioral = 0
     behavioral += history.get("successful_tasks", 0) * 2
     behavioral -= history.get("failed_tasks", 0) * 10
@@ -89,11 +95,11 @@ async def get_reputation(agent_did: str):
     behavioral += history.get("disputes_won", 0) * 10
     behavioral -= history.get("times_slashed", 0) * 75
     behavioral = max(-300, min(300, behavioral))
-    
+
     capability = 50  # Would calculate from manifest
-    
+
     total = max(0, min(1000, base_score + behavioral + capability))
-    
+
     return TrustScoreResponse(
         agent_did=agent_did,
         total_score=total,
@@ -121,10 +127,10 @@ async def report_outcome(agent_did: str, request: ReportOutcomeRequest):
             "times_slashed": 0,
             "total_tasks": 0,
         }
-    
+
     history = _reputation_history[agent_did]
     history["total_tasks"] = history.get("total_tasks", 0) + 1
-    
+
     if request.outcome == "success":
         history["successful_tasks"] += 1
     elif request.outcome == "failure":
@@ -132,7 +138,7 @@ async def report_outcome(agent_did: str, request: ReportOutcomeRequest):
     else:  # partial
         history["successful_tasks"] += 0.5
         history["failed_tasks"] += 0.5
-    
+
     return {
         "success": True,
         "agent_did": agent_did,
@@ -145,23 +151,23 @@ async def report_outcome(agent_did: str, request: ReportOutcomeRequest):
 async def slash_reputation(agent_did: str, request: SlashRequest):
     """
     Slash an agent's reputation for misbehavior.
-    
+
     When triggered, can broadcast to the network so all agents
     immediately block the offending agent.
     """
     # Get current score
     history = _reputation_history.get(agent_did, {"times_slashed": 0})
-    
+
     # Calculate score before
     base = 400
     behavioral = (
-        history.get("successful_tasks", 0) * 2 -
-        history.get("failed_tasks", 0) * 10 -
-        history.get("disputes_lost", 0) * 50 -
-        history.get("times_slashed", 0) * 75
+        history.get("successful_tasks", 0) * 2
+        - history.get("failed_tasks", 0) * 10
+        - history.get("disputes_lost", 0) * 50
+        - history.get("times_slashed", 0) * 75
     )
     score_before = max(0, min(1000, base + behavioral + 50))
-    
+
     # Calculate reduction
     penalties = {
         "critical": 200,
@@ -171,14 +177,14 @@ async def slash_reputation(agent_did: str, request: SlashRequest):
     }
     reduction = penalties[request.severity]
     score_after = max(0, score_before - reduction)
-    
+
     # Update history
     if agent_did not in _reputation_history:
         _reputation_history[agent_did] = {"times_slashed": 0}
     _reputation_history[agent_did]["times_slashed"] = (
         _reputation_history[agent_did].get("times_slashed", 0) + 1
     )
-    
+
     # Create slash event
     slash_id = f"slash_{agent_did}_{datetime.now(timezone.utc).timestamp()}"
     slash_event = {
@@ -195,7 +201,7 @@ async def slash_reputation(agent_did: str, request: SlashRequest):
         "occurred_at": datetime.now(timezone.utc).isoformat(),
     }
     _slash_events.append(slash_event)
-    
+
     return SlashResponse(
         agent_did=agent_did,
         slash_id=slash_id,
@@ -214,11 +220,11 @@ async def sync_reputation(
 ):
     """
     Get reputation scores for syncing to local cache.
-    
+
     Used by NexusClient.sync_reputation()
     """
     scores = {}
-    
+
     # If specific DIDs requested
     if agent_dids:
         dids = agent_dids.split(",")
@@ -229,7 +235,7 @@ async def sync_reputation(
         # Return all known agents
         for did, history in _reputation_history.items():
             scores[did] = _calculate_score(history)
-    
+
     return {"scores": scores, "synced_at": datetime.now(timezone.utc).isoformat()}
 
 
@@ -239,29 +245,33 @@ async def get_leaderboard(
 ):
     """Get top agents by trust score."""
     entries = []
-    
+
     for did, history in _reputation_history.items():
         score = _calculate_score(history)
-        entries.append({
-            "agent_did": did,
-            "trust_score": score,
-            "successful_tasks": history.get("successful_tasks", 0),
-        })
-    
+        entries.append(
+            {
+                "agent_did": did,
+                "trust_score": score,
+                "successful_tasks": history.get("successful_tasks", 0),
+            }
+        )
+
     # Sort by score
     entries.sort(key=lambda e: e["trust_score"], reverse=True)
-    
+
     # Add rank and tier
     results = []
     for i, entry in enumerate(entries[:limit]):
-        results.append(LeaderboardEntry(
-            rank=i + 1,
-            agent_did=entry["agent_did"],
-            trust_score=entry["trust_score"],
-            tier=_get_tier(entry["trust_score"]),
-            successful_tasks=entry["successful_tasks"],
-        ))
-    
+        results.append(
+            LeaderboardEntry(
+                rank=i + 1,
+                agent_did=entry["agent_did"],
+                trust_score=entry["trust_score"],
+                tier=_get_tier(entry["trust_score"]),
+                successful_tasks=entry["successful_tasks"],
+            )
+        )
+
     return results
 
 
@@ -273,13 +283,13 @@ async def get_slash_history(
 ):
     """Get slash event history."""
     events = _slash_events
-    
+
     if agent_did:
         events = [e for e in events if e["agent_did"] == agent_did]
-    
+
     if since:
         events = [e for e in events if e["occurred_at"] >= since]
-    
+
     return {"events": events[:limit], "total": len(events)}
 
 
@@ -287,10 +297,10 @@ def _calculate_score(history: dict) -> int:
     """Calculate trust score from history."""
     base = 400
     behavioral = (
-        history.get("successful_tasks", 0) * 2 -
-        history.get("failed_tasks", 0) * 10 -
-        history.get("disputes_lost", 0) * 50 -
-        history.get("times_slashed", 0) * 75
+        history.get("successful_tasks", 0) * 2
+        - history.get("failed_tasks", 0) * 10
+        - history.get("disputes_lost", 0) * 50
+        - history.get("times_slashed", 0) * 75
     )
     behavioral = max(-300, min(300, behavioral))
     return max(0, min(1000, base + behavioral + 50))

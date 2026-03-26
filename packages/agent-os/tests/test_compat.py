@@ -2,14 +2,12 @@
 # Licensed under the MIT License.
 """Tests for version compatibility checker."""
 
-import pytest
-
 from agent_os.integrations.compat import (
     CompatReport,
-    check_compatibility,
-    doctor,
     _parse_version,
     _version_in_range,
+    check_compatibility,
+    doctor,
 )
 
 
@@ -43,30 +41,22 @@ class TestVersionInRange:
 
 class TestCheckCompatibility:
     def test_compatible_pair(self):
-        ok, msg = check_compatibility(
-            "agent-os-kernel", "2.0.2", "agentmesh-platform", "2.0.2"
-        )
+        ok, msg = check_compatibility("agent-os-kernel", "2.0.2", "agentmesh-platform", "2.0.2")
         assert ok is True
         assert "compatible" in msg
 
     def test_incompatible_pair(self):
-        ok, msg = check_compatibility(
-            "agent-os-kernel", "3.5.0", "agentmesh-platform", "2.0.0"
-        )
+        ok, msg = check_compatibility("agent-os-kernel", "3.5.0", "agentmesh-platform", "2.0.0")
         assert ok is False
         assert "WARNING" in msg
 
     def test_unknown_pair(self):
-        ok, msg = check_compatibility(
-            "unknown-pkg", "1.0.0", "other-pkg", "1.0.0"
-        )
+        ok, msg = check_compatibility("unknown-pkg", "1.0.0", "other-pkg", "1.0.0")
         assert ok is True
         assert "assumed" in msg
 
     def test_reversed_key_order(self):
-        ok, msg = check_compatibility(
-            "agentmesh-platform", "2.0.2", "agent-os-kernel", "2.0.2"
-        )
+        ok, msg = check_compatibility("agentmesh-platform", "2.0.2", "agent-os-kernel", "2.0.2")
         assert ok is True
 
 

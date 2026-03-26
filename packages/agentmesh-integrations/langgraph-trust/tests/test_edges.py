@@ -41,11 +41,13 @@ class TestTrustEdge:
 
 class TestTrustRouter:
     def test_basic_routing(self):
-        route = trust_router({
-            "pass": "execute",
-            "fail": "quarantine",
-            "review": "human_review",
-        })
+        route = trust_router(
+            {
+                "pass": "execute",
+                "fail": "quarantine",
+                "review": "human_review",
+            }
+        )
         assert route({"trust_result": {"verdict": "pass"}}) == "execute"
         assert route({"trust_result": {"verdict": "fail"}}) == "quarantine"
         assert route({"trust_result": {"verdict": "review"}}) == "human_review"

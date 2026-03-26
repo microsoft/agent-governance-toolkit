@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 import types
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -41,27 +41,31 @@ import agent_os.integrations.gemini_adapter as _gemini_adapter_mod
 _anthropic_adapter_mod._HAS_ANTHROPIC = True
 _gemini_adapter_mod._HAS_GENAI = True
 
+import agent_os.integrations.mistral_adapter as _mistral_adapter_mod
 from agent_os.integrations.anthropic_adapter import (  # noqa: E402
     AnthropicKernel,
     GovernedAnthropicClient,
+)
+from agent_os.integrations.anthropic_adapter import (
     PolicyViolationError as AnthropicPolicyViolation,
-    RequestCancelledException,
 )
 from agent_os.integrations.gemini_adapter import (  # noqa: E402
     GeminiKernel,
     GovernedGeminiModel,
+)
+from agent_os.integrations.gemini_adapter import (
     PolicyViolationError as GeminiPolicyViolation,
 )
-import agent_os.integrations.mistral_adapter as _mistral_adapter_mod
 
 _mistral_adapter_mod._HAS_MISTRAL = True
 
 from agent_os.integrations.mistral_adapter import (  # noqa: E402
     GovernedMistralClient,
     MistralKernel,
+)
+from agent_os.integrations.mistral_adapter import (
     PolicyViolationError as MistralPolicyViolation,
 )
-
 
 # ============================================================================
 # Helpers
@@ -200,9 +204,7 @@ class TestAnthropicKernel:
         tool_block.id = "tu_1"
         tool_block.input = {}
 
-        client.messages.create.return_value = _make_anthropic_response(
-            content_blocks=[tool_block]
-        )
+        client.messages.create.return_value = _make_anthropic_response(content_blocks=[tool_block])
 
         kernel = AnthropicKernel(policy=policy)
         governed = kernel.wrap(client)
@@ -361,9 +363,7 @@ class TestGeminiKernel:
         candidate = MagicMock()
         candidate.content = content
 
-        model.generate_content.return_value = _make_gemini_response(
-            candidates=[candidate]
-        )
+        model.generate_content.return_value = _make_gemini_response(candidates=[candidate])
 
         kernel = GeminiKernel(policy=policy)
         governed = kernel.wrap(model)
@@ -431,9 +431,7 @@ class TestGeminiKernel:
         candidate.content = content
 
         model = MagicMock(model_name="gemini-pro")
-        model.generate_content.return_value = _make_gemini_response(
-            candidates=[candidate]
-        )
+        model.generate_content.return_value = _make_gemini_response(candidates=[candidate])
 
         kernel = GeminiKernel(policy=policy)
         governed = kernel.wrap(model)
@@ -506,9 +504,7 @@ class TestMistralKernel:
         """Exceeding the cumulative token limit should raise."""
         policy = GovernancePolicy(max_tokens=40)
         client = MagicMock()
-        client.chat.return_value = _make_mistral_response(
-            prompt_tokens=25, completion_tokens=20
-        )
+        client.chat.return_value = _make_mistral_response(prompt_tokens=25, completion_tokens=20)
 
         kernel = MistralKernel(policy=policy)
         governed = kernel.wrap(client)

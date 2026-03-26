@@ -63,9 +63,7 @@ class MetricsExporter:
     ) -> None:
         self._service_name = service_name
         if meter_provider:
-            self._meter: Meter = meter_provider.get_meter(
-                "agent_sre", version="0.1.0"
-            )
+            self._meter: Meter = meter_provider.get_meter("agent_sre", version="0.1.0")
         else:
             self._meter = metrics.get_meter("agent_sre", version="0.1.0")
 

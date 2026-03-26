@@ -115,7 +115,10 @@ class TestBraintrustExporter:
     def test_clear(self, exporter, sample_slo):
         """Clear removes all stored data."""
         exporter.log_eval(
-            trace_id="t1", agent_id="a1", slo_name="s1", scores={"x": 1.0},
+            trace_id="t1",
+            agent_id="a1",
+            slo_name="s1",
+            scores={"x": 1.0},
         )
         exporter.log_experiment("exp", [{"scores": {"x": 1.0}}])
 
@@ -129,10 +132,16 @@ class TestBraintrustExporter:
     def test_stats(self, exporter):
         """Get stats returns correct counts."""
         exporter.log_eval(
-            trace_id="t1", agent_id="a1", slo_name="s1", scores={"x": 1.0},
+            trace_id="t1",
+            agent_id="a1",
+            slo_name="s1",
+            scores={"x": 1.0},
         )
         exporter.log_eval(
-            trace_id="t2", agent_id="a2", slo_name="s2", scores={"y": 0.5},
+            trace_id="t2",
+            agent_id="a2",
+            slo_name="s2",
+            scores={"y": 0.5},
         )
         exporter.log_experiment("exp", [{"scores": {"x": 1.0}}])
 

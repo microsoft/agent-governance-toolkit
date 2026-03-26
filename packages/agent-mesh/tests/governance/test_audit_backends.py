@@ -7,8 +7,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from agentmesh.governance.audit import AuditEntry, AuditLog
 from agentmesh.governance.audit_backends import (
     AuditSink,
@@ -84,9 +82,7 @@ class TestSignedAuditEntry:
         e2 = _make_entry(entry_id="entry-2")
 
         s1 = SignedAuditEntry.from_entry(e1, previous_hash="", secret_key=SECRET_KEY)
-        s2 = SignedAuditEntry.from_entry(
-            e2, previous_hash=s1.content_hash, secret_key=SECRET_KEY
-        )
+        s2 = SignedAuditEntry.from_entry(e2, previous_hash=s1.content_hash, secret_key=SECRET_KEY)
 
         assert s2.previous_hash == s1.content_hash
         assert s2.previous_hash != ""

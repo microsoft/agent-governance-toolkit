@@ -32,7 +32,7 @@ dangerous_commands:
   - "mkfs"
   - "dd if=/dev/zero"
   - ":(){:|:&};:"  # fork bomb
-  
+
 protected_paths:
   - /etc
   - /usr

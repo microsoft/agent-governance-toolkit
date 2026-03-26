@@ -13,9 +13,8 @@ from __future__ import annotations
 import hashlib
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any, Dict, List, Optional
-
 
 from agentmesh.exceptions import TrustError  # noqa: E402
 
@@ -32,7 +31,7 @@ class PipelineIdentity:
     did: str
     public_key: str
     trust_score: float = 0.5
-    capabilities: List[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
     component_type: str = "custom"
 
     @classmethod
@@ -40,9 +39,9 @@ class PipelineIdentity:
         cls,
         component_name: str,
         component_type: str = "custom",
-        capabilities: Optional[List[str]] = None,
+        capabilities: list[str] | None = None,
         trust_score: float = 0.5,
-    ) -> "PipelineIdentity":
+    ) -> PipelineIdentity:
         """Generate identity for a Haystack component."""
         seed = f"haystack:{component_name}:{component_type}:{time.time_ns()}"
         did_hash = hashlib.sha256(seed.encode()).hexdigest()[:32]
@@ -65,8 +64,8 @@ class PipelineAuditEntry:
     timestamp: datetime
     trust_score: float
     verified: bool
-    input_keys: List[str] = field(default_factory=list)
-    output_keys: List[str] = field(default_factory=list)
+    input_keys: list[str] = field(default_factory=list)
+    output_keys: list[str] = field(default_factory=list)
     reason: str = ""
     duration_ms: float = 0.0
 
@@ -99,7 +98,7 @@ class TrustGateComponent:
     def __init__(
         self,
         min_trust_score: float = 0.5,
-        required_capabilities: Optional[List[str]] = None,
+        required_capabilities: list[str] | None = None,
         on_failure: str = "block",
         audit_logging: bool = True,
     ):
@@ -107,8 +106,8 @@ class TrustGateComponent:
         self.required_capabilities = required_capabilities or []
         self.on_failure = on_failure
         self.audit_logging = audit_logging
-        self._identities: Dict[str, PipelineIdentity] = {}
-        self._audit_log: List[PipelineAuditEntry] = []
+        self._identities: dict[str, PipelineIdentity] = {}
+        self._audit_log: list[PipelineAuditEntry] = []
 
     def register_component(
         self,
@@ -121,9 +120,9 @@ class TrustGateComponent:
     def run(
         self,
         component_name: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         stage: str = "default",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run trust verification for a pipeline stage.
 
         Args:
@@ -137,9 +136,7 @@ class TrustGateComponent:
         """
         identity = self._identities.get(component_name)
         if identity is None:
-            raise HaystackTrustError(
-                f"Component '{component_name}' not registered"
-            )
+            raise HaystackTrustError(f"Component '{component_name}' not registered")
 
         verified = True
         reason = "Verified"
@@ -155,20 +152,21 @@ class TrustGateComponent:
         if verified and identity.trust_score < self.min_trust_score:
             verified = False
             reason = (
-                f"Trust score {identity.trust_score:.2f} "
-                f"below required {self.min_trust_score:.2f}"
+                f"Trust score {identity.trust_score:.2f} below required {self.min_trust_score:.2f}"
             )
 
         if self.audit_logging:
-            self._audit_log.append(PipelineAuditEntry(
-                component_name=component_name,
-                stage=stage,
-                timestamp=datetime.now(timezone.utc),
-                trust_score=identity.trust_score,
-                verified=verified,
-                input_keys=list(data.keys()),
-                reason=reason,
-            ))
+            self._audit_log.append(
+                PipelineAuditEntry(
+                    component_name=component_name,
+                    stage=stage,
+                    timestamp=datetime.now(UTC),
+                    trust_score=identity.trust_score,
+                    verified=verified,
+                    input_keys=list(data.keys()),
+                    reason=reason,
+                )
+            )
 
         if not verified and self.on_failure == "block":
             raise HaystackTrustError(reason)
@@ -185,7 +183,7 @@ class TrustGateComponent:
             },
         }
 
-    def get_audit_log(self) -> List[PipelineAuditEntry]:
+    def get_audit_log(self) -> list[PipelineAuditEntry]:
         """Return the pipeline audit log."""
         return self._audit_log.copy()
 
@@ -223,21 +221,21 @@ class TrustAgentComponent:
         self,
         identity: PipelineIdentity,
         min_trust_score: float = 0.5,
-        required_capabilities: Optional[List[str]] = None,
+        required_capabilities: list[str] | None = None,
         audit_logging: bool = True,
     ):
         self.identity = identity
         self.min_trust_score = min_trust_score
         self.required_capabilities = required_capabilities or []
         self.audit_logging = audit_logging
-        self._audit_log: List[PipelineAuditEntry] = []
+        self._audit_log: list[PipelineAuditEntry] = []
 
     def run(
         self,
         query: str,
         handler: Any = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute the agent with trust verification.
 
         Args:
@@ -275,17 +273,19 @@ class TrustAgentComponent:
         elapsed_ms = (time.time() - start) * 1000
 
         if self.audit_logging:
-            self._audit_log.append(PipelineAuditEntry(
-                component_name=self.identity.component_name,
-                stage="agent_execution",
-                timestamp=datetime.now(timezone.utc),
-                trust_score=self.identity.trust_score,
-                verified=verified,
-                input_keys=["query"] + list(kwargs.keys()),
-                output_keys=["result"] if result is not None else [],
-                reason=reason,
-                duration_ms=elapsed_ms,
-            ))
+            self._audit_log.append(
+                PipelineAuditEntry(
+                    component_name=self.identity.component_name,
+                    stage="agent_execution",
+                    timestamp=datetime.now(UTC),
+                    trust_score=self.identity.trust_score,
+                    verified=verified,
+                    input_keys=["query"] + list(kwargs.keys()),
+                    output_keys=["result"] if result is not None else [],
+                    reason=reason,
+                    duration_ms=elapsed_ms,
+                )
+            )
 
         if not verified:
             raise HaystackTrustError(reason)
@@ -300,7 +300,7 @@ class TrustAgentComponent:
             },
         }
 
-    def get_audit_log(self) -> List[PipelineAuditEntry]:
+    def get_audit_log(self) -> list[PipelineAuditEntry]:
         """Return the agent audit log."""
         return self._audit_log.copy()
 
@@ -319,7 +319,7 @@ class TrustedPipeline:
     ):
         self.min_trust_score = min_trust_score
         self.audit_logging = audit_logging
-        self._components: Dict[str, PipelineIdentity] = {}
+        self._components: dict[str, PipelineIdentity] = {}
         self._gate = TrustGateComponent(
             min_trust_score=min_trust_score,
             audit_logging=audit_logging,
@@ -328,7 +328,7 @@ class TrustedPipeline:
     def add_component(
         self,
         name: str,
-        capabilities: Optional[List[str]] = None,
+        capabilities: list[str] | None = None,
         trust_score: float = 0.5,
     ) -> PipelineIdentity:
         """Add a component with trust identity."""
@@ -344,9 +344,9 @@ class TrustedPipeline:
     def verify_stage(
         self,
         component_name: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         stage: str = "default",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Verify trust for a pipeline stage."""
         return self._gate.run(component_name, data, stage)
 
@@ -356,7 +356,7 @@ class TrustedPipeline:
             identity = self._components[component_name]
             identity.trust_score = max(0.0, min(1.0, identity.trust_score + delta))
 
-    def get_pipeline_report(self) -> Dict[str, Any]:
+    def get_pipeline_report(self) -> dict[str, Any]:
         """Get trust report for the entire pipeline."""
         audit = self._gate.get_audit_log()
         return {

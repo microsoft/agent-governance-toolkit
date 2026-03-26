@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Metrics Dashboard Panel - Real-time monitoring dashboard
- * 
+ *
  * Provides visualization of agent activity, policy enforcement,
  * and performance metrics.
  */
@@ -50,7 +50,7 @@ export class MetricsDashboardPanel {
         }, 30000);
 
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
-        
+
         this._panel.webview.onDidReceiveMessage(
             async message => {
                 switch (message.type) {
@@ -96,7 +96,7 @@ export class MetricsDashboardPanel {
     private _getMetrics(timeRange: string = 'today'): MetricsData {
         const logs = this._auditLogger.getAll();
         const now = new Date();
-        
+
         let startDate: Date;
         switch (timeRange) {
             case 'week':
@@ -110,11 +110,11 @@ export class MetricsDashboardPanel {
         }
 
         const filteredLogs = logs.filter(log => new Date(log.timestamp) >= startDate);
-        
+
         // Count violations by type
         const violationsByType: Record<string, number> = {};
         const violationCounts: Record<string, number> = {};
-        
+
         filteredLogs.forEach(log => {
             if (log.type === 'blocked') {
                 const violation = log.violation || 'unknown';
@@ -158,10 +158,10 @@ export class MetricsDashboardPanel {
     private async _exportReport(format: 'json' | 'csv'): Promise<void> {
         const metrics = this._getMetrics('month');
         const logs = this._auditLogger.getAll();
-        
+
         let content: string;
         let extension: string;
-        
+
         if (format === 'json') {
             content = JSON.stringify({ metrics, logs }, null, 2);
             extension = 'json';
@@ -182,8 +182,8 @@ export class MetricsDashboardPanel {
 
         const uri = await vscode.window.showSaveDialog({
             defaultUri: vscode.Uri.file(`agent-os-report.${extension}`),
-            filters: format === 'json' 
-                ? { 'JSON': ['json'] } 
+            filters: format === 'json'
+                ? { 'JSON': ['json'] }
                 : { 'CSV': ['csv'] }
         });
 
@@ -211,7 +211,7 @@ export class MetricsDashboardPanel {
         const webview = this._panel.webview;
         this._panel.title = 'Agent OS Metrics Dashboard';
         this._panel.webview.html = this._getHtmlForWebview(webview);
-        
+
         // Send initial metrics
         setTimeout(() => this._sendMetricsUpdate(), 100);
     }
@@ -521,15 +521,15 @@ export class MetricsDashboardPanel {
         function updateChart(data) {
             const chart = document.getElementById('activityChart');
             const max = Math.max(...data, 1);
-            
-            chart.innerHTML = data.map((value, i) => 
+
+            chart.innerHTML = data.map((value, i) =>
                 \`<div class="bar" style="height: \${(value / max) * 100}%" data-value="\${value}"></div>\`
             ).join('');
         }
 
         function updateViolations(violations) {
             const container = document.getElementById('topViolations');
-            
+
             if (!violations || violations.length === 0) {
                 container.innerHTML = '<p style="color: var(--vscode-descriptionForeground); text-align: center;">No violations recorded</p>';
                 return;
@@ -550,16 +550,16 @@ export class MetricsDashboardPanel {
             const message = event.data;
             if (message.type === 'metricsUpdate') {
                 const m = message.metrics;
-                
+
                 document.getElementById('blockedToday').textContent = m.blockedToday;
                 document.getElementById('warningsToday').textContent = m.warningsToday;
                 document.getElementById('cmvkReviewsToday').textContent = m.cmvkReviewsToday;
                 document.getElementById('totalLogs').textContent = m.totalLogs;
-                
+
                 document.getElementById('p50').textContent = m.latencyPercentiles.p50;
                 document.getElementById('p95').textContent = m.latencyPercentiles.p95;
                 document.getElementById('p99').textContent = m.latencyPercentiles.p99;
-                
+
                 updateChart(m.activityByHour);
                 updateViolations(m.topViolations);
             }

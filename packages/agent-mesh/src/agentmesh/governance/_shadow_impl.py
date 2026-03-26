@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -113,7 +113,7 @@ class SimulatedAction:
 
     def __post_init__(self) -> None:
         if self.timestamp is None:
-            self.timestamp = datetime.now(timezone.utc)
+            self.timestamp = datetime.now(UTC)
 
 
 @dataclass
@@ -166,7 +166,7 @@ class ShadowResult:
     production_rule: str | None = None
     diverged: bool = False
     divergence_reason: str | None = None
-    evaluated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    evaluated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     shadow_latency_ms: float | None = None
     production_latency_ms: float | None = None
 
@@ -205,7 +205,9 @@ class ShadowResult:
         factors = [
             self.match_rate,
             self.avg_similarity,
-            1.0 if self.avg_latency_delta_ms <= 0 else max(0.0, 1.0 - self.avg_latency_delta_ms / 5000),
+            1.0
+            if self.avg_latency_delta_ms <= 0
+            else max(0.0, 1.0 - self.avg_latency_delta_ms / 5000),
             1.0 if self.avg_cost_delta_usd <= 0 else max(0.0, 1.0 - self.avg_cost_delta_usd / 1.0),
         ]
         return sum(factors) / len(factors)
@@ -224,19 +226,21 @@ class ShadowResult:
             "confidence_score": self.confidence_score,
         }
         if self.action_id:
-            data.update({
-                "action_id": self.action_id,
-                "shadow_allowed": self.shadow_allowed,
-                "shadow_action": self.shadow_action,
-                "shadow_rule": self.shadow_rule,
-                "production_allowed": self.production_allowed,
-                "production_action": self.production_action,
-                "production_rule": self.production_rule,
-                "diverged": self.diverged,
-                "divergence_reason": self.divergence_reason,
-                "shadow_latency_ms": self.shadow_latency_ms,
-                "production_latency_ms": self.production_latency_ms,
-            })
+            data.update(
+                {
+                    "action_id": self.action_id,
+                    "shadow_allowed": self.shadow_allowed,
+                    "shadow_action": self.shadow_action,
+                    "shadow_rule": self.shadow_rule,
+                    "production_allowed": self.production_allowed,
+                    "production_action": self.production_action,
+                    "production_rule": self.production_rule,
+                    "diverged": self.diverged,
+                    "divergence_reason": self.divergence_reason,
+                    "shadow_latency_ms": self.shadow_latency_ms,
+                    "production_latency_ms": self.production_latency_ms,
+                }
+            )
         return data
 
 
@@ -245,7 +249,7 @@ class ShadowSession:
     """A governance shadow-mode evaluation session."""
 
     session_id: str = field(default_factory=lambda: f"shadow_{uuid.uuid4().hex[:12]}")
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     agent_dids: list[str] = field(default_factory=list)
     policy_names: list[str] = field(default_factory=list)
     total_evaluated: int = 0
@@ -329,12 +333,12 @@ class ShadowMode:
         if self.policy_engine is None:
             raise RuntimeError("A policy_engine is required for governance shadow evaluation")
 
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         shadow_decision = self.policy_engine.evaluate(
             agent_did=action.agent_did,
             context=action.context,
         )
-        shadow_latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+        shadow_latency = (datetime.now(UTC) - start).total_seconds() * 1000
 
         result = ShadowResult(
             action_id=action.action_id,
@@ -394,7 +398,7 @@ class ShadowMode:
             raise ValueError("No active session")
         session = self._sessions[sid]
         session.active = False
-        session.ended_at = datetime.now(timezone.utc)
+        session.ended_at = datetime.now(UTC)
         if sid == self._active_session:
             self._active_session = None
         return session

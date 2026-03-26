@@ -28,7 +28,7 @@ logger = logging.getLogger("agent_os.autogen")
 
 # Patterns used to detect potential PII / secrets in state changes
 _PII_PATTERNS = [
-    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),           # SSN
+    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),  # SSN
     re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),  # email
     re.compile(r"\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+", re.IGNORECASE),
 ]
@@ -122,7 +122,7 @@ class AutoGenKernel(BaseIntegration):
         governed = []
 
         for agent in agents:
-            agent_id = getattr(agent, 'name', f"autogen-{id(agent)}")
+            agent_id = getattr(agent, "name", f"autogen-{id(agent)}")
             ctx = self.create_context(agent_id)
 
             # Store reference
@@ -131,7 +131,7 @@ class AutoGenKernel(BaseIntegration):
 
             # Store original methods before wrapping
             self._original_methods[agent_id] = {}
-            for method_name in ('initiate_chat', 'generate_reply', 'receive'):
+            for method_name in ("initiate_chat", "generate_reply", "receive"):
                 if hasattr(agent, method_name):
                     self._original_methods[agent_id][method_name] = getattr(agent, method_name)
 
@@ -167,7 +167,7 @@ class AutoGenKernel(BaseIntegration):
             ctx: Execution context for this agent.
             agent_id: Unique identifier for audit logging.
         """
-        if not hasattr(agent, 'initiate_chat'):
+        if not hasattr(agent, "initiate_chat"):
             return
 
         original = agent.initiate_chat
@@ -178,7 +178,9 @@ class AutoGenKernel(BaseIntegration):
                 raise PolicyViolationError(f"Agent '{agent_id}' is stopped (SIGSTOP)")
 
             try:
-                allowed, reason = kernel.pre_execute(ctx, {"recipient": str(recipient), "message": message})
+                allowed, reason = kernel.pre_execute(
+                    ctx, {"recipient": str(recipient), "message": message}
+                )
                 if not allowed:
                     logger.info("Policy DENY on initiate_chat for %s: %s", agent_id, reason)
                     raise PolicyViolationError(reason)
@@ -220,7 +222,7 @@ class AutoGenKernel(BaseIntegration):
             ctx: Execution context for this agent.
             agent_id: Unique identifier for audit logging.
         """
-        if not hasattr(agent, 'generate_reply'):
+        if not hasattr(agent, "generate_reply"):
             return
 
         original = agent.generate_reply
@@ -231,7 +233,9 @@ class AutoGenKernel(BaseIntegration):
                 return f"[BLOCKED: Agent '{agent_id}' is stopped (SIGSTOP)]"
 
             try:
-                allowed, reason = kernel.pre_execute(ctx, {"messages": messages, "sender": str(sender)})
+                allowed, reason = kernel.pre_execute(
+                    ctx, {"messages": messages, "sender": str(sender)}
+                )
                 if not allowed:
                     logger.info("Policy DENY on generate_reply for %s: %s", agent_id, reason)
                     return f"[BLOCKED: {reason}]"
@@ -271,7 +275,7 @@ class AutoGenKernel(BaseIntegration):
             ctx: Execution context for this agent.
             agent_id: Unique identifier for audit logging.
         """
-        if not hasattr(agent, 'receive'):
+        if not hasattr(agent, "receive"):
             return
 
         original = agent.receive
@@ -282,7 +286,9 @@ class AutoGenKernel(BaseIntegration):
                 raise PolicyViolationError(f"Agent '{agent_id}' is stopped (SIGSTOP)")
 
             try:
-                allowed, reason = kernel.pre_execute(ctx, {"message": message, "sender": str(sender)})
+                allowed, reason = kernel.pre_execute(
+                    ctx, {"message": message, "sender": str(sender)}
+                )
                 if not allowed:
                     logger.info("Policy DENY on receive for %s: %s", agent_id, reason)
                     raise PolicyViolationError(reason)
@@ -313,9 +319,7 @@ class AutoGenKernel(BaseIntegration):
 
     # ── Deep Integration Hooks ────────────────────────────────────
 
-    def _intercept_function_calls(
-        self, agent: Any, ctx: ExecutionContext, agent_id: str
-    ) -> None:
+    def _intercept_function_calls(self, agent: Any, ctx: ExecutionContext, agent_id: str) -> None:
         """Wrap the function_map on an AutoGen AssistantAgent.
 
         AutoGen agents store callable functions in a ``function_map`` dict.
@@ -377,9 +381,7 @@ class AutoGenKernel(BaseIntegration):
             governed_function._fn_governed = True
             function_map[func_name] = governed_function
 
-    def _intercept_groupchat(
-        self, agent: Any, ctx: ExecutionContext, agent_id: str
-    ) -> None:
+    def _intercept_groupchat(self, agent: Any, ctx: ExecutionContext, agent_id: str) -> None:
         """Hook into GroupChat's select_speaker and message routing.
 
         If the agent is a GroupChat manager (has a ``groupchat`` attribute),
@@ -417,13 +419,13 @@ class AutoGenKernel(BaseIntegration):
                 matched = kernel.policy.matches_pattern(speaker_name)
                 if matched:
                     raise PolicyViolationError(
-                        f"Speaker '{speaker_name}' blocked: "
-                        f"pattern '{matched[0]}' detected"
+                        f"Speaker '{speaker_name}' blocked: pattern '{matched[0]}' detected"
                     )
 
                 logger.debug(
                     "GroupChat speaker selected: manager=%s speaker=%s",
-                    agent_id, speaker_name,
+                    agent_id,
+                    speaker_name,
                 )
                 return result
 
@@ -446,20 +448,20 @@ class AutoGenKernel(BaseIntegration):
                             f"GroupChat message blocked: pattern '{matched[0]}' detected"
                         )
 
-                    kernel._groupchat_message_log.append({
-                        "groupchat_manager": agent_id,
-                        "route_method": _attr,
-                        "message_summary": message_str[:200],
-                        "timestamp": datetime.now().isoformat(),
-                    })
+                    kernel._groupchat_message_log.append(
+                        {
+                            "groupchat_manager": agent_id,
+                            "route_method": _attr,
+                            "message_summary": message_str[:200],
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
                     return _orig(*args, **kwargs)
 
                 governed_route._gc_governed = True
                 setattr(groupchat, route_attr, governed_route)
 
-    def _intercept_state_changes(
-        self, agent: Any, ctx: ExecutionContext, agent_id: str
-    ) -> None:
+    def _intercept_state_changes(self, agent: Any, ctx: ExecutionContext, agent_id: str) -> None:
         """Track agent state changes for governance audit.
 
         Wraps ``update_system_message`` and ``reset`` (if present) to
@@ -493,16 +495,17 @@ class AutoGenKernel(BaseIntegration):
                 matched = kernel.policy.matches_pattern(content)
                 if matched:
                     raise PolicyViolationError(
-                        f"State update blocked for '{agent_id}': "
-                        f"pattern '{matched[0]}' detected"
+                        f"State update blocked for '{agent_id}': pattern '{matched[0]}' detected"
                     )
 
-                kernel._state_change_log.append({
-                    "agent_id": agent_id,
-                    "action": "update_system_message",
-                    "content_summary": content[:200],
-                    "timestamp": datetime.now().isoformat(),
-                })
+                kernel._state_change_log.append(
+                    {
+                        "agent_id": agent_id,
+                        "action": "update_system_message",
+                        "content_summary": content[:200],
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
                 return original_update(*args, **kwargs)
 
             governed_update._state_governed = True
@@ -514,11 +517,13 @@ class AutoGenKernel(BaseIntegration):
 
             @functools.wraps(original_reset)
             def governed_reset(*args: Any, **kwargs: Any) -> Any:
-                kernel._state_change_log.append({
-                    "agent_id": agent_id,
-                    "action": "reset",
-                    "timestamp": datetime.now().isoformat(),
-                })
+                kernel._state_change_log.append(
+                    {
+                        "agent_id": agent_id,
+                        "action": "reset",
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
                 logger.info("Agent state reset: agent=%s", agent_id)
                 return original_reset(*args, **kwargs)
 
@@ -537,7 +542,7 @@ class AutoGenKernel(BaseIntegration):
         Returns:
             The agent with its original, un-governed methods restored.
         """
-        agent_id = getattr(governed_agent, 'name', f"autogen-{id(governed_agent)}")
+        agent_id = getattr(governed_agent, "name", f"autogen-{id(governed_agent)}")
         originals = self._original_methods.get(agent_id, {})
 
         for method_name, original_method in originals.items():
@@ -615,6 +620,4 @@ def govern(
         >>> from agent_os.integrations.autogen_adapter import govern
         >>> governed_agents = govern(assistant, user_proxy)
     """
-    return AutoGenKernel(
-        policy, timeout_seconds=timeout_seconds, on_error=on_error
-    ).govern(*agents)
+    return AutoGenKernel(policy, timeout_seconds=timeout_seconds, on_error=on_error).govern(*agents)

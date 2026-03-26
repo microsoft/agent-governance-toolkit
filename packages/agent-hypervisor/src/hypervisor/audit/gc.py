@@ -77,7 +77,9 @@ class EphemeralGC:
             retained_hash=True,
             purged_vfs_files=0,
             purged_caches=0,
-            storage_before_bytes=estimated_vfs_bytes + estimated_cache_bytes + estimated_delta_bytes,
+            storage_before_bytes=estimated_vfs_bytes
+            + estimated_cache_bytes
+            + estimated_delta_bytes,
             storage_after_bytes=estimated_vfs_bytes + estimated_cache_bytes + estimated_delta_bytes,
         )
         self._gc_history.append(result)

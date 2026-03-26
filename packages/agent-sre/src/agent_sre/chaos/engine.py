@@ -70,7 +70,9 @@ class Fault:
     # Adversarial fault factory methods
 
     @staticmethod
-    def prompt_injection(target: str, technique: str = "direct_override", rate: float = 1.0) -> Fault:
+    def prompt_injection(
+        target: str, technique: str = "direct_override", rate: float = 1.0
+    ) -> Fault:
         """Inject a prompt injection attack against a target."""
         return Fault(FaultType.PROMPT_INJECTION, target, rate, {"technique": technique})
 
@@ -120,7 +122,9 @@ class Fault:
     @staticmethod
     def llm_degraded(provider: str, quality: float = 0.5, rate: float = 1.0) -> Fault:
         """Simulate LLM quality degradation (incoherent or low-quality responses)."""
-        return Fault(FaultType.LATENCY_INJECTION, provider, rate, {"quality": quality, "degraded": True})
+        return Fault(
+            FaultType.LATENCY_INJECTION, provider, rate, {"quality": quality, "degraded": True}
+        )
 
     @staticmethod
     def delegation_reject(from_agent: str, rate: float = 0.1) -> Fault:
@@ -145,13 +149,17 @@ class Fault:
     @staticmethod
     def cost_spike(tool: str, multiplier: float = 10.0) -> Fault:
         """Simulate a sudden cost spike on a tool or provider."""
-        return Fault(FaultType.ERROR_INJECTION, tool, 1.0, {"error": "cost_spike", "multiplier": multiplier})
+        return Fault(
+            FaultType.ERROR_INJECTION, tool, 1.0, {"error": "cost_spike", "multiplier": multiplier}
+        )
 
     # Behavioral fault factory methods
 
     @staticmethod
     def deadlock_injection(
-        agents: list[str], timeout_ms: int = 30000, rate: float = 1.0,
+        agents: list[str],
+        timeout_ms: int = 30000,
+        rate: float = 1.0,
     ) -> Fault:
         """Simulate circular dependency deadlock between agents."""
         return Fault(
@@ -291,21 +299,27 @@ class ChaosExperiment:
         self.state = ExperimentState.RUNNING
         self.started_at = time.time()
 
-    def inject_fault(self, fault: Fault, applied: bool = True, details: dict[str, Any] | None = None) -> None:
+    def inject_fault(
+        self, fault: Fault, applied: bool = True, details: dict[str, Any] | None = None
+    ) -> None:
         """Record a fault injection event."""
-        self.injection_events.append(FaultInjectionEvent(
-            fault_type=fault.fault_type,
-            target=fault.target,
-            applied=applied,
-            details=details or fault.params,
-        ))
+        self.injection_events.append(
+            FaultInjectionEvent(
+                fault_type=fault.fault_type,
+                target=fault.target,
+                applied=applied,
+                details=details or fault.params,
+            )
+        )
 
     def check_abort(self, metrics: dict[str, float]) -> bool:
         """Check abort conditions. Returns True if experiment should stop."""
         for condition in self.abort_conditions:
             value = metrics.get(condition.metric)
             if value is not None and condition.should_abort(value):
-                self.abort(reason=f"{condition.metric} = {value} (threshold: {condition.threshold})")
+                self.abort(
+                    reason=f"{condition.metric} = {value} (threshold: {condition.threshold})"
+                )
                 return True
         return False
 

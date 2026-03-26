@@ -8,28 +8,28 @@ Handles registration, peer verification, and reputation sync.
 """
 
 from datetime import datetime, timezone
-from typing import Optional, Literal
-import asyncio
+from typing import Literal, Optional
+
 import aiohttp
 
-from .schemas.manifest import AgentManifest
-from .registry import AgentRegistry, RegistrationResult, PeerVerification
-from .reputation import ReputationEngine, TrustScore
-from .escrow import ProofOfOutcome, EscrowManager
 from .arbiter import Arbiter
-from .dmz import DMZProtocol, DataHandlingPolicy
+from .dmz import DataHandlingPolicy, DMZProtocol
+from .escrow import EscrowManager, ProofOfOutcome
 from .exceptions import (
-    IATPUnverifiedPeerException,
     IATPInsufficientTrustException,
+    IATPUnverifiedPeerException,
 )
+from .registry import AgentRegistry, PeerVerification, RegistrationResult
+from .reputation import ReputationEngine
+from .schemas.manifest import AgentManifest
 
 
 class NexusClient:
     """
     Client for Agent OS agents to interact with Nexus.
-    
+
     Installed in: agent_os.kernel.network
-    
+
     Provides:
     - Agent registration and updates
     - Peer verification before IATP handshake
@@ -37,11 +37,11 @@ class NexusClient:
     - Escrow/reward management
     - DMZ data transfer
     """
-    
+
     # Default API endpoints
     DEFAULT_API_URL = "https://api.nexus.agent-os.dev/v1"
     DEFAULT_TRUST_THRESHOLD = 700
-    
+
     def __init__(
         self,
         agent_manifest: AgentManifest,
@@ -56,11 +56,11 @@ class NexusClient:
         self.base_url = api_url or self.DEFAULT_API_URL
         self.trust_threshold = trust_threshold
         self.local_mode = local_mode
-        
+
         # Local cache of peer reputations
         self._known_peers: dict[str, int] = {}  # DID -> Trust Score
         self._last_sync: Optional[datetime] = None
-        
+
         # For local mode testing
         if local_mode:
             self._local_registry = AgentRegistry()
@@ -68,25 +68,25 @@ class NexusClient:
             self._local_escrow = EscrowManager(self._local_reputation)
             self._local_arbiter = Arbiter(self._local_reputation)
             self._local_dmz = DMZProtocol()
-    
+
     @property
     def agent_did(self) -> str:
         """Get this agent's DID."""
         return self.manifest.identity.did
-    
+
     # ==================== Registration ====================
-    
+
     async def register(self) -> RegistrationResult:
         """
         Register this agent on Nexus.
-        
+
         Returns:
             RegistrationResult with status and initial trust score
         """
         if self.local_mode:
             signature = self._generate_signature(self.manifest.model_dump())
             return await self._local_registry.register(self.manifest, signature)
-        
+
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{self.base_url}/agents",
@@ -95,15 +95,15 @@ class NexusClient:
             ) as resp:
                 data = await resp.json()
                 return RegistrationResult(**data)
-    
+
     async def update_manifest(self, manifest: AgentManifest) -> RegistrationResult:
         """Update this agent's manifest."""
         self.manifest = manifest
-        
+
         if self.local_mode:
             signature = self._generate_signature(manifest.model_dump())
             return await self._local_registry.update(self.agent_did, manifest, signature)
-        
+
         async with aiohttp.ClientSession() as session:
             async with session.put(
                 f"{self.base_url}/agents/{self.agent_did}",
@@ -112,22 +112,22 @@ class NexusClient:
             ) as resp:
                 data = await resp.json()
                 return RegistrationResult(**data)
-    
+
     async def deregister(self) -> bool:
         """Remove this agent from Nexus."""
         if self.local_mode:
             signature = self._generate_signature({"did": self.agent_did})
             return await self._local_registry.deregister(self.agent_did, signature)
-        
+
         async with aiohttp.ClientSession() as session:
             async with session.delete(
                 f"{self.base_url}/agents/{self.agent_did}",
                 headers=self._headers(),
             ) as resp:
                 return resp.status == 200
-    
+
     # ==================== Peer Verification ====================
-    
+
     async def verify_peer(
         self,
         peer_did: str,
@@ -136,37 +136,35 @@ class NexusClient:
     ) -> PeerVerification:
         """
         Verify a peer agent before IATP handshake.
-        
+
         This is the core viral mechanism - unverified peers get
         directed to register on Nexus.
-        
+
         Args:
             peer_did: DID of the peer to verify
             min_score: Minimum required trust score (default: trust_threshold)
             required_capabilities: Capabilities the peer must have
-            
+
         Returns:
             PeerVerification result
-            
+
         Raises:
             IATPUnverifiedPeerException: If peer is not registered
             IATPInsufficientTrustException: If peer's score is below threshold
         """
         threshold = min_score or self.trust_threshold
-        
+
         if self.local_mode:
             return await self._local_registry.verify_peer(
                 peer_did, threshold, required_capabilities
             )
-        
+
         # Check local cache first
         if peer_did in self._known_peers:
             cached_score = self._known_peers[peer_did]
             if cached_score < threshold:
-                raise IATPInsufficientTrustException(
-                    peer_did, cached_score, threshold
-                )
-        
+                raise IATPInsufficientTrustException(peer_did, cached_score, threshold)
+
         # Verify with Nexus API
         async with aiohttp.ClientSession() as session:
             async with session.get(
@@ -179,25 +177,25 @@ class NexusClient:
             ) as resp:
                 if resp.status == 404:
                     raise IATPUnverifiedPeerException(peer_did)
-                
+
                 data = await resp.json()
-                
+
                 if data.get("error") == "IATP_INSUFFICIENT_TRUST":
                     raise IATPInsufficientTrustException(
                         peer_did,
                         data["current_score"],
                         data["required_score"],
                     )
-                
+
                 # Update cache
                 self._known_peers[peer_did] = data.get("trust_score", 0)
-                
+
                 return PeerVerification(**data)
-    
+
     async def quick_verify(self, peer_did: str) -> bool:
         """
         Quick check if peer meets trust threshold.
-        
+
         Uses local cache when possible for speed.
         """
         try:
@@ -205,21 +203,21 @@ class NexusClient:
             return True
         except (IATPUnverifiedPeerException, IATPInsufficientTrustException):
             return False
-    
+
     # ==================== Reputation Sync ====================
-    
+
     async def sync_reputation(
         self,
         force: bool = False,
     ) -> dict[str, int]:
         """
         Sync local known_peers cache with global reputation.
-        
+
         Called periodically by the kernel to keep cache fresh.
-        
+
         Args:
             force: Force sync even if recently synced
-            
+
         Returns:
             Updated mapping of DID -> Trust Score
         """
@@ -228,7 +226,7 @@ class NexusClient:
             elapsed = (datetime.now(timezone.utc) - self._last_sync).total_seconds()
             if elapsed < 300:  # 5 minutes
                 return self._known_peers
-        
+
         if self.local_mode:
             self._known_peers = await self._local_registry.get_reputation_sync()
         else:
@@ -239,10 +237,10 @@ class NexusClient:
                 ) as resp:
                     data = await resp.json()
                     self._known_peers = data.get("scores", {})
-        
+
         self._last_sync = datetime.now(timezone.utc)
         return self._known_peers
-    
+
     async def report_outcome(
         self,
         task_id: str,
@@ -253,7 +251,7 @@ class NexusClient:
         if self.local_mode:
             self._local_reputation.record_task_outcome(peer_did, outcome)
             return
-        
+
         async with aiohttp.ClientSession() as session:
             await session.post(
                 f"{self.base_url}/reputation/{peer_did}/report",
@@ -264,9 +262,9 @@ class NexusClient:
                 },
                 headers=self._headers(),
             )
-    
+
     # ==================== Escrow / Proof of Outcome ====================
-    
+
     async def create_escrow(
         self,
         provider_did: str,
@@ -276,7 +274,7 @@ class NexusClient:
     ) -> dict:
         """
         Create an escrow for a task.
-        
+
         Args:
             provider_did: DID of the agent providing the service
             task_hash: SHA-256 hash of the task specification
@@ -293,7 +291,7 @@ class NexusClient:
                 timeout_seconds=timeout_seconds,
             )
             return receipt.model_dump()
-        
+
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{self.base_url}/escrow",
@@ -307,7 +305,7 @@ class NexusClient:
                 headers=self._headers(),
             ) as resp:
                 return await resp.json()
-    
+
     async def release_escrow(
         self,
         escrow_id: str,
@@ -328,7 +326,7 @@ class NexusClient:
                 "credits_to_provider": resolution.credits_to_provider,
                 "credits_to_requester": resolution.credits_to_requester,
             }
-        
+
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{self.base_url}/escrow/{escrow_id}/release",
@@ -339,9 +337,9 @@ class NexusClient:
                 headers=self._headers(),
             ) as resp:
                 return await resp.json()
-    
+
     # ==================== DMZ Protocol ====================
-    
+
     async def initiate_dmz_transfer(
         self,
         receiver_did: str,
@@ -359,10 +357,10 @@ class NexusClient:
                 policy=policy,
             )
             return request.model_dump()
-        
+
         # Would implement API call for remote mode
         raise NotImplementedError("Remote DMZ not yet implemented")
-    
+
     async def sign_dmz_policy(
         self,
         transfer_id: str,
@@ -370,25 +368,23 @@ class NexusClient:
         """Sign a DMZ data handling policy to receive access."""
         if self.local_mode:
             signature = self._generate_signature({"transfer_id": transfer_id})
-            signed = await self._local_dmz.sign_policy(
-                transfer_id, self.agent_did, signature
-            )
+            signed = await self._local_dmz.sign_policy(transfer_id, self.agent_did, signature)
             return {
                 "policy_hash": signed.policy_hash,
                 "signed_at": signed.signed_at.isoformat(),
             }
-        
+
         raise NotImplementedError("Remote DMZ not yet implemented")
-    
+
     async def get_dmz_key(self, transfer_id: str) -> bytes:
         """Get decryption key for a DMZ transfer."""
         if self.local_mode:
             return await self._local_dmz.release_key(transfer_id, self.agent_did)
-        
+
         raise NotImplementedError("Remote DMZ not yet implemented")
-    
+
     # ==================== Discovery ====================
-    
+
     async def discover_agents(
         self,
         capabilities: Optional[list[str]] = None,
@@ -405,14 +401,14 @@ class NexusClient:
                 limit=limit,
             )
             return [m.model_dump() for m in manifests]
-        
+
         async with aiohttp.ClientSession() as session:
             params = {"min_score": min_score, "limit": limit}
             if capabilities:
                 params["capabilities"] = ",".join(capabilities)
             if privacy_policy:
                 params["privacy_policy"] = privacy_policy
-            
+
             async with session.get(
                 f"{self.base_url}/agents/discover",
                 params=params,
@@ -420,14 +416,14 @@ class NexusClient:
             ) as resp:
                 data = await resp.json()
                 return data.get("agents", [])
-    
+
     # ==================== Credits ====================
-    
+
     async def get_credits(self) -> int:
         """Get credit balance."""
         if self.local_mode:
             return self._local_escrow.get_agent_credits(self.agent_did)
-        
+
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 f"{self.base_url}/credits/{self.agent_did}",
@@ -435,9 +431,9 @@ class NexusClient:
             ) as resp:
                 data = await resp.json()
                 return data.get("credits", 0)
-    
+
     # ==================== Internal Helpers ====================
-    
+
     def _headers(self) -> dict:
         """Get API request headers."""
         return {
@@ -445,21 +441,22 @@ class NexusClient:
             "X-Agent-DID": self.agent_did,
             "Content-Type": "application/json",
         }
-    
+
     def _generate_signature(self, data: dict) -> str:
         """Generate signature for data (placeholder)."""
         import hashlib
         import json
+
         canonical = json.dumps(data, sort_keys=True, default=str)
         return f"sig_{hashlib.sha256(canonical.encode()).hexdigest()[:32]}"
-    
+
     # ==================== Context Manager ====================
-    
+
     async def __aenter__(self):
         """Async context manager entry."""
         await self.register()
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         # Don't deregister on exit - agent should persist

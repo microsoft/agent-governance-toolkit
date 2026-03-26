@@ -32,14 +32,14 @@ def main():
     iatp_dir = proto_dir.parent / "iatp"
     generated_dir = iatp_dir / "generated"
     proto_file = proto_dir / "iatp.proto"
-    
+
     # Create output directory
     generated_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Create __init__.py
     init_file = generated_dir / "__init__.py"
     init_file.write_text('"""Generated gRPC stubs for IATP."""\n')
-    
+
     # Check if grpcio-tools is installed
     try:
         import grpc_tools.protoc
@@ -47,34 +47,36 @@ def main():
         print("Error: grpcio-tools not installed.")
         print("Install with: pip install grpcio-tools")
         sys.exit(1)
-    
+
     # Generate stubs
     print(f"Generating Python stubs from {proto_file}")
     print(f"Output directory: {generated_dir}")
-    
+
     # Build command
     cmd = [
-        sys.executable, "-m", "grpc_tools.protoc",
+        sys.executable,
+        "-m",
+        "grpc_tools.protoc",
         f"-I{proto_dir}",
         f"--python_out={generated_dir}",
         f"--pyi_out={generated_dir}",
         f"--grpc_python_out={generated_dir}",
         str(proto_file),
     ]
-    
+
     print(f"Running: {' '.join(cmd)}")
-    
+
     result = subprocess.run(cmd, capture_output=True, text=True)
-    
+
     if result.returncode != 0:
-        print(f"Error generating stubs:")
+        print("Error generating stubs:")
         print(result.stderr)
         sys.exit(1)
-    
+
     print("Successfully generated:")
     for f in generated_dir.glob("*.py"):
         print(f"  - {f.name}")
-    
+
     print("\nUsage:")
     print("  from iatp.generated import iatp_pb2, iatp_pb2_grpc")
 

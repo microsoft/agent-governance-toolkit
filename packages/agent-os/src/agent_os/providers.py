@@ -56,9 +56,7 @@ def _discover_provider(group: str) -> type | None:
             ep = next(iter(eps))
             provider_cls = ep.load()
             _provider_cache[group] = provider_cls
-            logger.info(
-                "Advanced provider loaded: %s from %s", ep.name, ep.value
-            )
+            logger.info("Advanced provider loaded: %s from %s", ep.name, ep.value)
             return provider_cls
     except Exception:
         logger.debug("Provider discovery failed for %s", group, exc_info=True)
@@ -78,6 +76,7 @@ def get_verification_engine(**kwargs: Any):
         return provider(**kwargs)
 
     from cmvk.verification import VerificationEngine
+
     return VerificationEngine(**kwargs)
 
 
@@ -92,6 +91,7 @@ def get_self_correction_kernel(**kwargs: Any):
         return provider(**kwargs)
 
     from agent_kernel.kernel import SelfCorrectingAgentKernel
+
     return SelfCorrectingAgentKernel(**kwargs)
 
 
@@ -106,6 +106,7 @@ def get_policy_engine(**kwargs: Any):
         return provider(**kwargs)
 
     from agent_os.integrations.base import GovernancePolicy
+
     return GovernancePolicy(**kwargs)
 
 
@@ -120,6 +121,7 @@ def get_context_service(**kwargs: Any):
         return provider(**kwargs)
 
     from caas.triad import ContextTriadManager
+
     return ContextTriadManager(**kwargs)
 
 
@@ -134,6 +136,7 @@ def get_memory_store(**kwargs: Any):
         return provider(**kwargs)
 
     from emk.store import EpisodicMemoryStore
+
     return EpisodicMemoryStore(**kwargs)
 
 
@@ -148,6 +151,7 @@ def get_trust_protocol(**kwargs: Any):
         return provider(**kwargs)
 
     from iatp.policy_engine import IATPPolicyEngine
+
     return IATPPolicyEngine(**kwargs)
 
 
@@ -162,6 +166,7 @@ def get_mute_agent(**kwargs: Any):
         return provider(**kwargs)
 
     from agent_os.mute_agent import MuteAgent
+
     return MuteAgent(**kwargs)
 
 

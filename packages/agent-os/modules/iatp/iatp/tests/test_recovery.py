@@ -3,6 +3,7 @@
 """
 Tests for the IATP Recovery Engine (scak integration).
 """
+
 import pytest
 
 from iatp.models import (
@@ -39,7 +40,7 @@ async def test_handle_failure_with_reversibility():
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.EPHEMERAL,
             human_review=False,
-        )
+        ),
     )
 
     error = Exception("Test error")
@@ -51,7 +52,7 @@ async def test_handle_failure_with_reversibility():
         error=error,
         manifest=manifest,
         payload=payload,
-        compensation_callback=None
+        compensation_callback=None,
     )
 
     assert result is not None
@@ -75,7 +76,7 @@ async def test_handle_failure_with_compensation():
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.EPHEMERAL,
             human_review=False,
-        )
+        ),
     )
 
     compensation_called = False
@@ -92,7 +93,7 @@ async def test_handle_failure_with_compensation():
         error=error,
         manifest=manifest,
         payload=payload,
-        compensation_callback=compensation_callback
+        compensation_callback=compensation_callback,
     )
 
     assert result is not None
@@ -116,7 +117,7 @@ async def test_handle_failure_no_reversibility():
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.TEMPORARY,
             human_review=False,
-        )
+        ),
     )
 
     error = Exception("Test error")
@@ -127,7 +128,7 @@ async def test_handle_failure_no_reversibility():
         error=error,
         manifest=manifest,
         payload=payload,
-        compensation_callback=None
+        compensation_callback=None,
     )
 
     assert result is not None
@@ -150,7 +151,7 @@ def test_should_attempt_recovery_reversible():
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.EPHEMERAL,
             human_review=False,
-        )
+        ),
     )
 
     error = Exception("Test error")
@@ -174,7 +175,7 @@ def test_should_attempt_recovery_timeout():
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.TEMPORARY,
             human_review=False,
-        )
+        ),
     )
 
     error = TimeoutError("Request timeout")
@@ -190,9 +191,7 @@ def test_get_recovery_history():
     engine = IATPRecoveryEngine()
 
     # Add some history manually
-    engine.recovery_history["test-trace"] = {
-        "test": "data"
-    }
+    engine.recovery_history["test-trace"] = {"test": "data"}
 
     history = engine.get_recovery_history("test-trace")
 
@@ -219,7 +218,7 @@ async def test_handle_failure_compensation_exception():
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.EPHEMERAL,
             human_review=False,
-        )
+        ),
     )
 
     async def failing_compensation():
@@ -233,7 +232,7 @@ async def test_handle_failure_compensation_exception():
         error=error,
         manifest=manifest,
         payload=payload,
-        compensation_callback=failing_compensation
+        compensation_callback=failing_compensation,
     )
 
     assert result is not None
@@ -256,7 +255,7 @@ async def test_handle_failure_sync_callback():
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.EPHEMERAL,
             human_review=False,
-        )
+        ),
     )
 
     compensation_called = False
@@ -273,7 +272,7 @@ async def test_handle_failure_sync_callback():
         error=error,
         manifest=manifest,
         payload=payload,
-        compensation_callback=sync_compensation
+        compensation_callback=sync_compensation,
     )
 
     assert result is not None

@@ -168,15 +168,12 @@ class TestDIDExtraction:
         did = verifier.extract_did_from_cert(b"not a cert")
         assert did is None
 
-    def test_extract_did_returns_none_for_cert_without_did(
-        self, verifier: MTLSIdentityVerifier
-    ):
+    def test_extract_did_returns_none_for_cert_without_did(self, verifier: MTLSIdentityVerifier):
         """A certificate with no DID in SAN or subject should return None."""
         key = ec.generate_private_key(ec.SECP256R1())
-        from datetime import timezone
         import datetime as dt
 
-        now = dt.datetime.now(timezone.utc)
+        now = dt.datetime.now(dt.UTC)
         cert = (
             x509.CertificateBuilder()
             .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "no-did")]))

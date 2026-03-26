@@ -159,20 +159,26 @@ class TestActionDescriptorValidation:
     def test_undo_window_negative(self):
         with pytest.raises(ValueError, match="undo_window_seconds must not be negative"):
             ActionDescriptor(
-                action_id="test", name="Test", execute_api="/api/test",
+                action_id="test",
+                name="Test",
+                execute_api="/api/test",
                 undo_window_seconds=-1,
             )
 
     def test_undo_window_exceeds_limit(self):
         with pytest.raises(ValueError, match="undo_window_seconds must not exceed 86400"):
             ActionDescriptor(
-                action_id="test", name="Test", execute_api="/api/test",
+                action_id="test",
+                name="Test",
+                execute_api="/api/test",
                 undo_window_seconds=100_000,
             )
 
     def test_undo_window_valid_boundary(self):
         action = ActionDescriptor(
-            action_id="test", name="Test", execute_api="/api/test",
+            action_id="test",
+            name="Test",
+            execute_api="/api/test",
             undo_window_seconds=86400,
         )
         assert action.undo_window_seconds == 86400
@@ -180,25 +186,33 @@ class TestActionDescriptorValidation:
     def test_action_id_too_long(self):
         with pytest.raises(ValueError, match="action_id exceeds maximum length"):
             ActionDescriptor(
-                action_id="a" * 257, name="Test", execute_api="/api/test",
+                action_id="a" * 257,
+                name="Test",
+                execute_api="/api/test",
             )
 
     def test_name_too_long(self):
         with pytest.raises(ValueError, match="name exceeds maximum length"):
             ActionDescriptor(
-                action_id="test", name="x" * 257, execute_api="/api/test",
+                action_id="test",
+                name="x" * 257,
+                execute_api="/api/test",
             )
 
     def test_valid_undo_api_validated(self):
         action = ActionDescriptor(
-            action_id="test", name="Test",
-            execute_api="/api/test", undo_api="/api/test/undo",
+            action_id="test",
+            name="Test",
+            execute_api="/api/test",
+            undo_api="/api/test/undo",
         )
         assert action.undo_api == "/api/test/undo"
 
     def test_empty_undo_api_rejected(self):
         with pytest.raises(ValueError, match="undo_api must not be empty"):
             ActionDescriptor(
-                action_id="test", name="Test",
-                execute_api="/api/test", undo_api="",
+                action_id="test",
+                name="Test",
+                execute_api="/api/test",
+                undo_api="",
             )

@@ -1,7 +1,7 @@
 # FAQ
 
 ## What is Agent OS?
-Agent OS is a kernel-style architecture for governing autonomous AI agents.  
+Agent OS is a kernel-style architecture for governing autonomous AI agents.
 It applies operating system concepts—such as policies, signals, and controlled execution—to intercept and validate agent actions deterministically before they execute.
 
 Agent OS focuses on *governance*, not agent creation.
@@ -9,7 +9,7 @@ Agent OS focuses on *governance*, not agent creation.
 ---
 
 ## How is Agent OS different from LangChain or CrewAI?
-LangChain and CrewAI are **agent frameworks** used to build agents.  
+LangChain and CrewAI are **agent frameworks** used to build agents.
 Agent OS is **governance infrastructure** that wraps those frameworks.
 
 You can use Agent OS *alongside* LangChain, CrewAI, Semantic Kernel, or OpenAI Assistants to enforce safety, policies, and auditability during execution.
@@ -17,7 +17,7 @@ You can use Agent OS *alongside* LangChain, CrewAI, Semantic Kernel, or OpenAI A
 ---
 
 ## Do I need to change my existing agent code?
-No.  
+No.
 Agent OS provides adapters that wrap existing agent code with minimal changes.
 
 Most integrations involve wrapping your current agent or executor with a KernelSpace instance and defining policies.
@@ -63,16 +63,16 @@ If a rule matches an action, the action is stopped immediately—without asking 
 ---
 
 ## Does Agent OS replace safety tools like Guardrails or LlamaGuard?
-No.  
+No.
 Those tools perform input/output filtering.
 
-Agent OS operates *during execution* by intercepting actions.  
+Agent OS operates *during execution* by intercepting actions.
 They can be used together for defense in depth.
 
 ---
 
 ## Can Agent OS be used with local models?
-Yes.  
+Yes.
 Agent OS does not depend on cloud APIs and works with local inference stacks.
 
 Governance logic runs at the application layer, independent of the model runtime.

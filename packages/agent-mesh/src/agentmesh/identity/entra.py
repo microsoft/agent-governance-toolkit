@@ -12,9 +12,9 @@ Requires: azure-identity (optional dependency)
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -36,7 +36,7 @@ class EntraAgentBlueprint(BaseModel):
     default_capabilities: list[str] = Field(default_factory=list)
     require_sponsor: bool = Field(default=True)
     max_delegation_depth: int = Field(default=2)
-    conditional_access_policy: Optional[str] = Field(
+    conditional_access_policy: str | None = Field(
         default=None, description="Conditional Access policy ID to apply"
     )
 
@@ -63,25 +63,23 @@ class EntraAgentIdentity(BaseModel):
 
     # Sponsor (human accountability)
     sponsor_email: str = Field(..., description="Human sponsor email (Entra UPN)")
-    sponsor_object_id: str = Field(
-        default="", description="Sponsor's Entra object ID"
-    )
+    sponsor_object_id: str = Field(default="", description="Sponsor's Entra object ID")
 
     # Lifecycle
     status: EntraAgentStatus = Field(default=EntraAgentStatus.ACTIVE)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    last_activity: Optional[datetime] = Field(default=None)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_activity: datetime | None = Field(default=None)
 
     # Capabilities & access
     capabilities: list[str] = Field(default_factory=list)
-    conditional_access_policy: Optional[str] = Field(default=None)
+    conditional_access_policy: str | None = Field(default=None)
     scopes: list[str] = Field(
         default_factory=list,
         description="Entra API permissions/scopes granted to this agent",
     )
 
     # Blueprint reference
-    blueprint_name: Optional[str] = Field(default=None)
+    blueprint_name: str | None = Field(default=None)
 
     @classmethod
     def create(
@@ -91,9 +89,9 @@ class EntraAgentIdentity(BaseModel):
         entra_object_id: str,
         tenant_id: str,
         sponsor_email: str,
-        capabilities: Optional[list[str]] = None,
-        scopes: Optional[list[str]] = None,
-        blueprint: Optional[EntraAgentBlueprint] = None,
+        capabilities: list[str] | None = None,
+        scopes: list[str] | None = None,
+        blueprint: EntraAgentBlueprint | None = None,
     ) -> EntraAgentIdentity:
         """Create an Entra Agent ID binding for an AgentMesh agent."""
         caps = capabilities or (blueprint.default_capabilities if blueprint else [])
@@ -113,7 +111,7 @@ class EntraAgentIdentity(BaseModel):
 
     def record_activity(self) -> None:
         """Update last activity timestamp."""
-        self.last_activity = datetime.now(timezone.utc)
+        self.last_activity = datetime.now(UTC)
 
     def suspend(self, reason: str = "") -> None:
         """Suspend agent identity (reversible)."""
@@ -146,9 +144,7 @@ class EntraAgentIdentity(BaseModel):
             "status": self.status.value,
             "capabilities": self.capabilities,
             "scopes": self.scopes,
-            "last_activity": (
-                self.last_activity.isoformat() if self.last_activity else None
-            ),
+            "last_activity": (self.last_activity.isoformat() if self.last_activity else None),
         }
 
 
@@ -178,17 +174,15 @@ class EntraAgentRegistry:
         agent_name: str,
         entra_object_id: str,
         sponsor_email: str,
-        capabilities: Optional[list[str]] = None,
-        scopes: Optional[list[str]] = None,
-        blueprint_name: Optional[str] = None,
+        capabilities: list[str] | None = None,
+        scopes: list[str] | None = None,
+        blueprint_name: str | None = None,
     ) -> EntraAgentIdentity:
         """Register an agent with both AgentMesh DID and Entra Agent ID."""
         blueprint = self._blueprints.get(blueprint_name) if blueprint_name else None
 
         if blueprint and blueprint.require_sponsor and not sponsor_email:
-            raise ValueError(
-                f"Blueprint '{blueprint_name}' requires a sponsor email"
-            )
+            raise ValueError(f"Blueprint '{blueprint_name}' requires a sponsor email")
 
         identity = EntraAgentIdentity.create(
             agent_did=agent_did,
@@ -206,11 +200,11 @@ class EntraAgentRegistry:
         self._log_event("register", identity)
         return identity
 
-    def get_by_did(self, agent_did: str) -> Optional[EntraAgentIdentity]:
+    def get_by_did(self, agent_did: str) -> EntraAgentIdentity | None:
         """Look up agent by AgentMesh DID."""
         return self._agents.get(agent_did)
 
-    def get_by_entra_id(self, entra_object_id: str) -> Optional[EntraAgentIdentity]:
+    def get_by_entra_id(self, entra_object_id: str) -> EntraAgentIdentity | None:
         """Look up agent by Entra object ID."""
         did = self._by_entra_id.get(entra_object_id)
         return self._agents.get(did) if did else None
@@ -242,9 +236,7 @@ class EntraAgentRegistry:
             return True
         return False
 
-    def verify_access(
-        self, agent_did: str, required_scope: str
-    ) -> tuple[bool, str]:
+    def verify_access(self, agent_did: str, required_scope: str) -> tuple[bool, str]:
         """
         Verify an agent has the required Entra scope and is active.
 
@@ -261,9 +253,7 @@ class EntraAgentRegistry:
         identity.record_activity()
         return True, "Access granted"
 
-    def list_agents(
-        self, status: Optional[EntraAgentStatus] = None
-    ) -> list[EntraAgentIdentity]:
+    def list_agents(self, status: EntraAgentStatus | None = None) -> list[EntraAgentIdentity]:
         """List all registered agents, optionally filtered by status."""
         agents = list(self._agents.values())
         if status:
@@ -272,9 +262,7 @@ class EntraAgentRegistry:
 
     def get_sponsor_agents(self, sponsor_email: str) -> list[EntraAgentIdentity]:
         """Get all agents owned by a specific sponsor."""
-        return [
-            a for a in self._agents.values() if a.sponsor_email == sponsor_email
-        ]
+        return [a for a in self._agents.values() if a.sponsor_email == sponsor_email]
 
     def get_audit_log(self) -> list[dict[str, Any]]:
         """Return the full audit log."""
@@ -284,11 +272,11 @@ class EntraAgentRegistry:
         self,
         event_type: str,
         identity: EntraAgentIdentity,
-        extra: Optional[dict[str, Any]] = None,
+        extra: dict[str, Any] | None = None,
     ) -> None:
         """Log an identity lifecycle event."""
         entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "event_type": event_type,
             "agent_did": identity.agent_did,
             "entra_object_id": identity.entra_object_id,

@@ -58,23 +58,24 @@ Example Usage:
 from __future__ import annotations
 
 import asyncio
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable, Optional, Protocol, Sequence, Union
-from datetime import datetime, timezone
 import json
 import re
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
+from typing import Any, Protocol
 
 
 class Severity(str, Enum):
     """Severity level for principle violations."""
+
     CRITICAL = "critical"  # Must block output
-    HIGH = "high"          # Should block unless overridden
-    MEDIUM = "medium"      # Warning, may proceed
-    LOW = "low"            # Informational
-    
-    def __lt__(self, other: "Severity") -> bool:
+    HIGH = "high"  # Should block unless overridden
+    MEDIUM = "medium"  # Warning, may proceed
+    LOW = "low"  # Informational
+
+    def __lt__(self, other: Severity) -> bool:
         order = [Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL]
         return order.index(self) < order.index(other)
 
@@ -83,10 +84,10 @@ class Severity(str, Enum):
 class Principle:
     """
     A single constitutional principle.
-    
+
     Principles are natural language rules that outputs must comply with.
     They are evaluated by an LLM to determine if the output violates them.
-    
+
     Attributes:
         name: Short identifier for the principle
         description: Natural language description of the rule
@@ -94,15 +95,16 @@ class Principle:
         category: Optional category for grouping (e.g., "safety", "ethics")
         examples: Optional list of (input, is_violation, explanation) tuples
     """
+
     name: str
     description: str
     severity: Severity = Severity.MEDIUM
-    category: Optional[str] = None
+    category: str | None = None
     examples: tuple[tuple[str, bool, str], ...] = field(default_factory=tuple)
-    
+
     def __hash__(self) -> int:
         return hash((self.name, self.description))
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -118,36 +120,37 @@ class Principle:
 class PrincipleSet:
     """
     A named collection of principles.
-    
+
     Attributes:
         name: Name of this principle set
         principles: List of principles in this set
         description: Optional description of what this set covers
         version: Version string for tracking changes
     """
+
     name: str
     principles: list[Principle]
-    description: Optional[str] = None
+    description: str | None = None
     version: str = "1.0.0"
-    
+
     def __iter__(self):
         return iter(self.principles)
-    
+
     def __len__(self) -> int:
         return len(self.principles)
-    
-    def get_by_name(self, name: str) -> Optional[Principle]:
+
+    def get_by_name(self, name: str) -> Principle | None:
         """Get a principle by name."""
         for p in self.principles:
             if p.name == name:
                 return p
         return None
-    
+
     def get_by_category(self, category: str) -> list[Principle]:
         """Get all principles in a category."""
         return [p for p in self.principles if p.category == category]
-    
-    def merge(self, other: "PrincipleSet") -> "PrincipleSet":
+
+    def merge(self, other: PrincipleSet) -> PrincipleSet:
         """Merge with another principle set."""
         combined = list(self.principles)
         existing_names = {p.name for p in combined}
@@ -157,9 +160,9 @@ class PrincipleSet:
         return PrincipleSet(
             name=f"{self.name}+{other.name}",
             principles=combined,
-            description=f"Merged: {self.description or ''} + {other.description or ''}"
+            description=f"Merged: {self.description or ''} + {other.description or ''}",
         )
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -168,9 +171,9 @@ class PrincipleSet:
             "version": self.version,
             "principles": [p.to_dict() for p in self.principles],
         }
-    
+
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "PrincipleSet":
+    def from_dict(cls, data: dict[str, Any]) -> PrincipleSet:
         """Create from dictionary."""
         principles = [
             Principle(
@@ -205,8 +208,16 @@ SAFETY_PRINCIPLES = PrincipleSet(
             severity=Severity.CRITICAL,
             category="safety",
             examples=(
-                ("Here's how to make a weapon at home...", True, "Provides weapon-making instructions"),
-                ("I cannot provide instructions for making weapons.", False, "Appropriately refuses"),
+                (
+                    "Here's how to make a weapon at home...",
+                    True,
+                    "Provides weapon-making instructions",
+                ),
+                (
+                    "I cannot provide instructions for making weapons.",
+                    False,
+                    "Appropriately refuses",
+                ),
             ),
         ),
         Principle(
@@ -323,11 +334,12 @@ FINANCIAL_PRINCIPLES = PrincipleSet(
 # Violation Types
 # ============================================================================
 
+
 @dataclass
 class Violation:
     """
     A detected principle violation.
-    
+
     Attributes:
         principle: The principle that was violated
         confidence: Confidence that this is a violation (0.0 to 1.0)
@@ -335,12 +347,13 @@ class Violation:
         evidence: The specific text/content that triggered the violation
         suggested_revision: Optional suggested revision to fix the violation
     """
+
     principle: Principle
     confidence: float
     explanation: str
-    evidence: Optional[str] = None
-    suggested_revision: Optional[str] = None
-    
+    evidence: str | None = None
+    suggested_revision: str | None = None
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -356,7 +369,7 @@ class Violation:
 class ValidationResult:
     """
     Result of validating an output against principles.
-    
+
     Attributes:
         passed: Whether the output passed all critical/high severity principles
         violations: List of detected violations
@@ -365,29 +378,31 @@ class ValidationResult:
         timestamp: When the validation was performed
         metadata: Additional metadata from the validation
     """
+
     passed: bool
     violations: list[Violation]
     output_text: str
     principles_checked: int
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
-    
+
     @property
     def critical_violations(self) -> list[Violation]:
         """Get only critical severity violations."""
         return [v for v in self.violations if v.principle.severity == Severity.CRITICAL]
-    
+
     @property
     def high_violations(self) -> list[Violation]:
         """Get only high severity violations."""
         return [v for v in self.violations if v.principle.severity == Severity.HIGH]
-    
+
     @property
     def blocking_violations(self) -> list[Violation]:
         """Get violations that should block the output (critical + high)."""
-        return [v for v in self.violations 
-                if v.principle.severity in (Severity.CRITICAL, Severity.HIGH)]
-    
+        return [
+            v for v in self.violations if v.principle.severity in (Severity.CRITICAL, Severity.HIGH)
+        ]
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -404,38 +419,39 @@ class ValidationResult:
 # Evaluator Interface
 # ============================================================================
 
+
 class PrincipleEvaluator(Protocol):
     """
     Protocol for principle evaluation backends.
-    
+
     Implementations can use different LLMs or even rule-based systems
     to evaluate whether an output violates a principle.
     """
-    
+
     def evaluate(
         self,
         output: str,
         principle: Principle,
-        context: Optional[str] = None,
+        context: str | None = None,
     ) -> tuple[bool, float, str]:
         """
         Evaluate if an output violates a principle.
-        
+
         Args:
             output: The text to evaluate
             principle: The principle to check against
             context: Optional context about the conversation/task
-            
+
         Returns:
             Tuple of (is_violation, confidence, explanation)
         """
         ...
-    
+
     async def evaluate_async(
         self,
         output: str,
         principle: Principle,
-        context: Optional[str] = None,
+        context: str | None = None,
     ) -> tuple[bool, float, str]:
         """Async version of evaluate."""
         ...
@@ -444,62 +460,62 @@ class PrincipleEvaluator(Protocol):
 class RuleBasedEvaluator:
     """
     Simple rule-based evaluator using pattern matching.
-    
+
     This is a fallback evaluator that uses regex patterns and keywords.
     It's fast but less sophisticated than LLM-based evaluation.
     """
-    
+
     # Keyword patterns for common violations
     HARM_PATTERNS = [
         r"\bhow to (make|build|create) (a |an )?(bomb|weapon|explosive)",
         r"\bstep[- ]by[- ]step.*(kill|harm|attack)",
         r"\binstructions for (killing|harming|attacking)",
     ]
-    
+
     ILLEGAL_PATTERNS = [
         r"\bhow to (hack|bypass|break into)",
         r"\b(steal|fraud|counterfeit).*(instructions|guide|tutorial)",
     ]
-    
+
     MALWARE_PATTERNS = [
         r"\b(virus|malware|trojan|ransomware).*(code|script|create)",
         r"\bkeylogger",
         r"\bexploit.*(vulnerability|zero[- ]day)",
     ]
-    
+
     def __init__(self):
         self._compiled_patterns = {
             "no_harm_instructions": [re.compile(p, re.IGNORECASE) for p in self.HARM_PATTERNS],
             "no_illegal_activity": [re.compile(p, re.IGNORECASE) for p in self.ILLEGAL_PATTERNS],
             "no_malware": [re.compile(p, re.IGNORECASE) for p in self.MALWARE_PATTERNS],
         }
-    
+
     def evaluate(
         self,
         output: str,
         principle: Principle,
-        context: Optional[str] = None,
+        context: str | None = None,
     ) -> tuple[bool, float, str]:
         """Evaluate using pattern matching."""
         patterns = self._compiled_patterns.get(principle.name, [])
-        
+
         for pattern in patterns:
             match = pattern.search(output)
             if match:
                 return (
                     True,
                     0.8,  # High but not certain confidence
-                    f"Pattern match detected: '{match.group()}' violates {principle.name}"
+                    f"Pattern match detected: '{match.group()}' violates {principle.name}",
                 )
-        
+
         # No pattern match - assume no violation (conservative for rule-based)
         return (False, 0.6, "No pattern match detected")
-    
+
     async def evaluate_async(
         self,
         output: str,
         principle: Principle,
-        context: Optional[str] = None,
+        context: str | None = None,
     ) -> tuple[bool, float, str]:
         """Async version (just wraps sync for rule-based)."""
         return self.evaluate(output, principle, context)
@@ -508,11 +524,11 @@ class RuleBasedEvaluator:
 class LLMEvaluator:
     """
     LLM-based principle evaluator.
-    
+
     Uses an LLM to evaluate whether outputs violate principles.
     This is more sophisticated and can understand nuance.
     """
-    
+
     EVALUATION_PROMPT = """You are a Constitutional AI safety evaluator. Your task is to determine if an AI output violates a specific principle.
 
 PRINCIPLE: {principle_name}
@@ -539,53 +555,53 @@ Respond in the following JSON format:
 }}
 
 Your response (JSON only):"""
-    
+
     def __init__(
         self,
         model_fn: Callable[[str], str],
-        async_model_fn: Optional[Callable[[str], Any]] = None,
+        async_model_fn: Callable[[str], Any] | None = None,
     ):
         """
         Initialize with model functions.
-        
+
         Args:
             model_fn: Sync function that takes prompt and returns response
             async_model_fn: Optional async version
         """
         self._model_fn = model_fn
         self._async_model_fn = async_model_fn
-    
+
     def _build_prompt(
         self,
         output: str,
         principle: Principle,
-        context: Optional[str] = None,
+        context: str | None = None,
     ) -> str:
         """Build the evaluation prompt."""
         context_section = ""
         if context:
             context_section = f"\nCONTEXT:\n{context}\n"
-        
+
         # Include examples if available
         if principle.examples:
             examples_text = "\n\nEXAMPLES:\n"
             for text, is_violation, explanation in principle.examples:
                 status = "VIOLATION" if is_violation else "OK"
-                examples_text += f"- [{status}] \"{text[:100]}...\" - {explanation}\n"
+                examples_text += f'- [{status}] "{text[:100]}..." - {explanation}\n'
             context_section += examples_text
-        
+
         return self.EVALUATION_PROMPT.format(
             principle_name=principle.name,
             principle_description=principle.description,
             output=output,
             context_section=context_section,
         )
-    
-    def _parse_response(self, response: str) -> tuple[bool, float, str, Optional[str]]:
+
+    def _parse_response(self, response: str) -> tuple[bool, float, str, str | None]:
         """Parse LLM response into structured result."""
         try:
             # Try to extract JSON from response
-            json_match = re.search(r'\{[^{}]*\}', response, re.DOTALL)
+            json_match = re.search(r"\{[^{}]*\}", response, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group())
                 return (
@@ -596,34 +612,34 @@ Your response (JSON only):"""
                 )
         except (json.JSONDecodeError, ValueError):
             pass
-        
+
         # Fallback: simple keyword detection
         is_violation = "violation" in response.lower() and "not a violation" not in response.lower()
         return (is_violation, 0.5, response[:200], None)
-    
+
     def evaluate(
         self,
         output: str,
         principle: Principle,
-        context: Optional[str] = None,
+        context: str | None = None,
     ) -> tuple[bool, float, str]:
         """Evaluate using LLM."""
         prompt = self._build_prompt(output, principle, context)
         response = self._model_fn(prompt)
         is_violation, confidence, explanation, _ = self._parse_response(response)
         return (is_violation, confidence, explanation)
-    
+
     async def evaluate_async(
         self,
         output: str,
         principle: Principle,
-        context: Optional[str] = None,
+        context: str | None = None,
     ) -> tuple[bool, float, str]:
         """Async evaluate using LLM."""
         if self._async_model_fn is None:
             # Fall back to sync
             return self.evaluate(output, principle, context)
-        
+
         prompt = self._build_prompt(output, principle, context)
         response = await self._async_model_fn(prompt)
         is_violation, confidence, explanation, _ = self._parse_response(response)
@@ -634,41 +650,42 @@ Your response (JSON only):"""
 # Main Validator
 # ============================================================================
 
+
 class ConstitutionalValidator:
     """
     Constitutional Validator for checking AI outputs against principles.
-    
+
     This validator checks outputs against a set of natural language principles
     and reports violations. It can use different evaluation backends.
-    
+
     Example:
         # Basic usage with built-in safety principles
         validator = ConstitutionalValidator(principles=SAFETY_PRINCIPLES)
         result = validator.validate("Some AI output...")
-        
+
         if not result.passed:
             print(f"Found {len(result.violations)} violations")
-        
+
         # With custom evaluator
         validator = ConstitutionalValidator(
             principles=SAFETY_PRINCIPLES,
             evaluator=LLMEvaluator(model_fn=my_llm_call)
         )
-        
+
         # Async validation
         result = await validator.validate_async("Some AI output...")
     """
-    
+
     def __init__(
         self,
-        principles: Union[PrincipleSet, list[Principle]],
-        evaluator: Optional[PrincipleEvaluator] = None,
+        principles: PrincipleSet | list[Principle],
+        evaluator: PrincipleEvaluator | None = None,
         min_confidence: float = 0.7,
         fail_on_evaluator_error: bool = False,
     ):
         """
         Initialize the validator.
-        
+
         Args:
             principles: Principles to validate against
             evaluator: Evaluation backend (defaults to RuleBasedEvaluator)
@@ -681,26 +698,26 @@ class ConstitutionalValidator:
         else:
             self._principle_set = PrincipleSet(name="custom", principles=principles)
             self._principles = principles
-        
+
         self._evaluator = evaluator or RuleBasedEvaluator()
         self._min_confidence = min_confidence
         self._fail_on_error = fail_on_evaluator_error
         self._validation_count = 0
-    
+
     @property
     def principles(self) -> list[Principle]:
         """Get the list of principles."""
         return self._principles
-    
+
     @property
     def principle_set(self) -> PrincipleSet:
         """Get the principle set."""
         return self._principle_set
-    
+
     def add_principle(self, principle: Principle) -> None:
         """Add a principle to the validator."""
         self._principles.append(principle)
-    
+
     def remove_principle(self, name: str) -> bool:
         """Remove a principle by name. Returns True if found and removed."""
         for i, p in enumerate(self._principles):
@@ -708,53 +725,58 @@ class ConstitutionalValidator:
                 self._principles.pop(i)
                 return True
         return False
-    
+
     def validate(
         self,
         output: str,
-        context: Optional[str] = None,
-        principles: Optional[list[Principle]] = None,
+        context: str | None = None,
+        principles: list[Principle] | None = None,
     ) -> ValidationResult:
         """
         Validate an output against principles.
-        
+
         Args:
             output: The text to validate
             context: Optional context about the conversation/task
             principles: Optional subset of principles to check (defaults to all)
-            
+
         Returns:
             ValidationResult with any violations found
         """
         self._validation_count += 1
         principles_to_check = principles or self._principles
         violations: list[Violation] = []
-        
+
         for principle in principles_to_check:
             try:
                 is_violation, confidence, explanation = self._evaluator.evaluate(
                     output, principle, context
                 )
-                
+
                 if is_violation and confidence >= self._min_confidence:
-                    violations.append(Violation(
-                        principle=principle,
-                        confidence=confidence,
-                        explanation=explanation,
-                    ))
+                    violations.append(
+                        Violation(
+                            principle=principle,
+                            confidence=confidence,
+                            explanation=explanation,
+                        )
+                    )
             except Exception as e:
                 if self._fail_on_error:
-                    violations.append(Violation(
-                        principle=principle,
-                        confidence=1.0,
-                        explanation=f"Evaluator error (treating as violation): {e}",
-                    ))
-        
+                    violations.append(
+                        Violation(
+                            principle=principle,
+                            confidence=1.0,
+                            explanation=f"Evaluator error (treating as violation): {e}",
+                        )
+                    )
+
         # Determine if passed (no critical or high violations)
-        blocking = [v for v in violations 
-                   if v.principle.severity in (Severity.CRITICAL, Severity.HIGH)]
+        blocking = [
+            v for v in violations if v.principle.severity in (Severity.CRITICAL, Severity.HIGH)
+        ]
         passed = len(blocking) == 0
-        
+
         return ValidationResult(
             passed=passed,
             violations=violations,
@@ -766,31 +788,31 @@ class ConstitutionalValidator:
                 "evaluator": type(self._evaluator).__name__,
             },
         )
-    
+
     async def validate_async(
         self,
         output: str,
-        context: Optional[str] = None,
-        principles: Optional[list[Principle]] = None,
+        context: str | None = None,
+        principles: list[Principle] | None = None,
         parallel: bool = True,
     ) -> ValidationResult:
         """
         Async validate an output against principles.
-        
+
         Args:
             output: The text to validate
             context: Optional context
             principles: Optional subset of principles
             parallel: If True, evaluate principles in parallel
-            
+
         Returns:
             ValidationResult with any violations found
         """
         self._validation_count += 1
         principles_to_check = principles or self._principles
         violations: list[Violation] = []
-        
-        async def check_principle(principle: Principle) -> Optional[Violation]:
+
+        async def check_principle(principle: Principle) -> Violation | None:
             try:
                 is_violation, confidence, explanation = await self._evaluator.evaluate_async(
                     output, principle, context
@@ -809,22 +831,21 @@ class ConstitutionalValidator:
                         explanation=f"Evaluator error: {e}",
                     )
             return None
-        
+
         if parallel:
-            results = await asyncio.gather(
-                *[check_principle(p) for p in principles_to_check]
-            )
+            results = await asyncio.gather(*[check_principle(p) for p in principles_to_check])
             violations = [v for v in results if v is not None]
         else:
             for principle in principles_to_check:
                 violation = await check_principle(principle)
                 if violation:
                     violations.append(violation)
-        
-        blocking = [v for v in violations 
-                   if v.principle.severity in (Severity.CRITICAL, Severity.HIGH)]
+
+        blocking = [
+            v for v in violations if v.principle.severity in (Severity.CRITICAL, Severity.HIGH)
+        ]
         passed = len(blocking) == 0
-        
+
         return ValidationResult(
             passed=passed,
             violations=violations,
@@ -837,7 +858,7 @@ class ConstitutionalValidator:
                 "parallel": parallel,
             },
         )
-    
+
     def get_stats(self) -> dict[str, Any]:
         """Get validator statistics."""
         return {
@@ -853,14 +874,15 @@ class ConstitutionalValidator:
 # Convenience Functions
 # ============================================================================
 
-def validate_safety(output: str, context: Optional[str] = None) -> ValidationResult:
+
+def validate_safety(output: str, context: str | None = None) -> ValidationResult:
     """
     Quick validation against safety principles.
-    
+
     Args:
         output: Text to validate
         context: Optional context
-        
+
     Returns:
         ValidationResult
     """
@@ -868,14 +890,14 @@ def validate_safety(output: str, context: Optional[str] = None) -> ValidationRes
     return validator.validate(output, context)
 
 
-def validate_medical(output: str, context: Optional[str] = None) -> ValidationResult:
+def validate_medical(output: str, context: str | None = None) -> ValidationResult:
     """Quick validation against medical principles."""
     combined = SAFETY_PRINCIPLES.merge(MEDICAL_PRINCIPLES)
     validator = ConstitutionalValidator(principles=combined)
     return validator.validate(output, context)
 
 
-def validate_financial(output: str, context: Optional[str] = None) -> ValidationResult:
+def validate_financial(output: str, context: str | None = None) -> ValidationResult:
     """Quick validation against financial principles."""
     combined = SAFETY_PRINCIPLES.merge(FINANCIAL_PRINCIPLES)
     validator = ConstitutionalValidator(principles=combined)
@@ -885,7 +907,7 @@ def validate_financial(output: str, context: Optional[str] = None) -> Validation
 def create_validator_from_yaml(yaml_str: str) -> ConstitutionalValidator:
     """
     Create a validator from YAML configuration.
-    
+
     YAML format:
         name: my_principles
         description: Custom principles
@@ -897,8 +919,11 @@ def create_validator_from_yaml(yaml_str: str) -> ConstitutionalValidator:
     """
     try:
         import yaml
+
         data = yaml.safe_load(yaml_str)
         principle_set = PrincipleSet.from_dict(data)
         return ConstitutionalValidator(principles=principle_set)
     except ImportError:
-        raise ImportError("PyYAML is required for YAML configuration. Install with: pip install pyyaml")
+        raise ImportError(
+            "PyYAML is required for YAML configuration. Install with: pip install pyyaml"
+        )

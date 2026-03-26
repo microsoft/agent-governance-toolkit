@@ -87,14 +87,14 @@ The IATP Sidecar is a lightweight binary that:
 ```go
 func CalculateTrustScore(manifest *CapabilityManifest) int {
     score := manifest.TrustLevel.BaseScore() // 0-10
-    
+
     if manifest.Reversibility.Level != "none" {
         score += 2
     }
     if manifest.Privacy.Retention == "ephemeral" {
         score += 1
     }
-    if manifest.Privacy.Retention == "permanent" || 
+    if manifest.Privacy.Retention == "permanent" ||
        manifest.Privacy.Retention == "forever" {
         score -= 1
     }
@@ -104,7 +104,7 @@ func CalculateTrustScore(manifest *CapabilityManifest) int {
     if manifest.Privacy.TrainingConsent {
         score -= 1
     }
-    
+
     return clamp(score, 0, 10)
 }
 ```
@@ -154,14 +154,14 @@ func CalculateTrustScore(manifest *CapabilityManifest) int {
 type CapabilityManifest struct {
     Schema   string   `json:"$schema"`
     Identity Identity `json:"identity"`
-    
+
     TrustLevel      TrustLevel      `json:"trust_level"`
     Capabilities    Capabilities    `json:"capabilities,omitempty"`
     Reversibility   Reversibility   `json:"reversibility,omitempty"`
     Privacy         Privacy         `json:"privacy,omitempty"`
     Authentication  Authentication  `json:"authentication,omitempty"`
     RateLimiting    RateLimiting    `json:"rate_limiting,omitempty"`
-    
+
     ProtocolVersion string `json:"protocol_version"`
     ManifestVersion string `json:"manifest_version,omitempty"`
     UpdatedAt       string `json:"updated_at,omitempty"`
@@ -250,16 +250,16 @@ IATP_ALLOW_OVERRIDE=true
 backend:
   url: http://localhost:8000
   timeout: 30s
-  
+
 server:
   port: 8001
   log_level: info
-  
+
 telemetry:
   log_dir: /var/log/iatp
   otel_endpoint: http://localhost:4318
   metrics_port: 9090
-  
+
 policy:
   trust_threshold: 3
   allow_override: true
@@ -287,7 +287,7 @@ spec:
     image: my-agent:v1.0.0
     ports:
     - containerPort: 8000
-  
+
   - name: iatp-sidecar
     image: iatp-sidecar:v1.0.0
     ports:
@@ -343,7 +343,7 @@ func TestTrustScoreCalculation(t *testing.T) {
         Reversibility: Reversibility{Level: "partial"},
         Privacy: Privacy{Retention: "ephemeral"},
     }
-    
+
     score := CalculateTrustScore(manifest)
     assert.Equal(t, 10, score) // 10 + 2 + 1 = 13, clamped to 10
 }
@@ -359,15 +359,15 @@ func TestProxyFlow(t *testing.T) {
         w.Write([]byte(`{"result":"success"}`))
     }))
     defer backend.Close()
-    
+
     // Start sidecar
     sidecar := NewSidecar(backend.URL, manifest)
     go sidecar.Run()
-    
+
     // Make request
-    resp, err := http.Post("http://localhost:8001/proxy", "application/json", 
+    resp, err := http.Post("http://localhost:8001/proxy", "application/json",
         strings.NewReader(`{"task":"test"}`))
-    
+
     assert.NoError(t, err)
     assert.Equal(t, 200, resp.StatusCode)
 }

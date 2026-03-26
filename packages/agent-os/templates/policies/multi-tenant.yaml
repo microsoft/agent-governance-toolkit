@@ -17,10 +17,10 @@ tenancy:
   # Tenant identification
   tenant_id_source: header  # header, token, or path
   tenant_header: "X-Tenant-ID"
-  
+
   # Strict isolation mode
   strict_isolation: true
-  
+
   # Cross-tenant communication
   allow_cross_tenant: false
 
@@ -39,12 +39,12 @@ policies:
       - resource: filesystem
         pattern: "/data/{tenant_id}/**"
         enforce: true
-        
+
       # Database queries must filter by tenant
       - resource: database
         require_tenant_filter: true
         tenant_column: "tenant_id"
-        
+
       # S3/blob storage isolation
       - resource: object_storage
         pattern: "s3://{bucket}/{tenant_id}/**"
@@ -63,7 +63,7 @@ policies:
       - vfs_root: "/mem/tenants/{tenant_id}"
         shared_read: false
         shared_write: false
-        
+
       # Context windows are isolated
       - context_isolation: true
         no_context_sharing: true
@@ -80,7 +80,7 @@ policies:
       # Tenant-specific endpoints only
       - allow_shared_apis: true  # e.g., OpenAI
         block_tenant_apis: true  # Prevent calling other tenant endpoints
-        
+
       # Headers must not leak tenant info
       - sanitize_headers: true
         remove_headers:
@@ -100,7 +100,7 @@ policies:
       max_tokens_per_day: 100000
       max_storage_mb: 1000
       max_api_calls_per_hour: 1000
-    
+
     # Tier-based quotas
     tiers:
       free:
@@ -108,19 +108,19 @@ policies:
         max_tokens_per_day: 10000
         max_storage_mb: 100
         max_api_calls_per_hour: 100
-      
+
       pro:
         max_concurrent_agents: 10
         max_tokens_per_day: 100000
         max_storage_mb: 1000
         max_api_calls_per_hour: 1000
-      
+
       enterprise:
         max_concurrent_agents: 100
         max_tokens_per_day: 1000000
         max_storage_mb: 10000
         max_api_calls_per_hour: 10000
-    
+
     action: SIGSTOP
     message: "Tenant resource quota exceeded"
 
@@ -151,7 +151,7 @@ policies:
       # Remove any other tenant references
       - redact_patterns:
           - 'tenant_id:\s*(?!{current_tenant})[a-zA-Z0-9-]+'
-          
+
       # Ensure no cross-tenant IDs in output
       - validate_tenant_refs: true
         only_current_tenant: true
@@ -168,7 +168,7 @@ policies:
       # Separate log streams
       - log_path: "./logs/tenants/{tenant_id}/"
         shared_logs: false
-        
+
       # Tenant cannot query other tenant logs
       - log_query_isolation: true
     action: SIGSTOP
@@ -182,7 +182,7 @@ context:
   required_fields:
     - tenant_id
     - user_id
-  
+
   # Context validation
   validate:
     tenant_id:
@@ -201,7 +201,7 @@ onboarding:
     - vfs_directory: "/mem/tenants/{tenant_id}"
     - log_directory: "./logs/tenants/{tenant_id}"
     - config_file: "./config/tenants/{tenant_id}.yaml"
-  
+
   # Default policies for new tenants
   default_policies:
     - secure-coding
@@ -216,7 +216,7 @@ emergency:
     - repeated_isolation_violations: 5
     - quota_exceeded_times: 10
     - injection_attempts: 3
-  
+
   # Admin override
   admin_bypass: false  # Even admins cannot bypass isolation
 
@@ -229,7 +229,7 @@ audit:
     - quota_usage
     - tenant_context
   retention_days: 90
-  
+
   # Per-tenant audit exports
   tenant_exports:
     enabled: true

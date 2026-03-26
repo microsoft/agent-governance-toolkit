@@ -1,7 +1,5 @@
 """Tests for OpenAI Agents AgentMesh trust integration."""
 
-import pytest
-
 from openai_agents_agentmesh import (
     AgentTrustContext,
     FunctionCallResult,
@@ -24,7 +22,9 @@ class TestResults:
         assert d["function"] == "search"
 
     def test_handoff_to_dict(self):
-        r = HandoffResult(allowed=False, source_did="d1", target_did="d2", reason="low trust")
+        r = HandoffResult(
+            allowed=False, source_did="d1", target_did="d2", reason="low trust"
+        )
         d = r.to_dict()
         assert not d["allowed"]
         assert d["reason"] == "low trust"
@@ -251,7 +251,14 @@ class TestIntegration:
             FunctionCallResult,
             TrustedFunctionGuard,
         )
-        assert all(c is not None for c in [
-            AgentTrustContext, HandoffResult, HandoffVerifier,
-            FunctionCallResult, TrustedFunctionGuard,
-        ])
+
+        assert all(
+            c is not None
+            for c in [
+                AgentTrustContext,
+                HandoffResult,
+                HandoffVerifier,
+                FunctionCallResult,
+                TrustedFunctionGuard,
+            ]
+        )

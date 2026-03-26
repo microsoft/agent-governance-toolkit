@@ -10,10 +10,10 @@ Provides:
 - HTTP metrics server for Prometheus scraping
 """
 
-from agent_os_observability.tracer import KernelTracer, trace_operation
-from agent_os_observability.metrics import KernelMetrics, metrics_endpoint
 from agent_os_observability.dashboards import get_grafana_dashboard
+from agent_os_observability.metrics import KernelMetrics, metrics_endpoint
 from agent_os_observability.server import MetricsServer, create_fastapi_router
+from agent_os_observability.tracer import KernelTracer, trace_operation
 
 __version__ = "0.2.0"
 __all__ = [

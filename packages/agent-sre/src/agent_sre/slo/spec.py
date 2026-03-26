@@ -115,9 +115,7 @@ def resolve_inheritance(specs: list[SLOSpec]) -> list[SLOSpec]:
 
         parent_name = spec.inherits_from
         if parent_name not in by_name:
-            raise ValueError(
-                f"SLO '{spec.name}' inherits from unknown spec '{parent_name}'"
-            )
+            raise ValueError(f"SLO '{spec.name}' inherits from unknown spec '{parent_name}'")
 
         parent = _resolve(by_name[parent_name])
 

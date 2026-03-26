@@ -20,5 +20,4 @@ Contributions are welcome. Contributors should refer to the individual component
 ## 9. What is the license?
 This project is licensed under the MIT License. See the LICENSE file for more details.
 ## 10. What is the roadmap?
-The project is structured around expanding and integrating four governance layers: policy enforcement (Agent OS), zero-trust communication (AgentMesh), runtime supervision (Agent Runtime), and reliability engineering (Agent SRE). 
-
+The project is structured around expanding and integrating four governance layers: policy enforcement (Agent OS), zero-trust communication (AgentMesh), runtime supervision (Agent Runtime), and reliability engineering (Agent SRE).

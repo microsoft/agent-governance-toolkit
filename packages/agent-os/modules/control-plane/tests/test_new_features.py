@@ -7,13 +7,14 @@ Unit tests for Agent Control Plane v1.0 new features:
 - Flight Recorder (Black Box audit logging)
 """
 
-import unittest
 import asyncio
 import os
 import tempfile
+import unittest
+
 from src.agent_control_plane.agent_kernel import AgentKernel
-from src.agent_control_plane.policy_engine import PolicyEngine, Condition, ConditionalPermission
 from src.agent_control_plane.flight_recorder import FlightRecorder
+from src.agent_control_plane.policy_engine import Condition, ConditionalPermission, PolicyEngine
 
 
 class TestAsyncSupport(unittest.TestCase):

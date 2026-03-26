@@ -34,22 +34,22 @@ python main.py
 governance:
   name: smart-home-agent
   framework: safety-first
-  
+
 safety_rules:
   # Prevent dangerous combinations
   - rule: heater_window
     condition: "heater.on AND window.open"
     action: block
     message: "Cannot run heater with windows open"
-    
+
   - rule: stove_unattended
     condition: "stove.on AND no_motion_30min"
     action: alert_then_off
-    
+
   - rule: water_heater_limit
     condition: "water_heater.temp > 120F"
     action: cap_temperature
-    
+
 emergency:
   always_allowed:
     - unlock_doors  # Fire escape
@@ -59,7 +59,7 @@ emergency:
     - smoke_detectors
     - co_detectors
     - water_leak_sensors
-    
+
 privacy:
   cameras:
     - require_consent: true

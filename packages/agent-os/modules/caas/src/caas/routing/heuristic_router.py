@@ -7,7 +7,8 @@ Heuristic Router — routes all queries to the default retriever.
 No pattern-based classification; every query receives the same default route.
 """
 
-from typing import Optional, List
+from typing import Optional
+
 from caas.models import ModelTier, RoutingDecision
 
 

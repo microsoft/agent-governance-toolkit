@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Stats Tree View Provider
- * 
+ *
  * Displays safety statistics in the sidebar.
  */
 

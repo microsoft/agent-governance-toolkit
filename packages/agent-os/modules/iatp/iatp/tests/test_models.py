@@ -3,6 +3,7 @@
 """
 Unit tests for IATP models.
 """
+
 from iatp.models import (
     AgentCapabilities,
     CapabilityManifest,
@@ -23,13 +24,11 @@ def test_capability_manifest_creation():
             idempotency=True,
             reversibility=ReversibilityLevel.FULL,
             undo_window="24h",
-            sla_latency="1000ms"
+            sla_latency="1000ms",
         ),
         privacy_contract=PrivacyContract(
-            retention=RetentionPolicy.EPHEMERAL,
-            storage_location="us-east",
-            human_review=False
-        )
+            retention=RetentionPolicy.EPHEMERAL, storage_location="us-east", human_review=False
+        ),
     )
 
     assert manifest.agent_id == "test-agent"
@@ -51,7 +50,7 @@ def test_capability_manifest_with_scopes():
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.EPHEMERAL,
         ),
-        scopes=["repo:read", "repo:write"]
+        scopes=["repo:read", "repo:write"],
     )
 
     assert manifest.agent_id == "coder-agent"
@@ -66,7 +65,7 @@ def test_capability_manifest_default_scopes():
         capabilities=AgentCapabilities(),
         privacy_contract=PrivacyContract(
             retention=RetentionPolicy.TEMPORARY,
-        )
+        ),
     )
 
     assert manifest.scopes == []
@@ -77,14 +76,8 @@ def test_trust_score_verified_partner():
     manifest = CapabilityManifest(
         agent_id="verified-agent",
         trust_level=TrustLevel.VERIFIED_PARTNER,
-        capabilities=AgentCapabilities(
-            idempotency=True,
-            reversibility=ReversibilityLevel.FULL
-        ),
-        privacy_contract=PrivacyContract(
-            retention=RetentionPolicy.EPHEMERAL,
-            human_review=False
-        )
+        capabilities=AgentCapabilities(idempotency=True, reversibility=ReversibilityLevel.FULL),
+        privacy_contract=PrivacyContract(retention=RetentionPolicy.EPHEMERAL, human_review=False),
     )
 
     score = manifest.calculate_trust_score()
@@ -96,14 +89,8 @@ def test_trust_score_untrusted():
     manifest = CapabilityManifest(
         agent_id="sketchy-agent",
         trust_level=TrustLevel.UNTRUSTED,
-        capabilities=AgentCapabilities(
-            idempotency=False,
-            reversibility=ReversibilityLevel.NONE
-        ),
-        privacy_contract=PrivacyContract(
-            retention=RetentionPolicy.FOREVER,
-            human_review=True
-        )
+        capabilities=AgentCapabilities(idempotency=False, reversibility=ReversibilityLevel.NONE),
+        privacy_contract=PrivacyContract(retention=RetentionPolicy.FOREVER, human_review=True),
     )
 
     score = manifest.calculate_trust_score()
@@ -112,9 +99,7 @@ def test_trust_score_untrusted():
 
 def test_privacy_contract_defaults():
     """Test privacy contract default values."""
-    contract = PrivacyContract(
-        retention=RetentionPolicy.TEMPORARY
-    )
+    contract = PrivacyContract(retention=RetentionPolicy.TEMPORARY)
 
     assert contract.human_review is False
     assert contract.encryption_at_rest is True

@@ -26,10 +26,11 @@ Architecture:
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Callable
 
 
 class Severity(str, Enum):
@@ -57,6 +58,7 @@ class SecurityFinding:
 # Individual skill checks
 # ---------------------------------------------------------------------------
 
+
 def _find_line(source: str, pattern: re.Pattern[str]) -> int:
     """Return 1-based line number of first match, or 0."""
     for i, line in enumerate(source.splitlines(), 1):
@@ -77,25 +79,27 @@ def check_stub_security(source: str, path: str = "") -> list[SecurityFinding]:
     findings: list[SecurityFinding] = []
     for m in _STUB_PATTERN.finditer(source):
         fn_name = m.group(1)
-        line = source[:m.start()].count("\n") + 1
-        findings.append(SecurityFinding(
-            rule_id="SKILL-001",
-            title=f"Stub security function: {fn_name}()",
-            severity=Severity.CRITICAL,
-            description=(
-                f"Function '{fn_name}()' unconditionally returns True. "
-                "An attacker can bypass this security boundary entirely. "
-                "This was the root cause of a real-world identity fabrication "
-                "vulnerability in agent trust handshakes."
-            ),
-            file_path=path,
-            line_number=line,
-            suggestion=(
-                "Implement actual verification logic with cryptographic "
-                "challenge-response or registry lookup."
-            ),
-            owasp_risks=("AT02", "AT07"),
-        ))
+        line = source[: m.start()].count("\n") + 1
+        findings.append(
+            SecurityFinding(
+                rule_id="SKILL-001",
+                title=f"Stub security function: {fn_name}()",
+                severity=Severity.CRITICAL,
+                description=(
+                    f"Function '{fn_name}()' unconditionally returns True. "
+                    "An attacker can bypass this security boundary entirely. "
+                    "This was the root cause of a real-world identity fabrication "
+                    "vulnerability in agent trust handshakes."
+                ),
+                file_path=path,
+                line_number=line,
+                suggestion=(
+                    "Implement actual verification logic with cryptographic "
+                    "challenge-response or registry lookup."
+                ),
+                owasp_risks=("AT02", "AT07"),
+            )
+        )
     return findings
 
 
@@ -113,19 +117,21 @@ def check_unsafe_pickle(source: str, path: str = "") -> list[SecurityFinding]:
     if _HMAC_CHECK.search(source):
         return []
     line = _find_line(source, _PICKLE_LOAD)
-    return [SecurityFinding(
-        rule_id="SKILL-002",
-        title="pickle.loads() without integrity verification",
-        severity=Severity.CRITICAL,
-        description=(
-            "pickle.loads() is called without HMAC or signature verification. "
-            "Tampered pickle data enables arbitrary code execution."
-        ),
-        file_path=path,
-        line_number=line,
-        suggestion="Sign data with HMAC-SHA256 and verify before deserializing.",
-        owasp_risks=("AT02", "AT07"),
-    )]
+    return [
+        SecurityFinding(
+            rule_id="SKILL-002",
+            title="pickle.loads() without integrity verification",
+            severity=Severity.CRITICAL,
+            description=(
+                "pickle.loads() is called without HMAC or signature verification. "
+                "Tampered pickle data enables arbitrary code execution."
+            ),
+            file_path=path,
+            line_number=line,
+            suggestion="Sign data with HMAC-SHA256 and verify before deserializing.",
+            owasp_risks=("AT02", "AT07"),
+        )
+    ]
 
 
 _DENYLIST_PATTERN = re.compile(
@@ -139,23 +145,25 @@ def check_hardcoded_denylist(source: str, path: str = "") -> list[SecurityFindin
     """Detect hardcoded security deny-lists in source."""
     findings: list[SecurityFinding] = []
     for m in _DENYLIST_PATTERN.finditer(source):
-        line = source[:m.start()].count("\n") + 1
-        findings.append(SecurityFinding(
-            rule_id="SKILL-003",
-            title="Hardcoded security deny-list",
-            severity=Severity.HIGH,
-            description=(
-                "Security patterns are hardcoded in source. Attackers with "
-                "read access can reverse-engineer bypass strategies."
-            ),
-            file_path=path,
-            line_number=line,
-            suggestion=(
-                "Externalize into YAML config loaded at runtime. Keep "
-                "built-in defaults in a dataclass but warn when used."
-            ),
-            owasp_risks=("AT01", "AT08"),
-        ))
+        line = source[: m.start()].count("\n") + 1
+        findings.append(
+            SecurityFinding(
+                rule_id="SKILL-003",
+                title="Hardcoded security deny-list",
+                severity=Severity.HIGH,
+                description=(
+                    "Security patterns are hardcoded in source. Attackers with "
+                    "read access can reverse-engineer bypass strategies."
+                ),
+                file_path=path,
+                line_number=line,
+                suggestion=(
+                    "Externalize into YAML config loaded at runtime. Keep "
+                    "built-in defaults in a dataclass but warn when used."
+                ),
+                owasp_risks=("AT01", "AT08"),
+            )
+        )
     return findings
 
 
@@ -170,28 +178,28 @@ _EVICTION = re.compile(
 )
 
 
-def check_unbounded_collections(
-    source: str, path: str = ""
-) -> list[SecurityFinding]:
+def check_unbounded_collections(source: str, path: str = "") -> list[SecurityFinding]:
     """Detect security-sensitive dicts/lists without size limits."""
     if not _CACHE_DICT.search(source):
         return []
     if _EVICTION.search(source):
         return []
     line = _find_line(source, _CACHE_DICT)
-    return [SecurityFinding(
-        rule_id="SKILL-004",
-        title="Unbounded security-sensitive collection",
-        severity=Severity.MEDIUM,
-        description=(
-            "A dict/list used for caching or session tracking grows "
-            "without size limit. An attacker can exhaust memory."
-        ),
-        file_path=path,
-        line_number=line,
-        suggestion="Add _MAX_ENTRIES and evict oldest entries when full.",
-        owasp_risks=("AT05",),
-    )]
+    return [
+        SecurityFinding(
+            rule_id="SKILL-004",
+            title="Unbounded security-sensitive collection",
+            severity=Severity.MEDIUM,
+            description=(
+                "A dict/list used for caching or session tracking grows "
+                "without size limit. An attacker can exhaust memory."
+            ),
+            file_path=path,
+            line_number=line,
+            suggestion="Add _MAX_ENTRIES and evict oldest entries when full.",
+            owasp_risks=("AT05",),
+        )
+    ]
 
 
 _URL_FROM_INPUT = re.compile(
@@ -213,20 +221,22 @@ def check_ssrf_urls(source: str, path: str = "") -> list[SecurityFinding]:
     if _SSRF_GUARD.search(source):
         return []
     line = _find_line(source, _URL_FROM_INPUT)
-    return [SecurityFinding(
-        rule_id="SKILL-005",
-        title="SSRF-vulnerable URL handling",
-        severity=Severity.HIGH,
-        description=(
-            "A URL derived from user/agent input is used without SSRF "
-            "validation. Attackers can reach internal services (cloud "
-            "metadata endpoints, localhost admin panels)."
-        ),
-        file_path=path,
-        line_number=line,
-        suggestion="Block reserved/internal addresses before making requests.",
-        owasp_risks=("AT02", "AT07"),
-    )]
+    return [
+        SecurityFinding(
+            rule_id="SKILL-005",
+            title="SSRF-vulnerable URL handling",
+            severity=Severity.HIGH,
+            description=(
+                "A URL derived from user/agent input is used without SSRF "
+                "validation. Attackers can reach internal services (cloud "
+                "metadata endpoints, localhost admin panels)."
+            ),
+            file_path=path,
+            line_number=line,
+            suggestion="Block reserved/internal addresses before making requests.",
+            owasp_risks=("AT02", "AT07"),
+        )
+    ]
 
 
 _EXTERNAL_CALL = re.compile(
@@ -240,31 +250,31 @@ _CIRCUIT_BREAKER = re.compile(
 )
 
 
-def check_missing_circuit_breaker(
-    source: str, path: str = ""
-) -> list[SecurityFinding]:
+def check_missing_circuit_breaker(source: str, path: str = "") -> list[SecurityFinding]:
     """Detect external calls without circuit breaker."""
     if not _EXTERNAL_CALL.search(source):
         return []
     if _CIRCUIT_BREAKER.search(source):
         return []
     line = _find_line(source, _EXTERNAL_CALL)
-    return [SecurityFinding(
-        rule_id="SKILL-006",
-        title="External calls without circuit breaker",
-        severity=Severity.MEDIUM,
-        description=(
-            "External service calls lack circuit breaker pattern. "
-            "Failing downstream services cause cascading failures."
-        ),
-        file_path=path,
-        line_number=line,
-        suggestion=(
-            "Track consecutive failures per endpoint and stop calling "
-            "after threshold is exceeded."
-        ),
-        owasp_risks=("AT05", "AT10"),
-    )]
+    return [
+        SecurityFinding(
+            rule_id="SKILL-006",
+            title="External calls without circuit breaker",
+            severity=Severity.MEDIUM,
+            description=(
+                "External service calls lack circuit breaker pattern. "
+                "Failing downstream services cause cascading failures."
+            ),
+            file_path=path,
+            line_number=line,
+            suggestion=(
+                "Track consecutive failures per endpoint and stop calling "
+                "after threshold is exceeded."
+            ),
+            owasp_risks=("AT05", "AT10"),
+        )
+    ]
 
 
 _REGEX_COMPILE = re.compile(r"re\.compile\(\s*['\"](.+?)['\"]\s*\)")
@@ -277,28 +287,36 @@ def check_redos_patterns(source: str, path: str = "") -> list[SecurityFinding]:
     for m in _REGEX_COMPILE.finditer(source):
         pattern_str = m.group(1)
         if _REDOS_INDICATORS.search(pattern_str):
-            line = source[:m.start()].count("\n") + 1
-            findings.append(SecurityFinding(
-                rule_id="SKILL-007",
-                title="Potential ReDoS pattern",
-                severity=Severity.MEDIUM,
-                description=(
-                    f"Regex '{pattern_str[:60]}...' has nested quantifiers "
-                    "that may cause catastrophic backtracking (ReDoS)."
-                ),
-                file_path=path,
-                line_number=line,
-                suggestion=(
-                    "Use atomic groups, possessive quantifiers, or "
-                    "re2/regex library with backtracking limits."
-                ),
-                owasp_risks=("AT05",),
-            ))
+            line = source[: m.start()].count("\n") + 1
+            findings.append(
+                SecurityFinding(
+                    rule_id="SKILL-007",
+                    title="Potential ReDoS pattern",
+                    severity=Severity.MEDIUM,
+                    description=(
+                        f"Regex '{pattern_str[:60]}...' has nested quantifiers "
+                        "that may cause catastrophic backtracking (ReDoS)."
+                    ),
+                    file_path=path,
+                    line_number=line,
+                    suggestion=(
+                        "Use atomic groups, possessive quantifiers, or "
+                        "re2/regex library with backtracking limits."
+                    ),
+                    owasp_risks=("AT05",),
+                )
+            )
     return findings
 
 
 _SECRET_PATTERNS = [
-    (re.compile(r"""(?:api[_-]?key|secret[_-]?key|password|token)\s*=\s*['"][A-Za-z0-9+/=_-]{16,}['"]""", re.IGNORECASE), "Hardcoded secret/API key"),
+    (
+        re.compile(
+            r"""(?:api[_-]?key|secret[_-]?key|password|token)\s*=\s*['"][A-Za-z0-9+/=_-]{16,}['"]""",
+            re.IGNORECASE,
+        ),
+        "Hardcoded secret/API key",
+    ),
     (re.compile(r"AKIA[0-9A-Z]{16}"), "AWS access key ID"),
     (re.compile(r"gh[ps]_[A-Za-z0-9]{36}"), "GitHub token"),
     (re.compile(r"sk-[A-Za-z0-9]{32,}"), "OpenAI API key"),
@@ -315,20 +333,22 @@ def check_hardcoded_secrets(source: str, path: str = "") -> list[SecurityFinding
                 continue
             if "YOUR_" in m.group(0) or "PLACEHOLDER" in m.group(0):
                 continue
-            line = source[:m.start()].count("\n") + 1
-            findings.append(SecurityFinding(
-                rule_id="SKILL-008",
-                title=f"Hardcoded secret: {label}",
-                severity=Severity.CRITICAL,
-                description=(
-                    f"Possible hardcoded credential ({label}) in source. "
-                    "Secrets in code are exposed through version control."
-                ),
-                file_path=path,
-                line_number=line,
-                suggestion="Use environment variables or Azure Key Vault.",
-                owasp_risks=("AT02",),
-            ))
+            line = source[: m.start()].count("\n") + 1
+            findings.append(
+                SecurityFinding(
+                    rule_id="SKILL-008",
+                    title=f"Hardcoded secret: {label}",
+                    severity=Severity.CRITICAL,
+                    description=(
+                        f"Possible hardcoded credential ({label}) in source. "
+                        "Secrets in code are exposed through version control."
+                    ),
+                    file_path=path,
+                    line_number=line,
+                    suggestion="Use environment variables or Azure Key Vault.",
+                    owasp_risks=("AT02",),
+                )
+            )
     return findings
 
 
@@ -344,32 +364,32 @@ _CRYPTO_VERIFY = re.compile(
 )
 
 
-def check_trust_without_crypto(
-    source: str, path: str = ""
-) -> list[SecurityFinding]:
+def check_trust_without_crypto(source: str, path: str = "") -> list[SecurityFinding]:
     """Detect trust decisions made without cryptographic verification."""
     if not _TRUST_DECISION.search(source):
         return []
     if _CRYPTO_VERIFY.search(source):
         return []
     line = _find_line(source, _TRUST_DECISION)
-    return [SecurityFinding(
-        rule_id="SKILL-009",
-        title="Trust decision without cryptographic verification",
-        severity=Severity.HIGH,
-        description=(
-            "Trust score, level, or verification status is assigned without "
-            "cryptographic proof (Ed25519, HMAC). Attackers can fabricate "
-            "trusted identities."
-        ),
-        file_path=path,
-        line_number=line,
-        suggestion=(
-            "Require Ed25519 signature verification before assigning "
-            "trust scores. Use challenge-response for peer verification."
-        ),
-        owasp_risks=("AT02", "AT07"),
-    )]
+    return [
+        SecurityFinding(
+            rule_id="SKILL-009",
+            title="Trust decision without cryptographic verification",
+            severity=Severity.HIGH,
+            description=(
+                "Trust score, level, or verification status is assigned without "
+                "cryptographic proof (Ed25519, HMAC). Attackers can fabricate "
+                "trusted identities."
+            ),
+            file_path=path,
+            line_number=line,
+            suggestion=(
+                "Require Ed25519 signature verification before assigning "
+                "trust scores. Use challenge-response for peer verification."
+            ),
+            owasp_risks=("AT02", "AT07"),
+        )
+    ]
 
 
 _EXCEPTION_EXPOSE = re.compile(
@@ -389,23 +409,24 @@ def check_error_info_leak(source: str, path: str = "") -> list[SecurityFinding]:
     if _SANITIZE_ERROR.search(source):
         return []
     line = _find_line(source, _EXCEPTION_EXPOSE)
-    return [SecurityFinding(
-        rule_id="SKILL-010",
-        title="Exception details exposed to caller",
-        severity=Severity.MEDIUM,
-        description=(
-            "Full exception details (str(e), repr(e)) are returned or "
-            "logged at user-visible level. Internal paths, stack frames, "
-            "and SQL queries may leak to attackers."
-        ),
-        file_path=path,
-        line_number=line,
-        suggestion=(
-            "Return only type(e).__name__ to callers. Log full details "
-            "at DEBUG level only."
-        ),
-        owasp_risks=("AT02",),
-    )]
+    return [
+        SecurityFinding(
+            rule_id="SKILL-010",
+            title="Exception details exposed to caller",
+            severity=Severity.MEDIUM,
+            description=(
+                "Full exception details (str(e), repr(e)) are returned or "
+                "logged at user-visible level. Internal paths, stack frames, "
+                "and SQL queries may leak to attackers."
+            ),
+            file_path=path,
+            line_number=line,
+            suggestion=(
+                "Return only type(e).__name__ to callers. Log full details at DEBUG level only."
+            ),
+            owasp_risks=("AT02",),
+        )
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -507,8 +528,7 @@ def format_findings(findings: list[SecurityFinding]) -> str:
     counts = {s.value: len(fs) for s, fs in by_severity.items() if fs}
     summary_parts = [f"{v} {k}" for k, v in counts.items()]
     header = (
-        f"❌ **Security scan found {len(findings)} issue(s)**: "
-        + ", ".join(summary_parts) + ".\n"
+        f"❌ **Security scan found {len(findings)} issue(s)**: " + ", ".join(summary_parts) + ".\n"
     )
 
     lines = [header]
@@ -529,10 +549,7 @@ def format_findings(findings: list[SecurityFinding]) -> str:
         if f.suggestion:
             lines.append(f"\n**Suggested fix:** {f.suggestion}")
         if f.owasp_risks:
-            lines.append(
-                "**OWASP Agentic Top-10:** "
-                + ", ".join(f"`{r}`" for r in f.owasp_risks)
-            )
+            lines.append("**OWASP Agentic Top-10:** " + ", ".join(f"`{r}`" for r in f.owasp_risks))
         lines.append("---")
 
     return "\n".join(lines)

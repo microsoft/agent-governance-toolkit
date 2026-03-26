@@ -6,11 +6,12 @@ Arbiter Routes
 API endpoints for dispute resolution.
 """
 
+import uuid
+from datetime import datetime, timezone
+from typing import Literal, Optional
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from typing import Optional, Literal
-from datetime import datetime, timezone
-import uuid
 
 router = APIRouter()
 
@@ -61,13 +62,13 @@ _disputes: dict[str, dict] = {}
 async def submit_dispute(request: SubmitDisputeRequest):
     """
     Submit a new dispute for resolution.
-    
+
     The Arbiter will analyze evidence from both parties.
     """
     dispute_id = f"dispute_{uuid.uuid4().hex[:16]}"
-    
+
     now = datetime.now(timezone.utc)
-    
+
     dispute = {
         "dispute_id": dispute_id,
         "escrow_id": request.escrow_id,
@@ -80,16 +81,16 @@ async def submit_dispute(request: SubmitDisputeRequest):
         "provider_logs_hash": None,
         "resolved": False,
     }
-    
+
     # Set initial evidence
     if request.flight_recorder_logs_hash:
         if request.disputing_party == "requester":
             dispute["requester_logs_hash"] = request.flight_recorder_logs_hash
         else:
             dispute["provider_logs_hash"] = request.flight_recorder_logs_hash
-    
+
     _disputes[dispute_id] = dispute
-    
+
     return DisputeResponse(**dispute)
 
 
@@ -98,7 +99,7 @@ async def get_dispute(dispute_id: str):
     """Get dispute details."""
     if dispute_id not in _disputes:
         raise HTTPException(status_code=404, detail="Dispute not found")
-    
+
     return DisputeResponse(**_disputes[dispute_id])
 
 
@@ -107,21 +108,21 @@ async def submit_evidence(dispute_id: str, request: SubmitEvidenceRequest, party
     """Submit counter-evidence from the other party."""
     if dispute_id not in _disputes:
         raise HTTPException(status_code=404, detail="Dispute not found")
-    
+
     dispute = _disputes[dispute_id]
-    
+
     if dispute["resolved"]:
         raise HTTPException(status_code=400, detail="Dispute already resolved")
-    
+
     if party == "requester":
         dispute["requester_logs_hash"] = request.flight_recorder_logs_hash
     else:
         dispute["provider_logs_hash"] = request.flight_recorder_logs_hash
-    
+
     # Check if we have evidence from both parties
     if dispute["requester_logs_hash"] and dispute["provider_logs_hash"]:
         dispute["status"] = "ready_for_resolution"
-    
+
     return {"success": True, "status": dispute["status"]}
 
 
@@ -129,32 +130,31 @@ async def submit_evidence(dispute_id: str, request: SubmitEvidenceRequest, party
 async def resolve_dispute(dispute_id: str):
     """
     Resolve a dispute by analyzing evidence.
-    
+
     The Arbiter replays flight recorder logs against the Control Plane
     to determine which agent's claim is accurate.
     """
     if dispute_id not in _disputes:
         raise HTTPException(status_code=404, detail="Dispute not found")
-    
+
     dispute = _disputes[dispute_id]
-    
+
     if dispute["resolved"]:
         raise HTTPException(status_code=400, detail="Dispute already resolved")
-    
+
     # Check we have evidence
     if not dispute["requester_logs_hash"] or not dispute["provider_logs_hash"]:
         raise HTTPException(
-            status_code=400,
-            detail="Evidence required from both parties before resolution"
+            status_code=400, detail="Evidence required from both parties before resolution"
         )
-    
+
     # Analyze dispute (placeholder logic)
     # In production, would replay logs against Control Plane
-    
+
     # For demo, use simple heuristics
     requester_valid = bool(dispute["requester_logs_hash"])
     provider_valid = bool(dispute["provider_logs_hash"])
-    
+
     # Determine outcome
     if dispute["claimed_outcome"] == "success":
         # Disputing party claims success - likely provider
@@ -170,10 +170,10 @@ async def resolve_dispute(dispute_id: str):
         outcome = "split"
         decision = "Inconclusive evidence; compromise reached"
         liar = None
-    
+
     # Calculate credit distribution (assume 100 credits for demo)
     total_credits = 100
-    
+
     if outcome == "requester_wins":
         credits_requester = total_credits
         credits_provider = 0
@@ -189,13 +189,13 @@ async def resolve_dispute(dispute_id: str):
         credits_provider = total_credits // 2
         rep_requester = -10
         rep_provider = -10
-    
+
     # Mark resolved
     dispute["resolved"] = True
     dispute["status"] = "resolved"
     dispute["resolution_outcome"] = outcome
     dispute["resolved_at"] = datetime.now(timezone.utc).isoformat()
-    
+
     return DisputeResolutionResponse(
         dispute_id=dispute_id,
         escrow_id=dispute["escrow_id"],
@@ -216,12 +216,12 @@ async def get_resolution(dispute_id: str):
     """Get resolution for a resolved dispute."""
     if dispute_id not in _disputes:
         raise HTTPException(status_code=404, detail="Dispute not found")
-    
+
     dispute = _disputes[dispute_id]
-    
+
     if not dispute["resolved"]:
         raise HTTPException(status_code=400, detail="Dispute not yet resolved")
-    
+
     # Return stored resolution (in production would fetch from resolution store)
     return DisputeResolutionResponse(
         dispute_id=dispute_id,
@@ -246,10 +246,10 @@ async def list_disputes(
 ):
     """List disputes with optional filtering."""
     results = list(_disputes.values())
-    
+
     if resolved is not None:
         results = [d for d in results if d["resolved"] == resolved]
-    
+
     # Would filter by agent_did if we stored that
-    
+
     return {"disputes": results[:limit], "total": len(results)}

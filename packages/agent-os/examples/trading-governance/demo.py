@@ -43,9 +43,8 @@ sys.path.insert(0, os.path.join(_REPO_ROOT, "src"))
 from agent_os.integrations.base import (
     BaseIntegration,
     ExecutionContext,
-    GovernancePolicy,
     GovernanceEventType,
-    PatternType,
+    GovernancePolicy,
     PolicyInterceptor,
     ToolCallRequest,
     ToolCallResult,
@@ -82,8 +81,10 @@ compliance_policy = GovernancePolicy(
     require_human_approval=False,
     max_tool_calls=20,
     allowed_tools=[
-        "check_restricted_list", "verify_trading_window",
-        "approve_order", "reject_order",
+        "check_restricted_list",
+        "verify_trading_window",
+        "approve_order",
+        "reject_order",
     ],
     blocked_patterns=[],
     log_all_calls=True,
@@ -115,13 +116,14 @@ class TradeOrder:
       NEW -> RESEARCH_APPROVED -> RISK_CHECKED -> COMPLIANCE_APPROVED -> EXECUTED
       Any stage may set status to *_REJECTED or GOVERNANCE_BLOCKED.
     """
+
     order_id: str
     symbol: str
-    side: str                                   # BUY / SELL
+    side: str  # BUY / SELL
     quantity: int
     price: float
-    notional: float                             # quantity * price
-    order_type: str                             # MARKET / LIMIT
+    notional: float  # quantity * price
+    order_type: str  # MARKET / LIMIT
     status: str = "NEW"
     research_signal: Dict[str, Any] = field(default_factory=dict)
     risk_assessment: Dict[str, Any] = field(default_factory=dict)
@@ -146,6 +148,7 @@ def audit_listener(event: Dict[str, Any]) -> None:
 # 4. INTEGRATION SUBCLASS
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TradingIntegration(BaseIntegration):
     """Thin integration used to access governance helpers."""
 
@@ -160,6 +163,7 @@ class TradingIntegration(BaseIntegration):
 # 5. MOCK AGENTS — no real LLM calls
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class ResearchAgent:
     """Ring 3 — read-only market data and signal generation."""
 
@@ -167,9 +171,9 @@ class ResearchAgent:
     privilege_ring = 3
 
     _MOCK_DATA: Dict[str, Dict[str, Any]] = {
-        "AAPL": {"trend": "bullish",  "momentum":  0.72, "support": 148.50, "resistance": 155.00},
-        "TSLA": {"trend": "bearish",  "momentum": -0.45, "support": 220.00, "resistance": 260.00},
-        "MSFT": {"trend": "bullish",  "momentum":  0.65, "support": 380.00, "resistance": 400.00},
+        "AAPL": {"trend": "bullish", "momentum": 0.72, "support": 148.50, "resistance": 155.00},
+        "TSLA": {"trend": "bearish", "momentum": -0.45, "support": 220.00, "resistance": 260.00},
+        "MSFT": {"trend": "bullish", "momentum": 0.65, "support": 380.00, "resistance": 400.00},
     }
 
     def analyze_market(self, symbol: str) -> Dict[str, Any]:
@@ -185,8 +189,7 @@ class ResearchAgent:
             "action": "BUY" if momentum > 0 else "SELL",
             "confidence": abs(momentum),
             "target_price": (
-                analysis.get("resistance", 0) if momentum > 0
-                else analysis.get("support", 0)
+                analysis.get("resistance", 0) if momentum > 0 else analysis.get("support", 0)
             ),
             "timestamp": datetime.now().isoformat(),
         }
@@ -198,19 +201,21 @@ class RiskAgent:
     name = "RiskAgent"
     privilege_ring = 2
 
-    POSITION_LIMIT = 500_000       # $500 K max single-name exposure
-    CONCENTRATION_LIMIT = 0.10     # 10 % of portfolio
-    VAR_THRESHOLD = 50_000         # $50 K one-day 95 % VaR limit
+    POSITION_LIMIT = 500_000  # $500 K max single-name exposure
+    CONCENTRATION_LIMIT = 0.10  # 10 % of portfolio
+    VAR_THRESHOLD = 50_000  # $50 K one-day 95 % VaR limit
 
     def __init__(self) -> None:
         self.portfolio_value = 5_000_000
         self.positions: Dict[str, float] = {
-            "AAPL": 150_000, "MSFT": 200_000, "GOOG": 100_000,
+            "AAPL": 150_000,
+            "MSFT": 200_000,
+            "GOOG": 100_000,
         }
 
     def calculate_var(self, symbol: str, quantity: int, price: float) -> Dict[str, Any]:
         notional = quantity * price
-        var_estimate = notional * 0.05          # simple 5 % VaR proxy
+        var_estimate = notional * 0.05  # simple 5 % VaR proxy
         return {
             "symbol": symbol,
             "notional": notional,
@@ -243,7 +248,7 @@ class ComplianceAgent:
 
     RESTRICTED_LIST = ["INSIDER_CORP", "PENDING_MERGER_CO", "UNDER_INVESTIGATION_INC"]
     TRADING_WINDOW_CLOSED = ["INSIDER_CORP", "EARNINGS_CO"]
-    HUMAN_APPROVAL_THRESHOLD = 1_000_000       # $1 M notional
+    HUMAN_APPROVAL_THRESHOLD = 1_000_000  # $1 M notional
 
     def __init__(self) -> None:
         self.recent_trades: List[Dict[str, str]] = []
@@ -321,6 +326,7 @@ class ExecutionAgent:
 # 6. GOVERNED EXECUTION HELPER
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def governed_call(
     integration: TradingIntegration,
     ctx: ExecutionContext,
@@ -360,12 +366,14 @@ def governed_call(
         return None
 
     ctx.call_count += 1
-    ctx.tool_calls.append({
-        "call_id": request.call_id,
-        "tool": tool_name,
-        "arguments": {k: str(v)[:80] for k, v in arguments.items()},
-        "timestamp": datetime.now().isoformat(),
-    })
+    ctx.tool_calls.append(
+        {
+            "call_id": request.call_id,
+            "tool": tool_name,
+            "arguments": {k: str(v)[:80] for k, v in arguments.items()},
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
 
     if ctx.policy.log_all_calls:
         integration.emit(
@@ -407,6 +415,7 @@ def governed_call(
 # 7. DISPLAY HELPERS
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def print_header(title: str) -> None:
     width = 72
     print()
@@ -425,8 +434,7 @@ def print_order(order: TradeOrder) -> None:
         f"{order.symbol} @ ${order.price:.2f}"
     )
     print(
-        f"    Notional: ${order.notional:,.2f} | Type: {order.order_type} "
-        f"| Status: {order.status}"
+        f"    Notional: ${order.notional:,.2f} | Type: {order.order_type} | Status: {order.status}"
     )
 
 
@@ -438,6 +446,7 @@ def print_agent_header(agent_name: str, ring: int) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 # 8. TRADING PIPELINE
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TradingPipeline:
     """Orchestrates the four-stage governed trading pipeline."""
@@ -456,8 +465,10 @@ class TradingPipeline:
         self.execution_integ = TradingIntegration(policy=execution_policy)
 
         for integ in (
-            self.research_integ, self.risk_integ,
-            self.compliance_integ, self.execution_integ,
+            self.research_integ,
+            self.risk_integ,
+            self.compliance_integ,
+            self.execution_integ,
         ):
             for evt in (
                 GovernanceEventType.POLICY_CHECK,
@@ -482,7 +493,11 @@ class TradingPipeline:
 
     # ------------------------------------------------------------------
     def create_order(
-        self, symbol: str, side: str, quantity: int, price: float,
+        self,
+        symbol: str,
+        side: str,
+        quantity: int,
+        price: float,
         order_type: str = "LIMIT",
     ) -> TradeOrder:
         self._order_counter += 1
@@ -502,28 +517,47 @@ class TradingPipeline:
     def _research_stage(self, order: TradeOrder) -> bool:
         print_agent_header("ResearchAgent", 3)
 
-        if governed_call(
-            self.research_integ, self.research_ctx, self.research_icpt,
-            "analyze_market", {"symbol": order.symbol}, "ResearchAgent",
-        ) is None:
+        if (
+            governed_call(
+                self.research_integ,
+                self.research_ctx,
+                self.research_icpt,
+                "analyze_market",
+                {"symbol": order.symbol},
+                "ResearchAgent",
+            )
+            is None
+        ):
             return False
 
         analysis = self.research.analyze_market(order.symbol)
 
-        if governed_call(
-            self.research_integ, self.research_ctx, self.research_icpt,
-            "generate_signal", {"symbol": order.symbol}, "ResearchAgent",
-        ) is None:
+        if (
+            governed_call(
+                self.research_integ,
+                self.research_ctx,
+                self.research_icpt,
+                "generate_signal",
+                {"symbol": order.symbol},
+                "ResearchAgent",
+            )
+            is None
+        ):
             return False
 
         signal = self.research.generate_signal(order.symbol, analysis)
         order.research_signal = signal
         order.status = "RESEARCH_APPROVED"
-        order.audit_trail.append({
-            "stage": "research", "agent": "ResearchAgent", "ring": 3,
-            "decision": "APPROVED", "signal": signal,
-            "timestamp": datetime.now().isoformat(),
-        })
+        order.audit_trail.append(
+            {
+                "stage": "research",
+                "agent": "ResearchAgent",
+                "ring": 3,
+                "decision": "APPROVED",
+                "signal": signal,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
         print(
             f"    Signal: {signal['action']} {order.symbol} "
             f"(confidence: {signal['confidence']:.0%})"
@@ -533,12 +567,17 @@ class TradingPipeline:
     def _risk_stage(self, order: TradeOrder) -> bool:
         print_agent_header("RiskAgent", 2)
 
-        if governed_call(
-            self.risk_integ, self.risk_ctx, self.risk_icpt,
-            "calculate_var",
-            {"symbol": order.symbol, "quantity": order.quantity, "price": order.price},
-            "RiskAgent",
-        ) is None:
+        if (
+            governed_call(
+                self.risk_integ,
+                self.risk_ctx,
+                self.risk_icpt,
+                "calculate_var",
+                {"symbol": order.symbol, "quantity": order.quantity, "price": order.price},
+                "RiskAgent",
+            )
+            is None
+        ):
             return False
 
         var_result = self.risk.calculate_var(order.symbol, order.quantity, order.price)
@@ -547,12 +586,17 @@ class TradingPipeline:
             f"(limit: ${var_result['limit']:,.2f})"
         )
 
-        if governed_call(
-            self.risk_integ, self.risk_ctx, self.risk_icpt,
-            "check_exposure",
-            {"symbol": order.symbol, "notional": order.notional},
-            "RiskAgent",
-        ) is None:
+        if (
+            governed_call(
+                self.risk_integ,
+                self.risk_ctx,
+                self.risk_icpt,
+                "check_exposure",
+                {"symbol": order.symbol, "notional": order.notional},
+                "RiskAgent",
+            )
+            is None
+        ):
             return False
 
         exposure = self.risk.check_exposure(order.symbol, order.notional)
@@ -564,13 +608,20 @@ class TradingPipeline:
         if var_result["var_exceeds_limit"]:
             order.status = "RISK_REJECTED"
             order.risk_assessment = {
-                "decision": "REJECTED", "reason": "VaR exceeds limit", **var_result,
+                "decision": "REJECTED",
+                "reason": "VaR exceeds limit",
+                **var_result,
             }
-            order.audit_trail.append({
-                "stage": "risk", "agent": "RiskAgent", "ring": 2,
-                "decision": "REJECTED", "reason": "VaR exceeds limit",
-                "timestamp": datetime.now().isoformat(),
-            })
+            order.audit_trail.append(
+                {
+                    "stage": "risk",
+                    "agent": "RiskAgent",
+                    "ring": 2,
+                    "decision": "REJECTED",
+                    "reason": "VaR exceeds limit",
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
             print(
                 f"    \u26a0 RISK REJECTED: VaR ${var_result['var_1day_95']:,.2f} "
                 f"exceeds ${var_result['limit']:,.2f}"
@@ -580,14 +631,20 @@ class TradingPipeline:
         if exposure["exceeds_position_limit"]:
             order.status = "RISK_REJECTED"
             order.risk_assessment = {
-                "decision": "REJECTED", "reason": "Position limit exceeded",
+                "decision": "REJECTED",
+                "reason": "Position limit exceeded",
                 **exposure,
             }
-            order.audit_trail.append({
-                "stage": "risk", "agent": "RiskAgent", "ring": 2,
-                "decision": "REJECTED", "reason": "Position limit exceeded",
-                "timestamp": datetime.now().isoformat(),
-            })
+            order.audit_trail.append(
+                {
+                    "stage": "risk",
+                    "agent": "RiskAgent",
+                    "ring": 2,
+                    "decision": "REJECTED",
+                    "reason": "Position limit exceeded",
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
             print(
                 f"    \u26a0 RISK REJECTED: exposure ${exposure['proposed_exposure']:,.2f} "
                 f"exceeds ${exposure['position_limit']:,.2f}"
@@ -596,10 +653,15 @@ class TradingPipeline:
 
         order.status = "RISK_CHECKED"
         order.risk_assessment = {"decision": "PASSED", **var_result, **exposure}
-        order.audit_trail.append({
-            "stage": "risk", "agent": "RiskAgent", "ring": 2,
-            "decision": "PASSED", "timestamp": datetime.now().isoformat(),
-        })
+        order.audit_trail.append(
+            {
+                "stage": "risk",
+                "agent": "RiskAgent",
+                "ring": 2,
+                "decision": "PASSED",
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
         print("    \u2714 Risk checks passed")
         return True
 
@@ -607,10 +669,17 @@ class TradingPipeline:
         print_agent_header("ComplianceAgent", 1)
 
         # --- Restricted list ---
-        if governed_call(
-            self.compliance_integ, self.compliance_ctx, self.compliance_icpt,
-            "check_restricted_list", {"symbol": order.symbol}, "ComplianceAgent",
-        ) is None:
+        if (
+            governed_call(
+                self.compliance_integ,
+                self.compliance_ctx,
+                self.compliance_icpt,
+                "check_restricted_list",
+                {"symbol": order.symbol},
+                "ComplianceAgent",
+            )
+            is None
+        ):
             return False
 
         restricted = self.compliance.check_restricted_list(order.symbol)
@@ -618,19 +687,31 @@ class TradingPipeline:
             rej = self.compliance.reject_order(order, restricted["reason"])
             order.status = "COMPLIANCE_REJECTED"
             order.compliance_check = rej
-            order.audit_trail.append({
-                "stage": "compliance", "agent": "ComplianceAgent", "ring": 1,
-                "decision": "REJECTED", "reason": restricted["reason"],
-                "timestamp": datetime.now().isoformat(),
-            })
+            order.audit_trail.append(
+                {
+                    "stage": "compliance",
+                    "agent": "ComplianceAgent",
+                    "ring": 1,
+                    "decision": "REJECTED",
+                    "reason": restricted["reason"],
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
             print(f"    \u26a0 COMPLIANCE REJECTED: {restricted['reason']}")
             return False
 
         # --- Trading window ---
-        if governed_call(
-            self.compliance_integ, self.compliance_ctx, self.compliance_icpt,
-            "verify_trading_window", {"symbol": order.symbol}, "ComplianceAgent",
-        ) is None:
+        if (
+            governed_call(
+                self.compliance_integ,
+                self.compliance_ctx,
+                self.compliance_icpt,
+                "verify_trading_window",
+                {"symbol": order.symbol},
+                "ComplianceAgent",
+            )
+            is None
+        ):
             return False
 
         window = self.compliance.verify_trading_window(order.symbol)
@@ -638,11 +719,16 @@ class TradingPipeline:
             rej = self.compliance.reject_order(order, window["reason"])
             order.status = "COMPLIANCE_REJECTED"
             order.compliance_check = rej
-            order.audit_trail.append({
-                "stage": "compliance", "agent": "ComplianceAgent", "ring": 1,
-                "decision": "REJECTED", "reason": window["reason"],
-                "timestamp": datetime.now().isoformat(),
-            })
+            order.audit_trail.append(
+                {
+                    "stage": "compliance",
+                    "agent": "ComplianceAgent",
+                    "ring": 1,
+                    "decision": "REJECTED",
+                    "reason": window["reason"],
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
             print(f"    \u26a0 COMPLIANCE REJECTED: {window['reason']}")
             return False
 
@@ -650,30 +736,36 @@ class TradingPipeline:
         wash = self.compliance.check_wash_trading(order.symbol, order.side)
         if wash["wash_trading_detected"]:
             rej = self.compliance.reject_order(
-                order, f"Wash trading detected: {wash['pattern']}",
+                order,
+                f"Wash trading detected: {wash['pattern']}",
             )
             order.status = "COMPLIANCE_REJECTED"
             order.compliance_check = rej
-            order.audit_trail.append({
-                "stage": "compliance", "agent": "ComplianceAgent", "ring": 1,
-                "decision": "REJECTED",
-                "reason": f"Wash trading: {wash['pattern']}",
-                "timestamp": datetime.now().isoformat(),
-            })
-            print(
-                f"    \u26a0 COMPLIANCE REJECTED: Wash trading detected "
-                f"({wash['pattern']})"
+            order.audit_trail.append(
+                {
+                    "stage": "compliance",
+                    "agent": "ComplianceAgent",
+                    "ring": 1,
+                    "decision": "REJECTED",
+                    "reason": f"Wash trading: {wash['pattern']}",
+                    "timestamp": datetime.now().isoformat(),
+                }
             )
+            print(f"    \u26a0 COMPLIANCE REJECTED: Wash trading detected ({wash['pattern']})")
             return False
 
         # --- Human escalation for large notional ---
         if order.notional > ComplianceAgent.HUMAN_APPROVAL_THRESHOLD:
-            order.audit_trail.append({
-                "stage": "compliance", "agent": "ComplianceAgent", "ring": 1,
-                "decision": "ESCALATED",
-                "reason": f"Notional ${order.notional:,.2f} > $1M threshold",
-                "timestamp": datetime.now().isoformat(),
-            })
+            order.audit_trail.append(
+                {
+                    "stage": "compliance",
+                    "agent": "ComplianceAgent",
+                    "ring": 1,
+                    "decision": "ESCALATED",
+                    "reason": f"Notional ${order.notional:,.2f} > $1M threshold",
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
             print(
                 f"    \u23f3 ESCALATED: Notional ${order.notional:,.2f} "
                 f"exceeds $1M human-approval threshold"
@@ -682,22 +774,37 @@ class TradingPipeline:
             print("    >> [SIMULATED] Human approval GRANTED")
 
         # --- Approve ---
-        if governed_call(
-            self.compliance_integ, self.compliance_ctx, self.compliance_icpt,
-            "approve_order", {"order_id": order.order_id}, "ComplianceAgent",
-        ) is None:
+        if (
+            governed_call(
+                self.compliance_integ,
+                self.compliance_ctx,
+                self.compliance_icpt,
+                "approve_order",
+                {"order_id": order.order_id},
+                "ComplianceAgent",
+            )
+            is None
+        ):
             return False
 
         approval = self.compliance.approve_order(order)
         order.status = "COMPLIANCE_APPROVED"
         order.compliance_check = approval
-        order.audit_trail.append({
-            "stage": "compliance", "agent": "ComplianceAgent", "ring": 1,
-            "decision": "APPROVED", "timestamp": datetime.now().isoformat(),
-        })
-        self.compliance.recent_trades.append({
-            "symbol": order.symbol, "side": order.side,
-        })
+        order.audit_trail.append(
+            {
+                "stage": "compliance",
+                "agent": "ComplianceAgent",
+                "ring": 1,
+                "decision": "APPROVED",
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+        self.compliance.recent_trades.append(
+            {
+                "symbol": order.symbol,
+                "side": order.side,
+            }
+        )
         print("    \u2714 Compliance approved")
         return True
 
@@ -705,23 +812,30 @@ class TradingPipeline:
         print_agent_header("ExecutionAgent", 1)
 
         if order.status != "COMPLIANCE_APPROVED":
-            print(
-                f"    \u2718 BLOCKED: Order status is '{order.status}', "
-                f"not COMPLIANCE_APPROVED"
+            print(f"    \u2718 BLOCKED: Order status is '{order.status}', not COMPLIANCE_APPROVED")
+            order.audit_trail.append(
+                {
+                    "stage": "execution",
+                    "agent": "ExecutionAgent",
+                    "ring": 1,
+                    "decision": "BLOCKED",
+                    "reason": f"Status: {order.status}",
+                    "timestamp": datetime.now().isoformat(),
+                }
             )
-            order.audit_trail.append({
-                "stage": "execution", "agent": "ExecutionAgent", "ring": 1,
-                "decision": "BLOCKED", "reason": f"Status: {order.status}",
-                "timestamp": datetime.now().isoformat(),
-            })
             return False
 
-        if governed_call(
-            self.execution_integ, self.execution_ctx, self.execution_icpt,
-            "execute_order",
-            {"order_id": order.order_id, "symbol": order.symbol},
-            "ExecutionAgent",
-        ) is None:
+        if (
+            governed_call(
+                self.execution_integ,
+                self.execution_ctx,
+                self.execution_icpt,
+                "execute_order",
+                {"order_id": order.order_id, "symbol": order.symbol},
+                "ExecutionAgent",
+            )
+            is None
+        ):
             return False
 
         execution = self.execution.execute_order(order)
@@ -729,24 +843,33 @@ class TradingPipeline:
 
         if execution["executed"]:
             order.status = "EXECUTED"
-            order.audit_trail.append({
-                "stage": "execution", "agent": "ExecutionAgent", "ring": 1,
-                "decision": "EXECUTED",
-                "fill_price": execution["fill_price"],
-                "venue": execution["venue"],
-                "timestamp": datetime.now().isoformat(),
-            })
+            order.audit_trail.append(
+                {
+                    "stage": "execution",
+                    "agent": "ExecutionAgent",
+                    "ring": 1,
+                    "decision": "EXECUTED",
+                    "fill_price": execution["fill_price"],
+                    "venue": execution["venue"],
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
             print(
                 f"    \u2714 EXECUTED: {order.quantity} {order.symbol} "
                 f"@ ${execution['fill_price']:.2f} on {execution['venue']}"
             )
         else:
             order.status = "EXECUTION_FAILED"
-            order.audit_trail.append({
-                "stage": "execution", "agent": "ExecutionAgent", "ring": 1,
-                "decision": "FAILED", "reason": execution["reason"],
-                "timestamp": datetime.now().isoformat(),
-            })
+            order.audit_trail.append(
+                {
+                    "stage": "execution",
+                    "agent": "ExecutionAgent",
+                    "ring": 1,
+                    "decision": "FAILED",
+                    "reason": execution["reason"],
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
             print(f"    \u2718 EXECUTION FAILED: {execution['reason']}")
             return False
 
@@ -770,22 +893,41 @@ class TradingPipeline:
 # 9. DEMO SCENARIOS
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def run_demo() -> None:
     pipeline = TradingPipeline()
 
     # -- Policy summary ---------------------------------------------------
     print_header("Multi-Agent Trading Governance Demo \u2014 Agent OS")
-    print("\n  Pipeline: ResearchAgent \u2192 RiskAgent \u2192 ComplianceAgent \u2192 ExecutionAgent")
+    print(
+        "\n  Pipeline: ResearchAgent \u2192 RiskAgent \u2192 ComplianceAgent \u2192 ExecutionAgent"
+    )
     print()
     print("  Agent Privilege Matrix:")
-    print("  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510")
-    print("  \u2502 Agent            \u2502 Ring   \u2502 Allowed Tools                       \u2502")
-    print("  \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524")
-    print("  \u2502 ResearchAgent    \u2502 Ring 3 \u2502 analyze_market, screen_stocks, ...  \u2502")
-    print("  \u2502 RiskAgent        \u2502 Ring 2 \u2502 calculate_var, check_exposure, ...  \u2502")
-    print("  \u2502 ComplianceAgent  \u2502 Ring 1 \u2502 check_restricted_list, approve, ... \u2502")
-    print("  \u2502 ExecutionAgent   \u2502 Ring 1 \u2502 execute_order, cancel_order, ...    \u2502")
-    print("  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518")
+    print(
+        "  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510"
+    )
+    print(
+        "  \u2502 Agent            \u2502 Ring   \u2502 Allowed Tools                       \u2502"
+    )
+    print(
+        "  \u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524"
+    )
+    print(
+        "  \u2502 ResearchAgent    \u2502 Ring 3 \u2502 analyze_market, screen_stocks, ...  \u2502"
+    )
+    print(
+        "  \u2502 RiskAgent        \u2502 Ring 2 \u2502 calculate_var, check_exposure, ...  \u2502"
+    )
+    print(
+        "  \u2502 ComplianceAgent  \u2502 Ring 1 \u2502 check_restricted_list, approve, ... \u2502"
+    )
+    print(
+        "  \u2502 ExecutionAgent   \u2502 Ring 1 \u2502 execute_order, cancel_order, ...    \u2502"
+    )
+    print(
+        "  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518"
+    )
 
     # -- Scenario 1: Normal trade -----------------------------------------
     print_section("Scenario 1: Normal Trade Flow (AAPL 100 shares)")
@@ -809,15 +951,24 @@ def run_demo() -> None:
     print_agent_header("ResearchAgent", 3)
     print("    Attempting execute_order (not in ResearchAgent's allowed tools):")
     governed_call(
-        pipeline.research_integ, pipeline.research_ctx, pipeline.research_icpt,
-        "execute_order", {"order_id": order4.order_id}, "ResearchAgent",
+        pipeline.research_integ,
+        pipeline.research_ctx,
+        pipeline.research_icpt,
+        "execute_order",
+        {"order_id": order4.order_id},
+        "ResearchAgent",
     )
     order4.status = "GOVERNANCE_BLOCKED"
-    order4.audit_trail.append({
-        "stage": "research", "agent": "ResearchAgent", "ring": 3,
-        "decision": "BLOCKED", "reason": "execute_order not in allowed_tools",
-        "timestamp": datetime.now().isoformat(),
-    })
+    order4.audit_trail.append(
+        {
+            "stage": "research",
+            "agent": "ResearchAgent",
+            "ring": 3,
+            "decision": "BLOCKED",
+            "reason": "execute_order not in allowed_tools",
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
 
     # -- Scenario 5: Large order escalation -------------------------------
     # Use GOOG — current position $100K, adding $1.05M stays under VaR
@@ -864,10 +1015,10 @@ def run_demo() -> None:
     # -- Governance statistics --------------------------------------------
     print_header("Governance Statistics")
     contexts = [
-        ("ResearchAgent",   pipeline.research_ctx),
-        ("RiskAgent",       pipeline.risk_ctx),
+        ("ResearchAgent", pipeline.research_ctx),
+        ("RiskAgent", pipeline.risk_ctx),
         ("ComplianceAgent", pipeline.compliance_ctx),
-        ("ExecutionAgent",  pipeline.execution_ctx),
+        ("ExecutionAgent", pipeline.execution_ctx),
     ]
     for name, ctx in contexts:
         print(

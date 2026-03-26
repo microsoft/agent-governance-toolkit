@@ -4,15 +4,12 @@
 
 from __future__ import annotations
 
-import pytest
-
 from agent_os.policies.backends import (
-    BackendDecision,
     CedarBackend,
     ExternalPolicyBackend,
     OPABackend,
 )
-from agent_os.policies.evaluator import PolicyDecision, PolicyEvaluator
+from agent_os.policies.evaluator import PolicyEvaluator
 from agent_os.policies.schema import (
     PolicyAction,
     PolicyCondition,
@@ -20,7 +17,6 @@ from agent_os.policies.schema import (
     PolicyOperator,
     PolicyRule,
 )
-
 
 # ── OPA Backend Tests ─────────────────────────────────────────
 
@@ -271,10 +267,12 @@ class TestPolicyEvaluatorWithBackends:
         evaluator = PolicyEvaluator(
             policies=[self._make_yaml_policy("file_read", PolicyAction.DENY)]
         )
-        evaluator.load_rego(rego_content="""
+        evaluator.load_rego(
+            rego_content="""
 package agentos
 default allow = true
-""")
+"""
+        )
         decision = evaluator.evaluate({"tool_name": "file_read"})
         assert decision.allowed is False
         assert decision.matched_rule == "yaml-rule"
@@ -284,13 +282,15 @@ default allow = true
         evaluator = PolicyEvaluator(
             policies=[self._make_yaml_policy("file_read", PolicyAction.DENY)]
         )
-        evaluator.load_rego(rego_content="""
+        evaluator.load_rego(
+            rego_content="""
 package agentos
 default allow = false
 allow {
     input.tool_name == "web_search"
 }
-""")
+"""
+        )
         decision = evaluator.evaluate({"tool_name": "web_search"})
         assert decision.allowed is True
         assert "opa" in decision.audit_entry.get("backend", "opa")
@@ -300,13 +300,15 @@ allow {
         evaluator = PolicyEvaluator(
             policies=[self._make_yaml_policy("file_read", PolicyAction.DENY)]
         )
-        evaluator.load_cedar(policy_content="""
+        evaluator.load_cedar(
+            policy_content="""
 permit(
     principal,
     action == Action::"WebSearch",
     resource
 );
-""")
+"""
+        )
         decision = evaluator.evaluate({"tool_name": "web_search"})
         assert decision.allowed is True
         assert "cedar" in decision.audit_entry.get("backend", "cedar")
@@ -316,24 +318,30 @@ permit(
         evaluator = PolicyEvaluator()
 
         # OPA denies everything
-        evaluator.load_rego(rego_content="""
+        evaluator.load_rego(
+            rego_content="""
 package agentos
 default allow = false
-""")
+"""
+        )
         # Cedar would allow — but OPA runs first
-        evaluator.load_cedar(policy_content="""
+        evaluator.load_cedar(
+            policy_content="""
 permit(principal, action, resource);
-""")
+"""
+        )
         decision = evaluator.evaluate({"tool_name": "anything"})
         assert decision.allowed is False
 
     def test_backend_decision_includes_audit_entry(self):
         """Backend decisions include audit information."""
         evaluator = PolicyEvaluator()
-        evaluator.load_rego(rego_content="""
+        evaluator.load_rego(
+            rego_content="""
 package agentos
 default allow = true
-""")
+"""
+        )
         decision = evaluator.evaluate({"tool_name": "test"})
         assert "external:opa" in decision.audit_entry.get("policy", "")
         assert "evaluation_ms" in decision.audit_entry
@@ -352,7 +360,5 @@ default allow = true
 
     def test_load_cedar_returns_backend(self):
         evaluator = PolicyEvaluator()
-        backend = evaluator.load_cedar(
-            policy_content='permit(principal, action, resource);'
-        )
+        backend = evaluator.load_cedar(policy_content="permit(principal, action, resource);")
         assert backend.name == "cedar"

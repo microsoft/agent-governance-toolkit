@@ -11,7 +11,7 @@ Run:
     python examples/chaos_test.py
 """
 
-from agent_sre.chaos.engine import ChaosExperiment, Fault, AbortCondition
+from agent_sre.chaos.engine import AbortCondition, ChaosExperiment, Fault
 
 # ── Define a chaos experiment ───────────────────────────────────────────
 
@@ -53,10 +53,10 @@ print()
 
 # Simulate metrics during chaos
 simulated_metrics = {
-    "error_rate": 0.12,       # Elevated but manageable
+    "error_rate": 0.12,  # Elevated but manageable
     "success_rate": 0.88,
-    "avg_latency_ms": 3500,   # Slower due to retries
-    "cost_per_task": 0.55,    # Slightly higher cost from retries
+    "avg_latency_ms": 3500,  # Slower due to retries
+    "cost_per_task": 0.55,  # Slightly higher cost from retries
 }
 
 print("Observed metrics under chaos:")

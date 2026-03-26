@@ -11,6 +11,7 @@ message format, handshake protocols, and trust scores. Higher layers
 (like agent-control-plane) USE this protocol; this protocol does NOT
 depend on them.
 """
+
 from typing import Any, Dict, List, Optional, Protocol, Tuple, runtime_checkable
 
 from iatp.models import CapabilityManifest, ReversibilityLevel
@@ -39,11 +40,7 @@ class PolicyRule:
     """
 
     def __init__(
-        self,
-        name: str,
-        action: str,
-        conditions: Dict[str, List[Any]],
-        description: str = ""
+        self, name: str, action: str, conditions: Dict[str, List[Any]], description: str = ""
     ):
         """
         Initialize a policy rule.
@@ -103,19 +100,19 @@ class IATPPolicyEngine:
                 name="WarnUntrustedAgent",
                 description="Warn when agents are marked as untrusted",
                 action="warn",
-                conditions={"trust_level": ["untrusted"]}
+                conditions={"trust_level": ["untrusted"]},
             ),
             PolicyRule(
                 name="RequireReversibility",
                 description="Warn when agents don't support reversibility",
                 action="warn",
-                conditions={"reversibility": ["none"]}
+                conditions={"reversibility": ["none"]},
             ),
             PolicyRule(
                 name="AllowEphemeral",
                 description="Allow agents with ephemeral data retention",
                 action="allow",
-                conditions={"retention_policy": ["ephemeral"]}
+                conditions={"retention_policy": ["ephemeral"]},
             ),
         ]
 
@@ -134,14 +131,13 @@ class IATPPolicyEngine:
             name=rule.get("name", "CustomRule"),
             action=rule.get("action", "warn"),
             conditions=rule.get("conditions", {}),
-            description=rule.get("description", "")
+            description=rule.get("description", ""),
         )
         # Insert at beginning so custom rules take precedence
         self.rules.insert(0, policy_rule)
 
     def validate_manifest(
-        self,
-        manifest: CapabilityManifest
+        self, manifest: CapabilityManifest
     ) -> Tuple[bool, Optional[str], Optional[str]]:
         """
         Validate a capability manifest against policies.
@@ -211,11 +207,7 @@ class IATPPolicyEngine:
             "scopes": manifest.scopes,
         }
 
-    def _generate_deny_message(
-        self,
-        manifest: CapabilityManifest,
-        context: Dict[str, Any]
-    ) -> str:
+    def _generate_deny_message(self, manifest: CapabilityManifest, context: Dict[str, Any]) -> str:
         """
         Generate a denial message for blocked requests.
 
@@ -235,20 +227,14 @@ class IATPPolicyEngine:
             )
 
         if context["trust_level"] == "untrusted":
-            reasons.append(
-                f"Agent '{manifest.agent_id}' is marked as untrusted"
-            )
+            reasons.append(f"Agent '{manifest.agent_id}' is marked as untrusted")
 
         if reasons:
             return "Policy Violation: " + "; ".join(reasons)
 
         return f"Policy Violation: Agent '{manifest.agent_id}' failed policy validation"
 
-    def _generate_warn_message(
-        self,
-        manifest: CapabilityManifest,
-        context: Dict[str, Any]
-    ) -> str:
+    def _generate_warn_message(self, manifest: CapabilityManifest, context: Dict[str, Any]) -> str:
         """
         Generate a warning message for risky requests.
 
@@ -262,19 +248,13 @@ class IATPPolicyEngine:
         warnings = []
 
         if context["reversibility"] == "none":
-            warnings.append(
-                f"Agent '{manifest.agent_id}' does not support transaction reversal"
-            )
+            warnings.append(f"Agent '{manifest.agent_id}' does not support transaction reversal")
 
         if not context["idempotency"]:
-            warnings.append(
-                f"Agent '{manifest.agent_id}' may not handle duplicate requests safely"
-            )
+            warnings.append(f"Agent '{manifest.agent_id}' may not handle duplicate requests safely")
 
         if context["human_review"]:
-            warnings.append(
-                f"Agent '{manifest.agent_id}' may have humans review your data"
-            )
+            warnings.append(f"Agent '{manifest.agent_id}' may have humans review your data")
 
         if warnings:
             return "⚠️  Policy Warning:\n" + "\n".join(f"  • {w}" for w in warnings)
@@ -285,7 +265,7 @@ class IATPPolicyEngine:
         self,
         manifest: CapabilityManifest,
         required_capabilities: Optional[List[str]] = None,
-        required_scopes: Optional[List[str]] = None
+        required_scopes: Optional[List[str]] = None,
     ) -> Tuple[bool, Optional[str]]:
         """
         Validate handshake compatibility between agents.
@@ -314,11 +294,12 @@ class IATPPolicyEngine:
         # Check specific capability requirements
         missing = []
         for capability in required_capabilities:
-            if capability == "reversibility" and \
-               manifest.capabilities.reversibility == ReversibilityLevel.NONE:
+            if (
+                capability == "reversibility"
+                and manifest.capabilities.reversibility == ReversibilityLevel.NONE
+            ):
                 missing.append("reversibility support")
-            elif capability == "idempotency" and \
-                 not manifest.capabilities.idempotency:
+            elif capability == "idempotency" and not manifest.capabilities.idempotency:
                 missing.append("idempotency support")
 
         if missing:

@@ -11,11 +11,11 @@ Configurable via Django settings; returns 403 JSON on trust failure.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, JsonResponse
-
 
 logger = logging.getLogger(__name__)
 
@@ -67,11 +67,11 @@ class AgentTrustMiddleware:
         return str(_get_setting("AGENTMESH_SIGNATURE_HEADER", "X-Agent-Signature"))
 
     @staticmethod
-    def _exempt_paths() -> List[str]:
+    def _exempt_paths() -> list[str]:
         return list(_get_setting("AGENTMESH_EXEMPT_PATHS", []))
 
     @staticmethod
-    def _trusted_proxies() -> List[str]:
+    def _trusted_proxies() -> list[str]:
         """Return list of trusted proxy IPs/CIDRs.
 
         When set, DID headers are only trusted from these source IPs.
@@ -100,7 +100,10 @@ class AgentTrustMiddleware:
                     remote_addr,
                 )
                 return JsonResponse(
-                    {"error": "Untrusted proxy", "detail": "Request source is not in AGENTMESH_TRUSTED_PROXIES."},
+                    {
+                        "error": "Untrusted proxy",
+                        "detail": "Request source is not in AGENTMESH_TRUSTED_PROXIES.",
+                    },
                     status=403,
                 )
 
@@ -108,12 +111,8 @@ class AgentTrustMiddleware:
         sig_header = self._signature_header()
 
         # Django normalises headers to META keys: HTTP_X_AGENT_DID
-        agent_did: str = request.META.get(
-            "HTTP_" + did_header.upper().replace("-", "_"), ""
-        )
-        agent_sig: str = request.META.get(
-            "HTTP_" + sig_header.upper().replace("-", "_"), ""
-        )
+        agent_did: str = request.META.get("HTTP_" + did_header.upper().replace("-", "_"), "")
+        agent_sig: str = request.META.get("HTTP_" + sig_header.upper().replace("-", "_"), "")
 
         if not agent_did:
             return JsonResponse(
@@ -132,7 +131,7 @@ class AgentTrustMiddleware:
             request.agent_trust_score = None  # type: ignore[attr-defined]
             return self.get_response(request)
 
-        per_view_score: Optional[int] = None
+        per_view_score: int | None = None
         if view_func is not None:
             per_view_score = getattr(view_func, _TRUST_REQUIRED_ATTR, None)
 
@@ -187,6 +186,7 @@ class AgentTrustMiddleware:
             return 0
 
         import base64
+
         try:
             sig_bytes = base64.b64decode(agent_sig)
             public_key.verify(sig_bytes, agent_did.encode("utf-8"))
@@ -196,9 +196,9 @@ class AgentTrustMiddleware:
             return 0
 
     @staticmethod
-    def _resolve_view_func(request: HttpRequest) -> Optional[Callable[..., Any]]:
+    def _resolve_view_func(request: HttpRequest) -> Callable[..., Any] | None:
         """Resolve the view function for the current request, if possible."""
-        from django.urls import resolve, Resolver404
+        from django.urls import Resolver404, resolve
 
         try:
             match = resolve(request.path)

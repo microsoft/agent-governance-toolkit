@@ -3,13 +3,14 @@
 """Tests for schema definitions."""
 
 import pytest
+
 from atr.schema import (
-    ToolSpec,
-    ToolMetadata,
+    CostLevel,
     ParameterSpec,
     ParameterType,
     SideEffect,
-    CostLevel,
+    ToolMetadata,
+    ToolSpec,
 )
 
 
@@ -21,7 +22,7 @@ def test_parameter_spec_basic():
         description="The URL to process",
         required=True,
     )
-    
+
     assert param.name == "url"
     assert param.type == ParameterType.STRING
     assert param.description == "The URL to process"
@@ -38,7 +39,7 @@ def test_parameter_spec_with_default():
         required=False,
         default=30,
     )
-    
+
     assert param.required is False
     assert param.default == 30
 
@@ -65,7 +66,7 @@ def test_tool_metadata():
         side_effects=[SideEffect.READ, SideEffect.NETWORK],
         tags=["test", "example"],
     )
-    
+
     assert metadata.name == "test_tool"
     assert metadata.cost == CostLevel.LOW
     assert SideEffect.READ in metadata.side_effects
@@ -78,19 +79,19 @@ def test_tool_spec_basic():
         name="scraper",
         description="Web scraper tool",
     )
-    
+
     param = ParameterSpec(
         name="url",
         type=ParameterType.STRING,
         description="URL to scrape",
         required=True,
     )
-    
+
     spec = ToolSpec(
         metadata=metadata,
         parameters=[param],
     )
-    
+
     assert spec.metadata.name == "scraper"
     assert len(spec.parameters) == 1
     assert spec.parameters[0].name == "url"
@@ -102,7 +103,7 @@ def test_tool_spec_to_openai_schema():
         name="calculator",
         description="Perform calculations",
     )
-    
+
     params = [
         ParameterSpec(
             name="operation",
@@ -124,10 +125,10 @@ def test_tool_spec_to_openai_schema():
             required=True,
         ),
     ]
-    
+
     spec = ToolSpec(metadata=metadata, parameters=params)
     openai_schema = spec.to_openai_function_schema()
-    
+
     assert openai_schema["name"] == "calculator"
     assert openai_schema["description"] == "Perform calculations"
     assert "parameters" in openai_schema
@@ -136,7 +137,12 @@ def test_tool_spec_to_openai_schema():
     assert "a" in openai_schema["parameters"]["properties"]
     assert "b" in openai_schema["parameters"]["properties"]
     assert set(openai_schema["parameters"]["required"]) == {"operation", "a", "b"}
-    assert openai_schema["parameters"]["properties"]["operation"]["enum"] == ["add", "subtract", "multiply", "divide"]
+    assert openai_schema["parameters"]["properties"]["operation"]["enum"] == [
+        "add",
+        "subtract",
+        "multiply",
+        "divide",
+    ]
 
 
 def test_tool_spec_optional_parameters():
@@ -145,7 +151,7 @@ def test_tool_spec_optional_parameters():
         name="fetcher",
         description="Fetch data",
     )
-    
+
     params = [
         ParameterSpec(
             name="url",
@@ -161,10 +167,10 @@ def test_tool_spec_optional_parameters():
             default=30,
         ),
     ]
-    
+
     spec = ToolSpec(metadata=metadata, parameters=params)
     openai_schema = spec.to_openai_function_schema()
-    
+
     # Only required params should be in 'required' list
     assert openai_schema["parameters"]["required"] == ["url"]
     assert "timeout" in openai_schema["parameters"]["properties"]
@@ -176,9 +182,9 @@ def test_tool_spec_serialization():
         name="test",
         description="Test tool",
     )
-    
+
     spec = ToolSpec(metadata=metadata, parameters=[])
-    
+
     # Should serialize without error (private attrs are auto-excluded)
     json_str = spec.model_dump_json()
     assert json_str is not None

@@ -23,8 +23,10 @@ logger = logging.getLogger(__name__)
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class FirewallMode(Enum):
     """Operating mode for the combined firewall."""
+
     LLAMAFIREWALL_ONLY = "llamafirewall_only"
     AGENT_OS_ONLY = "agent_os_only"
     CHAIN_BOTH = "chain_both"
@@ -33,6 +35,7 @@ class FirewallMode(Enum):
 
 class FirewallVerdict(Enum):
     """Unified verdict across scanners."""
+
     SAFE = "safe"
     SUSPICIOUS = "suspicious"
     BLOCKED = "blocked"
@@ -43,9 +46,11 @@ class FirewallVerdict(Enum):
 # Result dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FirewallResult:
     """Combined result from LlamaFirewall and/or Agent OS scanning."""
+
     verdict: FirewallVerdict
     source: str  # "llamafirewall", "agent_os", "combined"
     score: float  # 0.0 (safe) to 1.0 (blocked)
@@ -59,6 +64,7 @@ class FirewallResult:
 # ---------------------------------------------------------------------------
 # LlamaFirewallAdapter
 # ---------------------------------------------------------------------------
+
 
 class LlamaFirewallAdapter:
     """Adapter that chains Meta's LlamaFirewall with Agent OS prompt injection detection.
@@ -83,12 +89,17 @@ class LlamaFirewallAdapter:
         # Lazy import of llamafirewall
         try:
             import llamafirewall  # noqa: F401
+
             self._llama_available = True
         except ImportError:
             self._llama_available = False
 
         # Fallback if llama is required but not installed
-        if mode in (FirewallMode.LLAMAFIREWALL_ONLY, FirewallMode.CHAIN_BOTH, FirewallMode.VOTE_MAJORITY):
+        if mode in (
+            FirewallMode.LLAMAFIREWALL_ONLY,
+            FirewallMode.CHAIN_BOTH,
+            FirewallMode.VOTE_MAJORITY,
+        ):
             if not self._llama_available:
                 logger.warning(
                     "llamafirewall package not installed — falling back to AGENT_OS_ONLY mode"
@@ -156,6 +167,7 @@ class LlamaFirewallAdapter:
 
         try:
             from llamafirewall import CodeShield  # type: ignore[import-untyped]
+
             shield = CodeShield()
             result = shield.scan(code, language=language)
             verdict = self._map_llama_verdict(result.get("verdict", "safe"))
@@ -192,6 +204,7 @@ class LlamaFirewallAdapter:
         """Call LlamaFirewall's scan API with graceful error handling."""
         try:
             from llamafirewall import LlamaFirewall as LF  # type: ignore[import-untyped]
+
             fw = LF()
             result = fw.scan(prompt, context=context)
             return {
@@ -244,7 +257,9 @@ class LlamaFirewallAdapter:
                 score=llama_score,
                 details={"mode": mode.value},
                 prompt_guard_result=llama_result.get("prompt_guard") if llama_result else None,
-                alignment_check_result=llama_result.get("alignment_check") if llama_result else None,
+                alignment_check_result=llama_result.get("alignment_check")
+                if llama_result
+                else None,
             )
 
         # CHAIN_BOTH: block if either blocks, use max score (most conservative)
@@ -252,7 +267,10 @@ class LlamaFirewallAdapter:
             combined_score = max(llama_score, aos_score)
             if llama_verdict == FirewallVerdict.BLOCKED or aos_verdict == FirewallVerdict.BLOCKED:
                 combined_verdict = FirewallVerdict.BLOCKED
-            elif llama_verdict == FirewallVerdict.SUSPICIOUS or aos_verdict == FirewallVerdict.SUSPICIOUS:
+            elif (
+                llama_verdict == FirewallVerdict.SUSPICIOUS
+                or aos_verdict == FirewallVerdict.SUSPICIOUS
+            ):
                 combined_verdict = FirewallVerdict.SUSPICIOUS
             elif llama_verdict == FirewallVerdict.ERROR or aos_verdict == FirewallVerdict.ERROR:
                 combined_verdict = FirewallVerdict.ERROR
@@ -263,19 +281,27 @@ class LlamaFirewallAdapter:
                 verdict=combined_verdict,
                 source="combined",
                 score=combined_score,
-                details={"mode": mode.value, "llama_verdict": llama_verdict_str, "aos_verdict": aos_verdict.value},
+                details={
+                    "mode": mode.value,
+                    "llama_verdict": llama_verdict_str,
+                    "aos_verdict": aos_verdict.value,
+                },
                 prompt_guard_result=llama_result.get("prompt_guard") if llama_result else None,
-                alignment_check_result=llama_result.get("alignment_check") if llama_result else None,
+                alignment_check_result=llama_result.get("alignment_check")
+                if llama_result
+                else None,
                 agent_os_result=aos_result,
             )
 
         # VOTE_MAJORITY: require both to agree for block, use average score
         if mode == FirewallMode.VOTE_MAJORITY:
             combined_score = (llama_score + aos_score) / 2.0
-            block_votes = sum([
-                llama_verdict == FirewallVerdict.BLOCKED,
-                aos_verdict == FirewallVerdict.BLOCKED,
-            ])
+            block_votes = sum(
+                [
+                    llama_verdict == FirewallVerdict.BLOCKED,
+                    aos_verdict == FirewallVerdict.BLOCKED,
+                ]
+            )
             if block_votes >= 2:
                 combined_verdict = FirewallVerdict.BLOCKED
             elif block_votes == 1:
@@ -294,7 +320,9 @@ class LlamaFirewallAdapter:
                     "aos_verdict": aos_verdict.value,
                 },
                 prompt_guard_result=llama_result.get("prompt_guard") if llama_result else None,
-                alignment_check_result=llama_result.get("alignment_check") if llama_result else None,
+                alignment_check_result=llama_result.get("alignment_check")
+                if llama_result
+                else None,
                 agent_os_result=aos_result,
             )
 
@@ -334,10 +362,16 @@ class LlamaFirewallAdapter:
     def available_scanners(self) -> list[str]:
         """Return list of active scanner names."""
         scanners: list[str] = []
-        if self._mode in (FirewallMode.AGENT_OS_ONLY, FirewallMode.CHAIN_BOTH, FirewallMode.VOTE_MAJORITY):
+        if self._mode in (
+            FirewallMode.AGENT_OS_ONLY,
+            FirewallMode.CHAIN_BOTH,
+            FirewallMode.VOTE_MAJORITY,
+        ):
             scanners.append("agent_os")
         if self._llama_available and self._mode in (
-            FirewallMode.LLAMAFIREWALL_ONLY, FirewallMode.CHAIN_BOTH, FirewallMode.VOTE_MAJORITY,
+            FirewallMode.LLAMAFIREWALL_ONLY,
+            FirewallMode.CHAIN_BOTH,
+            FirewallMode.VOTE_MAJORITY,
         ):
             scanners.append("llamafirewall")
         return scanners

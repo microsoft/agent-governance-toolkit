@@ -32,16 +32,18 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List, Optional, Awaitable
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class MCPMessageType(Enum):
     """MCP message types."""
+
     REQUEST = "request"
     RESPONSE = "response"
     NOTIFICATION = "notification"
@@ -51,43 +53,45 @@ class MCPMessageType(Enum):
 @dataclass
 class MCPTool:
     """MCP tool definition with trust requirements."""
+
     name: str
     description: str
     handler: Callable[..., Awaitable[Any]]
-    input_schema: Dict[str, Any] = field(default_factory=dict)
+    input_schema: dict[str, Any] = field(default_factory=dict)
 
     # Trust requirements
-    required_capability: Optional[str] = None
+    required_capability: str | None = None
     min_trust_score: int = 300
     require_human_sponsor: bool = False
 
     # Audit
     total_calls: int = 0
     failed_calls: int = 0
-    last_called: Optional[datetime] = None
+    last_called: datetime | None = None
 
 
 @dataclass
 class MCPToolCall:
     """Record of an MCP tool invocation."""
+
     call_id: str
     tool_name: str
     caller_did: str
-    arguments: Dict[str, Any]
+    arguments: dict[str, Any]
 
     # Trust metadata
     trust_verified: bool = False
     trust_score: int = 0
-    capabilities_checked: List[str] = field(default_factory=list)
+    capabilities_checked: list[str] = field(default_factory=list)
 
     # Timing
     started_at: datetime = field(default_factory=datetime.utcnow)
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
     # Result
     success: bool = False
     result: Any = None
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class TrustGatedMCPServer:
@@ -112,14 +116,14 @@ class TrustGatedMCPServer:
         self.min_trust_score = min_trust_score
         self.audit_all_calls = audit_all_calls
 
-        self._tools: Dict[str, MCPTool] = {}
-        self._call_history: List[MCPToolCall] = []
-        self._verified_clients: Dict[str, datetime] = {}
+        self._tools: dict[str, MCPTool] = {}
+        self._call_history: list[MCPToolCall] = []
+        self._verified_clients: dict[str, datetime] = {}
         self._verification_ttl = timedelta(minutes=10)
         self._max_verified_clients = 10_000
 
         # P10: Circuit breaker — track consecutive failures per tool
-        self._tool_failures: Dict[str, int] = {}
+        self._tool_failures: dict[str, int] = {}
         self._circuit_breaker_threshold = 5  # open circuit after 5 consecutive failures
         self._circuit_breaker_reset = timedelta(minutes=1)
 
@@ -133,9 +137,9 @@ class TrustGatedMCPServer:
         name: str,
         handler: Callable[..., Awaitable[Any]],
         description: str = "",
-        input_schema: Optional[Dict[str, Any]] = None,
-        required_capability: Optional[str] = None,
-        min_trust_score: Optional[int] = None,
+        input_schema: dict[str, Any] | None = None,
+        required_capability: str | None = None,
+        min_trust_score: int | None = None,
         require_human_sponsor: bool = False,
     ) -> None:
         """
@@ -152,13 +156,16 @@ class TrustGatedMCPServer:
         """
         # P05: Sanitize tool description — truncate and strip control characters
         import re as _re
+
         clean_desc = _re.sub(r"[\x00-\x1f\x7f-\x9f]", "", description)
         if len(clean_desc) > self._MAX_DESCRIPTION_LENGTH:
             logger.warning(
                 "Tool '%s' description truncated from %d to %d chars",
-                name, len(clean_desc), self._MAX_DESCRIPTION_LENGTH,
+                name,
+                len(clean_desc),
+                self._MAX_DESCRIPTION_LENGTH,
             )
-            clean_desc = clean_desc[:self._MAX_DESCRIPTION_LENGTH]
+            clean_desc = clean_desc[: self._MAX_DESCRIPTION_LENGTH]
 
         self._tools[name] = MCPTool(
             name=name,
@@ -174,7 +181,7 @@ class TrustGatedMCPServer:
     async def verify_client(
         self,
         client_did: str,
-        client_card: Optional[Any] = None,  # A2AAgentCard
+        client_card: Any | None = None,  # A2AAgentCard
     ) -> bool:
         """Verify client identity before allowing tool access."""
         # Check cache
@@ -214,15 +221,14 @@ class TrustGatedMCPServer:
         """Remove expired entries from the verified clients cache."""
         now = datetime.utcnow()
         expired = [
-            did for did, ts in self._verified_clients.items()
-            if now - ts >= self._verification_ttl
+            did for did, ts in self._verified_clients.items() if now - ts >= self._verification_ttl
         ]
         for did in expired:
             del self._verified_clients[did]
 
     def _check_capability(
         self,
-        client_capabilities: List[str],
+        client_capabilities: list[str],
         required: str,
     ) -> bool:
         """Check if client has required capability (with wildcard support)."""
@@ -244,9 +250,9 @@ class TrustGatedMCPServer:
     async def invoke_tool(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
         caller_did: str,
-        caller_capabilities: Optional[List[str]] = None,
+        caller_capabilities: list[str] | None = None,
         caller_trust_score: int = 0,
     ) -> MCPToolCall:
         """
@@ -275,12 +281,15 @@ class TrustGatedMCPServer:
 
         # P12: Reject oversized arguments to prevent memory DoS
         import json as _json
+
         try:
             args_size = len(_json.dumps(arguments))
         except (TypeError, ValueError):
             args_size = 0
         if args_size > self._MAX_ARGUMENTS_SIZE:
-            call.error = f"Arguments too large: {args_size} bytes exceeds {self._MAX_ARGUMENTS_SIZE} limit"
+            call.error = (
+                f"Arguments too large: {args_size} bytes exceeds {self._MAX_ARGUMENTS_SIZE} limit"
+            )
             call.completed_at = datetime.utcnow()
             self._record_call(call)
             return call
@@ -296,9 +305,7 @@ class TrustGatedMCPServer:
 
         # Verify trust score
         if caller_trust_score < tool.min_trust_score:
-            call.error = (
-                f"Insufficient trust score: {caller_trust_score} < {tool.min_trust_score}"
-            )
+            call.error = f"Insufficient trust score: {caller_trust_score} < {tool.min_trust_score}"
             call.completed_at = datetime.utcnow()
             tool.failed_calls += 1
             self._record_call(call)
@@ -335,7 +342,9 @@ class TrustGatedMCPServer:
                 if stripped:
                     logger.warning(
                         "Stripped unexpected kwargs from %s call by %s: %s",
-                        tool_name, caller_did, stripped,
+                        tool_name,
+                        caller_did,
+                        stripped,
                     )
             else:
                 sanitized = arguments
@@ -366,7 +375,7 @@ class TrustGatedMCPServer:
             if len(self._call_history) > 1000:
                 self._call_history = self._call_history[-1000:]
 
-    def list_tools(self) -> List[Dict[str, Any]]:
+    def list_tools(self) -> list[dict[str, Any]]:
         """List available tools in MCP format."""
         return [
             {
@@ -382,7 +391,7 @@ class TrustGatedMCPServer:
             for tool in self._tools.values()
         ]
 
-    def get_audit_summary(self) -> Dict[str, Any]:
+    def get_audit_summary(self) -> dict[str, Any]:
         """Get summary of tool usage."""
         return {
             "totalTools": len(self._tools),
@@ -407,12 +416,13 @@ class TrustGatedMCPClient:
     ):
         self.identity = identity
         self.trust_bridge = trust_bridge
-        self._connected_servers: Dict[str, datetime] = {}
+        self._connected_servers: dict[str, datetime] = {}
 
     async def connect(self, server_url: str) -> bool:
         """Connect to MCP server with trust verification."""
         # V18: Validate server URL scheme
         from urllib.parse import urlparse
+
         parsed = urlparse(server_url)
         if parsed.scheme not in ("http", "https", "ws", "wss"):
             logger.warning("Rejected server URL with invalid scheme: %s", server_url)
@@ -439,7 +449,7 @@ class TrustGatedMCPClient:
         logger.info(f"Connected to MCP server: {server_url}")
         return True
 
-    async def _discover_server_did(self, server_url: str) -> Optional[str]:
+    async def _discover_server_did(self, server_url: str) -> str | None:
         """Discover server DID from /.well-known/agent.json"""
         # In real implementation, fetch agent.json and extract DID
         return None
@@ -448,8 +458,8 @@ class TrustGatedMCPClient:
         self,
         server_url: str,
         tool_name: str,
-        arguments: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        arguments: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Invoke tool on MCP server.
 
@@ -468,13 +478,17 @@ class TrustGatedMCPClient:
             "Provide an HTTP transport backend via a subclass or plugin."
         )
 
-    def get_credentials(self) -> Dict[str, Any]:
+    def get_credentials(self) -> dict[str, Any]:
         """Get identity credentials for MCP authentication."""
         return {
             "type": "cmvk",
             "did": str(self.identity.did) if hasattr(self.identity, "did") else "",
-            "trustScore": self.identity.trust_score if hasattr(self.identity, "trust_score") else 500,
-            "capabilities": list(self.identity.capabilities) if hasattr(self.identity, "capabilities") else [],
+            "trustScore": self.identity.trust_score
+            if hasattr(self.identity, "trust_score")
+            else 500,
+            "capabilities": list(self.identity.capabilities)
+            if hasattr(self.identity, "capabilities")
+            else [],
         }
 
 

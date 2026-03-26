@@ -130,10 +130,9 @@ class EvaluationImporter:
         return {
             "total_evaluations": len(self._records),
             "by_eval_name": by_eval,
-            "mapped_sli_types": list(set(
-                _EVAL_TO_SLI_MAP.get(r.eval_name, "unmapped")
-                for r in self._records
-            )),
+            "mapped_sli_types": list(
+                set(_EVAL_TO_SLI_MAP.get(r.eval_name, "unmapped") for r in self._records)
+            ),
         }
 
     def clear(self) -> None:

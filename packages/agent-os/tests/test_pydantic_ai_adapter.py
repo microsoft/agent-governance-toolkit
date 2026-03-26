@@ -8,21 +8,18 @@ No real pydantic-ai dependency required — uses mock Agent objects.
 Run with: python -m pytest tests/test_pydantic_ai_adapter.py -v --tb=short
 """
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agent_os.integrations.pydantic_ai_adapter import (
-    HumanApprovalRequired,
-    PydanticAIKernel,
-    wrap,
-)
 from agent_os.integrations.base import (
     GovernancePolicy,
     PolicyViolationError,
 )
-
+from agent_os.integrations.pydantic_ai_adapter import (
+    PydanticAIKernel,
+    wrap,
+)
 
 # =============================================================================
 # Helpers

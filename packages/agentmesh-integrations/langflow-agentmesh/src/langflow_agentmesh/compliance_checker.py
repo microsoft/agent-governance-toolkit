@@ -94,21 +94,33 @@ def _json_dumps_safe(obj: Any) -> str:
 _PHI_PATTERNS = [
     (r"\b\d{3}-\d{2}-\d{4}\b", "SSN detected"),
     (r"\bMRN\s*[:#]?\s*\d+\b", "Medical Record Number detected"),
-    (r"\b(?:DOB|date of birth)\s*[:#]?\s*\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}\b", "Date of Birth detected"),
+    (
+        r"\b(?:DOB|date of birth)\s*[:#]?\s*\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}\b",
+        "Date of Birth detected",
+    ),
     (r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "Email address detected"),
 ]
 
 # High-risk AI domains per EU AI Act
 _HIGH_RISK_DOMAINS = {
-    "biometric", "law_enforcement", "migration", "justice",
-    "employment", "education", "critical_infrastructure",
-    "credit_scoring", "insurance",
+    "biometric",
+    "law_enforcement",
+    "migration",
+    "justice",
+    "employment",
+    "education",
+    "critical_infrastructure",
+    "credit_scoring",
+    "insurance",
 }
 
 # Unacceptable risk keywords
 _UNACCEPTABLE_KEYWORDS = [
-    "social_scoring", "subliminal_manipulation", "exploitation_vulnerability",
-    "real_time_biometric", "emotion_recognition_workplace",
+    "social_scoring",
+    "subliminal_manipulation",
+    "exploitation_vulnerability",
+    "real_time_biometric",
+    "emotion_recognition_workplace",
 ]
 
 
@@ -199,34 +211,40 @@ class ComplianceChecker:
         risk_level = self._classify_risk(action, domain)
 
         if risk_level == RiskLevel.UNACCEPTABLE:
-            violations.append(ComplianceViolation(
-                framework=ComplianceFramework.EU_AI_ACT,
-                rule="Article 5 - Prohibited AI Practices",
-                description=f"Action '{action}' classified as unacceptable risk",
-                severity="critical",
-                required_action="Block action — prohibited under EU AI Act",
-            ))
+            violations.append(
+                ComplianceViolation(
+                    framework=ComplianceFramework.EU_AI_ACT,
+                    rule="Article 5 - Prohibited AI Practices",
+                    description=f"Action '{action}' classified as unacceptable risk",
+                    severity="critical",
+                    required_action="Block action — prohibited under EU AI Act",
+                )
+            )
             actions.append("Block action — prohibited under EU AI Act")
 
         if risk_level == RiskLevel.HIGH:
             if not context.get("transparency_notice"):
-                violations.append(ComplianceViolation(
-                    framework=ComplianceFramework.EU_AI_ACT,
-                    rule="Article 13 - Transparency",
-                    description="High-risk AI system requires transparency notice",
-                    severity="high",
-                    required_action="Add transparency notice for high-risk AI action",
-                ))
+                violations.append(
+                    ComplianceViolation(
+                        framework=ComplianceFramework.EU_AI_ACT,
+                        rule="Article 13 - Transparency",
+                        description="High-risk AI system requires transparency notice",
+                        severity="high",
+                        required_action="Add transparency notice for high-risk AI action",
+                    )
+                )
                 actions.append("Add transparency notice for high-risk AI action")
 
             if not context.get("human_oversight"):
-                violations.append(ComplianceViolation(
-                    framework=ComplianceFramework.EU_AI_ACT,
-                    rule="Article 14 - Human Oversight",
-                    description="High-risk AI system requires human oversight",
-                    severity="high",
-                    required_action="Enable human oversight for high-risk AI action",
-                ))
+                violations.append(
+                    ComplianceViolation(
+                        framework=ComplianceFramework.EU_AI_ACT,
+                        rule="Article 14 - Human Oversight",
+                        description="High-risk AI system requires human oversight",
+                        severity="high",
+                        required_action="Enable human oversight for high-risk AI action",
+                    )
+                )
                 actions.append("Enable human oversight for high-risk AI action")
 
         return violations, actions
@@ -243,37 +261,49 @@ class ComplianceChecker:
         actions: List[str] = []
 
         if not agent_id:
-            violations.append(ComplianceViolation(
-                framework=ComplianceFramework.SOC2,
-                rule="CC6.1 - Logical Access",
-                description="Agent identity required for access control",
-                severity="high",
-                required_action="Provide agent_id for audit trail",
-            ))
+            violations.append(
+                ComplianceViolation(
+                    framework=ComplianceFramework.SOC2,
+                    rule="CC6.1 - Logical Access",
+                    description="Agent identity required for access control",
+                    severity="high",
+                    required_action="Provide agent_id for audit trail",
+                )
+            )
             actions.append("Provide agent_id for audit trail")
 
         if not context.get("audit_enabled", False):
-            violations.append(ComplianceViolation(
-                framework=ComplianceFramework.SOC2,
-                rule="CC7.2 - System Monitoring",
-                description="Audit logging must be enabled for compliance",
-                severity="medium",
-                required_action="Enable audit logging",
-            ))
+            violations.append(
+                ComplianceViolation(
+                    framework=ComplianceFramework.SOC2,
+                    rule="CC7.2 - System Monitoring",
+                    description="Audit logging must be enabled for compliance",
+                    severity="medium",
+                    required_action="Enable audit logging",
+                )
+            )
             actions.append("Enable audit logging")
 
-        sensitive_actions = context.get("sensitive_actions", [
-            "delete", "modify", "deploy", "configure",
-        ])
+        sensitive_actions = context.get(
+            "sensitive_actions",
+            [
+                "delete",
+                "modify",
+                "deploy",
+                "configure",
+            ],
+        )
         if action.lower() in [a.lower() for a in sensitive_actions]:
             if not context.get("change_approved", False):
-                violations.append(ComplianceViolation(
-                    framework=ComplianceFramework.SOC2,
-                    rule="CC8.1 - Change Management",
-                    description=f"Sensitive action '{action}' requires change approval",
-                    severity="medium",
-                    required_action=f"Obtain approval for sensitive action '{action}'",
-                ))
+                violations.append(
+                    ComplianceViolation(
+                        framework=ComplianceFramework.SOC2,
+                        rule="CC8.1 - Change Management",
+                        description=f"Sensitive action '{action}' requires change approval",
+                        severity="medium",
+                        required_action=f"Obtain approval for sensitive action '{action}'",
+                    )
+                )
                 actions.append(f"Obtain approval for sensitive action '{action}'")
 
         return violations, actions
@@ -291,33 +321,41 @@ class ComplianceChecker:
         all_text = f"{action} {_json_dumps_safe(parameters)}"
         phi_found = self._detect_phi(all_text)
         if phi_found:
-            violations.append(ComplianceViolation(
-                framework=ComplianceFramework.HIPAA,
-                rule="§164.502 - PHI Protection",
-                description=f"Protected Health Information detected: {', '.join(phi_found)}",
-                severity="critical",
-                required_action="Remove or encrypt PHI before processing",
-            ))
+            violations.append(
+                ComplianceViolation(
+                    framework=ComplianceFramework.HIPAA,
+                    rule="§164.502 - PHI Protection",
+                    description=f"Protected Health Information detected: {', '.join(phi_found)}",
+                    severity="critical",
+                    required_action="Remove or encrypt PHI before processing",
+                )
+            )
             actions.append("Remove or encrypt PHI before processing")
 
-        if context.get("data_scope") == "full" and not context.get("minimum_necessary_justified"):
-            violations.append(ComplianceViolation(
-                framework=ComplianceFramework.HIPAA,
-                rule="§164.502(b) - Minimum Necessary",
-                description="Full data scope requested without minimum necessary justification",
-                severity="medium",
-                required_action="Justify full data scope or limit to minimum necessary",
-            ))
+        if context.get("data_scope") == "full" and not context.get(
+            "minimum_necessary_justified"
+        ):
+            violations.append(
+                ComplianceViolation(
+                    framework=ComplianceFramework.HIPAA,
+                    rule="§164.502(b) - Minimum Necessary",
+                    description="Full data scope requested without minimum necessary justification",
+                    severity="medium",
+                    required_action="Justify full data scope or limit to minimum necessary",
+                )
+            )
             actions.append("Justify full data scope or limit to minimum necessary")
 
         if not context.get("access_logged", False):
-            violations.append(ComplianceViolation(
-                framework=ComplianceFramework.HIPAA,
-                rule="§164.312(b) - Audit Controls",
-                description="PHI access must be logged",
-                severity="medium",
-                required_action="Enable access logging for PHI operations",
-            ))
+            violations.append(
+                ComplianceViolation(
+                    framework=ComplianceFramework.HIPAA,
+                    rule="§164.312(b) - Audit Controls",
+                    description="PHI access must be logged",
+                    severity="medium",
+                    required_action="Enable access logging for PHI operations",
+                )
+            )
             actions.append("Enable access logging for PHI operations")
 
         return violations, actions

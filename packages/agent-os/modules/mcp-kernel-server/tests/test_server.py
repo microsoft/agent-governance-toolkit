@@ -2,12 +2,13 @@
 # Licensed under the MIT License.
 """Tests for MCP Kernel Server."""
 
-import sys
-import os
 import json
+import os
+import sys
+
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from mcp_kernel_server.server import KernelMCPServer, ServerConfig, stateless_execute
 
@@ -36,9 +37,14 @@ class TestKernelMCPServer:
 
     def test_tool_names(self):
         expected = {
-            "verify_code_safety", "cmvk_verify", "cmvk_review",
-            "kernel_execute", "iatp_sign", "iatp_verify",
-            "iatp_reputation", "get_audit_log",
+            "verify_code_safety",
+            "cmvk_verify",
+            "cmvk_review",
+            "kernel_execute",
+            "iatp_sign",
+            "iatp_verify",
+            "iatp_reputation",
+            "get_audit_log",
         }
         assert set(self.server.tools.keys()) == expected
 
@@ -99,7 +105,8 @@ class TestKernelMCPServer:
     @pytest.mark.asyncio
     async def test_handle_get_prompt_governed_agent(self):
         result = await self.server.handle_get_prompt(
-            "governed_agent", {"agent_id": "test-agent", "policies": "strict"},
+            "governed_agent",
+            {"agent_id": "test-agent", "policies": "strict"},
         )
         assert "messages" in result
         assert result["messages"][0]["role"] == "user"

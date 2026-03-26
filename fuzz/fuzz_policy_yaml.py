@@ -3,6 +3,7 @@
 Tests that malformed/adversarial YAML input doesn't cause crashes,
 hangs, or resource exhaustion in the policy parser.
 """
+
 import sys
 import atheris
 import yaml
@@ -41,8 +42,15 @@ def fuzz_yaml_policy_parse(data: bytes) -> None:
                                 _ = str(key)
                                 _ = str(val)
 
-    except (yaml.YAMLError, ValueError, TypeError, KeyError,
-            UnicodeDecodeError, RecursionError, MemoryError):
+    except (
+        yaml.YAMLError,
+        ValueError,
+        TypeError,
+        KeyError,
+        UnicodeDecodeError,
+        RecursionError,
+        MemoryError,
+    ):
         pass
 
 

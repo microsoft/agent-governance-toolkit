@@ -9,7 +9,6 @@ When agent-sre is installed the real SDK types are used for display hints.
 from __future__ import annotations
 
 import datetime as dt
-import random
 import sys
 import time
 from pathlib import Path
@@ -25,17 +24,17 @@ import streamlit as st
 # ---------------------------------------------------------------------------
 try:
     sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-    from agent_sre.slo.objectives import SLO, SLOStatus  # noqa: F401
-    from agent_sre.slo.indicators import (  # noqa: F401
-        TaskSuccessRate,
-        CostPerTask,
-        ResponseLatency,
-        HallucinationRate,
-    )
-    from agent_sre.slo.dashboard import SLODashboard  # noqa: F401
-    from agent_sre.cost.guard import CostGuard  # noqa: F401
     from agent_sre.chaos.engine import ChaosExperiment  # noqa: F401
+    from agent_sre.cost.guard import CostGuard  # noqa: F401
     from agent_sre.incidents.detector import IncidentDetector  # noqa: F401
+    from agent_sre.slo.dashboard import SLODashboard  # noqa: F401
+    from agent_sre.slo.indicators import (  # noqa: F401
+        CostPerTask,
+        HallucinationRate,
+        ResponseLatency,
+        TaskSuccessRate,
+    )
+    from agent_sre.slo.objectives import SLO, SLOStatus  # noqa: F401
 
     _SDK = True
 except Exception:
@@ -114,7 +113,7 @@ def gen_slo_data() -> pd.DataFrame:
         base = rng.uniform(0.92, 0.999)
         noise = rng.normal(0, 0.008, size=len(ts))
         vals = np.clip(base + np.cumsum(noise) * 0.02, 0.80, 1.0)
-        for t, v in zip(ts, vals):
+        for t, v in zip(ts, vals, strict=False):
             rows.append({"timestamp": t, "slo": slo, "compliance": float(v)})
     return pd.DataFrame(rows)
 
@@ -191,7 +190,7 @@ def gen_cost_data() -> tuple[pd.DataFrame, pd.DataFrame, list[dict]]:
         base = rng.uniform(1, 15)
         noise = rng.normal(0, 1.5, size=len(ts))
         vals = np.clip(base + np.cumsum(noise) * 0.1, 0.5, 50)
-        for t, v in zip(ts, vals):
+        for t, v in zip(ts, vals, strict=False):
             rows.append({"timestamp": t, "agent": agent, "cost_usd": float(v)})
     trend_df = pd.DataFrame(rows)
 
@@ -206,7 +205,10 @@ def gen_cost_data() -> tuple[pd.DataFrame, pd.DataFrame, list[dict]]:
                 "agent": agent,
                 "message": f"{'Budget exceeded' if sev == 'critical' else 'Approaching limit' if sev == 'warning' else 'Cost recorded'} for {agent}",
                 "value": f"${rng.uniform(10, 200):.2f}",
-                "time": (dt.datetime.now(tz=dt.timezone.utc) - dt.timedelta(minutes=int(rng.integers(1, 300)))).strftime("%H:%M"),
+                "time": (
+                    dt.datetime.now(tz=dt.timezone.utc)
+                    - dt.timedelta(minutes=int(rng.integers(1, 300)))
+                ).strftime("%H:%M"),
             }
         )
     return budget_df, trend_df, alerts
@@ -370,10 +372,7 @@ def gen_policy_heatmap_data(
     """
     hours = HOURS[time_range]
     # Bucket width: 1 h buckets for short ranges, 4 h or day buckets for long.
-    if hours <= 6:
-        n_buckets = hours
-        bucket_label = "hour"
-    elif hours <= 48:
+    if hours <= 6 or hours <= 48:
         n_buckets = hours
         bucket_label = "hour"
     else:
@@ -469,7 +468,13 @@ def severity_badge(sev: str) -> str:
 
 
 def _gauge(value: float, title: str, thresholds: tuple[float, float] = (2.0, 6.0)) -> go.Figure:
-    color = COLOR_HEALTHY if value < thresholds[0] else COLOR_WARNING if value < thresholds[1] else COLOR_CRITICAL
+    color = (
+        COLOR_HEALTHY
+        if value < thresholds[0]
+        else COLOR_WARNING
+        if value < thresholds[1]
+        else COLOR_CRITICAL
+    )
     fig = go.Figure(
         go.Indicator(
             mode="gauge+number",
@@ -502,7 +507,14 @@ def _gauge(value: float, title: str, thresholds: tuple[float, float] = (2.0, 6.0
 # TABS
 # ---------------------------------------------------------------------------
 tab_slo, tab_cost, tab_chaos, tab_inc, tab_delivery, tab_policy = st.tabs(
-    ["📊 SLO Health", "💰 Cost Management", "🧪 Chaos Engineering", "🚨 Incidents", "🚀 Progressive Delivery", "🔥 Policy Heatmap"]
+    [
+        "📊 SLO Health",
+        "💰 Cost Management",
+        "🧪 Chaos Engineering",
+        "🚨 Incidents",
+        "🚀 Progressive Delivery",
+        "🔥 Policy Heatmap",
+    ]
 )
 
 # ========================== TAB 1: SLO Health ==============================
@@ -517,15 +529,23 @@ with tab_slo:
     c1.metric("Total SLOs", len(snapshots))
     c2.metric("Healthy", healthy, delta=f"{healthy}" if healthy else None, delta_color="normal")
     c3.metric("Warning", warning, delta=f"-{warning}" if warning else "0", delta_color="inverse")
-    c4.metric("Critical", critical, delta=f"-{critical}" if critical else "0", delta_color="inverse")
-    c5.metric("Exhausted", exhausted, delta=f"-{exhausted}" if exhausted else "0", delta_color="inverse")
+    c4.metric(
+        "Critical", critical, delta=f"-{critical}" if critical else "0", delta_color="inverse"
+    )
+    c5.metric(
+        "Exhausted", exhausted, delta=f"-{exhausted}" if exhausted else "0", delta_color="inverse"
+    )
 
     st.subheader("Error Budget Burn Rates")
     cols = st.columns(len(snapshots))
-    for col, snap in zip(cols, snapshots):
+    for col, snap in zip(cols, snapshots, strict=False):
         with col:
-            st.plotly_chart(_gauge(snap["burn_rate_1h"], f"{snap['key']} — 1 h"), use_container_width=True)
-            st.plotly_chart(_gauge(snap["burn_rate_6h"], f"{snap['key']} — 6 h"), use_container_width=True)
+            st.plotly_chart(
+                _gauge(snap["burn_rate_1h"], f"{snap['key']} — 1 h"), use_container_width=True
+            )
+            st.plotly_chart(
+                _gauge(snap["burn_rate_6h"], f"{snap['key']} — 6 h"), use_container_width=True
+            )
 
     st.subheader("SLO Compliance Timeline")
     slo_df = gen_slo_data()
@@ -558,10 +578,16 @@ with tab_cost:
     total_limit = budget_df["daily_limit"].sum()
     avg_util = budget_df["utilization"].mean()
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Spent Today", f"${total_spent:,.2f}", delta=f"${total_spent - total_limit:+,.2f}")
+    c1.metric(
+        "Total Spent Today", f"${total_spent:,.2f}", delta=f"${total_spent - total_limit:+,.2f}"
+    )
     c2.metric("Daily Budget", f"${total_limit:,.2f}")
-    c3.metric("Avg Utilization", f"{avg_util:.1f}%", delta=f"{avg_util - 70:+.1f}%", delta_color="inverse")
-    c4.metric("Active Alerts", len(cost_alerts), delta=f"-{len(cost_alerts)}", delta_color="inverse")
+    c3.metric(
+        "Avg Utilization", f"{avg_util:.1f}%", delta=f"{avg_util - 70:+.1f}%", delta_color="inverse"
+    )
+    c4.metric(
+        "Active Alerts", len(cost_alerts), delta=f"-{len(cost_alerts)}", delta_color="inverse"
+    )
 
     left, right = st.columns([3, 2])
     with left:
@@ -582,7 +608,8 @@ with tab_cost:
         fig_budget.add_trace(
             go.Bar(
                 y=budget_df["agent"],
-                x=budget_df["daily_limit"] - budget_df["spent_today"].clip(upper=budget_df["daily_limit"]),
+                x=budget_df["daily_limit"]
+                - budget_df["spent_today"].clip(upper=budget_df["daily_limit"]),
                 orientation="h",
                 name="Remaining",
                 marker_color="rgba(100,100,100,0.3)",
@@ -661,8 +688,13 @@ with tab_chaos:
     with left:
         st.subheader("Experiments")
         for exp in experiments:
-            state_icon = "🟢" if exp["state"] == "completed" else "🔵" if exp["state"] == "running" else "⏳"
-            with st.expander(f"{state_icon} **{exp['name']}** — {exp['agent']}  [{exp['state']}]", expanded=exp["state"] == "running"):
+            state_icon = (
+                "🟢" if exp["state"] == "completed" else "🔵" if exp["state"] == "running" else "⏳"
+            )
+            with st.expander(
+                f"{state_icon} **{exp['name']}** — {exp['agent']}  [{exp['state']}]",
+                expanded=exp["state"] == "running",
+            ):
                 ec1, ec2, ec3 = st.columns(3)
                 ec1.metric("Fault Type", exp["fault"])
                 ec2.metric("Duration", f"{exp['duration_s']}s")
@@ -680,7 +712,12 @@ with tab_chaos:
                 r = exp["resilience"]
                 fig_radar.add_trace(
                     go.Scatterpolar(
-                        r=[r["fault_tolerance"], r["recovery_time"], r["degradation"], r["cost_impact"]],
+                        r=[
+                            r["fault_tolerance"],
+                            r["recovery_time"],
+                            r["degradation"],
+                            r["cost_impact"],
+                        ],
                         theta=categories,
                         fill="toself",
                         name=exp["name"],
@@ -731,9 +768,30 @@ with tab_chaos:
     if completed_exps:
         ba_rows = []
         for exp in completed_exps:
-            ba_rows.append({"Experiment": exp["name"], "Metric": "Success Rate", "Before": f"{rng.uniform(0.98, 0.999):.3f}", "After": f"{rng.uniform(0.92, 0.98):.3f}"})
-            ba_rows.append({"Experiment": exp["name"], "Metric": "P95 Latency (ms)", "Before": f"{int(rng.integers(200, 400))}", "After": f"{int(rng.integers(350, 800))}"})
-            ba_rows.append({"Experiment": exp["name"], "Metric": "Avg Cost ($)", "Before": f"{rng.uniform(0.10, 0.25):.3f}", "After": f"{rng.uniform(0.15, 0.40):.3f}"})
+            ba_rows.append(
+                {
+                    "Experiment": exp["name"],
+                    "Metric": "Success Rate",
+                    "Before": f"{rng.uniform(0.98, 0.999):.3f}",
+                    "After": f"{rng.uniform(0.92, 0.98):.3f}",
+                }
+            )
+            ba_rows.append(
+                {
+                    "Experiment": exp["name"],
+                    "Metric": "P95 Latency (ms)",
+                    "Before": f"{int(rng.integers(200, 400))}",
+                    "After": f"{int(rng.integers(350, 800))}",
+                }
+            )
+            ba_rows.append(
+                {
+                    "Experiment": exp["name"],
+                    "Metric": "Avg Cost ($)",
+                    "Before": f"{rng.uniform(0.10, 0.25):.3f}",
+                    "After": f"{rng.uniform(0.15, 0.40):.3f}",
+                }
+            )
         st.dataframe(pd.DataFrame(ba_rows), use_container_width=True, hide_index=True)
 
     st.divider()
@@ -757,7 +815,12 @@ with tab_inc:
     c1.metric("Active Incidents", len(active), delta=f"-{len(active)}", delta_color="inverse")
     c2.metric("Resolved (window)", len(resolved))
     c3.metric("MTTR (avg)", f"{np.mean(resolved_mttr):.0f} min" if resolved_mttr else "N/A")
-    c4.metric("P1 Open", sum(1 for i in active if i["severity"] == "P1"), delta="-1", delta_color="inverse")
+    c4.metric(
+        "P1 Open",
+        sum(1 for i in active if i["severity"] == "P1"),
+        delta="-1",
+        delta_color="inverse",
+    )
 
     st.subheader("Active Incidents")
     for inc in active:
@@ -765,9 +828,9 @@ with tab_inc:
         st.markdown(
             f"""<div style="border-left:4px solid {color};padding:8px 12px;margin-bottom:8px;
             background:rgba(255,255,255,0.03);border-radius:4px;">
-            <strong>{inc['severity']}</strong> &nbsp; {inc['title']} &nbsp;
-            <code>{inc['state']}</code><br/>
-            <small>Agent: {inc['agent']} · Detected: {inc['detected']} · Ack: {inc['acknowledged']}</small>
+            <strong>{inc["severity"]}</strong> &nbsp; {inc["title"]} &nbsp;
+            <code>{inc["state"]}</code><br/>
+            <small>Agent: {inc["agent"]} · Detected: {inc["detected"]} · Ack: {inc["acknowledged"]}</small>
             </div>""",
             unsafe_allow_html=True,
         )
@@ -778,11 +841,19 @@ with tab_inc:
         tl_data = []
         for inc in incidents:
             tl_data.append({"incident": inc["id"], "event": "Detected", "time": inc["detected"]})
-            tl_data.append({"incident": inc["id"], "event": "Acknowledged", "time": inc["acknowledged"]})
+            tl_data.append(
+                {"incident": inc["id"], "event": "Acknowledged", "time": inc["acknowledged"]}
+            )
             if inc["resolved"]:
-                tl_data.append({"incident": inc["id"], "event": "Resolved", "time": inc["resolved"]})
+                tl_data.append(
+                    {"incident": inc["id"], "event": "Resolved", "time": inc["resolved"]}
+                )
         tl_df = pd.DataFrame(tl_data)
-        event_colors = {"Detected": COLOR_CRITICAL, "Acknowledged": COLOR_WARNING, "Resolved": COLOR_HEALTHY}
+        event_colors = {
+            "Detected": COLOR_CRITICAL,
+            "Acknowledged": COLOR_WARNING,
+            "Resolved": COLOR_HEALTHY,
+        }
         fig_itl = px.scatter(
             tl_df,
             x="time",
@@ -794,7 +865,9 @@ with tab_inc:
             size_max=12,
         )
         fig_itl.update_traces(marker_size=12)
-        fig_itl.update_layout(height=260, margin=dict(l=20, r=20, t=10, b=30), xaxis_title="", yaxis_title="")
+        fig_itl.update_layout(
+            height=260, margin=dict(l=20, r=20, t=10, b=30), xaxis_title="", yaxis_title=""
+        )
         st.plotly_chart(fig_itl, use_container_width=True)
 
     with right:
@@ -810,7 +883,12 @@ with tab_inc:
             x="Severity",
             y="Avg MTTR (min)",
             color="Severity",
-            color_discrete_map={"P1": COLOR_CRITICAL, "P2": "#e67e22", "P3": COLOR_WARNING, "P4": COLOR_INFO},
+            color_discrete_map={
+                "P1": COLOR_CRITICAL,
+                "P2": "#e67e22",
+                "P3": COLOR_WARNING,
+                "P4": COLOR_INFO,
+            },
             template=PLOTLY_TEMPLATE,
         )
         fig_mttr.update_layout(height=260, margin=dict(l=20, r=20, t=10, b=30), showlegend=False)
@@ -821,7 +899,9 @@ with tab_inc:
     for inc in incidents:
         for sig in inc["signals"]:
             signal_map.setdefault(sig, []).append(inc["id"])
-    corr_rows = [{"Signal": sig, "Triggered Incidents": ", ".join(incs)} for sig, incs in signal_map.items()]
+    corr_rows = [
+        {"Signal": sig, "Triggered Incidents": ", ".join(incs)} for sig, incs in signal_map.items()
+    ]
     st.dataframe(pd.DataFrame(corr_rows), use_container_width=True, hide_index=True)
 
 # ========================== TAB 5: Progressive Delivery ====================
@@ -866,13 +946,35 @@ with tab_delivery:
         comparison = pd.DataFrame(
             {
                 "Metric": ["Success Rate", "P95 Latency (ms)", "Cost / Task ($)"],
-                "Canary": [rollout["canary_success_rate"], rollout["canary_p95_ms"], rollout["canary_cost"]],
-                "Baseline": [rollout["baseline_success_rate"], rollout["baseline_p95_ms"], rollout["baseline_cost"]],
+                "Canary": [
+                    rollout["canary_success_rate"],
+                    rollout["canary_p95_ms"],
+                    rollout["canary_cost"],
+                ],
+                "Baseline": [
+                    rollout["baseline_success_rate"],
+                    rollout["baseline_p95_ms"],
+                    rollout["baseline_cost"],
+                ],
             }
         )
         fig_comp = go.Figure()
-        fig_comp.add_trace(go.Bar(x=comparison["Metric"], y=comparison["Canary"], name="Canary", marker_color=COLOR_INFO))
-        fig_comp.add_trace(go.Bar(x=comparison["Metric"], y=comparison["Baseline"], name="Baseline", marker_color="#888"))
+        fig_comp.add_trace(
+            go.Bar(
+                x=comparison["Metric"],
+                y=comparison["Canary"],
+                name="Canary",
+                marker_color=COLOR_INFO,
+            )
+        )
+        fig_comp.add_trace(
+            go.Bar(
+                x=comparison["Metric"],
+                y=comparison["Baseline"],
+                name="Baseline",
+                marker_color="#888",
+            )
+        )
         fig_comp.update_layout(
             barmode="group",
             template=PLOTLY_TEMPLATE,
@@ -892,7 +994,11 @@ with tab_delivery:
                 number={"suffix": "%", "font": {"size": 32}},
                 gauge={
                     "axis": {"range": [0, 100]},
-                    "bar": {"color": COLOR_HEALTHY if rollout["shadow_match_rate"] > 0.9 else COLOR_WARNING},
+                    "bar": {
+                        "color": COLOR_HEALTHY
+                        if rollout["shadow_match_rate"] > 0.9
+                        else COLOR_WARNING
+                    },
                     "bgcolor": "#1e1e1e",
                     "steps": [
                         {"range": [0, 80], "color": "#3a1a1a"},
@@ -913,11 +1019,31 @@ with tab_delivery:
     st.subheader("Rollout Event Timeline")
     now = dt.datetime.now(tz=dt.timezone.utc)
     events = [
-        {"time": (now - dt.timedelta(hours=2)).strftime("%H:%M"), "event": "Shadow started", "step": 0},
-        {"time": (now - dt.timedelta(hours=1)).strftime("%H:%M"), "event": "Shadow passed — match 95.2%", "step": 0},
-        {"time": (now - dt.timedelta(minutes=50)).strftime("%H:%M"), "event": "Canary 5% started", "step": 1},
-        {"time": (now - dt.timedelta(minutes=20)).strftime("%H:%M"), "event": "Canary 5% passed analysis", "step": 1},
-        {"time": (now - dt.timedelta(minutes=18)).strftime("%H:%M"), "event": "Canary 25% started", "step": 2},
+        {
+            "time": (now - dt.timedelta(hours=2)).strftime("%H:%M"),
+            "event": "Shadow started",
+            "step": 0,
+        },
+        {
+            "time": (now - dt.timedelta(hours=1)).strftime("%H:%M"),
+            "event": "Shadow passed — match 95.2%",
+            "step": 0,
+        },
+        {
+            "time": (now - dt.timedelta(minutes=50)).strftime("%H:%M"),
+            "event": "Canary 5% started",
+            "step": 1,
+        },
+        {
+            "time": (now - dt.timedelta(minutes=20)).strftime("%H:%M"),
+            "event": "Canary 5% passed analysis",
+            "step": 1,
+        },
+        {
+            "time": (now - dt.timedelta(minutes=18)).strftime("%H:%M"),
+            "event": "Canary 25% started",
+            "step": 2,
+        },
     ]
     st.dataframe(pd.DataFrame(events), use_container_width=True, hide_index=True)
 
@@ -1032,7 +1158,7 @@ with tab_policy:
                 x=agg_eval["z"],
                 orientation="h",
                 marker_color=COLOR_INFO,
-                hovertemplate=f"<b>%{{y}}</b><br>Evaluations: %{{x:,}}<extra></extra>",
+                hovertemplate="<b>%{y}</b><br>Evaluations: %{x:,}<extra></extra>",
             )
         )
         fig_eval_bar.update_layout(
@@ -1053,7 +1179,7 @@ with tab_policy:
                 x=agg_viol["z"],
                 orientation="h",
                 marker_color=COLOR_CRITICAL,
-                hovertemplate=f"<b>%{{y}}</b><br>Violations: %{{x:,}}<extra></extra>",
+                hovertemplate="<b>%{y}</b><br>Violations: %{x:,}<extra></extra>",
             )
         )
         fig_viol_bar.update_layout(

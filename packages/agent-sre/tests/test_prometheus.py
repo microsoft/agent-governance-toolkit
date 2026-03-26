@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 """Tests for Prometheus exporter."""
 
-
 from agent_sre.integrations.prometheus import PrometheusExporter
 from agent_sre.slo.indicators import TaskSuccessRate
 from agent_sre.slo.objectives import SLO, ErrorBudget

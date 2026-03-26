@@ -20,6 +20,9 @@ import random
 import time
 
 from agent_sre import SLO, ErrorBudget
+from agent_sre.evals import EvalInput, EvalSuite, EvaluationEngine, RulesJudge
+from agent_sre.integrations.langchain.callback import AgentSRECallback
+from agent_sre.slo.dashboard import SLODashboard
 from agent_sre.slo.indicators import (
     CostPerTask,
     HallucinationRate,
@@ -27,9 +30,6 @@ from agent_sre.slo.indicators import (
     TaskSuccessRate,
     ToolCallAccuracy,
 )
-from agent_sre.slo.dashboard import SLODashboard
-from agent_sre.integrations.langchain.callback import AgentSRECallback
-from agent_sre.evals import EvalInput, EvaluationEngine, EvalSuite, RulesJudge
 
 # ── 1. Configure Agent-SRE monitoring ──────────────────────────────────
 
@@ -83,8 +83,7 @@ TASKS = [
     },
     {
         "query": "Explain Kubernetes pod autoscaling",
-        "context": "HPA adjusts replicas based on CPU/memory. VPA adjusts "
-        "resource requests.",
+        "context": "HPA adjusts replicas based on CPU/memory. VPA adjusts resource requests.",
         "reference": "Kubernetes HPA scales pod count, VPA scales resource "
         "requests based on metrics.",
     },
@@ -92,15 +91,12 @@ TASKS = [
         "query": "What is the CAP theorem?",
         "context": "CAP states distributed systems can have at most 2 of: "
         "Consistency, Availability, Partition tolerance.",
-        "reference": "CAP theorem: choose 2 of consistency, availability, "
-        "and partition tolerance.",
+        "reference": "CAP theorem: choose 2 of consistency, availability, and partition tolerance.",
     },
     {
         "query": "How do transformers work in NLP?",
-        "context": "Transformers use self-attention to process sequences in "
-        "parallel, unlike RNNs.",
-        "reference": "Transformers use self-attention mechanisms for parallel "
-        "sequence processing.",
+        "context": "Transformers use self-attention to process sequences in parallel, unlike RNNs.",
+        "reference": "Transformers use self-attention mechanisms for parallel sequence processing.",
     },
 ]
 
@@ -179,6 +175,7 @@ def simulate_langchain_task(task: dict) -> dict:
 
 # ── 3. Run 50 simulated calls ─────────────────────────────────────────
 
+
 def main() -> None:
     print("Agent-SRE + LangChain Monitoring Demo")
     print("=" * 60)
@@ -209,9 +206,7 @@ def main() -> None:
                 ),
                 suite=eval_suite,
             )
-            hallu_results = [
-                r for r in eval_result.results if r.criterion.value == "hallucination"
-            ]
+            hallu_results = [r for r in eval_result.results if r.criterion.value == "hallucination"]
             if hallu_results:
                 hallucination.record_evaluation(hallucinated=(hallu_results[0].score < 0.7))
 
@@ -220,10 +215,9 @@ def main() -> None:
         cost_usd = random.uniform(0.01, 0.15)
         print(
             f"  [{i + 1:>2}/{num_tasks}] {status_icon} "
-            f"\"{task['query'][:50]}\" "
+            f'"{task["query"][:50]}" '
             f" {result['latency_ms']:>7.0f}ms"
-            f"  ${cost_usd:.2f}"
-            + ("" if result["success"] else "  FAILED")
+            f"  ${cost_usd:.2f}" + ("" if result["success"] else "  FAILED")
         )
 
     # ── 4. SLO compliance report ───────────────────────────────────────

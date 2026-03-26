@@ -85,7 +85,7 @@ services:
     build: .
     ports:
       - "8000:8000"
-  
+
   iatp-sidecar:
     image: iatp-sidecar:latest
     environment:

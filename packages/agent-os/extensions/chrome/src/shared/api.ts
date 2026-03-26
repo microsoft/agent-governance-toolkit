@@ -96,7 +96,7 @@ class AgentOSApiClient {
   async getAuditLog(agentId?: string, limit = 100): Promise<AuditLogEntry[]> {
     const params = new URLSearchParams({ limit: String(limit) });
     if (agentId) params.set('agentId', agentId);
-    
+
     try {
       return await this.request<AuditLogEntry[]>(`/audit?${params}`);
     } catch (error) {

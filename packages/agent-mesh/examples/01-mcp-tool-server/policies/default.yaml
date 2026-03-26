@@ -3,7 +3,7 @@ policies:
     name: "Default Security Policy"
     version: "1.0.0"
     enabled: true
-    
+
     rules:
       - id: "no-secrets-in-output"
         name: "Prevent Secret Leakage"
@@ -15,7 +15,7 @@ policies:
           - "output contains 'token'"
         message: "Sensitive data detected and redacted"
         severity: "high"
-      
+
       - id: "rate-limit-api"
         name: "API Rate Limiting"
         action: "block"
@@ -24,7 +24,7 @@ policies:
           - "count(tool='api_call', window='1h') > 100"
         message: "API rate limit exceeded (100 calls/hour)"
         severity: "medium"
-      
+
       - id: "rate-limit-database"
         name: "Database Query Rate Limiting"
         action: "block"
@@ -33,7 +33,7 @@ policies:
           - "count(tool='database_query', window='1h') > 200"
         message: "Database query rate limit exceeded (200 queries/hour)"
         severity: "medium"
-      
+
       - id: "block-dangerous-sql"
         name: "Prevent Dangerous SQL"
         action: "block"
@@ -45,7 +45,7 @@ policies:
           - "params.query contains 'ALTER'"
         message: "Dangerous SQL keywords detected"
         severity: "critical"
-      
+
       - id: "require-peer-trust"
         name: "Minimum Peer Trust Score"
         action: "block"
@@ -53,7 +53,7 @@ policies:
           - "peer_trust_score < 500"
         message: "Peer trust score below minimum threshold"
         severity: "high"
-      
+
       - id: "audit-all-actions"
         name: "Audit All Tool Invocations"
         action: "audit"

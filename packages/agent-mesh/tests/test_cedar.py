@@ -4,10 +4,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from agentmesh.governance.cedar import (
-    CedarDecision,
     CedarEvaluator,
     _parse_cedar_statements,
     load_cedar_into_engine,
@@ -115,13 +112,16 @@ forbid(principal, action == Action::"Export", resource);
 
     def test_build_request_normalizes_entities(self):
         evaluator = CedarEvaluator(policy_content=self.PERMIT_ALL)
-        request = evaluator._build_request('Action::"Test"', {
-            "agent_did": "did:example:agent1",
-            "resource": "dataset-A",
-        })
-        assert '::' in request["principal"]
-        assert '::' in request["resource"]
-        assert '::' in request["action"]
+        request = evaluator._build_request(
+            'Action::"Test"',
+            {
+                "agent_did": "did:example:agent1",
+                "resource": "dataset-A",
+            },
+        )
+        assert "::" in request["principal"]
+        assert "::" in request["resource"]
+        assert "::" in request["action"]
 
 
 class TestCedarParseStatements:
@@ -136,16 +136,12 @@ class TestCedarParseStatements:
         assert stmts[0]["action_constraint"] == 'Action::"ReadData"'
 
     def test_parse_forbid(self):
-        stmts = _parse_cedar_statements(
-            'forbid(principal, action == Action::"Delete", resource);'
-        )
+        stmts = _parse_cedar_statements('forbid(principal, action == Action::"Delete", resource);')
         assert len(stmts) == 1
         assert stmts[0]["effect"] == "forbid"
 
     def test_parse_catchall_no_constraint(self):
-        stmts = _parse_cedar_statements(
-            'permit(principal, action, resource);'
-        )
+        stmts = _parse_cedar_statements("permit(principal, action, resource);")
         assert len(stmts) == 1
         assert stmts[0]["action_constraint"] is None
 
@@ -174,9 +170,11 @@ class TestPolicyEngineWithCedar:
 
     def test_load_cedar_registers_evaluator(self):
         engine = PolicyEngine()
-        evaluator = engine.load_cedar(cedar_content="""
+        evaluator = engine.load_cedar(
+            cedar_content="""
 permit(principal, action == Action::"ReadData", resource);
-""")
+"""
+        )
         assert isinstance(evaluator, CedarEvaluator)
         assert len(engine._cedar_evaluators) == 1
 
@@ -192,9 +190,11 @@ rules:
     action: deny
     priority: 100
 """)
-        engine.load_cedar(cedar_content="""
+        engine.load_cedar(
+            cedar_content="""
 permit(principal, action == Action::"read_data", resource);
-""")
+"""
+        )
         # YAML matches → deny
         decision = engine.evaluate("did:example:1", {"action": {"type": "export"}})
         assert decision.allowed is False
@@ -207,16 +207,20 @@ permit(principal, action == Action::"read_data", resource);
         """Cedar policies are checked after Rego when Rego has errors."""
         engine = PolicyEngine()
         # Load Cedar (no Rego)
-        engine.load_cedar(cedar_content="""
+        engine.load_cedar(
+            cedar_content="""
 permit(principal, action == Action::"analyze", resource);
-""")
+"""
+        )
         decision = engine.evaluate("did:example:1", {"tool_name": "analyze"})
         assert decision.allowed is True
 
     def test_multiple_cedar_evaluators(self):
         engine = PolicyEngine()
-        engine.load_cedar(cedar_content='forbid(principal, action == Action::"dangerous", resource);')
-        engine.load_cedar(cedar_content='permit(principal, action, resource);')
+        engine.load_cedar(
+            cedar_content='forbid(principal, action == Action::"dangerous", resource);'
+        )
+        engine.load_cedar(cedar_content="permit(principal, action, resource);")
 
         # First Cedar evaluator forbids
         decision = engine.evaluate("did:example:1", {"tool_name": "dangerous"})

@@ -40,8 +40,10 @@ logger = logging.getLogger(__name__)
 # Data models
 # ---------------------------------------------------------------------------
 
+
 class AlertSeverity(Enum):
     """Severity level for memory poisoning alerts."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -50,6 +52,7 @@ class AlertSeverity(Enum):
 
 class AlertType(Enum):
     """Classification of a memory poisoning alert."""
+
     INJECTION_PATTERN = "injection_pattern"
     CODE_INJECTION = "code_injection"
     INTEGRITY_VIOLATION = "integrity_violation"
@@ -67,6 +70,7 @@ class MemoryEntry:
         timestamp: UTC timestamp of when the entry was created.
         content_hash: SHA-256 hex digest of ``content``.
     """
+
     content: str
     source: str
     timestamp: datetime
@@ -99,6 +103,7 @@ class Alert:
         entry_source: Source field of the offending entry (if available).
         matched_pattern: The pattern that triggered this alert.
     """
+
     alert_type: AlertType
     severity: AlertSeverity
     message: str
@@ -114,6 +119,7 @@ class ValidationResult:
         allowed: Whether the write should be permitted.
         alerts: Any alerts raised during validation.
     """
+
     allowed: bool
     alerts: list[Alert] = field(default_factory=list)
 
@@ -129,6 +135,7 @@ class AuditRecord:
         allowed: Whether the write was permitted.
         alerts: Alerts raised (may be empty).
     """
+
     timestamp: datetime
     source: str
     content_hash: str
@@ -167,6 +174,7 @@ _SPECIAL_CHAR_THRESHOLD = 0.3
 # MemoryGuard
 # ---------------------------------------------------------------------------
 
+
 class MemoryGuard:
     """Guards agent memory against poisoning attacks (OWASP ASI06).
 
@@ -200,18 +208,20 @@ class MemoryGuard:
             # Fail closed: block the write if validation itself errors
             logger.error(
                 "Memory validation error — blocking write (fail closed) | source=%s",
-                source, exc_info=True,
+                source,
+                exc_info=True,
             )
-            alerts.append(Alert(
-                alert_type=AlertType.INJECTION_PATTERN,
-                severity=AlertSeverity.CRITICAL,
-                message=f"Validation error — write blocked (fail closed) for source {source}",
-                entry_source=source,
-            ))
+            alerts.append(
+                Alert(
+                    alert_type=AlertType.INJECTION_PATTERN,
+                    severity=AlertSeverity.CRITICAL,
+                    message=f"Validation error — write blocked (fail closed) for source {source}",
+                    entry_source=source,
+                )
+            )
 
         allowed = not any(
-            a.severity in (AlertSeverity.HIGH, AlertSeverity.CRITICAL)
-            for a in alerts
+            a.severity in (AlertSeverity.HIGH, AlertSeverity.CRITICAL) for a in alerts
         )
 
         result = ValidationResult(allowed=allowed, alerts=alerts)
@@ -250,8 +260,7 @@ class MemoryGuard:
         intact = expected == entry.content_hash
         if not intact:
             logger.warning(
-                "Integrity violation for entry from source=%s "
-                "(expected=%s, stored=%s)",
+                "Integrity violation for entry from source=%s (expected=%s, stored=%s)",
                 entry.source,
                 expected,
                 entry.content_hash,
@@ -268,12 +277,14 @@ class MemoryGuard:
             try:
                 # Integrity check
                 if not self.verify_integrity(entry):
-                    all_alerts.append(Alert(
-                        alert_type=AlertType.INTEGRITY_VIOLATION,
-                        severity=AlertSeverity.CRITICAL,
-                        message=f"Hash mismatch for entry from {entry.source}",
-                        entry_source=entry.source,
-                    ))
+                    all_alerts.append(
+                        Alert(
+                            alert_type=AlertType.INTEGRITY_VIOLATION,
+                            severity=AlertSeverity.CRITICAL,
+                            message=f"Hash mismatch for entry from {entry.source}",
+                            entry_source=entry.source,
+                        )
+                    )
 
                 # Content checks (reuse validate_write logic)
                 all_alerts.extend(self._check_injection_patterns(entry.content, entry.source))
@@ -283,14 +294,17 @@ class MemoryGuard:
             except Exception:
                 logger.error(
                     "Error scanning memory entry — flagging as suspicious | source=%s",
-                    entry.source, exc_info=True,
+                    entry.source,
+                    exc_info=True,
                 )
-                all_alerts.append(Alert(
-                    alert_type=AlertType.INTEGRITY_VIOLATION,
-                    severity=AlertSeverity.CRITICAL,
-                    message=f"Scan error for entry from {entry.source} — flagged as suspicious",
-                    entry_source=entry.source,
-                ))
+                all_alerts.append(
+                    Alert(
+                        alert_type=AlertType.INTEGRITY_VIOLATION,
+                        severity=AlertSeverity.CRITICAL,
+                        message=f"Scan error for entry from {entry.source} — flagged as suspicious",
+                        entry_source=entry.source,
+                    )
+                )
 
         return all_alerts
 
@@ -301,61 +315,53 @@ class MemoryGuard:
 
     # -- internal checks ----------------------------------------------------
 
-    def _check_injection_patterns(
-        self, content: str, source: str
-    ) -> list[Alert]:
+    def _check_injection_patterns(self, content: str, source: str) -> list[Alert]:
         alerts: list[Alert] = []
         for pattern in _INJECTION_PATTERNS:
             if pattern.search(content):
-                alerts.append(Alert(
-                    alert_type=AlertType.INJECTION_PATTERN,
-                    severity=AlertSeverity.HIGH,
-                    message=f"Prompt injection pattern detected: {pattern.pattern}",
-                    entry_source=source,
-                    matched_pattern=pattern.pattern,
-                ))
+                alerts.append(
+                    Alert(
+                        alert_type=AlertType.INJECTION_PATTERN,
+                        severity=AlertSeverity.HIGH,
+                        message=f"Prompt injection pattern detected: {pattern.pattern}",
+                        entry_source=source,
+                        matched_pattern=pattern.pattern,
+                    )
+                )
         return alerts
 
-    def _check_code_injection(
-        self, content: str, source: str
-    ) -> list[Alert]:
+    def _check_code_injection(self, content: str, source: str) -> list[Alert]:
         alerts: list[Alert] = []
         for pattern in _CODE_INJECTION_PATTERNS:
             if pattern.search(content):
-                alerts.append(Alert(
-                    alert_type=AlertType.CODE_INJECTION,
-                    severity=AlertSeverity.HIGH,
-                    message=f"Code injection pattern detected: {pattern.pattern}",
-                    entry_source=source,
-                    matched_pattern=pattern.pattern,
-                ))
+                alerts.append(
+                    Alert(
+                        alert_type=AlertType.CODE_INJECTION,
+                        severity=AlertSeverity.HIGH,
+                        message=f"Code injection pattern detected: {pattern.pattern}",
+                        entry_source=source,
+                        matched_pattern=pattern.pattern,
+                    )
+                )
         return alerts
 
-    def _check_special_characters(
-        self, content: str, source: str
-    ) -> list[Alert]:
+    def _check_special_characters(self, content: str, source: str) -> list[Alert]:
         if not content:
             return []
-        special = sum(
-            1 for c in content
-            if not c.isalnum() and not c.isspace()
-        )
+        special = sum(1 for c in content if not c.isalnum() and not c.isspace())
         ratio = special / len(content)
         if ratio > _SPECIAL_CHAR_THRESHOLD:
-            return [Alert(
-                alert_type=AlertType.EXCESSIVE_SPECIAL_CHARS,
-                severity=AlertSeverity.MEDIUM,
-                message=(
-                    f"Excessive special characters ({ratio:.0%}) "
-                    f"from source {source}"
-                ),
-                entry_source=source,
-            )]
+            return [
+                Alert(
+                    alert_type=AlertType.EXCESSIVE_SPECIAL_CHARS,
+                    severity=AlertSeverity.MEDIUM,
+                    message=(f"Excessive special characters ({ratio:.0%}) from source {source}"),
+                    entry_source=source,
+                )
+            ]
         return []
 
-    def _check_unicode_manipulation(
-        self, content: str, source: str
-    ) -> list[Alert]:
+    def _check_unicode_manipulation(self, content: str, source: str) -> list[Alert]:
         alerts: list[Alert] = []
         # Detect right-to-left override and other bidi control characters
         bidi_chars = {
@@ -373,15 +379,17 @@ class MemoryGuard:
         }
         found = [c for c in content if c in bidi_chars]
         if found:
-            alerts.append(Alert(
-                alert_type=AlertType.UNICODE_MANIPULATION,
-                severity=AlertSeverity.HIGH,
-                message=(
-                    f"Bidirectional unicode control characters detected "
-                    f"({len(found)} occurrences) from source {source}"
-                ),
-                entry_source=source,
-            ))
+            alerts.append(
+                Alert(
+                    alert_type=AlertType.UNICODE_MANIPULATION,
+                    severity=AlertSeverity.HIGH,
+                    message=(
+                        f"Bidirectional unicode control characters detected "
+                        f"({len(found)} occurrences) from source {source}"
+                    ),
+                    entry_source=source,
+                )
+            )
 
         # Detect homoglyph-heavy content (characters from mixed scripts)
         scripts: set[str] = set()
@@ -396,14 +404,16 @@ class MemoryGuard:
                 elif name.startswith("GREEK"):
                     scripts.add("GREEK")
         if len(scripts) > 1:
-            alerts.append(Alert(
-                alert_type=AlertType.UNICODE_MANIPULATION,
-                severity=AlertSeverity.MEDIUM,
-                message=(
-                    f"Mixed unicode scripts detected ({', '.join(sorted(scripts))}) "
-                    f"— possible homoglyph attack from source {source}"
-                ),
-                entry_source=source,
-            ))
+            alerts.append(
+                Alert(
+                    alert_type=AlertType.UNICODE_MANIPULATION,
+                    severity=AlertSeverity.MEDIUM,
+                    message=(
+                        f"Mixed unicode scripts detected ({', '.join(sorted(scripts))}) "
+                        f"— possible homoglyph attack from source {source}"
+                    ),
+                    entry_source=source,
+                )
+            )
 
         return alerts

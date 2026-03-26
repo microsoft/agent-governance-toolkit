@@ -25,10 +25,10 @@ PRIORITY_ORDER = {
 class InMemoryBroker(BrokerAdapter):
     """
     In-memory broker implementation for testing and simple use cases.
-    
+
     This broker stores messages in memory and uses anyio for async handling.
     It's suitable for testing, development, and single-process applications.
-    
+
     Features:
     - Backpressure: Automatically slows down producers when consumers are overwhelmed
     - Priority lanes: CRITICAL messages jump ahead of BACKGROUND messages
@@ -39,11 +39,11 @@ class InMemoryBroker(BrokerAdapter):
         max_queue_size: int = 1000,
         backpressure_threshold: float = 0.8,
         backpressure_delay: float = 0.01,
-        use_priority_delivery: bool = True
+        use_priority_delivery: bool = True,
     ):
         """
         Initialize the in-memory broker.
-        
+
         Args:
             max_queue_size: Maximum messages per topic before backpressure kicks in
             backpressure_threshold: Queue fill percentage (0.0-1.0) that triggers backpressure
@@ -58,7 +58,9 @@ class InMemoryBroker(BrokerAdapter):
         self._message_counter = 0  # For stable sorting within same priority
 
         self._response_queues: Dict[str, asyncio.Queue] = {}
-        self._request_message_ids: Set[str] = set()  # Track request message IDs to avoid self-capture
+        self._request_message_ids: Set[str] = (
+            set()
+        )  # Track request message IDs to avoid self-capture
         self._tasks: Set[asyncio.Task] = set()
 
         # Backpressure configuration
@@ -108,10 +110,10 @@ class InMemoryBroker(BrokerAdapter):
     def _check_backpressure(self, topic: str) -> bool:
         """
         Check if backpressure should be applied for a topic.
-        
+
         Args:
             topic: The topic to check
-            
+
         Returns:
             True if backpressure should be applied
         """
@@ -122,7 +124,7 @@ class InMemoryBroker(BrokerAdapter):
     async def _apply_backpressure(self, topic: str) -> None:
         """
         Apply backpressure delay to slow down the producer.
-        
+
         Args:
             topic: The topic experiencing backpressure
         """
@@ -132,7 +134,7 @@ class InMemoryBroker(BrokerAdapter):
     async def _priority_delivery_worker(self, topic: str) -> None:
         """
         Background worker that delivers messages in priority order.
-        
+
         Args:
             topic: The topic to process
         """
@@ -172,17 +174,17 @@ class InMemoryBroker(BrokerAdapter):
     async def publish(self, message: Message, wait_for_confirmation: bool = False) -> Optional[str]:
         """
         Publish a message to all subscribers of the topic.
-        
+
         Implements backpressure: If the queue is near capacity, the publisher
         is automatically slowed down to prevent overwhelming consumers.
-        
+
         Implements priority lanes: CRITICAL messages are processed before
         BACKGROUND messages, allowing urgent tasks to jump the queue.
-        
+
         Args:
             message: The message to publish
             wait_for_confirmation: If True, wait for handlers to process
-        
+
         Returns:
             Message ID
         """
@@ -209,8 +211,7 @@ class InMemoryBroker(BrokerAdapter):
         priority_value = PRIORITY_ORDER.get(message.priority, 3)
         self._message_counter += 1
         heapq.heappush(
-            self._message_queues[topic],
-            (priority_value, self._message_counter, message)
+            self._message_queues[topic], (priority_value, self._message_counter, message)
         )
 
         # Start priority delivery worker if not already running
@@ -256,10 +257,10 @@ class InMemoryBroker(BrokerAdapter):
     def _drop_background_message(self, topic: str) -> bool:
         """
         Drop the oldest BACKGROUND priority message from the queue.
-        
+
         Args:
             topic: The topic to drop from
-            
+
         Returns:
             True if a message was dropped, False if no BACKGROUND messages found
         """
@@ -269,12 +270,12 @@ class InMemoryBroker(BrokerAdapter):
         # Find index of oldest BACKGROUND message (largest counter value for background priority)
         background_idx = None
         max_counter = -1
-        
+
         for i, (priority, counter, _msg) in enumerate(queue):
             if priority == background_priority and counter > max_counter:
                 background_idx = i
                 max_counter = counter
-        
+
         if background_idx is not None:
             # Remove the item and re-heapify
             queue[background_idx] = queue[-1]
@@ -288,11 +289,11 @@ class InMemoryBroker(BrokerAdapter):
     async def subscribe(self, topic: str, handler: MessageHandler) -> str:
         """
         Subscribe to a topic.
-        
+
         Args:
             topic: Topic to subscribe to
             handler: Message handler function
-        
+
         Returns:
             Subscription ID
         """
@@ -306,7 +307,7 @@ class InMemoryBroker(BrokerAdapter):
     async def unsubscribe(self, subscription_id: str) -> None:
         """
         Unsubscribe from a topic.
-        
+
         Args:
             subscription_id: The subscription ID
         """
@@ -318,14 +319,14 @@ class InMemoryBroker(BrokerAdapter):
     async def request(self, message: Message, timeout: float = 30.0) -> Message:
         """
         Send a request and wait for response.
-        
+
         Args:
             message: Request message
             timeout: Timeout in seconds
-        
+
         Returns:
             Response message
-        
+
         Raises:
             TimeoutError: If timeout exceeded
         """
@@ -364,11 +365,11 @@ class InMemoryBroker(BrokerAdapter):
     async def get_pending_messages(self, topic: str, limit: int = 10) -> List[Message]:
         """
         Get pending messages from a topic (in priority order).
-        
+
         Args:
             topic: Topic to get messages from
             limit: Maximum number of messages
-        
+
         Returns:
             List of messages (highest priority first)
         """
@@ -386,10 +387,10 @@ class InMemoryBroker(BrokerAdapter):
     def get_backpressure_stats(self, topic: Optional[str] = None) -> Dict[str, int]:
         """
         Get backpressure statistics.
-        
+
         Args:
             topic: Optional topic to get stats for. If None, returns all topics.
-            
+
         Returns:
             Dictionary mapping topics to backpressure event counts
         """
@@ -400,10 +401,10 @@ class InMemoryBroker(BrokerAdapter):
     def get_queue_size(self, topic: str) -> int:
         """
         Get current queue size for a topic.
-        
+
         Args:
             topic: The topic to check
-            
+
         Returns:
             Number of messages in the queue
         """

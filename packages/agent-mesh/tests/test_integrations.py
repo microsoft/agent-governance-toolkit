@@ -5,11 +5,8 @@
 import pytest
 
 # ── Langflow ────────────────────────────────────────────────────────
-
 from agentmesh.integrations.langflow import (
     ComponentIdentity,
-    ConnectionRecord,
-    IdentityComponent,
     TrustGatedFlow,
     TrustVerificationComponent,
     TrustVerificationError,
@@ -84,9 +81,7 @@ class TestLangflowVerification:
         assert log[0].verified is True
 
     def test_warn_mode_does_not_raise(self):
-        verifier = TrustVerificationComponent(
-            min_trust_score=0.9, on_failure="warn"
-        )
+        verifier = TrustVerificationComponent(min_trust_score=0.9, on_failure="warn")
         source = ComponentIdentity.generate("src")
         target = ComponentIdentity.generate("tgt", trust_score=0.1)
         result = verifier.verify(source, target)
@@ -171,16 +166,12 @@ class TestFlowiseClient:
             client.predict("flow-1", "hello")
 
     def test_blocked_flow(self):
-        client = self._make_client(
-            trust_score=0.9, blocked_flows=["bad-flow"]
-        )
+        client = self._make_client(trust_score=0.9, blocked_flows=["bad-flow"])
         with pytest.raises(FlowiseTrustError, match="blocked"):
             client.predict("bad-flow", "hello")
 
     def test_allowed_flow_only(self):
-        client = self._make_client(
-            trust_score=0.9, allowed_flows=["good-flow"]
-        )
+        client = self._make_client(trust_score=0.9, allowed_flows=["good-flow"])
         with pytest.raises(FlowiseTrustError, match="not in allowed"):
             client.predict("other-flow", "hello")
 
@@ -203,9 +194,7 @@ class TestFlowiseClient:
             client.predict("flow-1", "hello")
 
     def test_rate_limiting(self):
-        client = self._make_client(
-            trust_score=0.9, max_calls_per_minute=2
-        )
+        client = self._make_client(trust_score=0.9, max_calls_per_minute=2)
         # First 2 calls: policy passes, fails on HTTP (no server)
         for _ in range(2):
             with pytest.raises(FlowiseTrustError, match="API error"):
@@ -250,11 +239,10 @@ class TestFlowiseNodeDefinition:
 
 from agentmesh.integrations.haystack import (
     HaystackTrustError,
-    PipelineAuditEntry,
     PipelineIdentity,
     TrustAgentComponent,
-    TrustGateComponent,
     TrustedPipeline,
+    TrustGateComponent,
 )
 
 
@@ -331,9 +319,7 @@ class TestHaystackTrustAgent:
 
     def test_agent_missing_capability(self):
         identity = PipelineIdentity.generate("agent", capabilities=["search"])
-        agent = TrustAgentComponent(
-            identity=identity, required_capabilities=["execute"]
-        )
+        agent = TrustAgentComponent(identity=identity, required_capabilities=["execute"])
         with pytest.raises(HaystackTrustError, match="Missing capability"):
             agent.run("hello")
 

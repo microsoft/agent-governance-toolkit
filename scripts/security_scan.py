@@ -43,7 +43,6 @@ from agent_os.security_skills import (
     format_findings,
     scan_directory,
     scan_file,
-    scan_source,
 )
 
 SEVERITY_ORDER = [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW]
@@ -130,9 +129,7 @@ def main() -> int:
         for path_str in args.paths:
             p = Path(path_str)
             if p.is_dir():
-                all_findings.extend(
-                    scan_directory(p, exclude_tests=args.exclude_tests)
-                )
+                all_findings.extend(scan_directory(p, exclude_tests=args.exclude_tests))
             elif p.is_file():
                 all_findings.extend(scan_file(p))
             else:
@@ -155,14 +152,12 @@ def main() -> int:
     min_sev = Severity(args.min_severity)
     threshold_idx = SEVERITY_ORDER.index(min_sev)
     blocking = [
-        f for f in all_findings
-        if SEVERITY_ORDER.index(f.severity) <= threshold_idx
+        f for f in all_findings if SEVERITY_ORDER.index(f.severity) <= threshold_idx
     ]
 
     if blocking:
         print(
-            f"\n{len(blocking)} finding(s) at or above "
-            f"{args.min_severity} severity.",
+            f"\n{len(blocking)} finding(s) at or above {args.min_severity} severity.",
             file=sys.stderr,
         )
         return 1

@@ -2,12 +2,10 @@
 # Licensed under the MIT License.
 """Tests for KernelMetrics (metrics.py)."""
 
-import sys
 import os
+import sys
 import time
 from uuid import uuid4
-
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -29,6 +27,7 @@ class TestKernelMetricsInit:
     def test_creates_counter_metrics(self):
         m = KernelMetrics(namespace=_unique_ns())
         from prometheus_client import Counter
+
         assert isinstance(m.requests_total, Counter)
         assert isinstance(m.violations_total, Counter)
         assert isinstance(m.violations_blocked, Counter)
@@ -46,6 +45,7 @@ class TestKernelMetricsInit:
     def test_creates_histogram_metrics(self):
         m = KernelMetrics(namespace=_unique_ns())
         from prometheus_client import Histogram
+
         assert isinstance(m.policy_check_duration, Histogram)
         assert isinstance(m.execution_duration, Histogram)
         assert isinstance(m.kernel_latency, Histogram)
@@ -58,6 +58,7 @@ class TestKernelMetricsInit:
     def test_creates_gauge_metrics(self):
         m = KernelMetrics(namespace=_unique_ns())
         from prometheus_client import Gauge
+
         assert isinstance(m.violation_rate, Gauge)
         assert isinstance(m.active_agents, Gauge)
         assert isinstance(m.kernel_uptime, Gauge)
@@ -66,6 +67,7 @@ class TestKernelMetricsInit:
     def test_creates_info_metric(self):
         m = KernelMetrics(namespace=_unique_ns())
         from prometheus_client import Info
+
         assert isinstance(m.kernel_info, Info)
 
     def test_creates_summary_is_not_required(self):

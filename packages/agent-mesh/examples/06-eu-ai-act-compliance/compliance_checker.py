@@ -18,17 +18,18 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
-
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Risk Classification (Article 6)
 # ---------------------------------------------------------------------------
 
+
 class RiskLevel(Enum):
     """EU AI Act risk tiers."""
+
     UNACCEPTABLE = "unacceptable"
     HIGH = "high"
     LIMITED = "limited"
@@ -87,10 +88,11 @@ LIMITED_RISK_INDICATORS = {
 @dataclass
 class AgentProfile:
     """Describes an AI agent for compliance assessment."""
+
     name: str
     description: str
     domain: str
-    capabilities: List[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
     has_human_oversight: bool = False
     transparency_disclosure: bool = False
     logs_decisions: bool = False
@@ -104,12 +106,13 @@ class AgentProfile:
     data_governance: bool = False
     version: str = "1.0.0"
     deployer: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ComplianceIssue:
     """A single compliance finding."""
+
     article: str
     requirement: str
     status: str  # "pass", "fail", "warning"
@@ -120,18 +123,20 @@ class ComplianceIssue:
 @dataclass
 class ComplianceReport:
     """Full compliance assessment report."""
+
     agent_name: str
     risk_level: RiskLevel
     compliant: bool
-    issues: List[ComplianceIssue]
+    issues: list[ComplianceIssue]
     generated_at: str
     summary: str
-    recommendations: List[str]
+    recommendations: list[str]
 
 
 # ---------------------------------------------------------------------------
 # Risk Classifier
 # ---------------------------------------------------------------------------
+
 
 class RiskClassifier:
     """Classify an agent's risk level per Article 6 and Annex III."""
@@ -155,11 +160,11 @@ class RiskClassifier:
 
         return RiskLevel.MINIMAL
 
-    def explain(self, profile: AgentProfile) -> Dict[str, Any]:
+    def explain(self, profile: AgentProfile) -> dict[str, Any]:
         level = self.classify(profile)
         domain = profile.domain.lower().replace(" ", "_").replace("-", "_")
 
-        triggers: List[str] = []
+        triggers: list[str] = []
         if domain in UNACCEPTABLE_DOMAINS:
             triggers.append(f"Domain '{profile.domain}' is prohibited under Article 5")
         elif domain in HIGH_RISK_DOMAINS:
@@ -183,50 +188,59 @@ class RiskClassifier:
 # Article-specific checkers
 # ---------------------------------------------------------------------------
 
+
 class TransparencyChecker:
     """Check transparency requirements (Articles 13 & 50)."""
 
-    def check(self, profile: AgentProfile, risk_level: RiskLevel) -> List[ComplianceIssue]:
-        issues: List[ComplianceIssue] = []
+    def check(self, profile: AgentProfile, risk_level: RiskLevel) -> list[ComplianceIssue]:
+        issues: list[ComplianceIssue] = []
 
         # Article 50 — users must know they interact with AI
         if not profile.transparency_disclosure:
             severity = "critical" if risk_level in (RiskLevel.HIGH, RiskLevel.LIMITED) else "medium"
-            issues.append(ComplianceIssue(
-                article="Article 50",
-                requirement="AI system disclosure to users",
-                status="fail",
-                detail="Users are not informed they are interacting with an AI system.",
-                severity=severity,
-            ))
+            issues.append(
+                ComplianceIssue(
+                    article="Article 50",
+                    requirement="AI system disclosure to users",
+                    status="fail",
+                    detail="Users are not informed they are interacting with an AI system.",
+                    severity=severity,
+                )
+            )
         else:
-            issues.append(ComplianceIssue(
-                article="Article 50",
-                requirement="AI system disclosure to users",
-                status="pass",
-                detail="Users are informed they are interacting with an AI system.",
-                severity="low",
-            ))
+            issues.append(
+                ComplianceIssue(
+                    article="Article 50",
+                    requirement="AI system disclosure to users",
+                    status="pass",
+                    detail="Users are informed they are interacting with an AI system.",
+                    severity="low",
+                )
+            )
 
         # Article 13 — high-risk systems need full transparency documentation
         if risk_level == RiskLevel.HIGH:
             if not profile.has_documentation:
-                issues.append(ComplianceIssue(
-                    article="Article 13",
-                    requirement="Transparency for high-risk AI",
-                    status="fail",
-                    detail="High-risk system lacks required technical documentation "
-                           "describing its capabilities, limitations, and intended purpose.",
-                    severity="critical",
-                ))
+                issues.append(
+                    ComplianceIssue(
+                        article="Article 13",
+                        requirement="Transparency for high-risk AI",
+                        status="fail",
+                        detail="High-risk system lacks required technical documentation "
+                        "describing its capabilities, limitations, and intended purpose.",
+                        severity="critical",
+                    )
+                )
             else:
-                issues.append(ComplianceIssue(
-                    article="Article 13",
-                    requirement="Transparency for high-risk AI",
-                    status="pass",
-                    detail="Technical documentation is available.",
-                    severity="low",
-                ))
+                issues.append(
+                    ComplianceIssue(
+                        article="Article 13",
+                        requirement="Transparency for high-risk AI",
+                        status="pass",
+                        detail="Technical documentation is available.",
+                        severity="low",
+                    )
+                )
 
         return issues
 
@@ -234,28 +248,32 @@ class TransparencyChecker:
 class HumanOversightChecker:
     """Check human oversight requirements (Article 14)."""
 
-    def check(self, profile: AgentProfile, risk_level: RiskLevel) -> List[ComplianceIssue]:
-        issues: List[ComplianceIssue] = []
+    def check(self, profile: AgentProfile, risk_level: RiskLevel) -> list[ComplianceIssue]:
+        issues: list[ComplianceIssue] = []
 
         if risk_level in (RiskLevel.HIGH, RiskLevel.UNACCEPTABLE):
             if not profile.has_human_oversight:
-                issues.append(ComplianceIssue(
-                    article="Article 14",
-                    requirement="Human oversight for high-risk AI",
-                    status="fail",
-                    detail="No human oversight mechanism. High-risk AI systems must allow "
-                           "meaningful human control including the ability to override, "
-                           "interrupt, or shut down the system.",
-                    severity="critical",
-                ))
+                issues.append(
+                    ComplianceIssue(
+                        article="Article 14",
+                        requirement="Human oversight for high-risk AI",
+                        status="fail",
+                        detail="No human oversight mechanism. High-risk AI systems must allow "
+                        "meaningful human control including the ability to override, "
+                        "interrupt, or shut down the system.",
+                        severity="critical",
+                    )
+                )
             else:
-                issues.append(ComplianceIssue(
-                    article="Article 14",
-                    requirement="Human oversight for high-risk AI",
-                    status="pass",
-                    detail="Human oversight mechanism is in place.",
-                    severity="low",
-                ))
+                issues.append(
+                    ComplianceIssue(
+                        article="Article 14",
+                        requirement="Human oversight for high-risk AI",
+                        status="pass",
+                        detail="Human oversight mechanism is in place.",
+                        severity="low",
+                    )
+                )
 
         return issues
 
@@ -263,28 +281,32 @@ class HumanOversightChecker:
 class RecordKeepingChecker:
     """Check record-keeping / logging obligations (Article 12)."""
 
-    def check(self, profile: AgentProfile, risk_level: RiskLevel) -> List[ComplianceIssue]:
-        issues: List[ComplianceIssue] = []
+    def check(self, profile: AgentProfile, risk_level: RiskLevel) -> list[ComplianceIssue]:
+        issues: list[ComplianceIssue] = []
 
         if risk_level == RiskLevel.HIGH:
             if not profile.logs_decisions:
-                issues.append(ComplianceIssue(
-                    article="Article 12",
-                    requirement="Automatic logging for high-risk AI",
-                    status="fail",
-                    detail="High-risk system does not log decisions. Automatic logging "
-                           "of events is required for traceability throughout the system's "
-                           "lifecycle.",
-                    severity="high",
-                ))
+                issues.append(
+                    ComplianceIssue(
+                        article="Article 12",
+                        requirement="Automatic logging for high-risk AI",
+                        status="fail",
+                        detail="High-risk system does not log decisions. Automatic logging "
+                        "of events is required for traceability throughout the system's "
+                        "lifecycle.",
+                        severity="high",
+                    )
+                )
             else:
-                issues.append(ComplianceIssue(
-                    article="Article 12",
-                    requirement="Automatic logging for high-risk AI",
-                    status="pass",
-                    detail="Decision logging is enabled.",
-                    severity="low",
-                ))
+                issues.append(
+                    ComplianceIssue(
+                        article="Article 12",
+                        requirement="Automatic logging for high-risk AI",
+                        status="pass",
+                        detail="Decision logging is enabled.",
+                        severity="low",
+                    )
+                )
 
         return issues
 
@@ -292,39 +314,45 @@ class RecordKeepingChecker:
 class AccuracyRobustnessChecker:
     """Check accuracy, robustness, and cybersecurity (Article 15)."""
 
-    def check(self, profile: AgentProfile, risk_level: RiskLevel) -> List[ComplianceIssue]:
-        issues: List[ComplianceIssue] = []
+    def check(self, profile: AgentProfile, risk_level: RiskLevel) -> list[ComplianceIssue]:
+        issues: list[ComplianceIssue] = []
 
         if risk_level == RiskLevel.HIGH:
             if not profile.accuracy_metrics_available:
-                issues.append(ComplianceIssue(
-                    article="Article 15",
-                    requirement="Accuracy metrics for high-risk AI",
-                    status="fail",
-                    detail="No accuracy metrics documented. High-risk AI systems must "
-                           "achieve appropriate levels of accuracy for their intended purpose.",
-                    severity="high",
-                ))
+                issues.append(
+                    ComplianceIssue(
+                        article="Article 15",
+                        requirement="Accuracy metrics for high-risk AI",
+                        status="fail",
+                        detail="No accuracy metrics documented. High-risk AI systems must "
+                        "achieve appropriate levels of accuracy for their intended purpose.",
+                        severity="high",
+                    )
+                )
 
             if not profile.cybersecurity_measures:
-                issues.append(ComplianceIssue(
-                    article="Article 15",
-                    requirement="Cybersecurity measures",
-                    status="fail",
-                    detail="Cybersecurity measures not documented. High-risk AI systems "
-                           "must be resilient against unauthorized access and manipulation.",
-                    severity="high",
-                ))
+                issues.append(
+                    ComplianceIssue(
+                        article="Article 15",
+                        requirement="Cybersecurity measures",
+                        status="fail",
+                        detail="Cybersecurity measures not documented. High-risk AI systems "
+                        "must be resilient against unauthorized access and manipulation.",
+                        severity="high",
+                    )
+                )
 
             if not profile.tested_for_bias:
-                issues.append(ComplianceIssue(
-                    article="Article 15",
-                    requirement="Robustness and bias testing",
-                    status="fail",
-                    detail="System has not been tested for bias. High-risk AI must be "
-                           "robust and not produce discriminatory outcomes.",
-                    severity="high",
-                ))
+                issues.append(
+                    ComplianceIssue(
+                        article="Article 15",
+                        requirement="Robustness and bias testing",
+                        status="fail",
+                        detail="System has not been tested for bias. High-risk AI must be "
+                        "robust and not produce discriminatory outcomes.",
+                        severity="high",
+                    )
+                )
 
         return issues
 
@@ -332,48 +360,56 @@ class AccuracyRobustnessChecker:
 class QualityManagementChecker:
     """Check quality management system (Article 17)."""
 
-    def check(self, profile: AgentProfile, risk_level: RiskLevel) -> List[ComplianceIssue]:
-        issues: List[ComplianceIssue] = []
+    def check(self, profile: AgentProfile, risk_level: RiskLevel) -> list[ComplianceIssue]:
+        issues: list[ComplianceIssue] = []
 
         if risk_level == RiskLevel.HIGH:
             if not profile.has_quality_management:
-                issues.append(ComplianceIssue(
-                    article="Article 17",
-                    requirement="Quality management system",
-                    status="fail",
-                    detail="No quality management system. Providers of high-risk AI must "
-                           "establish a QMS covering risk management, data governance, "
-                           "post-market monitoring, and incident reporting.",
-                    severity="high",
-                ))
+                issues.append(
+                    ComplianceIssue(
+                        article="Article 17",
+                        requirement="Quality management system",
+                        status="fail",
+                        detail="No quality management system. Providers of high-risk AI must "
+                        "establish a QMS covering risk management, data governance, "
+                        "post-market monitoring, and incident reporting.",
+                        severity="high",
+                    )
+                )
             else:
-                issues.append(ComplianceIssue(
-                    article="Article 17",
-                    requirement="Quality management system",
-                    status="pass",
-                    detail="Quality management system is in place.",
-                    severity="low",
-                ))
+                issues.append(
+                    ComplianceIssue(
+                        article="Article 17",
+                        requirement="Quality management system",
+                        status="pass",
+                        detail="Quality management system is in place.",
+                        severity="low",
+                    )
+                )
 
             if not profile.data_governance:
-                issues.append(ComplianceIssue(
-                    article="Article 17",
-                    requirement="Data governance practices",
-                    status="fail",
-                    detail="Data governance practices are not documented as part of the "
-                           "quality management system.",
-                    severity="medium",
-                ))
+                issues.append(
+                    ComplianceIssue(
+                        article="Article 17",
+                        requirement="Data governance practices",
+                        status="fail",
+                        detail="Data governance practices are not documented as part of the "
+                        "quality management system.",
+                        severity="medium",
+                    )
+                )
 
             if not profile.has_risk_assessment:
-                issues.append(ComplianceIssue(
-                    article="Article 17",
-                    requirement="Risk management procedures",
-                    status="fail",
-                    detail="No documented risk assessment. The QMS must include a risk "
-                           "management process.",
-                    severity="high",
-                ))
+                issues.append(
+                    ComplianceIssue(
+                        article="Article 17",
+                        requirement="Risk management procedures",
+                        status="fail",
+                        detail="No documented risk assessment. The QMS must include a risk "
+                        "management process.",
+                        severity="high",
+                    )
+                )
 
         return issues
 
@@ -381,6 +417,7 @@ class QualityManagementChecker:
 # ---------------------------------------------------------------------------
 # Compliance Engine — ties everything together
 # ---------------------------------------------------------------------------
+
 
 class EUAIActComplianceChecker:
     """Orchestrates a full EU AI Act compliance assessment for an agent."""
@@ -398,7 +435,7 @@ class EUAIActComplianceChecker:
     def classify_risk(self, profile: AgentProfile) -> RiskLevel:
         return self.risk_classifier.classify(profile)
 
-    def explain_risk(self, profile: AgentProfile) -> Dict[str, Any]:
+    def explain_risk(self, profile: AgentProfile) -> dict[str, Any]:
         return self.risk_classifier.explain(profile)
 
     def check_compliance(self, profile: AgentProfile) -> ComplianceReport:
@@ -410,21 +447,23 @@ class EUAIActComplianceChecker:
                 agent_name=profile.name,
                 risk_level=risk_level,
                 compliant=False,
-                issues=[ComplianceIssue(
-                    article="Article 5",
-                    requirement="Prohibited AI practices",
-                    status="fail",
-                    detail=f"AI system in domain '{profile.domain}' is classified as "
-                           f"UNACCEPTABLE risk and is PROHIBITED under the EU AI Act.",
-                    severity="critical",
-                )],
-                generated_at=datetime.now(timezone.utc).isoformat(),
+                issues=[
+                    ComplianceIssue(
+                        article="Article 5",
+                        requirement="Prohibited AI practices",
+                        status="fail",
+                        detail=f"AI system in domain '{profile.domain}' is classified as "
+                        f"UNACCEPTABLE risk and is PROHIBITED under the EU AI Act.",
+                        severity="critical",
+                    )
+                ],
+                generated_at=datetime.now(UTC).isoformat(),
                 summary="DEPLOYMENT BLOCKED — system falls under prohibited AI practices.",
                 recommendations=["Do not deploy this system in the EU."],
             )
 
         # Collect issues from each checker
-        issues: List[ComplianceIssue] = []
+        issues: list[ComplianceIssue] = []
         issues.extend(self.transparency.check(profile, risk_level))
         issues.extend(self.human_oversight.check(profile, risk_level))
         issues.extend(self.record_keeping.check(profile, risk_level))
@@ -455,7 +494,7 @@ class EUAIActComplianceChecker:
             risk_level=risk_level,
             compliant=compliant,
             issues=issues,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
             summary=summary,
             recommendations=recommendations,
         )
@@ -467,7 +506,7 @@ class EUAIActComplianceChecker:
 
     def format_report(self, report: ComplianceReport) -> str:
         """Return a human-readable compliance report."""
-        lines: List[str] = []
+        lines: list[str] = []
 
         lines.append("=" * 70)
         lines.append("EU AI ACT COMPLIANCE REPORT")
@@ -506,31 +545,34 @@ class EUAIActComplianceChecker:
 
     def to_json(self, report: ComplianceReport) -> str:
         """Serialize a report to JSON."""
-        return json.dumps({
-            "agent_name": report.agent_name,
-            "risk_level": report.risk_level.value,
-            "compliant": report.compliant,
-            "generated_at": report.generated_at,
-            "summary": report.summary,
-            "issues": [
-                {
-                    "article": i.article,
-                    "requirement": i.requirement,
-                    "status": i.status,
-                    "detail": i.detail,
-                    "severity": i.severity,
-                }
-                for i in report.issues
-            ],
-            "recommendations": report.recommendations,
-        }, indent=2)
+        return json.dumps(
+            {
+                "agent_name": report.agent_name,
+                "risk_level": report.risk_level.value,
+                "compliant": report.compliant,
+                "generated_at": report.generated_at,
+                "summary": report.summary,
+                "issues": [
+                    {
+                        "article": i.article,
+                        "requirement": i.requirement,
+                        "status": i.status,
+                        "detail": i.detail,
+                        "severity": i.severity,
+                    }
+                    for i in report.issues
+                ],
+                "recommendations": report.recommendations,
+            },
+            indent=2,
+        )
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-_RECOMMENDATION_MAP: Dict[str, str] = {
+_RECOMMENDATION_MAP: dict[str, str] = {
     "Article 50": "Add a clear disclosure informing users they are interacting with AI.",
     "Article 13": "Create technical documentation covering capabilities, limitations, and intended purpose.",
     "Article 14": "Implement human oversight controls (override, interrupt, shutdown).",
@@ -540,9 +582,9 @@ _RECOMMENDATION_MAP: Dict[str, str] = {
 }
 
 
-def _build_recommendations(failures: List[ComplianceIssue]) -> List[str]:
+def _build_recommendations(failures: list[ComplianceIssue]) -> list[str]:
     seen_articles: set[str] = set()
-    recs: List[str] = []
+    recs: list[str] = []
     for issue in failures:
         if issue.article not in seen_articles:
             seen_articles.add(issue.article)

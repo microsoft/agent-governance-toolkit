@@ -2,13 +2,13 @@
 # Licensed under the MIT License.
 """Tests for MetricsServer and HTTP endpoints (server.py)."""
 
-import sys
-import os
 import json
+import os
 import random
+import sys
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 from uuid import uuid4
 
 import pytest

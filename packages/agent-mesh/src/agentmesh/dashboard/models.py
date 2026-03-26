@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -86,4 +86,4 @@ class DashboardOverview:
     avg_trust_score: float = 0.0
     top_agents: list[LeaderboardEntry] = field(default_factory=list)
     recent_events: list[TrafficEntry] = field(default_factory=list)
-    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = field(default_factory=lambda: datetime.now(UTC))

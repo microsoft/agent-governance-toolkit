@@ -264,6 +264,7 @@ class TestChaosLibraryBehavioral:
 
     def test_library_has_behavioral_templates(self) -> None:
         from agent_sre.chaos.library import ChaosLibrary
+
         lib = ChaosLibrary()
         agent_templates = lib.list_templates(category="agent")
         assert len(agent_templates) >= 3
@@ -274,6 +275,7 @@ class TestChaosLibraryBehavioral:
 
     def test_library_has_enterprise_templates(self) -> None:
         from agent_sre.chaos.library import ChaosLibrary
+
         lib = ChaosLibrary()
         ids = [t.template_id for t in lib.list_templates()]
         assert "delegation-reject" in ids
@@ -281,6 +283,7 @@ class TestChaosLibraryBehavioral:
 
     def test_instantiate_deadlock_template(self) -> None:
         from agent_sre.chaos.library import ChaosLibrary
+
         lib = ChaosLibrary()
         exp = lib.instantiate("deadlock-injection", "my-agent")
         assert exp is not None
@@ -290,6 +293,7 @@ class TestChaosLibraryBehavioral:
 
     def test_instantiate_trust_perturbation_template(self) -> None:
         from agent_sre.chaos.library import ChaosLibrary
+
         lib = ChaosLibrary()
         exp = lib.instantiate("trust-perturbation", "agent-x")
         assert exp is not None
@@ -297,12 +301,14 @@ class TestChaosLibraryBehavioral:
 
     def test_total_template_count(self) -> None:
         from agent_sre.chaos.library import ChaosLibrary
+
         lib = ChaosLibrary()
         # 3 basic + 3 adversarial + 3 behavioral + 2 enterprise = 11
         assert len(lib.list_templates()) == 11
 
     def test_categories_include_agent(self) -> None:
         from agent_sre.chaos.library import ChaosLibrary
+
         lib = ChaosLibrary()
         cats = lib.categories()
         assert "agent" in cats

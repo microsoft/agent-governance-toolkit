@@ -9,12 +9,11 @@ from click.testing import CliRunner
 
 from agentmesh.cli.main import app
 from agentmesh.cli.trust_cli import (
-    trust,
+    _format_datetime,
+    _get_demo_history,
+    _get_demo_peers,
     _trust_level_label,
     _trust_level_style,
-    _format_datetime,
-    _get_demo_peers,
-    _get_demo_history,
 )
 
 
@@ -27,6 +26,7 @@ def runner():
 # ---------------------------------------------------------------------------
 # Helper function tests
 # ---------------------------------------------------------------------------
+
 
 class TestHelpers:
     def test_trust_level_verified_partner(self):
@@ -60,6 +60,7 @@ class TestHelpers:
 
     def test_format_datetime_valid(self):
         from datetime import datetime
+
         dt = datetime(2026, 1, 15, 10, 30, 0)
         assert _format_datetime(dt) == "2026-01-15 10:30:00"
 
@@ -79,6 +80,7 @@ class TestHelpers:
 # ---------------------------------------------------------------------------
 # trust list
 # ---------------------------------------------------------------------------
+
 
 class TestTrustList:
     def test_list_table(self, runner):
@@ -125,6 +127,7 @@ class TestTrustList:
 # trust inspect
 # ---------------------------------------------------------------------------
 
+
 class TestTrustInspect:
     def test_inspect_table(self, runner):
         result = runner.invoke(app, ["trust", "inspect", "did:mesh:agent-alpha-001"])
@@ -154,6 +157,7 @@ class TestTrustInspect:
 # trust history
 # ---------------------------------------------------------------------------
 
+
 class TestTrustHistory:
     def test_history_table(self, runner):
         result = runner.invoke(app, ["trust", "history", "did:mesh:agent-alpha-001"])
@@ -161,9 +165,7 @@ class TestTrustHistory:
         assert "Score" in result.output or "score" in result.output.lower()
 
     def test_history_json(self, runner):
-        result = runner.invoke(
-            app, ["trust", "history", "did:mesh:agent-alpha-001", "--json"]
-        )
+        result = runner.invoke(app, ["trust", "history", "did:mesh:agent-alpha-001", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["agent_id"] == "did:mesh:agent-alpha-001"
@@ -179,9 +181,7 @@ class TestTrustHistory:
 
     def test_history_unknown_agent(self, runner):
         """History for unknown agent still returns default data."""
-        result = runner.invoke(
-            app, ["trust", "history", "did:mesh:unknown", "--json"]
-        )
+        result = runner.invoke(app, ["trust", "history", "did:mesh:unknown", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert len(data["history"]) > 0
@@ -190,6 +190,7 @@ class TestTrustHistory:
 # ---------------------------------------------------------------------------
 # trust graph
 # ---------------------------------------------------------------------------
+
 
 class TestTrustGraph:
     def test_graph_ascii(self, runner):
@@ -216,6 +217,7 @@ class TestTrustGraph:
 # trust revoke
 # ---------------------------------------------------------------------------
 
+
 class TestTrustRevoke:
     def test_revoke_with_force(self, runner):
         result = runner.invoke(
@@ -239,8 +241,12 @@ class TestTrustRevoke:
         result = runner.invoke(
             app,
             [
-                "trust", "revoke", "did:mesh:agent-beta-002",
-                "--force", "--reason", "Compromised",
+                "trust",
+                "revoke",
+                "did:mesh:agent-beta-002",
+                "--force",
+                "--reason",
+                "Compromised",
                 "--json",
             ],
         )
@@ -249,9 +255,7 @@ class TestTrustRevoke:
         assert data["reason"] == "Compromised"
 
     def test_revoke_not_found(self, runner):
-        result = runner.invoke(
-            app, ["trust", "revoke", "did:mesh:nonexistent", "--force"]
-        )
+        result = runner.invoke(app, ["trust", "revoke", "did:mesh:nonexistent", "--force"])
         assert result.exit_code != 0
 
     def test_revoke_cancelled(self, runner):
@@ -269,18 +273,15 @@ class TestTrustRevoke:
 # trust attest
 # ---------------------------------------------------------------------------
 
+
 class TestTrustAttest:
     def test_attest_table(self, runner):
-        result = runner.invoke(
-            app, ["trust", "attest", "did:mesh:agent-beta-002"]
-        )
+        result = runner.invoke(app, ["trust", "attest", "did:mesh:agent-beta-002"])
         assert result.exit_code == 0
         assert "Attested" in result.output or "attested" in result.output.lower()
 
     def test_attest_json(self, runner):
-        result = runner.invoke(
-            app, ["trust", "attest", "did:mesh:agent-beta-002", "--json"]
-        )
+        result = runner.invoke(app, ["trust", "attest", "did:mesh:agent-beta-002", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["action"] == "attested"
@@ -290,8 +291,12 @@ class TestTrustAttest:
         result = runner.invoke(
             app,
             [
-                "trust", "attest", "did:mesh:agent-gamma-003",
-                "--score-boost", "100", "--json",
+                "trust",
+                "attest",
+                "did:mesh:agent-gamma-003",
+                "--score-boost",
+                "100",
+                "--json",
             ],
         )
         assert result.exit_code == 0
@@ -303,8 +308,12 @@ class TestTrustAttest:
         result = runner.invoke(
             app,
             [
-                "trust", "attest", "did:mesh:agent-alpha-001",
-                "--score-boost", "500", "--json",
+                "trust",
+                "attest",
+                "did:mesh:agent-alpha-001",
+                "--score-boost",
+                "500",
+                "--json",
             ],
         )
         assert result.exit_code == 0
@@ -312,17 +321,19 @@ class TestTrustAttest:
         assert data["new_score"] <= 1000
 
     def test_attest_not_found(self, runner):
-        result = runner.invoke(
-            app, ["trust", "attest", "did:mesh:nonexistent"]
-        )
+        result = runner.invoke(app, ["trust", "attest", "did:mesh:nonexistent"])
         assert result.exit_code != 0
 
     def test_attest_custom_note(self, runner):
         result = runner.invoke(
             app,
             [
-                "trust", "attest", "did:mesh:agent-beta-002",
-                "--note", "Passed security audit", "--json",
+                "trust",
+                "attest",
+                "did:mesh:agent-beta-002",
+                "--note",
+                "Passed security audit",
+                "--json",
             ],
         )
         assert result.exit_code == 0
@@ -333,6 +344,7 @@ class TestTrustAttest:
 # ---------------------------------------------------------------------------
 # trust help
 # ---------------------------------------------------------------------------
+
 
 class TestTrustHelp:
     def test_trust_help(self, runner):

@@ -49,6 +49,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class GovernancePolicy:
     """Policy configuration for OpenAI Agents."""
+
     # Tool limits
     max_tool_calls: int = 50
     max_handoffs: int = 5
@@ -74,6 +75,7 @@ class GovernancePolicy:
 @dataclass
 class ExecutionContext:
     """Runtime context for governed execution."""
+
     session_id: str
     agent_id: str
     policy: GovernancePolicy
@@ -89,15 +91,18 @@ class ExecutionContext:
     events: list[dict[str, Any]] = field(default_factory=list)
 
     def record_event(self, event_type: str, data: dict[str, Any]) -> None:
-        self.events.append({
-            "type": event_type,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "data": data,
-        })
+        self.events.append(
+            {
+                "type": event_type,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "data": data,
+            }
+        )
 
 
 class PolicyViolationError(Exception):
     """Raised when a policy violation is detected."""
+
     def __init__(self, policy_name: str, description: str, severity: str = "high"):
         self.policy_name = policy_name
         self.description = description
@@ -132,6 +137,7 @@ class OpenAIAgentsKernel:
     def _create_context(self, agent_id: str) -> ExecutionContext:
         """Create execution context for an agent."""
         import uuid
+
         session_id = str(uuid.uuid4())[:8]
         ctx = ExecutionContext(
             session_id=session_id,
@@ -308,6 +314,7 @@ class OpenAIAgentsKernel:
                 return func(*args, **kwargs)
 
             return wrapper
+
         return guard
 
     def create_guardrail(self) -> Any:

@@ -97,11 +97,13 @@ class DetectorConfig:
     z_threshold: float = 2.5
     iqr_multiplier: float = 1.5
     min_samples: int = 20
-    severity_thresholds: dict[str, AnomalySeverity] = field(default_factory=lambda: {
-        "low": AnomalySeverity.INFO,
-        "medium": AnomalySeverity.WARNING,
-        "high": AnomalySeverity.CRITICAL,
-    })
+    severity_thresholds: dict[str, AnomalySeverity] = field(
+        default_factory=lambda: {
+            "low": AnomalySeverity.INFO,
+            "medium": AnomalySeverity.WARNING,
+            "high": AnomalySeverity.CRITICAL,
+        }
+    )
     enabled_strategies: list[str] = field(
         default_factory=lambda: ["statistical", "sequential", "resource"],
     )
@@ -351,6 +353,7 @@ class AnomalyDetector:
 
 
 # -- helpers --------------------------------------------------------------
+
 
 def _infer_anomaly_type(metric_name: str) -> AnomalyType:
     """Best-effort mapping from metric name to anomaly type."""

@@ -17,7 +17,7 @@ Cursor is the AI-first IDE. With Agent OS, it becomes the **safest** AI-first ID
 Cursor's powerful AI (Composer, Copilot++) can suggest code that:
 - `DROP TABLE users` - deletes production data
 - Hardcoded API keys and secrets
-- `rm -rf /` - destructive file operations  
+- `rm -rf /` - destructive file operations
 - Code with SQL injection vulnerabilities
 
 **Your AI won't accidentally destroy your production database.**
@@ -84,7 +84,7 @@ Right-click on code and select **"Agent OS: Review Code with CMVK"** to get a co
 Consensus: 66% Agreement
 
 ✅ GPT-4:     No issues
-✅ Claude:    No issues  
+✅ Claude:    No issues
 ⚠️  Gemini:   Potential SQL injection (Line 42)
 
 Recommendations:

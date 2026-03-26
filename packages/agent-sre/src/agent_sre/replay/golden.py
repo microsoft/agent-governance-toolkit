@@ -34,9 +34,7 @@ class GoldenTrace(BaseModel):
     expected_output: str
     tolerance: float = 0.0
     labels: list[str] = Field(default_factory=list)
-    created_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     source: TraceSource = TraceSource.PRODUCTION
 
     def to_trace(self) -> Trace:

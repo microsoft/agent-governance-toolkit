@@ -15,6 +15,7 @@ from agent_sre.slo.objectives import SLO, SLOStatus
 
 class ReportPeriod(Enum):
     """Dashboard reporting period."""
+
     HOUR = "hour"
     DAY = "day"
     WEEK = "week"
@@ -29,6 +30,7 @@ class ReportPeriod(Enum):
 @dataclass
 class SLOSnapshot:
     """Point-in-time snapshot of an SLO's state."""
+
     slo_name: str
     status: SLOStatus
     error_budget_remaining_percent: float
@@ -50,6 +52,7 @@ class SLOSnapshot:
 @dataclass
 class ComplianceRecord:
     """Historical compliance record for trend analysis."""
+
     slo_name: str
     period: ReportPeriod
     compliant: bool

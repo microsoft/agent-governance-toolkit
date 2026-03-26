@@ -9,16 +9,14 @@ correctly rejected, including edge cases around clock skew and boundary times.
 import uuid
 from datetime import datetime, timedelta
 
-import pytest
-
 from agentmesh.identity.agent_id import AgentIdentity
 from agentmesh.identity.credentials import Credential, CredentialManager
-from agentmesh.identity.delegation import ScopeChain, DelegationLink
-
+from agentmesh.identity.delegation import DelegationLink, ScopeChain
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_identity(name: str = "test") -> AgentIdentity:
     return AgentIdentity.create(
@@ -62,6 +60,7 @@ def _chain_with_expiring_link(
 # ---------------------------------------------------------------------------
 # Credential expiry tests
 # ---------------------------------------------------------------------------
+
 
 class TestCredentialExpiry:
     """Credential.is_valid rejects expired credentials."""
@@ -128,6 +127,7 @@ class TestCredentialManagerExpiry:
 # ---------------------------------------------------------------------------
 # Delegation link expiry tests
 # ---------------------------------------------------------------------------
+
 
 class TestDelegationLinkExpiry:
     """DelegationLink.is_valid rejects expired links."""
@@ -198,6 +198,7 @@ class TestScopeChainWithExpiredLinks:
 # Clock skew tolerance tests
 # ---------------------------------------------------------------------------
 
+
 class TestClockSkewTolerance:
     """Edge cases around small time differences."""
 
@@ -222,6 +223,7 @@ class TestClockSkewTolerance:
 # ---------------------------------------------------------------------------
 # Agent identity expiry tests
 # ---------------------------------------------------------------------------
+
 
 class TestAgentIdentityExpiry:
     """AgentIdentity.is_active respects expires_at."""

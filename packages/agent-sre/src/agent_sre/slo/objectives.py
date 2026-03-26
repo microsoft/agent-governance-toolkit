@@ -64,7 +64,10 @@ class ErrorBudget:
 
     def __post_init__(self) -> None:
         """Ensure _events is a bounded deque with the correct maxlen."""
-        if not isinstance(self._events, collections.deque) or self._events.maxlen != self.max_events:
+        if (
+            not isinstance(self._events, collections.deque)
+            or self._events.maxlen != self.max_events
+        ):
             self._events = collections.deque(self._events, maxlen=self.max_events)
 
     @property
@@ -245,32 +248,36 @@ class SLO:
                 SLOStatus.WARNING: AlertSeverity.WARNING,
             }
             alert_severity = severity_map.get(status, AlertSeverity.WARNING)
-            self._alert_manager.send(Alert(  # type: ignore[union-attr]
-                title=f"SLO Breach: {self.name}",
-                message=f"SLO {self.name} status changed to {status.value}",
-                severity=alert_severity,
-                agent_id=self._agent_id,
-                slo_name=self.name,
-                dedup_key=f"{self._agent_id}:{self.name}",
-                metadata={
-                    "remaining_percent": self.error_budget.remaining_percent,
-                    "status": status.value,
-                },
-            ))
+            self._alert_manager.send(
+                Alert(  # type: ignore[union-attr]
+                    title=f"SLO Breach: {self.name}",
+                    message=f"SLO {self.name} status changed to {status.value}",
+                    severity=alert_severity,
+                    agent_id=self._agent_id,
+                    slo_name=self.name,
+                    dedup_key=f"{self._agent_id}:{self.name}",
+                    metadata={
+                        "remaining_percent": self.error_budget.remaining_percent,
+                        "status": status.value,
+                    },
+                )
+            )
         elif status == SLOStatus.HEALTHY and prev is not None and prev != SLOStatus.HEALTHY:
             # Recovered
-            self._alert_manager.send(Alert(  # type: ignore[union-attr]
-                title=f"SLO Breach: {self.name}",
-                message=f"SLO {self.name} recovered to healthy",
-                severity=AlertSeverity.RESOLVED,
-                agent_id=self._agent_id,
-                slo_name=self.name,
-                dedup_key=f"{self._agent_id}:{self.name}",
-                metadata={
-                    "remaining_percent": self.error_budget.remaining_percent,
-                    "status": status.value,
-                },
-            ))
+            self._alert_manager.send(
+                Alert(  # type: ignore[union-attr]
+                    title=f"SLO Breach: {self.name}",
+                    message=f"SLO {self.name} recovered to healthy",
+                    severity=AlertSeverity.RESOLVED,
+                    agent_id=self._agent_id,
+                    slo_name=self.name,
+                    dedup_key=f"{self._agent_id}:{self.name}",
+                    metadata={
+                        "remaining_percent": self.error_budget.remaining_percent,
+                        "status": status.value,
+                    },
+                )
+            )
 
     def record_event(self, good: bool) -> None:
         """Record a good or bad event against the SLO."""

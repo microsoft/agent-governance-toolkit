@@ -15,13 +15,23 @@ def _make_trace():
     root.finish(output={"result": "done"}, cost_usd=0.01)
     trace.add_span(root)
 
-    tool = Span(span_id="tool1", parent_id="root", trace_id="test-trace",
-                kind=SpanKind.TOOL_CALL, name="search")
+    tool = Span(
+        span_id="tool1",
+        parent_id="root",
+        trace_id="test-trace",
+        kind=SpanKind.TOOL_CALL,
+        name="search",
+    )
     tool.finish(output={"data": "found"}, cost_usd=0.005)
     trace.add_span(tool)
 
-    llm = Span(span_id="llm1", parent_id="root", trace_id="test-trace",
-               kind=SpanKind.LLM_INFERENCE, name="generate")
+    llm = Span(
+        span_id="llm1",
+        parent_id="root",
+        trace_id="test-trace",
+        kind=SpanKind.LLM_INFERENCE,
+        name="generate",
+    )
     llm.finish(output={"text": "answer"}, cost_usd=0.02)
     trace.add_span(llm)
 

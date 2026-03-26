@@ -207,9 +207,7 @@ class A2AGovernanceAdapter:
 
         # 4. Trust score
         if trust_score < self.policy.min_trust_score:
-            return deny(
-                f"Trust score {trust_score} below minimum {self.policy.min_trust_score}"
-            )
+            return deny(f"Trust score {trust_score} below minimum {self.policy.min_trust_score}")
 
         # 5. Content check
         ok, reason = self._check_content(fields["texts"])
@@ -221,7 +219,11 @@ class A2AGovernanceAdapter:
         if self._guardian and fields["texts"]:
             from .conversation_guardian import AlertAction
 
-            conv_id = conversation_id or task.get("id", "") if isinstance(task, dict) else getattr(task, "id", "")
+            conv_id = (
+                conversation_id or task.get("id", "")
+                if isinstance(task, dict)
+                else getattr(task, "id", "")
+            )
             src = sender or source_did
             dst = receiver or skill_id
             combined_text = " ".join(fields["texts"])

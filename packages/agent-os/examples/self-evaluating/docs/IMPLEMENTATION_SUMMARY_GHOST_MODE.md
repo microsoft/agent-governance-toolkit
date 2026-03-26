@@ -9,13 +9,13 @@ Ghost Mode implements the "Observer Daemon Pattern" - a background process that 
 From the requirement:
 
 > **3. The "Ghost Mode" (Passive Observation)**
-> 
+>
 > The Old World: "The user must explicitly ask for help."
-> 
+>
 > The Architecture: The highest form of "Scale by Subtraction" is No UI.
-> 
+>
 > The best AI is one I don't have to talk to.
-> 
+>
 > This is the "Observer Daemon" Pattern.
 
 ## Implementation
@@ -198,7 +198,7 @@ class PassiveDoerAgent(DoerAgent):
             surfacing_callback=self._handle_observation
         )
         self.ghost_observer.start_observing()
-    
+
     def _handle_observation(self, obs):
         # Surface high-confidence observations
         if obs.recommendation:

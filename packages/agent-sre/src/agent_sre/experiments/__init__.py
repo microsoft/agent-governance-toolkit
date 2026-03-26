@@ -153,13 +153,18 @@ class Experiment:
         return name
 
     def record(self, variant_name: str, metric_name: str, value: float) -> None:
-        self._samples.append(MetricSample(
-            variant_name=variant_name, metric_name=metric_name, value=value,
-        ))
+        self._samples.append(
+            MetricSample(
+                variant_name=variant_name,
+                metric_name=metric_name,
+                value=value,
+            )
+        )
 
     def _get_values(self, variant_name: str, metric_name: str) -> list[float]:
         return [
-            s.value for s in self._samples
+            s.value
+            for s in self._samples
             if s.variant_name == variant_name and s.metric_name == metric_name
         ]
 
@@ -213,7 +218,7 @@ def _welch_p_value(m1: float, m2: float, s1: float, s2: float, n1: int, n2: int)
         return 1.0
     if s1 == 0 and s2 == 0:
         return 0.0 if m1 != m2 else 1.0
-    se = math.sqrt((s1 ** 2) / n1 + (s2 ** 2) / n2)
+    se = math.sqrt((s1**2) / n1 + (s2**2) / n2)
     if se == 0:
         return 0.0 if m1 != m2 else 1.0
     t = abs(m1 - m2) / se
@@ -221,8 +226,11 @@ def _welch_p_value(m1: float, m2: float, s1: float, s2: float, n1: int, n2: int)
 
 
 def _compare(
-    metric: str, name_a: str, name_b: str,
-    values_a: list[float], values_b: list[float],
+    metric: str,
+    name_a: str,
+    name_b: str,
+    values_a: list[float],
+    values_b: list[float],
 ) -> MetricSummary:
     n_a, n_b = len(values_a), len(values_b)
     mean_a = sum(values_a) / n_a if n_a else 0.0
@@ -248,8 +256,18 @@ def _compare(
         winner = name_b if mean_b > mean_a else name_a
 
     return MetricSummary(
-        metric_name=metric, variant_a=name_a, variant_b=name_b,
-        mean_a=mean_a, mean_b=mean_b, std_a=std_a, std_b=std_b,
-        n_a=n_a, n_b=n_b, difference=diff, relative_improvement=rel,
-        p_value=p, significance=sig, winner=winner,
+        metric_name=metric,
+        variant_a=name_a,
+        variant_b=name_b,
+        mean_a=mean_a,
+        mean_b=mean_b,
+        std_a=std_a,
+        std_b=std_b,
+        n_a=n_a,
+        n_b=n_b,
+        difference=diff,
+        relative_improvement=rel,
+        p_value=p,
+        significance=sig,
+        winner=winner,
     )

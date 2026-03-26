@@ -14,7 +14,6 @@ from agentmesh.governance.policy import (
     validate_policy_schema,
 )
 
-
 VALID_V1_YAML = """
 apiVersion: governance.toolkit/v1
 name: test-policy
@@ -76,6 +75,7 @@ rules: []
 
     def test_json_version_validation(self):
         import json
+
         data = {
             "apiVersion": "governance.toolkit/v1",
             "name": "json-policy",
@@ -86,6 +86,7 @@ rules: []
 
     def test_json_unsupported_version_raises(self):
         import json
+
         data = {
             "apiVersion": "governance.toolkit/v99",
             "name": "bad-policy",
@@ -101,6 +102,7 @@ class TestMigration:
         assert "governance.toolkit/v1" in result
         # version field should be removed
         import yaml
+
         data = yaml.safe_load(result)
         assert data.get("apiVersion") == CURRENT_API_VERSION
         assert "version" not in data

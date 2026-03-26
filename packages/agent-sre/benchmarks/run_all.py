@@ -10,15 +10,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import sys
 
 from benchmarks.bench_chaos import run_all as chaos_benchmarks
 from benchmarks.bench_delivery import run_all as delivery_benchmarks
 from benchmarks.bench_slo import run_all as slo_benchmarks
 
-HEADER = (
-    f"{'Benchmark':30s}  {'Throughput':>14s}  {'p50':>10s}  {'p99':>10s}"
-)
+HEADER = f"{'Benchmark':30s}  {'Throughput':>14s}  {'p50':>10s}  {'p99':>10s}"
 SEP = "-" * len(HEADER)
 
 

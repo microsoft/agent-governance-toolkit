@@ -4,8 +4,13 @@
 
 from __future__ import annotations
 
-import pytest
-
+from agentmesh.events.bus import (
+    ALL_EVENT_TYPES,
+    EVENT_AUTHORITY_RESOLVED,
+    EVENT_TRUST_SCORE_CHANGED,
+    Event,
+    InMemoryEventBus,
+)
 from agentmesh.governance.authority import (
     ActionRequest,
     AuthorityDecision,
@@ -15,15 +20,7 @@ from agentmesh.governance.authority import (
     DelegationInfo,
     TrustInfo,
 )
-from agentmesh.events.bus import (
-    EVENT_TRUST_SCORE_CHANGED,
-    EVENT_AUTHORITY_RESOLVED,
-    ALL_EVENT_TYPES,
-    Event,
-    InMemoryEventBus,
-)
 from agentmesh.identity.agent_id import AgentIdentity
-
 
 # ── AuthorityDecision Tests ───────────────────────────────────
 
@@ -243,11 +240,13 @@ class TestEventTypes:
         received = []
         bus.subscribe("trust.*", lambda e: received.append(e))
 
-        bus.emit(Event(
-            event_type=EVENT_TRUST_SCORE_CHANGED,
-            source="test",
-            payload={"direction": "decreased"},
-        ))
+        bus.emit(
+            Event(
+                event_type=EVENT_TRUST_SCORE_CHANGED,
+                source="test",
+                payload={"direction": "decreased"},
+            )
+        )
         assert len(received) == 1
         assert received[0].payload["direction"] == "decreased"
 

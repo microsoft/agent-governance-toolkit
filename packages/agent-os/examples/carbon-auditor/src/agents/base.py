@@ -8,15 +8,15 @@ Uses amb-core for message bus communication.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Callable
-import asyncio
+from typing import Callable, Dict, List, Optional
 
 
 class AgentState(Enum):
     """Agent lifecycle states."""
+
     CREATED = "created"
     STARTING = "starting"
     RUNNING = "running"
@@ -29,6 +29,7 @@ class AgentState(Enum):
 @dataclass
 class AgentMetrics:
     """Runtime metrics for an agent."""
+
     messages_received: int = 0
     messages_sent: int = 0
     errors: int = 0
@@ -39,7 +40,7 @@ class AgentMetrics:
 class BaseAgent(ABC):
     """
     Base class for all agents in the swarm.
-    
+
     Agents are autonomous workers that:
     - Subscribe to topics on the message bus (amb-core)
     - Process messages using their tools (atr)
@@ -53,14 +54,14 @@ class BaseAgent(ABC):
     ):
         """
         Initialize an agent.
-        
+
         Args:
             agent_id: Unique identifier for this agent
             name: Human-readable name (defaults to agent_id)
         """
         self.agent_id = agent_id
         self.name = name or agent_id
-        
+
         self._state = AgentState.CREATED
         self._metrics = AgentMetrics()
         self._message_handlers: Dict[str, List[Callable]] = {}
@@ -95,7 +96,7 @@ class BaseAgent(ABC):
         self._state = AgentState.STARTING
         self._metrics.start_time = datetime.now(timezone.utc)
         self._state = AgentState.RUNNING
-        self._log(f"Agent started")
+        self._log("Agent started")
 
     def stop(self) -> None:
         """Stop the agent gracefully."""

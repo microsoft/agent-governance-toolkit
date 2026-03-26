@@ -19,6 +19,7 @@ from agent_sre.fleet import (
 # AgentRegistration
 # ---------------------------------------------------------------------------
 
+
 class TestAgentRegistration:
     def test_defaults(self):
         reg = AgentRegistration(agent_id="a1")
@@ -72,6 +73,7 @@ class TestAgentRegistration:
 # FleetManager — registration
 # ---------------------------------------------------------------------------
 
+
 class TestFleetRegistration:
     def test_register(self):
         fm = FleetManager()
@@ -105,6 +107,7 @@ class TestFleetRegistration:
 # FleetManager — heartbeats
 # ---------------------------------------------------------------------------
 
+
 class TestFleetHeartbeat:
     def test_heartbeat(self):
         fm = FleetManager()
@@ -123,6 +126,7 @@ class TestFleetHeartbeat:
 # ---------------------------------------------------------------------------
 # FleetManager — events
 # ---------------------------------------------------------------------------
+
 
 class TestFleetEvents:
     def test_record_event(self):
@@ -154,6 +158,7 @@ class TestFleetEvents:
 # ---------------------------------------------------------------------------
 # FleetManager — state management
 # ---------------------------------------------------------------------------
+
 
 class TestFleetStates:
     def test_refresh_detects_unresponsive(self):
@@ -191,6 +196,7 @@ class TestFleetStates:
 # FleetManager — health queries
 # ---------------------------------------------------------------------------
 
+
 class TestFleetHealth:
     def test_agent_health(self):
         fm = FleetManager()
@@ -213,6 +219,7 @@ class TestFleetHealth:
         class MockSLO:
             def evaluate(self):
                 return type("Status", (), {"value": "healthy"})()
+
             def record_event(self, good):
                 pass
 
@@ -223,11 +230,16 @@ class TestFleetHealth:
 
     def test_agent_health_to_dict(self):
         health = AgentHealth(
-            agent_id="a1", state=AgentState.ACTIVE,
-            is_responsive=True, success_rate=0.95,
-            avg_latency_ms=120.0, total_cost_usd=1.5,
-            event_count=100, uptime_seconds=3600.0,
-            tags={"env": "prod"}, slo_status="healthy",
+            agent_id="a1",
+            state=AgentState.ACTIVE,
+            is_responsive=True,
+            success_rate=0.95,
+            avg_latency_ms=120.0,
+            total_cost_usd=1.5,
+            event_count=100,
+            uptime_seconds=3600.0,
+            tags={"env": "prod"},
+            slo_status="healthy",
         )
         d = health.to_dict()
         assert d["agent_id"] == "a1"
@@ -286,6 +298,7 @@ class TestFleetHealth:
 # ---------------------------------------------------------------------------
 # FleetManager — filtering
 # ---------------------------------------------------------------------------
+
 
 class TestFleetFiltering:
     def test_agents_by_tag(self):

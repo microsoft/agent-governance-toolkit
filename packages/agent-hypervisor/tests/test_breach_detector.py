@@ -119,23 +119,21 @@ class TestRingBreachDetector:
 
     def test_privilege_escalation_amplifies_severity(self):
         """Ring 3 → Ring 0 (distance 3) amplifies anomaly score vs same-ring."""
-        detector_same = RingBreachDetector(
-            window_seconds=60, baseline_rate=0.05
-        )
-        detector_escalate = RingBreachDetector(
-            window_seconds=60, baseline_rate=0.05
-        )
+        detector_same = RingBreachDetector(window_seconds=60, baseline_rate=0.05)
+        detector_escalate = RingBreachDetector(window_seconds=60, baseline_rate=0.05)
 
         breach_same = None
         breach_escalate = None
         for _ in range(20):
             r1 = detector_same.record_call(
-                "did:example:a", "s1",
+                "did:example:a",
+                "s1",
                 ExecutionRing.RING_2_STANDARD,
                 ExecutionRing.RING_2_STANDARD,
             )
             r2 = detector_escalate.record_call(
-                "did:example:a", "s1",
+                "did:example:a",
+                "s1",
                 ExecutionRing.RING_3_SANDBOX,
                 ExecutionRing.RING_0_ROOT,
             )
@@ -150,15 +148,14 @@ class TestRingBreachDetector:
 
     def test_breaker_trips_on_high_severity(self):
         """Circuit-breaker trips when HIGH or CRITICAL breach detected."""
-        detector = RingBreachDetector(
-            window_seconds=60, baseline_rate=0.01
-        )
+        detector = RingBreachDetector(window_seconds=60, baseline_rate=0.01)
 
         assert detector.is_breaker_tripped("did:example:a", "s1") is False
 
         for _ in range(50):
             detector.record_call(
-                "did:example:a", "s1",
+                "did:example:a",
+                "s1",
                 ExecutionRing.RING_3_SANDBOX,
                 ExecutionRing.RING_0_ROOT,
             )
@@ -167,13 +164,12 @@ class TestRingBreachDetector:
 
     def test_breaker_reset(self):
         """reset_breaker() clears the trip and the call window."""
-        detector = RingBreachDetector(
-            window_seconds=60, baseline_rate=0.01
-        )
+        detector = RingBreachDetector(window_seconds=60, baseline_rate=0.01)
 
         for _ in range(50):
             detector.record_call(
-                "did:example:a", "s1",
+                "did:example:a",
+                "s1",
                 ExecutionRing.RING_3_SANDBOX,
                 ExecutionRing.RING_0_ROOT,
             )
@@ -183,7 +179,8 @@ class TestRingBreachDetector:
         assert detector.is_breaker_tripped("did:example:a", "s1") is False
 
         result = detector.record_call(
-            "did:example:a", "s1",
+            "did:example:a",
+            "s1",
             ExecutionRing.RING_2_STANDARD,
             ExecutionRing.RING_2_STANDARD,
         )
@@ -192,12 +189,11 @@ class TestRingBreachDetector:
 
     def test_breach_history_populated(self):
         """Breach events are stored in breach_history."""
-        detector = RingBreachDetector(
-            window_seconds=60, baseline_rate=0.01
-        )
+        detector = RingBreachDetector(window_seconds=60, baseline_rate=0.01)
         for _ in range(20):
             detector.record_call(
-                "did:example:a", "s1",
+                "did:example:a",
+                "s1",
                 ExecutionRing.RING_3_SANDBOX,
                 ExecutionRing.RING_0_ROOT,
             )
@@ -222,7 +218,8 @@ class TestRingBreachDetector:
         )
         for _ in range(200):
             detector.record_call(
-                "did:example:a", "s1",
+                "did:example:a",
+                "s1",
                 ExecutionRing.RING_2_STANDARD,
                 ExecutionRing.RING_2_STANDARD,
             )
@@ -231,13 +228,12 @@ class TestRingBreachDetector:
 
     def test_multiple_agents_independent(self):
         """Each agent has independent tracking and breaker state."""
-        detector = RingBreachDetector(
-            window_seconds=60, baseline_rate=0.01
-        )
+        detector = RingBreachDetector(window_seconds=60, baseline_rate=0.01)
 
         for _ in range(50):
             detector.record_call(
-                "did:example:agent1", "s1",
+                "did:example:agent1",
+                "s1",
                 ExecutionRing.RING_3_SANDBOX,
                 ExecutionRing.RING_0_ROOT,
             )

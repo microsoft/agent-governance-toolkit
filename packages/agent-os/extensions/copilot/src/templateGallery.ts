@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Agent Template Gallery
- * 
+ *
  * Provides a searchable library of pre-built agent templates
  * organized by category for quick instantiation.
  */
@@ -25,7 +25,7 @@ export interface AgentTemplate {
     exampleUseCase?: string;
 }
 
-export type TemplateCategory = 
+export type TemplateCategory =
     | 'data-processing'
     | 'customer-support'
     | 'devops'
@@ -111,18 +111,18 @@ export class TemplateGallery {
      */
     recommend(description: string, limit: number = 5): AgentTemplate[] {
         const words = description.toLowerCase().split(/\s+/);
-        
+
         // Score templates by keyword matches
         const scored = this.templates.map(template => {
             let score = 0;
             const templateText = `${template.name} ${template.description} ${template.tags.join(' ')}`.toLowerCase();
-            
+
             for (const word of words) {
                 if (word.length > 2 && templateText.includes(word)) {
                     score += 1;
                 }
             }
-            
+
             return { template, score };
         });
 

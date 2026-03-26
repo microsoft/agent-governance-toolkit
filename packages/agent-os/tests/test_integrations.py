@@ -9,9 +9,8 @@ Uses mock objects — no real API calls.
 Run with: python -m pytest tests/test_integrations.py -v --tb=short
 """
 
-import time
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -22,12 +21,12 @@ from agent_os.integrations.base import (
     GovernancePolicy,
     PatternType,
 )
+from agent_os.integrations.base import PolicyViolationError as BasePolicyViolationError
+from agent_os.integrations.crewai_adapter import CrewAIKernel
 from agent_os.integrations.langchain_adapter import (
     LangChainKernel,
     PolicyViolationError,
 )
-from agent_os.integrations.base import PolicyViolationError as BasePolicyViolationError
-from agent_os.integrations.crewai_adapter import CrewAIKernel
 from agent_os.integrations.openai_adapter import (
     AssistantContext,
     GovernedAssistant,
@@ -37,7 +36,6 @@ from agent_os.integrations.openai_adapter import (
 from agent_os.integrations.openai_adapter import (
     PolicyViolationError as OpenAIPolicyViolationError,
 )
-
 
 # =============================================================================
 # Helpers
@@ -221,11 +219,15 @@ class TestGovernancePolicyValidation:
             GovernancePolicy(checkpoint_frequency=0)
 
     def test_confidence_threshold_negative_raises(self):
-        with pytest.raises(ValueError, match="confidence_threshold must be a float between 0.0 and 1.0"):
+        with pytest.raises(
+            ValueError, match="confidence_threshold must be a float between 0.0 and 1.0"
+        ):
             GovernancePolicy(confidence_threshold=-0.1)
 
     def test_confidence_threshold_above_one_raises(self):
-        with pytest.raises(ValueError, match="confidence_threshold must be a float between 0.0 and 1.0"):
+        with pytest.raises(
+            ValueError, match="confidence_threshold must be a float between 0.0 and 1.0"
+        ):
             GovernancePolicy(confidence_threshold=1.5)
 
     def test_drift_threshold_negative_raises(self):
@@ -249,16 +251,12 @@ class TestGovernancePolicyValidation:
             GovernancePolicy(blocked_patterns=[None])
 
     def test_blocked_patterns_regex_type(self):
-        p = GovernancePolicy(
-            blocked_patterns=[("\\d{3}-\\d{2}-\\d{4}", PatternType.REGEX)]
-        )
+        p = GovernancePolicy(blocked_patterns=[("\\d{3}-\\d{2}-\\d{4}", PatternType.REGEX)])
         assert p.matches_pattern("SSN: 123-45-6789") == ["\\d{3}-\\d{2}-\\d{4}"]
         assert p.matches_pattern("no numbers here") == []
 
     def test_blocked_patterns_glob_type(self):
-        p = GovernancePolicy(
-            blocked_patterns=[("*.exe", PatternType.GLOB)]
-        )
+        p = GovernancePolicy(blocked_patterns=[("*.exe", PatternType.GLOB)])
         assert p.matches_pattern("run malware.exe") == ["*.exe"]
         assert p.matches_pattern("document.pdf") == []
 
@@ -290,10 +288,10 @@ class TestGovernancePolicyValidation:
             GovernancePolicy(blocked_patterns=[("pattern", "regex")])
 
     def test_blocked_patterns_multiple_matches(self):
-        p = GovernancePolicy(
-            blocked_patterns=["secret", ("\\bapi.key\\b", PatternType.REGEX)]
+        p = GovernancePolicy(blocked_patterns=["secret", ("\\bapi.key\\b", PatternType.REGEX)])
+        assert sorted(p.matches_pattern("secret api_key data")) == sorted(
+            ["secret", "\\bapi.key\\b"]
         )
-        assert sorted(p.matches_pattern("secret api_key data")) == sorted(["secret", "\\bapi.key\\b"])
 
     def test_valid_string_lists_pass(self):
         p = GovernancePolicy(
@@ -659,20 +657,28 @@ class TestExecutionContextValidation:
 
     def test_negative_call_count_raises(self):
         with pytest.raises(ValueError, match="call_count must be a non-negative integer"):
-            ExecutionContext(agent_id="a1", session_id="s1", policy=GovernancePolicy(), call_count=-1)
+            ExecutionContext(
+                agent_id="a1", session_id="s1", policy=GovernancePolicy(), call_count=-1
+            )
 
     def test_negative_total_tokens_raises(self):
         with pytest.raises(ValueError, match="total_tokens must be a non-negative integer"):
-            ExecutionContext(agent_id="a1", session_id="s1", policy=GovernancePolicy(), total_tokens=-5)
+            ExecutionContext(
+                agent_id="a1", session_id="s1", policy=GovernancePolicy(), total_tokens=-5
+            )
 
     def test_zero_call_count_and_total_tokens_pass(self):
-        ctx = ExecutionContext(agent_id="a1", session_id="s1", policy=GovernancePolicy(), call_count=0, total_tokens=0)
+        ctx = ExecutionContext(
+            agent_id="a1", session_id="s1", policy=GovernancePolicy(), call_count=0, total_tokens=0
+        )
         assert ctx.call_count == 0
         assert ctx.total_tokens == 0
 
     def test_checkpoints_non_string_entry_raises(self):
         with pytest.raises(ValueError, match=r"checkpoints\[0\] must be a string"):
-            ExecutionContext(agent_id="a1", session_id="s1", policy=GovernancePolicy(), checkpoints=[42])
+            ExecutionContext(
+                agent_id="a1", session_id="s1", policy=GovernancePolicy(), checkpoints=[42]
+            )
 
     def test_valid_checkpoints_pass(self):
         ctx = ExecutionContext(
@@ -1037,6 +1043,7 @@ class TestOpenAIKernelBasics:
         assistant = _make_mock_assistant()
         client = _make_mock_openai_client()
         import warnings
+
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             governed = kernel.wrap_assistant(assistant, client)
@@ -1750,10 +1757,9 @@ class TestAgentsCompatYAMLParsing:
 
 
 from agent_os.integrations.base import (
+    CompositeInterceptor,
     PolicyInterceptor,
     ToolCallRequest,
-    ToolCallResult,
-    CompositeInterceptor,
 )
 
 
@@ -1787,9 +1793,7 @@ class TestGovernancePipelineIntegration:
 
         # Interceptor allows
         interceptor = PolicyInterceptor(policy, ctx)
-        result = interceptor.intercept(
-            ToolCallRequest(tool_name="search", arguments={"q": "cats"})
-        )
+        result = interceptor.intercept(ToolCallRequest(tool_name="search", arguments={"q": "cats"}))
         assert result.allowed is True
 
         # Post-execute records
@@ -1803,9 +1807,7 @@ class TestGovernancePipelineIntegration:
         """A tool not in allowed_tools is denied by the interceptor."""
         policy = GovernancePolicy(allowed_tools=["search"])
         interceptor = PolicyInterceptor(policy)
-        result = interceptor.intercept(
-            ToolCallRequest(tool_name="delete_database", arguments={})
-        )
+        result = interceptor.intercept(ToolCallRequest(tool_name="delete_database", arguments={}))
         assert result.allowed is False
         assert "not in allowed list" in result.reason
 
@@ -1832,9 +1834,7 @@ class TestGovernancePipelineIntegration:
         ctx.call_count = 2
 
         interceptor = PolicyInterceptor(policy, ctx)
-        result = interceptor.intercept(
-            ToolCallRequest(tool_name="any", arguments={})
-        )
+        result = interceptor.intercept(ToolCallRequest(tool_name="any", arguments={}))
         assert result.allowed is False
         assert "Max tool calls exceeded" in result.reason
 
@@ -1905,22 +1905,16 @@ class TestGovernancePipelineIntegration:
         p2 = GovernancePolicy()  # permissive
         chain = CompositeInterceptor([PolicyInterceptor(p1), PolicyInterceptor(p2)])
 
-        result = chain.intercept(
-            ToolCallRequest(tool_name="search", arguments={"q": "test"})
-        )
+        result = chain.intercept(ToolCallRequest(tool_name="search", arguments={"q": "test"}))
         assert result.allowed is True
 
     def test_composite_interceptor_first_deny_wins(self):
         """CompositeInterceptor stops at the first denial."""
         p_strict = GovernancePolicy(allowed_tools=["search"])
         p_permissive = GovernancePolicy()
-        chain = CompositeInterceptor(
-            [PolicyInterceptor(p_strict), PolicyInterceptor(p_permissive)]
-        )
+        chain = CompositeInterceptor([PolicyInterceptor(p_strict), PolicyInterceptor(p_permissive)])
 
-        result = chain.intercept(
-            ToolCallRequest(tool_name="delete", arguments={})
-        )
+        result = chain.intercept(ToolCallRequest(tool_name="delete", arguments={}))
         assert result.allowed is False
 
     # ── End-to-end multi-decision pipeline ──────────────────────
@@ -1943,25 +1937,19 @@ class TestGovernancePipelineIntegration:
 
         # Call 1: ALLOW
         ok1, _ = integration.pre_execute(ctx, "search query")
-        r1 = interceptor.intercept(
-            ToolCallRequest(tool_name="search", arguments={"q": "x"})
-        )
+        r1 = interceptor.intercept(ToolCallRequest(tool_name="search", arguments={"q": "x"}))
         integration.post_execute(ctx, "result-1")
         assert ok1 and r1.allowed
 
         # Call 2: ALLOW + checkpoint (frequency=2)
         ok2, _ = integration.pre_execute(ctx, "read file")
-        r2 = interceptor.intercept(
-            ToolCallRequest(tool_name="read", arguments={"path": "/a"})
-        )
+        r2 = interceptor.intercept(ToolCallRequest(tool_name="read", arguments={"path": "/a"}))
         integration.post_execute(ctx, "result-2")
         assert ok2 and r2.allowed
         assert len(ctx.checkpoints) == 1
 
         # Call 3: DENY (tool not in allowed list)
-        r3 = interceptor.intercept(
-            ToolCallRequest(tool_name="delete", arguments={})
-        )
+        r3 = interceptor.intercept(ToolCallRequest(tool_name="delete", arguments={}))
         assert r3.allowed is False
 
         # Verify audit trail contains checks, a checkpoint, and no violations for allowed calls

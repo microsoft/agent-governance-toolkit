@@ -26,7 +26,9 @@ class PolicyComplianceSLI(SLI):
         self._total = 0
         self._compliant = 0
 
-    def record_check(self, compliant: bool, policy_name: str = "", metadata: dict[str, Any] | None = None) -> SLIValue:
+    def record_check(
+        self, compliant: bool, policy_name: str = "", metadata: dict[str, Any] | None = None
+    ) -> SLIValue:
         self._total += 1
         if compliant:
             self._compliant += 1

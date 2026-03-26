@@ -50,8 +50,7 @@ import logging
 logging.disable(logging.WARNING)
 
 # -- Governance toolkit imports ---------------------------------------------
-from agent_os.policies.evaluator import PolicyDecision, PolicyEvaluator
-from agent_os.policies.schema import PolicyDocument
+from agent_os.policies.evaluator import PolicyEvaluator
 from agent_os.integrations.maf_adapter import (
     GovernancePolicyMiddleware,
     CapabilityGuardMiddleware,
@@ -118,7 +117,7 @@ def _section(title: str) -> str:
 
 
 def _agent_msg(agent: str, msg: str) -> str:
-    return f"{C.BOLD}{C.BLUE}🤖 {agent}{C.RESET} → {C.WHITE}\"{msg}\"{C.RESET}"
+    return f'{C.BOLD}{C.BLUE}🤖 {agent}{C.RESET} → {C.WHITE}"{msg}"{C.RESET}'
 
 
 def _tree(icon: str, colour: str, label: str, detail: str) -> str:
@@ -145,7 +144,9 @@ def _detect_backend() -> str:
     """Detect which LLM backend to use from environment variables."""
     if os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY"):
         return BACKEND_GEMINI
-    if os.environ.get("AZURE_OPENAI_API_KEY") and os.environ.get("AZURE_OPENAI_ENDPOINT"):
+    if os.environ.get("AZURE_OPENAI_API_KEY") and os.environ.get(
+        "AZURE_OPENAI_ENDPOINT"
+    ):
         return BACKEND_AZURE
     if os.environ.get("OPENAI_API_KEY"):
         return BACKEND_OPENAI
@@ -166,7 +167,9 @@ def _create_client() -> tuple[Any, str]:
         try:
             import google.generativeai as genai
         except ImportError:
-            print(f"{C.RED}✗ google-generativeai not installed. Run: pip install google-generativeai{C.RESET}")
+            print(
+                f"{C.RED}✗ google-generativeai not installed. Run: pip install google-generativeai{C.RESET}"
+            )
             sys.exit(1)
 
         api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
@@ -198,10 +201,14 @@ def _create_client() -> tuple[Any, str]:
         return OpenAI(api_key=os.environ["OPENAI_API_KEY"]), BACKEND_OPENAI
 
     print(f"{C.RED}✗ No API key found.{C.RESET}")
-    print(f"  Set one of:")
-    print(f"    {C.CYAN}GOOGLE_API_KEY{C.RESET}=...   (Google Gemini — free tier available)")
+    print("  Set one of:")
+    print(
+        f"    {C.CYAN}GOOGLE_API_KEY{C.RESET}=...   (Google Gemini — free tier available)"
+    )
     print(f"    {C.CYAN}OPENAI_API_KEY{C.RESET}=sk-... (OpenAI)")
-    print(f"    {C.CYAN}AZURE_OPENAI_API_KEY{C.RESET}=... + {C.CYAN}AZURE_OPENAI_ENDPOINT{C.RESET}=https://...")
+    print(
+        f"    {C.CYAN}AZURE_OPENAI_API_KEY{C.RESET}=... + {C.CYAN}AZURE_OPENAI_ENDPOINT{C.RESET}=https://..."
+    )
     sys.exit(1)
 
 
@@ -249,6 +256,7 @@ def _llm_call(client: Any, model: str, messages: list[dict], **kwargs: Any) -> A
 @dataclass
 class _NormalizedChoice:
     """Normalized LLM response for cross-backend compatibility."""
+
     text: str = ""
     tool_calls: list[Any] | None = None
 
@@ -262,7 +270,9 @@ class _NormalizedResponse:
             self.choices = [_NormalizedChoice()]
 
 
-def _openai_call(client: Any, model: str, messages: list[dict], **kwargs: Any) -> _NormalizedResponse:
+def _openai_call(
+    client: Any, model: str, messages: list[dict], **kwargs: Any
+) -> _NormalizedResponse:
     """OpenAI / Azure OpenAI chat completion call."""
     resp = client.chat.completions.create(model=model, messages=messages, **kwargs)
     choice = resp.choices[0]
@@ -282,7 +292,9 @@ def _openai_call(client: Any, model: str, messages: list[dict], **kwargs: Any) -
     )
 
 
-def _gemini_call(genai_module: Any, model: str, messages: list[dict], **kwargs: Any) -> _NormalizedResponse:
+def _gemini_call(
+    genai_module: Any, model: str, messages: list[dict], **kwargs: Any
+) -> _NormalizedResponse:
     """Google Gemini GenerativeAI call, translating OpenAI-style messages."""
     import google.generativeai as genai
 
@@ -338,7 +350,9 @@ def _gemini_call(genai_module: Any, model: str, messages: list[dict], **kwargs: 
             if hasattr(part, "function_call") and part.function_call.name:
                 fc = part.function_call
                 tool_calls.append(
-                    _NormalizedToolCall(name=fc.name, arguments=json.dumps(dict(fc.args)))
+                    _NormalizedToolCall(
+                        name=fc.name, arguments=json.dumps(dict(fc.args))
+                    )
                 )
             elif hasattr(part, "text") and part.text:
                 text += part.text
@@ -356,6 +370,7 @@ def _gemini_call(genai_module: Any, model: str, messages: list[dict], **kwargs: 
 @dataclass
 class _NormalizedToolCall:
     """Normalized tool call across backends."""
+
     name: str
     arguments: str
 
@@ -380,7 +395,9 @@ def _convert_schema(schema: dict) -> Any:
     schema_type = type_map.get(schema.get("type", "object"), genai.protos.Type.OBJECT)
     properties = {}
     for prop_name, prop_schema in schema.get("properties", {}).items():
-        prop_type = type_map.get(prop_schema.get("type", "string"), genai.protos.Type.STRING)
+        prop_type = type_map.get(
+            prop_schema.get("type", "string"), genai.protos.Type.STRING
+        )
         properties[prop_name] = genai.protos.Schema(
             type=prop_type, description=prop_schema.get("description", "")
         )
@@ -494,7 +511,10 @@ async def scenario_1_policy_enforcement(
             client,
             model,
             [
-                {"role": "system", "content": "You are a research assistant. Be concise."},
+                {
+                    "role": "system",
+                    "content": "You are a research assistant. Be concise.",
+                },
                 {"role": "user", "content": user_prompt},
             ],
             tools=RESEARCH_TOOLS,
@@ -507,21 +527,35 @@ async def scenario_1_policy_enforcement(
         else:
             llm_response_text = choice.text or ""
 
-        ctx.result = AgentResponse(
-            messages=[Message("assistant", [llm_response_text])]
-        )
+        ctx.result = AgentResponse(messages=[Message("assistant", [llm_response_text])])
 
     try:
         await middleware.process(ctx, real_llm_call)  # type: ignore[arg-type]
         recent = audit_log._chain._entries
         entry_id = recent[-1].entry_id if recent else "n/a"
 
-        print(_tree("✅", C.GREEN, "Policy", f"{C.GREEN}ALLOWED{C.RESET} (rule: allow-web-search)"))
-        print(_tree("🧠", C.MAGENTA, "LLM", f"{C.DIM}Real {model} response received{C.RESET}"))
+        print(
+            _tree(
+                "✅",
+                C.GREEN,
+                "Policy",
+                f"{C.GREEN}ALLOWED{C.RESET} (rule: allow-web-search)",
+            )
+        )
+        print(
+            _tree(
+                "🧠",
+                C.MAGENTA,
+                "LLM",
+                f"{C.DIM}Real {model} response received{C.RESET}",
+            )
+        )
         if verbose:
             # Truncate to 120 chars for display
-            display = llm_response_text[:120] + ("..." if len(llm_response_text) > 120 else "")
-            print(_tree("📦", C.WHITE, "Response", f"{C.DIM}\"{display}\"{C.RESET}"))
+            display = llm_response_text[:120] + (
+                "..." if len(llm_response_text) > 120 else ""
+            )
+            print(_tree("📦", C.WHITE, "Response", f'{C.DIM}"{display}"{C.RESET}'))
         print(_tree_last("📝", C.DIM, "Audit", f"Entry #{entry_id[:12]} logged"))
     except MiddlewareTermination:
         print(_tree_last("❌", C.RED, "Error", "Unexpected denial"))
@@ -550,7 +584,14 @@ async def scenario_1_policy_enforcement(
         recent = audit_log._chain._entries
         entry_id = recent[-1].entry_id if recent else "n/a"
 
-        print(_tree("⛔", C.RED, "Policy", f"{C.RED}DENIED{C.RESET} (rule: block-internal-resources)"))
+        print(
+            _tree(
+                "⛔",
+                C.RED,
+                "Policy",
+                f"{C.RED}DENIED{C.RESET} (rule: block-internal-resources)",
+            )
+        )
         saved = "saved" if not llm_was_called else "NOT saved"
         print(
             _tree(
@@ -560,10 +601,21 @@ async def scenario_1_policy_enforcement(
                 f"{C.GREEN}LLM call blocked — API tokens {saved}{C.RESET}",
             )
         )
-        print(_tree("📝", C.YELLOW, "Audit", f"Entry #{entry_id[:12]} {C.RED}(VIOLATION){C.RESET}"))
+        print(
+            _tree(
+                "📝",
+                C.YELLOW,
+                "Audit",
+                f"Entry #{entry_id[:12]} {C.RED}(VIOLATION){C.RESET}",
+            )
+        )
         denial = getattr(ctx2.result, "messages", [None])
         denial_text = getattr(denial[0], "text", "") if denial else ""
-        print(_tree_last("📦", C.WHITE, "Agent received", f"{C.DIM}\"{denial_text}\"{C.RESET}"))
+        print(
+            _tree_last(
+                "📦", C.WHITE, "Agent received", f'{C.DIM}"{denial_text}"{C.RESET}'
+            )
+        )
 
     entries_logged = len(audit_log._chain._entries) - entries_before
     return entries_logged
@@ -706,11 +758,11 @@ async def scenario_2_capability_sandboxing(
                     f"{C.DIM}{len(tool_calls)} tool call(s) requested by {model}{C.RESET}",
                 )
             )
-        tool_calls_to_test = [
-            (tc.function.name, tc.arguments) for tc in tool_calls
-        ]
+        tool_calls_to_test = [(tc.function.name, tc.arguments) for tc in tool_calls]
         # Ensure we also test denied tools if the LLM was well-behaved
-        denied_present = any(n in ("write_file", "shell_exec") for n, _ in tool_calls_to_test)
+        denied_present = any(
+            n in ("write_file", "shell_exec") for n, _ in tool_calls_to_test
+        )
         if not denied_present:
             tool_calls_to_test.append(
                 ("write_file", '{"path": "/output/report.txt", "content": "summary"}')
@@ -720,7 +772,9 @@ async def scenario_2_capability_sandboxing(
 
     for tool_name, tool_args in tool_calls_to_test:
         args_display = tool_args[:60] + ("..." if len(tool_args) > 60 else "")
-        print(f"  {C.BOLD}{C.BLUE}🔧 {tool_name}{C.RESET}({C.DIM}{args_display}{C.RESET})")
+        print(
+            f"  {C.BOLD}{C.BLUE}🔧 {tool_name}{C.RESET}({C.DIM}{args_display}{C.RESET})"
+        )
 
         ctx = _FunctionContext(tool_name)
 
@@ -736,8 +790,22 @@ async def scenario_2_capability_sandboxing(
         except MiddlewareTermination:
             recent = audit_log._chain._entries
             entry_id = recent[-1].entry_id if recent else "n/a"
-            print(_tree("⛔", C.RED, "Guard", f"{C.RED}DENIED{C.RESET} — tool not in permitted set"))
-            print(_tree_last("📝", C.YELLOW, "Audit", f"Entry #{entry_id[:12]} {C.RED}(BLOCKED){C.RESET}"))
+            print(
+                _tree(
+                    "⛔",
+                    C.RED,
+                    "Guard",
+                    f"{C.RED}DENIED{C.RESET} — tool not in permitted set",
+                )
+            )
+            print(
+                _tree_last(
+                    "📝",
+                    C.YELLOW,
+                    "Audit",
+                    f"Entry #{entry_id[:12]} {C.RED}(BLOCKED){C.RESET}",
+                )
+            )
         print()
 
     entries_logged = len(audit_log._chain._entries) - entries_before
@@ -797,7 +865,10 @@ async def scenario_3_rogue_detection(
         client,
         model,
         [
-            {"role": "system", "content": "You are a notification agent. Confirm the action briefly."},
+            {
+                "role": "system",
+                "content": "You are a notification agent. Confirm the action briefly.",
+            },
             {"role": "user", "content": normal_prompt},
         ],
         max_tokens=60,
@@ -809,14 +880,24 @@ async def scenario_3_rogue_detection(
     detector.frequency_analyzer.record("notification-agent", timestamp=normal_ts)
     assessment = detector.assess("notification-agent", timestamp=normal_ts)
 
-    print(_tree("✅", C.GREEN, "Rogue Check", f"{C.GREEN}LOW RISK{C.RESET} (score: {assessment.composite_score:.2f})"))
+    print(
+        _tree(
+            "✅",
+            C.GREEN,
+            "Rogue Check",
+            f"{C.GREEN}LOW RISK{C.RESET} (score: {assessment.composite_score:.2f})",
+        )
+    )
     print(_tree("🧠", C.MAGENTA, "LLM", f"{C.DIM}{llm_text[:100]}{C.RESET}"))
     audit_log.log(
         event_type="tool_invocation",
         agent_did="notification-agent",
         action="allow",
         resource="send_notification",
-        data={"risk_level": assessment.risk_level.value, "score": assessment.composite_score},
+        data={
+            "risk_level": assessment.risk_level.value,
+            "score": assessment.composite_score,
+        },
         outcome="success",
     )
     print(_tree_last("📝", C.DIM, "Audit", "Normal operation logged"))
@@ -824,7 +905,11 @@ async def scenario_3_rogue_detection(
     print()
 
     # --- 3b: Anomalous burst — 50 rapid calls trigger quarantine ----------
-    print(_agent_msg("Notification Agent", "send_notification × 50 — rapid burst (compromised?)"))
+    print(
+        _agent_msg(
+            "Notification Agent", "send_notification × 50 — rapid burst (compromised?)"
+        )
+    )
 
     burst_start = normal_ts + 2.5
     detector.frequency_analyzer._flush_bucket("notification-agent", burst_start)
@@ -841,7 +926,11 @@ async def scenario_3_rogue_detection(
     burst_assess_ts = burst_start + 1.5
     assessment_burst = detector.assess("notification-agent", timestamp=burst_assess_ts)
 
-    risk_colour = C.RED if assessment_burst.risk_level in (RiskLevel.HIGH, RiskLevel.CRITICAL) else C.YELLOW
+    risk_colour = (
+        C.RED
+        if assessment_burst.risk_level in (RiskLevel.HIGH, RiskLevel.CRITICAL)
+        else C.YELLOW
+    )
     risk_icon = "🚨" if assessment_burst.quarantine_recommended else "⚠️"
 
     print(
@@ -865,14 +954,28 @@ async def scenario_3_rogue_detection(
             data=assessment_burst.to_dict(),
             outcome="denied",
         )
-        print(_tree("🛑", C.RED, "Action", f"{C.RED}{C.BOLD}QUARANTINED{C.RESET} — Agent execution halted"))
-        print(_tree("📝", C.YELLOW, "Audit", f"Entry #{entry_q.entry_id[:12]} {C.RED}(QUARANTINE){C.RESET}"))
+        print(
+            _tree(
+                "🛑",
+                C.RED,
+                "Action",
+                f"{C.RED}{C.BOLD}QUARANTINED{C.RESET} — Agent execution halted",
+            )
+        )
+        print(
+            _tree(
+                "📝",
+                C.YELLOW,
+                "Audit",
+                f"Entry #{entry_q.entry_id[:12]} {C.RED}(QUARANTINE){C.RESET}",
+            )
+        )
         print(
             _tree_last(
                 "📦",
                 C.WHITE,
                 "Result",
-                f"{C.DIM}\"Agent quarantined: anomalous tool call frequency detected\"{C.RESET}",
+                f'{C.DIM}"Agent quarantined: anomalous tool call frequency detected"{C.RESET}',
             )
         )
     else:
@@ -884,8 +987,19 @@ async def scenario_3_rogue_detection(
             data=assessment_burst.to_dict(),
             outcome="success",
         )
-        print(_tree("⚠️ ", C.YELLOW, "Action", f"{C.YELLOW}WARNING{C.RESET} — Elevated risk detected"))
-        print(_tree_last("📝", C.DIM, "Audit", f"Entry #{entry_w.entry_id[:12]} (WARNING)"))
+        print(
+            _tree(
+                "⚠️ ",
+                C.YELLOW,
+                "Action",
+                f"{C.YELLOW}WARNING{C.RESET} — Elevated risk detected",
+            )
+        )
+        print(
+            _tree_last(
+                "📝", C.DIM, "Audit", f"Entry #{entry_w.entry_id[:12]} (WARNING)"
+            )
+        )
 
     entries_logged = len(audit_log._chain._entries) - entries_before
     return entries_logged
@@ -946,17 +1060,46 @@ async def scenario_4_blocked_content(
             result_text = ""
             if ctx.result and ctx.result.messages:
                 result_text = getattr(ctx.result.messages[0], "text", "")
-            print(_tree("✅", C.GREEN, "Policy", f"{C.GREEN}ALLOWED{C.RESET} → LLM called"))
+            print(
+                _tree(
+                    "✅", C.GREEN, "Policy", f"{C.GREEN}ALLOWED{C.RESET} → LLM called"
+                )
+            )
             if verbose and result_text:
-                print(_tree("📦", C.WHITE, "Response", f"{C.DIM}\"{result_text[:100]}\"{C.RESET}"))
+                print(
+                    _tree(
+                        "📦",
+                        C.WHITE,
+                        "Response",
+                        f'{C.DIM}"{result_text[:100]}"{C.RESET}',
+                    )
+                )
             print(_tree_last("📝", C.DIM, "Audit", f"Entry #{entry_id[:12]}"))
         except MiddlewareTermination:
             recent = audit_log._chain._entries
             entry_id = recent[-1].entry_id if recent else "n/a"
-            print(_tree("⛔", C.RED, "Policy", f"{C.RED}DENIED{C.RESET} — blocked before LLM"))
-            cost_msg = "LLM NOT called — zero tokens consumed" if not llm_called else "LLM was called"
+            print(
+                _tree(
+                    "⛔",
+                    C.RED,
+                    "Policy",
+                    f"{C.RED}DENIED{C.RESET} — blocked before LLM",
+                )
+            )
+            cost_msg = (
+                "LLM NOT called — zero tokens consumed"
+                if not llm_called
+                else "LLM was called"
+            )
             print(_tree("💰", C.GREEN, "Cost", f"{C.DIM}{cost_msg}{C.RESET}"))
-            print(_tree_last("📝", C.YELLOW, "Audit", f"Entry #{entry_id[:12]} {C.RED}(VIOLATION){C.RESET}"))
+            print(
+                _tree_last(
+                    "📝",
+                    C.YELLOW,
+                    "Audit",
+                    f"Entry #{entry_id[:12]} {C.RED}(VIOLATION){C.RESET}",
+                )
+            )
         print()
 
     entries_logged = len(audit_log._chain._entries) - entries_before
@@ -978,7 +1121,9 @@ def print_audit_summary(audit_log: AuditLog) -> None:
     allowed = sum(1 for e in entries if e.outcome == "success")
     denied = sum(1 for e in entries if e.outcome == "denied")
     quarantined = sum(
-        1 for e in entries if e.event_type == "rogue_detection" and e.action == "quarantine"
+        1
+        for e in entries
+        if e.event_type == "rogue_detection" and e.action == "quarantine"
     )
 
     print(f"  {C.CYAN}📋 Total entries:{C.RESET} {C.BOLD}{total}{C.RESET}")
@@ -997,11 +1142,15 @@ def print_audit_summary(audit_log: AuditLog) -> None:
     else:
         print(f"  {C.RED}🔓 Merkle chain integrity: {C.BOLD}FAILED ✗{C.RESET} — {err}")
 
-    print(f"  {C.CYAN}🔗 Root hash:{C.RESET} {C.DIM}{root_hash[:16]}...{root_hash[-8:]}{C.RESET}")
+    print(
+        f"  {C.CYAN}🔗 Root hash:{C.RESET} {C.DIM}{root_hash[:16]}...{root_hash[-8:]}{C.RESET}"
+    )
 
     print(f"\n  {C.CYAN}📖 Recent entries:{C.RESET}")
     for entry in entries[-6:]:
-        outcome_icon = {"success": "✅", "denied": "⛔", "error": "❌"}.get(entry.outcome, "📝")
+        outcome_icon = {"success": "✅", "denied": "⛔", "error": "❌"}.get(
+            entry.outcome, "📝"
+        )
         print(
             f"     {outcome_icon} {C.DIM}{entry.entry_id[:16]}{C.RESET}  "
             f"{entry.event_type:<20s}  {entry.action:<10s}  "
@@ -1062,10 +1211,14 @@ async def scenario_adversarial_attacks(
         ),
     ]
 
-    print(f"  {C.DIM}Running {len(attacks)} adversarial probes against governance stack …{C.RESET}\n")
+    print(
+        f"  {C.DIM}Running {len(attacks)} adversarial probes against governance stack …{C.RESET}\n"
+    )
 
     for attack_name, payload, description in attacks:
-        print(f"  {C.BOLD}{C.RED}⚔  {attack_name}{C.RESET}  {C.DIM}— {description}{C.RESET}")
+        print(
+            f"  {C.BOLD}{C.RED}⚔  {attack_name}{C.RESET}  {C.DIM}— {description}{C.RESET}"
+        )
         print(_agent_msg("Adversary", payload))
 
         ctx = _AgentContext(
@@ -1102,10 +1255,31 @@ async def scenario_adversarial_attacks(
                 blocked = True
 
         if blocked:
-            print(_tree("🛡️", C.GREEN, "Result", f"{C.GREEN}BLOCKED{C.RESET} — governance rejected the attack"))
-            print(_tree_last("📝", C.DIM, "Audit", f"{C.DIM}Violation recorded in audit chain{C.RESET}"))
+            print(
+                _tree(
+                    "🛡️",
+                    C.GREEN,
+                    "Result",
+                    f"{C.GREEN}BLOCKED{C.RESET} — governance rejected the attack",
+                )
+            )
+            print(
+                _tree_last(
+                    "📝",
+                    C.DIM,
+                    "Audit",
+                    f"{C.DIM}Violation recorded in audit chain{C.RESET}",
+                )
+            )
         else:
-            print(_tree("⚠️ ", C.YELLOW, "Result", f"{C.YELLOW}PASSED THROUGH{C.RESET} — review policy coverage"))
+            print(
+                _tree(
+                    "⚠️ ",
+                    C.YELLOW,
+                    "Result",
+                    f"{C.YELLOW}PASSED THROUGH{C.RESET} — review policy coverage",
+                )
+            )
             print(
                 _tree_last(
                     "📝",
@@ -1121,7 +1295,9 @@ async def scenario_adversarial_attacks(
     # Summary box
     w = 64
     print(f"  {C.RED}{C.BOLD}{C.BOX_TL}{C.BOX_H * w}{C.BOX_TR}{C.RESET}")
-    summary_line = f"  ⚔  Adversarial probes complete — {entries_logged} audit entries logged"
+    summary_line = (
+        f"  ⚔  Adversarial probes complete — {entries_logged} audit entries logged"
+    )
     print(
         f"  {C.RED}{C.BOLD}{C.BOX_V}{C.RESET}{C.YELLOW}{summary_line}"
         f"{' ' * (w - len(summary_line))}{C.RED}{C.BOLD}{C.BOX_V}{C.RESET}"
@@ -1176,15 +1352,15 @@ async def main() -> None:
     print(_banner())
     print()
 
-    print(f"  {C.DIM}Backend:{C.RESET} {C.GREEN}{backend}{C.RESET} ({C.CYAN}{model}{C.RESET})")
+    print(
+        f"  {C.DIM}Backend:{C.RESET} {C.GREEN}{backend}{C.RESET} ({C.CYAN}{model}{C.RESET})"
+    )
     print(
         f"  {C.DIM}Governance:{C.RESET} {C.GREEN}REAL{C.RESET}  {C.DIM}│{C.RESET}  "
         f"{C.DIM}Audit:{C.RESET} {C.GREEN}REAL{C.RESET}  {C.DIM}│{C.RESET}  "
         f"{C.DIM}LLM calls:{C.RESET} {C.GREEN}REAL{C.RESET}"
     )
-    print(
-        f"  {C.DIM}Packages: agent-os-kernel, agentmesh-platform, agent-sre{C.RESET}"
-    )
+    print(f"  {C.DIM}Packages: agent-os-kernel, agentmesh-platform, agent-sre{C.RESET}")
     print(
         f"  {C.YELLOW}⚠  Storage:{C.RESET} {C.DIM}IN-MEMORY ONLY — audit logs, trust scores, and violation history are not"
         f" persisted across restarts. For production, extend TrustManager with external storage.{C.RESET}"
@@ -1200,7 +1376,9 @@ async def main() -> None:
 
     s_adv = 0
     if args.include_attacks:
-        s_adv = await scenario_adversarial_attacks(client, model, audit_log, args.verbose)
+        s_adv = await scenario_adversarial_attacks(
+            client, model, audit_log, args.verbose
+        )
 
     print_audit_summary(audit_log)
 
@@ -1208,15 +1386,21 @@ async def main() -> None:
     scenario_count = 4 + (1 if args.include_attacks else 0)
     w = 64
     print(f"\n{C.CYAN}{C.BOLD}{C.BOX_TL}{C.BOX_H * w}{C.BOX_TR}{C.RESET}")
-    line1 = f"  ✓ Demo complete — {total} audit entries across {scenario_count} scenarios"
-    print(f"{C.CYAN}{C.BOLD}{C.BOX_V}{C.RESET}{C.GREEN}{line1}{' ' * (w - len(line1))}{C.CYAN}{C.BOLD}{C.BOX_V}{C.RESET}")
+    line1 = (
+        f"  ✓ Demo complete — {total} audit entries across {scenario_count} scenarios"
+    )
+    print(
+        f"{C.CYAN}{C.BOLD}{C.BOX_V}{C.RESET}{C.GREEN}{line1}{' ' * (w - len(line1))}{C.CYAN}{C.BOLD}{C.BOX_V}{C.RESET}"
+    )
     lines = [
         f"  Every LLM call was a REAL API request to {backend}",
-        f"  Governance intercepted requests BEFORE and AFTER the LLM",
-        f"  All decisions Merkle-chained in a tamper-proof audit log",
+        "  Governance intercepted requests BEFORE and AFTER the LLM",
+        "  All decisions Merkle-chained in a tamper-proof audit log",
     ]
     for ln in lines:
-        print(f"{C.CYAN}{C.BOLD}{C.BOX_V}{C.RESET}{C.DIM}{ln}{' ' * (w - len(ln))}{C.RESET}{C.CYAN}{C.BOLD}{C.BOX_V}{C.RESET}")
+        print(
+            f"{C.CYAN}{C.BOLD}{C.BOX_V}{C.RESET}{C.DIM}{ln}{' ' * (w - len(ln))}{C.RESET}{C.CYAN}{C.BOLD}{C.BOX_V}{C.RESET}"
+        )
     print(f"{C.CYAN}{C.BOLD}{C.BOX_BL}{C.BOX_H * w}{C.BOX_BR}{C.RESET}")
     print()
 

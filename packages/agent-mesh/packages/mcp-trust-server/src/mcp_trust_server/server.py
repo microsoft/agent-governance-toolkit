@@ -13,7 +13,6 @@ import hashlib
 import logging
 import os
 import secrets
-import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -99,9 +98,7 @@ class TrustStore:
         record["last_updated"] = datetime.now(timezone.utc).isoformat()
         return record
 
-    def record_interaction(
-        self, peer_did: str, outcome: str, details: str
-    ) -> dict[str, Any]:
+    def record_interaction(self, peer_did: str, outcome: str, details: str) -> dict[str, Any]:
         """Persist an interaction and adjust trust accordingly."""
         interaction = {
             "peer_did": peer_did,
@@ -111,12 +108,12 @@ class TrustStore:
         }
         self.interactions.append(interaction)
 
-        delta = {"success": 10, "failure": -20, "timeout": -10, "partial": 5}.get(
-            outcome, 0
-        )
-        dimension = {"success": "competence", "failure": "integrity", "timeout": "availability"}.get(
-            outcome
-        )
+        delta = {"success": 10, "failure": -20, "timeout": -10, "partial": 5}.get(outcome, 0)
+        dimension = {
+            "success": "competence",
+            "failure": "integrity",
+            "timeout": "availability",
+        }.get(outcome)
         record = self.update_score(peer_did, delta, dimension)
         record["interaction_count"] = record.get("interaction_count", 0) + 1
         return {**interaction, "updated_score": record}
@@ -255,9 +252,7 @@ def establish_handshake(peer_did: str, capabilities: list[str]) -> dict:
 
 
 @mcp.tool()
-def verify_delegation(
-    agent_did: str, delegator_did: str, capability: str
-) -> dict:
+def verify_delegation(agent_did: str, delegator_did: str, capability: str) -> dict:
     """Verify that a scope chain from *delegator_did* to *agent_did* is valid.
 
     Checks that the agent's DID is known, the delegator's trust score is

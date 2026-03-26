@@ -4,11 +4,10 @@ import time
 
 import pytest
 
-from haystack_agentmesh.trust_gate import AgentTrustRecord, TrustGate
+from haystack_agentmesh.trust_gate import TrustGate
 
 
 class TestTrustGate:
-
     def test_default_score_is_review(self):
         """A brand-new agent with default score 0.5 lands in review zone."""
         gate = TrustGate()

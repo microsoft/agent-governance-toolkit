@@ -1,5 +1,5 @@
 # Prometheus Configuration for Agent OS
-# 
+#
 # Scrapes metrics from:
 # - Agent OS kernel (/metrics endpoint)
 # - AlertManager

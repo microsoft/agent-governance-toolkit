@@ -9,16 +9,13 @@ forcefully terminated using real OS signals (SIGKILL).
 
 from __future__ import annotations
 
-import multiprocessing
 import os
 import platform
 import sys
 import time
 
 import pytest
-
 from agent_control_plane.process_isolation import (
-    AgentProcessHandle,
     AgentProcessResult,
     AgentProcessState,
     IsolatedSignalDispatcher,
@@ -27,10 +24,8 @@ from agent_control_plane.process_isolation import (
     create_isolated_signal_dispatcher,
 )
 from agent_control_plane.signals import (
-    AgentKernelPanic,
     AgentSignal,
 )
-
 
 # ========== Target functions (module-level for pickling) ==========
 
@@ -123,7 +118,8 @@ class TestAgentProcessResult:
 
     def test_default_fields(self):
         r = AgentProcessResult(
-            agent_id="a1", state=AgentProcessState.COMPLETED,
+            agent_id="a1",
+            state=AgentProcessState.COMPLETED,
         )
         assert r.agent_id == "a1"
         assert r.return_value is None
@@ -223,7 +219,9 @@ class TestProcessIsolationManager:
         """Agent that exceeds spawn timeout is killed automatically."""
         mgr = ProcessIsolationManager()
         h = mgr.spawn(
-            infinite_agent, agent_id="t-timeout", timeout=1.0,
+            infinite_agent,
+            agent_id="t-timeout",
+            timeout=1.0,
         )
         result = h.wait(timeout=10)
         assert result.state == AgentProcessState.TERMINATED
@@ -401,7 +399,8 @@ class TestIsolatedSignalDispatcher:
         assert h.is_alive()
 
         dispatcher = IsolatedSignalDispatcher(
-            "agent-iso-kill", process_manager=mgr,
+            "agent-iso-kill",
+            process_manager=mgr,
         )
         # Should NOT raise -- real kill instead of exception.
         dispatcher.signal(AgentSignal.SIGKILL, reason="policy violation")
@@ -432,7 +431,8 @@ class TestCreateIsolatedSignalDispatcher:
     def test_factory_with_custom_manager(self):
         mgr = ProcessIsolationManager()
         d = create_isolated_signal_dispatcher(
-            "agent-f2", process_manager=mgr,
+            "agent-f2",
+            process_manager=mgr,
         )
         assert d._process_manager is mgr
 

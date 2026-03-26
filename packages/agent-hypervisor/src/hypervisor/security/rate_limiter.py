@@ -151,9 +151,7 @@ class AgentRateLimiter:
     ) -> None:
         """Update an agent's rate limit when their ring changes."""
         key = f"{agent_did}:{session_id}"
-        rate, capacity = self._limits.get(
-            new_ring, RATE_LIMIT_FALLBACK
-        )
+        rate, capacity = self._limits.get(new_ring, RATE_LIMIT_FALLBACK)
         self._buckets[key] = TokenBucket(
             capacity=capacity,
             tokens=capacity,  # Start full
@@ -173,9 +171,7 @@ class AgentRateLimiter:
                 stats.capacity = bucket.capacity
         return stats
 
-    def _get_or_create_bucket(
-        self, key: str, ring: ExecutionRing
-    ) -> TokenBucket:
+    def _get_or_create_bucket(self, key: str, ring: ExecutionRing) -> TokenBucket:
         if key not in self._buckets:
             rate, capacity = self._limits.get(ring, RATE_LIMIT_FALLBACK)
             self._buckets[key] = TokenBucket(

@@ -7,13 +7,14 @@ import tempfile
 import pytest
 
 from flowise_agentmesh.policy import Policy, load_policy
-from flowise_agentmesh.governance_node import GovernanceNode, GovernanceResult
-from flowise_agentmesh.trust_gate_node import TrustGateNode, TrustResult
-from flowise_agentmesh.audit_node import AuditNode, AuditEntry
+from flowise_agentmesh.governance_node import GovernanceNode
+from flowise_agentmesh.trust_gate_node import TrustGateNode
+from flowise_agentmesh.audit_node import AuditNode
 from flowise_agentmesh.rate_limiter_node import RateLimiterNode
 
 
 # ── Policy tests ─────────────────────────────────────────────────────
+
 
 class TestPolicy:
     def test_default_deny(self):
@@ -75,7 +76,9 @@ class TestLoadPolicy:
 
     def test_load_from_yaml_file(self):
         yaml_content = "allowed_tools:\n  - read_file\nblocked_tools:\n  - rm_*\n"
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+        ) as f:
             f.write(yaml_content)
             f.flush()
             path = f.name
@@ -93,6 +96,7 @@ class TestLoadPolicy:
 
 # ── GovernanceNode tests ─────────────────────────────────────────────
 
+
 class TestGovernanceNode:
     def test_allowed_tool(self):
         node = GovernanceNode(policy={"allowed_tools": ["search"]})
@@ -106,15 +110,22 @@ class TestGovernanceNode:
         assert "not allowed" in result.reason
 
     def test_blocked_content(self):
-        node = GovernanceNode(policy={"blocked_content_patterns": [r"password"], "default_action": "allow"})
+        node = GovernanceNode(
+            policy={
+                "blocked_content_patterns": [r"password"],
+                "default_action": "allow",
+            }
+        )
         result = node.evaluate(content="my password is 1234")
         assert not result.allowed
 
     def test_blocked_argument(self):
-        node = GovernanceNode(policy={
-            "blocked_argument_patterns": [r"\.\."],
-            "default_action": "allow",
-        })
+        node = GovernanceNode(
+            policy={
+                "blocked_argument_patterns": [r"\.\."],
+                "default_action": "allow",
+            }
+        )
         result = node.evaluate(arguments={"path": "../../etc/passwd"})
         assert not result.allowed
 
@@ -143,6 +154,7 @@ class TestGovernanceNode:
 
 
 # ── TrustGateNode tests ──────────────────────────────────────────────
+
 
 class TestTrustGateNode:
     def test_trusted_tier(self):
@@ -198,6 +210,7 @@ class TestTrustGateNode:
 
 
 # ── AuditNode tests ──────────────────────────────────────────────────
+
 
 class TestAuditNode:
     def test_single_entry(self):
@@ -294,6 +307,7 @@ class TestAuditNode:
 
 
 # ── RateLimiterNode tests ────────────────────────────────────────────
+
 
 class TestRateLimiterNode:
     def test_allows_within_limit(self):

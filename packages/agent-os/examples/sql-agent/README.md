@@ -70,7 +70,7 @@ if result.requires_approval:
     print("⚠️ This query requires approval:")
     print(f"  SQL: {result.sql}")
     print(f"  Affected rows: ~{result.estimated_rows}")
-    
+
     # In production, this would go to an approval queue
     if get_human_approval():
         result = await agent.execute_approved(result.approval_token)

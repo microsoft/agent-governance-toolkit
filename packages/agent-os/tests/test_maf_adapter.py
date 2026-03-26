@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -12,9 +11,8 @@ import pytest
 pytest.importorskip("agentmesh", reason="agentmesh not installed")
 pytest.importorskip("agent_sre", reason="agent_sre not installed")
 
-from agentmesh.governance import AuditLog
-from agent_os.policies import PolicyDecision, PolicyEvaluator
 from agent_sre.anomaly import RiskLevel, RogueAgentDetector, RogueDetectorConfig
+from agentmesh.governance import AuditLog
 
 from agent_os.integrations.maf_adapter import (
     AuditTrailMiddleware,
@@ -24,7 +22,7 @@ from agent_os.integrations.maf_adapter import (
     RogueDetectionMiddleware,
     create_governance_middleware,
 )
-
+from agent_os.policies import PolicyDecision, PolicyEvaluator
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -244,7 +242,8 @@ class TestCapabilityGuardMiddleware:
     async def test_logs_denied_tool_to_audit(self):
         audit = AuditLog()
         mw = CapabilityGuardMiddleware(
-            denied_tools=["bad_tool"], audit_log=audit,
+            denied_tools=["bad_tool"],
+            audit_log=audit,
         )
         ctx = _make_function_context(func_name="bad_tool")
         call_next = AsyncMock()
@@ -341,7 +340,8 @@ class TestRogueDetectionMiddleware:
     @pytest.mark.asyncio
     async def test_allows_low_risk_invocations(self, detector):
         mw = RogueDetectionMiddleware(
-            detector=detector, agent_id="good-agent",
+            detector=detector,
+            agent_id="good-agent",
         )
         ctx = _make_function_context(func_name="web_search")
         call_next = AsyncMock()
@@ -439,7 +439,9 @@ class TestRogueDetectionMiddleware:
     @pytest.mark.asyncio
     async def test_works_without_audit_log(self, detector):
         mw = RogueDetectionMiddleware(
-            detector=detector, agent_id="quiet-agent", audit_log=None,
+            detector=detector,
+            agent_id="quiet-agent",
+            audit_log=None,
         )
         ctx = _make_function_context()
         call_next = AsyncMock()
@@ -478,7 +480,8 @@ class TestCreateGovernanceMiddleware:
     def test_includes_audit_trail(self):
         audit = AuditLog()
         stack = create_governance_middleware(
-            audit_log=audit, enable_rogue_detection=False,
+            audit_log=audit,
+            enable_rogue_detection=False,
         )
         types = [type(m).__name__ for m in stack]
         assert "AuditTrailMiddleware" in types

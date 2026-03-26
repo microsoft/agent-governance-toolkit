@@ -15,6 +15,7 @@ from agent_os.integrations.base import GovernancePolicy
 
 class Role(Enum):
     """Standard roles for agent access control."""
+
     READER = "reader"
     WRITER = "writer"
     ADMIN = "admin"
@@ -109,8 +110,7 @@ class RBACManager:
             }
         if self._custom_permissions:
             data["custom_permissions"] = {
-                role.value: sorted(perms)
-                for role, perms in self._custom_permissions.items()
+                role.value: sorted(perms) for role, perms in self._custom_permissions.items()
             }
         with open(path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)

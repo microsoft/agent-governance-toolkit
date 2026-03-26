@@ -23,7 +23,7 @@
 npx agentos-mcp-server
 ```
 
-**npm:** [`agentos-mcp-server`](https://www.npmjs.com/package/agentos-mcp-server)  
+**npm:** [`agentos-mcp-server`](https://www.npmjs.com/package/agentos-mcp-server)
 **MCP Registry:** `io.github.microsoft/agentos`
 
 ## Overview

@@ -27,13 +27,13 @@ Instead of testing ambiguous syntax ("restart service" without environment), we 
 #### Class A: Stale State (10 scenarios)
 **The Problem:** User was viewing Service A, then viewed Service B logs, then says "restart it"
 
-**Baseline Behavior:** Uses last accessed service (stale context) or asks for clarification  
+**Baseline Behavior:** Uses last accessed service (stale context) or asks for clarification
 **Mute Agent Behavior:** Graph encodes current focus from log access, restarts Service B
 
 **Example: "The Log Viewer Switch"**
 ```
 1. User views payment-prod logs
-2. User views auth-prod logs  
+2. User views auth-prod logs
 3. User says "restart it"
 
 Baseline → Might restart payment-prod (stale!) or ask "restart what?"
@@ -43,7 +43,7 @@ Mute Agent → Knows current focus is auth-prod, restarts it correctly
 #### Class B: Ghost Resource (10 scenarios)
 **The Problem:** Resource stuck in PARTIAL/zombie state, normal operations don't work
 
-**Baseline Behavior:** Tries operation, fails, enters retry loop, wastes tokens  
+**Baseline Behavior:** Tries operation, fails, enters retry loop, wastes tokens
 **Mute Agent Behavior:** Graph shows state=PARTIAL, operations disabled, suggests force_delete
 
 **Example: "The Zombie Service Restart"**
@@ -58,7 +58,7 @@ Mute Agent → Graph blocks restart on PARTIAL state. Error: "Use force_delete i
 #### Class C: Privilege Escalation (10 scenarios)
 **The Problem:** User lacks permissions but tries destructive operation
 
-**Baseline Behavior:** Attempts operation, gets 403 from API, apologizes  
+**Baseline Behavior:** Attempts operation, gets 403 from API, apologizes
 **Mute Agent Behavior:** Graph lacks permission edge, blocks before API call
 
 **Example: "The Junior Dev Prod Access"**
@@ -180,7 +180,7 @@ The Mute Agent's graph-based permission system is **deterministic** and cannot b
 
 **Real-World Impact:**
 - 1000 operations/day × 2,750 tokens = 2.75M tokens (Baseline)
-- 1000 operations/day × 350 tokens = 350K tokens (Mute) 
+- 1000 operations/day × 350 tokens = 350K tokens (Mute)
 - **Savings: 2.4M tokens/day = ~$1,500/month** (at GPT-4 pricing)
 
 ## The "Killer" Advantages
@@ -287,10 +287,10 @@ The Mute Agent uses 4 dimensional subgraphs:
 An action must be valid in **ALL dimensions simultaneously**. This creates a powerful intersection:
 
 ```
-Valid Actions = 
-    Operations_Graph ∩ 
-    Permissions_Graph ∩ 
-    State_Graph ∩ 
+Valid Actions =
+    Operations_Graph ∩
+    Permissions_Graph ∩
+    State_Graph ∩
     Context_Graph
 ```
 

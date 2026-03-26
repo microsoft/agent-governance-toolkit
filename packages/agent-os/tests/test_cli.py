@@ -4,109 +4,112 @@
 Test Agent OS CLI.
 """
 
-import pytest
+import argparse
+import io
+import json
+import sys
 import tempfile
 from pathlib import Path
-import argparse
-import json
-import io
-import sys
 
 
 class TestCLIInit:
     """Test agentos init command."""
-    
+
     def test_init_creates_agents_dir(self):
         """Test init creates .agents/ directory."""
         from agent_os.cli import cmd_init
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class Args:
                 path = tmpdir
                 template = "strict"
                 force = False
-            
+
             result = cmd_init(Args())
-            
+
             assert result == 0
             assert (Path(tmpdir) / ".agents").exists()
             assert (Path(tmpdir) / ".agents" / "agents.md").exists()
             assert (Path(tmpdir) / ".agents" / "security.md").exists()
-    
+
     def test_init_strict_template(self):
         """Test init with strict template."""
         from agent_os.cli import cmd_init
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class Args:
                 path = tmpdir
                 template = "strict"
                 force = False
-            
+
             cmd_init(Args())
-            
+
             security_md = (Path(tmpdir) / ".agents" / "security.md").read_text()
             assert "mode: strict" in security_md
             assert "SIGKILL" in security_md
-    
+
     def test_init_permissive_template(self):
         """Test init with permissive template."""
         from agent_os.cli import cmd_init
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class Args:
                 path = tmpdir
                 template = "permissive"
                 force = False
-            
+
             cmd_init(Args())
-            
+
             security_md = (Path(tmpdir) / ".agents" / "security.md").read_text()
             assert "mode: permissive" in security_md
-    
+
     def test_init_audit_template(self):
         """Test init with audit template."""
         from agent_os.cli import cmd_init
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class Args:
                 path = tmpdir
                 template = "audit"
                 force = False
-            
+
             cmd_init(Args())
-            
+
             security_md = (Path(tmpdir) / ".agents" / "security.md").read_text()
             assert "mode: audit" in security_md
-    
+
     def test_init_fails_if_exists(self):
         """Test init fails if .agents/ already exists."""
         from agent_os.cli import cmd_init
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / ".agents").mkdir()
-            
+
             class Args:
                 path = tmpdir
                 template = "strict"
                 force = False
-            
+
             result = cmd_init(Args())
             assert result == 1
-    
+
     def test_init_force_overwrites(self):
         """Test init --force overwrites existing."""
         from agent_os.cli import cmd_init
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / ".agents").mkdir()
             (Path(tmpdir) / ".agents" / "old.txt").write_text("old")
-            
+
             class Args:
                 path = tmpdir
                 template = "strict"
                 force = True
-            
+
             result = cmd_init(Args())
             assert result == 0
             assert (Path(tmpdir) / ".agents" / "agents.md").exists()
@@ -114,110 +117,114 @@ class TestCLIInit:
 
 class TestCLISecure:
     """Test agentos secure command."""
-    
+
     def test_secure_validates_config(self):
         """Test secure validates security config."""
         from agent_os.cli import cmd_init, cmd_secure
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             # First init
             class InitArgs:
                 path = tmpdir
                 template = "strict"
                 force = False
+
             cmd_init(InitArgs())
-            
+
             # Then secure
             class SecureArgs:
                 path = tmpdir
                 verify = False
-            
+
             result = cmd_secure(SecureArgs())
             assert result == 0
-    
+
     def test_secure_fails_without_agents_dir(self):
         """Test secure fails if no .agents/ directory."""
         from agent_os.cli import cmd_secure
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class Args:
                 path = tmpdir
                 verify = False
-            
+
             result = cmd_secure(Args())
             assert result == 1
-    
+
     def test_secure_fails_without_security_md(self):
         """Test secure fails if no security.md."""
         from agent_os.cli import cmd_secure
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / ".agents").mkdir()
-            
+
             class Args:
                 path = tmpdir
                 verify = False
-            
+
             result = cmd_secure(Args())
             assert result == 1
 
 
 class TestCLIAudit:
     """Test agentos audit command."""
-    
+
     def test_audit_reports_missing_files(self):
         """Test audit reports missing files."""
         from agent_os.cli import cmd_audit
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / ".agents").mkdir()
             (Path(tmpdir) / ".agents" / "agents.md").write_text("# Agent")
             # No security.md
-            
+
             class Args:
                 path = tmpdir
                 format = "text"
-            
+
             result = cmd_audit(Args())
             assert result == 1  # Fails due to missing security.md
-    
+
     def test_audit_passes_with_valid_config(self):
         """Test audit passes with valid configuration."""
-        from agent_os.cli import cmd_init, cmd_audit
-        
+        from agent_os.cli import cmd_audit, cmd_init
+
         with tempfile.TemporaryDirectory() as tmpdir:
             # First init
             class InitArgs:
                 path = tmpdir
                 template = "strict"
                 force = False
+
             cmd_init(InitArgs())
-            
+
             # Then audit
             class AuditArgs:
                 path = tmpdir
                 format = "text"
-            
+
             result = cmd_audit(AuditArgs())
             assert result == 0
-    
+
     def test_audit_json_format(self):
         """Test audit JSON output format."""
-        from agent_os.cli import cmd_init, cmd_audit
-        import json
-        from io import StringIO
-        
+
+        from agent_os.cli import cmd_audit, cmd_init
+
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class InitArgs:
                 path = tmpdir
                 template = "strict"
                 force = False
+
             cmd_init(InitArgs())
-            
+
             class AuditArgs:
                 path = tmpdir
                 format = "json"
-            
+
             # Capture output would need more setup
             # Just verify it doesn't crash
             result = cmd_audit(AuditArgs())
@@ -226,14 +233,14 @@ class TestCLIAudit:
 
 class TestCLIStatus:
     """Test agentos status command."""
-    
+
     def test_status_shows_version(self):
         """Test status shows version information."""
         from agent_os.cli import cmd_status
-        
+
         class Args:
             pass
-        
+
         # Should not crash
         result = cmd_status(Args())
         assert result == 0
@@ -241,29 +248,31 @@ class TestCLIStatus:
 
 class TestCLIMain:
     """Test main CLI entry point."""
-    
+
     def test_main_no_args(self):
         """Test main with no arguments."""
-        from agent_os.cli import main
         import sys
-        
+
+        from agent_os.cli import main
+
         # Save original argv
         original_argv = sys.argv
-        
+
         try:
             sys.argv = ["agentos"]
             result = main()
             assert result == 0
         finally:
             sys.argv = original_argv
-    
+
     def test_main_version(self):
         """Test main --version."""
-        from agent_os.cli import main
         import sys
-        
+
+        from agent_os.cli import main
+
         original_argv = sys.argv
-        
+
         try:
             sys.argv = ["agentos", "--version"]
             result = main()
@@ -277,7 +286,6 @@ class TestCLIServe:
 
     def test_serve_parser_defaults(self):
         """Test serve subparser accepts --port and --host with defaults."""
-        from agent_os.cli import main
         import argparse
 
         parser = argparse.ArgumentParser()
@@ -287,7 +295,6 @@ class TestCLIServe:
         try:
             sys.argv = ["agentos", "serve"]
             # Just verify parsing doesn't error
-            from agent_os.cli import main as _m
         finally:
             sys.argv = original_argv
 
@@ -304,8 +311,6 @@ class TestCLIServe:
 
     def test_request_handler_health(self):
         """Test /health endpoint returns ok status."""
-        import io
-        from agent_os.cli import AgentOSRequestHandler
 
         handler = _make_get_handler("/health")
         body = json.loads(handler._response_body)
@@ -314,7 +319,7 @@ class TestCLIServe:
 
     def test_request_handler_agents(self):
         """Test /agents endpoint returns list."""
-        from agent_os.cli import AgentOSRequestHandler, _registered_agents
+        from agent_os.cli import _registered_agents
 
         _registered_agents.clear()
         handler = _make_get_handler("/agents")
@@ -578,6 +583,7 @@ class TestColorsInstanceIsolation:
     def test_thread_safety_separate_instances(self):
         """Concurrent threads with separate instances don't interfere."""
         import threading
+
         from agent_os.cli import Colors as _ColorsClass
 
         results = {}
@@ -586,6 +592,7 @@ class TestColorsInstanceIsolation:
             inst = _ColorsClass.__class__(enabled=enabled)
             # Small sleep to interleave threads
             import time
+
             time.sleep(0.01)
             results[name] = inst.RED
 
@@ -613,6 +620,7 @@ class TestCLIInitExtended:
         from agent_os.cli import cmd_init
 
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class Args:
                 path = tmpdir
                 template = "strict"
@@ -650,6 +658,7 @@ class TestCLIInitExtended:
         from agent_os.cli import cmd_init
 
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class Args:
                 path = tmpdir
                 template = "strict"
@@ -671,6 +680,7 @@ class TestCLIInitExtended:
         from agent_os.cli import cmd_init
 
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class Args:
                 path = tmpdir
                 template = "strict"
@@ -703,13 +713,15 @@ class TestCLIAuditExtended:
 
     def test_audit_with_complete_config(self):
         """Test audit with fully initialized project passes."""
-        from agent_os.cli import cmd_init, cmd_audit
+        from agent_os.cli import cmd_audit, cmd_init
 
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class InitArgs:
                 path = tmpdir
                 template = "strict"
                 force = False
+
             cmd_init(InitArgs())
 
             class AuditArgs:
@@ -734,13 +746,15 @@ class TestCLIAuditExtended:
 
     def test_audit_json_output_structure(self, capsys):
         """Test audit --format json returns valid JSON with expected keys."""
-        from agent_os.cli import cmd_init, cmd_audit
+        from agent_os.cli import cmd_audit, cmd_init
 
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class InitArgs:
                 path = tmpdir
                 template = "strict"
                 force = False
+
             cmd_init(InitArgs())
 
             class AuditArgs:
@@ -758,6 +772,7 @@ class TestCLIAuditExtended:
         from agent_os.cli import cmd_audit
 
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class Args:
                 path = tmpdir
                 format = "text"
@@ -795,9 +810,7 @@ class TestCLIValidateExtended:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             policy_file = Path(tmpdir) / "policy.yaml"
-            policy_file.write_text(
-                "version: '1.0'\nname: test-policy\nrules:\n  - type: allow\n"
-            )
+            policy_file.write_text("version: '1.0'\nname: test-policy\nrules:\n  - type: allow\n")
 
             class Args:
                 files = [str(policy_file)]
@@ -873,6 +886,7 @@ class TestCLIValidateExtended:
         from agent_os.cli import cmd_validate
 
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class Args:
                 files = [str(Path(tmpdir) / "ghost.yaml")]
                 strict = False
@@ -886,9 +900,7 @@ class TestCLIValidateExtended:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             policy_file = Path(tmpdir) / "badrules.yaml"
-            policy_file.write_text(
-                "version: '1.0'\nname: bad\nrules: not-a-list\n"
-            )
+            policy_file.write_text("version: '1.0'\nname: bad\nrules: not-a-list\n")
 
             class Args:
                 files = [str(policy_file)]
@@ -908,13 +920,15 @@ class TestJSONOutputFormat:
 
     def test_audit_json_only_outputs_json(self, capsys):
         """Test audit --format json outputs only valid JSON, no text."""
-        from agent_os.cli import cmd_init, cmd_audit
+        from agent_os.cli import cmd_audit, cmd_init
 
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class InitArgs:
                 path = tmpdir
                 template = "strict"
                 force = False
+
             cmd_init(InitArgs())
             capsys.readouterr()  # discard init output
 
@@ -939,6 +953,7 @@ class TestJSONOutputFormat:
         from agent_os.cli import cmd_audit
 
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class Args:
                 path = tmpdir
                 format = "json"
@@ -1011,13 +1026,15 @@ class TestCSVExport:
 
     def test_audit_export_csv_creates_file(self):
         """Test audit --export csv creates a CSV file."""
-        from agent_os.cli import cmd_init, cmd_audit
+        from agent_os.cli import cmd_audit, cmd_init
 
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class InitArgs:
                 path = tmpdir
                 template = "strict"
                 force = False
+
             cmd_init(InitArgs())
 
             csv_path = str(Path(tmpdir) / "audit.csv")
@@ -1033,6 +1050,7 @@ class TestCSVExport:
             assert Path(csv_path).exists()
 
             import csv as csv_mod
+
             with open(csv_path, newline="", encoding="utf-8") as f:
                 reader = csv_mod.reader(f)
                 rows = list(reader)
@@ -1062,6 +1080,7 @@ class TestCSVExport:
             assert Path(csv_path).exists()
 
             import csv as csv_mod
+
             with open(csv_path, newline="", encoding="utf-8") as f:
                 reader = csv_mod.reader(f)
                 rows = list(reader)
@@ -1071,14 +1090,17 @@ class TestCSVExport:
 
     def test_audit_export_csv_default_output(self):
         """Test CSV export defaults to audit.csv when no --output given."""
-        from agent_os.cli import cmd_init, cmd_audit
         import os
 
+        from agent_os.cli import cmd_audit, cmd_init
+
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class InitArgs:
                 path = tmpdir
                 template = "strict"
                 force = False
+
             cmd_init(InitArgs())
 
             old_cwd = os.getcwd()
@@ -1099,13 +1121,15 @@ class TestCSVExport:
 
     def test_audit_export_csv_with_json_format(self, capsys):
         """Test CSV export works alongside JSON format."""
-        from agent_os.cli import cmd_init, cmd_audit
+        from agent_os.cli import cmd_audit, cmd_init
 
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class InitArgs:
                 path = tmpdir
                 template = "strict"
                 force = False
+
             cmd_init(InitArgs())
             capsys.readouterr()  # discard init output
 
@@ -1136,10 +1160,12 @@ class TestColoredOutput:
     def test_no_color_env_disables_colors(self):
         """Test NO_COLOR environment variable disables colors."""
         import os
+
         old = os.environ.get("NO_COLOR")
         try:
             os.environ["NO_COLOR"] = "1"
             from agent_os.cli import supports_color
+
             assert supports_color() is False
         finally:
             if old is None:
@@ -1168,13 +1194,15 @@ class TestColoredOutput:
 
     def test_audit_text_uses_colored_symbols(self, capsys):
         """Test audit text output uses ✓ and ✗ symbols."""
-        from agent_os.cli import cmd_init, cmd_audit
+        from agent_os.cli import cmd_audit, cmd_init
 
         with tempfile.TemporaryDirectory() as tmpdir:
+
             class InitArgs:
                 path = tmpdir
                 template = "strict"
                 force = False
+
             cmd_init(InitArgs())
 
             class AuditArgs:
@@ -1218,6 +1246,7 @@ class TestEnvVarConfig:
     def test_get_env_config_defaults(self):
         """Test get_env_config returns defaults when no env vars set."""
         import os
+
         from agent_os.cli import get_env_config
 
         # Clear any existing env vars
@@ -1239,6 +1268,7 @@ class TestEnvVarConfig:
     def test_get_env_config_custom(self):
         """Test get_env_config reads custom env vars."""
         import os
+
         from agent_os.cli import get_env_config
 
         saved = {}
@@ -1266,6 +1296,7 @@ class TestEnvVarConfig:
     def test_configure_logging_valid(self):
         """Test configure_logging sets log level."""
         import logging
+
         from agent_os.cli import configure_logging
 
         configure_logging("DEBUG")
@@ -1277,6 +1308,7 @@ class TestEnvVarConfig:
     def test_configure_logging_invalid_falls_back(self):
         """Test configure_logging falls back to WARNING for invalid input."""
         import logging
+
         from agent_os.cli import configure_logging
 
         configure_logging("INVALID_LEVEL")
@@ -1285,6 +1317,7 @@ class TestEnvVarConfig:
     def test_get_config_path_from_env(self):
         """Test get_config_path uses AGENTOS_CONFIG env var."""
         import os
+
         from agent_os.cli import get_config_path
 
         old = os.environ.get("AGENTOS_CONFIG")
@@ -1301,6 +1334,7 @@ class TestEnvVarConfig:
     def test_get_config_path_args_override_env(self):
         """Test get_config_path prefers args over env var."""
         import os
+
         from agent_os.cli import get_config_path
 
         old = os.environ.get("AGENTOS_CONFIG")

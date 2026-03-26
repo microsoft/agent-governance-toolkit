@@ -276,7 +276,7 @@ observer.start_observing()
 # Monitor command execution
 def run_command(cmd):
     result = subprocess.run(cmd, capture_output=True, text=True)
-    
+
     # Observe the execution
     observer.observe_signal({
         "type": "command_execution",
@@ -287,7 +287,7 @@ def run_command(cmd):
             "stderr": result.stderr
         }
     })
-    
+
     return result
 
 # Ghost Mode learns command patterns and surfaces warnings
@@ -429,7 +429,7 @@ class GhostModeObserver:
         confidence_threshold: float = 0.7,
         surfacing_callback: Optional[Callable[[ObservationResult], None]] = None
     )
-    
+
     def start_observing(self, poll_interval: float = 1.0) -> None
     def stop_observing(self) -> None
     def observe_signal(self, signal: Dict[str, Any]) -> None
@@ -446,7 +446,7 @@ class ContextShadow:
         storage_file: str = "behavior_model.json",
         user_id: Optional[str] = None
     )
-    
+
     def learn_pattern(self, pattern: BehaviorPattern) -> None
     def query_patterns(
         self,
@@ -487,7 +487,7 @@ class ObservationResult:
     recommendation: Optional[str] = None
     dry_run_result: Optional[Dict[str, Any]] = None
     context: Dict[str, Any] = field(default_factory=dict)
-    
+
     def get_confidence_level(self) -> ConfidenceLevel
     def to_dict(self) -> Dict[str, Any]
 ```

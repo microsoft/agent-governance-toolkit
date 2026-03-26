@@ -8,8 +8,7 @@ import pytest
 
 from agent_os.integrations.base import GovernancePolicy
 from agent_os.supervisor import SupervisorHierarchy
-from agent_os.trust_root import TrustDecision, TrustRoot
-
+from agent_os.trust_root import TrustRoot
 
 # ============================================================================
 # TrustRoot tests

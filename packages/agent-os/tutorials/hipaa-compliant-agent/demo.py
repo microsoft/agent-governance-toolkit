@@ -16,19 +16,18 @@ This demo:
   6. Shows immutable audit logging with tamper detection
 """
 
-import sys
+import hashlib
 import os
 import re
-import hashlib
+import sys
 from datetime import datetime, timezone
 
 # Add project root to path so we can import agent_os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from agent_os.integrations import LangChainKernel, GovernancePolicy
+from agent_os.integrations import GovernancePolicy, LangChainKernel
 from agent_os.integrations.base import GovernanceEventType
 from agent_os.integrations.langchain_adapter import PolicyViolationError
-
 
 # ── ANSI colors ──────────────────────────────────────────────────
 GREEN = "\033[92m"
@@ -95,6 +94,7 @@ APPROVAL_TRIGGERS = [
 
 # ── Immutable Audit Log ─────────────────────────────────────────
 
+
 class HIPAAAuditLog:
     """Tamper-evident audit log with hash chaining."""
 
@@ -135,6 +135,7 @@ class HIPAAAuditLog:
 
 # ── Mock Healthcare Agent ────────────────────────────────────────
 
+
 class MockHealthcareAgent:
     """A mock healthcare agent that simulates patient query handling."""
 
@@ -152,6 +153,7 @@ class MockHealthcareAgent:
 
 
 # ── The Demo ─────────────────────────────────────────────────────
+
 
 def check_phi_patterns(query):
     """Check if query contains any PHI patterns."""
@@ -250,7 +252,13 @@ def main():
         except PolicyViolationError as e:
             blocked(f"BLOCKED: {query}")
             info(f"     Policy: {e}")
-            audit_log.log("phi_blocked", query, "blocked", "phi_detection", phi_type if has_phi else "pattern_match")
+            audit_log.log(
+                "phi_blocked",
+                query,
+                "blocked",
+                "phi_detection",
+                phi_type if has_phi else "pattern_match",
+            )
 
     # ── Part 2: Human-in-the-Loop for Patient Data Access ────────
     print()
@@ -272,8 +280,8 @@ def main():
         needs_approval = check_approval_required(query)
         if needs_approval:
             warn(f"PAUSED: {query}")
-            info(f"     [PAUSED] Awaiting HIPAA officer approval (SIGSTOP)")
-            info(f"     Approval level: hipaa_officer | Timeout: 15 min")
+            info("     [PAUSED] Awaiting HIPAA officer approval (SIGSTOP)")
+            info("     Approval level: hipaa_officer | Timeout: 15 min")
             audit_log.log("approval_required", query, "paused", "phi_data_access_approval")
         else:
             try:
@@ -388,7 +396,7 @@ def main():
         os.path.dirname(__file__), "..", "..", "templates", "policies", "hipaa.yaml"
     )
     if os.path.exists(template_path):
-        ok(f"HIPAA policy template found: templates/policies/hipaa.yaml")
+        ok("HIPAA policy template found: templates/policies/hipaa.yaml")
         info("  The template includes:")
         info("    - PHI detection for all 18 HIPAA identifiers")
         info("    - Human approval workflows (SIGSTOP -> HIPAA officer)")
@@ -420,10 +428,10 @@ def main():
     print(f"    Integrity:      {'Verified' if integrity else 'COMPROMISED'}")
     print()
     print(f"  {BOLD}Next steps:{RESET}")
-    print(f"  * Review the HIPAA checklist: hipaa-checklist.md")
-    print(f"  * Explore the full healthcare example: examples/healthcare-hipaa/")
-    print(f"  * Load the HIPAA template: load_policy('hipaa')")
-    print(f"  * See all templates: templates/policies/README.md")
+    print("  * Review the HIPAA checklist: hipaa-checklist.md")
+    print("  * Explore the full healthcare example: examples/healthcare-hipaa/")
+    print("  * Load the HIPAA template: load_policy('hipaa')")
+    print("  * See all templates: templates/policies/README.md")
     print()
 
 

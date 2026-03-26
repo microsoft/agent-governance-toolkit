@@ -46,10 +46,14 @@ def generate_sbom(package_dir: Path, output_dir: Path) -> Path:
     try:
         result = subprocess.run(
             [
-                sys.executable, "-m", "cyclonedx_py",
+                sys.executable,
+                "-m",
+                "cyclonedx_py",
                 "environment",
-                "--output", str(out_file),
-                "--format", "json",
+                "--output",
+                str(out_file),
+                "--format",
+                "json",
             ],
             cwd=str(package_dir),
             capture_output=True,

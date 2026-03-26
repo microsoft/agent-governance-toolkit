@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from agentmesh.governance.audit import AuditEntry, AuditLog, AuditChain
+from agentmesh.governance.audit import AuditChain, AuditEntry, AuditLog
 
 
 class AuditService:
@@ -43,9 +43,9 @@ class AuditService:
         agent_did: str,
         action: str,
         outcome: str = "success",
-        resource: Optional[str] = None,
-        data: Optional[dict] = None,
-        trace_id: Optional[str] = None,
+        resource: str | None = None,
+        data: dict | None = None,
+        trace_id: str | None = None,
     ) -> AuditEntry:
         """Log an agent action."""
         return self._log.log(
@@ -64,7 +64,7 @@ class AuditService:
         action: str,
         decision: str,
         policy_name: str = "",
-        data: Optional[dict] = None,
+        data: dict | None = None,
     ) -> AuditEntry:
         """Log a policy enforcement decision."""
         outcome = "success" if decision == "allow" else "denied"
@@ -82,7 +82,7 @@ class AuditService:
         initiator_did: str,
         responder_did: str,
         success: bool,
-        data: Optional[dict] = None,
+        data: dict | None = None,
     ) -> AuditEntry:
         """Log a trust handshake event."""
         return self._log.log(

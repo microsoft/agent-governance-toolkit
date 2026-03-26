@@ -21,28 +21,28 @@ network:
     - api.anthropic.com
     - generativelanguage.googleapis.com
     - api.groq.com
-    
+
     # Common development tools
     - api.github.com
     - gitlab.com
     - api.bitbucket.org
-    
+
     # Documentation & Search
     - api.duckduckgo.com
     - serpapi.com
-    
+
     # Cloud providers (for storage, etc)
     - s3.amazonaws.com
     - storage.googleapis.com
     - blob.core.windows.net
-  
+
   # Explicitly blocked domains
   blocklist:
     - '*.onion'          # Tor
     - 'pastebin.com'     # Often used for exfiltration
     - '*.ngrok.io'       # Tunneling
     - '*.localtunnel.me' # Tunneling
-  
+
   # Block all domains not in allowlist
   default_action: deny
 

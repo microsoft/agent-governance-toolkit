@@ -266,19 +266,19 @@ rules:
   - name: require-high-trust
     condition: "agent.trust_score >= 0.6"
     action: allow
-    
+
   - name: no-pii-export
     condition: "action.type == 'export' and data.contains_pii"
     action: deny
     audit: true
-    
+
   - name: rate-limit
     condition: "action.type == 'api_call'"
     limit: "100/hour"
 
 compliance:
   frameworks: ["hipaa", "gdpr"]
-  
+
 delegation:
   allow: true
   max_depth: 2

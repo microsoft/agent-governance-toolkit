@@ -11,8 +11,6 @@ Run with: python -m pytest tests/test_repr.py -v
 
 from datetime import datetime
 
-import pytest
-
 from agent_os.base_agent import AgentConfig, AuditEntry, PolicyDecision
 from agent_os.integrations.base import (
     ExecutionContext,
@@ -20,7 +18,6 @@ from agent_os.integrations.base import (
     ToolCallRequest,
     ToolCallResult,
 )
-
 
 # =============================================================================
 # AgentConfig

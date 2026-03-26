@@ -39,7 +39,7 @@ Successfully implemented a Graph RAG-inspired Prioritization Framework that sits
 - Automatic extraction from critique
 - Injected with ⚠️ WARNING or CRITICAL urgency
 
-### Layer 2: Personalization (Medium Priority) 🟡  
+### Layer 2: Personalization (Medium Priority) 🟡
 **"Does this specific user have preferred constraints?"**
 - User-specific preferences (output format, verbosity, tool usage)
 - Priority-ranked (1-10 scale)
@@ -95,7 +95,7 @@ User Query
 └─────────────────────────────────┘
     │
     ▼
-Ranked Context: "I must solve X, but avoid Y 
+Ranked Context: "I must solve X, but avoid Y
 because I failed at it last time"
     │
     ▼
@@ -204,10 +204,10 @@ As documented in PRIORITIZATION_FRAMEWORK.md:
 
 The Prioritization Framework successfully implements the requirements from the problem statement:
 
-> "We need a Prioritization Framework that sits between the database and the agent. 
-> Before the agent acts, the framework ranks retrieved context based on a hierarchy 
-> of needs: Safety Layer (Highest Priority), Personalization Layer (Medium Priority), 
-> Global Wisdom Layer (Low Priority). The agent doesn't just get context; it gets a 
+> "We need a Prioritization Framework that sits between the database and the agent.
+> Before the agent acts, the framework ranks retrieved context based on a hierarchy
+> of needs: Safety Layer (Highest Priority), Personalization Layer (Medium Priority),
+> Global Wisdom Layer (Low Priority). The agent doesn't just get context; it gets a
 > ranked strategy."
 
 **Status: ✅ Complete and Ready for Review**

@@ -170,7 +170,7 @@ if report.has_drift:
 Your Agent Code
     │
     ├── agent_sre.SLO          → Define reliability targets
-    ├── agent_sre.CostGuard    → Prevent cost explosions  
+    ├── agent_sre.CostGuard    → Prevent cost explosions
     ├── agent_sre.evals        → LLM-as-Judge evaluation
     ├── agent_sre.alerts       → Webhook alerting
     │

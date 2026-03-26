@@ -19,6 +19,7 @@ from agent_sre.anomaly.strategies import (
 
 # ── DetectorConfig ──────────────────────────────────────────────────
 
+
 class TestDetectorConfig:
     def test_defaults(self) -> None:
         cfg = DetectorConfig()
@@ -36,6 +37,7 @@ class TestDetectorConfig:
 
 
 # ── BehaviorBaseline ────────────────────────────────────────────────
+
 
 class TestBehaviorBaseline:
     def test_defaults(self) -> None:
@@ -72,6 +74,7 @@ class TestBehaviorBaseline:
 
 
 # ── StatisticalStrategy ─────────────────────────────────────────────
+
 
 class TestStatisticalStrategy:
     def test_zscore_normal(self) -> None:
@@ -125,6 +128,7 @@ class TestStatisticalStrategy:
 
 # ── SequentialStrategy ───────────────────────────────────────────────
 
+
 class TestSequentialStrategy:
     def test_empty_sequence(self) -> None:
         s = SequentialStrategy()
@@ -155,6 +159,7 @@ class TestSequentialStrategy:
 
 
 # ── ResourceStrategy ────────────────────────────────────────────────
+
 
 class TestResourceStrategy:
     def test_no_limits(self) -> None:
@@ -191,6 +196,7 @@ class TestResourceStrategy:
 
 
 # ── AnomalyDetector (integration) ───────────────────────────────────
+
 
 class TestAnomalyDetector:
     def test_normal_values_no_alert(self) -> None:
@@ -302,6 +308,7 @@ class TestAnomalyDetector:
 
 # ── Severity levels ─────────────────────────────────────────────────
 
+
 class TestSeverityLevels:
     def test_info_severity(self) -> None:
         s = StatisticalStrategy()
@@ -327,6 +334,7 @@ class TestSeverityLevels:
 
 
 # ── Anomaly type inference ──────────────────────────────────────────
+
 
 class TestAnomalyTypeInference:
     def test_latency(self) -> None:

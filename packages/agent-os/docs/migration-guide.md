@@ -21,8 +21,8 @@ List all prompt-based safety instructions you're currently using:
 ```python
 # BEFORE: Prompt-based safety
 system_prompt = """
-You are a helpful assistant. 
-IMPORTANT: 
+You are a helpful assistant.
+IMPORTANT:
 - Never reveal API keys or passwords
 - Do not access files outside /workspace
 - Do not run destructive SQL commands like DROP or DELETE
@@ -59,7 +59,7 @@ plane = ControlPlane()
 # Add policies (equivalent to your prompt instructions)
 plane.policy_engine.add_constraint("agent", [
     "read_file",
-    "write_file", 
+    "write_file",
     "query_database",
 ])
 
@@ -140,8 +140,8 @@ Once kernel-based enforcement is verified, you can simplify your prompts:
 ```python
 # BEFORE: Long safety-focused prompt
 system_prompt = """
-You are a helpful assistant. 
-IMPORTANT: 
+You are a helpful assistant.
+IMPORTANT:
 - Never reveal API keys or passwords
 - Do not access files outside /workspace
 - Do not run destructive SQL commands

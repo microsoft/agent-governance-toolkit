@@ -93,7 +93,7 @@ tools:
       - "api.github.com"
       - "api.weather.gov"
     rate_limit: 10  # per minute
-  
+
   files:
     sandbox_paths:
       - "./data"

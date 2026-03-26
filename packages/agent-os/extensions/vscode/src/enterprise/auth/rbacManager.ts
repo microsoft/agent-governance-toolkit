@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Role-Based Access Control (RBAC) Manager
- * 
+ *
  * Manages permissions and access control for enterprise deployments
  * with granular role-based policies.
  */
@@ -250,7 +250,7 @@ export class RBACManager {
         if (!user) return [];
 
         const permissionIds = new Set<string>();
-        
+
         for (const roleName of user.roles) {
             this._collectRolePermissions(roleName, permissionIds);
         }
@@ -283,14 +283,14 @@ export class RBACManager {
 export function requiresPermission(rbac: RBACManager, permissionId: string) {
     return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
         const originalMethod = descriptor.value;
-        
+
         descriptor.value = async function (...args: any[]) {
             if (rbac.requirePermission(permissionId)) {
                 return originalMethod.apply(this, args);
             }
             return undefined;
         };
-        
+
         return descriptor;
     };
 }

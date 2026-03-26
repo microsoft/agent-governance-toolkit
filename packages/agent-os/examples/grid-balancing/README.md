@@ -50,7 +50,7 @@ docker-compose up
 
 This demo simulates a distributed energy grid with 100 Distributed Energy Resources (DERs):
 - Solar panels
-- Home batteries  
+- Home batteries
 - Electric vehicles
 
 When the grid operator broadcasts a price signal, agents autonomously negotiate to balance supply and demand.

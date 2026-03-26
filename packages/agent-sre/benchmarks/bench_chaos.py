@@ -15,10 +15,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from agent_sre.chaos.engine import (
-    AbortCondition,
     ChaosExperiment,
     Fault,
-    FaultType,
 )
 from agent_sre.chaos.library import ChaosLibrary
 from agent_sre.chaos.scheduler import BlackoutWindow, ChaosSchedule, ProgressiveConfig

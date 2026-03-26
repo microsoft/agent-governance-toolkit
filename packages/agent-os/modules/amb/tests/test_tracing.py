@@ -110,6 +110,7 @@ async def test_reply_propagates_trace_id():
     custom_trace_id = "fedcba0987654321fedcba0987654321"
 
     async with MessageBus() as bus:
+
         async def responder(msg: Message):
             await bus.reply(msg, {"response": "pong"})
 
@@ -145,7 +146,7 @@ async def test_get_current_trace_returns_context_inside_trace():
 async def test_trace_context_new_creates_valid_context():
     """Test TraceContext.new creates valid trace context."""
     ctx = TraceContext.new("test-operation")
-    
+
     assert ctx.trace_id is not None
     assert ctx.span_id is not None
     assert len(ctx.spans) == 1  # Root span
@@ -155,9 +156,9 @@ async def test_trace_context_new_creates_valid_context():
 async def test_trace_context_start_span():
     """Test creating child spans."""
     ctx = TraceContext.new("root-operation")
-    
+
     span = ctx.start_span("child-operation")
-    
+
     assert span.parent_span_id == ctx.span_id
     assert span.trace_id == ctx.trace_id
     assert len(ctx.spans) == 2
@@ -167,9 +168,9 @@ async def test_trace_context_start_span():
 async def test_trace_context_to_headers():
     """Test converting trace context to headers for propagation."""
     ctx = TraceContext.new("test-operation")
-    
+
     headers = ctx.to_headers()
-    
+
     assert "x-trace-id" in headers
     assert headers["x-trace-id"] == ctx.trace_id
     assert "x-span-id" in headers
@@ -180,10 +181,10 @@ async def test_trace_context_from_headers():
     """Test creating trace context from headers."""
     original = TraceContext.new("original-operation")
     headers = original.to_headers()
-    
+
     # Create new context from headers (simulating receiving in another service)
     continued = TraceContext.from_headers(headers)
-    
+
     assert continued.trace_id == original.trace_id
     # New context gets a new span_id
     assert continued.span_id != original.span_id
@@ -195,9 +196,9 @@ async def test_trace_context_from_headers():
 async def test_trace_context_to_message_metadata():
     """Test converting trace context to message metadata."""
     ctx = TraceContext.new("test-operation")
-    
+
     metadata = ctx.to_message_metadata()
-    
+
     assert metadata["trace_id"] == ctx.trace_id
     assert metadata["span_id"] == ctx.span_id
 
@@ -206,10 +207,10 @@ async def test_trace_context_to_message_metadata():
 async def test_trace_context_baggage():
     """Test baggage propagation in trace context."""
     ctx = TraceContext.new("test-operation")
-    
+
     ctx.set_baggage("user_id", "user-123")
     ctx.set_baggage("tenant_id", "tenant-abc")
-    
+
     assert ctx.get_baggage("user_id") == "user-123"
     assert ctx.get_baggage("tenant_id") == "tenant-abc"
     assert ctx.get_baggage("missing") is None
@@ -219,10 +220,10 @@ async def test_trace_context_baggage():
 async def test_trace_span_logging():
     """Test span logging functionality."""
     ctx = TraceContext.new("test-operation")
-    
+
     ctx.log("Processing started", item_count=10)
     ctx.log("Processing complete")
-    
+
     # Find the root span
     root_span = ctx.spans[0]
     assert len(root_span.logs) == 2
@@ -234,10 +235,10 @@ async def test_trace_span_logging():
 async def test_trace_span_tagging():
     """Test span tagging functionality."""
     ctx = TraceContext.new("test-operation")
-    
+
     ctx.set_tag("component", "message-bus")
     ctx.set_tag("topic", "test.topic")
-    
+
     root_span = ctx.spans[0]
     assert root_span.tags["component"] == "message-bus"
     assert root_span.tags["topic"] == "test.topic"
@@ -251,6 +252,6 @@ async def test_trace_context_error_handling():
             raise ValueError("Test error")
     except ValueError:
         pass
-    
+
     # After context exit, current trace should be None
     assert get_current_trace() is None

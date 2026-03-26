@@ -9,7 +9,7 @@ based on trust scores, delegation depth, or explicit contribution weights.
 
 from __future__ import annotations
 
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
@@ -20,7 +20,7 @@ class ParticipantInfo(BaseModel):
     agent_did: str
     trust_score: int = Field(ge=0, le=1000)
     delegation_depth: int = Field(ge=0, description="0 = root agent")
-    contribution_weight: Optional[float] = Field(default=None, ge=0.0)
+    contribution_weight: float | None = Field(default=None, ge=0.0)
 
 
 class RewardPool(BaseModel):
@@ -104,8 +104,8 @@ class TrustWeightedStrategy:
         allocations: list[RewardAllocation] = []
 
         for p in pool.participants:
-            weight = p.trust_score / total_trust if total_trust > 0 else 1.0 / len(
-                pool.participants
+            weight = (
+                p.trust_score / total_trust if total_trust > 0 else 1.0 / len(pool.participants)
             )
             amount = pool.total_reward * weight
             allocations.append(
@@ -145,7 +145,7 @@ class HierarchicalStrategy:
                 total_distributed=0.0,
             )
 
-        weights = [self.decay_factor ** p.delegation_depth for p in pool.participants]
+        weights = [self.decay_factor**p.delegation_depth for p in pool.participants]
         total_weight = sum(weights)
         allocations: list[RewardAllocation] = []
 

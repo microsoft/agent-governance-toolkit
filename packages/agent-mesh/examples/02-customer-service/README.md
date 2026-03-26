@@ -122,7 +122,7 @@ python main.py
 # View supervisor status
 agentmesh status supervisor/
 
-# View technical agent status  
+# View technical agent status
 agentmesh status technical-agent/
 
 # View cross-agent audit trail

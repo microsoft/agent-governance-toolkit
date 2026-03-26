@@ -19,6 +19,9 @@ import random
 import time
 
 from agent_sre import SLO, ErrorBudget
+from agent_sre.evals import EvalInput, EvalSuite, EvaluationEngine, RulesJudge
+from agent_sre.integrations.langchain.callback import AgentSRECallback
+from agent_sre.slo.dashboard import SLODashboard
 from agent_sre.slo.indicators import (
     CostPerTask,
     HallucinationRate,
@@ -26,10 +29,6 @@ from agent_sre.slo.indicators import (
     TaskSuccessRate,
     ToolCallAccuracy,
 )
-from agent_sre.slo.dashboard import SLODashboard
-from agent_sre.integrations.langchain.callback import AgentSRECallback
-from agent_sre.evals import EvalInput, EvaluationEngine, EvalSuite, RulesJudge
-
 
 # ── 1. Set up Agent-SRE monitoring ──────────────────────────────────────
 
@@ -187,9 +186,7 @@ for i in range(num_tasks):
         # Feed hallucination eval into SLI
         hallu_results = [r for r in eval_result.results if r.criterion.value == "hallucination"]
         if hallu_results:
-            hallucination.record_evaluation(
-                hallucinated=(hallu_results[0].score < 0.7)
-            )
+            hallucination.record_evaluation(hallucinated=(hallu_results[0].score < 0.7))
 
     if (i + 1) % 10 == 0:
         print(f"  Processed {i + 1}/{num_tasks} tasks...")

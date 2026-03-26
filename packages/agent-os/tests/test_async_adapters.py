@@ -10,19 +10,16 @@ Run with: python -m pytest tests/test_async_adapters.py -v --tb=short
 """
 
 import asyncio
-from typing import Any, Optional
-from unittest.mock import MagicMock
+from typing import Any
 
 import pytest
 
 from agent_os.integrations.base import (
     AsyncGovernedWrapper,
     BaseIntegration,
-    ExecutionContext,
     GovernancePolicy,
     PolicyViolationError,
 )
-
 
 # =============================================================================
 # Helpers
@@ -193,6 +190,7 @@ async def test_concurrent_access_serialized():
 @pytest.mark.asyncio
 async def test_concurrent_call_count_integrity():
     """call_count should be accurate even under concurrent access."""
+
     async def noop() -> None:
         await asyncio.sleep(0.01)
 

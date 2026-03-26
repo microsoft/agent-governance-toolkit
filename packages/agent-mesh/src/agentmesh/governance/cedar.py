@@ -56,9 +56,9 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class CedarDecision:
     action: str = ""
     evaluation_ms: float = 0.0
     source: Literal["cedarpy", "cli", "builtin", "fallback"] = "builtin"
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class CedarEvaluator:
@@ -97,11 +97,11 @@ class CedarEvaluator:
     def __init__(
         self,
         mode: Literal["auto", "cedarpy", "cli", "builtin"] = "auto",
-        policy_path: Optional[str] = None,
-        policy_content: Optional[str] = None,
-        entities: Optional[list[dict[str, Any]]] = None,
-        entities_path: Optional[str] = None,
-        schema_path: Optional[str] = None,
+        policy_path: str | None = None,
+        policy_content: str | None = None,
+        entities: list[dict[str, Any]] | None = None,
+        entities_path: str | None = None,
+        schema_path: str | None = None,
         timeout_seconds: float = 5.0,
     ):
         """Initialize the Cedar evaluator.
@@ -138,6 +138,7 @@ class CedarEvaluator:
     def _check_cedarpy() -> bool:
         try:
             import cedarpy  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -154,26 +155,22 @@ class CedarEvaluator:
         Returns:
             CedarDecision with the result.
         """
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
 
         try:
-            if self.mode == "cedarpy" or (
-                self.mode == "auto" and self._cedarpy_available
-            ):
+            if self.mode == "cedarpy" or (self.mode == "auto" and self._cedarpy_available):
                 result = self._evaluate_cedarpy(action, context)
-            elif self.mode == "cli" or (
-                self.mode == "auto" and self._cli_available
-            ):
+            elif self.mode == "cli" or (self.mode == "auto" and self._cli_available):
                 result = self._evaluate_cli(action, context)
             else:
                 result = self._evaluate_builtin(action, context)
 
-            elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+            elapsed = (datetime.now(UTC) - start).total_seconds() * 1000
             result.evaluation_ms = elapsed
             return result
 
         except Exception as e:
-            elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+            elapsed = (datetime.now(UTC) - start).total_seconds() * 1000
             logger.error(f"Cedar evaluation failed: {e}")
             return CedarDecision(
                 allowed=False,
@@ -185,8 +182,8 @@ class CedarEvaluator:
 
     def _build_request(self, action: str, context: dict) -> dict[str, Any]:
         """Build a Cedar authorization request from context."""
-        principal = context.get("agent_did", context.get("principal", "Agent::\"anonymous\""))
-        resource = context.get("resource", "Resource::\"default\"")
+        principal = context.get("agent_did", context.get("principal", 'Agent::"anonymous"'))
+        resource = context.get("resource", 'Resource::"default"')
 
         if "::" not in str(principal):
             principal = f'Agent::"{principal}"'
@@ -200,8 +197,7 @@ class CedarEvaluator:
             "action": action,
             "resource": resource,
             "context": {
-                k: v for k, v in context.items()
-                if k not in ("agent_did", "principal", "resource")
+                k: v for k, v in context.items() if k not in ("agent_did", "principal", "resource")
             },
         }
 
@@ -225,7 +221,9 @@ class CedarEvaluator:
             allowed=allowed,
             raw_result={
                 "decision": str(response.decision),
-                "diagnostics": str(response.diagnostics) if hasattr(response, "diagnostics") else None,
+                "diagnostics": str(response.diagnostics)
+                if hasattr(response, "diagnostics")
+                else None,
             },
             action=action,
             source="cedarpy",
@@ -246,10 +244,14 @@ class CedarEvaluator:
             request_file.write_text(json.dumps(request))
 
             cmd = [
-                "cedar", "authorize",
-                "--policies", str(policy_file),
-                "--entities", str(entities_file),
-                "--request-json", str(request_file),
+                "cedar",
+                "authorize",
+                "--policies",
+                str(policy_file),
+                "--entities",
+                str(entities_file),
+                "--request-json",
+                str(request_file),
             ]
             if self.schema_path:
                 cmd.extend(["--schema", self.schema_path])
@@ -288,7 +290,9 @@ class CedarEvaluator:
         """
         if not self.policy_content:
             return CedarDecision(
-                allowed=False, action=action, source="builtin",
+                allowed=False,
+                action=action,
+                source="builtin",
                 error="No Cedar policy content",
             )
 
@@ -331,7 +335,7 @@ def _parse_cedar_statements(content: str) -> list[dict[str, Any]]:
     """Parse Cedar permit/forbid statements from policy content."""
     statements: list[dict[str, Any]] = []
     pattern = re.compile(
-        r'(permit|forbid)\s*\((.*?)\)\s*;',
+        r"(permit|forbid)\s*\((.*?)\)\s*;",
         re.DOTALL,
     )
 
@@ -339,14 +343,14 @@ def _parse_cedar_statements(content: str) -> list[dict[str, Any]]:
         effect = match.group(1)
         body = match.group(2)
         action_match = re.search(r'action\s*==\s*Action::"([^"]+)"', body)
-        action_constraint = (
-            f'Action::"{action_match.group(1)}"' if action_match else None
+        action_constraint = f'Action::"{action_match.group(1)}"' if action_match else None
+        statements.append(
+            {
+                "effect": effect,
+                "action_constraint": action_constraint,
+                "raw": match.group(0),
+            }
         )
-        statements.append({
-            "effect": effect,
-            "action_constraint": action_constraint,
-            "raw": match.group(0),
-        })
 
     return statements
 
@@ -354,7 +358,7 @@ def _parse_cedar_statements(content: str) -> list[dict[str, Any]]:
 def load_cedar_into_engine(
     engine: Any,
     cedar_path: str,
-    entities: Optional[list[dict[str, Any]]] = None,
+    entities: list[dict[str, Any]] | None = None,
 ) -> CedarEvaluator:
     """
     Register a .cedar file with the existing PolicyEngine.

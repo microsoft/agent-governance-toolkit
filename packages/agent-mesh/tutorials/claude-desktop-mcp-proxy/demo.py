@@ -18,14 +18,14 @@ import json
 import textwrap
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # Domain types
 # ---------------------------------------------------------------------------
+
 
 class Decision(str, Enum):
     ALLOW = "allow"
@@ -89,6 +89,7 @@ class AgentIdentity:
 # Mock MCP server
 # ---------------------------------------------------------------------------
 
+
 class MockMCPServer:
     """Simulates an upstream MCP server exposing filesystem/shell tools."""
 
@@ -113,6 +114,7 @@ class MockMCPServer:
 # ---------------------------------------------------------------------------
 # Policy engine
 # ---------------------------------------------------------------------------
+
 
 class PolicyEngine:
     """Evaluates tool calls against governance rules."""
@@ -168,6 +170,7 @@ class PolicyEngine:
 # Audit logger (hash-chained)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class AuditLogger:
     """Tamper-evident, hash-chained audit log."""
@@ -186,7 +189,7 @@ class AuditLogger:
     ) -> AuditEntry:
         seq = len(self.entries) + 1
         event_id = f"evt-{seq:04d}"
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
 
         payload = f"{self._prev_hash}:{event_id}:{tool}:{decision.value}"
         chain_hash = hashlib.sha256(payload.encode()).hexdigest()[:12]
@@ -222,6 +225,7 @@ class AuditLogger:
 # ---------------------------------------------------------------------------
 # MCP Governance Proxy
 # ---------------------------------------------------------------------------
+
 
 class MCPGovernanceProxy:
     """Wraps an MCP server with policy enforcement and audit logging."""
@@ -289,9 +293,7 @@ DEMO_POLICIES: dict[str, Any] = {
                     "id": "approve-writes",
                     "name": "Require approval for write operations",
                     "action": "require_approval",
-                    "conditions": [
-                        "tool in ['write_file', 'execute_command']"
-                    ],
+                    "conditions": ["tool in ['write_file', 'execute_command']"],
                     "severity": "high",
                     "message": "Write/execute operations require human approval",
                 },
@@ -299,9 +301,7 @@ DEMO_POLICIES: dict[str, Any] = {
                     "id": "block-destructive",
                     "name": "Block destructive operations",
                     "action": "deny",
-                    "conditions": [
-                        "tool in ['delete_file', 'modify_system', 'shell_exec']"
-                    ],
+                    "conditions": ["tool in ['delete_file', 'modify_system', 'shell_exec']"],
                     "severity": "critical",
                     "message": "Destructive operations are blocked by governance policy",
                 },
@@ -344,19 +344,17 @@ def run_demo() -> None:
 
     # 1. Identity
     identity = AgentIdentity.create("claude-desktop-proxy")
-    print(f"[1] Agent identity created")
+    print("[1] Agent identity created")
     print(f"    DID:  {identity.did}")
     print(f"    Name: {identity.name}")
     print(f"    Trust: {identity.trust_score}/1000\n")
 
     # 2. Policy engine
     engine = PolicyEngine.from_yaml_dict(DEMO_POLICIES)
-    rule_count = sum(
-        len(p.get("rules", [])) for p in DEMO_POLICIES["policies"]
-    )
-    print(f"[2] Governance policies loaded")
+    rule_count = sum(len(p.get("rules", [])) for p in DEMO_POLICIES["policies"])
+    print("[2] Governance policies loaded")
     print(f"    Rules: {rule_count} active")
-    print(f"    Mode:  enforce (not shadow)\n")
+    print("    Mode:  enforce (not shadow)\n")
 
     # 3. Proxy
     upstream = MockMCPServer()
@@ -400,7 +398,7 @@ def run_demo() -> None:
 
     # 5. Trust score
     print("[5] Trust score impact")
-    print(f"    Initial:  800 (trusted)")
+    print("    Initial:  800 (trusted)")
     print(f"    After:    {identity.trust_score} (blocked calls reduced score)")
     if identity.trust_score >= 800:
         level = "✅ trusted"

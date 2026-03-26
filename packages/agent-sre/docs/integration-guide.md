@@ -26,7 +26,7 @@ with TraceCapture(agent_id="governed-agent", task_input="process payment") as ca
     span.finish(output={"decision": "ALLOW"})
     compliance.record_check(compliant=True)
 
-    span = capture.start_span("tool_call", SpanKind.TOOL_CALL, 
+    span = capture.start_span("tool_call", SpanKind.TOOL_CALL,
                               input_data={"tool": "payment_api"})
     # Agent executes tool
     span.finish(output={"status": "success"}, cost_usd=0.15)

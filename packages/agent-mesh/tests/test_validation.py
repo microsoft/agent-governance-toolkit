@@ -5,20 +5,20 @@
 import pytest
 from pydantic import ValidationError
 
-from agentmesh.identity import AgentIdentity, AgentDID, ScopeChain, DelegationLink
-from agentmesh.trust import TrustHandshake
-from agentmesh.reward.scoring import TrustScore
 from agentmesh.exceptions import (
-    IdentityError,
-    TrustError,
     DelegationError,
     HandshakeError,
+    IdentityError,
+    TrustError,
 )
-
+from agentmesh.identity import AgentDID, AgentIdentity, ScopeChain
+from agentmesh.reward.scoring import TrustScore
+from agentmesh.trust import TrustHandshake
 
 # ---------------------------------------------------------------------------
 # AgentIdentity validation
 # ---------------------------------------------------------------------------
+
 
 class TestAgentIdentityValidation:
     """Validation tests for AgentIdentity constructor and factory."""
@@ -134,6 +134,7 @@ class TestAgentIdentityValidation:
 # TrustHandshake validation
 # ---------------------------------------------------------------------------
 
+
 class TestTrustHandshakeValidation:
     """Validation tests for TrustHandshake constructor."""
 
@@ -165,6 +166,7 @@ class TestTrustHandshakeValidation:
 # ---------------------------------------------------------------------------
 # ScopeChain validation
 # ---------------------------------------------------------------------------
+
 
 class TestScopeChainValidation:
     """Validation tests for ScopeChain constructor."""
@@ -241,6 +243,7 @@ class TestScopeChainValidation:
 # ---------------------------------------------------------------------------
 # TrustScore validation
 # ---------------------------------------------------------------------------
+
 
 class TestTrustScoreValidation:
     """Validation tests for TrustScore constructor."""

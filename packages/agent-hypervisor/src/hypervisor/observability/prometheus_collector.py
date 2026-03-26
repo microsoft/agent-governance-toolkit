@@ -37,16 +37,20 @@ from typing import Any, Protocol
 from hypervisor.observability.event_bus import EventType, HypervisorEvent, HypervisorEventBus
 
 # Ring event types that represent transitions
-_RING_TRANSITION_EVENTS = frozenset({
-    EventType.RING_ASSIGNED,
-    EventType.RING_ELEVATED,
-    EventType.RING_DEMOTED,
-    EventType.RING_ELEVATION_EXPIRED,
-})
+_RING_TRANSITION_EVENTS = frozenset(
+    {
+        EventType.RING_ASSIGNED,
+        EventType.RING_ELEVATED,
+        EventType.RING_DEMOTED,
+        EventType.RING_ELEVATION_EXPIRED,
+    }
+)
 
-_RING_BREACH_EVENTS = frozenset({
-    EventType.RING_BREACH_DETECTED,
-})
+_RING_BREACH_EVENTS = frozenset(
+    {
+        EventType.RING_BREACH_DETECTED,
+    }
+)
 
 _ALL_RING_EVENTS = _RING_TRANSITION_EVENTS | _RING_BREACH_EVENTS
 
@@ -55,13 +59,17 @@ class PrometheusExporterProtocol(Protocol):
     """Protocol for Prometheus exporters — avoids hard dep on agent-sre."""
 
     def set_gauge(
-        self, name: str, value: float,
+        self,
+        name: str,
+        value: float,
         labels: dict[str, str] | None = None,
         help_text: str = "",
     ) -> None: ...
 
     def inc_counter(
-        self, name: str, value: float = 1.0,
+        self,
+        name: str,
+        value: float = 1.0,
         labels: dict[str, str] | None = None,
         help_text: str = "",
     ) -> None: ...
@@ -144,9 +152,7 @@ class RingMetricsCollector:
             ):
                 start = self._elevation_start.pop(agent_did, None)
                 if start is not None:
-                    self._elevation_durations[agent_did] = (
-                        event.timestamp.timestamp() - start
-                    )
+                    self._elevation_durations[agent_did] = event.timestamp.timestamp() - start
 
         elif event.event_type in _RING_BREACH_EVENTS:
             self._breach_counts[(agent_did, session_id)] += 1

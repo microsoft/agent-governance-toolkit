@@ -195,9 +195,7 @@ def create_app(
         if server and req.sensitivity == server.detector._config.sensitivity:
             detector = server.detector
         else:
-            detector = PromptInjectionDetector(
-                DetectionConfig(sensitivity=req.sensitivity)
-            )
+            detector = PromptInjectionDetector(DetectionConfig(sensitivity=req.sensitivity))
 
         result = detector.detect(req.text, req.source, req.canary_tokens)
         return _detection_result_to_response(result)
@@ -210,9 +208,7 @@ def create_app(
         if server and req.sensitivity == server.detector._config.sensitivity:
             detector = server.detector
         else:
-            detector = PromptInjectionDetector(
-                DetectionConfig(sensitivity=req.sensitivity)
-            )
+            detector = PromptInjectionDetector(DetectionConfig(sensitivity=req.sensitivity))
 
         inputs = [(item.get("text", ""), item.get("source", "api")) for item in req.inputs]
         results = detector.detect_batch(inputs, req.canary_tokens)
@@ -260,17 +256,19 @@ def create_app(
         records: list[dict] = []
         if server:
             for rec in server.detector.audit_log[-limit:]:
-                records.append({
-                    "timestamp": rec.timestamp.isoformat(),
-                    "input_hash": rec.input_hash,
-                    "source": rec.source,
-                    "is_injection": rec.result.is_injection,
-                    "threat_level": rec.result.threat_level.value,
-                    "injection_type": (
-                        rec.result.injection_type.value if rec.result.injection_type else None
-                    ),
-                    "explanation": rec.result.explanation,
-                })
+                records.append(
+                    {
+                        "timestamp": rec.timestamp.isoformat(),
+                        "input_hash": rec.input_hash,
+                        "source": rec.source,
+                        "is_injection": rec.result.is_injection,
+                        "threat_level": rec.result.threat_level.value,
+                        "injection_type": (
+                            rec.result.injection_type.value if rec.result.injection_type else None
+                        ),
+                        "explanation": rec.result.explanation,
+                    }
+                )
         return {"records": records, "total": len(records)}
 
     return app

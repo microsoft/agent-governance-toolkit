@@ -14,49 +14,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic policy recommendations based on task
   - Support for Python, TypeScript, JavaScript, Go
   - Cron schedule support for recurring agents
-  
+
 - **`attach_policy`** - Attach safety policies to agents
   - Policy conflict detection
   - Template-based and custom policies
   - Validation before attachment
-  
+
 - **`test_agent`** - Dry-run testing before deployment
   - Scenario-based testing
   - Policy violation detection
   - Resource usage estimation
-  
+
 - **`deploy_agent`** - Deploy agents to local or cloud
   - Local execution support
   - Cloud deployment (requires API key)
   - Approval workflow integration
-  
+
 - **`get_agent_status`** - Get agent status and metrics
   - Execution metrics (success rate, failures)
   - Active policy list
   - Pending approval status
   - Recent activity logs
-  
+
 - **`list_templates`** - Browse template library
   - Filter by category, search, framework
   - Agent and policy templates
   - Example prompts for each template
-  
+
 - **`request_approval`** - Human-in-the-loop approvals
   - Risk-based approval requirements
   - Multi-party approval for critical actions
   - Expiration handling
-  
+
 - **`audit_log`** - Query audit trail
   - Time range filtering
   - Action type filtering
   - Summary statistics
   - Export capability
-  
+
 - **`create_policy`** - Create custom policies
   - Natural language to policy rules
   - Extend existing templates
   - Category and framework tagging
-  
+
 - **`check_compliance`** - Compliance framework validation
   - SOC 2 Type II controls
   - GDPR requirements

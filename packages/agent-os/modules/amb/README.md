@@ -11,7 +11,7 @@
 
 In multi-agent systems, tight coupling between agents creates dependency graphs that scale exponentially with system size. When Agent A must know about Agent B, C, and D to communicate, the system becomes rigid and unmaintainable.
 
-We built `amb` because **direct agent coupling creates spaghetti code**. The solution: **Scale by Subtraction**. 
+We built `amb` because **direct agent coupling creates spaghetti code**. The solution: **Scale by Subtraction**.
 
 By removing the requirement for agents to know about each other, we eliminate O(n²) dependencies and replace them with O(1) broadcast semantics. Agents emit signals (`"I am thinking"`, `"I need verification"`) without knowing who listens. The bus stays dumb and fast—it just transports the envelope.
 
@@ -55,7 +55,7 @@ Tag messages as `CRITICAL` (Security/Governance) vs `BACKGROUND` (Memory consoli
 ```python
 # Critical security alert - jumps ahead
 await bus.publish(
-    "agent.alerts", 
+    "agent.alerts",
     {"alert": "Security anomaly detected"},
     priority=MessagePriority.CRITICAL
 )
@@ -107,7 +107,7 @@ async with MessageBus() as bus:
     # Messages published within a span automatically get the trace_id
     with tracer.start_as_current_span("agent-thinking"):
         await bus.publish("agent.thoughts", {"thought": "Processing data"})
-    
+
     # Or explicitly set trace_id for cross-system tracing
     await bus.publish(
         "agent.action",

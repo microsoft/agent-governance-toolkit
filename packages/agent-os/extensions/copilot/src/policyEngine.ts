@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Policy Engine for Agent OS Copilot Extension
- * 
+ *
  * Shared policy engine - ported from VS Code extension.
  */
 

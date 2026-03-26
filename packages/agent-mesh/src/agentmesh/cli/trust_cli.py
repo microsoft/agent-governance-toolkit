@@ -14,20 +14,19 @@ Commands for inspecting and managing the trust network:
 
 import json
 from datetime import datetime, timedelta
-from typing import Optional
 
 import click
+from rich import box
 from rich.console import Console
 from rich.table import Table
-from rich import box
 
-from agentmesh.trust.bridge import PeerInfo
 from agentmesh.constants import (
-    TIER_VERIFIED_PARTNER_THRESHOLD,
-    TIER_TRUSTED_THRESHOLD,
-    TIER_STANDARD_THRESHOLD,
     TIER_PROBATIONARY_THRESHOLD,
+    TIER_STANDARD_THRESHOLD,
+    TIER_TRUSTED_THRESHOLD,
+    TIER_VERIFIED_PARTNER_THRESHOLD,
 )
+from agentmesh.trust.bridge import PeerInfo
 
 console = Console()
 
@@ -57,7 +56,7 @@ def _trust_level_style(level: str) -> str:
     return styles.get(level, "white")
 
 
-def _format_datetime(dt: Optional[datetime]) -> str:
+def _format_datetime(dt: datetime | None) -> str:
     """Format a datetime for display, handling None."""
     if dt is None:
         return "N/A"
@@ -128,12 +127,14 @@ def _get_demo_history(agent_id: str) -> list[dict]:
 
     history = []
     for i, (score, event) in enumerate(zip(scores, events)):
-        history.append({
-            "timestamp": _format_datetime(now - timedelta(hours=len(scores) - i)),
-            "score": score,
-            "event": event,
-            "delta": score - scores[i - 1] if i > 0 else 0,
-        })
+        history.append(
+            {
+                "timestamp": _format_datetime(now - timedelta(hours=len(scores) - i)),
+                "score": score,
+                "event": event,
+                "delta": score - scores[i - 1] if i > 0 else 0,
+            }
+        )
     return history
 
 
@@ -146,6 +147,7 @@ def _output_yaml(data: object) -> None:
     """Print data as YAML to stdout."""
     try:
         import yaml
+
         click.echo(yaml.dump(data, default_flow_style=False, sort_keys=False))
     except ImportError:
         click.echo("# PyYAML not installed, falling back to JSON")
@@ -164,21 +166,28 @@ def trust():
 
 @trust.command("list")
 @click.option(
-    "--format", "fmt",
+    "--format",
+    "fmt",
     type=click.Choice(["table", "json", "yaml"]),
     default="table",
     help="Output format (table, json, or yaml).",
 )
-@click.option("--json", "json_flag", is_flag=True, help="Output as JSON (shorthand for --format json).")
 @click.option(
-    "--min-score", type=int, default=None,
+    "--json", "json_flag", is_flag=True, help="Output as JSON (shorthand for --format json)."
+)
+@click.option(
+    "--min-score",
+    type=int,
+    default=None,
     help="Only show agents with trust score >= this value.",
 )
 @click.option(
-    "--verified-only", is_flag=True, default=False,
+    "--verified-only",
+    is_flag=True,
+    default=False,
     help="Only show verified agents.",
 )
-def list_agents(fmt: str, json_flag: bool, min_score: Optional[int], verified_only: bool):
+def list_agents(fmt: str, json_flag: bool, min_score: int | None, verified_only: bool):
     """List all agents with their trust scores."""
     if json_flag:
         fmt = "json"
@@ -195,16 +204,18 @@ def list_agents(fmt: str, json_flag: bool, min_score: Optional[int], verified_on
     if fmt in ("json", "yaml"):
         data = []
         for p in filtered:
-            data.append({
-                "agent_id": p.peer_did,
-                "name": p.peer_name,
-                "trust_score": p.trust_score,
-                "trust_level": _trust_level_label(p.trust_score),
-                "verified": p.trust_verified,
-                "protocol": p.protocol,
-                "capabilities": p.capabilities,
-                "last_verified": _format_datetime(p.last_verified),
-            })
+            data.append(
+                {
+                    "agent_id": p.peer_did,
+                    "name": p.peer_name,
+                    "trust_score": p.trust_score,
+                    "trust_level": _trust_level_label(p.trust_score),
+                    "verified": p.trust_verified,
+                    "protocol": p.protocol,
+                    "capabilities": p.capabilities,
+                    "last_verified": _format_datetime(p.last_verified),
+                }
+            )
         if fmt == "json":
             _output_json(data)
         else:
@@ -243,7 +254,8 @@ def list_agents(fmt: str, json_flag: bool, min_score: Optional[int], verified_on
 @trust.command()
 @click.argument("agent_id")
 @click.option(
-    "--format", "fmt",
+    "--format",
+    "fmt",
     type=click.Choice(["table", "json", "yaml"]),
     default="table",
     help="Output format.",
@@ -287,7 +299,9 @@ def inspect(agent_id: str, fmt: str, json_flag: bool):
     # Table output
     level = _trust_level_label(peer.trust_score)
     style = _trust_level_style(level)
-    console.print(f"\n[bold blue]🔍 Agent Inspection: {peer.peer_name or peer.peer_did}[/bold blue]\n")
+    console.print(
+        f"\n[bold blue]🔍 Agent Inspection: {peer.peer_name or peer.peer_did}[/bold blue]\n"
+    )
 
     detail_table = Table(box=box.SIMPLE, show_header=False)
     detail_table.add_column("Field", style="bold cyan", no_wrap=True)
@@ -300,7 +314,9 @@ def inspect(agent_id: str, fmt: str, json_flag: bool):
     verified_icon = "[green]✓ Yes[/green]" if peer.trust_verified else "[red]✗ No[/red]"
     detail_table.add_row("Verified", verified_icon)
     detail_table.add_row("Protocol", peer.protocol)
-    detail_table.add_row("Capabilities", ", ".join(peer.capabilities) if peer.capabilities else "None")
+    detail_table.add_row(
+        "Capabilities", ", ".join(peer.capabilities) if peer.capabilities else "None"
+    )
     detail_table.add_row("Endpoint", peer.endpoint or "—")
     detail_table.add_row("Connected At", _format_datetime(peer.connected_at))
     detail_table.add_row("Last Verified", _format_datetime(peer.last_verified))
@@ -312,14 +328,15 @@ def inspect(agent_id: str, fmt: str, json_flag: bool):
 @trust.command()
 @click.argument("agent_id")
 @click.option(
-    "--format", "fmt",
+    "--format",
+    "fmt",
     type=click.Choice(["table", "json", "yaml"]),
     default="table",
     help="Output format.",
 )
 @click.option("--json", "json_flag", is_flag=True, help="Output as JSON.")
 @click.option("--limit", type=int, default=None, help="Max number of history entries.")
-def history(agent_id: str, fmt: str, json_flag: bool, limit: Optional[int]):
+def history(agent_id: str, fmt: str, json_flag: bool, limit: int | None):
     """Show trust score history for an agent over time.
 
     AGENT_ID is the DID of the agent (e.g. did:mesh:agent-alpha-001).
@@ -369,7 +386,8 @@ def history(agent_id: str, fmt: str, json_flag: bool, limit: Optional[int]):
 
 @trust.command()
 @click.option(
-    "--format", "fmt",
+    "--format",
+    "fmt",
     type=click.Choice(["ascii", "mermaid"]),
     default="ascii",
     help="Graph format: ascii (default) or mermaid.",
@@ -383,21 +401,25 @@ def graph(fmt: str, json_flag: bool):
         nodes = []
         edges = []
         for peer in peers.values():
-            nodes.append({
-                "id": peer.peer_did,
-                "name": peer.peer_name,
-                "trust_score": peer.trust_score,
-                "verified": peer.trust_verified,
-            })
+            nodes.append(
+                {
+                    "id": peer.peer_did,
+                    "name": peer.peer_name,
+                    "trust_score": peer.trust_score,
+                    "verified": peer.trust_verified,
+                }
+            )
         # Generate demo edges between verified peers
         verified = [p for p in peers.values() if p.trust_verified]
         for i, a in enumerate(verified):
-            for b in verified[i + 1:]:
-                edges.append({
-                    "from": a.peer_did,
-                    "to": b.peer_did,
-                    "protocol": a.protocol,
-                })
+            for b in verified[i + 1 :]:
+                edges.append(
+                    {
+                        "from": a.peer_did,
+                        "to": b.peer_did,
+                        "protocol": a.protocol,
+                    }
+                )
         _output_json({"nodes": nodes, "edges": edges})
         return
 
@@ -408,11 +430,11 @@ def graph(fmt: str, json_flag: bool):
             short_id = f"A{i}"
             id_map[peer.peer_did] = short_id
             label = peer.peer_name or peer.peer_did.split(":")[-1]
-            lines.append(f"    {short_id}[\"{label}<br/>Score: {peer.trust_score}\"]")
+            lines.append(f'    {short_id}["{label}<br/>Score: {peer.trust_score}"]')
 
         verified = [p for p in peers.values() if p.trust_verified]
         for i, a in enumerate(verified):
-            for b in verified[i + 1:]:
+            for b in verified[i + 1 :]:
                 a_id = id_map[a.peer_did]
                 b_id = id_map[b.peer_did]
                 lines.append(f"    {a_id} -->|{a.protocol}| {b_id}")
@@ -440,7 +462,7 @@ def graph(fmt: str, json_flag: bool):
 
     verified = [p for p in peers.values() if p.trust_verified]
     for i, a in enumerate(verified):
-        for b in verified[i + 1:]:
+        for b in verified[i + 1 :]:
             a_name = a.peer_name or a.peer_did.split(":")[-1]
             b_name = b.peer_name or b.peer_did.split(":")[-1]
             click.echo(f"  {a_name} <--({a.protocol})--> {b_name}")
@@ -453,7 +475,8 @@ def graph(fmt: str, json_flag: bool):
 @click.option("--reason", "-r", default="Manual revocation via CLI", help="Reason for revocation.")
 @click.option("--force", is_flag=True, help="Skip confirmation prompt.")
 @click.option(
-    "--format", "fmt",
+    "--format",
+    "fmt",
     type=click.Choice(["table", "json", "yaml"]),
     default="table",
     help="Output format.",
@@ -476,8 +499,7 @@ def revoke(agent_id: str, reason: str, force: bool, fmt: str, json_flag: bool):
 
     if not force:
         click.echo(
-            f"Revoking trust for agent '{peer.peer_name or agent_id}' "
-            f"(score: {peer.trust_score})."
+            f"Revoking trust for agent '{peer.peer_name or agent_id}' (score: {peer.trust_score})."
         )
         confirmed = click.confirm("Are you sure?", default=False)
         if not confirmed:
@@ -515,7 +537,8 @@ def revoke(agent_id: str, reason: str, force: bool, fmt: str, json_flag: bool):
 @click.option("--note", "-n", default="Manual attestation via CLI", help="Attestation note.")
 @click.option("--score-boost", type=int, default=50, help="Trust score boost (default: 50).")
 @click.option(
-    "--format", "fmt",
+    "--format",
+    "fmt",
     type=click.Choice(["table", "json", "yaml"]),
     default="table",
     help="Output format.",

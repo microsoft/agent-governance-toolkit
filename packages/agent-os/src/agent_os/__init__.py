@@ -125,6 +125,7 @@ try:
         resume_agent,
         user_space_execution,
     )
+
     _CONTROL_PLANE_AVAILABLE = True
 except ImportError:
     _CONTROL_PLANE_AVAILABLE = False
@@ -136,6 +137,8 @@ except ImportError:
 # AGENTS.md Compatibility
 from agent_os.agents_compat import (
     AgentConfig as AgentsConfig,
+)
+from agent_os.agents_compat import (
     AgentSkill,
     AgentsParser,
     discover_agents,
@@ -229,7 +232,6 @@ __all__ = [
     "__author__",
     "AVAILABLE_PACKAGES",
     "check_installation",
-
     # Control Plane
     "AgentControlPlane",
     "create_control_plane",
@@ -260,7 +262,6 @@ __all__ = [
     "FlightRecorder",
     "ExecutionEngine",
     "ExecutionStatus",
-
     # Mute Agent Primitives
     "face_agent",
     "mute_agent",
@@ -271,7 +272,6 @@ __all__ = [
     "StepResult",
     "PipelineResult",
     "CapabilityViolation",
-
     # Stateless API
     "StatelessKernel",
     "ExecutionContext",
@@ -279,7 +279,6 @@ __all__ = [
     "ExecutionResult",
     "StatelessMemoryBackend",
     "stateless_execute",
-
     # Base Agent Classes
     "BaseAgent",
     "ToolUsingAgent",
@@ -287,26 +286,22 @@ __all__ = [
     "AuditEntry",
     "PolicyDecision",
     "TypedResult",
-
     # AGENTS.md Compatibility
     "AgentsParser",
     "AgentsConfig",
     "AgentSkill",
     "discover_agents",
-
     # Semantic Policy Engine
     "SemanticPolicyEngine",
     "IntentCategory",
     "IntentClassification",
     "PolicyDenied",
-
     # Prompt Injection Detection
     "PromptInjectionDetector",
     "InjectionType",
     "ThreatLevel",
     "DetectionResult",
     "DetectionConfig",
-
     # MCP Security
     "MCPSecurityScanner",
     "MCPThreatType",
@@ -314,13 +309,11 @@ __all__ = [
     "MCPThreat",
     "ToolFingerprint",
     "ScanResult",
-
     # LlamaFirewall Integration
     "LlamaFirewallAdapter",
     "FirewallMode",
     "FirewallVerdict",
     "FirewallResult",
-
     # Context Budget Scheduler
     "ContextScheduler",
     "ContextWindow",

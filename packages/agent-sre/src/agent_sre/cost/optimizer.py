@@ -72,9 +72,7 @@ class CostOptimizer:
             estimated_latency_ms=model.avg_latency_ms,
         )
 
-    def recommend(
-        self, task: TaskProfile, current_model: str | None = None
-    ) -> OptimizationResult:
+    def recommend(self, task: TaskProfile, current_model: str | None = None) -> OptimizationResult:
         """Find optimal models meeting quality/latency constraints, sorted by cost."""
         estimates: list[CostEstimate] = []
         for model in self._models.values():
@@ -108,15 +106,11 @@ class CostOptimizer:
 
     def pareto_frontier(self, task: TaskProfile) -> list[CostEstimate]:
         """Cost optimization — not available in Community Edition."""
-        raise NotImplementedError(
-            "Not available in Community Edition"
-        )
+        raise NotImplementedError("Not available in Community Edition")
 
     def simulate(self, task: TaskProfile, model_name: str, volume: int) -> dict[str, object]:
         """Cost simulation — not available in Community Edition."""
-        raise NotImplementedError(
-            "Cost simulation is not available in Community Edition"
-        )
+        raise NotImplementedError("Cost simulation is not available in Community Edition")
 
     def suggest_routing(self, tasks: list[TaskProfile]) -> dict[str, str]:
         """For each task type, suggest the cheapest model meeting constraints."""

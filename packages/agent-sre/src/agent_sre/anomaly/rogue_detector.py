@@ -18,7 +18,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -218,7 +217,9 @@ class ActionEntropyScorer:
 
         if h > self.high_threshold:
             # Erratic behavior
-            return (h - self.high_threshold) / self.high_threshold if self.high_threshold > 0 else 1.0
+            return (
+                (h - self.high_threshold) / self.high_threshold if self.high_threshold > 0 else 1.0
+            )
 
         return 0.0
 

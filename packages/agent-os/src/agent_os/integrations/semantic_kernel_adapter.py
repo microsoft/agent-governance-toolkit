@@ -125,15 +125,11 @@ class SemanticKernelWrapper(BaseIntegration):
             agent_id=kernel_id,
             session_id=f"sk-{int(datetime.now().timestamp())}",
             policy=self.policy,
-            kernel_id=kernel_id
+            kernel_id=kernel_id,
         )
         self._contexts[kernel_id] = ctx
 
-        return GovernedSemanticKernel(
-            kernel=kernel,
-            wrapper=self,
-            ctx=ctx
-        )
+        return GovernedSemanticKernel(kernel=kernel, wrapper=self, ctx=ctx)
 
     def unwrap(self, governed_kernel: Any) -> Any:
         """Retrieve the original unwrapped Semantic Kernel instance.
@@ -218,12 +214,7 @@ class GovernedSemanticKernel:
     Intercepts all function calls, plugin operations, and memory access.
     """
 
-    def __init__(
-        self,
-        kernel: Any,
-        wrapper: SemanticKernelWrapper,
-        ctx: SKContext
-    ):
+    def __init__(self, kernel: Any, wrapper: SemanticKernelWrapper, ctx: SKContext):
         self._kernel = kernel
         self._wrapper = wrapper
         self._ctx = ctx
@@ -237,7 +228,7 @@ class GovernedSemanticKernel:
         plugin_name: Optional[str] = None,
         function_name: Optional[str] = None,
         function: Optional[Any] = None,
-        **kwargs
+        **kwargs,
     ) -> Any:
         """
         Governed function invocation.
@@ -267,7 +258,7 @@ class GovernedSemanticKernel:
 
         # Build function identifier
         if function:
-            func_id = getattr(function, 'name', str(function))
+            func_id = getattr(function, "name", str(function))
         else:
             func_id = f"{plugin_name}.{function_name}"
 
@@ -275,7 +266,7 @@ class GovernedSemanticKernel:
         invocation = {
             "function": func_id,
             "arguments": str(kwargs)[:500],  # Truncate for audit
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
         self._ctx.functions_invoked.append(invocation)
 
@@ -300,8 +291,7 @@ class GovernedSemanticKernel:
                 result = await self._kernel.invoke(function, **kwargs)
             elif plugin_name and function_name:
                 result = await self._kernel.invoke(
-                    self._kernel.plugins[plugin_name][function_name],
-                    **kwargs
+                    self._kernel.plugins[plugin_name][function_name], **kwargs
                 )
             else:
                 raise ValueError("Must provide either function or plugin_name+function_name")
@@ -323,7 +313,7 @@ class GovernedSemanticKernel:
         plugin_name: Optional[str] = None,
         function_name: Optional[str] = None,
         function: Optional[Any] = None,
-        **kwargs
+        **kwargs,
     ) -> Any:
         """Synchronous wrapper around :meth:`invoke`.
 
@@ -345,23 +335,17 @@ class GovernedSemanticKernel:
             PolicyViolationError: If the invocation violates policy.
             ExecutionKilledError: If SIGKILL has been received.
         """
-        return asyncio.run(self.invoke(
-            plugin_name=plugin_name,
-            function_name=function_name,
-            function=function,
-            **kwargs
-        ))
+        return asyncio.run(
+            self.invoke(
+                plugin_name=plugin_name, function_name=function_name, function=function, **kwargs
+            )
+        )
 
     # =========================================================================
     # Plugin Management
     # =========================================================================
 
-    def add_plugin(
-        self,
-        plugin: Any,
-        plugin_name: str,
-        **kwargs
-    ) -> Any:
+    def add_plugin(self, plugin: Any, plugin_name: str, **kwargs) -> Any:
         """Register a plugin with the kernel, tracking it for governance.
 
         The plugin name is recorded in the execution context for audit
@@ -383,12 +367,7 @@ class GovernedSemanticKernel:
         # Add to kernel
         return self._kernel.add_plugin(plugin, plugin_name, **kwargs)
 
-    def import_plugin_from_openai(
-        self,
-        plugin_name: str,
-        openai_function: dict,
-        **kwargs
-    ) -> Any:
+    def import_plugin_from_openai(self, plugin_name: str, openai_function: dict, **kwargs) -> Any:
         """Import an OpenAI function definition as a Semantic Kernel plugin.
 
         Args:
@@ -400,11 +379,7 @@ class GovernedSemanticKernel:
             The result from the underlying import call.
         """
         self._ctx.plugins_loaded.append(f"openai:{plugin_name}")
-        return self._kernel.import_plugin_from_openai(
-            plugin_name,
-            openai_function,
-            **kwargs
-        )
+        return self._kernel.import_plugin_from_openai(plugin_name, openai_function, **kwargs)
 
     @property
     def plugins(self) -> dict:
@@ -416,11 +391,7 @@ class GovernedSemanticKernel:
     # =========================================================================
 
     async def memory_save(
-        self,
-        collection: str,
-        text: str,
-        id: Optional[str] = None,
-        **kwargs
+        self, collection: str, text: str, id: Optional[str] = None, **kwargs
     ) -> Any:
         """Save information to kernel memory with governance checks.
 
@@ -451,30 +422,23 @@ class GovernedSemanticKernel:
             raise PolicyViolationError(f"Memory save blocked: {reason}")
 
         # Record operation
-        self._ctx.memory_operations.append({
-            "operation": "save",
-            "collection": collection,
-            "id": id,
-            "timestamp": datetime.now().isoformat()
-        })
+        self._ctx.memory_operations.append(
+            {
+                "operation": "save",
+                "collection": collection,
+                "id": id,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
         # Execute
-        if hasattr(self._kernel, 'memory') and self._kernel.memory:
+        if hasattr(self._kernel, "memory") and self._kernel.memory:
             return await self._kernel.memory.save_information(
-                collection=collection,
-                text=text,
-                id=id,
-                **kwargs
+                collection=collection, text=text, id=id, **kwargs
             )
         return None
 
-    async def memory_search(
-        self,
-        collection: str,
-        query: str,
-        limit: int = 5,
-        **kwargs
-    ) -> list:
+    async def memory_search(self, collection: str, query: str, limit: int = 5, **kwargs) -> list:
         """Search kernel memory with governance logging.
 
         The search operation is recorded in the audit trail (query text
@@ -498,20 +462,19 @@ class GovernedSemanticKernel:
             raise ExecutionKilledError("Kernel received SIGKILL")
 
         # Record operation
-        self._ctx.memory_operations.append({
-            "operation": "search",
-            "collection": collection,
-            "query": query[:100],  # Truncate for audit
-            "timestamp": datetime.now().isoformat()
-        })
+        self._ctx.memory_operations.append(
+            {
+                "operation": "search",
+                "collection": collection,
+                "query": query[:100],  # Truncate for audit
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
         # Execute
-        if hasattr(self._kernel, 'memory') and self._kernel.memory:
+        if hasattr(self._kernel, "memory") and self._kernel.memory:
             return await self._kernel.memory.search(
-                collection=collection,
-                query=query,
-                limit=limit,
-                **kwargs
+                collection=collection, query=query, limit=limit, **kwargs
             )
         return []
 
@@ -519,11 +482,7 @@ class GovernedSemanticKernel:
     # Chat Completion (Governed)
     # =========================================================================
 
-    async def invoke_prompt(
-        self,
-        prompt: str,
-        **kwargs
-    ) -> Any:
+    async def invoke_prompt(self, prompt: str, **kwargs) -> Any:
         """
         Invoke a prompt with governance.
 
@@ -539,11 +498,13 @@ class GovernedSemanticKernel:
             raise PolicyViolationError(f"Prompt blocked: {reason}")
 
         # Record
-        self._ctx.functions_invoked.append({
-            "function": "prompt",
-            "arguments": prompt[:500],
-            "timestamp": datetime.now().isoformat()
-        })
+        self._ctx.functions_invoked.append(
+            {
+                "function": "prompt",
+                "arguments": prompt[:500],
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
         # Get chat service and invoke
         # This works with SK's chat completion service pattern
@@ -560,12 +521,7 @@ class GovernedSemanticKernel:
     # Planner (Governed)
     # =========================================================================
 
-    async def create_plan(
-        self,
-        goal: str,
-        planner: Optional[Any] = None,
-        **kwargs
-    ) -> Any:
+    async def create_plan(self, goal: str, planner: Optional[Any] = None, **kwargs) -> Any:
         """Create a governed execution plan.
 
         Each step in the generated plan is validated against
@@ -599,6 +555,7 @@ class GovernedSemanticKernel:
         else:
             # Use default sequential planner if available
             from semantic_kernel.planners import SequentialPlanner
+
             planner = SequentialPlanner(self._kernel)
             plan = await planner.create_plan(goal, **kwargs)
 
@@ -647,7 +604,7 @@ class GovernedSemanticKernel:
             "functions_invoked": self._ctx.functions_invoked,
             "memory_operations": self._ctx.memory_operations,
             "call_count": self._ctx.call_count,
-            "checkpoints": self._ctx.checkpoints
+            "checkpoints": self._ctx.checkpoints,
         }
 
     def __getattr__(self, name):
@@ -662,12 +619,7 @@ class GovernedPlan:
     policy constraint before execution begins.
     """
 
-    def __init__(
-        self,
-        plan: Any,
-        wrapper: SemanticKernelWrapper,
-        ctx: SKContext
-    ):
+    def __init__(self, plan: Any, wrapper: SemanticKernelWrapper, ctx: SKContext):
         """Initialise a governed plan wrapper.
 
         Args:
@@ -700,14 +652,12 @@ class GovernedPlan:
             raise ExecutionKilledError("Kernel received SIGKILL")
 
         # Validate plan steps against policy
-        if hasattr(self._plan, '_steps'):
+        if hasattr(self._plan, "_steps"):
             for step in self._plan._steps:
-                step_name = getattr(step, 'name', str(step))
+                step_name = getattr(step, "name", str(step))
                 if self._wrapper.policy.allowed_tools:
                     if step_name not in self._wrapper.policy.allowed_tools:
-                        raise PolicyViolationError(
-                            f"Plan step not allowed: {step_name}"
-                        )
+                        raise PolicyViolationError(f"Plan step not allowed: {step_name}")
 
         # Execute with signal checks
         result = await self._plan.invoke(**kwargs)
@@ -721,6 +671,7 @@ class GovernedPlan:
 # ============================================================================
 # Exceptions
 # ============================================================================
+
 
 class PolicyViolationError(Exception):
     """Raised when a Semantic Kernel function violates governance policy."""
@@ -744,6 +695,7 @@ class ExecutionKilledError(Exception):
 # Convenience Functions
 # ============================================================================
 
+
 def wrap_kernel(
     kernel: Any,
     policy: Optional[GovernancePolicy] = None,
@@ -758,6 +710,4 @@ def wrap_kernel(
         governed = wrap_kernel(my_kernel)
         result = await governed.invoke("plugin", "function")
     """
-    return SemanticKernelWrapper(
-        policy=policy, timeout_seconds=timeout_seconds
-    ).wrap(kernel)
+    return SemanticKernelWrapper(policy=policy, timeout_seconds=timeout_seconds).wrap(kernel)

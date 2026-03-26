@@ -42,7 +42,9 @@ class TestCircuitBreaker:
 
     def test_half_open_to_closed_on_success(self):
         """Community Edition: use force_close to recover from OPEN."""
-        config = CircuitBreakerConfig(failure_threshold=2, timeout_seconds=0.01, success_threshold=2)
+        config = CircuitBreakerConfig(
+            failure_threshold=2, timeout_seconds=0.01, success_threshold=2
+        )
         cb = CircuitBreaker("agent-1", config)
         cb.record_failure("e1")
         cb.record_failure("e2")

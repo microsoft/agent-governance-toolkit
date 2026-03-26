@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Policy Engine
- * 
+ *
  * Evaluates tool calls against security policies.
  */
 
@@ -101,13 +101,13 @@ export async function loadPolicy(nameOrPath: string): Promise<Policy> {
 
   // Load from file
   const path = isAbsolute(nameOrPath) ? nameOrPath : join(process.cwd(), nameOrPath);
-  
+
   if (!existsSync(path)) {
     throw new Error(`Policy file not found: ${path}`);
   }
 
   const content = readFileSync(path, 'utf-8');
-  
+
   // Parse YAML or JSON
   let policy: Policy;
   if (path.endsWith('.json')) {
@@ -118,7 +118,7 @@ export async function loadPolicy(nameOrPath: string): Promise<Policy> {
 
   // Validate
   validatePolicy(policy);
-  
+
   return policy;
 }
 

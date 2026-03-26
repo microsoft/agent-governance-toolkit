@@ -12,10 +12,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from langflow_agentmesh.policy import (
-    GovernanceEventType,
     GovernancePolicy,
     PatternType,
-    PolicyCheckResult,
 )
 
 
@@ -82,7 +80,7 @@ class GovernanceComponent:
             self.policy = GovernancePolicy.from_yaml(policy_yaml)
         else:
             parsed_patterns = []
-            for p in (blocked_patterns or []):
+            for p in blocked_patterns or []:
                 if isinstance(p, (list, tuple)) and len(p) == 2:
                     parsed_patterns.append((p[0], PatternType(p[1])))
                 elif isinstance(p, str):

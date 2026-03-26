@@ -425,7 +425,9 @@ def start_experiment(experiment_id: str) -> dict[str, Any]:
     if exp is None:
         raise HTTPException(status_code=404, detail=f"Experiment '{experiment_id}' not found")
     if exp.state != ExperimentState.PENDING:
-        raise HTTPException(status_code=409, detail=f"Experiment is '{exp.state.value}', not pending")
+        raise HTTPException(
+            status_code=409, detail=f"Experiment is '{exp.state.value}', not pending"
+        )
     exp.start()
     _bump("requests_total")
     return exp.to_dict()
@@ -438,11 +440,15 @@ def inject_fault(experiment_id: str, body: FaultInjectRequest) -> dict[str, Any]
     if exp is None:
         raise HTTPException(status_code=404, detail=f"Experiment '{experiment_id}' not found")
     if exp.state != ExperimentState.RUNNING:
-        raise HTTPException(status_code=409, detail=f"Experiment is '{exp.state.value}', not running")
+        raise HTTPException(
+            status_code=409, detail=f"Experiment is '{exp.state.value}', not running"
+        )
     try:
         ft = FaultType(body.fault_type)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Unknown fault type '{body.fault_type}'") from e
+        raise HTTPException(
+            status_code=400, detail=f"Unknown fault type '{body.fault_type}'"
+        ) from e
     fault = Fault(fault_type=ft, target=body.target, rate=body.rate, params=body.params)
     exp.inject_fault(fault, applied=body.applied, details=body.details or None)
     _bump("faults_injected_total")
@@ -496,7 +502,9 @@ def acknowledge_incident(incident_id: str) -> dict[str, Any]:
 
 
 @app.post("/api/v1/incidents/{incident_id}/resolve", tags=["incidents"])
-def resolve_incident(incident_id: str, body: IncidentResolveRequest | None = None) -> dict[str, Any]:
+def resolve_incident(
+    incident_id: str, body: IncidentResolveRequest | None = None
+) -> dict[str, Any]:
     """Resolve an incident."""
     det = _get_incident_detector()
     note = body.note if body else ""
@@ -548,7 +556,12 @@ def ingest_signal(body: SignalIngestRequest) -> dict[str, Any]:
 def create_rollout(body: RolloutCreateRequest) -> dict[str, Any]:
     """Create a staged rollout."""
     steps = [
-        RolloutStep(name=s.name, weight=s.weight, duration_seconds=s.duration_seconds, manual_gate=s.manual_gate)
+        RolloutStep(
+            name=s.name,
+            weight=s.weight,
+            duration_seconds=s.duration_seconds,
+            manual_gate=s.manual_gate,
+        )
         for s in body.steps
     ] or None
     conditions = [
@@ -591,7 +604,9 @@ def advance_rollout(rollout_id: str) -> dict[str, Any]:
     if rollout is None:
         raise HTTPException(status_code=404, detail=f"Rollout '{rollout_id}' not found")
     if rollout.state not in (RolloutState.CANARY, RolloutState.SHADOW):
-        raise HTTPException(status_code=409, detail=f"Rollout is '{rollout.state.value}', cannot advance")
+        raise HTTPException(
+            status_code=409, detail=f"Rollout is '{rollout.state.value}', cannot advance"
+        )
     advanced = rollout.advance()
     _bump("requests_total")
     return {"advanced": advanced, **rollout.to_dict()}

@@ -1,5 +1,5 @@
 # Agent Control Plane Docker Image
-# 
+#
 # Multi-stage build for production deployment
 # Based on Python 3.11 slim image
 

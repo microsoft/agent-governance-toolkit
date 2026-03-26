@@ -69,10 +69,7 @@ class VectorClock:
         with first._lock:
             with second._lock:
                 all_agents = set(self.clocks.keys()) | set(other.clocks.keys())
-                return all(
-                    self.clocks.get(a, 0) == other.clocks.get(a, 0)
-                    for a in all_agents
-                )
+                return all(self.clocks.get(a, 0) == other.clocks.get(a, 0) for a in all_agents)
 
 
 class VectorClockManager:

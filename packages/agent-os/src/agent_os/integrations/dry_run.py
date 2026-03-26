@@ -17,6 +17,7 @@ from .base import BaseIntegration, ExecutionContext
 
 class DryRunDecision(Enum):
     """Decision that would have been made by the wrapped policy."""
+
     ALLOW = "ALLOW"
     DENY = "DENY"
     WARN = "WARN"
@@ -25,6 +26,7 @@ class DryRunDecision(Enum):
 @dataclass
 class DryRunResult:
     """Result of a dry-run policy evaluation."""
+
     action: str
     decision: DryRunDecision
     reason: Optional[str]
@@ -78,7 +80,9 @@ class DryRunPolicy:
         self._policy_name = policy_name
         self.collector = collector or DryRunCollector()
 
-    def evaluate(self, action: str, context: ExecutionContext, input_data: Any = None) -> DryRunResult:
+    def evaluate(
+        self, action: str, context: ExecutionContext, input_data: Any = None
+    ) -> DryRunResult:
         """
         Evaluate a policy check in dry-run mode.
 

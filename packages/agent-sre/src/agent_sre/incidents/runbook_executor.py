@@ -70,9 +70,7 @@ class RunbookExecutor:
                 self._emit_event("rollback_completed", step=step, incident=incident)
             except Exception as exc:
                 logger.warning("Rollback failed for step '%s': %s", step.name, exc)
-                self._emit_event(
-                    "rollback_failed", step=step, incident=incident, error=str(exc)
-                )
+                self._emit_event("rollback_failed", step=step, incident=incident, error=str(exc))
 
         if any(s.rollback_action is not None for s, _ in completed_steps):
             execution.status = ExecutionStatus.ROLLED_BACK

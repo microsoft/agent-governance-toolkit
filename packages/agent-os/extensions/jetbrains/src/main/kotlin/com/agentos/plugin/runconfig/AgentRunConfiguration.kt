@@ -33,7 +33,7 @@ class AgentRunConfigurationFactory(type: ConfigurationType) : ConfigurationFacto
     override fun createTemplateConfiguration(project: Project): RunConfiguration {
         return AgentRunConfiguration(project, this, "Agent")
     }
-    
+
     override fun getId() = "AgentOSAgentRunConfigurationFactory"
     override fun getName() = "AgentOS Agent"
 }
@@ -46,21 +46,21 @@ class AgentRunConfiguration(
     factory: ConfigurationFactory,
     name: String
 ) : RunConfigurationBase<AgentRunConfigurationOptions>(project, factory, name) {
-    
+
     var agentId: String = ""
     var agentName: String = ""
     var environment: String = "development"
     var validatePolicies: Boolean = true
     var customPolicies: List<String> = emptyList()
-    
+
     override fun getConfigurationEditor(): SettingsEditor<out RunConfiguration> {
         return AgentRunConfigurationEditor(project)
     }
-    
+
     override fun getState(executor: Executor, environment: ExecutionEnvironment): RunProfileState {
         return AgentRunProfileState(this, environment)
     }
-    
+
     override fun readExternal(element: Element) {
         super.readExternal(element)
         agentId = JDOMExternalizerUtil.readField(element, "agentId") ?: ""
@@ -68,7 +68,7 @@ class AgentRunConfiguration(
         this.environment = JDOMExternalizerUtil.readField(element, "environment") ?: "development"
         validatePolicies = JDOMExternalizerUtil.readField(element, "validatePolicies")?.toBoolean() ?: true
     }
-    
+
     override fun writeExternal(element: Element) {
         super.writeExternal(element)
         JDOMExternalizerUtil.writeField(element, "agentId", agentId)
@@ -87,12 +87,12 @@ class AgentRunConfigurationOptions : RunConfigurationOptions()
  * Settings editor UI for agent run configuration.
  */
 class AgentRunConfigurationEditor(private val project: Project) : SettingsEditor<AgentRunConfiguration>() {
-    
+
     private val agentIdField = JBTextField()
     private val agentNameField = JBTextField()
     private val environmentField = JBTextField()
     private var validatePoliciesCheckbox: javax.swing.JCheckBox? = null
-    
+
     override fun createEditor(): JComponent {
         return panel {
             row("Agent ID:") {
@@ -109,7 +109,7 @@ class AgentRunConfigurationEditor(private val project: Project) : SettingsEditor
                 checkBox("Validate policies before run")
                     .also { validatePoliciesCheckbox = it.component }
             }
-            
+
             group("Available Agents") {
                 val agents = AgentService.getInstance(project).getAgents()
                 if (agents.isEmpty()) {
@@ -129,14 +129,14 @@ class AgentRunConfigurationEditor(private val project: Project) : SettingsEditor
             }
         }
     }
-    
+
     override fun applyEditorTo(s: AgentRunConfiguration) {
         s.agentId = agentIdField.text
         s.agentName = agentNameField.text
         s.environment = environmentField.text
         s.validatePolicies = validatePoliciesCheckbox?.isSelected ?: true
     }
-    
+
     override fun resetEditorFrom(s: AgentRunConfiguration) {
         agentIdField.text = s.agentId
         agentNameField.text = s.agentName
@@ -152,26 +152,26 @@ class AgentRunProfileState(
     private val configuration: AgentRunConfiguration,
     private val environment: ExecutionEnvironment
 ) : RunProfileState {
-    
+
     override fun execute(executor: Executor?, runner: com.intellij.execution.runners.ProgramRunner<*>): com.intellij.execution.ExecutionResult? {
         val project = environment.project
         val agentService = AgentService.getInstance(project)
-        
+
         // Find the agent
         val agent = agentService.getAgent(configuration.agentId)
             ?: throw ExecutionException("Agent not found: ${configuration.agentId}")
-        
+
         // Validate policies if enabled
         if (configuration.validatePolicies) {
             // TODO: Implement policy validation
         }
-        
+
         // Start the agent
         agentService.startAgent(agent.id)
-        
+
         // Create a simple process handler that shows agent status
         val processHandler = AgentProcessHandler(agent, agentService)
-        
+
         return com.intellij.execution.DefaultExecutionResult(
             com.intellij.execution.ui.ConsoleViewImpl(project, true),
             processHandler
@@ -186,7 +186,7 @@ class AgentProcessHandler(
     private val agent: Agent,
     private val agentService: AgentService
 ) : ProcessHandler() {
-    
+
     init {
         notifyTextAvailable("Starting agent: ${agent.name}\n", com.intellij.execution.process.ProcessOutputTypes.SYSTEM)
         notifyTextAvailable("Language: ${agent.language.displayName}\n", com.intellij.execution.process.ProcessOutputTypes.STDOUT)
@@ -194,18 +194,18 @@ class AgentProcessHandler(
         notifyTextAvailable("Policies: ${agent.policies.joinToString(", ").ifEmpty { "None" }}\n", com.intellij.execution.process.ProcessOutputTypes.STDOUT)
         notifyTextAvailable("\nAgent is now running...\n", com.intellij.execution.process.ProcessOutputTypes.SYSTEM)
     }
-    
+
     override fun destroyProcessImpl() {
         agentService.stopAgent(agent.id)
         notifyTextAvailable("\nAgent stopped.\n", com.intellij.execution.process.ProcessOutputTypes.SYSTEM)
         notifyProcessTerminated(0)
     }
-    
+
     override fun detachProcessImpl() {
         notifyProcessDetached()
     }
-    
+
     override fun detachIsDefault() = false
-    
+
     override fun getProcessInput() = null
 }

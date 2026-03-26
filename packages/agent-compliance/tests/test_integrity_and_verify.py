@@ -4,16 +4,12 @@
 
 import json
 import os
-import tempfile
 from urllib.parse import urlparse
 
-import pytest
 
 from agent_compliance.integrity import (
     IntegrityVerifier,
     IntegrityReport,
-    GOVERNANCE_MODULES,
-    CRITICAL_FUNCTIONS,
     _hash_file,
     _hash_function_bytecode,
 )
@@ -155,48 +151,37 @@ class TestGovernanceVerifier:
             assert asi_id in control_ids
 
     def test_coverage_percentage(self):
-        attestation = GovernanceAttestation(
-            controls_passed=8, controls_total=10
-        )
+        attestation = GovernanceAttestation(controls_passed=8, controls_total=10)
         assert attestation.coverage_pct() == 80
 
     def test_coverage_zero_total(self):
-        attestation = GovernanceAttestation(
-            controls_passed=0, controls_total=0
-        )
+        attestation = GovernanceAttestation(controls_passed=0, controls_total=0)
         assert attestation.coverage_pct() == 0
 
     def test_badge_url_full_coverage(self):
-        attestation = GovernanceAttestation(
-            controls_passed=10, controls_total=10
-        )
+        attestation = GovernanceAttestation(controls_passed=10, controls_total=10)
         url = attestation.badge_url()
         assert "brightgreen" in url
         assert "passed" in url
 
     def test_badge_url_partial_coverage(self):
-        attestation = GovernanceAttestation(
-            controls_passed=8, controls_total=10
-        )
+        attestation = GovernanceAttestation(controls_passed=8, controls_total=10)
         url = attestation.badge_url()
         assert "yellow" in url
 
     def test_badge_url_low_coverage(self):
-        attestation = GovernanceAttestation(
-            controls_passed=3, controls_total=10
-        )
+        attestation = GovernanceAttestation(controls_passed=3, controls_total=10)
         url = attestation.badge_url()
         assert "red" in url
 
     def test_badge_markdown(self):
-        attestation = GovernanceAttestation(
-            controls_passed=10, controls_total=10
-        )
+        attestation = GovernanceAttestation(controls_passed=10, controls_total=10)
         md = attestation.badge_markdown()
         assert md.startswith("[![")
         # Validate badge URL domain using proper URL parsing
         import re
-        urls = re.findall(r'https?://[^\s\)]+', md)
+
+        urls = re.findall(r"https?://[^\s\)]+", md)
         assert any(urlparse(u).hostname == "img.shields.io" for u in urls)
         assert "microsoft/agent-governance-toolkit" in md
 
@@ -271,7 +256,8 @@ class TestCLI:
         captured = capsys.readouterr()
         # Validate badge URL domain using proper URL parsing
         import re
-        urls = re.findall(r'https?://[^\s\)]+', captured.out)
+
+        urls = re.findall(r"https?://[^\s\)]+", captured.out)
         assert any(urlparse(u).hostname == "img.shields.io" for u in urls)
 
     def test_integrity_generate(self, tmp_path):

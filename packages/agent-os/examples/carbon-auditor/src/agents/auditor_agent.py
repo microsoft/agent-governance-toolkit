@@ -14,19 +14,15 @@ Updated for cmvk 0.2.0:
 - dimension_names for readable explanations
 """
 
-from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 import numpy as np
-import cmvk
+
 from cmvk import (
-    verify_embeddings,
-    DistanceMetric,
-    DriftType,
-    AuditTrail,
     configure_audit_trail,
-    get_audit_trail,
+    verify_embeddings,
 )
 
 from .base import BaseAgent
@@ -35,11 +31,12 @@ from .base import BaseAgent
 @dataclass
 class ClaimVector:
     """Vector representation of a carbon credit claim."""
+
     project_id: str
     ndvi: float
     carbon_stock: float
     year: int
-    
+
     def to_array(self) -> np.ndarray:
         """Convert to numpy array for verification."""
         return np.array([self.ndvi, self.carbon_stock / 1000.0])
@@ -48,22 +45,23 @@ class ClaimVector:
 @dataclass
 class ObservationVector:
     """Vector representation of satellite observations."""
+
     project_id: str
     ndvi_mean: float
     ndvi_std: float
     cloud_cover: float
     vegetation_coverage: float
     deforestation_indicator: float
-    
+
     @property
     def estimated_carbon_stock(self) -> float:
         """Estimate carbon stock from NDVI (simplified model)."""
-        return 250 * (self.ndvi_mean ** 2)
-    
+        return 250 * (self.ndvi_mean**2)
+
     def to_array(self) -> np.ndarray:
         """Convert to numpy array for verification."""
         return np.array([self.ndvi_mean, self.estimated_carbon_stock / 1000.0])
-    
+
     @property
     def confidence(self) -> float:
         """Calculate observation confidence score."""
@@ -79,23 +77,23 @@ DIMENSION_NAMES = ["ndvi", "carbon_stock_normalized"]
 class AuditorAgent(BaseAgent):
     """
     The Auditor Agent - "The Judge"
-    
+
     Role: Decision maker that:
         - Subscribes to both Claim and Observation messages
         - Uses cmvk (Verification Kernel) to calculate drift scores
         - Issues verification results: VERIFIED, FLAGGED, or FRAUD
-    
+
     KEY PRINCIPLE: "The AI didn't decide; the Math decided."
-    
+
     The agent doesn't use LLM inference for the verification decision.
     It uses deterministic mathematical calculations via cmvk.
-    
+
     cmvk 0.2.0 Features Used:
         - DistanceMetric.EUCLIDEAN for magnitude-based fraud detection
         - threshold_profile="carbon" for domain-specific thresholds
         - explain=True for drift explainability
         - AuditTrail for immutable verification logs
-    
+
     Subscribes to: CLAIMS, OBSERVATIONS
     Publishes: Verification results and ALERTS
     """
@@ -112,18 +110,18 @@ class AuditorAgent(BaseAgent):
     ):
         """
         Initialize the Auditor Agent.
-        
+
         Args:
             agent_id: Unique identifier
             threshold: Drift score threshold for fraud detection
             enable_audit_trail: Enable cmvk audit trail (CMVK-006)
         """
         super().__init__(agent_id, name="auditor-agent")
-        
+
         self._threshold = threshold
         self._verification_count = 0
         self._results: List[Dict[str, Any]] = []
-        
+
         # NEW: Configure cmvk audit trail (CMVK-006)
         if enable_audit_trail:
             # configure_audit_trail returns an AuditTrail instance
@@ -143,22 +141,22 @@ class AuditorAgent(BaseAgent):
     ) -> Dict[str, Any]:
         """
         Perform mathematical verification using cmvk.
-        
+
         This is where "the Math decides, not the AI."
-        
+
         Args:
             claim_data: The claim from the claims agent
             observation_data: The observation from the geo agent
-            
+
         Returns:
             Verification result dictionary
         """
         project_id = claim_data.get("project_id", "UNKNOWN")
-        
+
         self._log(f"Performing verification for project: {project_id}")
-        self._log("="*60)
+        self._log("=" * 60)
         self._metrics.last_activity = datetime.now(timezone.utc)
-        
+
         # Build vectors
         claim_vector = ClaimVector(
             project_id=project_id,
@@ -166,7 +164,7 @@ class AuditorAgent(BaseAgent):
             carbon_stock=claim_data.get("claimed_carbon_stock", 0.0),
             year=claim_data.get("year", 2024),
         )
-        
+
         observation_vector = ObservationVector(
             project_id=project_id,
             ndvi_mean=observation_data.get("observed_ndvi_mean", 0.0),
@@ -175,15 +173,17 @@ class AuditorAgent(BaseAgent):
             vegetation_coverage=observation_data.get("vegetation_coverage", 0.0),
             deforestation_indicator=observation_data.get("deforestation_indicator", 0.0),
         )
-        
+
         self._log(f"Claim Vector: ndvi={claim_vector.ndvi}, carbon={claim_vector.carbon_stock}")
-        self._log(f"Observation Vector: ndvi={observation_vector.ndvi_mean:.3f}, "
-                  f"est_carbon={observation_vector.estimated_carbon_stock:.1f}")
-        
+        self._log(
+            f"Observation Vector: ndvi={observation_vector.ndvi_mean:.3f}, "
+            f"est_carbon={observation_vector.estimated_carbon_stock:.1f}"
+        )
+
         # Convert to arrays for verification
         claim_arr = claim_vector.to_array()
         obs_arr = observation_vector.to_array()
-        
+
         # =====================================================================
         # cmvk 0.2.0 - Full featured verification
         # =====================================================================
@@ -201,12 +201,12 @@ class AuditorAgent(BaseAgent):
             dimension_names=DIMENSION_NAMES,  # For readable explanations
             audit_trail=self._audit_trail,  # CMVK-006: Audit trail
         )
-        
+
         # Extract drift score from cmvk result
         drift_score = float(cmvk_result.drift_score)
-        
+
         self._verification_count += 1
-        
+
         # Determine status based on drift
         if drift_score > self._threshold:
             status = "FRAUD"
@@ -214,21 +214,21 @@ class AuditorAgent(BaseAgent):
             status = "FLAGGED"
         else:
             status = "VERIFIED"
-        
+
         # Build detailed result
         details = self._calculate_details(claim_vector, observation_vector, drift_score)
-        
+
         # Extract explanation if available (CMVK-010)
         explanation = None
-        if hasattr(cmvk_result, 'explanation') and cmvk_result.explanation:
+        if hasattr(cmvk_result, "explanation") and cmvk_result.explanation:
             expl = cmvk_result.explanation
             # explanation is a dict in cmvk 0.2.0
             explanation = {
-                "primary_drift_dimension": expl.get('primary_drift_dimension'),
-                "dimension_contributions": expl.get('dimension_contributions'),
-                "interpretation": expl.get('interpretation'),
+                "primary_drift_dimension": expl.get("primary_drift_dimension"),
+                "dimension_contributions": expl.get("dimension_contributions"),
+                "interpretation": expl.get("interpretation"),
             }
-        
+
         result = {
             "project_id": project_id,
             "status": status,
@@ -244,14 +244,14 @@ class AuditorAgent(BaseAgent):
             "cmvk_confidence": float(cmvk_result.confidence),
             "cmvk_explanation": explanation,  # NEW: Explainability (CMVK-010)
         }
-        
+
         self._log(f"Verification Result: status={status}, drift_score={drift_score:.4f}")
         self._results.append(result)
-        
+
         # Issue alert if fraud detected
         if status == "FRAUD":
             self._issue_alert(result)
-        
+
         return result
 
     def _calculate_details(
@@ -263,10 +263,10 @@ class AuditorAgent(BaseAgent):
         """Calculate detailed breakdown for audit trail."""
         ndvi_diff = claim.ndvi - observation.ndvi_mean
         ndvi_pct_diff = abs(ndvi_diff) / claim.ndvi * 100 if claim.ndvi else 0
-        
+
         carbon_diff = claim.carbon_stock - observation.estimated_carbon_stock
         carbon_pct_diff = abs(carbon_diff) / claim.carbon_stock * 100 if claim.carbon_stock else 0
-        
+
         return {
             "ndvi_claimed": claim.ndvi,
             "ndvi_observed": observation.ndvi_mean,
@@ -314,10 +314,13 @@ class AuditorAgent(BaseAgent):
 
     def _issue_alert(self, result: Dict[str, Any]) -> None:
         """Issue a CRITICAL alert for detected fraud."""
-        self._log("!"*60, level="ALERT")
+        self._log("!" * 60, level="ALERT")
         self._log(f"FRAUD DETECTED: {result['project_id']}", level="ALERT")
-        self._log(f"Drift Score: {result['drift_score']:.4f} (threshold: {result['threshold']})", level="ALERT")
-        self._log("!"*60, level="ALERT")
+        self._log(
+            f"Drift Score: {result['drift_score']:.4f} (threshold: {result['threshold']})",
+            level="ALERT",
+        )
+        self._log("!" * 60, level="ALERT")
 
     def get_results(self) -> List[Dict[str, Any]]:
         """Get all verification results."""
@@ -333,11 +336,11 @@ class AuditorAgent(BaseAgent):
             "metric": "euclidean",
             "threshold_profile": "carbon",
         }
-        
+
         # NEW: Include audit trail stats (CMVK-006)
         if self._audit_trail:
             stats["audit_trail_entries"] = len(self._audit_trail.entries)
-        
+
         return stats
 
     def get_audit_trail(self) -> Optional[List[Dict[str, Any]]]:

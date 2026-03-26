@@ -20,11 +20,13 @@ class TestPersistentAlertManager:
     def manager(self, tmp_path):
         db_path = str(tmp_path / "test_alerts.db")
         m = PersistentAlertManager(db_path=db_path)
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-            callback=lambda a: None,
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+                callback=lambda a: None,
+            )
+        )
         return m
 
     def test_persist_alert(self, manager):

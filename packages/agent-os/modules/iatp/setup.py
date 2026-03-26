@@ -1,9 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
-with open("README.md", "r", encoding="utf-8") as fh:
+with open("README.md", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
@@ -20,7 +20,9 @@ setup(
         "Documentation": "https://github.com/microsoft/agent-governance-toolkit",
         "Source Code": "https://github.com/microsoft/agent-governance-toolkit",
     },
-    packages=find_packages(exclude=["tests", "tests.*", "examples", "examples.*", "experiments", "experiments.*"]),
+    packages=find_packages(
+        exclude=["tests", "tests.*", "examples", "examples.*", "experiments", "experiments.*"]
+    ),
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",

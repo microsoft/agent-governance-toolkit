@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * CMVK Client for Agent OS Cursor Extension
- * 
+ *
  * Provides multi-model code verification by calling the Agent OS CMVK API.
  */
 
@@ -87,7 +87,7 @@ export class CMVKClient {
     private shouldUseMock(): boolean {
         const config = vscode.workspace.getConfiguration('agentOS');
         const endpoint = config.get<string>('cmvk.apiEndpoint', '');
-        
+
         // Use mock if endpoint is default (no custom endpoint configured)
         return endpoint.includes('api.agent-os.dev') || endpoint === '';
     }
@@ -111,7 +111,7 @@ export class CMVKClient {
             modelResults.push({
                 model,
                 passed,
-                summary: passed 
+                summary: passed
                     ? 'No significant issues detected'
                     : `Found ${modelIssues.length} potential issue(s)`,
                 issues: modelIssues,

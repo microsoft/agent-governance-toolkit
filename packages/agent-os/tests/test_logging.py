@@ -4,7 +4,6 @@
 
 import json
 import logging
-import os
 import threading
 
 import pytest
@@ -12,9 +11,9 @@ import pytest
 from agent_os.integrations.logging import (
     GovernanceLogger,
     JSONFormatter,
-    get_logger,
-    _logger_cache,
     _cache_lock,
+    _logger_cache,
+    get_logger,
 )
 
 
@@ -45,12 +44,18 @@ def _capture(logger: GovernanceLogger) -> list:
 
 # -- JSONFormatter ----------------------------------------------------------
 
+
 class TestJSONFormatter:
     def test_basic_format(self):
         formatter = JSONFormatter()
         record = logging.LogRecord(
-            name="test", level=logging.INFO, pathname="", lineno=0,
-            msg="hello", args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="hello",
+            args=(),
+            exc_info=None,
         )
         output = formatter.format(record)
         data = json.loads(output)
@@ -62,8 +67,13 @@ class TestJSONFormatter:
     def test_extra_fields(self):
         formatter = JSONFormatter()
         record = logging.LogRecord(
-            name="test", level=logging.WARNING, pathname="", lineno=0,
-            msg="warn", args=(), exc_info=None,
+            name="test",
+            level=logging.WARNING,
+            pathname="",
+            lineno=0,
+            msg="warn",
+            args=(),
+            exc_info=None,
         )
         record.agent_id = "a-1"  # type: ignore[attr-defined]
         record.action = "read"  # type: ignore[attr-defined]
@@ -74,14 +84,20 @@ class TestJSONFormatter:
 
     def test_exception_included(self):
         import sys
+
         formatter = JSONFormatter()
         try:
             raise ValueError("boom")
         except ValueError:
             exc_info = sys.exc_info()
         record = logging.LogRecord(
-            name="test", level=logging.ERROR, pathname="", lineno=0,
-            msg="err", args=(), exc_info=exc_info,
+            name="test",
+            level=logging.ERROR,
+            pathname="",
+            lineno=0,
+            msg="err",
+            args=(),
+            exc_info=exc_info,
         )
         output = formatter.format(record)
         data = json.loads(output)
@@ -91,13 +107,16 @@ class TestJSONFormatter:
 
 # -- GovernanceLogger -------------------------------------------------------
 
+
 class TestGovernanceLogger:
     def test_policy_decision(self):
         logger = GovernanceLogger("test_mod")
         captured = _capture(logger)
         logger.policy_decision(
-            agent_id="agent-1", action="write_file",
-            decision="allow", policy_name="default",
+            agent_id="agent-1",
+            action="write_file",
+            decision="allow",
+            policy_name="default",
         )
         assert len(captured) == 1
         data = json.loads(captured[0])
@@ -111,7 +130,10 @@ class TestGovernanceLogger:
         logger = GovernanceLogger("test_mod")
         captured = _capture(logger)
         logger.policy_decision(
-            agent_id="a1", action="x", decision="deny", reason="too risky",
+            agent_id="a1",
+            action="x",
+            decision="deny",
+            reason="too risky",
         )
         data = json.loads(captured[0])
         assert "too risky" in data["message"]
@@ -120,8 +142,10 @@ class TestGovernanceLogger:
         logger = GovernanceLogger("test_mod")
         captured = _capture(logger)
         logger.policy_violation(
-            agent_id="agent-2", action="delete_db",
-            policy_name="safety", reason="destructive action",
+            agent_id="agent-2",
+            action="delete_db",
+            policy_name="safety",
+            reason="destructive action",
         )
         data = json.loads(captured[0])
         assert data["level"] == "WARNING"
@@ -141,8 +165,10 @@ class TestGovernanceLogger:
         logger = GovernanceLogger("test_mod")
         captured = _capture(logger)
         logger.adapter_call(
-            adapter_name="langchain", agent_id="a-1",
-            action="invoke", duration_ms=42,
+            adapter_name="langchain",
+            agent_id="a-1",
+            action="invoke",
+            duration_ms=42,
         )
         data = json.loads(captured[0])
         assert data["level"] == "INFO"
@@ -153,7 +179,8 @@ class TestGovernanceLogger:
         logger = GovernanceLogger("test_mod")
         captured = _capture(logger)
         logger.audit_event(
-            agent_id="a-1", event_type="checkpoint",
+            agent_id="a-1",
+            event_type="checkpoint",
             details={"step": 5},
         )
         data = json.loads(captured[0])
@@ -190,6 +217,7 @@ class TestGovernanceLogger:
 
 # -- get_logger / caching / env var ----------------------------------------
 
+
 class TestGetLogger:
     def test_returns_governance_logger(self):
         logger = get_logger("test_mod")
@@ -224,6 +252,7 @@ class TestLogLevel:
 
 
 # -- Thread safety ----------------------------------------------------------
+
 
 class TestThreadSafety:
     def test_concurrent_logging(self):

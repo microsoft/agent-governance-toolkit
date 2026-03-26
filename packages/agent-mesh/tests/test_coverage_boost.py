@@ -7,18 +7,19 @@ Targets: trust/cards.py, identity/spiffe.py, identity/sponsor.py,
          integrations/http_middleware.py, reward/scoring.py, observability/metrics.py
 """
 
-import pytest
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch, PropertyMock
-from urllib.parse import urlparse
 import json
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse
 
+import pytest
+
+from agentmesh.identity.agent_id import AgentIdentity
 
 # ---------------------------------------------------------------------------
 # trust/cards.py
 # ---------------------------------------------------------------------------
-from agentmesh.trust.cards import TrustedAgentCard, CardRegistry
-from agentmesh.identity.agent_id import AgentIdentity
+from agentmesh.trust.cards import CardRegistry, TrustedAgentCard
 
 
 def _make_identity(**kwargs):
@@ -115,7 +116,7 @@ class TestTrustedAgentCard:
         assert restored.card_signature == original.card_signature
 
     def test_from_dict_with_timestamps(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         d = {
             "name": "t",
             "signature_timestamp": now.isoformat(),
@@ -266,20 +267,17 @@ class TestSPIFFEIdentity:
         assert si.workload_path == "/agentmesh/agent1"
 
     def test_create_with_org(self):
-        si = SPIFFEIdentity.create(
-            agent_did="did:mesh:1", agent_name="a", organization="myorg"
-        )
+        si = SPIFFEIdentity.create(agent_did="did:mesh:1", agent_name="a", organization="myorg")
         assert "/myorg/" in si.spiffe_id
 
     def test_create_custom_domain(self):
-        si = SPIFFEIdentity.create(
-            agent_did="did:mesh:1", agent_name="a", trust_domain="custom.io"
-        )
+        si = SPIFFEIdentity.create(agent_did="did:mesh:1", agent_name="a", trust_domain="custom.io")
         assert si.trust_domain == "custom.io"
         parsed = urlparse(si.spiffe_id)
         assert parsed.scheme == "spiffe"
         assert parsed.hostname == "custom.io"
         assert parsed.path.startswith("/")
+
     def test_issue_svid(self):
         si = SPIFFEIdentity.create(agent_did="did:mesh:1", agent_name="a")
         svid = si.issue_svid(ttl_hours=2)
@@ -586,11 +584,10 @@ class TestSponsorRegistry:
 # integrations/http_middleware.py
 # ---------------------------------------------------------------------------
 from agentmesh.integrations.http_middleware import (
-    TrustMiddleware,
     TrustConfig,
-    VerificationResult,
-    flask_trust_required,
+    TrustMiddleware,
     fastapi_trust_required,
+    flask_trust_required,
 )
 
 
@@ -686,10 +683,14 @@ class TestFlaskTrustRequired:
 
         mw = TrustMiddleware()
 
-        with patch.dict("sys.modules", {
-            "flask": MagicMock(request=mock_request, g=mock_g, jsonify=mock_jsonify),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "flask": MagicMock(request=mock_request, g=mock_g, jsonify=mock_jsonify),
+            },
+        ):
             import sys
+
             flask_mod = sys.modules["flask"]
             flask_mod.request = mock_request
             flask_mod.g = mock_g
@@ -713,10 +714,14 @@ class TestFlaskTrustRequired:
         cfg = TrustConfig(permissive_mode=False)
         mw = TrustMiddleware(config=cfg)
 
-        with patch.dict("sys.modules", {
-            "flask": MagicMock(request=mock_request, g=mock_g, jsonify=mock_jsonify),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "flask": MagicMock(request=mock_request, g=mock_g, jsonify=mock_jsonify),
+            },
+        ):
             import sys
+
             flask_mod = sys.modules["flask"]
             flask_mod.request = mock_request
             flask_mod.g = mock_g
@@ -743,10 +748,13 @@ class TestFastapiTrustRequired:
 
         mw = TrustMiddleware()
 
-        with patch.dict("sys.modules", {
-            "fastapi": MagicMock(),
-            "fastapi.responses": MagicMock(),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "fastapi": MagicMock(),
+                "fastapi.responses": MagicMock(),
+            },
+        ):
             dep = fastapi_trust_required(mw)
             result = await dep(mock_request)
             assert result.verified is True
@@ -769,10 +777,13 @@ class TestFastapiTrustRequired:
         mock_fastapi.HTTPException = FakeHTTPException
         mock_fastapi.Request = MagicMock
 
-        with patch.dict("sys.modules", {
-            "fastapi": mock_fastapi,
-            "fastapi.responses": MagicMock(),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "fastapi": mock_fastapi,
+                "fastapi.responses": MagicMock(),
+            },
+        ):
             dep = fastapi_trust_required(mw)
             with pytest.raises(FakeHTTPException):
                 await dep(mock_request)
@@ -782,11 +793,11 @@ class TestFastapiTrustRequired:
 # reward/scoring.py
 # ---------------------------------------------------------------------------
 from agentmesh.reward.scoring import (
+    DimensionType,
     RewardDimension,
     RewardSignal,
-    DimensionType,
-    TrustScore,
     ScoreThresholds,
+    TrustScore,
 )
 
 
@@ -969,7 +980,7 @@ class TestScoreThresholds:
 # ---------------------------------------------------------------------------
 # observability/metrics.py
 # ---------------------------------------------------------------------------
-from agentmesh.observability.metrics import MetricsCollector, setup_metrics, get_metrics
+from agentmesh.observability.metrics import MetricsCollector, get_metrics, setup_metrics
 
 
 class TestMetricsCollectorDisabled:
@@ -1022,9 +1033,7 @@ class TestMetricsCollectorEnabled:
     def test_record_policy_violation(self):
         mc = self._make_collector()
         mc.record_policy_violation("p1", "did:mesh:1")
-        mc.policy_violation_count.labels.assert_called_with(
-            policy_id="p1", agent_did="did:mesh:1"
-        )
+        mc.policy_violation_count.labels.assert_called_with(policy_id="p1", agent_did="did:mesh:1")
 
     def test_set_trust_score(self):
         mc = self._make_collector()
@@ -1039,9 +1048,7 @@ class TestMetricsCollectorEnabled:
     def test_record_api_request(self):
         mc = self._make_collector()
         mc.record_api_request("GET", "/api", 200, 0.5)
-        mc.api_request_duration.labels.assert_called_with(
-            method="GET", endpoint="/api", status=200
-        )
+        mc.api_request_duration.labels.assert_called_with(method="GET", endpoint="/api", status=200)
 
     def test_record_tool_call(self):
         mc = self._make_collector()
@@ -1060,9 +1067,7 @@ class TestMetricsCollectorEnabled:
     def test_record_audit_log(self):
         mc = self._make_collector()
         mc.record_audit_log("login", "success")
-        mc.audit_log_total.labels.assert_called_with(
-            event_type="login", outcome="success"
-        )
+        mc.audit_log_total.labels.assert_called_with(event_type="login", outcome="success")
 
     def test_record_credential_issued(self):
         mc = self._make_collector()
@@ -1080,7 +1085,7 @@ class TestMetricsCollectorEnabled:
 # ---------------------------------------------------------------------------
 # trust/capability.py
 # ---------------------------------------------------------------------------
-from agentmesh.trust.capability import CapabilityGrant, CapabilityScope, CapabilityRegistry
+from agentmesh.trust.capability import CapabilityGrant, CapabilityRegistry, CapabilityScope
 
 
 class TestCapabilityGrant:
@@ -1115,7 +1120,9 @@ class TestCapabilityGrant:
 
     def test_is_valid_expired(self):
         g = CapabilityGrant.create(
-            "read:data", "did:mesh:1", "did:mesh:0",
+            "read:data",
+            "did:mesh:1",
+            "did:mesh:0",
             expires_at=datetime.utcnow() - timedelta(hours=1),
         )
         assert g.is_valid() is False
@@ -1145,9 +1152,7 @@ class TestCapabilityGrant:
         assert g.matches("execute:tools:calc") is True
 
     def test_matches_resource_id(self):
-        g = CapabilityGrant.create(
-            "read:data", "did:mesh:1", "did:mesh:0", resource_ids=["res1"]
-        )
+        g = CapabilityGrant.create("read:data", "did:mesh:1", "did:mesh:0", resource_ids=["res1"])
         assert g.matches("read:data", resource_id="res1") is True
         assert g.matches("read:data", resource_id="res2") is False
 
@@ -1272,7 +1277,9 @@ class TestCapabilityRegistry:
 # trust/handshake.py
 # ---------------------------------------------------------------------------
 from agentmesh.trust.handshake import (
-    HandshakeChallenge, HandshakeResponse, HandshakeResult, TrustHandshake,
+    HandshakeChallenge,
+    HandshakeResult,
+    TrustHandshake,
 )
 
 
@@ -1322,8 +1329,13 @@ class TestTrustHandshake:
     @pytest.mark.asyncio
     async def test_initiate(self):
         from agentmesh.identity.agent_id import AgentIdentity, IdentityRegistry
-        me = AgentIdentity.create(name="me", sponsor="me@test.com", capabilities=["read:data", "write:reports"])
-        peer = AgentIdentity.create(name="peer", sponsor="peer@test.com", capabilities=["read:data", "write:reports"])
+
+        me = AgentIdentity.create(
+            name="me", sponsor="me@test.com", capabilities=["read:data", "write:reports"]
+        )
+        peer = AgentIdentity.create(
+            name="peer", sponsor="peer@test.com", capabilities=["read:data", "write:reports"]
+        )
         registry = IdentityRegistry()
         registry.register(me)
         registry.register(peer)
@@ -1335,8 +1347,11 @@ class TestTrustHandshake:
     @pytest.mark.asyncio
     async def test_initiate_cached(self):
         from agentmesh.identity.agent_id import AgentIdentity, IdentityRegistry
+
         me = AgentIdentity.create(name="me-c", sponsor="me@test.com", capabilities=["read:data"])
-        peer = AgentIdentity.create(name="peer-c", sponsor="peer@test.com", capabilities=["read:data"])
+        peer = AgentIdentity.create(
+            name="peer-c", sponsor="peer@test.com", capabilities=["read:data"]
+        )
         registry = IdentityRegistry()
         registry.register(me)
         registry.register(peer)
@@ -1348,8 +1363,11 @@ class TestTrustHandshake:
     @pytest.mark.asyncio
     async def test_initiate_no_cache(self):
         from agentmesh.identity.agent_id import AgentIdentity, IdentityRegistry
+
         me = AgentIdentity.create(name="me-nc", sponsor="me@test.com", capabilities=["read:data"])
-        peer = AgentIdentity.create(name="peer-nc", sponsor="peer@test.com", capabilities=["read:data"])
+        peer = AgentIdentity.create(
+            name="peer-nc", sponsor="peer@test.com", capabilities=["read:data"]
+        )
         registry = IdentityRegistry()
         registry.register(me)
         registry.register(peer)
@@ -1361,8 +1379,11 @@ class TestTrustHandshake:
     @pytest.mark.asyncio
     async def test_initiate_score_too_low(self):
         from agentmesh.identity.agent_id import AgentIdentity, IdentityRegistry
+
         me = AgentIdentity.create(name="me-sl", sponsor="me@test.com", capabilities=["read:data"])
-        peer = AgentIdentity.create(name="peer-sl", sponsor="peer@test.com", capabilities=["read:data"])
+        peer = AgentIdentity.create(
+            name="peer-sl", sponsor="peer@test.com", capabilities=["read:data"]
+        )
         registry = IdentityRegistry()
         registry.register(me)
         registry.register(peer)
@@ -1373,21 +1394,24 @@ class TestTrustHandshake:
     @pytest.mark.asyncio
     async def test_initiate_missing_capabilities(self):
         from agentmesh.identity.agent_id import AgentIdentity, IdentityRegistry
+
         me = AgentIdentity.create(name="me-mc", sponsor="me@test.com", capabilities=["read:data"])
-        peer = AgentIdentity.create(name="peer-mc", sponsor="peer@test.com", capabilities=["read:data"])
+        peer = AgentIdentity.create(
+            name="peer-mc", sponsor="peer@test.com", capabilities=["read:data"]
+        )
         registry = IdentityRegistry()
         registry.register(me)
         registry.register(peer)
         th = TrustHandshake(agent_did=str(me.did), identity=me, registry=registry)
         result = await th.initiate(
-            str(peer.did), required_trust_score=500,
-            required_capabilities=["admin:*"]
+            str(peer.did), required_trust_score=500, required_capabilities=["admin:*"]
         )
         assert result.verified is False
 
     @pytest.mark.asyncio
     async def test_respond(self):
         from agentmesh.identity.agent_id import AgentIdentity
+
         me = AgentIdentity.create(name="me-r", sponsor="me@test.com", capabilities=["read:data"])
         th = TrustHandshake(agent_did=str(me.did), identity=me)
         challenge = HandshakeChallenge.generate()
@@ -1398,6 +1422,7 @@ class TestTrustHandshake:
     @pytest.mark.asyncio
     async def test_respond_expired(self):
         from agentmesh.identity.agent_id import AgentIdentity
+
         me = AgentIdentity.create(name="me-re", sponsor="me@test.com", capabilities=["read:data"])
         th = TrustHandshake(agent_did=str(me.did), identity=me)
         challenge = HandshakeChallenge.generate()
@@ -1424,7 +1449,10 @@ class TestTrustHandshake:
 
     def test_get_cached_result_expired(self):
         th = TrustHandshake(agent_did="did:mesh:me", cache_ttl_seconds=0)
-        th._verified_peers["did:mesh:peer"] = (MagicMock(), datetime.utcnow() - timedelta(seconds=1))
+        th._verified_peers["did:mesh:peer"] = (
+            MagicMock(),
+            datetime.utcnow() - timedelta(seconds=1),
+        )
         assert th._get_cached_result("did:mesh:peer") is None
         assert "did:mesh:peer" not in th._verified_peers
 
@@ -1611,6 +1639,7 @@ from agentmesh.identity.delegation import DelegationLink, ScopeChain
 class TestDelegationLink:
     def _make_link(self, **kwargs):
         import uuid
+
         defaults = dict(
             link_id=f"link_{uuid.uuid4().hex[:12]}",
             depth=0,
@@ -1682,39 +1711,29 @@ class TestScopeChain:
         assert link.depth == 0
 
     def test_add_link(self):
-        chain, link = ScopeChain.create_root(
-            "admin@org.com", "did:mesh:root", ["read:data"]
-        )
+        chain, link = ScopeChain.create_root("admin@org.com", "did:mesh:root", ["read:data"])
         chain.add_link(link)
         assert chain.total_depth == 1
 
     def test_verify_empty(self):
-        chain, _ = ScopeChain.create_root(
-            "admin@org.com", "did:mesh:root", ["read:data"]
-        )
+        chain, _ = ScopeChain.create_root("admin@org.com", "did:mesh:root", ["read:data"])
         valid, err = chain.verify()
         assert valid is True
 
     def test_verify_valid_chain(self):
-        chain, link = ScopeChain.create_root(
-            "admin@org.com", "did:mesh:root", ["read:data"]
-        )
+        chain, link = ScopeChain.create_root("admin@org.com", "did:mesh:root", ["read:data"])
         chain.add_link(link)
         valid, err = chain.verify()
         assert valid is True
 
     def test_get_effective_capabilities(self):
-        chain, link = ScopeChain.create_root(
-            "admin@org.com", "did:mesh:root", ["read:data"]
-        )
+        chain, link = ScopeChain.create_root("admin@org.com", "did:mesh:root", ["read:data"])
         assert chain.get_effective_capabilities() == ["read:data"]
         chain.add_link(link)
         assert "read:data" in chain.get_effective_capabilities()
 
     def test_trace_capability(self):
-        chain, link = ScopeChain.create_root(
-            "admin@org.com", "did:mesh:root", ["read:data"]
-        )
+        chain, link = ScopeChain.create_root("admin@org.com", "did:mesh:root", ["read:data"])
         chain.add_link(link)
         trace = chain.trace_capability("read:data")
         assert len(trace) >= 1
@@ -1723,7 +1742,7 @@ class TestScopeChain:
 # ---------------------------------------------------------------------------
 # reward/engine.py
 # ---------------------------------------------------------------------------
-from agentmesh.reward.engine import RewardEngine, RewardConfig, AgentRewardState
+from agentmesh.reward.engine import RewardConfig, RewardEngine
 
 
 class TestRewardConfig:
@@ -1802,9 +1821,13 @@ class TestRewardEngine:
 
     def test_update_weights(self):
         engine = RewardEngine()
-        result = engine.update_weights(policy_compliance=0.3, resource_efficiency=0.1,
-                                        output_quality=0.2, security_posture=0.25,
-                                        collaboration_health=0.15)
+        result = engine.update_weights(
+            policy_compliance=0.3,
+            resource_efficiency=0.1,
+            output_quality=0.2,
+            security_posture=0.25,
+            collaboration_health=0.15,
+        )
         assert result is True
 
     def test_get_agents_at_risk(self):
@@ -1831,19 +1854,26 @@ class TestRewardEngine:
 # ---------------------------------------------------------------------------
 # trust/bridge.py
 # ---------------------------------------------------------------------------
-from agentmesh.trust.bridge import TrustBridge, ProtocolBridge, PeerInfo
+from agentmesh.trust.bridge import ProtocolBridge, TrustBridge
 
 
 class TestTrustBridge:
     def _make_bridge(self):
         from agentmesh.identity.agent_id import AgentIdentity, IdentityRegistry
-        me = AgentIdentity.create(name="bridge-me", sponsor="me@test.com", capabilities=["read:data", "write:reports"])
-        peer = AgentIdentity.create(name="bridge-peer", sponsor="peer@test.com", capabilities=["read:data", "write:reports"])
+
+        me = AgentIdentity.create(
+            name="bridge-me", sponsor="me@test.com", capabilities=["read:data", "write:reports"]
+        )
+        peer = AgentIdentity.create(
+            name="bridge-peer", sponsor="peer@test.com", capabilities=["read:data", "write:reports"]
+        )
         registry = IdentityRegistry()
         registry.register(me)
         registry.register(peer)
         bridge = TrustBridge(
-            agent_did=str(me.did), identity=me, registry=registry,
+            agent_did=str(me.did),
+            identity=me,
+            registry=registry,
             default_trust_threshold=500,
         )
         return bridge, me, peer
@@ -1889,13 +1919,18 @@ class TestProtocolBridge:
     @pytest.mark.asyncio
     async def test_send_message(self):
         from agentmesh.identity.agent_id import AgentIdentity, IdentityRegistry
+
         me = AgentIdentity.create(name="pb-me", sponsor="me@test.com", capabilities=["read:data"])
-        peer = AgentIdentity.create(name="pb-peer", sponsor="peer@test.com", capabilities=["read:data"])
+        peer = AgentIdentity.create(
+            name="pb-peer", sponsor="peer@test.com", capabilities=["read:data"]
+        )
         registry = IdentityRegistry()
         registry.register(me)
         registry.register(peer)
         pb = ProtocolBridge(
-            agent_did=str(me.did), identity=me, registry=registry,
+            agent_did=str(me.did),
+            identity=me,
+            registry=registry,
         )
         pb.trust_bridge.default_trust_threshold = 500
         await pb.trust_bridge.verify_peer(str(peer.did))
@@ -1905,13 +1940,18 @@ class TestProtocolBridge:
     @pytest.mark.asyncio
     async def test_send_message_untrusted(self):
         from agentmesh.identity.agent_id import AgentIdentity, IdentityRegistry
+
         me = AgentIdentity.create(name="pb-me2", sponsor="me@test.com", capabilities=["read:data"])
-        peer = AgentIdentity.create(name="pb-peer2", sponsor="peer@test.com", capabilities=["read:data"])
+        peer = AgentIdentity.create(
+            name="pb-peer2", sponsor="peer@test.com", capabilities=["read:data"]
+        )
         registry = IdentityRegistry()
         registry.register(me)
         registry.register(peer)
         pb = ProtocolBridge(
-            agent_did=str(me.did), identity=me, registry=registry,
+            agent_did=str(me.did),
+            identity=me,
+            registry=registry,
         )
         pb.trust_bridge.default_trust_threshold = 500
         # Should auto-verify via the registry and succeed
@@ -1945,14 +1985,18 @@ class TestProtocolBridge:
 
     def test_add_verification_footer(self):
         pb = ProtocolBridge(agent_did="did:mesh:me")
-        result = pb.add_verification_footer("Hello", 800, "did:mesh:agent123456789012345678901234567890")
+        result = pb.add_verification_footer(
+            "Hello", 800, "did:mesh:agent123456789012345678901234567890"
+        )
         assert "Verified by AgentMesh" in result
 
     def test_add_verification_footer_with_metadata(self):
         pb = ProtocolBridge(agent_did="did:mesh:me")
         result = pb.add_verification_footer(
-            "Hello", 800, "did:mesh:agent123456789012345678901234567890",
-            metadata={"policy": "p1", "audit": "a1", "view_log": "http://log"}
+            "Hello",
+            800,
+            "did:mesh:agent123456789012345678901234567890",
+            metadata={"policy": "p1", "audit": "a1", "view_log": "http://log"},
         )
         assert "Policy: p1" in result
         assert "Audit: a1" in result
@@ -1968,6 +2012,7 @@ class TestMetricsGlobal:
 
     def test_setup_and_get(self):
         import agentmesh.observability.metrics as mod
+
         old = mod._metrics_collector
         try:
             mod._metrics_collector = None
@@ -1982,6 +2027,7 @@ class TestMetricsGlobal:
 
     def test_get_metrics_none(self):
         import agentmesh.observability.metrics as mod
+
         old = mod._metrics_collector
         try:
             mod._metrics_collector = None

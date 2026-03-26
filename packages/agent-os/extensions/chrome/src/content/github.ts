@@ -18,7 +18,7 @@ if (document.readyState === 'loading') {
 
 async function init() {
   const settings = await getSettings();
-  
+
   if (!settings.enabled || !settings.platforms.github) {
     return;
   }
@@ -53,13 +53,13 @@ async function init() {
 
 function detectPageType(): string {
   const path = window.location.pathname;
-  
+
   if (path.includes('/pull/')) return 'pull-request';
   if (path.includes('/issues/') && !path.includes('/issues')) return 'issue';
   if (path.match(/^\/[^/]+\/[^/]+\/?$/)) return 'repository';
   if (path.includes('/issues')) return 'issues-list';
   if (path.includes('/pulls')) return 'pr-list';
-  
+
   return 'other';
 }
 
@@ -212,7 +212,7 @@ function injectFAB() {
   menu.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
     const action = target.dataset.action;
-    
+
     if (action === 'create') {
       chrome.runtime.sendMessage({ type: 'OPEN_CREATE_AGENT' });
     } else if (action === 'view') {
@@ -220,7 +220,7 @@ function injectFAB() {
     } else if (action === 'logs') {
       chrome.runtime.sendMessage({ type: 'OPEN_AUDIT_LOG' });
     }
-    
+
     menu.style.display = 'none';
   });
 
@@ -248,7 +248,7 @@ function showAgentOSPanel() {
         <span class="icon">✅</span>
         <span>All policies passed</span>
       </div>
-      
+
       <div class="agentos-section">
         <h3>Checks Performed</h3>
         <ul class="agentos-checks">
@@ -258,7 +258,7 @@ function showAgentOSPanel() {
           <li class="warn">⚠️ Large file detected (review recommended)</li>
         </ul>
       </div>
-      
+
       <div class="agentos-section">
         <h3>🤖 Available Agents</h3>
         <div class="agentos-agents">
@@ -273,7 +273,7 @@ function showAgentOSPanel() {
           </button>
         </div>
       </div>
-      
+
       <div class="agentos-section">
         <button class="agentos-run-all">▶️ Run All Agents</button>
       </div>
@@ -422,7 +422,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'INIT') {
     init();
   }
-  
+
   if (message.type === 'AGENTS_AVAILABLE') {
     console.log('AgentOS: Agents available:', message.agents);
   }

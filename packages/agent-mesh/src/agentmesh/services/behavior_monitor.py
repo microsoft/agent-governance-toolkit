@@ -29,7 +29,6 @@ import logging
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +42,10 @@ class AgentMetrics:
     failed_calls: int = 0
     consecutive_failures: int = 0
     capability_denials: int = 0
-    last_activity: Optional[datetime] = None
+    last_activity: datetime | None = None
     quarantined: bool = False
-    quarantine_reason: Optional[str] = None
-    quarantined_at: Optional[datetime] = None
+    quarantine_reason: str | None = None
+    quarantined_at: datetime | None = None
     # Rolling window for burst detection
     call_timestamps: list[datetime] = field(default_factory=list)
 
@@ -114,8 +113,7 @@ class AgentBehaviorMonitor:
             if m.consecutive_failures >= self._consecutive_failure_threshold:
                 self._quarantine(
                     agent_did,
-                    f"Consecutive failure threshold breached "
-                    f"({m.consecutive_failures} failures)",
+                    f"Consecutive failure threshold breached ({m.consecutive_failures} failures)",
                 )
 
         # Burst detection
@@ -171,7 +169,7 @@ class AgentBehaviorMonitor:
             m.capability_denials = 0
             logger.info("Released agent %s from quarantine", agent_did)
 
-    def get_metrics(self, agent_did: str) -> Optional[AgentMetrics]:
+    def get_metrics(self, agent_did: str) -> AgentMetrics | None:
         """Get current metrics for an agent (read-only snapshot)."""
         return self._agents.get(agent_did)
 

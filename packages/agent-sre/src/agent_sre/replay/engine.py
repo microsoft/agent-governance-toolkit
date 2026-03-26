@@ -158,23 +158,27 @@ class ReplayEngine:
             if span.name in overrides:
                 override_output = overrides[span.name]
                 if override_output != span.output_data:
-                    result.diffs.append(TraceDiff(
-                        diff_type=DiffType.OUTPUT_MISMATCH,
-                        span_name=span.name,
-                        original=span.output_data,
-                        replayed=override_output,
-                        description=f"Override applied to '{span.name}'",
-                    ))
+                    result.diffs.append(
+                        TraceDiff(
+                            diff_type=DiffType.OUTPUT_MISMATCH,
+                            span_name=span.name,
+                            original=span.output_data,
+                            replayed=override_output,
+                            description=f"Override applied to '{span.name}'",
+                        )
+                    )
 
             # Check for errors in original
             if span.status == SpanStatus.ERROR:
-                result.diffs.append(TraceDiff(
-                    diff_type=DiffType.STATUS_CHANGE,
-                    span_name=span.name,
-                    original=span.status.value,
-                    replayed="replayed_as_error",
-                    description=f"Original span '{span.name}' had error: {span.error}",
-                ))
+                result.diffs.append(
+                    TraceDiff(
+                        diff_type=DiffType.STATUS_CHANGE,
+                        span_name=span.name,
+                        original=span.status.value,
+                        replayed="replayed_as_error",
+                        description=f"Original span '{span.name}' had error: {span.error}",
+                    )
+                )
 
         result.success = not result.has_divergence
         return result
@@ -196,45 +200,51 @@ class ReplayEngine:
             sb = spans_b.get(name)
 
             if sa is None:
-                diffs.append(TraceDiff(
-                    diff_type=DiffType.EXTRA_SPAN,
-                    span_name=name,
-                    description=f"Span '{name}' only in trace B",
-                ))
+                diffs.append(
+                    TraceDiff(
+                        diff_type=DiffType.EXTRA_SPAN,
+                        span_name=name,
+                        description=f"Span '{name}' only in trace B",
+                    )
+                )
                 continue
 
             if sb is None:
-                diffs.append(TraceDiff(
-                    diff_type=DiffType.MISSING_SPAN,
-                    span_name=name,
-                    description=f"Span '{name}' only in trace A",
-                ))
+                diffs.append(
+                    TraceDiff(
+                        diff_type=DiffType.MISSING_SPAN,
+                        span_name=name,
+                        description=f"Span '{name}' only in trace A",
+                    )
+                )
                 continue
 
             # Compare outputs
             if sa.output_data != sb.output_data:
-                diffs.append(TraceDiff(
-                    diff_type=DiffType.OUTPUT_MISMATCH,
-                    span_name=name,
-                    original=sa.output_data,
-                    replayed=sb.output_data,
-                    description=f"Output differs for '{name}'",
-                ))
+                diffs.append(
+                    TraceDiff(
+                        diff_type=DiffType.OUTPUT_MISMATCH,
+                        span_name=name,
+                        original=sa.output_data,
+                        replayed=sb.output_data,
+                        description=f"Output differs for '{name}'",
+                    )
+                )
 
             # Compare status
             if sa.status != sb.status:
-                diffs.append(TraceDiff(
-                    diff_type=DiffType.STATUS_CHANGE,
-                    span_name=name,
-                    original=sa.status.value,
-                    replayed=sb.status.value,
-                    description=f"Status changed for '{name}'",
-                ))
+                diffs.append(
+                    TraceDiff(
+                        diff_type=DiffType.STATUS_CHANGE,
+                        span_name=name,
+                        original=sa.status.value,
+                        replayed=sb.status.value,
+                        description=f"Status changed for '{name}'",
+                    )
+                )
 
         return diffs
 
     def what_if(self, trace: Trace, overrides: dict[str, dict[str, Any]]) -> ReplayResult:
         """Trace comparison — not available in Community Edition."""
-        raise NotImplementedError(
-            "Not available in Community Edition"
-        )
+        raise NotImplementedError("Not available in Community Edition")

@@ -7,22 +7,24 @@ Updates trust score every ≤30s based on agent behavior.
 Score visible in dashboard; configurable alert thresholds.
 """
 
-from datetime import datetime, timedelta
-from typing import Callable, Optional, Literal
-from pydantic import BaseModel, Field
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 from agentmesh.constants import (
+    RISK_ALERT_THRESHOLD,
     RISK_CRITICAL_THRESHOLD,
     RISK_HIGH_THRESHOLD,
-    RISK_ALERT_THRESHOLD,
     RISK_MINIMAL_THRESHOLD,
     RISK_UPDATE_INTERVAL_SECONDS,
     RISK_WEIGHT_CRITICAL,
     RISK_WEIGHT_HIGH,
-    RISK_WEIGHT_MEDIUM,
-    RISK_WEIGHT_LOW,
     RISK_WEIGHT_INFO,
+    RISK_WEIGHT_LOW,
+    RISK_WEIGHT_MEDIUM,
     TRUST_SCORE_DEFAULT,
 )
 
@@ -44,8 +46,8 @@ class RiskSignal:
     severity: Literal["critical", "high", "medium", "low", "info"]
     value: float  # 0.0 to 1.0
     timestamp: datetime = field(default_factory=datetime.utcnow)
-    source: Optional[str] = None
-    details: Optional[str] = None
+    source: str | None = None
+    details: str | None = None
 
     @property
     def weight(self) -> float:
@@ -135,10 +137,10 @@ class RiskScore(BaseModel):
 
         # Weighted total (behavior and compliance weighted higher)
         self.total_score = int(
-            self.identity_score * 2 +
-            self.behavior_score * 3 +
-            self.network_score * 2 +
-            self.compliance_score * 3
+            self.identity_score * 2
+            + self.behavior_score * 3
+            + self.network_score * 2
+            + self.compliance_score * 3
         )  # Max: 1000
 
         self.risk_level = self.get_risk_level(self.total_score)
@@ -300,13 +302,15 @@ class RiskScorer:
         if score.risk_level != old_level:
             for callback in self._alert_callbacks:
                 try:
-                    callback({
-                        "type": "risk_level_change",
-                        "agent_did": agent_did,
-                        "old_level": old_level,
-                        "new_level": score.risk_level,
-                        "score": score.total_score,
-                    })
+                    callback(
+                        {
+                            "type": "risk_level_change",
+                            "agent_did": agent_did,
+                            "old_level": old_level,
+                            "new_level": score.risk_level,
+                            "score": score.total_score,
+                        }
+                    )
                 except Exception:
                     pass
 
@@ -314,12 +318,14 @@ class RiskScorer:
         if score.total_score < self.CRITICAL_THRESHOLD:
             for callback in self._alert_callbacks:
                 try:
-                    callback({
-                        "type": "critical_risk",
-                        "agent_did": agent_did,
-                        "score": score.total_score,
-                        "action": "immediate_review_required",
-                    })
+                    callback(
+                        {
+                            "type": "critical_risk",
+                            "agent_did": agent_did,
+                            "score": score.total_score,
+                            "action": "immediate_review_required",
+                        }
+                    )
                 except Exception:
                     pass
 
@@ -332,7 +338,7 @@ class RiskScorer:
         """
         self._alert_callbacks.append(callback)
 
-    def get_high_risk_agents(self, threshold: Optional[int] = None) -> list[RiskScore]:
+    def get_high_risk_agents(self, threshold: int | None = None) -> list[RiskScore]:
         """Get all agents above risk threshold.
 
         Args:
@@ -343,10 +349,7 @@ class RiskScorer:
             List of RiskScore objects for agents below the threshold.
         """
         thresh = threshold or self.HIGH_THRESHOLD
-        return [
-            score for score in self._scores.values()
-            if score.total_score < thresh
-        ]
+        return [score for score in self._scores.values() if score.total_score < thresh]
 
     def clear_signals(self, agent_did: str) -> None:
         """Clear all signals for an agent (e.g., after remediation).

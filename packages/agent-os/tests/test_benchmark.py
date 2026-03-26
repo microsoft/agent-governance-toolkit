@@ -7,23 +7,16 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import pytest
-
 # Ensure benchmark module is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from benchmarks.injection_benchmark import (
-    CANARY_TOKENS,
     Metrics,
-    TestCase,
     build_dataset,
-    evaluate,
-    evaluate_by_category,
     generate_markdown_report,
     run_benchmark,
 )
-from agent_os.prompt_injection import DetectionConfig, PromptInjectionDetector
 
 
 class TestDataset:
@@ -62,8 +55,7 @@ class TestMetrics:
     """Verify metrics calculations including edge cases."""
 
     def test_perfect_detection(self):
-        m = Metrics(true_positives=60, false_positives=0,
-                    true_negatives=40, false_negatives=0)
+        m = Metrics(true_positives=60, false_positives=0, true_negatives=40, false_negatives=0)
         assert m.tpr == 1.0
         assert m.fpr == 0.0
         assert m.precision == 1.0
@@ -71,24 +63,21 @@ class TestMetrics:
         assert m.f1 == 1.0
 
     def test_no_detections(self):
-        m = Metrics(true_positives=0, false_positives=0,
-                    true_negatives=40, false_negatives=60)
+        m = Metrics(true_positives=0, false_positives=0, true_negatives=40, false_negatives=60)
         assert m.tpr == 0.0
         assert m.fpr == 0.0
         assert m.precision == 0.0
         assert m.f1 == 0.0
 
     def test_all_flagged(self):
-        m = Metrics(true_positives=60, false_positives=40,
-                    true_negatives=0, false_negatives=0)
+        m = Metrics(true_positives=60, false_positives=40, true_negatives=0, false_negatives=0)
         assert m.tpr == 1.0
         assert m.fpr == 1.0
         assert m.precision == 0.6
         assert abs(m.f1 - 0.75) < 1e-9
 
     def test_divide_by_zero_empty(self):
-        m = Metrics(true_positives=0, false_positives=0,
-                    true_negatives=0, false_negatives=0)
+        m = Metrics(true_positives=0, false_positives=0, true_negatives=0, false_negatives=0)
         assert m.tpr == 0.0
         assert m.fpr == 0.0
         assert m.precision == 0.0

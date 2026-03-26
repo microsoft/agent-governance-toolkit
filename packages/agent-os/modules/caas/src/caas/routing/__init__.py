@@ -4,7 +4,7 @@
 Heuristic routing for fast query classification without model overhead.
 """
 
-from caas.routing.heuristic_router import HeuristicRouter
 from caas.models import ModelTier, RoutingDecision
+from caas.routing.heuristic_router import HeuristicRouter
 
-__all__ = ['HeuristicRouter', 'ModelTier', 'RoutingDecision']
+__all__ = ["HeuristicRouter", "ModelTier", "RoutingDecision"]

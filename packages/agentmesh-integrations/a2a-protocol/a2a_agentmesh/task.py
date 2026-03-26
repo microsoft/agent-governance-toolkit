@@ -89,8 +89,16 @@ class TaskEnvelope:
 
     def __post_init__(self) -> None:
         self._TRANSITIONS = {
-            TaskState.SUBMITTED: [TaskState.WORKING, TaskState.CANCELED, TaskState.FAILED],
-            TaskState.WORKING: [TaskState.COMPLETE, TaskState.FAILED, TaskState.CANCELED],
+            TaskState.SUBMITTED: [
+                TaskState.WORKING,
+                TaskState.CANCELED,
+                TaskState.FAILED,
+            ],
+            TaskState.WORKING: [
+                TaskState.COMPLETE,
+                TaskState.FAILED,
+                TaskState.CANCELED,
+            ],
             TaskState.COMPLETE: [],
             TaskState.FAILED: [],
             TaskState.CANCELED: [],

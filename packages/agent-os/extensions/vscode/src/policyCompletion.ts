@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Agent OS - Policy YAML Completion Provider
- * 
+ *
  * Provides auto-completion for .agents/*.yaml policy files.
  * Helps users configure policies with intelligent suggestions.
  */
@@ -10,14 +10,14 @@
 import * as vscode from 'vscode';
 
 export class PolicyCompletionProvider implements vscode.CompletionItemProvider {
-    
+
     provideCompletionItems(
         document: vscode.TextDocument,
         position: vscode.Position,
         token: vscode.CancellationToken,
         context: vscode.CompletionContext
     ): vscode.ProviderResult<vscode.CompletionItem[] | vscode.CompletionList> {
-        
+
         // Only provide completions for agent-os config files
         if (!this.isAgentOSConfigFile(document)) {
             return [];
@@ -37,7 +37,7 @@ export class PolicyCompletionProvider implements vscode.CompletionItemProvider {
 
     private isAgentOSConfigFile(document: vscode.TextDocument): boolean {
         const path = document.uri.fsPath.toLowerCase();
-        return path.includes('.agents') || 
+        return path.includes('.agents') ||
                path.includes('agent-os') ||
                path.endsWith('security.yaml') ||
                path.endsWith('policies.yaml');
@@ -51,12 +51,12 @@ export class PolicyCompletionProvider implements vscode.CompletionItemProvider {
     private getYAMLPath(document: vscode.TextDocument, position: vscode.Position): string[] {
         const path: string[] = [];
         const currentIndent = this.getIndentLevel(document.lineAt(position).text);
-        
+
         // Walk backwards to find parent keys
         for (let i = position.line - 1; i >= 0; i--) {
             const line = document.lineAt(i).text;
             const indent = this.getIndentLevel(line);
-            
+
             if (indent < currentIndent) {
                 const match = line.match(/^\s*(\w+):/);
                 if (match) {
@@ -64,7 +64,7 @@ export class PolicyCompletionProvider implements vscode.CompletionItemProvider {
                 }
             }
         }
-        
+
         return path;
     }
 
@@ -73,24 +73,24 @@ export class PolicyCompletionProvider implements vscode.CompletionItemProvider {
             this.createCompletion('kernel', 'Kernel configuration', `kernel:
   version: "1.0"
   mode: strict`, vscode.CompletionItemKind.Module),
-            
+
             this.createCompletion('policies', 'Policy definitions', `policies:
   - name: default
     blocked_actions: []`, vscode.CompletionItemKind.Module),
-            
+
             this.createCompletion('signals', 'Signal configuration', `signals:
   on_violation: SIGKILL
   on_warning: SIGSTOP`, vscode.CompletionItemKind.Module),
-            
+
             this.createCompletion('audit', 'Audit settings', `audit:
   enabled: true
   log_level: INFO`, vscode.CompletionItemKind.Module),
-            
+
             this.createCompletion('cmvk', 'Verification', `cmvk:
   enabled: false
   models: ["gpt-4", "claude-sonnet-4"]
   threshold: 0.8`, vscode.CompletionItemKind.Module),
-            
+
             this.createCompletion('iatp', 'Inter-agent trust protocol', `iatp:
   enabled: false
   trust_level: HIGH`, vscode.CompletionItemKind.Module),
@@ -198,7 +198,7 @@ export class PolicyCompletionProvider implements vscode.CompletionItemProvider {
             { name: 'secret_access', desc: 'Block access to secrets/credentials' },
         ];
 
-        return actions.map(action => 
+        return actions.map(action =>
             this.createValueCompletion(action.name, action.desc)
         );
     }
@@ -214,8 +214,8 @@ export class PolicyCompletionProvider implements vscode.CompletionItemProvider {
     }
 
     private createCompletion(
-        label: string, 
-        detail: string, 
+        label: string,
+        detail: string,
         insertText: string,
         kind: vscode.CompletionItemKind
     ): vscode.CompletionItem {
@@ -236,11 +236,11 @@ export class PolicyCompletionProvider implements vscode.CompletionItemProvider {
 
 /**
  * Policy Hover Provider
- * 
+ *
  * Shows policy documentation on hover over policy keywords.
  */
 export class PolicyHoverProvider implements vscode.HoverProvider {
-    
+
     private policyDocs: Map<string, string> = new Map([
         ['SIGKILL', '**SIGKILL** - Terminate the agent immediately.\n\nThis signal cannot be caught or ignored. Use for critical policy violations that must stop execution.'],
         ['SIGSTOP', '**SIGSTOP** - Pause the agent for review.\n\nThe agent is suspended until a SIGCONT is received. Use for suspicious activity that needs human review.'],
@@ -260,24 +260,24 @@ export class PolicyHoverProvider implements vscode.HoverProvider {
         position: vscode.Position,
         token: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.Hover> {
-        
+
         const wordRange = document.getWordRangeAtPosition(position);
         if (!wordRange) return null;
-        
+
         const word = document.getText(wordRange);
         const doc = this.policyDocs.get(word);
-        
+
         if (doc) {
             return new vscode.Hover(new vscode.MarkdownString(doc));
         }
-        
+
         return null;
     }
 }
 
 /**
  * Policy Diagnostics Provider
- * 
+ *
  * Validates policy YAML files and shows errors/warnings.
  */
 export class PolicyDiagnosticsProvider {
@@ -296,9 +296,9 @@ export class PolicyDiagnosticsProvider {
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
-            
+
             // Check for common issues
-            
+
             // Unknown signal
             const signalMatch = line.match(/:\s*(SIG\w+)/);
             if (signalMatch) {
@@ -351,7 +351,7 @@ export class PolicyDiagnosticsProvider {
 
     private isPolicyFile(document: vscode.TextDocument): boolean {
         const path = document.uri.fsPath.toLowerCase();
-        return (path.includes('.agents') || path.includes('agent-os')) && 
+        return (path.includes('.agents') || path.includes('agent-os')) &&
                (path.endsWith('.yaml') || path.endsWith('.yml'));
     }
 

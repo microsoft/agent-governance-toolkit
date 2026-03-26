@@ -6,7 +6,7 @@ with policy checks before execution.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Optional
 
 from pydantic_ai_governance.audit import AuditTrail
 from pydantic_ai_governance.intent import classify_intent

@@ -13,6 +13,13 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        args: ['--allow-multiple-documents']
+        exclude: >-
+          (?x)^(
+            packages/.*/charts/.*/templates/|
+            packages/.*/deployments/helm/.*/templates/|
+            packages/agent-os/templates/policies/
+          )
       - id: check-json
       - id: check-toml
       - id: check-added-large-files
@@ -36,7 +43,8 @@ repos:
     hooks:
       - id: mypy
         args: [--ignore-missing-imports]
-        exclude: ^(tests/|notebooks/|examples/|demo/)
+        files: ^packages/.*/src/
+        exclude: ^packages/.*(examples|tutorials|demo|benchmark)/
 
   # Secret scanning
   - repo: https://github.com/Yelp/detect-secrets

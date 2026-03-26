@@ -8,7 +8,6 @@ Store — Abstract interfaces and mutable file-based implementation for episodic
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
 from pathlib import Path
-import json
 import numpy as np
 
 from emk.schema import Episode
@@ -64,7 +63,9 @@ class VectorStoreAdapter(ABC):
     ) -> List[Episode]:
         """Retrieve episodes that are NOT failures."""
         batch_size = min(limit * 3, 1000)
-        all_episodes = self.retrieve(query_embedding=query_embedding, filters=filters, limit=batch_size)
+        all_episodes = self.retrieve(
+            query_embedding=query_embedding, filters=filters, limit=batch_size
+        )
         return [ep for ep in all_episodes if not ep.is_failure()][:limit]
 
     def retrieve_with_anti_patterns(
@@ -76,9 +77,13 @@ class VectorStoreAdapter(ABC):
     ) -> Dict[str, List[Episode]]:
         """Retrieve both successes and failures."""
         result: Dict[str, List[Episode]] = {"successes": [], "failures": []}
-        result["successes"] = self.retrieve_successes(query_embedding=query_embedding, filters=filters, limit=limit)
+        result["successes"] = self.retrieve_successes(
+            query_embedding=query_embedding, filters=filters, limit=limit
+        )
         if include_failures:
-            result["failures"] = self.retrieve_failures(query_embedding=query_embedding, filters=filters, limit=limit)
+            result["failures"] = self.retrieve_failures(
+                query_embedding=query_embedding, filters=filters, limit=limit
+            )
         return result
 
 
@@ -133,8 +138,7 @@ class FileAdapter(VectorStoreAdapter):
         episodes = self._read_all()
         if filters:
             episodes = [
-                ep for ep in episodes
-                if all(ep.metadata.get(k) == v for k, v in filters.items())
+                ep for ep in episodes if all(ep.metadata.get(k) == v for k, v in filters.items())
             ]
         episodes.reverse()
         return episodes[:limit]
@@ -182,10 +186,12 @@ try:
             collection_name: str = "episodes",
             persist_directory: str = "./chroma_data",
         ):
-            self.client = chromadb.Client(Settings(
-                persist_directory=persist_directory,
-                anonymized_telemetry=False,
-            ))
+            self.client = chromadb.Client(
+                Settings(
+                    persist_directory=persist_directory,
+                    anonymized_telemetry=False,
+                )
+            )
             self.collection = self.client.get_or_create_collection(
                 name=collection_name,
                 metadata={"description": "Episodic memory storage"},
@@ -201,14 +207,16 @@ try:
                 ids=[episode.episode_id],
                 documents=[text] if text else None,
                 embeddings=[embedding.tolist()] if embedding is not None else None,
-                metadatas=[{
-                    "goal": episode.goal,
-                    "action": episode.action,
-                    "result": episode.result,
-                    "reflection": episode.reflection,
-                    "timestamp": episode.timestamp.isoformat(),
-                    **episode.metadata,
-                }],
+                metadatas=[
+                    {
+                        "goal": episode.goal,
+                        "action": episode.action,
+                        "result": episode.result,
+                        "reflection": episode.reflection,
+                        "timestamp": episode.timestamp.isoformat(),
+                        **episode.metadata,
+                    }
+                ],
             )
             return episode.episode_id
 
@@ -228,18 +236,19 @@ try:
                 results = self.collection.get(limit=limit, where=filters)
 
             episodes = []
-            if 'metadatas' in results and results['metadatas']:
-                if isinstance(results['metadatas'][0], list) if results['metadatas'] else False:
-                    metadatas = results['metadatas'][0]
+            if "metadatas" in results and results["metadatas"]:
+                if isinstance(results["metadatas"][0], list) if results["metadatas"] else False:
+                    metadatas = results["metadatas"][0]
                 else:
-                    metadatas = results['metadatas']
+                    metadatas = results["metadatas"]
             else:
                 metadatas = []
 
             for metadata in metadatas:
                 episode_metadata = {
-                    k: v for k, v in metadata.items()
-                    if k not in ('goal', 'action', 'result', 'reflection', 'timestamp')
+                    k: v
+                    for k, v in metadata.items()
+                    if k not in ("goal", "action", "result", "reflection", "timestamp")
                 }
                 try:
                     episode = Episode(
@@ -258,12 +267,13 @@ try:
         def get_by_id(self, episode_id: str) -> Optional[Episode]:
             try:
                 results = self.collection.get(ids=[episode_id])
-                if not results['ids']:
+                if not results["ids"]:
                     return None
-                metadata = results['metadatas'][0]
+                metadata = results["metadatas"][0]
                 episode_metadata = {
-                    k: v for k, v in metadata.items()
-                    if k not in ('goal', 'action', 'result', 'reflection', 'timestamp')
+                    k: v
+                    for k, v in metadata.items()
+                    if k not in ("goal", "action", "result", "reflection", "timestamp")
                 }
                 return Episode(
                     goal=metadata.get("goal", ""),

@@ -113,7 +113,7 @@ The `agentmesh-platform` package (v1.0.0-alpha) includes:
 - `ScopeChain` — Capabilities that can only narrow, never widen
 - `CredentialManager` — 15-minute TTL, auto-rotation
 
-**Trust Module**  
+**Trust Module**
 - `TrustBridge` — Unified trust across A2A/MCP/IATP
 - `TrustHandshake` — < 200ms verification
 - `CapabilityRegistry` — Fine-grained resource/action control

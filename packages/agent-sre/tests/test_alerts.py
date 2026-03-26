@@ -7,7 +7,6 @@ Covers: Alert, AlertManager, ChannelConfig, formatters, delivery.
 Uses CALLBACK channels for zero-network testing.
 """
 
-
 from agent_sre.alerts import (
     Alert,
     AlertChannel,
@@ -100,10 +99,12 @@ class TestFormatters:
 class TestAlertManager:
     def test_add_channel(self):
         m = AlertManager()
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+            )
+        )
         assert "test" in m.list_channels()
 
     def test_remove_channel(self):
@@ -115,11 +116,13 @@ class TestAlertManager:
     def test_callback_delivery(self):
         received = []
         m = AlertManager()
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-            callback=lambda a: received.append(a),
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+                callback=lambda a: received.append(a),
+            )
+        )
         alert = Alert(title="Test", message="Hello")
         results = m.send(alert)
         assert len(results) == 1
@@ -130,12 +133,14 @@ class TestAlertManager:
     def test_severity_filtering(self):
         received = []
         m = AlertManager()
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="critical-only",
-            callback=lambda a: received.append(a),
-            min_severity=AlertSeverity.CRITICAL,
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="critical-only",
+                callback=lambda a: received.append(a),
+                min_severity=AlertSeverity.CRITICAL,
+            )
+        )
         # Send WARNING — should be filtered out
         m.send(Alert(title="Warn", message="minor", severity=AlertSeverity.WARNING))
         assert len(received) == 0
@@ -147,12 +152,14 @@ class TestAlertManager:
     def test_disabled_channel(self):
         received = []
         m = AlertManager()
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="disabled",
-            callback=lambda a: received.append(a),
-            enabled=False,
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="disabled",
+                callback=lambda a: received.append(a),
+                enabled=False,
+            )
+        )
         m.send(Alert(title="Test", message="msg"))
         assert len(received) == 0
 
@@ -160,16 +167,20 @@ class TestAlertManager:
         received_a = []
         received_b = []
         m = AlertManager()
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="channel-a",
-            callback=lambda a: received_a.append(a),
-        ))
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="channel-b",
-            callback=lambda a: received_b.append(a),
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="channel-a",
+                callback=lambda a: received_a.append(a),
+            )
+        )
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="channel-b",
+                callback=lambda a: received_b.append(a),
+            )
+        )
         m.send(Alert(title="Test", message="msg", severity=AlertSeverity.CRITICAL))
         assert len(received_a) == 1
         assert len(received_b) == 1
@@ -179,33 +190,39 @@ class TestAlertManager:
             raise RuntimeError("fail")
 
         m = AlertManager()
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="bad",
-            callback=bad_callback,
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="bad",
+                callback=bad_callback,
+            )
+        )
         results = m.send(Alert(title="Test", message="msg"))
         assert len(results) == 1
         assert not results[0].success
 
     def test_history(self):
         m = AlertManager()
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-            callback=lambda a: None,
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+                callback=lambda a: None,
+            )
+        )
         m.send(Alert(title="A", message="1"))
         m.send(Alert(title="B", message="2"))
         assert len(m.history) == 2
 
     def test_stats(self):
         m = AlertManager()
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-            callback=lambda a: None,
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+                callback=lambda a: None,
+            )
+        )
         m.send(Alert(title="A", message="1"))
         stats = m.get_stats()
         assert stats["channels"] == 1
@@ -214,22 +231,26 @@ class TestAlertManager:
 
     def test_clear_history(self):
         m = AlertManager()
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-            callback=lambda a: None,
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+                callback=lambda a: None,
+            )
+        )
         m.send(Alert(title="A", message="1"))
         m.clear_history()
         assert len(m.history) == 0
 
     def test_no_url_webhook_fails(self):
         m = AlertManager()
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.SLACK,
-            name="no-url",
-            url="",
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.SLACK,
+                name="no-url",
+                url="",
+            )
+        )
         results = m.send(Alert(title="Test", message="msg"))
         assert len(results) == 1
         assert not results[0].success
@@ -237,12 +258,14 @@ class TestAlertManager:
     def test_info_severity_filtered_by_default(self):
         received = []
         m = AlertManager()
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="warn-and-up",
-            callback=lambda a: received.append(a),
-            min_severity=AlertSeverity.WARNING,
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="warn-and-up",
+                callback=lambda a: received.append(a),
+                min_severity=AlertSeverity.WARNING,
+            )
+        )
         m.send(Alert(title="Info", message="msg", severity=AlertSeverity.INFO))
         assert len(received) == 0
 
@@ -258,33 +281,41 @@ class TestMCPDriftAlerts:
 
         received = []
         manager = AlertManager()
-        manager.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="drift-alerts",
-            callback=lambda a: received.append(a),
-        ))
+        manager.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="drift-alerts",
+                callback=lambda a: received.append(a),
+            )
+        )
 
         detector = DriftDetector()
-        detector.set_baseline(ToolSnapshot(
-            server_id="mcp-1",
-            tools=[ToolSchema(name="search"), ToolSchema(name="calc")],
-        ))
-        report = detector.compare(ToolSnapshot(
-            server_id="mcp-1",
-            tools=[ToolSchema(name="search")],  # calc removed
-        ))
+        detector.set_baseline(
+            ToolSnapshot(
+                server_id="mcp-1",
+                tools=[ToolSchema(name="search"), ToolSchema(name="calc")],
+            )
+        )
+        report = detector.compare(
+            ToolSnapshot(
+                server_id="mcp-1",
+                tools=[ToolSchema(name="search")],  # calc removed
+            )
+        )
 
         if report.has_drift:
             for drift_alert in report.alerts:
-                manager.send(Alert(
-                    title=f"MCP Drift: {drift_alert.drift_type.value}",
-                    message=drift_alert.message,
-                    severity=(
-                        AlertSeverity.CRITICAL
-                        if drift_alert.severity.value == "critical"
-                        else AlertSeverity.WARNING
-                    ),
-                ))
+                manager.send(
+                    Alert(
+                        title=f"MCP Drift: {drift_alert.drift_type.value}",
+                        message=drift_alert.message,
+                        severity=(
+                            AlertSeverity.CRITICAL
+                            if drift_alert.severity.value == "critical"
+                            else AlertSeverity.WARNING
+                        ),
+                    )
+                )
 
         assert len(received) >= 1
         assert "calc" in received[0].message
@@ -294,11 +325,13 @@ class TestAlertDeduplication:
     def test_dedup_suppresses_repeat(self):
         received = []
         m = AlertManager(dedup_window_seconds=60)
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-            callback=lambda a: received.append(a),
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+                callback=lambda a: received.append(a),
+            )
+        )
         alert = Alert(title="Breach", message="Budget low", dedup_key="agent-1:slo-1")
         m.send(alert)
         m.send(alert)  # should be suppressed
@@ -308,11 +341,13 @@ class TestAlertDeduplication:
     def test_dedup_allows_different_keys(self):
         received = []
         m = AlertManager(dedup_window_seconds=60)
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-            callback=lambda a: received.append(a),
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+                callback=lambda a: received.append(a),
+            )
+        )
         m.send(Alert(title="A", message="1", dedup_key="key-1"))
         m.send(Alert(title="B", message="2", dedup_key="key-2"))
         assert len(received) == 2
@@ -320,11 +355,13 @@ class TestAlertDeduplication:
     def test_dedup_allows_no_key(self):
         received = []
         m = AlertManager(dedup_window_seconds=60)
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-            callback=lambda a: received.append(a),
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+                callback=lambda a: received.append(a),
+            )
+        )
         m.send(Alert(title="A", message="1"))
         m.send(Alert(title="A", message="1"))
         assert len(received) == 2
@@ -332,22 +369,28 @@ class TestAlertDeduplication:
     def test_resolved_always_passes(self):
         received = []
         m = AlertManager(dedup_window_seconds=60)
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-            callback=lambda a: received.append(a),
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+                callback=lambda a: received.append(a),
+            )
+        )
         m.send(Alert(title="Breach", message="x", dedup_key="k1"))
-        m.send(Alert(title="Resolved", message="ok", dedup_key="k1", severity=AlertSeverity.RESOLVED))
+        m.send(
+            Alert(title="Resolved", message="ok", dedup_key="k1", severity=AlertSeverity.RESOLVED)
+        )
         assert len(received) == 2
 
     def test_suppressed_in_stats(self):
         m = AlertManager(dedup_window_seconds=60)
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-            callback=lambda a: None,
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+                callback=lambda a: None,
+            )
+        )
         m.send(Alert(title="A", message="1", dedup_key="k1"))
         m.send(Alert(title="A", message="1", dedup_key="k1"))
         stats = m.get_stats()
@@ -361,12 +404,14 @@ class TestSLOAlertAutoFire:
 
         received = []
         manager = AlertManager()
-        manager.add_channel(ChannelConfig(
-            channel_type=AlertChannel.CALLBACK,
-            name="test",
-            callback=lambda a: received.append(a),
-            min_severity=AlertSeverity.INFO,
-        ))
+        manager.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.CALLBACK,
+                name="test",
+                callback=lambda a: received.append(a),
+                min_severity=AlertSeverity.INFO,
+            )
+        )
 
         slo = SLO(
             name="test-slo",
@@ -407,8 +452,13 @@ class TestSLOAlertAutoFire:
 
 class TestOpsGenieFormatter:
     def test_basic_format(self):
-        a = Alert(title="SLO Breach", message="Budget low", severity=AlertSeverity.CRITICAL,
-                  agent_id="agent-1", slo_name="my-slo")
+        a = Alert(
+            title="SLO Breach",
+            message="Budget low",
+            severity=AlertSeverity.CRITICAL,
+            agent_id="agent-1",
+            slo_name="my-slo",
+        )
         payload = format_opsgenie(a)
         assert payload["message"] == "SLO Breach"
         assert payload["priority"] == "P1"
@@ -428,8 +478,13 @@ class TestOpsGenieFormatter:
 
 class TestTeamsFormatter:
     def test_basic_format(self):
-        a = Alert(title="SLO Breach", message="Budget low", severity=AlertSeverity.CRITICAL,
-                  agent_id="agent-1", slo_name="my-slo")
+        a = Alert(
+            title="SLO Breach",
+            message="Budget low",
+            severity=AlertSeverity.CRITICAL,
+            agent_id="agent-1",
+            slo_name="my-slo",
+        )
         payload = format_teams(a)
         assert payload["type"] == "message"
         card = payload["attachments"][0]["content"]
@@ -455,11 +510,13 @@ class TestOpsGenieChannel:
     def test_callback_delivery(self):
         received = []
         m = AlertManager()
-        m.add_channel(ChannelConfig(
-            channel_type=AlertChannel.OPSGENIE,
-            name="opsgenie",
-            callback=lambda a: received.append(a),
-        ))
+        m.add_channel(
+            ChannelConfig(
+                channel_type=AlertChannel.OPSGENIE,
+                name="opsgenie",
+                callback=lambda a: received.append(a),
+            )
+        )
         assert AlertChannel.OPSGENIE in m._formatters
 
     def test_teams_formatter_registered(self):

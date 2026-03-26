@@ -91,10 +91,9 @@ class VouchingEngine:
     def get_vouchers_for(self, agent_did: str, session_id: str) -> list[VouchRecord]:
         """Get all sponsors for an agent in a session."""
         return [
-            v for v in self._vouches.values()
-            if v.vouchee_did == agent_did
-            and v.session_id == session_id
-            and v.is_active
+            v
+            for v in self._vouches.values()
+            if v.vouchee_did == agent_did and v.session_id == session_id and v.is_active
         ]
 
     def get_total_exposure(self, voucher_did: str, session_id: str) -> float:
@@ -119,14 +118,10 @@ class VouchingEngine:
                 count += 1
         return count
 
-    def _active_vouches_for(
-        self, agent_did: str, session_id: str
-    ) -> list[VouchRecord]:
+    def _active_vouches_for(self, agent_did: str, session_id: str) -> list[VouchRecord]:
         return self.get_vouchers_for(agent_did, session_id)
 
-    def _creates_cycle(
-        self, voucher_did: str, vouchee_did: str, session_id: str
-    ) -> bool:
+    def _creates_cycle(self, voucher_did: str, vouchee_did: str, session_id: str) -> bool:
         return False
 
 

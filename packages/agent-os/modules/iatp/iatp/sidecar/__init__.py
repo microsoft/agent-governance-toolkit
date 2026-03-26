@@ -12,6 +12,7 @@ This is the main sidecar that sits in front of an agent and handles:
 - Request routing
 - Telemetry and tracing
 """
+
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -49,7 +50,7 @@ class SidecarProxy:
         manifest: CapabilityManifest,
         sidecar_host: str = "0.0.0.0",
         sidecar_port: int = 8001,
-        attestation: Optional[AttestationRecord] = None
+        attestation: Optional[AttestationRecord] = None,
     ):
         self.agent_url = agent_url
         self.manifest = manifest
@@ -97,8 +98,7 @@ class SidecarProxy:
             """
             if not self.attestation:
                 raise HTTPException(
-                    status_code=404,
-                    detail="No attestation available for this agent"
+                    status_code=404, detail="No attestation available for this agent"
                 )
             return self.attestation.model_dump()
 
@@ -111,7 +111,7 @@ class SidecarProxy:
         async def proxy_request(
             request: Request,
             x_user_override: Optional[str] = Header(None),
-            x_agent_trace_id: Optional[str] = Header(None)
+            x_agent_trace_id: Optional[str] = Header(None),
         ):
             """
             Main proxy endpoint that forwards requests to the backend agent.
@@ -126,7 +126,7 @@ class SidecarProxy:
             # Parse request body
             try:
                 payload = await request.json()
-            except ValueError as e:
+            except ValueError:
                 # Log JSON parsing error
                 return JSONResponse(
                     status_code=400,
@@ -138,8 +138,9 @@ class SidecarProxy:
 
             # Validate using Policy Engine
             # This provides an additional layer of policy validation
-            policy_allowed, policy_error, policy_warning = \
-                self.policy_engine.validate_manifest(self.manifest)
+            policy_allowed, policy_error, policy_warning = self.policy_engine.validate_manifest(
+                self.manifest
+            )
 
             if not policy_allowed:
                 # Policy engine blocked the request
@@ -148,7 +149,7 @@ class SidecarProxy:
                     agent_id=self.manifest.agent_id,
                     payload=payload,
                     reason=f"Policy Engine: {policy_error}",
-                    manifest=self.manifest
+                    manifest=self.manifest,
                 )
                 return JSONResponse(
                     status_code=403,
@@ -156,14 +157,12 @@ class SidecarProxy:
                         "error": policy_error,
                         "trace_id": trace_id,
                         "blocked": True,
-                        "blocked_by": "policy_engine"
-                    }
+                        "blocked_by": "policy_engine",
+                    },
                 )
 
             # Validate privacy policy (existing SecurityValidator)
-            is_valid, error_message = self.validator.validate_privacy_policy(
-                self.manifest, payload
-            )
+            is_valid, error_message = self.validator.validate_privacy_policy(self.manifest, payload)
 
             if not is_valid:
                 # BLOCK the request
@@ -172,15 +171,11 @@ class SidecarProxy:
                     agent_id=self.manifest.agent_id,
                     payload=payload,
                     reason=error_message,
-                    manifest=self.manifest
+                    manifest=self.manifest,
                 )
                 return JSONResponse(
                     status_code=403,
-                    content={
-                        "error": error_message,
-                        "trace_id": trace_id,
-                        "blocked": True
-                    }
+                    content={"error": error_message, "trace_id": trace_id, "blocked": True},
                 )
 
             # Check if warning is needed (combine policy and security warnings)
@@ -205,8 +200,8 @@ class SidecarProxy:
                         "message": (
                             "This request requires user confirmation. "
                             "To proceed, retry with header 'X-User-Override: true'"
-                        )
-                    }
+                        ),
+                    },
                 )
 
             # Create quarantine session if needed
@@ -217,14 +212,14 @@ class SidecarProxy:
                     warning_message=warning or "Low trust agent",
                     user_override=True,
                     timestamp=_get_utc_timestamp(),
-                    manifest=self.manifest
+                    manifest=self.manifest,
                 )
                 self.quarantine_sessions[trace_id] = session
                 self.flight_recorder.log_user_override(
                     trace_id=trace_id,
                     agent_id=self.manifest.agent_id,
                     warning=warning or "Low trust agent",
-                    quarantine_session=session
+                    quarantine_session=session,
                 )
 
             # Log the request
@@ -233,7 +228,7 @@ class SidecarProxy:
                 agent_id=self.manifest.agent_id,
                 payload=payload,
                 manifest=self.manifest,
-                quarantined=should_quarantine
+                quarantined=should_quarantine,
             )
 
             # Forward to backend agent
@@ -243,11 +238,8 @@ class SidecarProxy:
                     response = await client.post(
                         self.agent_url,
                         json=payload,
-                        headers={
-                            "X-Agent-Trace-ID": trace_id,
-                            "Content-Type": "application/json"
-                        },
-                        timeout=30.0
+                        headers={"X-Agent-Trace-ID": trace_id, "Content-Type": "application/json"},
+                        timeout=30.0,
                     )
                     latency_ms = (time.time() - start_time) * 1000
 
@@ -262,21 +254,20 @@ class SidecarProxy:
                         agent_id=self.manifest.agent_id,
                         response=response_data,
                         status_code=response.status_code,
-                        latency_ms=latency_ms
+                        latency_ms=latency_ms,
                     )
 
                     # Record successful transaction for reputation
                     if 200 <= response.status_code < 300:
                         self.reputation_manager.record_success(
-                            agent_id=self.manifest.agent_id,
-                            trace_id=trace_id
+                            agent_id=self.manifest.agent_id, trace_id=trace_id
                         )
 
                     # Add tracing headers to response
                     headers = {
                         "X-Agent-Trace-ID": trace_id,
                         "X-Agent-Latency-Ms": str(int(latency_ms)),
-                        "X-Agent-Trust-Score": str(self.manifest.calculate_trust_score())
+                        "X-Agent-Trust-Score": str(self.manifest.calculate_trust_score()),
                     }
 
                     if should_quarantine:
@@ -286,7 +277,7 @@ class SidecarProxy:
                         content=response.content,
                         status_code=response.status_code,
                         headers=headers,
-                        media_type="application/json"
+                        media_type="application/json",
                     )
 
             except httpx.TimeoutException as e:
@@ -294,7 +285,7 @@ class SidecarProxy:
                     trace_id=trace_id,
                     agent_id=self.manifest.agent_id,
                     error="Request timeout",
-                    details={"timeout_seconds": 30}
+                    details={"timeout_seconds": 30},
                 )
 
                 # Record timeout failure for reputation
@@ -302,7 +293,7 @@ class SidecarProxy:
                     agent_id=self.manifest.agent_id,
                     failure_type="timeout",
                     trace_id=trace_id,
-                    details={"timeout_seconds": 30}
+                    details={"timeout_seconds": 30},
                 )
 
                 # Attempt recovery using scak integration
@@ -311,7 +302,7 @@ class SidecarProxy:
                     error=e,
                     manifest=self.manifest,
                     payload=payload,
-                    compensation_callback=None
+                    compensation_callback=None,
                 )
 
                 return JSONResponse(
@@ -319,15 +310,15 @@ class SidecarProxy:
                     content={
                         "error": "Backend agent timeout",
                         "trace_id": trace_id,
-                        "recovery": recovery_result
-                    }
+                        "recovery": recovery_result,
+                    },
                 )
             except Exception as e:
                 self.flight_recorder.log_error(
                     trace_id=trace_id,
                     agent_id=self.manifest.agent_id,
                     error=str(e),
-                    details={"exception_type": type(e).__name__}
+                    details={"exception_type": type(e).__name__},
                 )
 
                 # Record general failure for reputation
@@ -335,7 +326,7 @@ class SidecarProxy:
                     agent_id=self.manifest.agent_id,
                     failure_type="error",
                     trace_id=trace_id,
-                    details={"error": str(e), "exception_type": type(e).__name__}
+                    details={"error": str(e), "exception_type": type(e).__name__},
                 )
 
                 # Attempt recovery using scak integration
@@ -344,7 +335,7 @@ class SidecarProxy:
                     error=e,
                     manifest=self.manifest,
                     payload=payload,
-                    compensation_callback=None
+                    compensation_callback=None,
                 )
 
                 return JSONResponse(
@@ -352,8 +343,8 @@ class SidecarProxy:
                     content={
                         "error": "Backend agent error",
                         "trace_id": trace_id,
-                        "recovery": recovery_result
-                    }
+                        "recovery": recovery_result,
+                    },
                 )
 
         @self.app.get("/trace/{trace_id}")
@@ -382,16 +373,12 @@ class SidecarProxy:
             score = self.reputation_manager.get_score(agent_id)
             if not score:
                 raise HTTPException(
-                    status_code=404,
-                    detail=f"No reputation data for agent '{agent_id}'"
+                    status_code=404, detail=f"No reputation data for agent '{agent_id}'"
                 )
             return score.model_dump()
 
         @self.app.post("/reputation/{agent_id}/slash")
-        async def slash_reputation(
-            agent_id: str,
-            request: Request
-        ):
+        async def slash_reputation(agent_id: str, request: Request):
             """
             Slash an agent's reputation due to misbehavior.
 
@@ -422,17 +409,11 @@ class SidecarProxy:
             # Record the event based on reason
             if reason == "hallucination":
                 score = self.reputation_manager.record_hallucination(
-                    agent_id=agent_id,
-                    severity=severity,
-                    trace_id=trace_id,
-                    details=details
+                    agent_id=agent_id, severity=severity, trace_id=trace_id, details=details
                 )
             else:
                 score = self.reputation_manager.record_failure(
-                    agent_id=agent_id,
-                    failure_type=reason,
-                    trace_id=trace_id,
-                    details=details
+                    agent_id=agent_id, failure_type=reason, trace_id=trace_id, details=details
                 )
 
             return {
@@ -441,7 +422,7 @@ class SidecarProxy:
                 "new_score": score.score,
                 "trust_level": score.get_trust_level().value,
                 "reason": reason,
-                "severity": severity
+                "severity": severity,
             }
 
         @self.app.get("/reputation/export")
@@ -453,7 +434,7 @@ class SidecarProxy:
             """
             return {
                 "reputation_data": self.reputation_manager.export_reputation_data(),
-                "timestamp": _get_utc_timestamp()
+                "timestamp": _get_utc_timestamp(),
             }
 
         @self.app.post("/reputation/import")
@@ -475,19 +456,13 @@ class SidecarProxy:
             reputation_data = payload.get("reputation_data", {})
             self.reputation_manager.import_reputation_data(reputation_data)
 
-            return {
-                "status": "imported",
-                "agents_updated": len(reputation_data)
-            }
+            return {"status": "imported", "agents_updated": len(reputation_data)}
 
     def run(self):
         """Run the sidecar server."""
         import uvicorn
-        uvicorn.run(
-            self.app,
-            host=self.sidecar_host,
-            port=self.sidecar_port
-        )
+
+        uvicorn.run(self.app, host=self.sidecar_host, port=self.sidecar_port)
 
 
 def create_sidecar(
@@ -495,7 +470,7 @@ def create_sidecar(
     manifest: CapabilityManifest,
     host: str = "0.0.0.0",
     port: int = 8001,
-    attestation: Optional[AttestationRecord] = None
+    attestation: Optional[AttestationRecord] = None,
 ) -> SidecarProxy:
     """
     Factory function to create a sidecar proxy.
@@ -515,5 +490,5 @@ def create_sidecar(
         manifest=manifest,
         sidecar_host=host,
         sidecar_port=port,
-        attestation=attestation
+        attestation=attestation,
     )

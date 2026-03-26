@@ -172,7 +172,9 @@ class PolicyConflictResolver:
                 strategy_used=self.strategy,
                 candidates_evaluated=1,
                 conflict_detected=False,
-                resolution_trace=[f"Single candidate: {candidates[0].rule_name} → {candidates[0].action}"],
+                resolution_trace=[
+                    f"Single candidate: {candidates[0].rule_name} → {candidates[0].action}"
+                ],
             )
 
         # Detect genuine conflict (mix of allow and deny)
@@ -208,7 +210,9 @@ class PolicyConflictResolver:
             denies.sort(key=lambda c: c.priority, reverse=True)
             winner = denies[0]
             trace.append(f"DENY_OVERRIDES: {len(denies)} deny rule(s) found")
-            trace.append(f"Winner: {winner.rule_name} (priority={winner.priority}, scope={winner.scope.value})")
+            trace.append(
+                f"Winner: {winner.rule_name} (priority={winner.priority}, scope={winner.scope.value})"
+            )
             return winner, trace
 
         # No denies — pick highest-priority allow
@@ -228,7 +232,9 @@ class PolicyConflictResolver:
             allows.sort(key=lambda c: c.priority, reverse=True)
             winner = allows[0]
             trace.append(f"ALLOW_OVERRIDES: {len(allows)} allow rule(s) found")
-            trace.append(f"Winner: {winner.rule_name} (priority={winner.priority}, scope={winner.scope.value})")
+            trace.append(
+                f"Winner: {winner.rule_name} (priority={winner.priority}, scope={winner.scope.value})"
+            )
             return winner, trace
 
         # No allows — pick highest-priority deny

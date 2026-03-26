@@ -55,9 +55,7 @@ class TestAgentIdentityManager:
     def test_peer_cannot_sign(self):
         mgr = AgentIdentityManager()
         local = mgr.create_identity("local")
-        peer = mgr.register_peer(
-            "remote", did="did:x", public_key_bytes=local.public_key_bytes
-        )
+        peer = mgr.register_peer("remote", did="did:x", public_key_bytes=local.public_key_bytes)
         try:
             peer.sign(b"data")
             assert False, "Should have raised ValueError"

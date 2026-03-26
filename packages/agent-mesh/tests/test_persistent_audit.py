@@ -4,9 +4,7 @@
 
 import pytest
 
-pytestmark = pytest.mark.skip(
-    reason="persistent_audit.py not included"
-)
+pytestmark = pytest.mark.skip(reason="persistent_audit.py not included")
 
 
 @pytest.fixture
@@ -51,15 +49,11 @@ class TestPersistentAuditAppend:
     @pytest.mark.asyncio
     async def test_chain_root_updates(self, audit_log):
         assert audit_log.chain_root is None
-        await audit_log.append(
-            event_type="test", agent_did="did:mesh:a1", action="read"
-        )
+        await audit_log.append(event_type="test", agent_did="did:mesh:a1", action="read")
         root1 = audit_log.chain_root
         assert root1 is not None
 
-        await audit_log.append(
-            event_type="test", agent_did="did:mesh:a1", action="write"
-        )
+        await audit_log.append(event_type="test", agent_did="did:mesh:a1", action="write")
         root2 = audit_log.chain_root
         assert root2 != root1
 
@@ -117,9 +111,7 @@ class TestPersistentAuditQuery:
 
     @pytest.mark.asyncio
     async def test_get_entry_by_id(self, audit_log):
-        entry = await audit_log.append(
-            event_type="test", agent_did="did:mesh:a1", action="read"
-        )
+        entry = await audit_log.append(event_type="test", agent_did="did:mesh:a1", action="read")
         found = await audit_log.get_entry(entry.entry_id)
         assert found is not None
         assert found.entry_id == entry.entry_id
@@ -137,7 +129,9 @@ class TestPersistentAuditQuery:
     @pytest.mark.asyncio
     async def test_query_by_event_type(self, audit_log):
         await audit_log.append(event_type="tool_invocation", agent_did="did:mesh:a1", action="read")
-        await audit_log.append(event_type="policy_violation", agent_did="did:mesh:a1", action="write")
+        await audit_log.append(
+            event_type="policy_violation", agent_did="did:mesh:a1", action="write"
+        )
 
         results = await audit_log.query(event_type="policy_violation")
         assert len(results) == 1
@@ -145,8 +139,12 @@ class TestPersistentAuditQuery:
 
     @pytest.mark.asyncio
     async def test_query_by_outcome(self, audit_log):
-        await audit_log.append(event_type="test", agent_did="did:mesh:a1", action="read", outcome="success")
-        await audit_log.append(event_type="test", agent_did="did:mesh:a1", action="write", outcome="denied")
+        await audit_log.append(
+            event_type="test", agent_did="did:mesh:a1", action="read", outcome="success"
+        )
+        await audit_log.append(
+            event_type="test", agent_did="did:mesh:a1", action="write", outcome="denied"
+        )
 
         results = await audit_log.query(outcome="denied")
         assert len(results) == 1

@@ -274,18 +274,18 @@ class WorkflowContext:
     current_step: str      # Current step ID
     data: Dict[str, Any]   # Shared data bus
     history: List[...]     # Execution history
-    
+
 # Access in workers
 def worker_function(input_data: Any, context: WorkflowContext) -> Any:
     # Access goal
     print(f"Goal: {context.goal}")
-    
+
     # Access previous outputs
     prev_output = context.get_last_output()
-    
+
     # Access specific worker output
     specs = context.get_last_output("product_manager")
-    
+
     # Store data for later steps
     context.data["important_info"] = "value"
 ```
@@ -426,7 +426,7 @@ Workers should be safe to retry:
 def coder_worker(input_data, context):
     # ✓ GOOD: Same input → Same output
     return generate_code(input_data)
-    
+
     # ✗ BAD: Side effects
     with open("file.txt", "w") as f:  # File gets overwritten!
         f.write(generate_code(input_data))
@@ -444,7 +444,7 @@ class WorkerType(Enum):
     PRODUCT_MANAGER = "product_manager"
     CODER = "coder"
     REVIEWER = "reviewer"
-    
+
     # Custom types
     DATA_SCIENTIST = "data_scientist"
     SECURITY_AUDITOR = "security_auditor"
@@ -463,13 +463,13 @@ def create_ml_pipeline() -> WorkflowDefinition:
         description="Train and deploy ML model",
         goal="Build ML model"
     )
-    
+
     workflow.add_step(...)  # Data collection
     workflow.add_step(...)  # Feature engineering
     workflow.add_step(...)  # Model training
     workflow.add_step(...)  # Validation
     workflow.add_step(...)  # Deployment
-    
+
     return workflow
 ```
 

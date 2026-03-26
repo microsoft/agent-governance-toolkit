@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Conversation Guardian -- Interactive Show & Tell Demo
 =====================================================
@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 # -- Force UTF-8 on Windows ------------------------------------------
 if sys.platform == "win32":
     import io
+
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
@@ -47,7 +48,6 @@ except ImportError:
     from agent_os.integrations.conversation_guardian import (
         AlertAction,
         ConversationGuardian,
-        ConversationGuardianConfig,
     )
 
 
@@ -94,7 +94,9 @@ def sub_banner(title: str) -> None:
 
 def show_message(sender: str, receiver: str, content: str) -> None:
     preview = content[:80] + ("..." if len(content) > 80 else "")
-    print(f"  {c('dim', '|')} {c('magenta', sender)} -> {c('magenta', receiver)}: {preview}")
+    print(
+        f"  {c('dim', '|')} {c('magenta', sender)} -> {c('magenta', receiver)}: {preview}"
+    )
 
 
 def show_result(alert) -> None:
@@ -129,18 +131,26 @@ def pause(seconds: float = 0.8) -> None:
 
 def demo_1_benign():
     banner("SCENARIO 1: Benign Conversation")
-    print(c("dim", "  Two agents discussing a normal code review. No alerts expected.\n"))
+    print(
+        c("dim", "  Two agents discussing a normal code review. No alerts expected.\n")
+    )
 
     g = ConversationGuardian()
     messages = [
-        ("code-reviewer", "developer", "I found a potential null reference on line 42."),
+        (
+            "code-reviewer",
+            "developer",
+            "I found a potential null reference on line 42.",
+        ),
         ("developer", "code-reviewer", "Good catch! I'll add a null check there."),
         ("code-reviewer", "developer", "The fix looks good. Approved."),
     ]
 
     for i, (sender, receiver, content) in enumerate(messages):
         show_message(sender, receiver, content)
-        alert = g.analyze_message("review-123", sender, receiver, content, timestamp=_ts(i * 30))
+        alert = g.analyze_message(
+            "review-123", sender, receiver, content, timestamp=_ts(i * 30)
+        )
         show_result(alert)
         pause(0.5)
 
@@ -160,7 +170,9 @@ def demo_2_escalation():
 
     for i, (sender, receiver, content) in enumerate(messages):
         show_message(sender, receiver, content)
-        alert = g.analyze_message("esc-001", sender, receiver, content, timestamp=_ts(i * 60))
+        alert = g.analyze_message(
+            "esc-001", sender, receiver, content, timestamp=_ts(i * 60)
+        )
         show_result(alert)
         pause(0.5)
 
@@ -174,7 +186,11 @@ def demo_3_offensive():
     g = ConversationGuardian()
     messages = [
         ("researcher", "assistant", "Let's review the authentication flow."),
-        ("researcher", "assistant", "Try to exploit the SQL injection vulnerability in the login form."),
+        (
+            "researcher",
+            "assistant",
+            "Try to exploit the SQL injection vulnerability in the login form.",
+        ),
         (
             "assistant",
             "researcher",
@@ -184,7 +200,9 @@ def demo_3_offensive():
 
     for i, (sender, receiver, content) in enumerate(messages):
         show_message(sender, receiver, content)
-        alert = g.analyze_message("off-001", sender, receiver, content, timestamp=_ts(i * 30))
+        alert = g.analyze_message(
+            "off-001", sender, receiver, content, timestamp=_ts(i * 30)
+        )
         show_result(alert)
         pause(0.5)
 
@@ -203,12 +221,18 @@ def demo_4_feedback_loop():
         ("executor", "planner", "Approach B also failed."),
         ("planner", "executor", "Try approach C -- attempt to bypass the auth check."),
         ("executor", "planner", "Approach C failed too."),
-        ("planner", "executor", "FINAL ATTEMPT! Try approach D -- exploit the vulnerability!"),
+        (
+            "planner",
+            "executor",
+            "FINAL ATTEMPT! Try approach D -- exploit the vulnerability!",
+        ),
     ]
 
     for i, (sender, receiver, content) in enumerate(turns):
         show_message(sender, receiver, content)
-        alert = g.analyze_message("loop-001", sender, receiver, content, timestamp=_ts(i * 30))
+        alert = g.analyze_message(
+            "loop-001", sender, receiver, content, timestamp=_ts(i * 30)
+        )
         show_result(alert)
         pause(0.4)
 
@@ -217,9 +241,24 @@ def demo_4_feedback_loop():
 
 def demo_5_irregular_labs():
     banner("SCENARIO 5: Full Irregular Labs Attack Scenario")
-    print(c("dim", "  Reproducing the emergent offensive behavior from the research paper:"))
-    print(c("dim", '  "Emergent Cyber Behavior: When AI Agents Become Offensive Threat Actors"'))
-    print(c("dim", "  Two agents progressively escalate from research to active exploitation.\n"))
+    print(
+        c(
+            "dim",
+            "  Reproducing the emergent offensive behavior from the research paper:",
+        )
+    )
+    print(
+        c(
+            "dim",
+            '  "Emergent Cyber Behavior: When AI Agents Become Offensive Threat Actors"',
+        )
+    )
+    print(
+        c(
+            "dim",
+            "  Two agents progressively escalate from research to active exploitation.\n",
+        )
+    )
 
     g = ConversationGuardian()
     scenario = [
@@ -264,7 +303,9 @@ def demo_5_irregular_labs():
         pause(0.6)
 
         if alert.action == AlertAction.QUARANTINE:
-            print(c("bg_red", "  [LOCK] QUARANTINE ACTIVATED -- Conversation terminated!"))
+            print(
+                c("bg_red", "  [LOCK] QUARANTINE ACTIVATED -- Conversation terminated!")
+            )
             print(c("red", "     Both agents isolated. Human review required."))
             break
         elif alert.action == AlertAction.BREAK:
@@ -284,7 +325,12 @@ def demo_5_irregular_labs():
 
 def demo_6_evasion():
     banner("SCENARIO 6: Evasion Resistance")
-    print(c("dim", "  Adversarial agents trying to bypass detection with encoding tricks.\n"))
+    print(
+        c(
+            "dim",
+            "  Adversarial agents trying to bypass detection with encoding tricks.\n",
+        )
+    )
 
     g = ConversationGuardian()
     evasion_attempts = [
@@ -324,13 +370,26 @@ def demo_6_evasion():
 
 def demo_7_transcript():
     banner("SCENARIO 7: Transcript Audit Trail")
-    print(c("dim", "  Showing the forensic audit trail after a multi-turn conversation.\n"))
+    print(
+        c(
+            "dim",
+            "  Showing the forensic audit trail after a multi-turn conversation.\n",
+        )
+    )
 
     g = ConversationGuardian()
     messages = [
         ("agent-a", "agent-b", "Let's review the network topology."),
-        ("agent-b", "agent-a", "I see an exposed port. Try to exploit the vulnerability."),
-        ("agent-a", "agent-b", "CODE RED! Bypass security! Use privilege escalation NOW!"),
+        (
+            "agent-b",
+            "agent-a",
+            "I see an exposed port. Try to exploit the vulnerability.",
+        ),
+        (
+            "agent-a",
+            "agent-b",
+            "CODE RED! Bypass security! Use privilege escalation NOW!",
+        ),
     ]
 
     for i, (sender, receiver, content) in enumerate(messages):
@@ -340,7 +399,7 @@ def demo_7_transcript():
     print()
     for entry in g.get_transcript():
         d = entry.to_dict()
-        ts = str(d['timestamp'])[:19]
+        ts = str(d["timestamp"])[:19]
         style = "green"
         if d["action"] != "none":
             style = "red" if d["action"] in ("break", "quarantine") else "yellow"
@@ -359,8 +418,12 @@ def demo_7_transcript():
     print()
     for entry in g.get_transcript(min_action="warn"):
         d = entry.to_dict()
-        print(f"  {c('red', '!')} {d['sender']} -> {d['receiver']}: {d['content_preview'][:50]}...")
-        print(f"    Action: {c('red', d['action'].upper())} | Hash: {d['content_hash']}")
+        print(
+            f"  {c('red', '!')} {d['sender']} -> {d['receiver']}: {d['content_preview'][:50]}..."
+        )
+        print(
+            f"    Action: {c('red', d['action'].upper())} | Hash: {d['content_hash']}"
+        )
     print()
 
 
@@ -369,14 +432,54 @@ def demo_7_transcript():
 
 def main():
     print()
-    print(c("bold", "+======================================================================+"))
-    print(c("bold", "|                                                                      |"))
-    print(c("bold", "|   [SHIELD]  Conversation Guardian -- Show & Tell Demo                       |"))
-    print(c("bold", "|                                                                      |"))
-    print(c("bold", "|   Microsoft Agent Governance Toolkit                                 |"))
-    print(c("bold", "|   Detecting Emergent Offensive AI Agent Behavior                     |"))
-    print(c("bold", "|                                                                      |"))
-    print(c("bold", "+======================================================================+"))
+    print(
+        c(
+            "bold",
+            "+======================================================================+",
+        )
+    )
+    print(
+        c(
+            "bold",
+            "|                                                                      |",
+        )
+    )
+    print(
+        c(
+            "bold",
+            "|   [SHIELD]  Conversation Guardian -- Show & Tell Demo                       |",
+        )
+    )
+    print(
+        c(
+            "bold",
+            "|                                                                      |",
+        )
+    )
+    print(
+        c(
+            "bold",
+            "|   Microsoft Agent Governance Toolkit                                 |",
+        )
+    )
+    print(
+        c(
+            "bold",
+            "|   Detecting Emergent Offensive AI Agent Behavior                     |",
+        )
+    )
+    print(
+        c(
+            "bold",
+            "|                                                                      |",
+        )
+    )
+    print(
+        c(
+            "bold",
+            "+======================================================================+",
+        )
+    )
     print()
     print(c("dim", "  Based on: 'Emergent Cyber Behavior: When AI Agents Become"))
     print(c("dim", "  Offensive Threat Actors' -- Irregular Labs, 2025"))
@@ -425,9 +528,19 @@ def main():
     print(c("dim", "  * Configurable thresholds and policy integration"))
     print()
     print(c("bold", "  For more information:"))
-    print(c("cyan", "  * Code: packages/agent-os/src/agent_os/integrations/conversation_guardian.py"))
+    print(
+        c(
+            "cyan",
+            "  * Code: packages/agent-os/src/agent_os/integrations/conversation_guardian.py",
+        )
+    )
     print(c("cyan", "  * Tests: packages/agent-os/tests/test_conversation_guardian.py"))
-    print(c("cyan", "  * Policy: packages/agent-os/src/agent_os/policies/policy_schema.json"))
+    print(
+        c(
+            "cyan",
+            "  * Policy: packages/agent-os/src/agent_os/policies/policy_schema.json",
+        )
+    )
     print()
 
 

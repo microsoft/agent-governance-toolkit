@@ -2,12 +2,12 @@
 # Licensed under the MIT License.
 """Tests for the adapter registry with auto-discovery."""
 
+from typing import Any
+
 import pytest
-from typing import Any, Optional
 
-from agent_os.integrations.base import BaseIntegration, GovernancePolicy
+from agent_os.integrations.base import BaseIntegration
 from agent_os.integrations.registry import AdapterRegistry, register_adapter
-
 
 # ── Helpers ──────────────────────────────────────────────────
 

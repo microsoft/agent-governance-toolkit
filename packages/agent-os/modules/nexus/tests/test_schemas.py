@@ -12,16 +12,14 @@ _nexus_parent = os.path.join(os.path.dirname(__file__), "..", "..")
 if _nexus_parent not in sys.path:
     sys.path.insert(0, _nexus_parent)
 
+from nexus.schemas.compliance import ComplianceRecord
+from nexus.schemas.escrow import EscrowReceipt, EscrowRequest, EscrowStatus
 from nexus.schemas.manifest import (
-    AgentIdentity,
     AgentCapabilities,
-    AgentPrivacy,
-    MuteRules,
+    AgentIdentity,
     AgentManifest,
 )
-from nexus.schemas.escrow import EscrowRequest, EscrowReceipt, EscrowStatus
-from nexus.schemas.receipt import JobReceipt, JobCompletionReceipt, SignedReceipt
-from nexus.schemas.compliance import ComplianceRecord, ComplianceAuditReport
+from nexus.schemas.receipt import JobCompletionReceipt, JobReceipt, SignedReceipt
 
 
 class TestAgentIdentity:
@@ -29,25 +27,33 @@ class TestAgentIdentity:
 
     def test_valid_did(self):
         identity = AgentIdentity(
-            did="did:nexus:my-agent", verification_key="ed25519:key123", owner_id="org",
+            did="did:nexus:my-agent",
+            verification_key="ed25519:key123",
+            owner_id="org",
         )
         assert identity.did == "did:nexus:my-agent"
 
     def test_invalid_did_prefix(self):
         with pytest.raises(Exception):
             AgentIdentity(
-                did="did:other:my-agent", verification_key="ed25519:key123", owner_id="org",
+                did="did:other:my-agent",
+                verification_key="ed25519:key123",
+                owner_id="org",
             )
 
     def test_invalid_verification_key(self):
         with pytest.raises(Exception):
             AgentIdentity(
-                did="did:nexus:my-agent", verification_key="rsa:key123", owner_id="org",
+                did="did:nexus:my-agent",
+                verification_key="rsa:key123",
+                owner_id="org",
             )
 
     def test_valid_ed25519_key(self):
         identity = AgentIdentity(
-            did="did:nexus:agent", verification_key="ed25519:abc", owner_id="org",
+            did="did:nexus:agent",
+            verification_key="ed25519:abc",
+            owner_id="org",
         )
         assert identity.verification_key == "ed25519:abc"
 
@@ -99,7 +105,9 @@ class TestAgentManifest:
     def test_is_attestation_valid_when_set(self):
         m = AgentManifest(
             identity=AgentIdentity(
-                did="did:nexus:a", verification_key="ed25519:k", owner_id="org",
+                did="did:nexus:a",
+                verification_key="ed25519:k",
+                owner_id="org",
             ),
             attestation_signature="sig_123",
             attestation_expires=datetime.now(timezone.utc) + timedelta(hours=24),
@@ -109,7 +117,9 @@ class TestAgentManifest:
     def test_is_attestation_expired(self):
         m = AgentManifest(
             identity=AgentIdentity(
-                did="did:nexus:a", verification_key="ed25519:k", owner_id="org",
+                did="did:nexus:a",
+                verification_key="ed25519:k",
+                owner_id="org",
             ),
             attestation_signature="sig_123",
             attestation_expires=datetime.now(timezone.utc) - timedelta(hours=1),
@@ -128,29 +138,39 @@ class TestEscrowRequestConstraints:
     def test_credits_must_be_positive(self):
         with pytest.raises(Exception):
             EscrowRequest(
-                requester_did="did:nexus:a", provider_did="did:nexus:b",
-                task_hash="h", credits=-1,
+                requester_did="did:nexus:a",
+                provider_did="did:nexus:b",
+                task_hash="h",
+                credits=-1,
             )
 
     def test_credits_max_10000(self):
         with pytest.raises(Exception):
             EscrowRequest(
-                requester_did="did:nexus:a", provider_did="did:nexus:b",
-                task_hash="h", credits=10001,
+                requester_did="did:nexus:a",
+                provider_did="did:nexus:b",
+                task_hash="h",
+                credits=10001,
             )
 
     def test_timeout_min_60(self):
         with pytest.raises(Exception):
             EscrowRequest(
-                requester_did="did:nexus:a", provider_did="did:nexus:b",
-                task_hash="h", credits=100, timeout_seconds=30,
+                requester_did="did:nexus:a",
+                provider_did="did:nexus:b",
+                task_hash="h",
+                credits=100,
+                timeout_seconds=30,
             )
 
     def test_timeout_max_86400(self):
         with pytest.raises(Exception):
             EscrowRequest(
-                requester_did="did:nexus:a", provider_did="did:nexus:b",
-                task_hash="h", credits=100, timeout_seconds=100000,
+                requester_did="did:nexus:a",
+                provider_did="did:nexus:b",
+                task_hash="h",
+                credits=100,
+                timeout_seconds=100000,
             )
 
 
@@ -160,31 +180,50 @@ class TestJobReceipt:
     def test_compute_hash_deterministic(self):
         now = datetime(2024, 1, 1, 12, 0, 0)
         r1 = JobReceipt(
-            receipt_id="r1", task_id="t1", requester_did="did:nexus:a",
-            provider_did="did:nexus:b", task_hash="hash1", created_at=now,
+            receipt_id="r1",
+            task_id="t1",
+            requester_did="did:nexus:a",
+            provider_did="did:nexus:b",
+            task_hash="hash1",
+            created_at=now,
         )
         r2 = JobReceipt(
-            receipt_id="r1", task_id="t1", requester_did="did:nexus:a",
-            provider_did="did:nexus:b", task_hash="hash1", created_at=now,
+            receipt_id="r1",
+            task_id="t1",
+            requester_did="did:nexus:a",
+            provider_did="did:nexus:b",
+            task_hash="hash1",
+            created_at=now,
         )
         assert r1.compute_hash() == r2.compute_hash()
 
     def test_compute_hash_differs_for_different_data(self):
         now = datetime(2024, 1, 1, 12, 0, 0)
         r1 = JobReceipt(
-            receipt_id="r1", task_id="t1", requester_did="did:nexus:a",
-            provider_did="did:nexus:b", task_hash="hash1", created_at=now,
+            receipt_id="r1",
+            task_id="t1",
+            requester_did="did:nexus:a",
+            provider_did="did:nexus:b",
+            task_hash="hash1",
+            created_at=now,
         )
         r2 = JobReceipt(
-            receipt_id="r2", task_id="t1", requester_did="did:nexus:a",
-            provider_did="did:nexus:b", task_hash="hash1", created_at=now,
+            receipt_id="r2",
+            task_id="t1",
+            requester_did="did:nexus:a",
+            provider_did="did:nexus:b",
+            task_hash="hash1",
+            created_at=now,
         )
         assert r1.compute_hash() != r2.compute_hash()
 
     def test_hash_is_sha256(self):
         r = JobReceipt(
-            receipt_id="r1", task_id="t1", requester_did="did:nexus:a",
-            provider_did="did:nexus:b", task_hash="hash1",
+            receipt_id="r1",
+            task_id="t1",
+            requester_did="did:nexus:a",
+            provider_did="did:nexus:b",
+            task_hash="hash1",
         )
         h = r.compute_hash()
         assert len(h) == 64  # SHA-256 hex digest length
@@ -193,10 +232,16 @@ class TestJobReceipt:
 class TestSignedReceipt:
     """Tests for SignedReceipt methods."""
 
-    def _make_signed_receipt(self, req_sig=None, prov_sig=None, nexus_witnessed=False, nexus_sig=None):
+    def _make_signed_receipt(
+        self, req_sig=None, prov_sig=None, nexus_witnessed=False, nexus_sig=None
+    ):
         receipt = JobCompletionReceipt(
-            receipt_id="r1", task_id="t1", requester_did="did:nexus:a",
-            provider_did="did:nexus:b", task_hash="h", outcome="success",
+            receipt_id="r1",
+            task_id="t1",
+            requester_did="did:nexus:a",
+            provider_did="did:nexus:b",
+            task_hash="h",
+            outcome="success",
             duration_ms=100,
         )
         return SignedReceipt(
@@ -246,7 +291,10 @@ class TestComplianceRecord:
         now = datetime(2024, 6, 1, 12, 0, 0)
         r1 = ComplianceRecord(event_id="e1", event_type="agent_registered", timestamp=now)
         r2 = ComplianceRecord(
-            event_id="e1", event_type="agent_registered", timestamp=now, signature="sig",
+            event_id="e1",
+            event_type="agent_registered",
+            timestamp=now,
+            signature="sig",
         )
         assert r1.compute_hash() == r2.compute_hash()
 
@@ -258,8 +306,10 @@ class TestEscrowReceiptMethods:
         return EscrowReceipt(
             escrow_id="e1",
             request=EscrowRequest(
-                requester_did="did:nexus:a", provider_did="did:nexus:b",
-                task_hash="h", credits=100,
+                requester_did="did:nexus:a",
+                provider_did="did:nexus:b",
+                task_hash="h",
+                credits=100,
             ),
             status=status,
             expires_at=datetime.now(timezone.utc) + timedelta(hours=expires_delta_hours),

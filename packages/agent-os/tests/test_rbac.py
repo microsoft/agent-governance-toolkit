@@ -8,8 +8,7 @@ import tempfile
 import pytest
 
 from agent_os.integrations.base import GovernancePolicy
-from agent_os.integrations.rbac import DEFAULT_ROLE, Role, RBACManager
-
+from agent_os.integrations.rbac import DEFAULT_ROLE, RBACManager, Role
 
 # ── Fixtures ──────────────────────────────────────────────────
 

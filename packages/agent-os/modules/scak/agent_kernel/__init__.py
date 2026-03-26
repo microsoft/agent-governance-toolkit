@@ -18,25 +18,32 @@ Reference Implementations:
 
 __version__ = "2.1.0"
 
-from .kernel import SelfCorrectingAgentKernel
-from .models import (
-    AgentFailure, FailureAnalysis, CorrectionPatch,
-    AgentOutcome, CompletenessAudit, ClassifiedPatch,
-    OutcomeType, GiveUpSignal, PatchDecayType,
-    ToolExecutionTelemetry, ToolExecutionStatus,
-    SemanticAnalysis, NudgeResult
-)
-from .outcome_analyzer import OutcomeAnalyzer
-from .completeness_auditor import CompletenessAuditor
-from .semantic_purge import SemanticPurge, PatchClassifier
-from .triage import FailureTriage, FixStrategy
-from .semantic_analyzer import SemanticAnalyzer
-from .nudge_mechanism import NudgeMechanism
-
 # Reference implementations (simplified examples)
 from .auditor import CompletenessAuditor as SimpleCompletenessAuditor
+from .completeness_auditor import CompletenessAuditor
+from .kernel import SelfCorrectingAgentKernel
+from .memory_manager import LessonType, MemoryManager
+from .models import (
+    AgentFailure,
+    AgentOutcome,
+    ClassifiedPatch,
+    CompletenessAudit,
+    CorrectionPatch,
+    FailureAnalysis,
+    GiveUpSignal,
+    NudgeResult,
+    OutcomeType,
+    PatchDecayType,
+    SemanticAnalysis,
+    ToolExecutionStatus,
+    ToolExecutionTelemetry,
+)
+from .nudge_mechanism import NudgeMechanism
+from .outcome_analyzer import OutcomeAnalyzer
+from .semantic_analyzer import SemanticAnalyzer
+from .semantic_purge import PatchClassifier, SemanticPurge
 from .teacher import diagnose_failure
-from .memory_manager import MemoryManager, LessonType
+from .triage import FailureTriage, FixStrategy
 
 __all__ = [
     "SelfCorrectingAgentKernel",

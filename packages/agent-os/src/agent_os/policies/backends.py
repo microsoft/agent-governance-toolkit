@@ -146,9 +146,7 @@ class OPABackend:
                 result = self._evaluate_remote(context)
             else:
                 result = self._evaluate_local(context)
-            result.evaluation_ms = (
-                datetime.now(timezone.utc) - start
-            ).total_seconds() * 1000
+            result.evaluation_ms = (datetime.now(timezone.utc) - start).total_seconds() * 1000
             return result
         except Exception as e:
             elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
@@ -214,16 +212,19 @@ class OPABackend:
 
     def _evaluate_cli(self, context: dict[str, Any]) -> BackendDecision:
         input_json = json.dumps(context)
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".rego", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".rego", delete=False) as f:
             f.write(self._rego_content)
             rego_file = f.name
 
         cmd = [
-            "opa", "eval", "--format", "json",
-            "--input", "/dev/stdin",
-            "--data", rego_file,
+            "opa",
+            "eval",
+            "--format",
+            "json",
+            "--input",
+            "/dev/stdin",
+            "--data",
+            rego_file,
             self._query,
         ]
         try:
@@ -428,6 +429,7 @@ class CedarBackend:
     def _check_cedarpy() -> bool:
         try:
             import cedarpy  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -439,19 +441,13 @@ class CedarBackend:
     def evaluate(self, context: dict[str, Any]) -> BackendDecision:
         start = datetime.now(timezone.utc)
         try:
-            if self._mode == "cedarpy" or (
-                self._mode == "auto" and self._cedarpy_available
-            ):
+            if self._mode == "cedarpy" or (self._mode == "auto" and self._cedarpy_available):
                 result = self._evaluate_cedarpy(context)
-            elif self._mode == "cli" or (
-                self._mode == "auto" and self._cli_available
-            ):
+            elif self._mode == "cli" or (self._mode == "auto" and self._cli_available):
                 result = self._evaluate_cli(context)
             else:
                 result = self._evaluate_builtin(context)
-            result.evaluation_ms = (
-                datetime.now(timezone.utc) - start
-            ).total_seconds() * 1000
+            result.evaluation_ms = (datetime.now(timezone.utc) - start).total_seconds() * 1000
             return result
         except Exception as e:
             elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
@@ -467,9 +463,9 @@ class CedarBackend:
 
     def _build_cedar_request(self, context: dict[str, Any]) -> dict[str, Any]:
         """Build a Cedar authorization request from execution context."""
-        agent_id = context.get("agent_id", "Agent::\"anonymous\"")
+        agent_id = context.get("agent_id", 'Agent::"anonymous"')
         tool_name = context.get("tool_name", "unknown")
-        resource = context.get("resource", "Resource::\"default\"")
+        resource = context.get("resource", 'Resource::"default"')
 
         # Normalize to Cedar entity format
         if "::" not in str(agent_id):
@@ -484,8 +480,9 @@ class CedarBackend:
             "principal": agent_id,
             "action": f'Action::"{action_name}"',
             "resource": resource,
-            "context": {k: v for k, v in context.items()
-                        if k not in ("agent_id", "tool_name", "resource")},
+            "context": {
+                k: v for k, v in context.items() if k not in ("agent_id", "tool_name", "resource")
+            },
         }
 
     def _evaluate_cedarpy(self, context: dict[str, Any]) -> BackendDecision:
@@ -511,7 +508,9 @@ class CedarBackend:
             backend="cedar",
             raw_result={
                 "decision": str(response.decision),
-                "diagnostics": str(response.diagnostics) if hasattr(response, "diagnostics") else None,
+                "diagnostics": str(response.diagnostics)
+                if hasattr(response, "diagnostics")
+                else None,
             },
         )
 
@@ -530,10 +529,14 @@ class CedarBackend:
             request_file.write_text(json.dumps(request))
 
             cmd = [
-                "cedar", "authorize",
-                "--policies", str(policy_file),
-                "--entities", str(entities_file),
-                "--request-json", str(request_file),
+                "cedar",
+                "authorize",
+                "--policies",
+                str(policy_file),
+                "--entities",
+                str(entities_file),
+                "--request-json",
+                str(request_file),
             ]
             if self._schema_path:
                 cmd.extend(["--schema", self._schema_path])
@@ -637,7 +640,7 @@ def _parse_cedar_statements(content: str) -> list[dict[str, Any]]:
     statements: list[dict[str, Any]] = []
     # Match permit(...) or forbid(...) blocks including multiline
     pattern = re.compile(
-        r'(permit|forbid)\s*\((.*?)\)\s*;',
+        r"(permit|forbid)\s*\((.*?)\)\s*;",
         re.DOTALL,
     )
 
@@ -646,17 +649,15 @@ def _parse_cedar_statements(content: str) -> list[dict[str, Any]]:
         body = match.group(2)
 
         # Extract action constraint: action == Action::"SomeThing"
-        action_match = re.search(
-            r'action\s*==\s*Action::"([^"]+)"', body
-        )
-        action_constraint = (
-            f'Action::"{action_match.group(1)}"' if action_match else None
-        )
+        action_match = re.search(r'action\s*==\s*Action::"([^"]+)"', body)
+        action_constraint = f'Action::"{action_match.group(1)}"' if action_match else None
 
-        statements.append({
-            "effect": effect,
-            "action_constraint": action_constraint,
-            "raw": match.group(0),
-        })
+        statements.append(
+            {
+                "effect": effect,
+                "action_constraint": action_constraint,
+                "raw": match.group(0),
+            }
+        )
 
     return statements

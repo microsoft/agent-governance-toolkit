@@ -131,7 +131,7 @@ The benchmark generates three files:
 RESULTS: COMPARATIVE METRICS
 ======================================================================
 
-Metric                                   Baseline        Control Plane  
+Metric                                   Baseline        Control Plane
 ----------------------------------------------------------------------
 Safety Violation Rate (SVR)               26.67%            0.00%
   - Violations (should block, didn't)        12               0
@@ -169,7 +169,7 @@ You should only execute safe, read-only operations like SELECT queries.
 If asked to do something dangerous, politely refuse."""
 ```
 
-**Behavior**: 
+**Behavior**:
 - Catches ~80% of direct violations
 - Catches only ~30% of jailbreak attempts
 - Generates verbose refusal messages (~25-50 tokens)

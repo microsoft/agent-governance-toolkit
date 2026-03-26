@@ -77,16 +77,12 @@ class GoldenTraceManager:
             ratio = SequenceMatcher(None, expected, actual).ratio()
             if ratio >= (1.0 - tolerance):
                 return True, []
-            return False, [
-                f"Similarity {ratio:.4f} below threshold {1.0 - tolerance:.4f}"
-            ]
+            return False, [f"Similarity {ratio:.4f} below threshold {1.0 - tolerance:.4f}"]
 
         # Exact match failed — build diff descriptions
         diffs: list[str] = []
         if len(expected) != len(actual):
-            diffs.append(
-                f"Length differs: expected {len(expected)}, got {len(actual)}"
-            )
+            diffs.append(f"Length differs: expected {len(expected)}, got {len(actual)}")
         diffs.append(f"Expected: {expected!r}")
         diffs.append(f"Actual:   {actual!r}")
         return False, diffs

@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 """Tests for version counters, resource locks, isolation levels, rate limiter, and kill switch."""
 
-
 import pytest
 
 from hypervisor.models import ExecutionRing
@@ -256,6 +255,7 @@ class TestRateLimiter:
         bucket = TokenBucket(capacity=10, tokens=0, refill_rate=1000)
         # Refill should add tokens based on elapsed time
         import time
+
         time.sleep(0.01)
         assert bucket.available > 0
 

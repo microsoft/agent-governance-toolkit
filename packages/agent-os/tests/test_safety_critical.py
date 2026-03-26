@@ -14,16 +14,16 @@ Run with: python -m pytest tests/test_safety_critical.py -v
 import pytest
 
 from agent_os.integrations.base import (
-    GovernancePolicy,
+    BoundedSemaphore,
+    CompositeInterceptor,
     ExecutionContext,
+    GovernancePolicy,
+    PolicyInterceptor,
     ToolCallRequest,
     ToolCallResult,
-    PolicyInterceptor,
-    CompositeInterceptor,
-    BoundedSemaphore,
 )
-from agent_os.stateless import StatelessKernel, ExecutionContext as StatelessContext
-
+from agent_os.stateless import ExecutionContext as StatelessContext
+from agent_os.stateless import StatelessKernel
 
 # =============================================================================
 # ToolCallRequest / ToolCallResult data structures
@@ -132,9 +132,7 @@ class TestPolicyInterceptor:
 
     def test_call_count_limit_blocks(self):
         policy = GovernancePolicy(max_tool_calls=3)
-        ctx = ExecutionContext(
-            agent_id="a1", session_id="s1", policy=policy, call_count=3
-        )
+        ctx = ExecutionContext(agent_id="a1", session_id="s1", policy=policy, call_count=3)
         interceptor = PolicyInterceptor(policy, context=ctx)
         req = ToolCallRequest(tool_name="search", arguments={})
         result = interceptor.intercept(req)
@@ -143,9 +141,7 @@ class TestPolicyInterceptor:
 
     def test_call_count_under_limit_allows(self):
         policy = GovernancePolicy(max_tool_calls=5)
-        ctx = ExecutionContext(
-            agent_id="a1", session_id="s1", policy=policy, call_count=4
-        )
+        ctx = ExecutionContext(agent_id="a1", session_id="s1", policy=policy, call_count=4)
         interceptor = PolicyInterceptor(policy, context=ctx)
         req = ToolCallRequest(tool_name="search", arguments={})
         result = interceptor.intercept(req)
@@ -177,10 +173,12 @@ class TestCompositeInterceptor:
         allow_policy = GovernancePolicy(allowed_tools=[])
         block_policy = GovernancePolicy(allowed_tools=["only_this"])
 
-        composite = CompositeInterceptor([
-            PolicyInterceptor(allow_policy),
-            PolicyInterceptor(block_policy),
-        ])
+        composite = CompositeInterceptor(
+            [
+                PolicyInterceptor(allow_policy),
+                PolicyInterceptor(block_policy),
+            ]
+        )
         req = ToolCallRequest(tool_name="other_tool", arguments={})
         result = composite.intercept(req)
         assert result.allowed is False
@@ -189,10 +187,12 @@ class TestCompositeInterceptor:
         policy1 = GovernancePolicy(allowed_tools=["search"])
         policy2 = GovernancePolicy(blocked_patterns=["password"])
 
-        composite = CompositeInterceptor([
-            PolicyInterceptor(policy1),
-            PolicyInterceptor(policy2),
-        ])
+        composite = CompositeInterceptor(
+            [
+                PolicyInterceptor(policy1),
+                PolicyInterceptor(policy2),
+            ]
+        )
         req = ToolCallRequest(tool_name="search", arguments={"q": "hello"})
         result = composite.intercept(req)
         assert result.allowed is True
@@ -202,10 +202,12 @@ class TestCompositeInterceptor:
         deny_policy = GovernancePolicy(allowed_tools=["x"])
         allow_policy = GovernancePolicy()
 
-        composite = CompositeInterceptor([
-            PolicyInterceptor(deny_policy),
-            PolicyInterceptor(allow_policy),
-        ])
+        composite = CompositeInterceptor(
+            [
+                PolicyInterceptor(deny_policy),
+                PolicyInterceptor(allow_policy),
+            ]
+        )
         req = ToolCallRequest(tool_name="y", arguments={})
         result = composite.intercept(req)
         assert result.allowed is False
@@ -320,9 +322,7 @@ class TestPolicyEdgeCases:
     async def test_empty_policies_list_allows(self):
         kernel = StatelessKernel()
         ctx = StatelessContext(agent_id="a1", policies=[])
-        result = await kernel.execute(
-            action="file_write", params={"path": "/tmp/x"}, context=ctx
-        )
+        result = await kernel.execute(action="file_write", params={"path": "/tmp/x"}, context=ctx)
         assert result.success is True
 
     @pytest.mark.asyncio
@@ -339,9 +339,7 @@ class TestPolicyEdgeCases:
         """read_only blocks file_write before no_pii is even checked."""
         kernel = StatelessKernel()
         ctx = StatelessContext(agent_id="a1", policies=["read_only", "no_pii"])
-        result = await kernel.execute(
-            action="file_write", params={"path": "/data"}, context=ctx
-        )
+        result = await kernel.execute(action="file_write", params={"path": "/data"}, context=ctx)
         assert result.success is False
         assert "read_only" in result.error
 
@@ -385,9 +383,7 @@ class TestPolicyEdgeCases:
     async def test_error_message_contains_suggestion_blocked_action(self):
         kernel = StatelessKernel()
         ctx = StatelessContext(agent_id="a1", policies=["read_only"])
-        result = await kernel.execute(
-            action="file_write", params={}, context=ctx
-        )
+        result = await kernel.execute(action="file_write", params={}, context=ctx)
         assert result.success is False
         assert "Try" in result.error or "instead" in result.error
 

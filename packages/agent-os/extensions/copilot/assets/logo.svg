@@ -16,48 +16,48 @@
       </feMerge>
     </filter>
   </defs>
-  
+
   <!-- Background -->
   <rect width="256" height="256" rx="32" fill="url(#bgGrad)"/>
-  
+
   <!-- Outer ring -->
   <circle cx="128" cy="128" r="90" fill="none" stroke="url(#emeraldGrad)" stroke-width="3" opacity="0.3"/>
-  
+
   <!-- Inner shield/hexagon shape -->
-  <path d="M128 48 L188 88 L188 168 L128 208 L68 168 L68 88 Z" 
-        fill="none" 
-        stroke="url(#emeraldGrad)" 
+  <path d="M128 48 L188 88 L188 168 L128 208 L68 168 L68 88 Z"
+        fill="none"
+        stroke="url(#emeraldGrad)"
         stroke-width="4"
         filter="url(#glow)"/>
-  
+
   <!-- Robot face -->
   <g filter="url(#glow)">
     <!-- Head -->
     <rect x="88" y="88" width="80" height="64" rx="8" fill="url(#emeraldGrad)" opacity="0.9"/>
-    
+
     <!-- Eyes -->
     <circle cx="108" cy="112" r="10" fill="#0d1117"/>
     <circle cx="148" cy="112" r="10" fill="#0d1117"/>
     <circle cx="108" cy="112" r="4" fill="#6ee7b7"/>
     <circle cx="148" cy="112" r="4" fill="#6ee7b7"/>
-    
+
     <!-- Mouth/speaker -->
     <rect x="103" y="132" width="50" height="8" rx="4" fill="#0d1117"/>
     <rect x="108" y="134" width="8" height="4" rx="2" fill="#6ee7b7"/>
     <rect x="120" y="134" width="8" height="4" rx="2" fill="#6ee7b7"/>
     <rect x="132" y="134" width="8" height="4" rx="2" fill="#6ee7b7"/>
-    
+
     <!-- Antenna -->
     <line x1="128" y1="88" x2="128" y2="68" stroke="url(#emeraldGrad)" stroke-width="3" stroke-linecap="round"/>
     <circle cx="128" cy="62" r="6" fill="url(#emeraldGrad)"/>
   </g>
-  
+
   <!-- Shield checkmark (safety indicator) -->
   <g transform="translate(168, 160)">
     <circle r="20" fill="#0d1117" stroke="#10b981" stroke-width="2"/>
     <path d="M-8 0 L-3 5 L8 -6" stroke="#10b981" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
-  
+
   <!-- Code brackets -->
   <text x="50" y="135" font-family="monospace" font-size="32" fill="#10b981" opacity="0.5">{</text>
   <text x="196" y="135" font-family="monospace" font-size="32" fill="#10b981" opacity="0.5">}</text>

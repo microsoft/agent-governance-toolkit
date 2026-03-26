@@ -20,8 +20,8 @@ from typing import Any
 _OTEL_AVAILABLE = False
 try:
     from opentelemetry import trace
-    from opentelemetry.sdk.trace import TracerProvider  # noqa: F401
     from opentelemetry.sdk.resources import Resource  # noqa: F401
+    from opentelemetry.sdk.trace import TracerProvider  # noqa: F401
 
     _OTEL_AVAILABLE = True
 except ImportError:
@@ -100,14 +100,10 @@ class GovernanceTracer:
         if not self.enabled:
             return
 
-        with self._tracer.start_as_current_span(
-            "mesh.governance.policy_decision"
-        ) as span:
+        with self._tracer.start_as_current_span("mesh.governance.policy_decision") as span:
             start = time.perf_counter()
             span.set_attribute("policy.name", policy_name)
-            span.set_attribute(
-                "policy.decision", str(decision.get("action", "unknown"))
-            )
+            span.set_attribute("policy.decision", str(decision.get("action", "unknown")))
             if "reason" in decision:
                 span.set_attribute("policy.reason", str(decision["reason"]))
 
@@ -136,9 +132,7 @@ class GovernanceTracer:
         if not self.enabled:
             return
 
-        with self._tracer.start_as_current_span(
-            "mesh.governance.trust_evaluation"
-        ) as span:
+        with self._tracer.start_as_current_span("mesh.governance.trust_evaluation") as span:
             start = time.perf_counter()
             span.set_attribute("agent.did", agent_did)
             span.set_attribute("agent.trust_score", trust_score)
@@ -163,9 +157,7 @@ class GovernanceTracer:
         if not self.enabled:
             return
 
-        with self._tracer.start_as_current_span(
-            "mesh.governance.signal_delivery"
-        ) as span:
+        with self._tracer.start_as_current_span("mesh.governance.signal_delivery") as span:
             start = time.perf_counter()
             span.set_attribute("agent.id", agent_id)
             span.set_attribute("governance.signal.name", signal_name)
@@ -190,9 +182,7 @@ class GovernanceTracer:
         if not self.enabled:
             return
 
-        with self._tracer.start_as_current_span(
-            "mesh.governance.audit_event"
-        ) as span:
+        with self._tracer.start_as_current_span("mesh.governance.audit_event") as span:
             start = time.perf_counter()
             span.set_attribute("audit.entry_id", entry_id)
             span.set_attribute("audit.event_type", event_type)

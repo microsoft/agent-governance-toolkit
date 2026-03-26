@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 from importlib.metadata import entry_points
-from typing import Any, Dict, Optional, Type
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +31,10 @@ PROVIDER_GROUPS = {
     "capability": "agentmesh.providers.capability",
 }
 
-_provider_cache: Dict[str, Any] = {}
+_provider_cache: dict[str, Any] = {}
 
 
-def _discover_provider(group: str) -> Optional[Type]:
+def _discover_provider(group: str) -> type | None:
     """Discover an advanced provider via entry_points."""
     if group in _provider_cache:
         return _provider_cache[group]
@@ -65,6 +65,7 @@ def get_reward_engine(**kwargs: Any):
         return provider(**kwargs)
 
     from agentmesh.reward.engine import RewardEngine
+
     return RewardEngine(**kwargs)
 
 
@@ -79,6 +80,7 @@ def get_trust_bridge(**kwargs: Any):
         return provider(**kwargs)
 
     from agentmesh.trust.bridge import TrustBridge
+
     return TrustBridge(**kwargs)
 
 
@@ -93,6 +95,7 @@ def get_delegation_chain(**kwargs: Any):
         return provider(**kwargs)
 
     from agentmesh.identity.delegation import DelegationChain
+
     return DelegationChain(**kwargs)
 
 
@@ -107,6 +110,7 @@ def get_audit_logger(**kwargs: Any):
         return provider(**kwargs)
 
     from agentmesh.governance.audit import AuditLogger
+
     return AuditLogger(**kwargs)
 
 
@@ -121,6 +125,7 @@ def get_trust_decay(**kwargs: Any):
         return provider(**kwargs)
 
     from agentmesh.reward.trust_decay import TrustDecayEngine
+
     return TrustDecayEngine(**kwargs)
 
 
@@ -135,10 +140,11 @@ def get_capability_engine(**kwargs: Any):
         return provider(**kwargs)
 
     from agentmesh.trust.capability import CapabilityEngine
+
     return CapabilityEngine(**kwargs)
 
 
-def list_providers() -> Dict[str, str]:
+def list_providers() -> dict[str, str]:
     """List all provider slots and their current implementations."""
     result = {}
     for name, group in PROVIDER_GROUPS.items():

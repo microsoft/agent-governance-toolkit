@@ -2,10 +2,8 @@
 # Licensed under the MIT License.
 """Tests for OPA/Rego policy adapter and PolicyEngine integration."""
 
-import pytest
-from agentmesh.governance.opa import OPAEvaluator, OPADecision
+from agentmesh.governance.opa import OPADecision, OPAEvaluator
 from agentmesh.governance.policy import PolicyEngine
-
 
 # ── Sample Rego policies ──────────────────────────────────────
 
@@ -64,6 +62,7 @@ allow {
 
 # ── OPAEvaluator: built-in evaluator tests ───────────────────
 
+
 class TestBuiltinEvaluator:
     """Test the built-in Rego parser (no OPA CLI needed)."""
 
@@ -75,51 +74,69 @@ class TestBuiltinEvaluator:
 
     def test_analyst_read_allowed(self):
         evaluator = OPAEvaluator(mode="local", rego_content=BASIC_REGO)
-        result = evaluator.evaluate("data.agentmesh.allow", {
-            "agent": {"role": "analyst"},
-            "action": "read",
-        })
+        result = evaluator.evaluate(
+            "data.agentmesh.allow",
+            {
+                "agent": {"role": "analyst"},
+                "action": "read",
+            },
+        )
         assert result.allowed is True
 
     def test_analyst_write_denied(self):
         evaluator = OPAEvaluator(mode="local", rego_content=BASIC_REGO)
-        result = evaluator.evaluate("data.agentmesh.allow", {
-            "agent": {"role": "analyst"},
-            "action": "write",
-        })
+        result = evaluator.evaluate(
+            "data.agentmesh.allow",
+            {
+                "agent": {"role": "analyst"},
+                "action": "write",
+            },
+        )
         assert result.allowed is False
 
     def test_unknown_role_denied(self):
         evaluator = OPAEvaluator(mode="local", rego_content=BASIC_REGO)
-        result = evaluator.evaluate("data.agentmesh.allow", {
-            "agent": {"role": "intern"},
-        })
+        result = evaluator.evaluate(
+            "data.agentmesh.allow",
+            {
+                "agent": {"role": "intern"},
+            },
+        )
         assert result.allowed is False
 
     def test_pii_access_allowed(self):
         evaluator = OPAEvaluator(mode="local", rego_content=PII_REGO)
-        result = evaluator.evaluate("data.agentmesh.allow", {
-            "data": {"contains_pii": True},
-            "agent": {"pii_access": True},
-        })
+        result = evaluator.evaluate(
+            "data.agentmesh.allow",
+            {
+                "data": {"contains_pii": True},
+                "agent": {"pii_access": True},
+            },
+        )
         assert result.allowed is True
 
     def test_pii_no_access_denied(self):
         evaluator = OPAEvaluator(mode="local", rego_content=PII_REGO)
-        result = evaluator.evaluate("data.agentmesh.allow", {
-            "data": {"contains_pii": True},
-            "agent": {"pii_access": False},
-        })
+        result = evaluator.evaluate(
+            "data.agentmesh.allow",
+            {
+                "data": {"contains_pii": True},
+                "agent": {"pii_access": False},
+            },
+        )
         # Without pii_access, the second rule doesn't match,
         # and contains_pii is truthy so first rule doesn't match either
         assert result.allowed is False
 
     def test_no_pii_allowed(self):
         evaluator = OPAEvaluator(mode="local", rego_content=PII_REGO)
-        result = evaluator.evaluate("data.agentmesh.allow", {
-            "data": {"contains_pii": False},
-            "agent": {},
-        })
+        result = evaluator.evaluate(
+            "data.agentmesh.allow",
+            {
+                "data": {"contains_pii": False},
+                "agent": {},
+            },
+        )
         assert result.allowed is True
 
     def test_not_equal_condition(self):
@@ -129,20 +146,26 @@ class TestBuiltinEvaluator:
 
     def test_multi_condition_match(self):
         evaluator = OPAEvaluator(mode="local", rego_content=MULTI_CONDITION_REGO)
-        result = evaluator.evaluate("data.governance.allow", {
-            "agent": {"role": "operator"},
-            "action": "deploy",
-            "env": "staging",
-        })
+        result = evaluator.evaluate(
+            "data.governance.allow",
+            {
+                "agent": {"role": "operator"},
+                "action": "deploy",
+                "env": "staging",
+            },
+        )
         assert result.allowed is True
 
     def test_multi_condition_partial_miss(self):
         evaluator = OPAEvaluator(mode="local", rego_content=MULTI_CONDITION_REGO)
-        result = evaluator.evaluate("data.governance.allow", {
-            "agent": {"role": "operator"},
-            "action": "deploy",
-            "env": "production",  # not staging
-        })
+        result = evaluator.evaluate(
+            "data.governance.allow",
+            {
+                "agent": {"role": "operator"},
+                "action": "deploy",
+                "env": "production",  # not staging
+            },
+        )
         assert result.allowed is False
 
     def test_evaluation_timing(self):
@@ -158,6 +181,7 @@ class TestBuiltinEvaluator:
 
 
 # ── OPADecision model ────────────────────────────────────────
+
 
 class TestOPADecision:
     def test_default_values(self):
@@ -175,6 +199,7 @@ class TestOPADecision:
 
 
 # ── PolicyEngine + Rego integration ──────────────────────────
+
 
 class TestPolicyEngineRegoIntegration:
     """Test that load_rego works alongside YAML policies."""
@@ -218,10 +243,13 @@ rules:
         engine.load_rego(rego_content=BASIC_REGO, package="agentmesh")
 
         # YAML deny should take precedence
-        decision = engine.evaluate("did:mesh:blocked", {
-            "action": {"type": "read"},
-            "agent": {"role": "admin"},
-        })
+        decision = engine.evaluate(
+            "did:mesh:blocked",
+            {
+                "action": {"type": "read"},
+                "agent": {"role": "admin"},
+            },
+        )
         assert decision.allowed is False
         assert decision.matched_rule == "block-all"
 
@@ -258,6 +286,7 @@ rules:
 
 
 # ── Edge cases ────────────────────────────────────────────────
+
 
 class TestEdgeCases:
     def test_empty_rego_content(self):

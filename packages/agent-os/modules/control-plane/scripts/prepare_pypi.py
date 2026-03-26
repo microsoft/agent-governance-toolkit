@@ -8,20 +8,13 @@ This script prepares the Agent Control Plane package for PyPI release.
 """
 
 import subprocess
-import sys
-from pathlib import Path
 
 
 def run_command(cmd, description):
     """Run a command and report results"""
     print(f"\n{description}...")
     try:
-        result = subprocess.run(
-            cmd,
-            check=True,
-            capture_output=True,
-            text=True
-        )
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         print(f"✅ {description} completed")
         return True
     except subprocess.CalledProcessError as e:
@@ -35,7 +28,7 @@ def main():
     print("=" * 70)
     print("Agent Control Plane - PyPI Release Preparation")
     print("=" * 70)
-    
+
     print("\nNext steps for PyPI release:")
     print("1. Review dist/ files after build")
     print("2. Test locally: pip install dist/*.whl")

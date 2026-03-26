@@ -2,33 +2,27 @@
 # Licensed under the MIT License.
 """Integration tests combining MockInfrastructureAPI with MockState."""
 
-import sys
 import os
+import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import pytest
+from core.mock_state import (
+    create_stale_pointer_scenario,
+    create_zombie_resource_scenario,
+)
 from core.tools import (
     MockInfrastructureAPI,
     SessionContext,
     User,
     UserRole,
-    Environment,
-    ResourceState,
-    Service,
 )
-from core.mock_state import (
-    MockState,
-    MockStateConfig,
-    ContextEventType,
-    create_stale_pointer_scenario,
-    create_zombie_resource_scenario,
-)
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _ctx(role: UserRole = UserRole.ADMIN) -> SessionContext:
     return SessionContext(user=User(name="test", role=role))
@@ -38,11 +32,13 @@ def _ctx(role: UserRole = UserRole.ADMIN) -> SessionContext:
 # Stale pointer scenario end-to-end
 # ---------------------------------------------------------------------------
 
+
 class TestStalePointerIntegration:
     def test_focus_shifts_to_service_b(self):
         """After the stale pointer scenario the current focus should be svc-b."""
         mock = create_stale_pointer_scenario(
-            service_a="svc-payment-prod", service_b="svc-payment-dev",
+            service_a="svc-payment-prod",
+            service_b="svc-payment-dev",
         )
         assert mock.get_current_focus() == "svc-payment-dev"
 
@@ -84,6 +80,7 @@ class TestStalePointerIntegration:
 # Zombie resource scenario end-to-end
 # ---------------------------------------------------------------------------
 
+
 class TestZombieResourceIntegration:
     def test_restart_blocked_on_partial_service(self):
         """Cannot restart a PARTIAL (zombie) service; API returns error."""
@@ -112,6 +109,7 @@ class TestZombieResourceIntegration:
 # ---------------------------------------------------------------------------
 # API statistics reflect usage
 # ---------------------------------------------------------------------------
+
 
 class TestStatisticsIntegration:
     def test_mixed_operations_tracked(self):

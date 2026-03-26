@@ -9,7 +9,6 @@ First matching rule wins. Falls back to defaults if no rule matches.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
 
 from .trust_policy import TrustPolicy
 
@@ -25,7 +24,7 @@ class TrustPolicyDecision(BaseModel):
     """
 
     allowed: bool = Field(..., description="Whether the action is allowed")
-    rule_name: Optional[str] = Field(None, description="Name of the matched rule, if any")
+    rule_name: str | None = Field(None, description="Name of the matched rule, if any")
     action: str = Field(..., description="Action taken (allow/deny/warn/require_approval)")
     reason: str = Field(..., description="Human-readable explanation")
 
@@ -106,9 +105,7 @@ class PolicyEvaluator:
                 allowed=False,
                 rule_name=None,
                 action="deny",
-                reason=(
-                    f"Trust score {trust_score} below minimum {defaults.min_trust_score}"
-                ),
+                reason=(f"Trust score {trust_score} below minimum {defaults.min_trust_score}"),
             )
 
         delegation_depth = context.get("delegation_depth")
@@ -123,9 +120,11 @@ class PolicyEvaluator:
                 ),
             )
 
-        namespace = context.get("agent", {}).get("namespace") if isinstance(
-            context.get("agent"), dict
-        ) else context.get("agent_namespace")
+        namespace = (
+            context.get("agent", {}).get("namespace")
+            if isinstance(context.get("agent"), dict)
+            else context.get("agent_namespace")
+        )
         if namespace and "*" not in defaults.allowed_namespaces:
             if namespace not in defaults.allowed_namespaces:
                 return TrustPolicyDecision(

@@ -7,7 +7,6 @@ Covers: EvalCriterion, Verdict, EvalInput, EvalResult, RulesJudge,
         JudgeProtocol, EvalSuite, EvalReport, EvaluationEngine.
 """
 
-
 from agent_sre.evals import (
     EvalCriterion,
     EvalInput,
@@ -258,7 +257,8 @@ class TestRulesJudge:
         j = RulesJudge()
         result = j.evaluate(
             EvalInput(
-                query="q", response="r",
+                query="q",
+                response="r",
                 tool_calls=[
                     {"name": "search", "result": "ok"},
                     {"name": "calc", "result": "42"},
@@ -273,7 +273,8 @@ class TestRulesJudge:
         j = RulesJudge()
         result = j.evaluate(
             EvalInput(
-                query="q", response="r",
+                query="q",
+                response="r",
                 tool_calls=[
                     {"name": "search", "result": "ok"},
                     {"name": "calc", "error": "timeout"},
@@ -397,47 +398,57 @@ class TestEvaluationEngine:
     def test_batch_run(self):
         judge = RulesJudge()
         engine = EvaluationEngine(judge)
-        reports = engine.run_batch([
-            EvalInput(query="q1", response="Python", reference="Python"),
-            EvalInput(query="q2", response="Java", reference="Java"),
-        ])
+        reports = engine.run_batch(
+            [
+                EvalInput(query="q1", response="Python", reference="Python"),
+                EvalInput(query="q2", response="Java", reference="Java"),
+            ]
+        )
         assert len(reports) == 2
 
     def test_pass_rate(self):
         judge = RulesJudge()
         engine = EvaluationEngine(judge)
-        engine.run(EvalInput(
-            query="What is Python?",
-            response="Python is a programming language.",
-            reference="Python is a programming language",
-        ))
-        engine.run(EvalInput(
-            query="What is Python?",
-            response="Python is a programming language.",
-            reference="Python is a programming language",
-        ))
+        engine.run(
+            EvalInput(
+                query="What is Python?",
+                response="Python is a programming language.",
+                reference="Python is a programming language",
+            )
+        )
+        engine.run(
+            EvalInput(
+                query="What is Python?",
+                response="Python is a programming language.",
+                reference="Python is a programming language",
+            )
+        )
         rate = engine.pass_rate()
         assert rate >= 0.0
 
     def test_average_score(self):
         judge = RulesJudge()
         engine = EvaluationEngine(judge)
-        engine.run(EvalInput(
-            query="What is Python?",
-            response="Python is a programming language.",
-            reference="Python is a programming language",
-        ))
+        engine.run(
+            EvalInput(
+                query="What is Python?",
+                response="Python is a programming language.",
+                reference="Python is a programming language",
+            )
+        )
         score = engine.average_score()
         assert 0.0 <= score <= 1.0
 
     def test_average_score_by_criterion(self):
         judge = RulesJudge()
         engine = EvaluationEngine(judge)
-        engine.run(EvalInput(
-            query="What is Python?",
-            response="Python is a programming language.",
-            reference="Python is a programming language",
-        ))
+        engine.run(
+            EvalInput(
+                query="What is Python?",
+                response="Python is a programming language.",
+                reference="Python is a programming language",
+            )
+        )
         safety_score = engine.average_score(EvalCriterion.SAFETY)
         assert safety_score == 1.0  # Safe response
 
@@ -457,11 +468,13 @@ class TestEvaluationEngine:
     def test_stats(self):
         judge = RulesJudge()
         engine = EvaluationEngine(judge)
-        engine.run(EvalInput(
-            query="What is Python?",
-            response="Python is a programming language.",
-            reference="Python is a programming language",
-        ))
+        engine.run(
+            EvalInput(
+                query="What is Python?",
+                response="Python is a programming language.",
+                reference="Python is a programming language",
+            )
+        )
         stats = engine.get_stats()
         assert stats["total_evaluations"] == 1
         assert "pass_rate" in stats
@@ -470,11 +483,13 @@ class TestEvaluationEngine:
     def test_report_to_dict(self):
         judge = RulesJudge()
         engine = EvaluationEngine(judge)
-        report = engine.run(EvalInput(
-            query="q",
-            response="Python is great.",
-            reference="Python is great",
-        ))
+        report = engine.run(
+            EvalInput(
+                query="q",
+                response="Python is great.",
+                reference="Python is great",
+            )
+        )
         d = report.to_dict()
         assert "suite" in d
         assert "overall_pass" in d

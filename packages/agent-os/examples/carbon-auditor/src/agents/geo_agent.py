@@ -11,8 +11,8 @@ Updated for atr 0.2.0:
 - Tool versioning support
 """
 
-from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 import atr
 
@@ -22,40 +22,36 @@ from .base import BaseAgent
 class GeoAgent(BaseAgent):
     """
     The Geo Agent - "The Eye"
-    
+
     Role: Satellite interface that:
         - Listens for Claim messages with coordinates
         - Fetches satellite imagery for the specified polygon
         - Calculates NDVI (vegetation index)
         - Publishes Observation objects with actual values
-    
+
     Tooling (atr 0.2.0): sentinel_api, ndvi_calculator
-    
+
     Subscribes to: CLAIMS topic
     Publishes: Observation objects to the OBSERVATIONS topic
     """
 
-    def __init__(
-        self,
-        agent_id: str,
-        simulate_deforestation: bool = False
-    ):
+    def __init__(self, agent_id: str, simulate_deforestation: bool = False):
         """
         Initialize the Geo Agent.
-        
+
         Args:
             agent_id: Unique identifier
             simulate_deforestation: If True, generate data showing deforestation
         """
         super().__init__(agent_id, name="geo-agent")
-        
+
         self._simulate_deforestation = simulate_deforestation
-        
+
         # NEW: Use public atr.get_tool() API (ATR-001)
         # This replaces the fragile atr._global_registry access
         sentinel_tool = atr.get_tool("sentinel_api", version=">=1.0.0")
         ndvi_tool = atr.get_tool("ndvi_calculator", version=">=1.0.0")
-        
+
         self._sentinel_api = atr.get_callable("sentinel_api")
         self._ndvi_calculator = atr.get_callable("ndvi_calculator")
 
@@ -65,57 +61,58 @@ class GeoAgent(BaseAgent):
         return ["vcm.claims"]
 
     def process_claim(
-        self,
-        claim: Dict[str, Any],
-        correlation_id: Optional[str] = None
+        self, claim: Dict[str, Any], correlation_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Process a claim by fetching satellite data and calculating NDVI.
-        
+
         Args:
             claim: The claim data with polygon and time range
             correlation_id: Optional tracking ID
-            
+
         Returns:
             The observation data
         """
         project_id = claim.get("project_id", "UNKNOWN")
         polygon = claim.get("polygon", "[]")
         year = claim.get("year", 2024)
-        
+
         self._log(f"Fetching satellite data for {project_id}, year {year}")
         self._metrics.last_activity = datetime.now(timezone.utc)
-        
+
         # Step 1: Fetch satellite imagery using atr tool
         satellite_result = self._sentinel_api(
             polygon=polygon,
             start_date=f"{year}-01-01",
             end_date=f"{year}-12-31",
         )
-        
+
         if "error" in satellite_result:
             self._log(f"Failed to fetch satellite data: {satellite_result['error']}", level="ERROR")
             return {"error": satellite_result["error"]}
-        
+
         cloud_cover = satellite_result.get("cloud_cover_percentage", 0) / 100.0
-        
-        self._log(f"Retrieved {satellite_result['product_type']} imagery, "
-                  f"cloud cover: {cloud_cover:.1%}")
-        
+
+        self._log(
+            f"Retrieved {satellite_result['product_type']} imagery, cloud cover: {cloud_cover:.1%}"
+        )
+
         # Step 2: Calculate NDVI using atr tool
         ndvi_result = self._ndvi_calculator(
             red_band=satellite_result["bands"]["B04_RED"],
             nir_band=satellite_result["bands"]["B08_NIR"],
             simulate_deforestation=self._simulate_deforestation,
         )
-        
+
         if "error" in ndvi_result:
             self._log(f"Failed to calculate NDVI: {ndvi_result['error']}", level="ERROR")
             return {"error": ndvi_result["error"]}
-        
-        self._log(f"Calculated NDVI: mean={ndvi_result['ndvi_mean']:.3f}, "
-                  f"vegetation coverage: {ndvi_result['vegetation_coverage']:.1%}")
-        
+
+        self._log(
+            f"Calculated NDVI: mean={ndvi_result['ndvi_mean']:.3f}, "
+            f"vegetation coverage: {ndvi_result['vegetation_coverage']:.1%}"
+        )
+
         # Step 3: Build observation object
         observation = self._build_observation(
             project_id=project_id,
@@ -124,9 +121,9 @@ class GeoAgent(BaseAgent):
             satellite_provenance=satellite_result.get("_provenance"),
             ndvi_provenance=ndvi_result.get("_provenance"),
         )
-        
+
         self._metrics.messages_sent += 1
-        
+
         return observation
 
     def _build_observation(
@@ -149,14 +146,14 @@ class GeoAgent(BaseAgent):
             "deforestation_indicator": ndvi_data["deforestation_indicator"],
             "pixel_count": ndvi_data["pixel_count"],
         }
-        
+
         # Add provenance metadata (the "Cryptographic Oracle" feature)
         if satellite_provenance:
             observation["_satellite_provenance"] = satellite_provenance
-        
+
         if ndvi_provenance:
             observation["_ndvi_provenance"] = ndvi_provenance
-        
+
         return observation
 
     def get_tools(self) -> List[str]:
@@ -166,7 +163,7 @@ class GeoAgent(BaseAgent):
     def set_simulation_mode(self, simulate_deforestation: bool) -> None:
         """
         Set whether to simulate deforestation in NDVI calculations.
-        
+
         Args:
             simulate_deforestation: If True, generate low NDVI values
         """

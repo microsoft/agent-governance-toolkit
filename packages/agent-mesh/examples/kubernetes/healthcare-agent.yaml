@@ -11,18 +11,18 @@ metadata:
 spec:
   image: my-hospital/healthcare-agent:v1.5.0
   sponsor: "compliance@hospital.com"
-  
+
   # Limited capabilities for HIPAA compliance
   capabilities:
     - "ehr:read"
     - "ehr:search"
     # Note: No write capabilities for compliance
-  
+
   # Strict policy for healthcare data
   policy: strict
-  
+
   replicas: 2
-  
+
   resources:
     limits:
       cpu: "1000m"
@@ -30,7 +30,7 @@ spec:
     requests:
       cpu: "500m"
       memory: "512Mi"
-  
+
   env:
     - name: COMPLIANCE_MODE
       value: "HIPAA"
@@ -43,7 +43,7 @@ spec:
           key: api-url
     - name: AUDIT_LOG_LEVEL
       value: "VERBOSE"
-  
+
   sidecar:
     enabled: true
     resources:
@@ -54,11 +54,11 @@ spec:
       requests:
         cpu: "100m"
         memory: "128Mi"
-  
+
   trustScore:
     initialScore: 700  # Higher for compliance-critical system
     minimumScore: 600  # Higher minimum for healthcare
-  
+
   observability:
     # Full observability required for HIPAA compliance
     traces: true

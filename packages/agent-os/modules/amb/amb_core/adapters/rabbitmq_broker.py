@@ -23,7 +23,7 @@ except ImportError:
 class RabbitMQBroker(BrokerAdapter):
     """
     RabbitMQ-based broker adapter.
-    
+
     This adapter uses RabbitMQ's topic exchanges for flexible routing
     and direct exchanges for request-response patterns.
     """
@@ -31,7 +31,7 @@ class RabbitMQBroker(BrokerAdapter):
     def __init__(self, url: str = "amqp://guest:guest@localhost/"):
         """
         Initialize RabbitMQ broker.
-        
+
         Args:
             url: RabbitMQ connection URL
         """
@@ -48,11 +48,7 @@ class RabbitMQBroker(BrokerAdapter):
         self._channel = await self._connection.channel()
 
         # Declare topic exchange for pub/sub
-        await self._channel.declare_exchange(
-            "amb.topic",
-            ExchangeType.TOPIC,
-            durable=True
-        )
+        await self._channel.declare_exchange("amb.topic", ExchangeType.TOPIC, durable=True)
 
     async def disconnect(self) -> None:
         """Disconnect from RabbitMQ."""
@@ -75,11 +71,11 @@ class RabbitMQBroker(BrokerAdapter):
     async def publish(self, message: Message, wait_for_confirmation: bool = False) -> Optional[str]:
         """
         Publish message to RabbitMQ exchange.
-        
+
         Args:
             message: Message to publish
             wait_for_confirmation: Wait for broker confirmation
-        
+
         Returns:
             Message ID
         """
@@ -101,9 +97,7 @@ class RabbitMQBroker(BrokerAdapter):
 
         # Publish
         await exchange.publish(
-            amqp_message,
-            routing_key=message.topic,
-            mandatory=wait_for_confirmation
+            amqp_message, routing_key=message.topic, mandatory=wait_for_confirmation
         )
 
         return message.id
@@ -111,11 +105,11 @@ class RabbitMQBroker(BrokerAdapter):
     async def subscribe(self, topic: str, handler: MessageHandler) -> str:
         """
         Subscribe to a RabbitMQ topic.
-        
+
         Args:
             topic: Topic pattern to subscribe to (supports wildcards: * and #)
             handler: Message handler
-        
+
         Returns:
             Subscription ID
         """
@@ -125,10 +119,7 @@ class RabbitMQBroker(BrokerAdapter):
         subscription_id = str(uuid.uuid4())
 
         # Declare queue
-        queue = await self._channel.declare_queue(
-            f"amb.queue.{subscription_id}",
-            auto_delete=True
-        )
+        queue = await self._channel.declare_queue(f"amb.queue.{subscription_id}", auto_delete=True)
 
         # Bind to exchange
         exchange = await self._channel.get_exchange("amb.topic")
@@ -152,7 +143,7 @@ class RabbitMQBroker(BrokerAdapter):
     async def unsubscribe(self, subscription_id: str) -> None:
         """
         Unsubscribe from a topic.
-        
+
         Args:
             subscription_id: Subscription ID
         """
@@ -164,11 +155,11 @@ class RabbitMQBroker(BrokerAdapter):
     async def request(self, message: Message, timeout: float = 30.0) -> Message:
         """
         Send request and wait for response using RabbitMQ RPC pattern.
-        
+
         Args:
             message: Request message
             timeout: Timeout in seconds
-        
+
         Returns:
             Response message
         """
@@ -180,10 +171,7 @@ class RabbitMQBroker(BrokerAdapter):
             message.correlation_id = str(uuid.uuid4())
 
         # Declare callback queue
-        callback_queue = await self._channel.declare_queue(
-            exclusive=True,
-            auto_delete=True
-        )
+        callback_queue = await self._channel.declare_queue(exclusive=True, auto_delete=True)
 
         # Set up response queue
         response_queue: asyncio.Queue = asyncio.Queue()
@@ -222,11 +210,11 @@ class RabbitMQBroker(BrokerAdapter):
     async def get_pending_messages(self, topic: str, limit: int = 10) -> List[Message]:
         """
         Get pending messages (limited support in RabbitMQ).
-        
+
         Args:
             topic: Topic to get messages from
             limit: Maximum messages to retrieve
-        
+
         Returns:
             Empty list (RabbitMQ doesn't support this easily)
         """

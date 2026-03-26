@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 class PatternType(Enum):
     """Type of pattern matching for blocked_patterns."""
+
     SUBSTRING = "substring"
     REGEX = "regex"
     GLOB = "glob"
@@ -33,6 +34,7 @@ class PatternType(Enum):
 
 class GovernanceEventType(Enum):
     """Event types emitted by the governance layer."""
+
     POLICY_CHECK = "policy_check"
     POLICY_VIOLATION = "policy_violation"
     TOOL_CALL_BLOCKED = "tool_call_blocked"
@@ -51,6 +53,7 @@ class DriftResult:
         baseline_hash: Hash of the baseline output.
         current_hash: Hash of the current output.
     """
+
     score: float
     exceeded: bool
     threshold: float
@@ -146,6 +149,7 @@ class GovernancePolicy:
             yaml_str = policy.to_yaml()
             restored = GovernancePolicy.from_yaml(yaml_str)
     """
+
     name: str = "default"
     max_tokens: int = 4096
     max_tool_calls: int = 10
@@ -204,30 +208,27 @@ class GovernancePolicy:
         """Validate all policy fields and raise ValueError for invalid inputs."""
         # Validate positive integers (must be > 0)
         for field_name in (
-            "max_tokens", "timeout_seconds",
-            "max_concurrent", "backpressure_threshold", "checkpoint_frequency",
+            "max_tokens",
+            "timeout_seconds",
+            "max_concurrent",
+            "backpressure_threshold",
+            "checkpoint_frequency",
         ):
             value = getattr(self, field_name)
             if not isinstance(value, int) or value <= 0:
-                raise ValueError(
-                    f"{field_name} must be a positive integer, got {value!r}"
-                )
+                raise ValueError(f"{field_name} must be a positive integer, got {value!r}")
 
         # Validate non-negative integers (>= 0 allowed)
         for field_name in ("max_tool_calls",):
             value = getattr(self, field_name)
             if not isinstance(value, int) or value < 0:
-                raise ValueError(
-                    f"{field_name} must be a non-negative integer, got {value!r}"
-                )
+                raise ValueError(f"{field_name} must be a non-negative integer, got {value!r}")
 
         # Validate float thresholds are in [0.0, 1.0]
         for field_name in ("confidence_threshold", "drift_threshold"):
             value = getattr(self, field_name)
             if not isinstance(value, (int, float)) or not (0.0 <= value <= 1.0):
-                raise ValueError(
-                    f"{field_name} must be a float between 0.0 and 1.0, got {value!r}"
-                )
+                raise ValueError(f"{field_name} must be a float between 0.0 and 1.0, got {value!r}")
 
         # Validate allowed_tools entries are strings
         if not isinstance(self.allowed_tools, list):
@@ -248,9 +249,7 @@ class GovernancePolicy:
 
         # Validate version is a non-empty string
         if not isinstance(self.version, str) or not self.version:
-            raise ValueError(
-                f"version must be a non-empty string, got {self.version!r}"
-            )
+            raise ValueError(f"version must be a non-empty string, got {self.version!r}")
 
         self._compiled_patterns: list[tuple[str, PatternType, re.Pattern | None]] = []
         for i, pattern in enumerate(self.blocked_patterns):
@@ -312,9 +311,7 @@ class GovernancePolicy:
 
         # Confidence checks effectively disabled
         if self.confidence_threshold == 0.0:
-            warnings.append(
-                "confidence_threshold is 0.0: effectively disables confidence checking"
-            )
+            warnings.append("confidence_threshold is 0.0: effectively disables confidence checking")
 
         # timeout_seconds is too low for reasonable execution (< 5s warning)
         if self.timeout_seconds < 5:
@@ -344,8 +341,7 @@ class GovernancePolicy:
             "max_tool_calls": self.max_tool_calls,
             "allowed_tools": self.allowed_tools,
             "blocked_patterns": [
-                {"pattern": p, "type": t.value} if t != PatternType.SUBSTRING
-                else p
+                {"pattern": p, "type": t.value} if t != PatternType.SUBSTRING else p
                 for p, t, _ in self._compiled_patterns
             ],
             "require_human_approval": self.require_human_approval,
@@ -387,10 +383,19 @@ class GovernancePolicy:
         data["blocked_patterns"] = patterns
 
         valid_fields = {
-            "name", "max_tokens", "max_tool_calls", "allowed_tools",
-            "blocked_patterns", "require_human_approval", "timeout_seconds",
-            "confidence_threshold", "drift_threshold", "log_all_calls",
-            "checkpoint_frequency", "max_concurrent", "backpressure_threshold",
+            "name",
+            "max_tokens",
+            "max_tool_calls",
+            "allowed_tools",
+            "blocked_patterns",
+            "require_human_approval",
+            "timeout_seconds",
+            "confidence_threshold",
+            "drift_threshold",
+            "log_all_calls",
+            "checkpoint_frequency",
+            "max_concurrent",
+            "backpressure_threshold",
             "version",
         }
         filtered = {k: v for k, v in data.items() if k in valid_fields}
@@ -417,8 +422,7 @@ class GovernancePolicy:
             "max_tool_calls": self.max_tool_calls,
             "allowed_tools": self.allowed_tools,
             "blocked_patterns": [
-                {"pattern": p, "type": t.value} if t != PatternType.SUBSTRING
-                else p
+                {"pattern": p, "type": t.value} if t != PatternType.SUBSTRING else p
                 for p, t, _ in self._compiled_patterns
             ],
             "require_human_approval": self.require_human_approval,
@@ -460,10 +464,19 @@ class GovernancePolicy:
 
         # Remove unknown keys
         valid_fields = {
-            "max_tokens", "max_tool_calls", "allowed_tools", "blocked_patterns",
-            "require_human_approval", "timeout_seconds", "confidence_threshold",
-            "drift_threshold", "log_all_calls", "checkpoint_frequency",
-            "max_concurrent", "backpressure_threshold", "version",
+            "max_tokens",
+            "max_tool_calls",
+            "allowed_tools",
+            "blocked_patterns",
+            "require_human_approval",
+            "timeout_seconds",
+            "confidence_threshold",
+            "drift_threshold",
+            "log_all_calls",
+            "checkpoint_frequency",
+            "max_concurrent",
+            "backpressure_threshold",
+            "version",
         }
         filtered = {k: v for k, v in data.items() if k in valid_fields}
         return cls(**filtered)
@@ -487,10 +500,19 @@ class GovernancePolicy:
         """
         changes: dict[str, tuple[Any, Any]] = {}
         fields = [
-            "max_tokens", "max_tool_calls", "allowed_tools", "blocked_patterns",
-            "require_human_approval", "timeout_seconds", "confidence_threshold",
-            "drift_threshold", "log_all_calls", "checkpoint_frequency",
-            "max_concurrent", "backpressure_threshold", "version",
+            "max_tokens",
+            "max_tool_calls",
+            "allowed_tools",
+            "blocked_patterns",
+            "require_human_approval",
+            "timeout_seconds",
+            "confidence_threshold",
+            "drift_threshold",
+            "log_all_calls",
+            "checkpoint_frequency",
+            "max_concurrent",
+            "backpressure_threshold",
+            "version",
         ]
         for f in fields:
             v_self = getattr(self, f)
@@ -519,19 +541,22 @@ class GovernancePolicy:
         # allowed_tools: fewer allowed tools is stricter (unless both empty)
         if self.allowed_tools or other.allowed_tools:
             checks.append(
-                len(self.allowed_tools) <= len(other.allowed_tools)
-                if other.allowed_tools else True
+                len(self.allowed_tools) <= len(other.allowed_tools) if other.allowed_tools else True
             )
         # Must be at least one actual difference to be considered stricter
-        has_difference = any([
-            self.max_tokens < other.max_tokens,
-            self.max_tool_calls < other.max_tool_calls,
-            self.timeout_seconds < other.timeout_seconds,
-            self.confidence_threshold > other.confidence_threshold,
-            self.require_human_approval and not other.require_human_approval,
-            len(self.blocked_patterns) > len(other.blocked_patterns),
-            len(self.allowed_tools) < len(other.allowed_tools) if other.allowed_tools else False,
-        ])
+        has_difference = any(
+            [
+                self.max_tokens < other.max_tokens,
+                self.max_tool_calls < other.max_tool_calls,
+                self.timeout_seconds < other.timeout_seconds,
+                self.confidence_threshold > other.confidence_threshold,
+                self.require_human_approval and not other.require_human_approval,
+                len(self.blocked_patterns) > len(other.blocked_patterns),
+                len(self.allowed_tools) < len(other.allowed_tools)
+                if other.allowed_tools
+                else False,
+            ]
+        )
         return all(checks) and has_difference
 
     def format_diff(self, other: GovernancePolicy) -> str:
@@ -552,6 +577,7 @@ _AGENT_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 @dataclass
 class ExecutionContext:
     """Context passed through the governance layer"""
+
     agent_id: str
     session_id: str
     policy: GovernancePolicy
@@ -575,19 +601,13 @@ class ExecutionContext:
         """Validate all context fields and raise ValueError for invalid inputs."""
         # Validate agent_id is a non-empty string matching allowed pattern
         if not isinstance(self.agent_id, str) or not self.agent_id:
-            raise ValueError(
-                f"agent_id must be a non-empty string, got {self.agent_id!r}"
-            )
+            raise ValueError(f"agent_id must be a non-empty string, got {self.agent_id!r}")
         if not _AGENT_ID_RE.match(self.agent_id):
-            raise ValueError(
-                f"agent_id must match ^[a-zA-Z0-9_-]+$, got {self.agent_id!r}"
-            )
+            raise ValueError(f"agent_id must match ^[a-zA-Z0-9_-]+$, got {self.agent_id!r}")
 
         # Validate session_id is a non-empty string
         if not isinstance(self.session_id, str) or not self.session_id:
-            raise ValueError(
-                f"session_id must be a non-empty string, got {self.session_id!r}"
-            )
+            raise ValueError(f"session_id must be a non-empty string, got {self.session_id!r}")
 
         # Validate policy is a GovernancePolicy instance
         if not isinstance(self.policy, GovernancePolicy):
@@ -599,15 +619,11 @@ class ExecutionContext:
         for field_name in ("call_count", "total_tokens"):
             value = getattr(self, field_name)
             if not isinstance(value, int) or value < 0:
-                raise ValueError(
-                    f"{field_name} must be a non-negative integer, got {value!r}"
-                )
+                raise ValueError(f"{field_name} must be a non-negative integer, got {value!r}")
 
         # Validate checkpoints is a list of strings
         if not isinstance(self.checkpoints, list):
-            raise ValueError(
-                f"checkpoints must be a list, got {type(self.checkpoints).__name__}"
-            )
+            raise ValueError(f"checkpoints must be a list, got {type(self.checkpoints).__name__}")
         for i, cp in enumerate(self.checkpoints):
             if not isinstance(cp, str):
                 raise ValueError(
@@ -617,9 +633,11 @@ class ExecutionContext:
 
 # ── Abstract Tool Call Interceptor ────────────────────────────
 
+
 @dataclass
 class ToolCallRequest:
     """Vendor-neutral representation of a tool/function call."""
+
     tool_name: str
     arguments: dict[str, Any]
     call_id: str = ""
@@ -633,6 +651,7 @@ class ToolCallRequest:
 @dataclass
 class ToolCallResult:
     """Result of intercepting a tool call."""
+
     allowed: bool
     reason: str | None = None
     modified_arguments: dict[str, Any] | None = None  # For argument sanitization
@@ -802,6 +821,7 @@ class CompositeInterceptor:
 
 # ── Bounded Concurrency ──────────────────────────────────────
 
+
 class BoundedSemaphore:
     """
     Async-compatible bounded semaphore with backpressure.
@@ -901,6 +921,7 @@ class BaseIntegration(ABC):
         prevents mid-session mutations from leaking into running sessions.
         """
         from uuid import uuid4
+
         ctx = ExecutionContext(
             agent_id=agent_id,
             session_id=str(uuid4())[:8],
@@ -921,7 +942,9 @@ class BaseIntegration(ABC):
             except Exception as exc:  # noqa: BLE001 — listener errors must not break governance flow
                 logger.warning(
                     "Governance event listener error for %s: %s",
-                    event_type, exc, exc_info=True,
+                    event_type,
+                    exc,
+                    exc_info=True,
                 )
 
     def pre_execute(self, ctx: ExecutionContext, input_data: Any) -> tuple[bool, str | None]:
@@ -952,7 +975,10 @@ class BaseIntegration(ABC):
         matched = self.policy.matches_pattern(input_str)
         if matched:
             reason = f"Blocked pattern detected: {matched[0]}"
-            self.emit(GovernanceEventType.TOOL_CALL_BLOCKED, {**event_base, "reason": reason, "pattern": matched[0]})
+            self.emit(
+                GovernanceEventType.TOOL_CALL_BLOCKED,
+                {**event_base, "reason": reason, "pattern": matched[0]},
+            )
             return False, reason
 
         # Check human approval requirement
@@ -963,8 +989,11 @@ class BaseIntegration(ABC):
 
         # Check confidence threshold
         if self.policy.confidence_threshold > 0.0:
-            confidence = getattr(input_data, 'confidence', None)
-            if isinstance(confidence, (int, float)) and confidence < self.policy.confidence_threshold:
+            confidence = getattr(input_data, "confidence", None)
+            if (
+                isinstance(confidence, (int, float))
+                and confidence < self.policy.confidence_threshold
+            ):
                 reason = (
                     f"Confidence {confidence:.2f} below threshold "
                     f"{self.policy.confidence_threshold:.2f}"
@@ -1007,15 +1036,18 @@ class BaseIntegration(ABC):
                         drift_result.score,
                         drift_result.threshold,
                     )
-                    self.emit(GovernanceEventType.DRIFT_DETECTED, {
-                        "agent_id": ctx.agent_id,
-                        "timestamp": datetime.now().isoformat(),
-                        "reason": reason,
-                        "drift_score": drift_result.score,
-                        "threshold": drift_result.threshold,
-                        "baseline_hash": drift_result.baseline_hash,
-                        "current_hash": drift_result.current_hash,
-                    })
+                    self.emit(
+                        GovernanceEventType.DRIFT_DETECTED,
+                        {
+                            "agent_id": ctx.agent_id,
+                            "timestamp": datetime.now().isoformat(),
+                            "reason": reason,
+                            "drift_score": drift_result.score,
+                            "threshold": drift_result.threshold,
+                            "baseline_hash": drift_result.baseline_hash,
+                            "current_hash": drift_result.current_hash,
+                        },
+                    )
                 else:
                     logger.debug(
                         "Drift check agent=%s score=%.4f threshold=%.2f",
@@ -1028,12 +1060,15 @@ class BaseIntegration(ABC):
         if ctx.call_count % self.policy.checkpoint_frequency == 0:
             checkpoint_id = f"checkpoint-{ctx.call_count}"
             ctx.checkpoints.append(checkpoint_id)
-            self.emit(GovernanceEventType.CHECKPOINT_CREATED, {
-                "agent_id": ctx.agent_id,
-                "timestamp": datetime.now().isoformat(),
-                "checkpoint_id": checkpoint_id,
-                "call_count": ctx.call_count,
-            })
+            self.emit(
+                GovernanceEventType.CHECKPOINT_CREATED,
+                {
+                    "agent_id": ctx.agent_id,
+                    "timestamp": datetime.now().isoformat(),
+                    "checkpoint_id": checkpoint_id,
+                    "call_count": ctx.call_count,
+                },
+            )
 
         return True, None
 
@@ -1056,9 +1091,7 @@ class BaseIntegration(ABC):
             return None
 
         # SequenceMatcher ratio: 1.0 = identical, 0.0 = nothing in common
-        similarity = difflib.SequenceMatcher(
-            None, ctx._baseline_text, current_text
-        ).ratio()
+        similarity = difflib.SequenceMatcher(None, ctx._baseline_text, current_text).ratio()
         score = 1.0 - similarity
 
         return DriftResult(
@@ -1069,7 +1102,9 @@ class BaseIntegration(ABC):
             current_hash=current_hash,
         )
 
-    async def async_pre_execute(self, ctx: ExecutionContext, input_data: Any) -> tuple[bool, str | None]:
+    async def async_pre_execute(
+        self, ctx: ExecutionContext, input_data: Any
+    ) -> tuple[bool, str | None]:
         """
         Async pre-execution policy check.
 
@@ -1078,7 +1113,9 @@ class BaseIntegration(ABC):
         """
         return self.pre_execute(ctx, input_data)
 
-    async def async_post_execute(self, ctx: ExecutionContext, output_data: Any) -> tuple[bool, str | None]:
+    async def async_post_execute(
+        self, ctx: ExecutionContext, output_data: Any
+    ) -> tuple[bool, str | None]:
         """
         Async post-execution validation.
 
@@ -1105,7 +1142,9 @@ class AsyncGovernedWrapper:
     Calls async_pre_execute before and async_post_execute after the wrapped callable.
     """
 
-    def __init__(self, integration: BaseIntegration, fn: Callable[..., Any], agent_id: str = "async-agent") -> None:
+    def __init__(
+        self, integration: BaseIntegration, fn: Callable[..., Any], agent_id: str = "async-agent"
+    ) -> None:
         self._integration = integration
         self._fn = fn
         self._ctx = integration.create_context(agent_id)

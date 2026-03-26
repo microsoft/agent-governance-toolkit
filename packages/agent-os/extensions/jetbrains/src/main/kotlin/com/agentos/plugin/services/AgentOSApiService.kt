@@ -20,48 +20,48 @@ import java.util.concurrent.TimeUnit
  */
 @Service
 class AgentOSApiService {
-    
+
     private val logger = Logger.getInstance(AgentOSApiService::class.java)
     private val gson: Gson = GsonBuilder()
         .setPrettyPrinting()
         .create()
-    
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
-    
+
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-    
+
     private val baseUrl: String
-        get() = AgentOSSettings.getInstance().state.apiEndpoint.ifBlank { 
-            "https://api.agent-os.dev/v1" 
+        get() = AgentOSSettings.getInstance().state.apiEndpoint.ifBlank {
+            "https://api.agent-os.dev/v1"
         }
-    
+
     private val apiKey: String
         get() = AgentOSSettings.getInstance().state.apiKey
-    
+
     /**
      * Create a new agent.
      */
     fun createAgent(agent: Agent): CompletableFuture<Agent> {
         val future = CompletableFuture<Agent>()
-        
+
         val request = Request.Builder()
             .url("$baseUrl/agents")
             .addHeader("Authorization", "Bearer $apiKey")
             .addHeader("Content-Type", "application/json")
             .post(gson.toJson(agent).toRequestBody(jsonMediaType))
             .build()
-        
+
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 logger.warn("Failed to create agent: ${e.message}")
                 // Return the local agent on API failure (offline mode)
                 future.complete(agent)
             }
-            
+
             override fun onResponse(call: Call, response: Response) {
                 response.use {
                     if (it.isSuccessful) {
@@ -75,28 +75,28 @@ class AgentOSApiService {
                 }
             }
         })
-        
+
         return future
     }
-    
+
     /**
      * List all agents for the current organization.
      */
     fun listAgents(): CompletableFuture<List<Agent>> {
         val future = CompletableFuture<List<Agent>>()
-        
+
         val request = Request.Builder()
             .url("$baseUrl/agents")
             .addHeader("Authorization", "Bearer $apiKey")
             .get()
             .build()
-        
+
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 logger.warn("Failed to list agents: ${e.message}")
                 future.complete(emptyList())
             }
-            
+
             override fun onResponse(call: Call, response: Response) {
                 response.use {
                     if (it.isSuccessful) {
@@ -110,81 +110,81 @@ class AgentOSApiService {
                 }
             }
         })
-        
+
         return future
     }
-    
+
     /**
      * Start an agent.
      */
     fun startAgent(agentId: String): CompletableFuture<Boolean> {
         return updateAgentStatus(agentId, "start")
     }
-    
+
     /**
      * Stop an agent.
      */
     fun stopAgent(agentId: String): CompletableFuture<Boolean> {
         return updateAgentStatus(agentId, "stop")
     }
-    
+
     /**
      * Pause an agent.
      */
     fun pauseAgent(agentId: String): CompletableFuture<Boolean> {
         return updateAgentStatus(agentId, "pause")
     }
-    
+
     private fun updateAgentStatus(agentId: String, action: String): CompletableFuture<Boolean> {
         val future = CompletableFuture<Boolean>()
-        
+
         val request = Request.Builder()
             .url("$baseUrl/agents/$agentId/$action")
             .addHeader("Authorization", "Bearer $apiKey")
             .post("".toRequestBody(jsonMediaType))
             .build()
-        
+
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 logger.warn("Failed to $action agent: ${e.message}")
                 future.complete(false)
             }
-            
+
             override fun onResponse(call: Call, response: Response) {
                 response.use {
                     future.complete(it.isSuccessful)
                 }
             }
         })
-        
+
         return future
     }
-    
+
     /**
      * Perform CMVK (Verification Kernel) review on code.
      */
     fun reviewWithCMVK(code: String, language: String): CompletableFuture<CMVKResult> {
         val future = CompletableFuture<CMVKResult>()
-        
+
         val payload = mapOf(
             "code" to code,
             "language" to language,
             "models" to listOf("gpt-4", "claude-3", "gemini-pro")
         )
-        
+
         val request = Request.Builder()
             .url("$baseUrl/cmvk/review")
             .addHeader("Authorization", "Bearer $apiKey")
             .addHeader("Content-Type", "application/json")
             .post(gson.toJson(payload).toRequestBody(jsonMediaType))
             .build()
-        
+
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 logger.warn("CMVK review failed: ${e.message}")
                 future.complete(CMVKResult.offline())
             }
-            
+
             override fun onResponse(call: Call, response: Response) {
                 response.use {
                     if (it.isSuccessful) {
@@ -198,28 +198,28 @@ class AgentOSApiService {
                 }
             }
         })
-        
+
         return future
     }
-    
+
     /**
      * Get available policies.
      */
     fun listPolicies(): CompletableFuture<List<Policy>> {
         val future = CompletableFuture<List<Policy>>()
-        
+
         val request = Request.Builder()
             .url("$baseUrl/policies")
             .addHeader("Authorization", "Bearer $apiKey")
             .get()
             .build()
-        
+
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 logger.warn("Failed to list policies: ${e.message}")
                 future.complete(getDefaultPolicies())
             }
-            
+
             override fun onResponse(call: Call, response: Response) {
                 response.use {
                     if (it.isSuccessful) {
@@ -232,34 +232,34 @@ class AgentOSApiService {
                 }
             }
         })
-        
+
         return future
     }
-    
+
     /**
      * Get audit log entries.
      */
     fun getAuditLog(agentId: String? = null, limit: Int = 100): CompletableFuture<List<AuditLogEntry>> {
         val future = CompletableFuture<List<AuditLogEntry>>()
-        
+
         val url = if (agentId != null) {
             "$baseUrl/audit?agentId=$agentId&limit=$limit"
         } else {
             "$baseUrl/audit?limit=$limit"
         }
-        
+
         val request = Request.Builder()
             .url(url)
             .addHeader("Authorization", "Bearer $apiKey")
             .get()
             .build()
-        
+
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 logger.warn("Failed to get audit log: ${e.message}")
                 future.complete(emptyList())
             }
-            
+
             override fun onResponse(call: Call, response: Response) {
                 response.use {
                     if (it.isSuccessful) {
@@ -272,10 +272,10 @@ class AgentOSApiService {
                 }
             }
         })
-        
+
         return future
     }
-    
+
     /**
      * Default policies when API is unavailable.
      */
@@ -318,7 +318,7 @@ class AgentOSApiService {
             builtIn = true
         )
     )
-    
+
     companion object {
         fun getInstance(): AgentOSApiService = service()
     }
@@ -342,7 +342,7 @@ data class CMVKResult(
             issues = listOf("Offline mode - unable to perform CMVK review"),
             suggestions = emptyList()
         )
-        
+
         fun error(message: String) = CMVKResult(
             consensus = 0.0,
             modelResults = emptyList(),

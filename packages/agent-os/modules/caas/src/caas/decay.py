@@ -37,15 +37,11 @@ def calculate_decay_factor(
         return 0.0
 
     try:
-        ingestion_dt = datetime.fromisoformat(
-            ingestion_timestamp.replace("Z", "+00:00")
-        )
+        ingestion_dt = datetime.fromisoformat(ingestion_timestamp.replace("Z", "+00:00"))
         if reference_time is None:
             reference_time = datetime.now(timezone.utc)
 
-        days_elapsed = max(
-            0.0, (reference_time - ingestion_dt).total_seconds() / 86400.0
-        )
+        days_elapsed = max(0.0, (reference_time - ingestion_dt).total_seconds() / 86400.0)
         ttl = _DEFAULT_TTL_DAYS / max(decay_rate, 0.001)
         if days_elapsed >= ttl:
             return 0.0

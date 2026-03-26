@@ -13,12 +13,19 @@ from pydantic import ValidationError
 
 from agentmesh.exceptions import AgentMeshError
 from agentmesh.identity.agent_id import AgentDID, AgentIdentity
-from agentmesh.identity.delegation import ScopeChain, DelegationLink, UserContext
+from agentmesh.identity.delegation import DelegationLink, ScopeChain, UserContext
 
 # ---------------------------------------------------------------------------
 # Acceptable exception types — parsers must raise one of these or succeed
 # ---------------------------------------------------------------------------
-CLEAN_EXCEPTIONS = (ValueError, TypeError, AgentMeshError, ValidationError, KeyError, AttributeError)
+CLEAN_EXCEPTIONS = (
+    ValueError,
+    TypeError,
+    AgentMeshError,
+    ValidationError,
+    KeyError,
+    AttributeError,
+)
 
 # ---------------------------------------------------------------------------
 # Malformed scalar inputs
@@ -236,8 +243,18 @@ class TestJWKFuzzing:
             {"kty": "OKP", "crv": "Ed25519", "x": "!!!invalid-b64!!!"},
             {"kty": "OKP", "crv": "Ed25519", "x": ""},
             {"kty": "OKP", "crv": "Ed25519", "x": "AAAA" * 100_000},  # huge key
-            {"kty": "OKP", "crv": "Ed25519", "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "d": "!!!"},
-            {"kty": "OKP", "crv": "Ed25519", "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "d": ""},
+            {
+                "kty": "OKP",
+                "crv": "Ed25519",
+                "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "d": "!!!",
+            },
+            {
+                "kty": "OKP",
+                "crv": "Ed25519",
+                "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "d": "",
+            },
             {"kty": None, "crv": None, "x": None},
             {"kty": 42, "crv": 42, "x": 42},
         ],

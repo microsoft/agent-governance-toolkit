@@ -189,17 +189,17 @@ def _check_policies(self, request: ExecutionRequest) -> Optional[str]:
         policy = self.policies.get(policy_name)
         if not policy:
             continue
-        
+
         # Check blocked actions
         if request.action in policy.get("blocked_actions", []):
             return f"Action '{request.action}' blocked by '{policy_name}'"
-        
+
         # Check blocked patterns in params
         params_str = json.dumps(request.params).lower()
         for pattern in policy.get("blocked_patterns", []):
             if re.search(pattern, params_str, re.IGNORECASE):
                 return f"Pattern '{pattern}' blocked by '{policy_name}'"
-    
+
     return None  # All checks passed
 ```
 
@@ -236,11 +236,11 @@ kernel = StatelessKernel(policies={
 ```python
 class SignalDispatcher:
     """Dispatch signals to agents."""
-    
+
     def __init__(self):
         self._handlers: Dict[str, Dict[Signal, Callable]] = {}
         self._history: List[Dict] = []
-    
+
     def send(self, agent_id: str, signal: Signal, reason: str = ""):
         """Send signal to agent."""
         entry = {
@@ -250,12 +250,12 @@ class SignalDispatcher:
             "reason": reason
         }
         self._history.append(entry)
-        
+
         # Non-maskable signals
         if signal in (Signal.SIGKILL, Signal.SIGPOLICY, Signal.SIGTRUST):
             self._terminate(agent_id, signal, reason)
             return
-        
+
         # Maskable signals - call handler if registered
         handlers = self._handlers.get(agent_id, {})
         handler = handlers.get(signal)
@@ -278,14 +278,14 @@ if error:
         policy=error.split("'")[1]
     )
     self.metrics.record_blocked(request.context.agent_id, request.action)
-    
+
     # Emit signal (for Flight Recorder)
     self.signals.send(
         request.context.agent_id,
         Signal.SIGKILL,
         reason=error
     )
-    
+
     return ExecutionResult(
         success=False,
         error=error,
@@ -322,24 +322,24 @@ if error:
 ```python
 class AgentVFS:
     """Virtual File System for agent memory and state."""
-    
+
     def __init__(self, agent_id: str, backend: StorageBackend = None):
         self.agent_id = agent_id
         self.backend = backend or MemoryBackend()
         self._readonly_paths = {"/policy", "/audit"}
-    
+
     def write(self, path: str, data: Any) -> bool:
         """Write to VFS path."""
         full_path = f"/agent/{self.agent_id}{path}"
-        
+
         # Check read-only
         for ro_path in self._readonly_paths:
             if path.startswith(ro_path):
                 raise PermissionError(f"Path {path} is read-only")
-        
+
         self.backend.set(full_path, data)
         return True
-    
+
     def read(self, path: str) -> Any:
         """Read from VFS path."""
         full_path = f"/agent/{self.agent_id}{path}"
@@ -367,7 +367,7 @@ All state lives in pluggable backends:
 ```python
 class StateBackend(Protocol):
     """Protocol for external state storage."""
-    
+
     async def get(self, key: str) -> Optional[Dict[str, Any]]: ...
     async def set(self, key: str, value: Dict[str, Any], ttl: int = None): ...
     async def delete(self, key: str): ...
@@ -375,10 +375,10 @@ class StateBackend(Protocol):
 # Implementations
 class MemoryBackend(StateBackend):
     """In-memory (for testing, single-instance)."""
-    
+
 class RedisBackend(StateBackend):
     """Redis (for production, distributed)."""
-    
+
 class DynamoDBBackend(StateBackend):
     """DynamoDB (for serverless)."""
 ```

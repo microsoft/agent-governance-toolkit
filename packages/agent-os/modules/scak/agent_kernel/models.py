@@ -7,22 +7,20 @@ Note: Core failure primitives (FailureType, FailureSeverity, AgentFailure, Failu
 are imported from agent-primitives (Layer 1) and re-exported here for backward compatibility.
 """
 
-from typing import Dict, List, Optional, Any
 from datetime import datetime
 from enum import Enum
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Any, Dict, List, Optional
 
 # Import from agent-primitives (Layer 1) and re-export for backward compatibility
 from agent_primitives import (
-    FailureType,
-    FailureSeverity,
-    FailureTrace,
     AgentFailure,
 )
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CognitiveGlitch(str, Enum):
     """Types of cognitive glitches that can occur in agent reasoning."""
+
     HALLUCINATION = "hallucination"  # Agent invents facts not in context
     LOGIC_ERROR = "logic_error"  # Agent misunderstands instructions or makes faulty inferences
     CONTEXT_GAP = "context_gap"  # Agent lacks necessary information in prompt/schema
@@ -38,21 +36,26 @@ class CognitiveGlitch(str, Enum):
 
 class FailureAnalysis(BaseModel):
     """Analysis of an agent failure."""
-    
+
     failure: AgentFailure
     root_cause: str = Field(..., description="Identified root cause")
     contributing_factors: List[str] = Field(default_factory=list)
     suggested_fixes: List[str] = Field(default_factory=list)
     confidence_score: float = Field(..., ge=0.0, le=1.0, description="Confidence in analysis")
-    similar_failures: List[str] = Field(default_factory=list, description="IDs of similar past failures")
-    
+    similar_failures: List[str] = Field(
+        default_factory=list, description="IDs of similar past failures"
+    )
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "root_cause": "Agent attempted unauthorized file access",
                 "contributing_factors": ["Missing permission check", "Inadequate input validation"],
-                "suggested_fixes": ["Add permission validation", "Implement safe file access patterns"],
-                "confidence_score": 0.85
+                "suggested_fixes": [
+                    "Add permission validation",
+                    "Implement safe file access patterns",
+                ],
+                "confidence_score": 0.85,
             }
         }
     )
@@ -60,14 +63,16 @@ class FailureAnalysis(BaseModel):
 
 class DiagnosisJSON(BaseModel):
     """Structured diagnosis identifying cognitive glitches in agent reasoning."""
-    
-    cognitive_glitch: CognitiveGlitch = Field(..., description="Primary cognitive glitch identified")
+
+    cognitive_glitch: CognitiveGlitch = Field(
+        ..., description="Primary cognitive glitch identified"
+    )
     deep_problem: str = Field(..., description="Deep analysis of the problem")
     evidence: List[str] = Field(default_factory=list, description="Evidence supporting diagnosis")
     hint: str = Field(..., description="Hint to inject for counterfactual simulation")
     expected_fix: str = Field(..., description="Expected outcome of applying the hint")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in diagnosis")
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -76,11 +81,11 @@ class DiagnosisJSON(BaseModel):
                 "evidence": [
                     "Query references 'recent_users' table",
                     "Schema only contains 'users' table",
-                    "No context provided about table names"
+                    "No context provided about table names",
                 ],
                 "hint": "Available tables: users, orders, products. Use 'users' table with date filter.",
                 "expected_fix": "Agent will query 'users' table with proper date filter",
-                "confidence": 0.92
+                "confidence": 0.92,
             }
         }
     )
@@ -88,14 +93,14 @@ class DiagnosisJSON(BaseModel):
 
 class SimulationResult(BaseModel):
     """Result of simulating an alternative path."""
-    
+
     simulation_id: str
     success: bool
     alternative_path: List[Dict[str, Any]] = Field(description="Steps in the alternative path")
     expected_outcome: str
     risk_score: float = Field(..., ge=0.0, le=1.0, description="Risk of the alternative")
     estimated_success_rate: float = Field(..., ge=0.0, le=1.0)
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -103,11 +108,11 @@ class SimulationResult(BaseModel):
                 "success": True,
                 "alternative_path": [
                     {"action": "validate_permissions", "params": {}},
-                    {"action": "safe_file_access", "params": {"file": "/tmp/safe.txt"}}
+                    {"action": "safe_file_access", "params": {"file": "/tmp/safe.txt"}},
                 ],
                 "expected_outcome": "Safe file operation completed",
                 "risk_score": 0.15,
-                "estimated_success_rate": 0.92
+                "estimated_success_rate": 0.92,
             }
         }
     )
@@ -115,7 +120,7 @@ class SimulationResult(BaseModel):
 
 class ShadowAgentResult(BaseModel):
     """Result of running a shadow agent with counterfactual simulation."""
-    
+
     shadow_id: str
     original_prompt: str = Field(..., description="Original user prompt")
     injected_hint: str = Field(..., description="Hint injected into the prompt")
@@ -125,7 +130,7 @@ class ShadowAgentResult(BaseModel):
     reasoning_chain: List[str] = Field(default_factory=list, description="Shadow agent's reasoning")
     action_taken: Optional[Dict[str, Any]] = Field(None, description="Action the shadow agent took")
     verified: bool = Field(..., description="Whether the fix actually works")
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -135,9 +140,16 @@ class ShadowAgentResult(BaseModel):
                 "modified_prompt": "Delete recent user records. [HINT: Available tables: users. 'Recent' means created_at > 7 days ago]",
                 "execution_success": True,
                 "output": "Query executed successfully",
-                "reasoning_chain": ["Parse user request", "Check hint for table info", "Build safe query"],
-                "action_taken": {"action": "execute_sql", "query": "DELETE FROM users WHERE created_at > NOW() - INTERVAL 7 DAY"},
-                "verified": True
+                "reasoning_chain": [
+                    "Parse user request",
+                    "Check hint for table info",
+                    "Build safe query",
+                ],
+                "action_taken": {
+                    "action": "execute_sql",
+                    "query": "DELETE FROM users WHERE created_at > NOW() - INTERVAL 7 DAY",
+                },
+                "verified": True,
             }
         }
     )
@@ -145,7 +157,7 @@ class ShadowAgentResult(BaseModel):
 
 class CorrectionPatch(BaseModel):
     """A patch to correct an agent's behavior."""
-    
+
     patch_id: str
     agent_id: str
     failure_analysis: FailureAnalysis
@@ -155,9 +167,13 @@ class CorrectionPatch(BaseModel):
     applied: bool = Field(default=False)
     applied_at: Optional[datetime] = None
     rollback_available: bool = Field(default=True)
-    diagnosis: Optional["DiagnosisJSON"] = Field(None, description="Cognitive diagnosis if available")
-    shadow_result: Optional[ShadowAgentResult] = Field(None, description="Shadow agent verification result")
-    
+    diagnosis: Optional["DiagnosisJSON"] = Field(
+        None, description="Cognitive diagnosis if available"
+    )
+    shadow_result: Optional[ShadowAgentResult] = Field(
+        None, description="Shadow agent verification result"
+    )
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -168,9 +184,9 @@ class CorrectionPatch(BaseModel):
                     "module": "file_handler",
                     "changes": [
                         {"type": "add_validation", "code": "if not has_permission(file): return"}
-                    ]
+                    ],
                 },
-                "applied": True
+                "applied": True,
             }
         }
     )
@@ -178,6 +194,7 @@ class CorrectionPatch(BaseModel):
 
 class PatchStrategy(str, Enum):
     """Strategy for applying patches."""
+
     SYSTEM_PROMPT = "system_prompt"  # Easy fix: Update system prompt
     RAG_MEMORY = "rag_memory"  # Hard fix: Inject into vector store
     CODE_CHANGE = "code_change"  # Direct code modification
@@ -187,7 +204,7 @@ class PatchStrategy(str, Enum):
 
 class AgentState(BaseModel):
     """Current state of an agent."""
-    
+
     agent_id: str
     status: str = Field(..., description="Current status (running, failed, patched, etc.)")
     last_failure: Optional[AgentFailure] = None
@@ -200,6 +217,7 @@ class AgentState(BaseModel):
 
 class GiveUpSignal(str, Enum):
     """Types of give-up signals indicating agent laziness."""
+
     NO_DATA_FOUND = "no_data_found"
     CANNOT_ANSWER = "cannot_answer"
     NO_RESULTS = "no_results"
@@ -210,12 +228,14 @@ class GiveUpSignal(str, Enum):
 
 class PatchDecayType(str, Enum):
     """Classification of patch based on decay characteristics."""
+
     SYNTAX_CAPABILITY = "syntax_capability"  # Type A: High decay - likely model defects
     BUSINESS_CONTEXT = "business_context"  # Type B: Zero decay - world truths
 
 
 class ToolExecutionStatus(str, Enum):
     """Status of tool execution."""
+
     SUCCESS = "success"
     ERROR = "error"
     EMPTY_RESULT = "empty_result"
@@ -224,6 +244,7 @@ class ToolExecutionStatus(str, Enum):
 
 class OutcomeType(str, Enum):
     """Types of agent outcomes."""
+
     SUCCESS = "success"
     GIVE_UP = "give_up"  # Negative result - triggers Completeness Auditor
     FAILURE = "failure"
@@ -232,20 +253,20 @@ class OutcomeType(str, Enum):
 
 class ToolExecutionTelemetry(BaseModel):
     """Telemetry data for tool executions during agent interaction."""
-    
+
     tool_name: str = Field(..., description="Name of the tool that was called")
     tool_status: ToolExecutionStatus = Field(..., description="Execution status of the tool")
     tool_result: Any = Field(None, description="Result returned by the tool")
     execution_time_ms: Optional[float] = Field(None, description="Execution time in milliseconds")
     error_message: Optional[str] = Field(None, description="Error message if tool failed")
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "tool_name": "search_logs",
                 "tool_status": "empty_result",
                 "tool_result": [],
-                "execution_time_ms": 150.5
+                "execution_time_ms": 150.5,
             }
         }
     )
@@ -253,19 +274,23 @@ class ToolExecutionTelemetry(BaseModel):
 
 class SemanticAnalysis(BaseModel):
     """Semantic analysis of agent response for refusal detection."""
-    
+
     is_refusal: bool = Field(..., description="Whether response indicates refusal/give-up")
-    refusal_confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in refusal detection")
-    semantic_category: str = Field(..., description="Category: 'compliance', 'refusal', 'error', 'unclear'")
+    refusal_confidence: float = Field(
+        ..., ge=0.0, le=1.0, description="Confidence in refusal detection"
+    )
+    semantic_category: str = Field(
+        ..., description="Category: 'compliance', 'refusal', 'error', 'unclear'"
+    )
     reasoning: str = Field(..., description="Explanation of the classification")
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "is_refusal": True,
                 "refusal_confidence": 0.85,
                 "semantic_category": "refusal",
-                "reasoning": "Response indicates inability to find data without attempting comprehensive search"
+                "reasoning": "Response indicates inability to find data without attempting comprehensive search",
             }
         }
     )
@@ -273,14 +298,14 @@ class SemanticAnalysis(BaseModel):
 
 class NudgeResult(BaseModel):
     """Result of nudging agent after give-up detection."""
-    
+
     nudge_id: str
     original_outcome: "AgentOutcome"
     nudge_prompt: str = Field(..., description="The nudge prompt that was injected")
     retry_response: str = Field(..., description="Agent's response after nudge")
     retry_successful: bool = Field(..., description="Whether nudge resolved the issue")
     improvement_detected: bool = Field(..., description="Whether response improved after nudge")
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -288,7 +313,7 @@ class NudgeResult(BaseModel):
                 "nudge_prompt": "You claimed no data was found. Please confirm you executed the search tool with correct parameters and checked all data sources.",
                 "retry_response": "After checking all sources, found 15 log entries in archived partition.",
                 "retry_successful": True,
-                "improvement_detected": True
+                "improvement_detected": True,
             }
         }
     )
@@ -296,7 +321,7 @@ class NudgeResult(BaseModel):
 
 class AgentOutcome(BaseModel):
     """Result of an agent execution."""
-    
+
     agent_id: str
     outcome_type: OutcomeType
     timestamp: datetime = Field(default_factory=datetime.utcnow)
@@ -305,14 +330,12 @@ class AgentOutcome(BaseModel):
     give_up_signal: Optional[GiveUpSignal] = None
     context: Dict[str, Any] = Field(default_factory=dict)
     tool_telemetry: List[ToolExecutionTelemetry] = Field(
-        default_factory=list,
-        description="Telemetry data for tools called during execution"
+        default_factory=list, description="Telemetry data for tools called during execution"
     )
     semantic_analysis: Optional[SemanticAnalysis] = Field(
-        None,
-        description="Semantic analysis of the response"
+        None, description="Semantic analysis of the response"
     )
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -320,7 +343,7 @@ class AgentOutcome(BaseModel):
                 "outcome_type": "give_up",
                 "user_prompt": "Find logs for error 500",
                 "agent_response": "No logs found for error 500.",
-                "give_up_signal": "no_data_found"
+                "give_up_signal": "no_data_found",
             }
         }
     )
@@ -328,7 +351,7 @@ class AgentOutcome(BaseModel):
 
 class CompletenessAudit(BaseModel):
     """Result of completeness auditing by teacher model."""
-    
+
     audit_id: str
     agent_outcome: AgentOutcome
     teacher_model: str = Field(default="o1-preview", description="High-reasoning teacher model")
@@ -338,7 +361,7 @@ class CompletenessAudit(BaseModel):
     competence_patch: str = Field(..., description="Lesson to prevent future laziness")
     confidence: float = Field(..., ge=0.0, le=1.0)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -348,7 +371,7 @@ class CompletenessAudit(BaseModel):
                 "teacher_found_data": True,
                 "gap_analysis": "Agent didn't check archived partitions",
                 "competence_patch": "When searching logs, always check archived partitions if recent logs are empty",
-                "confidence": 0.92
+                "confidence": 0.92,
             }
         }
     )
@@ -356,19 +379,19 @@ class CompletenessAudit(BaseModel):
 
 class ClassifiedPatch(BaseModel):
     """A patch with classification metadata for lifecycle management."""
-    
+
     base_patch: CorrectionPatch
     decay_type: PatchDecayType
     created_at_model_version: str = Field(..., description="Model version when patch was created")
     decay_metadata: Dict[str, Any] = Field(default_factory=dict)
     should_purge_on_upgrade: bool = Field(default=False)
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "decay_type": "syntax_capability",
                 "created_at_model_version": "gpt-4o",
-                "should_purge_on_upgrade": True
+                "should_purge_on_upgrade": True,
             }
         }
     )

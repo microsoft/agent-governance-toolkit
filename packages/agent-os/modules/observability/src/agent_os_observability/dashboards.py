@@ -12,14 +12,14 @@ import json
 def get_grafana_dashboard(name: str = "agent-os-overview") -> dict:
     """
     Get a pre-built Grafana dashboard.
-    
+
     Available dashboards:
     - agent-os-overview: Main overview for SOC teams
     - agent-os-safety: Safety metrics detail
     - agent-os-performance: Performance metrics
     - agent-os-amb: AMB health and throughput
     - agent-os-cmvk: CMVK verification metrics
-    
+
     Usage:
         dashboard = get_grafana_dashboard("agent-os-overview")
         # Import via Grafana API or UI
@@ -54,16 +54,13 @@ def _overview_dashboard() -> dict:
                     "title": "Violation Rate",
                     "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
                     "targets": [
-                        {
-                            "expr": "agent_os_violation_rate{window='all_time'}",
-                            "refId": "A"
-                        }
+                        {"expr": "agent_os_violation_rate{window='all_time'}", "refId": "A"}
                     ],
                     "options": {
                         "colorMode": "value",
                         "graphMode": "none",
                         "orientation": "auto",
-                        "textMode": "value_and_name"
+                        "textMode": "value_and_name",
                     },
                     "fieldConfig": {
                         "defaults": {
@@ -73,53 +70,35 @@ def _overview_dashboard() -> dict:
                                 "steps": [
                                     {"color": "green", "value": None},
                                     {"color": "yellow", "value": 0.001},
-                                    {"color": "red", "value": 0.01}
-                                ]
-                            }
+                                    {"color": "red", "value": 0.01},
+                                ],
+                            },
                         }
-                    }
+                    },
                 },
                 {
                     "id": 2,
                     "type": "stat",
                     "title": "SIGKILL Count (24h)",
                     "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
-                    "targets": [
-                        {
-                            "expr": "increase(agent_os_sigkill_total[24h])",
-                            "refId": "A"
-                        }
-                    ],
-                    "options": {"colorMode": "value"}
+                    "targets": [{"expr": "increase(agent_os_sigkill_total[24h])", "refId": "A"}],
+                    "options": {"colorMode": "value"},
                 },
                 {
                     "id": 3,
                     "type": "stat",
                     "title": "Kernel Uptime",
                     "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
-                    "targets": [
-                        {
-                            "expr": "agent_os_kernel_uptime_seconds",
-                            "refId": "A"
-                        }
-                    ],
-                    "fieldConfig": {
-                        "defaults": {"unit": "s"}
-                    }
+                    "targets": [{"expr": "agent_os_kernel_uptime_seconds", "refId": "A"}],
+                    "fieldConfig": {"defaults": {"unit": "s"}},
                 },
                 {
                     "id": 4,
                     "type": "stat",
                     "title": "Active Agents",
                     "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
-                    "targets": [
-                        {
-                            "expr": "agent_os_active_agents",
-                            "refId": "A"
-                        }
-                    ]
+                    "targets": [{"expr": "agent_os_active_agents", "refId": "A"}],
                 },
-                
                 # Row 2: Time Series
                 {
                     "id": 5,
@@ -130,9 +109,9 @@ def _overview_dashboard() -> dict:
                         {
                             "expr": "rate(agent_os_requests_total[1m])",
                             "legendFormat": "{{action}} - {{status}}",
-                            "refId": "A"
+                            "refId": "A",
                         }
-                    ]
+                    ],
                 },
                 {
                     "id": 6,
@@ -143,13 +122,13 @@ def _overview_dashboard() -> dict:
                         {
                             "expr": "histogram_quantile(0.99, rate(agent_os_policy_check_duration_seconds_bucket[5m]))",
                             "legendFormat": "p99",
-                            "refId": "A"
+                            "refId": "A",
                         },
                         {
                             "expr": "histogram_quantile(0.50, rate(agent_os_policy_check_duration_seconds_bucket[5m]))",
                             "legendFormat": "p50",
-                            "refId": "B"
-                        }
+                            "refId": "B",
+                        },
                     ],
                     "fieldConfig": {
                         "defaults": {
@@ -158,13 +137,12 @@ def _overview_dashboard() -> dict:
                                 "steps": [
                                     {"color": "green", "value": None},
                                     {"color": "yellow", "value": 0.005},
-                                    {"color": "red", "value": 0.01}
+                                    {"color": "red", "value": 0.01},
                                 ]
-                            }
+                            },
                         }
-                    }
+                    },
                 },
-                
                 # Row 3: Violations and Signals
                 {
                     "id": 7,
@@ -175,16 +153,10 @@ def _overview_dashboard() -> dict:
                         {
                             "expr": "rate(agent_os_violations_total[5m])",
                             "legendFormat": "{{policy}}",
-                            "refId": "A"
+                            "refId": "A",
                         }
                     ],
-                    "fieldConfig": {
-                        "defaults": {
-                            "custom": {
-                                "fillOpacity": 30
-                            }
-                        }
-                    }
+                    "fieldConfig": {"defaults": {"custom": {"fillOpacity": 30}}},
                 },
                 {
                     "id": 8,
@@ -195,26 +167,18 @@ def _overview_dashboard() -> dict:
                         {
                             "expr": "rate(agent_os_signals_total[5m])",
                             "legendFormat": "{{signal}}",
-                            "refId": "A"
+                            "refId": "A",
                         }
-                    ]
+                    ],
                 },
-                
                 # Row 4: Recovery
                 {
                     "id": 9,
                     "type": "histogram",
                     "title": "MTTR Distribution",
                     "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
-                    "targets": [
-                        {
-                            "expr": "agent_os_mttr_seconds_bucket",
-                            "refId": "A"
-                        }
-                    ],
-                    "fieldConfig": {
-                        "defaults": {"unit": "s"}
-                    }
+                    "targets": [{"expr": "agent_os_mttr_seconds_bucket", "refId": "A"}],
+                    "fieldConfig": {"defaults": {"unit": "s"}},
                 },
                 {
                     "id": 10,
@@ -225,14 +189,14 @@ def _overview_dashboard() -> dict:
                         {
                             "expr": "topk(10, agent_os_violations_total)",
                             "format": "table",
-                            "refId": "A"
+                            "refId": "A",
                         }
-                    ]
-                }
-            ]
+                    ],
+                },
+            ],
         },
         "folderId": 0,
-        "overwrite": True
+        "overwrite": True,
     }
 
 
@@ -253,24 +217,19 @@ def _safety_dashboard() -> dict:
                     "type": "stat",
                     "title": "30-Day Violation Count",
                     "gridPos": {"h": 6, "w": 8, "x": 0, "y": 0},
-                    "targets": [
-                        {
-                            "expr": "increase(agent_os_violations_total[30d])",
-                            "refId": "A"
-                        }
-                    ],
+                    "targets": [{"expr": "increase(agent_os_violations_total[30d])", "refId": "A"}],
                     "fieldConfig": {
                         "defaults": {
                             "thresholds": {
                                 "steps": [
                                     {"color": "green", "value": None},
-                                    {"color": "red", "value": 1}
+                                    {"color": "red", "value": 1},
                                 ]
                             }
                         }
-                    }
+                    },
                 }
-            ]
+            ],
         }
     }
 
@@ -286,7 +245,7 @@ def _performance_dashboard() -> dict:
             "timezone": "browser",
             "schemaVersion": 38,
             "version": 1,
-            "panels": []
+            "panels": [],
         }
     }
 
@@ -318,10 +277,7 @@ def _amb_dashboard() -> dict:
                     "title": "Messages/sec",
                     "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
                     "targets": [
-                        {
-                            "expr": "sum(rate(amb_messages_published_total[1m]))",
-                            "refId": "A"
-                        }
+                        {"expr": "sum(rate(amb_messages_published_total[1m]))", "refId": "A"}
                     ],
                     "fieldConfig": {
                         "defaults": {
@@ -330,34 +286,29 @@ def _amb_dashboard() -> dict:
                                 "steps": [
                                     {"color": "green", "value": None},
                                     {"color": "yellow", "value": 10000},
-                                    {"color": "red", "value": 50000}
+                                    {"color": "red", "value": 50000},
                                 ]
-                            }
+                            },
                         }
-                    }
+                    },
                 },
                 {
                     "id": 2,
                     "type": "stat",
                     "title": "Queue Depth",
                     "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
-                    "targets": [
-                        {
-                            "expr": "sum(amb_queue_depth)",
-                            "refId": "A"
-                        }
-                    ],
+                    "targets": [{"expr": "sum(amb_queue_depth)", "refId": "A"}],
                     "fieldConfig": {
                         "defaults": {
                             "thresholds": {
                                 "steps": [
                                     {"color": "green", "value": None},
                                     {"color": "yellow", "value": 500},
-                                    {"color": "red", "value": 1000}
+                                    {"color": "red", "value": 1000},
                                 ]
                             }
                         }
-                    }
+                    },
                 },
                 {
                     "id": 3,
@@ -365,10 +316,7 @@ def _amb_dashboard() -> dict:
                     "title": "Backpressure Events (1h)",
                     "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
                     "targets": [
-                        {
-                            "expr": "increase(amb_backpressure_activated_total[1h])",
-                            "refId": "A"
-                        }
+                        {"expr": "increase(amb_backpressure_activated_total[1h])", "refId": "A"}
                     ],
                     "fieldConfig": {
                         "defaults": {
@@ -376,11 +324,11 @@ def _amb_dashboard() -> dict:
                                 "steps": [
                                     {"color": "green", "value": None},
                                     {"color": "yellow", "value": 1},
-                                    {"color": "red", "value": 10}
+                                    {"color": "red", "value": 10},
                                 ]
                             }
                         }
-                    }
+                    },
                 },
                 {
                     "id": 4,
@@ -388,10 +336,7 @@ def _amb_dashboard() -> dict:
                     "title": "Delivery Failures (1h)",
                     "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
                     "targets": [
-                        {
-                            "expr": "increase(amb_delivery_failures_total[1h])",
-                            "refId": "A"
-                        }
+                        {"expr": "increase(amb_delivery_failures_total[1h])", "refId": "A"}
                     ],
                     "fieldConfig": {
                         "defaults": {
@@ -399,13 +344,12 @@ def _amb_dashboard() -> dict:
                                 "steps": [
                                     {"color": "green", "value": None},
                                     {"color": "yellow", "value": 1},
-                                    {"color": "red", "value": 10}
+                                    {"color": "red", "value": 10},
                                 ]
                             }
                         }
-                    }
+                    },
                 },
-                
                 # Row 2: Throughput
                 {
                     "id": 5,
@@ -416,17 +360,15 @@ def _amb_dashboard() -> dict:
                         {
                             "expr": "rate(amb_messages_published_total[1m])",
                             "legendFormat": "Published - {{topic}}",
-                            "refId": "A"
+                            "refId": "A",
                         },
                         {
                             "expr": "rate(amb_messages_delivered_total[1m])",
                             "legendFormat": "Delivered - {{topic}}",
-                            "refId": "B"
-                        }
+                            "refId": "B",
+                        },
                     ],
-                    "fieldConfig": {
-                        "defaults": {"unit": "msg/s"}
-                    }
+                    "fieldConfig": {"defaults": {"unit": "msg/s"}},
                 },
                 {
                     "id": 6,
@@ -434,14 +376,9 @@ def _amb_dashboard() -> dict:
                     "title": "Queue Depth by Topic",
                     "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
                     "targets": [
-                        {
-                            "expr": "amb_queue_depth",
-                            "legendFormat": "{{topic}}",
-                            "refId": "A"
-                        }
-                    ]
+                        {"expr": "amb_queue_depth", "legendFormat": "{{topic}}", "refId": "A"}
+                    ],
                 },
-                
                 # Row 3: Latency
                 {
                     "id": 7,
@@ -452,18 +389,18 @@ def _amb_dashboard() -> dict:
                         {
                             "expr": "histogram_quantile(0.99, rate(amb_publish_duration_seconds_bucket[5m]))",
                             "legendFormat": "p99",
-                            "refId": "A"
+                            "refId": "A",
                         },
                         {
                             "expr": "histogram_quantile(0.95, rate(amb_publish_duration_seconds_bucket[5m]))",
                             "legendFormat": "p95",
-                            "refId": "B"
+                            "refId": "B",
                         },
                         {
                             "expr": "histogram_quantile(0.50, rate(amb_publish_duration_seconds_bucket[5m]))",
                             "legendFormat": "p50",
-                            "refId": "C"
-                        }
+                            "refId": "C",
+                        },
                     ],
                     "fieldConfig": {
                         "defaults": {
@@ -472,11 +409,11 @@ def _amb_dashboard() -> dict:
                                 "steps": [
                                     {"color": "green", "value": None},
                                     {"color": "yellow", "value": 0.01},
-                                    {"color": "red", "value": 0.1}
+                                    {"color": "red", "value": 0.1},
                                 ]
-                            }
+                            },
                         }
-                    }
+                    },
                 },
                 {
                     "id": 8,
@@ -487,19 +424,16 @@ def _amb_dashboard() -> dict:
                         {
                             "expr": "histogram_quantile(0.99, rate(amb_delivery_duration_seconds_bucket[5m]))",
                             "legendFormat": "p99",
-                            "refId": "A"
+                            "refId": "A",
                         },
                         {
                             "expr": "histogram_quantile(0.50, rate(amb_delivery_duration_seconds_bucket[5m]))",
                             "legendFormat": "p50",
-                            "refId": "B"
-                        }
+                            "refId": "B",
+                        },
                     ],
-                    "fieldConfig": {
-                        "defaults": {"unit": "s"}
-                    }
+                    "fieldConfig": {"defaults": {"unit": "s"}},
                 },
-                
                 # Row 4: Health
                 {
                     "id": 9,
@@ -510,12 +444,10 @@ def _amb_dashboard() -> dict:
                         {
                             "expr": "rate(amb_messages_published_total[5m])",
                             "legendFormat": "{{priority}}",
-                            "refId": "A"
+                            "refId": "A",
                         }
                     ],
-                    "options": {
-                        "legend": {"displayMode": "table"}
-                    }
+                    "options": {"legend": {"displayMode": "table"}},
                 },
                 {
                     "id": 10,
@@ -523,81 +455,73 @@ def _amb_dashboard() -> dict:
                     "title": "Dead Letter Queue",
                     "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
                     "targets": [
-                        {
-                            "expr": "amb_dlq_messages_total",
-                            "format": "table",
-                            "refId": "A"
-                        }
+                        {"expr": "amb_dlq_messages_total", "format": "table", "refId": "A"}
                     ],
                     "fieldConfig": {
                         "defaults": {
                             "thresholds": {
                                 "steps": [
                                     {"color": "green", "value": None},
-                                    {"color": "red", "value": 1}
+                                    {"color": "red", "value": 1},
                                 ]
                             }
                         }
-                    }
+                    },
                 },
-                
                 # Row 5: Broker Health
                 {
                     "id": 11,
                     "type": "stat",
                     "title": "Broker Status",
                     "gridPos": {"h": 4, "w": 8, "x": 0, "y": 28},
-                    "targets": [
-                        {
-                            "expr": "amb_broker_connected",
-                            "refId": "A"
-                        }
-                    ],
+                    "targets": [{"expr": "amb_broker_connected", "refId": "A"}],
                     "fieldConfig": {
                         "defaults": {
                             "mappings": [
-                                {"type": "value", "options": {"1": {"text": "Connected", "color": "green"}}},
-                                {"type": "value", "options": {"0": {"text": "Disconnected", "color": "red"}}}
+                                {
+                                    "type": "value",
+                                    "options": {"1": {"text": "Connected", "color": "green"}},
+                                },
+                                {
+                                    "type": "value",
+                                    "options": {"0": {"text": "Disconnected", "color": "red"}},
+                                },
                             ]
                         }
-                    }
+                    },
                 },
                 {
                     "id": 12,
                     "type": "stat",
                     "title": "Persistence Status",
                     "gridPos": {"h": 4, "w": 8, "x": 8, "y": 28},
-                    "targets": [
-                        {
-                            "expr": "amb_persistence_enabled",
-                            "refId": "A"
-                        }
-                    ],
+                    "targets": [{"expr": "amb_persistence_enabled", "refId": "A"}],
                     "fieldConfig": {
                         "defaults": {
                             "mappings": [
-                                {"type": "value", "options": {"1": {"text": "Enabled", "color": "green"}}},
-                                {"type": "value", "options": {"0": {"text": "Disabled", "color": "yellow"}}}
+                                {
+                                    "type": "value",
+                                    "options": {"1": {"text": "Enabled", "color": "green"}},
+                                },
+                                {
+                                    "type": "value",
+                                    "options": {"0": {"text": "Disabled", "color": "yellow"}},
+                                },
                             ]
                         }
-                    }
+                    },
                 },
                 {
                     "id": 13,
                     "type": "stat",
                     "title": "Messages in WAL",
                     "gridPos": {"h": 4, "w": 8, "x": 16, "y": 28},
-                    "targets": [
-                        {
-                            "expr": "amb_wal_messages_pending",
-                            "refId": "A"
-                        }
-                    ]
-                }
-            ]
+                    "targets": [{"expr": "amb_wal_messages_pending", "refId": "A"}],
+                },
+            ],
         },
         "folderId": 0,
-        "overwrite": True
+        "overwrite": True,
     }
 
 
@@ -621,12 +545,7 @@ def _cmvk_dashboard() -> dict:
                     "title": "Model Consensus Rate",
                     "description": "Current agreement ratio across verification models (target: >90%)",
                     "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
-                    "targets": [
-                        {
-                            "expr": "agent_os_cmvk_consensus_ratio",
-                            "refId": "A"
-                        }
-                    ],
+                    "targets": [{"expr": "agent_os_cmvk_consensus_ratio", "refId": "A"}],
                     "fieldConfig": {
                         "defaults": {
                             "unit": "percentunit",
@@ -634,11 +553,11 @@ def _cmvk_dashboard() -> dict:
                                 "steps": [
                                     {"color": "red", "value": None},
                                     {"color": "yellow", "value": 0.7},
-                                    {"color": "green", "value": 0.9}
+                                    {"color": "green", "value": 0.9},
                                 ]
-                            }
+                            },
                         }
-                    }
+                    },
                 },
                 {
                     "id": 2,
@@ -646,11 +565,8 @@ def _cmvk_dashboard() -> dict:
                     "title": "Verifications (24h)",
                     "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
                     "targets": [
-                        {
-                            "expr": "increase(agent_os_cmvk_verifications_total[24h])",
-                            "refId": "A"
-                        }
-                    ]
+                        {"expr": "increase(agent_os_cmvk_verifications_total[24h])", "refId": "A"}
+                    ],
                 },
                 {
                     "id": 3,
@@ -661,7 +577,7 @@ def _cmvk_dashboard() -> dict:
                     "targets": [
                         {
                             "expr": "increase(agent_os_cmvk_verifications_total{result='flagged'}[24h])",
-                            "refId": "A"
+                            "refId": "A",
                         }
                     ],
                     "fieldConfig": {
@@ -670,11 +586,11 @@ def _cmvk_dashboard() -> dict:
                                 "steps": [
                                     {"color": "green", "value": None},
                                     {"color": "yellow", "value": 10},
-                                    {"color": "red", "value": 50}
+                                    {"color": "red", "value": 50},
                                 ]
                             }
                         }
-                    }
+                    },
                 },
                 {
                     "id": 4,
@@ -684,7 +600,7 @@ def _cmvk_dashboard() -> dict:
                     "targets": [
                         {
                             "expr": "histogram_quantile(0.50, rate(agent_os_cmvk_verification_duration_seconds_bucket[5m]))",
-                            "refId": "A"
+                            "refId": "A",
                         }
                     ],
                     "fieldConfig": {
@@ -694,13 +610,12 @@ def _cmvk_dashboard() -> dict:
                                 "steps": [
                                     {"color": "green", "value": None},
                                     {"color": "yellow", "value": 3},
-                                    {"color": "red", "value": 10}
+                                    {"color": "red", "value": 10},
                                 ]
-                            }
+                            },
                         }
-                    }
+                    },
                 },
-                
                 # Row 2: Verification Results
                 {
                     "id": 5,
@@ -711,12 +626,10 @@ def _cmvk_dashboard() -> dict:
                         {
                             "expr": "increase(agent_os_cmvk_verifications_total[24h])",
                             "legendFormat": "{{result}}",
-                            "refId": "A"
+                            "refId": "A",
                         }
                     ],
-                    "options": {
-                        "legend": {"displayMode": "table", "placement": "right"}
-                    }
+                    "options": {"legend": {"displayMode": "table", "placement": "right"}},
                 },
                 {
                     "id": 6,
@@ -727,19 +640,11 @@ def _cmvk_dashboard() -> dict:
                         {
                             "expr": "rate(agent_os_cmvk_verifications_total[5m])",
                             "legendFormat": "{{result}}",
-                            "refId": "A"
+                            "refId": "A",
                         }
                     ],
-                    "fieldConfig": {
-                        "defaults": {
-                            "unit": "req/s",
-                            "custom": {
-                                "fillOpacity": 30
-                            }
-                        }
-                    }
+                    "fieldConfig": {"defaults": {"unit": "req/s", "custom": {"fillOpacity": 30}}},
                 },
-                
                 # Row 3: Drift and Consensus
                 {
                     "id": 7,
@@ -751,18 +656,18 @@ def _cmvk_dashboard() -> dict:
                         {
                             "expr": "histogram_quantile(0.99, rate(agent_os_cmvk_drift_score_bucket[5m]))",
                             "legendFormat": "p99",
-                            "refId": "A"
+                            "refId": "A",
                         },
                         {
                             "expr": "histogram_quantile(0.95, rate(agent_os_cmvk_drift_score_bucket[5m]))",
                             "legendFormat": "p95",
-                            "refId": "B"
+                            "refId": "B",
                         },
                         {
                             "expr": "histogram_quantile(0.50, rate(agent_os_cmvk_drift_score_bucket[5m]))",
                             "legendFormat": "p50",
-                            "refId": "C"
-                        }
+                            "refId": "C",
+                        },
                     ],
                     "fieldConfig": {
                         "defaults": {
@@ -770,11 +675,11 @@ def _cmvk_dashboard() -> dict:
                                 "steps": [
                                     {"color": "green", "value": None},
                                     {"color": "yellow", "value": 0.15},
-                                    {"color": "red", "value": 0.30}
+                                    {"color": "red", "value": 0.30},
                                 ]
                             }
                         }
-                    }
+                    },
                 },
                 {
                     "id": 8,
@@ -785,11 +690,10 @@ def _cmvk_dashboard() -> dict:
                         {
                             "expr": "rate(agent_os_cmvk_model_disagreements_total[5m])",
                             "legendFormat": "{{model_pair}}",
-                            "refId": "A"
+                            "refId": "A",
                         }
-                    ]
+                    ],
                 },
-                
                 # Row 4: Per-Model Performance
                 {
                     "id": 9,
@@ -801,7 +705,7 @@ def _cmvk_dashboard() -> dict:
                         {
                             "expr": "histogram_quantile(0.95, rate(agent_os_cmvk_model_latency_seconds_bucket[5m]))",
                             "legendFormat": "{{model}} p95",
-                            "refId": "A"
+                            "refId": "A",
                         }
                     ],
                     "fieldConfig": {
@@ -811,11 +715,11 @@ def _cmvk_dashboard() -> dict:
                                 "steps": [
                                     {"color": "green", "value": None},
                                     {"color": "yellow", "value": 2},
-                                    {"color": "red", "value": 5}
+                                    {"color": "red", "value": 5},
                                 ]
-                            }
+                            },
                         }
-                    }
+                    },
                 },
                 {
                     "id": 10,
@@ -826,40 +730,48 @@ def _cmvk_dashboard() -> dict:
                         {
                             "expr": "increase(agent_os_cmvk_claims_by_confidence[24h])",
                             "legendFormat": "{{confidence_bucket}}",
-                            "refId": "A"
+                            "refId": "A",
                         }
                     ],
-                    "options": {
-                        "displayMode": "gradient",
-                        "orientation": "horizontal"
-                    },
+                    "options": {"displayMode": "gradient", "orientation": "horizontal"},
                     "fieldConfig": {
                         "defaults": {
                             "thresholds": {
                                 "steps": [
                                     {"color": "red", "value": None},
                                     {"color": "yellow", "value": 0},
-                                    {"color": "green", "value": 0}
+                                    {"color": "green", "value": 0},
                                 ]
                             }
                         },
                         "overrides": [
                             {
                                 "matcher": {"id": "byName", "options": "high"},
-                                "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]
+                                "properties": [
+                                    {
+                                        "id": "color",
+                                        "value": {"mode": "fixed", "fixedColor": "green"},
+                                    }
+                                ],
                             },
                             {
                                 "matcher": {"id": "byName", "options": "medium"},
-                                "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "yellow"}}]
+                                "properties": [
+                                    {
+                                        "id": "color",
+                                        "value": {"mode": "fixed", "fixedColor": "yellow"},
+                                    }
+                                ],
                             },
                             {
                                 "matcher": {"id": "byName", "options": "low"},
-                                "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
-                            }
-                        ]
-                    }
+                                "properties": [
+                                    {"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}
+                                ],
+                            },
+                        ],
+                    },
                 },
-                
                 # Row 5: Verification Duration
                 {
                     "id": 11,
@@ -870,12 +782,10 @@ def _cmvk_dashboard() -> dict:
                         {
                             "expr": "sum(rate(agent_os_cmvk_verification_duration_seconds_bucket[1m])) by (le)",
                             "format": "heatmap",
-                            "refId": "A"
+                            "refId": "A",
                         }
                     ],
-                    "options": {
-                        "yAxis": {"unit": "s"}
-                    }
+                    "options": {"yAxis": {"unit": "s"}},
                 },
                 {
                     "id": 12,
@@ -887,12 +797,12 @@ def _cmvk_dashboard() -> dict:
                         {
                             "expr": "topk(10, agent_os_cmvk_drift_score > 0.20)",
                             "format": "table",
-                            "refId": "A"
+                            "refId": "A",
                         }
-                    ]
-                }
-            ]
+                    ],
+                },
+            ],
         },
         "folderId": 0,
-        "overwrite": True
+        "overwrite": True,
     }

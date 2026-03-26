@@ -43,30 +43,30 @@ reward_engine = RewardEngine()
 
 class GovernedAutoGPT(AutoGPTAgent):
     """AutoGPT with AgentMesh governance."""
-    
+
     # Trust score adjustment constants
     TRUST_SCORE_SUCCESS_INCREMENT = 1
     TRUST_SCORE_FAILURE_DECREMENT = 5
     TRUST_SCORE_MIN_THRESHOLD = 500
     TRUST_SCORE_MAX = 1000
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.agentmesh_identity = identity
         self.policy_engine = policy_engine
         self.audit_log = audit_log
         self.trust_score = 800
-    
+
     def execute_command(self, command_name: str, arguments: dict):
         """Execute command with governance."""
-        
+
         # Policy check before execution
         policy_result = self.policy_engine.check(
             action="execute_command",
             command=command_name,
             params=arguments
         )
-        
+
         if not policy_result.allowed:
             self.audit_log.log(
                 "blocked",
@@ -74,26 +74,26 @@ class GovernedAutoGPT(AutoGPTAgent):
                 reason=policy_result.reason
             )
             raise PermissionError(f"Policy violation: {policy_result.reason}")
-        
+
         # Execute command
         try:
             result = super().execute_command(command_name, arguments)
-            
+
             # Log success
             self.audit_log.log(
                 "success",
                 command=command_name,
                 result=result
             )
-            
+
             # Update trust score (successful execution)
             self.trust_score = min(
                 self.TRUST_SCORE_MAX,
                 self.trust_score + self.TRUST_SCORE_SUCCESS_INCREMENT
             )
-            
+
             return result
-            
+
         except Exception as e:
             # Log failure
             self.audit_log.log(
@@ -101,15 +101,15 @@ class GovernedAutoGPT(AutoGPTAgent):
                 command=command_name,
                 error=str(e)
             )
-            
+
             # Decrease trust score on failure
             self.trust_score = max(
                 0,
                 self.trust_score - self.TRUST_SCORE_FAILURE_DECREMENT
             )
-            
+
             raise
-    
+
     def check_trust_score(self):
         """Check if trust score is above threshold."""
         if self.trust_score < self.TRUST_SCORE_MIN_THRESHOLD:
@@ -177,15 +177,15 @@ def update_autogpt_trust_score(agent, action_result):
     if action_result.halted_due_to_loop:
         # Infinite loop detected
         agent.trust_score -= 50
-    
+
     if action_result.violated_constraint:
         # Constraint violation
         agent.trust_score -= 20
-    
+
     if action_result.succeeded:
         # Good behavior
         agent.trust_score = min(1000, agent.trust_score + 2)
-    
+
     # Auto-revoke if score too low
     if agent.trust_score < 400:
         agent.agentmesh_identity.revoke_credentials()
@@ -280,7 +280,7 @@ def monitor_autogpt_trust(agent):
             f"AutoGPT trust score low: {agent.trust_score}/1000",
             severity="warning"
         )
-    
+
     if agent.trust_score < 500:
         # Critical alert and auto-stop
         send_alert(

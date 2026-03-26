@@ -150,7 +150,9 @@ class RingElevationManager:
     def get_active_elevation(self, agent_did: str, session_id: str) -> RingElevation | None:
         return None
 
-    def get_effective_ring(self, agent_did: str, session_id: str, base_ring: ExecutionRing) -> ExecutionRing:
+    def get_effective_ring(
+        self, agent_did: str, session_id: str, base_ring: ExecutionRing
+    ) -> ExecutionRing:
         return base_ring
 
     def revoke_elevation(self, elevation_id: str) -> None:
@@ -159,7 +161,9 @@ class RingElevationManager:
     def tick(self) -> list[RingElevation]:
         return []
 
-    def register_child(self, parent_did: str, child_did: str, parent_ring: ExecutionRing) -> ExecutionRing:
+    def register_child(
+        self, parent_did: str, child_did: str, parent_ring: ExecutionRing
+    ) -> ExecutionRing:
         child_ring_value = min(parent_ring.value + 1, ExecutionRing.RING_3_SANDBOX.value)
         return ExecutionRing(child_ring_value)
 
@@ -186,8 +190,7 @@ _REMEDIATION: dict[str, str] = {
         "threshold by completing successful operations in the current ring."
     ),
     ElevationDenialReason.NO_SPONSORSHIP: (
-        "Obtain a sponsorship from a Ring 1 or Ring 0 agent to vouch "
-        "for this elevation request."
+        "Obtain a sponsorship from a Ring 1 or Ring 0 agent to vouch for this elevation request."
     ),
     ElevationDenialReason.EXPIRED_TTL: (
         "Submit a new elevation request with a valid TTL "

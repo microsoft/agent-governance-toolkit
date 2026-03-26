@@ -14,25 +14,25 @@ The system determines the **Modality of Response** based on:
 3. **User Context** (debugging → inline, monitoring → dashboard)
 
 ### Scenario A (Data): Backend Telemetry → Dashboard Widget
-**Input:** Backend telemetry stream detects latency spike  
-**Agent Action:** Identifies spike from 500ms to 2000ms  
-**Polymorphic Output:** A Dashboard Widget with red alert  
+**Input:** Backend telemetry stream detects latency spike
+**Agent Action:** Identifies spike from 500ms to 2000ms
+**Polymorphic Output:** A Dashboard Widget with red alert
 **Not:** A chat message saying "Latency is high"
 
 **The Insight:** Don't chat with me. Draw a red line on a graph.
 
 ### Scenario B (Code): IDE Context → Ghost Text
-**Input:** User typing in an IDE  
-**Agent Action:** Predicts the next function  
-**Polymorphic Output:** Ghost Text (inline autocomplete)  
+**Input:** User typing in an IDE
+**Agent Action:** Predicts the next function
+**Polymorphic Output:** Ghost Text (inline autocomplete)
 **Not:** A popup window or chat response
 
 **The Insight:** Don't pop up a window. Just autocomplete the code.
 
 ### Scenario C (Analysis): SQL Results → Interactive Table
-**Input:** User runs database query  
-**Agent Action:** Returns structured tabular data  
-**Polymorphic Output:** Sortable, filterable table component  
+**Input:** User runs database query
+**Agent Action:** Returns structured tabular data
+**Polymorphic Output:** Sortable, filterable table component
 **Not:** Text dump of rows
 
 **The Insight:** Don't print rows. Render a table.
@@ -291,17 +291,17 @@ class PolymorphicDoerAgent(DoerAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.poly_engine = PolymorphicOutputEngine()
-    
+
     def run_polymorphic(self, query, input_context, **kwargs):
         # Run standard agent
         result = self.run(query, **kwargs)
-        
+
         # Generate polymorphic response
         poly_response = self.poly_engine.generate_response(
             data=result['response'],
             input_context=input_context
         )
-        
+
         return {
             **result,
             'polymorphic_response': poly_response
@@ -341,10 +341,10 @@ app.display(ui_component)
 ```
 
 ### The Result
-✅ Tables render themselves from SQL results  
-✅ Charts appear from time series data  
-✅ Notifications pop for critical alerts  
-✅ Ghost text for IDE completions  
+✅ Tables render themselves from SQL results
+✅ Charts appear from time series data
+✅ Notifications pop for critical alerts
+✅ Ghost text for IDE completions
 ✅ All automatic. No manual UI code.
 
 ### The Market

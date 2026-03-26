@@ -13,7 +13,6 @@ from mcp_trust_server.server import (
     get_trust_score,
     record_interaction,
     verify_delegation,
-    TrustStore,
 )
 
 
@@ -121,7 +120,16 @@ class TestVerifyDelegation:
         _store.scores[DELEGATOR_DID] = {
             "agent_did": DELEGATOR_DID,
             "overall_score": 100,
-            "dimensions": {d: 100 for d in ["competence", "integrity", "availability", "predictability", "transparency"]},
+            "dimensions": {
+                d: 100
+                for d in [
+                    "competence",
+                    "integrity",
+                    "availability",
+                    "predictability",
+                    "transparency",
+                ]
+            },
             "trust_level": "untrusted",
             "interaction_count": 0,
             "last_updated": "2025-01-01T00:00:00",

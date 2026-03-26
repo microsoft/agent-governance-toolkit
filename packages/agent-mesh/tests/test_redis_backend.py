@@ -7,7 +7,6 @@ Uses fakeredis for in-memory Redis emulation — no live Redis server required.
 """
 
 import json
-import time
 import threading
 
 import pytest
@@ -17,17 +16,14 @@ try:
 except ImportError:
     pytest.skip("fakeredis not installed", allow_module_level=True)
 
-from agentmesh.storage.redis_backend import RedisTrustStore, _REDIS_AVAILABLE
-
+from agentmesh.storage.redis_backend import RedisTrustStore
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_store(
-    prefix: str = "agentmesh:", ttl: int | None = None
-) -> RedisTrustStore:
+def _make_store(prefix: str = "agentmesh:", ttl: int | None = None) -> RedisTrustStore:
     """Create a RedisTrustStore backed by fakeredis."""
     store = RedisTrustStore.__new__(RedisTrustStore)
     store._prefix = prefix

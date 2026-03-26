@@ -19,6 +19,7 @@ from adk_agentmesh.audit import AuditEvent, LoggingAuditHandler
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _run(coro):
     """Run an async coroutine synchronously."""
     return asyncio.get_event_loop().run_until_complete(coro)
@@ -58,6 +59,7 @@ def sample_policy_path(tmp_path: Path) -> Path:
 # ADKPolicyEvaluator — tool call evaluation
 # ---------------------------------------------------------------------------
 
+
 class TestBlockedTools:
     """Blocked tools must be denied."""
 
@@ -73,7 +75,9 @@ class TestBlockedTools:
         assert decision.matched_rule == "blocked_tool"
 
     @pytest.mark.asyncio
-    async def test_second_blocked_tool_is_also_denied(self, evaluator: ADKPolicyEvaluator):
+    async def test_second_blocked_tool_is_also_denied(
+        self, evaluator: ADKPolicyEvaluator
+    ):
         decision = await evaluator.evaluate_tool_call(
             tool_name="drop_table",
             tool_args={"table": "users"},
@@ -218,6 +222,7 @@ class TestAuditLog:
 # Config loading
 # ---------------------------------------------------------------------------
 
+
 class TestConfigLoading:
     """Policy loading from YAML."""
 
@@ -256,6 +261,7 @@ class TestConfigLoading:
 # ---------------------------------------------------------------------------
 # DelegationScope
 # ---------------------------------------------------------------------------
+
 
 class TestDelegationScope:
     """Delegation scope narrowing must be monotonic."""
@@ -303,6 +309,7 @@ class TestDelegationScope:
 # GovernanceCallbacks
 # ---------------------------------------------------------------------------
 
+
 class TestGovernanceCallbacks:
     """GovernanceCallbacks wiring into ADK lifecycle."""
 
@@ -346,6 +353,7 @@ class TestGovernanceCallbacks:
 # AuditEvent & LoggingAuditHandler
 # ---------------------------------------------------------------------------
 
+
 class TestAuditEvent:
     """Structured audit event serialization."""
 
@@ -388,6 +396,7 @@ class TestAuditEvent:
 # PolicyDecision
 # ---------------------------------------------------------------------------
 
+
 class TestPolicyDecision:
     """PolicyDecision dataclass behavior."""
 
@@ -407,6 +416,7 @@ class TestPolicyDecision:
 # ---------------------------------------------------------------------------
 # Delegation evaluation
 # ---------------------------------------------------------------------------
+
 
 class TestDelegationEvaluation:
     """Agent delegation evaluation."""

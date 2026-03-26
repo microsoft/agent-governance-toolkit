@@ -23,6 +23,7 @@ from agent_sre.k8s import (
 # CRD manifest
 # ---------------------------------------------------------------------------
 
+
 class TestCRDManifest:
     def test_generate_crd(self):
         crd = generate_crd_manifest()
@@ -71,6 +72,7 @@ class TestCRDManifest:
 # ---------------------------------------------------------------------------
 # ResourceStatus
 # ---------------------------------------------------------------------------
+
 
 class TestResourceStatus:
     def test_defaults(self):
@@ -169,6 +171,7 @@ class TestReconcilerCreation:
 # Reconciler — advance & rollback
 # ---------------------------------------------------------------------------
 
+
 class TestReconcilerAdvance:
     def test_advance(self):
         r = Reconciler()
@@ -200,6 +203,7 @@ class TestReconcilerAdvance:
 # Reconciler — sync (idempotent reconcile)
 # ---------------------------------------------------------------------------
 
+
 class TestReconcilerSync:
     def test_noop_on_same_generation(self):
         r = Reconciler()
@@ -220,6 +224,7 @@ class TestReconcilerSync:
 # ---------------------------------------------------------------------------
 # Reconciler — queries
 # ---------------------------------------------------------------------------
+
 
 class TestReconcilerQueries:
     def test_list_rollouts(self):
@@ -254,6 +259,7 @@ class TestReconcilerQueries:
 # ---------------------------------------------------------------------------
 # Spec parsing edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestSpecParsing:
     def test_minimal_spec(self):

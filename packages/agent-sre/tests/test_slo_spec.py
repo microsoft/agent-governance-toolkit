@@ -166,9 +166,7 @@ class TestDiff:
         assert not diff.is_breaking
 
     def test_changed_metric_is_breaking(self, base_spec: SLOSpec) -> None:
-        changed = base_spec.model_copy(
-            update={"sli": SLISpec(metric="new_metric", threshold=0.99)}
-        )
+        changed = base_spec.model_copy(update={"sli": SLISpec(metric="new_metric", threshold=0.99)})
         diff = diff_specs(base_spec, changed)
         assert diff.is_breaking
 
@@ -183,9 +181,7 @@ class TestDiff:
 
 
 class TestInheritance:
-    def test_resolve_simple(
-        self, base_spec: SLOSpec, child_spec: SLOSpec
-    ) -> None:
+    def test_resolve_simple(self, base_spec: SLOSpec, child_spec: SLOSpec) -> None:
         resolved = resolve_inheritance([base_spec, child_spec])
         assert len(resolved) == 2
         child = next(s for s in resolved if s.name == "test-child")
@@ -195,9 +191,7 @@ class TestInheritance:
         # Child inherits parent labels (merged)
         assert child.labels.get("tier") == "critical"  # overridden
 
-    def test_inherits_from_cleared(
-        self, base_spec: SLOSpec, child_spec: SLOSpec
-    ) -> None:
+    def test_inherits_from_cleared(self, base_spec: SLOSpec, child_spec: SLOSpec) -> None:
         resolved = resolve_inheritance([base_spec, child_spec])
         child = next(s for s in resolved if s.name == "test-child")
         assert child.inherits_from is None
@@ -207,9 +201,7 @@ class TestInheritance:
         with pytest.raises(ValueError, match="unknown spec"):
             resolve_inheritance([orphan])
 
-    def test_parent_unchanged(
-        self, base_spec: SLOSpec, child_spec: SLOSpec
-    ) -> None:
+    def test_parent_unchanged(self, base_spec: SLOSpec, child_spec: SLOSpec) -> None:
         resolved = resolve_inheritance([base_spec, child_spec])
         parent = next(s for s in resolved if s.name == "test-base")
         assert parent.target == 99.0

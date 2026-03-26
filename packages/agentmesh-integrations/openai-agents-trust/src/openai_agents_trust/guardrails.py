@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 from agents import Agent, InputGuardrail, OutputGuardrail
 from agents.guardrail import GuardrailFunctionOutput
@@ -219,4 +219,3 @@ def content_output_guardrail(
         guardrail_function=_check_output,
         name="agentmesh_content_guardrail",
     )
-

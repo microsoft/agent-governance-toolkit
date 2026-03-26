@@ -2,25 +2,24 @@
 # Licensed under the MIT License.
 """Tests for MockState, MockStateConfig, and scenario utilities."""
 
-import sys
 import os
+import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import pytest
 from core.mock_state import (
+    ContextEventType,
     MockState,
     MockStateConfig,
-    ContextEvent,
-    ContextEventType,
     create_stale_pointer_scenario,
     create_zombie_resource_scenario,
 )
 
-
 # ---------------------------------------------------------------------------
 # Event tracking
 # ---------------------------------------------------------------------------
+
 
 class TestEventTracking:
     def test_add_event_stores_event(self):
@@ -32,8 +31,10 @@ class TestEventTracking:
     def test_add_event_with_metadata(self):
         state = MockState()
         state.add_event(
-            ContextEventType.EXECUTE_ACTION, service_id="svc-b",
-            action="restart", metadata={"reason": "test"},
+            ContextEventType.EXECUTE_ACTION,
+            service_id="svc-b",
+            action="restart",
+            metadata={"reason": "test"},
         )
         assert state.event_history[0].metadata["reason"] == "test"
         assert state.event_history[0].action == "restart"
@@ -62,6 +63,7 @@ class TestEventTracking:
 # ---------------------------------------------------------------------------
 # Time advancement & staleness
 # ---------------------------------------------------------------------------
+
 
 class TestTimeAndStaleness:
     def test_advance_time_seconds(self):
@@ -116,6 +118,7 @@ class TestTimeAndStaleness:
 # Focus tracking
 # ---------------------------------------------------------------------------
 
+
 class TestFocusTracking:
     def test_get_current_focus_within_ttl(self):
         state = MockState()
@@ -164,6 +167,7 @@ class TestFocusTracking:
 # Recent events
 # ---------------------------------------------------------------------------
 
+
 class TestRecentEvents:
     def test_get_recent_events_returns_most_recent_first(self):
         state = MockState()
@@ -193,6 +197,7 @@ class TestRecentEvents:
 # Reset
 # ---------------------------------------------------------------------------
 
+
 class TestReset:
     def test_reset_clears_events(self):
         state = MockState()
@@ -206,6 +211,7 @@ class TestReset:
 # ---------------------------------------------------------------------------
 # MockStateConfig
 # ---------------------------------------------------------------------------
+
 
 class TestMockStateConfig:
     def test_custom_ttl(self):
@@ -226,6 +232,7 @@ class TestMockStateConfig:
 # ---------------------------------------------------------------------------
 # Scenario utilities
 # ---------------------------------------------------------------------------
+
 
 class TestScenarioUtilities:
     def test_stale_pointer_scenario_focus_is_service_b(self):

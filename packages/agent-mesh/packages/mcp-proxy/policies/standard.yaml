@@ -1,5 +1,5 @@
 # AgentMesh MCP Proxy - Standard Policy
-# 
+#
 # Balanced policy: Block known-dangerous operations, allow most others.
 # Good for development and staging environments.
 

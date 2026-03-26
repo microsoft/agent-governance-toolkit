@@ -7,7 +7,7 @@ groups:
       # =========================================================================
       # CRITICAL: Safety Violations (Page immediately)
       # =========================================================================
-      
+
       - alert: AgentOSHighViolationRate
         expr: agent_os_violation_rate{window="all_time"} > 0.01
         for: 1m
@@ -20,7 +20,7 @@ groups:
             Violation rate is {{ $value | humanizePercentage }} (threshold: 1%).
             This exceeds the enterprise SLA. Investigate immediately.
           runbook_url: "https://docs.agent-os.dev/runbooks/high-violation-rate"
-      
+
       - alert: AgentOSSIGKILLSpike
         expr: increase(agent_os_sigkill_total[5m]) > 5
         for: 0m
@@ -33,7 +33,7 @@ groups:
             {{ $value }} SIGKILL signals issued in the last 5 minutes.
             This indicates repeated policy violations. Agent {{ $labels.agent_id }} may be compromised.
           runbook_url: "https://docs.agent-os.dev/runbooks/sigkill-spike"
-      
+
       - alert: AgentOSKernelCrash
         expr: increase(agent_os_kernel_crashes_total[5m]) > 0
         for: 0m
@@ -52,7 +52,7 @@ groups:
       # =========================================================================
       # WARNING: Performance Degradation
       # =========================================================================
-      
+
       - alert: AgentOSHighPolicyLatency
         expr: histogram_quantile(0.99, rate(agent_os_policy_check_duration_seconds_bucket[5m])) > 0.01
         for: 5m
@@ -65,7 +65,7 @@ groups:
             p99 policy check latency is {{ $value | humanizeDuration }} (threshold: 10ms).
             This may impact agent responsiveness.
           runbook_url: "https://docs.agent-os.dev/runbooks/high-latency"
-      
+
       - alert: AgentOSExecutionTimeout
         expr: histogram_quantile(0.99, rate(agent_os_execution_duration_seconds_bucket[5m])) > 5
         for: 5m
@@ -83,7 +83,7 @@ groups:
       # =========================================================================
       # WARNING: Availability Issues
       # =========================================================================
-      
+
       - alert: AgentOSKernelDown
         expr: up{job="agent-os"} == 0
         for: 1m
@@ -95,7 +95,7 @@ groups:
           description: |
             The Agent OS kernel is not responding to health checks.
             Agents are running without governance.
-      
+
       - alert: AgentOSHighMTTR
         expr: histogram_quantile(0.50, rate(agent_os_mttr_seconds_bucket[1h])) > 60
         for: 15m
@@ -113,7 +113,7 @@ groups:
       # =========================================================================
       # CMVK: Model Verification Alerts
       # =========================================================================
-      
+
       - alert: CMVKLowConsensus
         expr: agent_os_cmvk_consensus_ratio < 0.8
         for: 10m
@@ -129,7 +129,7 @@ groups:
             - Training data issues
             - Ambiguous claims being submitted
           runbook_url: "https://docs.agent-os.dev/runbooks/cmvk-low-consensus"
-      
+
       - alert: CMVKHighDrift
         expr: histogram_quantile(0.95, rate(agent_os_cmvk_drift_score_bucket[15m])) > 0.25
         for: 10m
@@ -141,7 +141,7 @@ groups:
           description: |
             95th percentile drift score is {{ $value }} (threshold: 0.25).
             Models are producing significantly different outputs.
-      
+
       - alert: CMVKVerificationSlow
         expr: histogram_quantile(0.95, rate(agent_os_cmvk_verification_duration_seconds_bucket[5m])) > 10
         for: 5m
@@ -153,7 +153,7 @@ groups:
           description: |
             p95 verification time is {{ $value | humanizeDuration }}.
             This impacts user experience and may indicate model API issues.
-      
+
       - alert: CMVKHighDisagreementRate
         expr: rate(agent_os_cmvk_model_disagreements_total[1h]) > 10
         for: 30m
@@ -171,7 +171,7 @@ groups:
       # =========================================================================
       # Agent Health Alerts
       # =========================================================================
-      
+
       - alert: AgentCrashLoop
         expr: increase(agent_os_agent_crashes_total[10m]) > 3
         for: 0m
@@ -183,7 +183,7 @@ groups:
           description: |
             Agent {{ $labels.agent_id }} has crashed {{ $value }} times in 10 minutes.
             Reason: {{ $labels.reason }}
-      
+
       - alert: AgentHighErrorRate
         expr: rate(agent_os_agent_errors_total[5m]) > 0.1
         for: 5m

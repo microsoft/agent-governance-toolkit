@@ -48,6 +48,7 @@ from uuid import uuid4
 
 class ActionStatus(Enum):
     """Status of an individual action step."""
+
     PENDING = "pending"
     APPROVED = "approved"
     DENIED = "denied"
@@ -69,6 +70,7 @@ class ActionStep:
         description: Human-readable description of what this step does
         depends_on: Indices of steps that must complete before this one
     """
+
     action: str
     params: dict[str, Any] = field(default_factory=dict)
     description: str = ""
@@ -88,6 +90,7 @@ class ExecutionPlan:
         metadata: Optional metadata from the reasoning phase
         plan_id: Unique identifier for this plan
     """
+
     steps: list[ActionStep] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     plan_id: str = field(default_factory=lambda: str(uuid4())[:12])
@@ -105,6 +108,7 @@ class ExecutionPlan:
 @dataclass
 class StepResult:
     """Result of executing a single ActionStep."""
+
     step_index: int
     action: str
     status: ActionStatus
@@ -116,6 +120,7 @@ class StepResult:
 @dataclass
 class PipelineResult:
     """Full result of a Face→Hands pipeline execution."""
+
     plan: ExecutionPlan
     step_results: list[StepResult] = field(default_factory=list)
     success: bool = False
@@ -142,14 +147,11 @@ class CapabilityViolation(Exception):
         self.action = action
         self.allowed = allowed
         super().__init__(
-            f"{agent_role} agent attempted '{action}' but only has "
-            f"capabilities: {sorted(allowed)}"
+            f"{agent_role} agent attempted '{action}' but only has capabilities: {sorted(allowed)}"
         )
 
 
-def _validate_plan_capabilities(
-    plan: ExecutionPlan, capabilities: set[str]
-) -> list[int]:
+def _validate_plan_capabilities(plan: ExecutionPlan, capabilities: set[str]) -> list[int]:
     """Validate every step in a plan against allowed capabilities.
 
     Returns list of step indices that are denied.
@@ -188,8 +190,7 @@ def face_agent(
             plan = await fn(*args, **kwargs)
             if not isinstance(plan, ExecutionPlan):
                 raise TypeError(
-                    f"@face_agent function must return ExecutionPlan, "
-                    f"got {type(plan).__name__}"
+                    f"@face_agent function must return ExecutionPlan, got {type(plan).__name__}"
                 )
             # Validate plan capabilities if specified
             if cap_set:
@@ -226,8 +227,7 @@ def mute_agent(
         async def wrapper(step: ActionStep, **kwargs) -> Any:
             if not isinstance(step, ActionStep):
                 raise TypeError(
-                    f"@mute_agent function receives ActionStep, "
-                    f"got {type(step).__name__}"
+                    f"@mute_agent function receives ActionStep, got {type(step).__name__}"
                 )
             # Enforce capability boundary
             if cap_set and step.action not in cap_set:
@@ -284,12 +284,14 @@ async def pipe(
         raise TypeError("Second argument to pipe() must be a @mute_agent function")
 
     # --- Phase 1: Reasoning (Face) ---
-    audit.append({
-        "phase": "face",
-        "event": "start",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "task_preview": str(task)[:200],
-    })
+    audit.append(
+        {
+            "phase": "face",
+            "event": "start",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "task_preview": str(task)[:200],
+        }
+    )
 
     try:
         kw = face_args or {}
@@ -301,13 +303,15 @@ async def pipe(
         return result
 
     result.plan = plan
-    audit.append({
-        "phase": "face",
-        "event": "plan_produced",
-        "plan_id": plan.plan_id,
-        "step_count": len(plan.steps),
-        "actions": sorted(plan.actions_used),
-    })
+    audit.append(
+        {
+            "phase": "face",
+            "event": "plan_produced",
+            "plan_id": plan.plan_id,
+            "step_count": len(plan.steps),
+            "actions": sorted(plan.actions_used),
+        }
+    )
 
     # --- Phase 2: Capability Validation (Kernel) ---
     mute_caps = getattr(mute_fn, "_capabilities", None) or set()
@@ -316,32 +320,40 @@ async def pipe(
 
     if denied_indices:
         denied_actions = {plan.steps[i].action for i in denied_indices}
-        audit.append({
-            "phase": "kernel",
-            "event": "capability_denied",
-            "denied_steps": denied_indices,
-            "denied_actions": sorted(denied_actions),
-            "allowed": sorted(mute_caps),
-        })
+        audit.append(
+            {
+                "phase": "kernel",
+                "event": "capability_denied",
+                "denied_steps": denied_indices,
+                "denied_actions": sorted(denied_actions),
+                "allowed": sorted(mute_caps),
+            }
+        )
         if halt_on_deny:
             result.success = False
             result.total_duration_ms = (time.perf_counter() - start) * 1000
             for i in denied_indices:
-                result.step_results.append(StepResult(
-                    step_index=i,
-                    action=plan.steps[i].action,
-                    status=ActionStatus.DENIED,
-                    error=f"Capability '{plan.steps[i].action}' not granted to mute agent",
-                ))
+                result.step_results.append(
+                    StepResult(
+                        step_index=i,
+                        action=plan.steps[i].action,
+                        status=ActionStatus.DENIED,
+                        error=f"Capability '{plan.steps[i].action}' not granted to mute agent",
+                    )
+                )
             return result
 
     # --- Phase 3: Execution (Hands) ---
     all_ok = True
     for i, step in enumerate(plan.steps):
         if i in denied_indices:
-            result.step_results.append(StepResult(
-                step_index=i, action=step.action, status=ActionStatus.DENIED,
-            ))
+            result.step_results.append(
+                StepResult(
+                    step_index=i,
+                    action=step.action,
+                    status=ActionStatus.DENIED,
+                )
+            )
             continue
 
         # Check dependencies
@@ -351,10 +363,14 @@ async def pipe(
             if d < len(result.step_results)
         )
         if not deps_met:
-            result.step_results.append(StepResult(
-                step_index=i, action=step.action, status=ActionStatus.FAILED,
-                error="Dependency not met",
-            ))
+            result.step_results.append(
+                StepResult(
+                    step_index=i,
+                    action=step.action,
+                    status=ActionStatus.FAILED,
+                    error="Dependency not met",
+                )
+            )
             all_ok = False
             if halt_on_error:
                 break
@@ -364,45 +380,60 @@ async def pipe(
         try:
             data = await mute_fn(step)
             duration = (time.perf_counter() - step_start) * 1000
-            result.step_results.append(StepResult(
-                step_index=i, action=step.action,
-                status=ActionStatus.EXECUTED, data=data, duration_ms=duration,
-            ))
-            audit.append({
-                "phase": "mute",
-                "event": "step_executed",
-                "step": i,
-                "action": step.action,
-                "duration_ms": round(duration, 2),
-            })
+            result.step_results.append(
+                StepResult(
+                    step_index=i,
+                    action=step.action,
+                    status=ActionStatus.EXECUTED,
+                    data=data,
+                    duration_ms=duration,
+                )
+            )
+            audit.append(
+                {
+                    "phase": "mute",
+                    "event": "step_executed",
+                    "step": i,
+                    "action": step.action,
+                    "duration_ms": round(duration, 2),
+                }
+            )
         except CapabilityViolation:
             raise  # Never swallow capability violations
         except Exception as exc:
             duration = (time.perf_counter() - step_start) * 1000
-            result.step_results.append(StepResult(
-                step_index=i, action=step.action,
-                status=ActionStatus.FAILED,
-                error=str(exc), duration_ms=duration,
-            ))
-            audit.append({
-                "phase": "mute",
-                "event": "step_failed",
-                "step": i,
-                "action": step.action,
-                "error": str(exc),
-            })
+            result.step_results.append(
+                StepResult(
+                    step_index=i,
+                    action=step.action,
+                    status=ActionStatus.FAILED,
+                    error=str(exc),
+                    duration_ms=duration,
+                )
+            )
+            audit.append(
+                {
+                    "phase": "mute",
+                    "event": "step_failed",
+                    "step": i,
+                    "action": step.action,
+                    "error": str(exc),
+                }
+            )
             all_ok = False
             if halt_on_error:
                 break
 
     result.success = all_ok and len(denied_indices) == 0
     result.total_duration_ms = (time.perf_counter() - start) * 1000
-    audit.append({
-        "phase": "pipeline",
-        "event": "complete",
-        "success": result.success,
-        "total_ms": round(result.total_duration_ms, 2),
-    })
+    audit.append(
+        {
+            "phase": "pipeline",
+            "event": "complete",
+            "success": result.success,
+            "total_ms": round(result.total_duration_ms, 2),
+        }
+    )
 
     return result
 

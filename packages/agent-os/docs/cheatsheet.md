@@ -145,7 +145,7 @@ policies:
     deny:
       - action: file_write
       - action: file_delete
-  
+
   - name: sandboxed_reads
     allow:
       - action: file_read

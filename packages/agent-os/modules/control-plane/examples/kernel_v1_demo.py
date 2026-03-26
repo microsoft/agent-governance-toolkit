@@ -12,12 +12,13 @@ Example scenario: A financial agent with context-aware permissions
 """
 
 import asyncio
+
 from agent_control_plane import (
     AgentKernel,
-    PolicyEngine,
     Condition,
     ConditionalPermission,
     FlightRecorder,
+    PolicyEngine,
 )
 
 

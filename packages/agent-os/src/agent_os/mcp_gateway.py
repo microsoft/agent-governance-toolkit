@@ -33,17 +33,18 @@ logger = logging.getLogger(__name__)
 
 _BUILTIN_DANGEROUS_PATTERNS: list[tuple[str, PatternType]] = [
     # PII / sensitive data
-    (r"\b\d{3}-\d{2}-\d{4}\b", PatternType.REGEX),          # SSN
+    (r"\b\d{3}-\d{2}-\d{4}\b", PatternType.REGEX),  # SSN
     (r"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b", PatternType.REGEX),  # credit card
     # Shell injection
-    (r";\s*(rm|del|format|mkfs)\b", PatternType.REGEX),      # destructive cmds
-    (r"\$\(.*\)", PatternType.REGEX),                         # command substitution
-    (r"`[^`]+`", PatternType.REGEX),                          # backtick execution
+    (r";\s*(rm|del|format|mkfs)\b", PatternType.REGEX),  # destructive cmds
+    (r"\$\(.*\)", PatternType.REGEX),  # command substitution
+    (r"`[^`]+`", PatternType.REGEX),  # backtick execution
 ]
 
 
 class ApprovalStatus(Enum):
     """Result of a human-approval check."""
+
     PENDING = "pending"
     APPROVED = "approved"
     DENIED = "denied"
@@ -52,6 +53,7 @@ class ApprovalStatus(Enum):
 @dataclass
 class AuditEntry:
     """A single audit-log record for a tool call."""
+
     timestamp: float
     agent_id: str
     tool_name: str
@@ -75,6 +77,7 @@ class AuditEntry:
 @dataclass
 class GatewayConfig:
     """Configuration returned by ``wrap_mcp_server``."""
+
     server_config: dict[str, Any]
     policy_name: str
     allowed_tools: list[str]
@@ -125,9 +128,7 @@ class MCPGateway:
         self._builtin_compiled: list[tuple[str, re.Pattern]] = []
         if enable_builtin_sanitization:
             for pat_str, _ in _BUILTIN_DANGEROUS_PATTERNS:
-                self._builtin_compiled.append(
-                    (pat_str, re.compile(pat_str, re.IGNORECASE))
-                )
+                self._builtin_compiled.append((pat_str, re.compile(pat_str, re.IGNORECASE)))
 
     # ── Core interception ────────────────────────────────────────────────
 
@@ -149,7 +150,9 @@ class MCPGateway:
             # Fail closed: deny access on unexpected evaluation errors
             logger.error(
                 "MCP Gateway evaluation error — failing closed | agent=%s tool=%s",
-                agent_id, tool_name, exc_info=True,
+                agent_id,
+                tool_name,
+                exc_info=True,
             )
             allowed, reason, approval = (
                 False,
@@ -172,7 +175,10 @@ class MCPGateway:
         if self.policy.log_all_calls:
             logger.info(
                 "MCP Gateway audit | agent=%s tool=%s allowed=%s reason=%s",
-                agent_id, tool_name, allowed, reason,
+                agent_id,
+                tool_name,
+                allowed,
+                reason,
             )
 
         return allowed, reason
@@ -235,7 +241,9 @@ class MCPGateway:
                 except Exception:
                     logger.error(
                         "Approval callback error — denying access | agent=%s tool=%s",
-                        agent_id, tool_name, exc_info=True,
+                        agent_id,
+                        tool_name,
+                        exc_info=True,
                     )
                     return False, "Approval callback error — access denied (fail closed)", None
             else:

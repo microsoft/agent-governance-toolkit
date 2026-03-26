@@ -7,16 +7,16 @@ These tests verify that the no_destructive_sql policy correctly identifies
 dangerous SQL operations while allowing safe queries.
 """
 
-import pytest
-from agent_control_plane.policy_engine import create_default_policies
-from agent_control_plane.agent_kernel import ExecutionRequest, ActionType
-
 import warnings
 
+import pytest
+from agent_control_plane.agent_kernel import ActionType, ExecutionRequest
+from agent_control_plane.policy_engine import create_default_policies
 
 # Check if sqlglot is available
 try:
     import sqlglot
+
     SQLGLOT_AVAILABLE = True
 except ImportError:
     SQLGLOT_AVAILABLE = False
@@ -37,9 +37,9 @@ class TestSQLPolicy:
     def make_sql_request(self, query: str) -> ExecutionRequest:
         """Helper to create an ExecutionRequest for a SQL query."""
         from datetime import datetime
-        from agent_control_plane.agent_kernel import (
-            AgentContext, PermissionLevel
-        )
+
+        from agent_control_plane.agent_kernel import AgentContext, PermissionLevel
+
         ctx = AgentContext(
             agent_id="test-agent",
             session_id="test-session",
@@ -73,7 +73,9 @@ class TestSQLPolicy:
 
     def test_insert_allowed(self, sql_policy):
         """INSERT statements should be allowed."""
-        request = self.make_sql_request("INSERT INTO users (name, email) VALUES ('John', 'john@example.com')")
+        request = self.make_sql_request(
+            "INSERT INTO users (name, email) VALUES ('John', 'john@example.com')"
+        )
         assert sql_policy.validator(request) is True
 
     def test_update_with_where_allowed(self, sql_policy):
@@ -194,7 +196,9 @@ class TestSQLPolicy:
             self.make_sql_request("DROP   TABLE   users"),  # Extra whitespace
         ]
         for request in requests:
-            assert sql_policy.validator(request) is False, f"Should block: {request.parameters['query']}"
+            assert sql_policy.validator(request) is False, (
+                f"Should block: {request.parameters['query']}"
+            )
 
     # =============================================
     # EDGE CASES
@@ -213,7 +217,9 @@ class TestSQLPolicy:
     def test_non_sql_action_allowed(self, sql_policy):
         """Non-SQL action types should pass through."""
         from datetime import datetime
+
         from agent_control_plane.agent_kernel import AgentContext, PermissionLevel
+
         ctx = AgentContext(
             agent_id="test-agent",
             session_id="test-session",
@@ -242,51 +248,63 @@ class TestSQLPolicyFallback:
     def test_fallback_blocks_drop(self):
         """Fallback should block DROP."""
         from agent_control_plane.policy_engine import _fallback_sql_check
+
         assert _fallback_sql_check("DROP TABLE users") is False
 
     def test_fallback_blocks_grant(self):
         """Fallback should block GRANT."""
         from agent_control_plane.policy_engine import _fallback_sql_check
+
         assert _fallback_sql_check("GRANT ALL PRIVILEGES ON *.* TO 'attacker'@'%'") is False
 
     def test_fallback_blocks_create_user(self):
         """Fallback should block CREATE USER."""
         from agent_control_plane.policy_engine import _fallback_sql_check
+
         assert _fallback_sql_check("CREATE USER 'backdoor'@'%' IDENTIFIED BY 'pass'") is False
 
     def test_fallback_blocks_exec_xp_cmdshell(self):
         """Fallback should block EXEC xp_cmdshell."""
         from agent_control_plane.policy_engine import _fallback_sql_check
+
         assert _fallback_sql_check("EXEC xp_cmdshell 'whoami'") is False
 
     def test_fallback_blocks_update_without_where(self):
         """Fallback should block UPDATE without WHERE."""
         from agent_control_plane.policy_engine import _fallback_sql_check
+
         assert _fallback_sql_check("UPDATE users SET role='admin'") is False
 
     def test_fallback_blocks_revoke(self):
         """Fallback should block REVOKE."""
         from agent_control_plane.policy_engine import _fallback_sql_check
+
         assert _fallback_sql_check("REVOKE ALL PRIVILEGES ON *.* FROM 'user'@'%'") is False
 
     def test_fallback_blocks_merge(self):
         """Fallback should block MERGE INTO."""
         from agent_control_plane.policy_engine import _fallback_sql_check
-        assert _fallback_sql_check("MERGE INTO target USING source ON target.id = source.id") is False
+
+        assert (
+            _fallback_sql_check("MERGE INTO target USING source ON target.id = source.id") is False
+        )
 
     def test_fallback_allows_select(self):
         """Fallback should allow SELECT."""
         from agent_control_plane.policy_engine import _fallback_sql_check
+
         assert _fallback_sql_check("SELECT * FROM users WHERE id = 1") is True
 
     def test_fallback_allows_insert(self):
         """Fallback should allow INSERT."""
         from agent_control_plane.policy_engine import _fallback_sql_check
+
         assert _fallback_sql_check("INSERT INTO logs (msg) VALUES ('hello')") is True
 
     def test_fallback_allows_update_with_where(self):
         """Fallback should allow UPDATE with WHERE."""
         from agent_control_plane.policy_engine import _fallback_sql_check
+
         assert _fallback_sql_check("UPDATE users SET active=0 WHERE id=5") is True
 
 
@@ -296,8 +314,9 @@ class TestSQLPolicyConfig:
     def test_create_policies_from_config_with_yaml(self, tmp_path):
         """Loading from YAML config should produce working policies."""
         from agent_control_plane.policy_engine import (
-            create_policies_from_config, SQLPolicyConfig,
+            create_policies_from_config,
         )
+
         cfg_file = tmp_path / "test-policy.yaml"
         cfg_file.write_text(
             "version: '1.0'\n"
@@ -321,8 +340,10 @@ class TestSQLPolicyConfig:
     def test_create_policies_from_explicit_config(self):
         """Passing SQLPolicyConfig directly should work."""
         from agent_control_plane.policy_engine import (
-            create_policies_from_config, SQLPolicyConfig,
+            SQLPolicyConfig,
+            create_policies_from_config,
         )
+
         cfg = SQLPolicyConfig(
             blocked_statements=["DROP"],
             require_where_clause=[],
@@ -343,12 +364,13 @@ class TestSQLPolicyConfig:
     def test_config_missing_file_raises(self):
         """Loading a non-existent config should raise FileNotFoundError."""
         from agent_control_plane.policy_engine import load_sql_policy_config
+
         with pytest.raises(FileNotFoundError):
             load_sql_policy_config("/nonexistent/path.yaml")
 
     def test_fallback_uses_config(self):
         """Fallback regex check should respect config."""
-        from agent_control_plane.policy_engine import _fallback_sql_check, SQLPolicyConfig
+        from agent_control_plane.policy_engine import SQLPolicyConfig, _fallback_sql_check
 
         # Config that blocks INSERT (not blocked by default)
         cfg = SQLPolicyConfig(

@@ -122,7 +122,7 @@ if results['overall_passed']:
     print("🎉 AI meets requirements!")
 else:
     print("❌ AI needs improvement")
-    
+
     # Debug failed cases
     failed = runner.get_failed_cases()
     for case in failed:
@@ -231,7 +231,7 @@ if not results['overall_passed']:
     print("Failed cases:")
     for case in runner.get_failed_cases():
         print(f"  {case.case_id}: {case.input}")
-    
+
     # Improve AI (retrain, adjust prompt, etc.)
     # Run again
 ```
@@ -299,16 +299,16 @@ def tone_evaluator(input_text: str, output_text: str, context: Any) -> float:
     Returns 0.0 (rude) to 1.0 (polite).
     """
     output_lower = output_text.lower()
-    
+
     # Negative indicators
     rude_words = ["stupid", "idiot", "obviously", "duh"]
     if any(word in output_lower for word in rude_words):
         return 0.0
-    
+
     # Positive indicators
     polite_words = ["please", "thank you", "happy to help", "sorry"]
     polite_count = sum(1 for word in polite_words if word in output_lower)
-    
+
     if polite_count >= 2:
         return 1.0
     elif polite_count == 1:
@@ -394,7 +394,7 @@ for case in runner.get_failed_cases():
     print(f"Input: {case.input}")
     print(f"Expected: {case.expected_output}")
     print(f"Got: {case.actual_output}")
-    
+
     # Dimension breakdown
     for dim, scores in case.scores['dimension_scores'].items():
         print(f"  {dim}: {scores['score']:.2f}")

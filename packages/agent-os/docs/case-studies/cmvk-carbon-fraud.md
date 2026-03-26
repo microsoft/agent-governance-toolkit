@@ -54,10 +54,10 @@ def verify(claim_vector, observation_vector, threshold=0.15):
     # Normalize vectors
     claim_norm = normalize(claim_vector)
     obs_norm = normalize(observation_vector)
-    
+
     # Calculate drift (mathematical, not LLM inference)
     drift = np.linalg.norm(claim_norm - obs_norm)
-    
+
     if drift > threshold:
         return "FLAGGED"
     return "PASSED"

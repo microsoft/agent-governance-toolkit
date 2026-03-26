@@ -70,7 +70,7 @@ policies:
     deny:
       - patterns:
           - '\.\./\.\.'
-          - '\.\.\\\.\\' 
+          - '\.\.\\\.\\'
           - '%2e%2e%2f'
           - '%252e%252e%252f'
     action: SIGKILL

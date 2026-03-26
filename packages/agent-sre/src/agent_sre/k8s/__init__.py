@@ -197,6 +197,7 @@ def _openapi_schema() -> dict[str, Any]:
 # Status conditions (K8s-style)
 # ---------------------------------------------------------------------------
 
+
 class ConditionType(Enum):
     """Standard K8s-style condition types for AgentRollout."""
 
@@ -278,15 +279,16 @@ class ResourceStatus:
 # Reconcile result
 # ---------------------------------------------------------------------------
 
+
 class ReconcileAction(Enum):
     """What the reconciler decided to do."""
 
-    CREATED = "created"      # New rollout started
-    ADVANCED = "advanced"    # Moved to next step
+    CREATED = "created"  # New rollout started
+    ADVANCED = "advanced"  # Moved to next step
     ROLLED_BACK = "rolled_back"  # Rollback triggered
     COMPLETED = "completed"  # Rollout finished successfully
-    NOOP = "noop"            # No change needed
-    ERROR = "error"          # Reconciliation failed
+    NOOP = "noop"  # No change needed
+    ERROR = "error"  # Reconciliation failed
 
 
 @dataclass
@@ -313,6 +315,7 @@ class ReconcileResult:
 # Reconciler
 # ---------------------------------------------------------------------------
 
+
 def _parse_spec(spec_dict: dict[str, Any]) -> RolloutSpec:
     """Parse a CRD spec dict into a RolloutSpec."""
     strategy_str = spec_dict.get("strategy", "canary")
@@ -326,29 +329,35 @@ def _parse_spec(spec_dict: dict[str, Any]) -> RolloutSpec:
         analysis = []
         for a in s.get("analysis", []):
             analysis.append(AnalysisCriterion(a["metric"], a["threshold"]))
-        steps.append(RolloutStep(
-            name=s.get("name", ""),
-            weight=s.get("weight", 0.0),
-            duration_seconds=s.get("durationSeconds", 3600),
-            analysis=analysis,
-            manual_gate=s.get("manualGate", False),
-        ))
+        steps.append(
+            RolloutStep(
+                name=s.get("name", ""),
+                weight=s.get("weight", 0.0),
+                duration_seconds=s.get("durationSeconds", 3600),
+                analysis=analysis,
+                manual_gate=s.get("manualGate", False),
+            )
+        )
 
     rollback_conditions = []
     for rc in spec_dict.get("rollbackConditions", []):
-        rollback_conditions.append(RollbackCondition(
-            metric=rc["metric"],
-            threshold=rc["threshold"],
-            comparator=rc.get("operator", "gte"),
-        ))
+        rollback_conditions.append(
+            RollbackCondition(
+                metric=rc["metric"],
+                threshold=rc["threshold"],
+                comparator=rc.get("operator", "gte"),
+            )
+        )
 
     slo_reqs = []
     for sr in spec_dict.get("sloRequirements", []):
-        slo_reqs.append(SLORef(
-            name=sr["name"],
-            target=sr["target"],
-            indicator=sr.get("indicator", ""),
-        ))
+        slo_reqs.append(
+            SLORef(
+                name=sr["name"],
+                target=sr["target"],
+                indicator=sr.get("indicator", ""),
+            )
+        )
 
     return RolloutSpec(
         strategy=strategy,
@@ -479,7 +488,11 @@ class Reconciler:
         # Already complete or rolled back?
         if rollout.state in (RolloutState.COMPLETE, RolloutState.ROLLED_BACK):
             status.phase = rollout.state.value
-            action = ReconcileAction.COMPLETED if rollout.state == RolloutState.COMPLETE else ReconcileAction.ROLLED_BACK
+            action = (
+                ReconcileAction.COMPLETED
+                if rollout.state == RolloutState.COMPLETE
+                else ReconcileAction.ROLLED_BACK
+            )
             return ReconcileResult(
                 action=action,
                 name=name,
@@ -610,12 +623,14 @@ class Reconciler:
             ns, name = key.split("/", 1)
             if namespace and ns != namespace:
                 continue
-            results.append({
-                "name": name,
-                "namespace": ns,
-                "phase": status.phase,
-                "currentWeight": status.current_weight,
-            })
+            results.append(
+                {
+                    "name": name,
+                    "namespace": ns,
+                    "phase": status.phase,
+                    "currentWeight": status.current_weight,
+                }
+            )
         return results
 
     @property

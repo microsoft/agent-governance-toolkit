@@ -6,11 +6,10 @@ Identity Revocation List
 Manual revocation list — a simple set of revoked DIDs.
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
 from pydantic import BaseModel, Field
 
 
@@ -26,10 +25,10 @@ class RevocationEntry(BaseModel):
     """
 
     agent_did: str = Field(..., description="DID of the revoked agent")
-    revoked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    revoked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     reason: str = Field(..., description="Reason for revocation")
-    revoked_by: Optional[str] = Field(default=None, description="DID of the revoker")
-    expires_at: Optional[datetime] = Field(
+    revoked_by: str | None = Field(default=None, description="DID of the revoker")
+    expires_at: datetime | None = Field(
         default=None, description="Expiry time for temporary revocations"
     )
 
@@ -67,7 +66,7 @@ class RevocationList:
         """
         expires_at = None
         if ttl_seconds is not None:
-            expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
+            expires_at = datetime.now(UTC) + timedelta(seconds=ttl_seconds)
 
         entry = RevocationEntry(
             agent_did=agent_did,
@@ -99,7 +98,7 @@ class RevocationList:
         entry = self._entries.get(agent_did)
         if entry is None:
             return False
-        if entry.expires_at is not None and datetime.now(timezone.utc) >= entry.expires_at:
+        if entry.expires_at is not None and datetime.now(UTC) >= entry.expires_at:
             del self._entries[agent_did]
             self._auto_persist()
             return False
@@ -122,7 +121,7 @@ class RevocationList:
         Returns:
             Number of entries removed.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expired = [
             did
             for did, entry in self._entries.items()

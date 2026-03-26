@@ -136,7 +136,7 @@ rate_limits:
   global:
     requests: 100
     per: minute
-  
+
   per_tool:
     write_file:
       requests: 10

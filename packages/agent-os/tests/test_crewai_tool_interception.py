@@ -7,11 +7,12 @@ Verifies that individual tool calls within a CrewAI crew are validated
 against governance policy (allowed_tools, blocked_patterns, max_tool_calls).
 """
 
-import pytest
 from unittest.mock import MagicMock
 
-from agent_os.integrations.crewai_adapter import CrewAIKernel, wrap
+import pytest
+
 from agent_os.integrations.base import GovernancePolicy, PolicyViolationError
+from agent_os.integrations.crewai_adapter import CrewAIKernel
 
 
 class TestCrewAIToolInterception:

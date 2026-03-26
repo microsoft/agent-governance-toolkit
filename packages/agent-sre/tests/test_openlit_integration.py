@@ -15,7 +15,9 @@ class TestOpenLitExporterInit:
 
     def test_import_error_without_otel(self):
         """Should raise ImportError with helpful message if OTel HTTP exporter missing."""
-        with patch.dict("sys.modules", {"opentelemetry.exporter.otlp.proto.http.trace_exporter": None}):
+        with patch.dict(
+            "sys.modules", {"opentelemetry.exporter.otlp.proto.http.trace_exporter": None}
+        ):
             from agent_sre.integrations.openlit import OpenLitExporter
 
             # Re-importing won't re-trigger, so we test the class directly
@@ -50,7 +52,7 @@ class TestOpenLitExporterWithMocks:
     def test_record_slo(self, mock_otel):
         """Should record SLO status and all SLI values."""
         from agent_sre.slo.indicators import TaskSuccessRate, TimeWindow
-        from agent_sre.slo.objectives import ErrorBudget, SLO
+        from agent_sre.slo.objectives import SLO, ErrorBudget
 
         sli = TaskSuccessRate(target=0.99, window=TimeWindow.DAY_1)
         sli.record(True)

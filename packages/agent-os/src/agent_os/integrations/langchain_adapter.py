@@ -29,7 +29,7 @@ logger = logging.getLogger("agent_os.langchain")
 
 # Patterns used to detect potential PII / secrets in memory writes
 _PII_PATTERNS = [
-    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),           # SSN
+    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),  # SSN
     re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),  # email
     re.compile(r"\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+", re.IGNORECASE),
 ]
@@ -131,6 +131,7 @@ class LangChainKernel(BaseIntegration):
         kernel = self
 
         if is_async:
+
             @functools.wraps(original_method)
             async def governed_async(*args: Any, **kwargs: Any) -> Any:
                 kernel._check_tool_policy(tool_name, args, kwargs, ctx)
@@ -139,6 +140,7 @@ class LangChainKernel(BaseIntegration):
 
             setattr(tool, method_name, governed_async)
         else:
+
             @functools.wraps(original_method)
             def governed_sync(*args: Any, **kwargs: Any) -> Any:
                 kernel._check_tool_policy(tool_name, args, kwargs, ctx)
@@ -147,9 +149,7 @@ class LangChainKernel(BaseIntegration):
 
             setattr(tool, method_name, governed_sync)
 
-    def _check_tool_policy(
-        self, tool_name: str, args: Any, kwargs: Any, ctx: Any
-    ) -> None:
+    def _check_tool_policy(self, tool_name: str, args: Any, kwargs: Any, ctx: Any) -> None:
         """Validate a tool call against the active governance policy.
 
         Raises :class:`PolicyViolationError` if the tool is not allowed or
@@ -176,9 +176,7 @@ class LangChainKernel(BaseIntegration):
                 f"Tool '{tool_name}' matches blocked pattern '{name_matched[0]}'"
             )
 
-    def _record_tool_invocation(
-        self, tool_name: str, args: Any, kwargs: Any
-    ) -> None:
+    def _record_tool_invocation(self, tool_name: str, args: Any, kwargs: Any) -> None:
         """Append a tool invocation record to the audit log."""
         record = {
             "tool_name": tool_name,
@@ -222,24 +220,22 @@ class LangChainKernel(BaseIntegration):
             """Governed wrapper around ``memory.save_context``."""
             kernel._validate_memory_write(inputs, outputs, ctx)
             result = save_context(inputs, outputs)
-            kernel._memory_audit_log.append({
-                "action": "save_context",
-                "inputs_summary": str(inputs)[:200],
-                "outputs_summary": str(outputs)[:200],
-                "timestamp": datetime.now().isoformat(),
-                "agent_id": ctx.agent_id,
-            })
-            logger.debug(
-                "Memory write recorded for agent=%s", ctx.agent_id
+            kernel._memory_audit_log.append(
+                {
+                    "action": "save_context",
+                    "inputs_summary": str(inputs)[:200],
+                    "outputs_summary": str(outputs)[:200],
+                    "timestamp": datetime.now().isoformat(),
+                    "agent_id": ctx.agent_id,
+                }
             )
+            logger.debug("Memory write recorded for agent=%s", ctx.agent_id)
             return result
 
         memory.save_context = governed_save_context
         memory._deep_governed = True
 
-    def _validate_memory_write(
-        self, inputs: Any, outputs: Any, ctx: Any
-    ) -> None:
+    def _validate_memory_write(self, inputs: Any, outputs: Any, ctx: Any) -> None:
         """Check memory content for PII, secrets, and blocked patterns.
 
         Raises :class:`PolicyViolationError` if the content being written
@@ -256,8 +252,7 @@ class LangChainKernel(BaseIntegration):
         for pattern in _PII_PATTERNS:
             if pattern.search(combined):
                 raise PolicyViolationError(
-                    f"Memory write blocked: sensitive data detected "
-                    f"(pattern: {pattern.pattern})"
+                    f"Memory write blocked: sensitive data detected (pattern: {pattern.pattern})"
                 )
 
         # Policy blocked-patterns check
@@ -308,7 +303,8 @@ class LangChainKernel(BaseIntegration):
             kernel._delegation_chains.append(chain_record)
             logger.info(
                 "Sub-agent delegation detected: agent=%s depth=%d",
-                ctx.agent_id, depth,
+                ctx.agent_id,
+                depth,
             )
 
             return original_invoke(input_data, **kwargs)
@@ -359,7 +355,7 @@ class LangChainKernel(BaseIntegration):
             >>> result = governed.invoke({"input": "safe query"})
         """
         # Get agent ID from the object
-        agent_id = getattr(agent, 'name', None) or f"langchain-{id(agent)}"
+        agent_id = getattr(agent, "name", None) or f"langchain-{id(agent)}"
         ctx = self.create_context(agent_id)
 
         # Store original
@@ -463,9 +459,7 @@ class LangChainKernel(BaseIntegration):
                         timeout=self._kernel.timeout_seconds,
                     )
                 except asyncio.TimeoutError:
-                    logger.warning(
-                        "ainvoke timed out after %ss", self._kernel.timeout_seconds
-                    )
+                    logger.warning("ainvoke timed out after %ss", self._kernel.timeout_seconds)
                     self._kernel._last_error = "timeout"
                     raise
                 except Exception as exc:

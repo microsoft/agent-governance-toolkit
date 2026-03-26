@@ -173,6 +173,6 @@ Set `VSCE_PAT` in repository secrets.
 
 ---
 
-**Extension Status**: Ready for GA Release  
-**Version**: 1.0.0  
+**Extension Status**: Ready for GA Release
+**Version**: 1.0.0
 **Package Size**: ~960 KB

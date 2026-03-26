@@ -65,7 +65,7 @@ async def main():
     )
     result = await kernel.syscall(request, ctx)
     print(f"Result: {result.return_value}")
-    
+
 asyncio.run(main())
 ```
 
@@ -103,12 +103,12 @@ python governed_agent.py
 # This will be BLOCKED (file_write is not in the allow-list)
 async def try_blocked():
     kernel.register_tool("file_write", lambda path, data: open(path, "w").write(data))
-    
+
     request = SyscallRequest(
         syscall=SyscallType.SYS_EXEC,
         args={"tool": "file_write", "args": {"path": "/tmp/test.txt", "data": "danger"}},
     )
-    
+
     try:
         result = await kernel.syscall(request, ctx)
     except Exception as e:

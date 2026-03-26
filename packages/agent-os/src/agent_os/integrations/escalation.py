@@ -191,11 +191,7 @@ class InMemoryApprovalQueue(ApprovalBackend):
 
     def list_pending(self) -> list[EscalationRequest]:
         with self._lock:
-            return [
-                r
-                for r in self._requests.values()
-                if r.decision == EscalationDecision.PENDING
-            ]
+            return [r for r in self._requests.values() if r.decision == EscalationDecision.PENDING]
 
     def wait_for_decision(
         self, request_id: str, timeout: float | None = None
@@ -242,8 +238,8 @@ class WebhookApprovalBackend(ApprovalBackend):
     def _notify(self, request: EscalationRequest) -> None:
         """Fire-and-forget webhook notification."""
         try:
-            import urllib.request
             import json
+            import urllib.request
 
             payload = json.dumps(
                 {
@@ -374,9 +370,7 @@ class EscalationHandler:
             return request
 
         # Record timestamp for fatigue tracking
-        self._escalation_times.setdefault(agent_id, []).append(
-            datetime.now(timezone.utc)
-        )
+        self._escalation_times.setdefault(agent_id, []).append(datetime.now(timezone.utc))
 
         request = EscalationRequest(
             agent_id=agent_id,
@@ -409,9 +403,7 @@ class EscalationHandler:
             ``default_action`` and returns that.
         """
         if isinstance(self.backend, InMemoryApprovalQueue):
-            decision = self.backend.wait_for_decision(
-                request_id, timeout=self.timeout_seconds
-            )
+            decision = self.backend.wait_for_decision(request_id, timeout=self.timeout_seconds)
         else:
             req = self.backend.get_decision(request_id)
             decision = req.decision if req else EscalationDecision.PENDING
@@ -518,8 +510,10 @@ class EscalationPolicy:
             )
 
         # Check if this denial was due to human approval requirement
-        if self._integration.policy.require_human_approval and reason and (
-            "human approval" in reason.lower()
+        if (
+            self._integration.policy.require_human_approval
+            and reason
+            and ("human approval" in reason.lower())
         ):
             request = self._handler.escalate(
                 agent_id=context.agent_id,

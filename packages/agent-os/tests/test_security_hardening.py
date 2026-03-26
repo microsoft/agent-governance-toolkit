@@ -14,10 +14,7 @@ import pytest
 
 from agent_os.integrations.base import (
     ContentHashInterceptor,
-    GovernancePolicy,
-    PolicyInterceptor,
     ToolCallRequest,
-    ToolCallResult,
 )
 from agent_os.integrations.escalation import (
     DefaultTimeoutAction,
@@ -26,7 +23,6 @@ from agent_os.integrations.escalation import (
     InMemoryApprovalQueue,
     QuorumConfig,
 )
-
 
 # ── Helpers ─────────────────────────────────────────────────────
 
@@ -139,6 +135,7 @@ class TestToolRegistryContentHash:
 
     def _make_registry(self):
         from agent_control_plane.tool_registry import ToolRegistry, ToolType
+
         return ToolRegistry, ToolType
 
     def test_register_tool_stores_content_hash(self):
@@ -247,15 +244,20 @@ class TestPolicyEngineFreeze:
     """Tests for PolicyEngine freeze() immutability."""
 
     def _make_engine(self):
-        import sys
         import os
+        import sys
+
         cp_path = os.path.join(
             os.path.dirname(__file__),
-            "..", "modules", "control-plane", "src",
+            "..",
+            "modules",
+            "control-plane",
+            "src",
         )
         if cp_path not in sys.path:
             sys.path.insert(0, os.path.abspath(cp_path))
         from agent_control_plane.policy_engine import PolicyEngine
+
         return PolicyEngine()
 
     def test_add_constraint_before_freeze(self):
@@ -288,6 +290,7 @@ class TestPolicyEngineFreeze:
             Condition,
             ConditionalPermission,
         )
+
         engine = self._make_engine()
         engine.freeze()
         perm = ConditionalPermission(
@@ -390,7 +393,7 @@ class TestEscalationFatigue:
         )
         # First 3 escalations should be PENDING (normal)
         for i in range(3):
-            req = handler.escalate(f"agent-1", f"action-{i}", "reason")
+            req = handler.escalate("agent-1", f"action-{i}", "reason")
             assert req.decision == EscalationDecision.PENDING
 
         # 4th escalation should be auto-DENY (fatigue)

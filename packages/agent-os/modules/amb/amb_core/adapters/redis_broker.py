@@ -14,15 +14,14 @@ try:
     import redis.asyncio as aioredis
 except ImportError:
     raise ImportError(
-        "Redis adapter requires 'redis' package. "
-        "Install it with: pip install amb-core[redis]"
+        "Redis adapter requires 'redis' package. Install it with: pip install amb-core[redis]"
     )
 
 
 class RedisBroker(BrokerAdapter):
     """
     Redis-based broker adapter using pub/sub.
-    
+
     This adapter uses Redis pub/sub for message distribution and
     Redis streams for request-response patterns.
     """
@@ -30,7 +29,7 @@ class RedisBroker(BrokerAdapter):
     def __init__(self, url: str = "redis://localhost:6379/0"):
         """
         Initialize Redis broker.
-        
+
         Args:
             url: Redis connection URL
         """
@@ -71,11 +70,11 @@ class RedisBroker(BrokerAdapter):
     async def publish(self, message: Message, wait_for_confirmation: bool = False) -> Optional[str]:
         """
         Publish message to Redis pub/sub.
-        
+
         Args:
             message: Message to publish
             wait_for_confirmation: Wait for Redis confirmation
-        
+
         Returns:
             Message ID
         """
@@ -92,7 +91,7 @@ class RedisBroker(BrokerAdapter):
         await self._client.xadd(
             f"stream:{message.topic}",
             {"data": message_json},
-            maxlen=1000  # Keep last 1000 messages
+            maxlen=1000,  # Keep last 1000 messages
         )
 
         if wait_for_confirmation:
@@ -105,11 +104,11 @@ class RedisBroker(BrokerAdapter):
     async def subscribe(self, topic: str, handler: MessageHandler) -> str:
         """
         Subscribe to a Redis channel.
-        
+
         Args:
             topic: Topic/channel to subscribe to
             handler: Message handler
-        
+
         Returns:
             Subscription ID
         """
@@ -134,12 +133,14 @@ class RedisBroker(BrokerAdapter):
         """Listen for messages on a topic."""
         while self._running:
             try:
-                message = await self._pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
-                if message and message['type'] == 'message':
+                message = await self._pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=1.0
+                )
+                if message and message["type"] == "message":
                     # Parse message
-                    data = message['data']
+                    data = message["data"]
                     if isinstance(data, bytes):
-                        data = data.decode('utf-8')
+                        data = data.decode("utf-8")
 
                     msg = Message.model_validate_json(data)
 
@@ -157,7 +158,7 @@ class RedisBroker(BrokerAdapter):
     async def unsubscribe(self, subscription_id: str) -> None:
         """
         Unsubscribe from a channel.
-        
+
         Args:
             subscription_id: Subscription ID
         """
@@ -177,11 +178,11 @@ class RedisBroker(BrokerAdapter):
     async def request(self, message: Message, timeout: float = 30.0) -> Message:
         """
         Send request and wait for response using Redis streams.
-        
+
         Args:
             message: Request message
             timeout: Timeout in seconds
-        
+
         Returns:
             Response message
         """
@@ -212,17 +213,13 @@ class RedisBroker(BrokerAdapter):
                 block_ms = max(int(remaining_time * 1000), 100)  # At least 100ms
 
                 # Read from response stream
-                messages = await self._client.xread(
-                    {response_key: '0'},
-                    count=1,
-                    block=block_ms
-                )
+                messages = await self._client.xread({response_key: "0"}, count=1, block=block_ms)
 
                 if messages:
                     # Parse response
                     stream_name, message_list = messages[0]
                     message_id, data = message_list[0]
-                    response_json = data[b'data'].decode('utf-8')
+                    response_json = data[b"data"].decode("utf-8")
 
                     # Clean up
                     await self._client.delete(response_key)
@@ -237,11 +234,11 @@ class RedisBroker(BrokerAdapter):
     async def get_pending_messages(self, topic: str, limit: int = 10) -> List[Message]:
         """
         Get pending messages from Redis stream.
-        
+
         Args:
             topic: Topic to get messages from
             limit: Maximum messages to retrieve
-        
+
         Returns:
             List of messages
         """
@@ -255,7 +252,7 @@ class RedisBroker(BrokerAdapter):
 
         result = []
         for message_id, data in messages:
-            message_json = data[b'data'].decode('utf-8')
+            message_json = data[b"data"].decode("utf-8")
             msg = Message.model_validate_json(message_json)
             result.append(msg)
 

@@ -8,13 +8,9 @@ No external dependencies — uses plain dicts to simulate JSON-RPC payloads.
 Run with: python -m pytest tests/test_a2a_adapter.py -v --tb=short
 """
 
-import time
-
-import pytest
-
 from agent_os.integrations.a2a_adapter import (
-    A2AGovernanceAdapter,
     A2AEvaluation,
+    A2AGovernanceAdapter,
     A2APolicy,
 )
 

@@ -7,9 +7,10 @@ Shows how Agent OS enforces policies and how to handle violations
 gracefully across different integration patterns.
 """
 
+from unittest.mock import MagicMock
+
 from agent_os.integrations import GovernancePolicy, LangChainKernel
 from agent_os.integrations.langchain_adapter import PolicyViolationError
-from unittest.mock import MagicMock
 
 
 def demo_blocked_patterns():
@@ -20,9 +21,11 @@ def demo_blocked_patterns():
     chain.name = "demo-chain"
     chain.invoke = MagicMock(return_value="Here is the password: hunter2")
 
-    kernel = LangChainKernel(policy=GovernancePolicy(
-        blocked_patterns=["password", "secret", "api_key"],
-    ))
+    kernel = LangChainKernel(
+        policy=GovernancePolicy(
+            blocked_patterns=["password", "secret", "api_key"],
+        )
+    )
     governed = kernel.wrap(chain)
 
     # Input with blocked content
@@ -42,17 +45,19 @@ def demo_tool_call_limits():
     chain.name = "limit-chain"
     chain.invoke = MagicMock(return_value="result")
 
-    kernel = LangChainKernel(policy=GovernancePolicy(
-        max_tool_calls=3,
-    ))
+    kernel = LangChainKernel(
+        policy=GovernancePolicy(
+            max_tool_calls=3,
+        )
+    )
     governed = kernel.wrap(chain)
 
     for i in range(5):
         try:
-            governed.invoke({"query": f"call {i+1}"})
-            print(f"  Call {i+1}: ✅ allowed")
+            governed.invoke({"query": f"call {i + 1}"})
+            print(f"  Call {i + 1}: ✅ allowed")
         except PolicyViolationError as e:
-            print(f"  Call {i+1}: ❌ blocked ({e})")
+            print(f"  Call {i + 1}: ❌ blocked ({e})")
 
 
 def demo_error_handling_pattern():

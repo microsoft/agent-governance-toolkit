@@ -2,27 +2,25 @@
 # Licensed under the MIT License.
 """Tests for KernelTracer and SpanContext (tracer.py)."""
 
-import sys
-import os
 import asyncio
-import time
+import os
+import sys
 import threading
+import time
 
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from opentelemetry import trace as otel_trace
+from agent_os_observability.tracer import KernelTracer, SpanContext, trace_operation
+from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
     SimpleSpanProcessor,
     SpanExporter,
     SpanExportResult,
 )
-from opentelemetry.sdk.resources import Resource
 from opentelemetry.trace import StatusCode
-
-from agent_os_observability.tracer import KernelTracer, SpanContext, trace_operation
 
 
 class InMemorySpanExporter(SpanExporter):
@@ -59,9 +57,7 @@ def _make_tracer_and_exporter():
     we build the provider manually and get the tracer from it directly.
     """
     exporter = InMemorySpanExporter()
-    provider = TracerProvider(
-        resource=Resource.create({"service.name": "test-service"})
-    )
+    provider = TracerProvider(resource=Resource.create({"service.name": "test-service"}))
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     tracer_obj = provider.get_tracer(__name__)
     # Build a thin wrapper that behaves like KernelTracer but uses our provider

@@ -34,14 +34,17 @@ logger = logging.getLogger(__name__)
 # Data models
 # ---------------------------------------------------------------------------
 
+
 class Permission(Enum):
     """Permission type for a constraint edge."""
+
     ALLOW = "allow"
     DENY = "deny"
 
 
 class ResourceType(Enum):
     """Classification of a governed resource."""
+
     TOOL = "tool"
     API = "api"
     DATA = "data"
@@ -56,6 +59,7 @@ class ResourceNode:
         resource_type: Classification of the resource.
         metadata: Arbitrary key/value metadata for condition evaluation.
     """
+
     name: str
     resource_type: ResourceType = ResourceType.TOOL
     metadata: dict[str, Any] = field(default_factory=dict, hash=False)
@@ -81,6 +85,7 @@ class ConstraintEdge:
             for this edge to apply (e.g. ``{"role": "admin"}``).
         priority: Higher-priority edges take precedence during resolution.
     """
+
     agent_pattern: str
     resource: str
     permission: Permission
@@ -91,6 +96,7 @@ class ConstraintEdge:
 # ---------------------------------------------------------------------------
 # Constraint Graph
 # ---------------------------------------------------------------------------
+
 
 class ConstraintGraph:
     """DAG of resource constraints.
@@ -188,6 +194,7 @@ class ConstraintGraph:
 # Enforcer (PolicyInterceptor-compatible)
 # ---------------------------------------------------------------------------
 
+
 class ConstraintGraphEnforcer:
     """Intercepts tool calls and enforces the constraint graph.
 
@@ -226,8 +233,7 @@ class ConstraintGraphEnforcer:
             return ToolCallResult(
                 allowed=False,
                 reason=(
-                    f"Constraint graph denied agent '{agent_id}' "
-                    f"access to resource '{tool_name}'"
+                    f"Constraint graph denied agent '{agent_id}' access to resource '{tool_name}'"
                 ),
             )
 

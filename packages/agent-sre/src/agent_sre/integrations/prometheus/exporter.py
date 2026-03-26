@@ -12,6 +12,7 @@ from typing import Any
 @dataclass
 class MetricSample:
     """A single metric sample."""
+
     name: str
     value: float
     labels: dict[str, str] = field(default_factory=dict)
@@ -41,8 +42,9 @@ class PrometheusExporter:
         label_str = ",".join(f'{k}="{v}"' for k, v in sorted_labels)
         return f"{name}{{{label_str}}}" if label_str else name
 
-    def set_gauge(self, name: str, value: float, labels: dict[str, str] | None = None,
-                  help_text: str = "") -> None:
+    def set_gauge(
+        self, name: str, value: float, labels: dict[str, str] | None = None, help_text: str = ""
+    ) -> None:
         """Set a gauge metric value."""
         labels = labels or {}
         key = self._label_key(name, labels)
@@ -51,15 +53,22 @@ class PrometheusExporter:
             self._help[name] = help_text
         self._type[name] = "gauge"
 
-    def inc_counter(self, name: str, value: float = 1.0, labels: dict[str, str] | None = None,
-                    help_text: str = "") -> None:
+    def inc_counter(
+        self,
+        name: str,
+        value: float = 1.0,
+        labels: dict[str, str] | None = None,
+        help_text: str = "",
+    ) -> None:
         """Increment a counter metric."""
         labels = labels or {}
         key = self._label_key(name, labels)
         if key in self._counters:
             self._counters[key].value += value
         else:
-            self._counters[key] = MetricSample(name=name, value=value, labels=labels, metric_type="counter")
+            self._counters[key] = MetricSample(
+                name=name, value=value, labels=labels, metric_type="counter"
+            )
         if help_text:
             self._help[name] = help_text
         self._type[name] = "counter"
@@ -72,12 +81,24 @@ class PrometheusExporter:
             labels["agent_id"] = agent_id
 
         status_codes = {"healthy": 0, "warning": 1, "critical": 2, "exhausted": 3, "unknown": -1}
-        self.set_gauge("agent_sre_slo_status", float(status_codes.get(status.value, -1)),
-                       labels, "Current SLO status (0=healthy, 1=warning, 2=critical, 3=exhausted)")
-        self.set_gauge("agent_sre_slo_budget_remaining", slo.error_budget.remaining,
-                       labels, "Error budget remaining (0.0-1.0)")
-        self.set_gauge("agent_sre_slo_burn_rate", slo.error_budget.burn_rate(),
-                       labels, "Current error budget burn rate")
+        self.set_gauge(
+            "agent_sre_slo_status",
+            float(status_codes.get(status.value, -1)),
+            labels,
+            "Current SLO status (0=healthy, 1=warning, 2=critical, 3=exhausted)",
+        )
+        self.set_gauge(
+            "agent_sre_slo_budget_remaining",
+            slo.error_budget.remaining,
+            labels,
+            "Error budget remaining (0.0-1.0)",
+        )
+        self.set_gauge(
+            "agent_sre_slo_burn_rate",
+            slo.error_budget.burn_rate(),
+            labels,
+            "Current error budget burn rate",
+        )
 
     def render(self) -> str:
         """Render all metrics in Prometheus text exposition format."""

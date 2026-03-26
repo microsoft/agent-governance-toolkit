@@ -11,12 +11,16 @@ The "Yellow Pages" of agents. Stores:
 """
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from agentmesh.constants import TIER_TRUSTED_THRESHOLD, TIER_VERIFIED_PARTNER_THRESHOLD, TRUST_SCORE_DEFAULT
+from agentmesh.constants import (
+    TIER_TRUSTED_THRESHOLD,
+    TIER_VERIFIED_PARTNER_THRESHOLD,
+    TRUST_SCORE_DEFAULT,
+)
 
 
 class AgentRegistryEntry(BaseModel):
@@ -42,13 +46,9 @@ class AgentRegistryEntry(BaseModel):
 
     # Trust
     trust_score: int = Field(default=TRUST_SCORE_DEFAULT, ge=0, le=1000)
-    trust_tier: Literal[
-        "verified_partner",
-        "trusted",
-        "standard",
-        "probationary",
-        "untrusted"
-    ] = "standard"
+    trust_tier: Literal["verified_partner", "trusted", "standard", "probationary", "untrusted"] = (
+        "standard"
+    )
 
     # Credentials
     public_key_fingerprint: str
@@ -128,7 +128,7 @@ class AgentRegistry:
                 raise ValueError(f"Agent {did} not found")
 
             entry.trust_score = new_score
-            entry.updated_at = datetime.now(timezone.utc)
+            entry.updated_at = datetime.now(UTC)
 
             # Update trust tier based on score
             if new_score >= TIER_VERIFIED_PARTNER_THRESHOLD:
@@ -166,7 +166,7 @@ class AgentRegistry:
 
             entry.status = status
             entry.revocation_reason = reason
-            entry.updated_at = datetime.now(timezone.utc)
+            entry.updated_at = datetime.now(UTC)
 
     async def record_activity(self, did: str) -> None:
         """
@@ -178,7 +178,7 @@ class AgentRegistry:
         async with self._lock:
             entry = self._agents.get(did)
             if entry:
-                entry.last_seen_at = datetime.now(timezone.utc)
+                entry.last_seen_at = datetime.now(UTC)
 
     async def list_agents(
         self,

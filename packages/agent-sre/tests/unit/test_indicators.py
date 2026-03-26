@@ -2,8 +2,6 @@
 # Licensed under the MIT License.
 """Tests for the SLI collector framework."""
 
-
-
 from agent_sre.slo.indicators import (
     SLI,
     CostPerTask,
@@ -107,8 +105,28 @@ class TestToolCallAccuracy:
 class TestResponseLatency:
     def test_percentile(self) -> None:
         sli = ResponseLatency(target_ms=5000, percentile=0.95)
-        for ms in [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000,
-                    1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 10000]:
+        for ms in [
+            100,
+            200,
+            300,
+            400,
+            500,
+            600,
+            700,
+            800,
+            900,
+            1000,
+            1100,
+            1200,
+            1300,
+            1400,
+            1500,
+            1600,
+            1700,
+            1800,
+            1900,
+            10000,
+        ]:
             sli.record_latency(ms)
 
         p95 = sli.current_value()

@@ -84,10 +84,7 @@ class ReversibilityRegistry:
 
     def has_non_reversible_actions(self) -> bool:
         """Check if any registered action is non-reversible."""
-        return any(
-            e.reversibility == ReversibilityLevel.NONE
-            for e in self._entries.values()
-        )
+        return any(e.reversibility == ReversibilityLevel.NONE for e in self._entries.values())
 
     def mark_undo_unhealthy(self, action_id: str) -> None:
         """Mark an Undo_API as unhealthy (failed health check)."""

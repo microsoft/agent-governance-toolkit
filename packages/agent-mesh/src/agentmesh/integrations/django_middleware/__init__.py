@@ -13,8 +13,8 @@ at instantiation time instead.
 from __future__ import annotations
 
 try:
+    from .decorators import trust_exempt, trust_required
     from .middleware import AgentTrustMiddleware
-    from .decorators import trust_required, trust_exempt
 
     __all__ = [
         "AgentTrustMiddleware",

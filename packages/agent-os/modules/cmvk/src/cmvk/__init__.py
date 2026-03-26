@@ -90,6 +90,25 @@ __license__ = "MIT"
 # Audit trail
 from .audit import AuditEntry, AuditTrail, configure_audit_trail, get_audit_trail
 
+# Constitutional Validator (CMVK-011)
+from .constitutional import (
+    FINANCIAL_PRINCIPLES,
+    MEDICAL_PRINCIPLES,
+    SAFETY_PRINCIPLES,
+    ConstitutionalValidator,
+    LLMEvaluator,
+    Principle,
+    PrincipleEvaluator,
+    PrincipleSet,
+    RuleBasedEvaluator,
+    Severity,
+    ValidationResult,
+    Violation,
+    validate_financial,
+    validate_medical,
+    validate_safety,
+)
+
 # Distance metrics module
 from .metrics import (
     DistanceMetric,
@@ -119,25 +138,6 @@ from .verification import (
     verify_embeddings,
     verify_embeddings_batch,
     verify_sequences,
-)
-
-# Constitutional Validator (CMVK-011)
-from .constitutional import (
-    ConstitutionalValidator,
-    Principle,
-    PrincipleSet,
-    Severity,
-    Violation,
-    ValidationResult,
-    PrincipleEvaluator,
-    RuleBasedEvaluator,
-    LLMEvaluator,
-    SAFETY_PRINCIPLES,
-    MEDICAL_PRINCIPLES,
-    FINANCIAL_PRINCIPLES,
-    validate_safety,
-    validate_medical,
-    validate_financial,
 )
 
 __all__ = [

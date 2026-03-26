@@ -8,12 +8,14 @@ This module provides:
 2. Reputation score tracking and slashing
 3. Integration with cmvk for hallucination detection
 """
+
 import base64
 import hashlib
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
 try:
+    from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.primitives.asymmetric.ed25519 import (
         Ed25519PrivateKey,
         Ed25519PublicKey,
@@ -24,7 +26,6 @@ try:
         PrivateFormat,
         PublicFormat,
     )
-    from cryptography.exceptions import InvalidSignature
 
     _CRYPTO_AVAILABLE = True
 except ImportError:
@@ -72,9 +73,7 @@ class AttestationValidator:
         self.public_keys[key_id] = public_key
 
     def validate_attestation(
-        self,
-        attestation: AttestationRecord,
-        verify_signature: bool = True
+        self, attestation: AttestationRecord, verify_signature: bool = True
     ) -> Tuple[bool, Optional[str]]:
         """
         Validate an agent attestation record.
@@ -160,7 +159,7 @@ class AttestationValidator:
         config_hash: str,
         signing_key_id: str,
         private_key: Optional[str] = None,
-        expires_in_hours: int = 24
+        expires_in_hours: int = 24,
     ) -> AttestationRecord:
         """
         Create a new attestation record (used by Control Plane).
@@ -209,7 +208,7 @@ class AttestationValidator:
             signature=signature,
             signing_key_id=signing_key_id,
             timestamp=timestamp,
-            expires_at=expires_at
+            expires_at=expires_at,
         )
 
     def compute_codebase_hash(self, codebase_content: str) -> str:
@@ -236,17 +235,11 @@ def generate_ed25519_keypair() -> Tuple[str, str]:
         RuntimeError: If the cryptography library is not installed.
     """
     if not _CRYPTO_AVAILABLE:
-        raise RuntimeError(
-            "cryptography library required: pip install cryptography>=42.0.0"
-        )
+        raise RuntimeError("cryptography library required: pip install cryptography>=42.0.0")
 
     private_key = Ed25519PrivateKey.generate()
-    private_bytes = private_key.private_bytes(
-        Encoding.Raw, PrivateFormat.Raw, NoEncryption()
-    )
-    public_bytes = private_key.public_key().public_bytes(
-        Encoding.Raw, PublicFormat.Raw
-    )
+    private_bytes = private_key.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
+    public_bytes = private_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
     return (
         base64.b64encode(private_bytes).decode(),
         base64.b64encode(public_bytes).decode(),
@@ -278,10 +271,7 @@ class ReputationManager:
         """
         if agent_id not in self.scores:
             self.scores[agent_id] = ReputationScore(
-                agent_id=agent_id,
-                score=5.0,
-                initial_score=5.0,
-                last_updated=_get_utc_timestamp()
+                agent_id=agent_id, score=5.0, initial_score=5.0, last_updated=_get_utc_timestamp()
             )
         return self.scores[agent_id]
 
@@ -290,7 +280,7 @@ class ReputationManager:
         agent_id: str,
         severity: str = "high",
         trace_id: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
     ) -> ReputationScore:
         """
         Record a hallucination detected by cmvk and slash reputation.
@@ -323,7 +313,7 @@ class ReputationManager:
             timestamp=_get_utc_timestamp(),
             trace_id=trace_id,
             details=details,
-            detected_by="cmvk"
+            detected_by="cmvk",
         )
 
         # Apply to score
@@ -332,11 +322,7 @@ class ReputationManager:
 
         return score
 
-    def record_success(
-        self,
-        agent_id: str,
-        trace_id: Optional[str] = None
-    ) -> ReputationScore:
+    def record_success(self, agent_id: str, trace_id: Optional[str] = None) -> ReputationScore:
         """
         Record a successful transaction to improve reputation.
 
@@ -356,7 +342,7 @@ class ReputationManager:
             score_delta=0.1,
             timestamp=_get_utc_timestamp(),
             trace_id=trace_id,
-            detected_by="iatp"
+            detected_by="iatp",
         )
 
         score = self.get_or_create_score(agent_id)
@@ -369,7 +355,7 @@ class ReputationManager:
         agent_id: str,
         failure_type: str,
         trace_id: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
     ) -> ReputationScore:
         """
         Record a failure event (timeout, error, etc.).
@@ -392,7 +378,7 @@ class ReputationManager:
             timestamp=_get_utc_timestamp(),
             trace_id=trace_id,
             details=details,
-            detected_by="iatp"
+            detected_by="iatp",
         )
 
         score = self.get_or_create_score(agent_id)
@@ -432,10 +418,7 @@ class ReputationManager:
         Returns:
             Dictionary containing all reputation scores
         """
-        return {
-            agent_id: score.model_dump()
-            for agent_id, score in self.scores.items()
-        }
+        return {agent_id: score.model_dump() for agent_id, score in self.scores.items()}
 
     def import_reputation_data(self, data: Dict[str, Any]) -> None:
         """
@@ -458,4 +441,5 @@ class ReputationManager:
     def _generate_event_id(self) -> str:
         """Generate a unique event ID."""
         import uuid
+
         return str(uuid.uuid4())

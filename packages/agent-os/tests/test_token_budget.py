@@ -12,7 +12,6 @@ import pytest
 from agent_os.integrations.base import GovernancePolicy
 from agent_os.integrations.token_budget import TokenBudgetStatus, TokenBudgetTracker
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -242,8 +241,12 @@ class TestThreadSafety:
 class TestTokenBudgetStatus:
     def test_status_is_immutable(self):
         status = TokenBudgetStatus(
-            used=100, limit=1000, remaining=900,
-            percentage=0.1, is_warning=False, is_exceeded=False,
+            used=100,
+            limit=1000,
+            remaining=900,
+            percentage=0.1,
+            is_warning=False,
+            is_exceeded=False,
         )
         with pytest.raises(AttributeError):
             status.used = 999

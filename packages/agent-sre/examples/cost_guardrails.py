@@ -19,10 +19,10 @@ from agent_sre.cost.guard import CostGuard
 # ── 1. Configure budget limits ─────────────────────────────────────────
 
 guard = CostGuard(
-    per_task_limit=1.50,         # Max $1.50 per single LLM call
+    per_task_limit=1.50,  # Max $1.50 per single LLM call
     per_agent_daily_limit=25.0,  # Each agent capped at $25/day
-    org_monthly_budget=500.0,    # Organization-wide: $500/month
-    auto_throttle=True,          # Automatically throttle at 85% budget
+    org_monthly_budget=500.0,  # Organization-wide: $500/month
+    auto_throttle=True,  # Automatically throttle at 85% budget
     kill_switch_threshold=0.95,  # Hard-stop at 95% budget
     alert_thresholds=[0.50, 0.75, 0.90],
 )
@@ -54,9 +54,11 @@ for i in range(60):
 print()
 for agent in agents:
     b = guard.get_budget(agent)
-    print(f"  {agent}: ${b.spent_today_usd:.2f} spent, "
-          f"${b.remaining_today_usd:.2f} remaining, "
-          f"{b.task_count_today} calls")
+    print(
+        f"  {agent}: ${b.spent_today_usd:.2f} spent, "
+        f"${b.remaining_today_usd:.2f} remaining, "
+        f"{b.task_count_today} calls"
+    )
 
 print()
 
@@ -92,8 +94,10 @@ print()
 
 for agent_id, info in summary["agents"].items():
     status = "🔴 KILLED" if info["killed"] else "🟡 THROTTLED" if info["throttled"] else "🟢 OK"
-    print(f"  {agent_id}: {status}  ${info['spent_today_usd']:.2f} "
-          f"({info['utilization_percent']:.0f}% of daily limit)")
+    print(
+        f"  {agent_id}: {status}  ${info['spent_today_usd']:.2f} "
+        f"({info['utilization_percent']:.0f}% of daily limit)"
+    )
 
 print()
 print("─" * 60)

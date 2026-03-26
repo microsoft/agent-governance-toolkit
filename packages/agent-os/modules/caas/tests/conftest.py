@@ -3,6 +3,7 @@
 """
 pytest configuration and fixtures for Context-as-a-Service tests.
 """
+
 import sys
 from pathlib import Path
 

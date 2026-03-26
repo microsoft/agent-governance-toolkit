@@ -21,6 +21,7 @@ from agentmesh import AgentIdentity
 # Optional: import Agent Runtime (legacy Python module name: hypervisor) and SRE if installed
 try:
     from hypervisor import Hypervisor as AgentRuntime, SessionConfig, ConsistencyMode
+
     HAS_RUNTIME = True
 except ImportError:
     HAS_RUNTIME = False
@@ -28,6 +29,7 @@ except ImportError:
 try:
     from agent_sre import SLO, ErrorBudget
     from agent_sre.slo.indicators import TaskSuccessRate
+
     HAS_SRE = True
 except ImportError:
     HAS_SRE = False
@@ -63,7 +65,9 @@ async def main():
         )
         print(f"[Agent Runtime] Session created: {session.sso.session_id}")
     else:
-        print("[Agent Runtime] Not installed — pip install agent-governance-toolkit[full]")
+        print(
+            "[Agent Runtime] Not installed — pip install agent-governance-toolkit[full]"
+        )
 
     # --- Layer 4: SRE ---
     if HAS_SRE:
@@ -100,7 +104,9 @@ async def main():
         params={"path": "/etc/config", "content": "malicious"},
         context=ctx,
     )
-    print(f"Write attempt: {'ALLOWED' if result.success else 'BLOCKED'} (signal: {result.signal})")
+    print(
+        f"Write attempt: {'ALLOWED' if result.success else 'BLOCKED'} (signal: {result.signal})"
+    )
 
     print("\n" + "=" * 60)
     print("  All governance layers operational")

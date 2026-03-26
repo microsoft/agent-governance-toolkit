@@ -16,9 +16,9 @@ from agent_sre.cost.guard import CostGuard
 # ── Set up cost guardrails ──────────────────────────────────────────────
 
 guard = CostGuard(
-    per_task_limit=1.00,         # No single task should cost > $1
+    per_task_limit=1.00,  # No single task should cost > $1
     per_agent_daily_limit=20.0,  # Each agent: max $20/day
-    org_monthly_budget=500.0,    # Org-wide: $500/month
+    org_monthly_budget=500.0,  # Org-wide: $500/month
     alert_thresholds=[0.50, 0.75, 0.90],  # Alert at 50%, 75%, 90%
 )
 
@@ -40,11 +40,13 @@ for i in range(30):
         for alert in alerts:
             print(f"  ⚠️  {alert.severity.value}: {alert.message}")
 
-print(f"After 30 normal tasks:")
+print("After 30 normal tasks:")
 print(f"  Total spent: ${guard.org_spent_month:.2f}")
 for agent in agents:
     budget = guard.get_budget(agent)
-    print(f"  {agent}: ${budget.spent_today_usd:.2f} spent, ${budget.remaining_today_usd:.2f} remaining")
+    print(
+        f"  {agent}: ${budget.spent_today_usd:.2f} spent, ${budget.remaining_today_usd:.2f} remaining"
+    )
 print()
 
 # ── Simulate runaway tool loop ──────────────────────────────────────────
@@ -68,7 +70,9 @@ print()
 print("Summary:")
 print(f"  Org spent: ${guard.org_spent_month:.2f} / ${guard.org_monthly_budget:.2f}")
 researcher = guard.get_budget("researcher")
-print(f"  Researcher: ${researcher.spent_today_usd:.2f} spent (limit: ${researcher.daily_limit_usd:.2f})")
+print(
+    f"  Researcher: ${researcher.spent_today_usd:.2f} spent (limit: ${researcher.daily_limit_usd:.2f})"
+)
 print()
 print("─" * 60)
 print("CostGuard stopped the runaway before it burned through the budget.")

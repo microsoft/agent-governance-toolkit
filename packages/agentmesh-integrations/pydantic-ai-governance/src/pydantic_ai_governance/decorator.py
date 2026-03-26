@@ -77,13 +77,10 @@ def govern(
                     _record_and_raise(result, tool_name, audit, on_violation)
 
                 # 4. Semantic intent classification
-                classification = classify_intent(
-                    arg_text, tool_name=tool_name
-                )
+                classification = classify_intent(arg_text, tool_name=tool_name)
                 if (
                     classification.confidence >= policy.confidence_threshold
-                    and classification.intent.value
-                    not in ("benign", "data_read")
+                    and classification.intent.value not in ("benign", "data_read")
                 ):
                     violation = PolicyCheckResult(
                         allowed=False,
@@ -135,8 +132,7 @@ def govern(
                 classification = classify_intent(arg_text, tool_name=tool_name)
                 if (
                     classification.confidence >= policy.confidence_threshold
-                    and classification.intent.value
-                    not in ("benign", "data_read")
+                    and classification.intent.value not in ("benign", "data_read")
                 ):
                     violation = PolicyCheckResult(
                         allowed=False,

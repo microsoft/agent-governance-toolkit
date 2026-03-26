@@ -2,21 +2,21 @@
 // Licensed under the MIT License.
 /**
  * Agent OS Chrome Extension - Injected Page Script
- * 
+ *
  * Runs in the page context to hook into Agent OS instances.
  * Communicates with the content script via window.postMessage.
  */
 
 (function() {
   'use strict';
-  
+
   // Wait for Agent OS to be available
   function waitForAgentOS(callback, maxAttempts = 50) {
     let attempts = 0;
-    
+
     const check = () => {
       attempts++;
-      
+
       if (window.__AGENT_OS__) {
         callback(window.__AGENT_OS__);
       } else if (attempts < maxAttempts) {
@@ -25,29 +25,29 @@
         console.log('[Agent OS DevTools] No Agent OS instance found after', maxAttempts * 100, 'ms');
       }
     };
-    
+
     check();
   }
-  
+
   // Hook into Agent OS
   function hookAgentOS(agentOS) {
     console.log('[Agent OS DevTools] Agent OS detected, hooking...');
-    
+
     // Hook message bus if available
     if (agentOS.messageBus) {
       hookMessageBus(agentOS.messageBus);
     }
-    
+
     // Hook trust registry if available
     if (agentOS.trustRegistry) {
       hookTrustRegistry(agentOS.trustRegistry);
     }
-    
+
     // Hook kernel if available
     if (agentOS.kernel) {
       hookKernel(agentOS.kernel);
     }
-    
+
     // Add emit function if not present
     if (!agentOS.emit) {
       agentOS.emit = emitToDevTools;
@@ -59,11 +59,11 @@
         return originalEmit(event, data);
       };
     }
-    
+
     console.log('[Agent OS DevTools] Hooks installed');
     emitToDevTools('connected', { version: agentOS.version });
   }
-  
+
   // Hook into message bus
   function hookMessageBus(messageBus) {
     // Hook publish method
@@ -83,7 +83,7 @@
         return originalPublish(topic, message);
       };
     }
-    
+
     // Hook subscribe method to intercept incoming messages
     if (messageBus.subscribe) {
       const originalSubscribe = messageBus.subscribe.bind(messageBus);
@@ -105,7 +105,7 @@
       };
     }
   }
-  
+
   // Hook into trust registry
   function hookTrustRegistry(registry) {
     // Hook register method
@@ -123,7 +123,7 @@
         return originalRegister(agent, trustLevel);
       };
     }
-    
+
     // Hook verify method
     if (registry.verify) {
       const originalVerify = registry.verify.bind(registry);
@@ -138,7 +138,7 @@
         return result;
       };
     }
-    
+
     // Hook revoke method
     if (registry.revoke) {
       const originalRevoke = registry.revoke.bind(registry);
@@ -152,7 +152,7 @@
       };
     }
   }
-  
+
   // Hook into kernel
   function hookKernel(kernel) {
     // Hook policy violations
@@ -168,7 +168,7 @@
         });
       });
     }
-    
+
     // Hook signal dispatch
     if (kernel.signalDispatcher && kernel.signalDispatcher.signal) {
       const originalSignal = kernel.signalDispatcher.signal.bind(kernel.signalDispatcher);
@@ -182,7 +182,7 @@
       };
     }
   }
-  
+
   // Send event to DevTools via content script
   function emitToDevTools(event, data) {
     window.postMessage({
@@ -191,7 +191,7 @@
       data: data
     }, '*');
   }
-  
+
   // Expose API for DevTools console
   window.__AGENT_OS_DEVTOOLS__ = {
     getMessages: function() {
@@ -211,7 +211,7 @@
       emitToDevTools('clear-request', {});
     }
   };
-  
+
   // Listen for DevTools connection
   window.addEventListener('message', (event) => {
     if (event.data.source === 'agent-os-extension' && event.data.type === 'devtools-connected') {
@@ -230,8 +230,8 @@
       }
     }
   });
-  
+
   // Start watching for Agent OS
   waitForAgentOS(hookAgentOS);
-  
+
 })();

@@ -14,26 +14,26 @@ import java.util.concurrent.ConcurrentHashMap
  */
 @Service(Service.Level.PROJECT)
 class AgentService(private val project: Project) {
-    
+
     private val logger = Logger.getInstance(AgentService::class.java)
     private val apiService = AgentOSApiService.getInstance()
-    
+
     // Local cache of agents
     private val agents = ConcurrentHashMap<String, Agent>()
-    
+
     // Listeners for agent state changes
     private val listeners = mutableListOf<AgentStateListener>()
-    
+
     /**
      * Get all agents for the current project.
      */
     fun getAgents(): List<Agent> = agents.values.toList()
-    
+
     /**
      * Get an agent by ID.
      */
     fun getAgent(id: String): Agent? = agents[id]
-    
+
     /**
      * Create a new agent.
      */
@@ -56,19 +56,19 @@ class AgentService(private val project: Project) {
             approvalMode = approvalMode,
             status = AgentStatus.STOPPED
         )
-        
+
         agents[agent.id] = agent
         notifyAgentCreated(agent)
-        
+
         // Sync with backend
         apiService.createAgent(agent).thenAccept { syncedAgent ->
             agents[syncedAgent.id] = syncedAgent
             logger.info("Agent ${agent.name} synced with backend")
         }
-        
+
         return agent
     }
-    
+
     /**
      * Create an agent from a template.
      */
@@ -81,7 +81,7 @@ class AgentService(private val project: Project) {
             policies = template.recommendedPolicies
         )
     }
-    
+
     /**
      * Update an existing agent.
      */
@@ -92,7 +92,7 @@ class AgentService(private val project: Project) {
         notifyAgentUpdated(updated)
         return updated
     }
-    
+
     /**
      * Delete an agent.
      */
@@ -104,7 +104,7 @@ class AgentService(private val project: Project) {
         }
         return false
     }
-    
+
     /**
      * Start an agent.
      */
@@ -117,7 +117,7 @@ class AgentService(private val project: Project) {
         }
         apiService.startAgent(id)
     }
-    
+
     /**
      * Stop an agent.
      */
@@ -127,7 +127,7 @@ class AgentService(private val project: Project) {
         }
         apiService.stopAgent(id)
     }
-    
+
     /**
      * Pause an agent.
      */
@@ -137,7 +137,7 @@ class AgentService(private val project: Project) {
         }
         apiService.pauseAgent(id)
     }
-    
+
     /**
      * Resume a paused agent.
      */
@@ -150,7 +150,7 @@ class AgentService(private val project: Project) {
         }
         apiService.startAgent(id)
     }
-    
+
     /**
      * Load agents from backend.
      */
@@ -163,7 +163,7 @@ class AgentService(private val project: Project) {
             notifyAgentsRefreshed()
         }
     }
-    
+
     /**
      * Get available agent templates.
      */
@@ -249,33 +249,33 @@ class AgentService(private val project: Project) {
             icon = "⚙️"
         )
     )
-    
+
     // Listener management
-    
+
     fun addListener(listener: AgentStateListener) {
         listeners.add(listener)
     }
-    
+
     fun removeListener(listener: AgentStateListener) {
         listeners.remove(listener)
     }
-    
+
     private fun notifyAgentCreated(agent: Agent) {
         listeners.forEach { it.onAgentCreated(agent) }
     }
-    
+
     private fun notifyAgentUpdated(agent: Agent) {
         listeners.forEach { it.onAgentUpdated(agent) }
     }
-    
+
     private fun notifyAgentDeleted(agent: Agent) {
         listeners.forEach { it.onAgentDeleted(agent) }
     }
-    
+
     private fun notifyAgentsRefreshed() {
         listeners.forEach { it.onAgentsRefreshed(agents.values.toList()) }
     }
-    
+
     companion object {
         fun getInstance(project: Project): AgentService = project.service()
     }

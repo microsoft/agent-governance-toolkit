@@ -3,6 +3,7 @@
 """
 Security and privacy validation logic.
 """
+
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -49,9 +50,9 @@ class SecurityValidator:
     """Validates requests against capability manifests and security policies."""
 
     # Patterns for detecting sensitive data
-    CREDIT_CARD_PATTERN = re.compile(r'\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b')
-    SSN_PATTERN = re.compile(r'\b\d{3}-\d{2}-\d{4}\b')
-    EMAIL_PATTERN = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
+    CREDIT_CARD_PATTERN = re.compile(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b")
+    SSN_PATTERN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+    EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
 
     def __init__(self):
         self.blocked_requests = []
@@ -59,9 +60,7 @@ class SecurityValidator:
         self.attestation_validator = AttestationValidator()
 
     def validate_attestation(
-        self,
-        attestation: AttestationRecord,
-        verify_signature: bool = True
+        self, attestation: AttestationRecord, verify_signature: bool = True
     ) -> Tuple[bool, Optional[str]]:
         """
         Validate an agent attestation record.
@@ -91,7 +90,7 @@ class SecurityValidator:
         # Check for credit cards with Luhn validation
         card_matches = self.CREDIT_CARD_PATTERN.finditer(payload_str)
         for match in card_matches:
-            card_number = match.group().replace(' ', '').replace('-', '')
+            card_number = match.group().replace(" ", "").replace("-", "")
             if _luhn_check(card_number):
                 sensitive_types.append("credit_card")
                 break  # Only need to detect once
@@ -105,9 +104,7 @@ class SecurityValidator:
         return sensitive_types
 
     def validate_privacy_policy(
-        self,
-        manifest: CapabilityManifest,
-        payload: Dict[str, Any]
+        self, manifest: CapabilityManifest, payload: Dict[str, Any]
     ) -> Tuple[bool, Optional[str]]:
         """
         Validate that the request complies with privacy policies.
@@ -122,7 +119,7 @@ class SecurityValidator:
         # Check for credit card data with permanent retention
         if "credit_card" in sensitive_data and manifest.privacy_contract.retention in [
             RetentionPolicy.PERMANENT,
-            RetentionPolicy.FOREVER
+            RetentionPolicy.FOREVER,
         ]:
             return False, (
                 f"Privacy Violation: Agent '{manifest.agent_id}' stores data "
@@ -142,9 +139,7 @@ class SecurityValidator:
         return True, None
 
     def generate_warning_message(
-        self,
-        manifest: CapabilityManifest,
-        payload: Dict[str, Any]
+        self, manifest: CapabilityManifest, payload: Dict[str, Any]
     ) -> Optional[str]:
         """
         Generate a warning message for risky requests that aren't blocked.
@@ -155,36 +150,26 @@ class SecurityValidator:
 
         # Low trust score warning
         if trust_score < 5:
-            warnings.append(
-                f"Low trust score ({trust_score}/10) for agent '{manifest.agent_id}'"
-            )
+            warnings.append(f"Low trust score ({trust_score}/10) for agent '{manifest.agent_id}'")
 
         # No reversibility warning
         if manifest.capabilities.reversibility == ReversibilityLevel.NONE:
-            warnings.append(
-                f"Agent '{manifest.agent_id}' does not support transaction reversal"
-            )
+            warnings.append(f"Agent '{manifest.agent_id}' does not support transaction reversal")
 
         # No idempotency warning
         if not manifest.capabilities.idempotency:
-            warnings.append(
-                f"Agent '{manifest.agent_id}' may not handle duplicate requests safely"
-            )
+            warnings.append(f"Agent '{manifest.agent_id}' may not handle duplicate requests safely")
 
         # Data retention warning
         if manifest.privacy_contract.retention in [
             RetentionPolicy.PERMANENT,
-            RetentionPolicy.FOREVER
+            RetentionPolicy.FOREVER,
         ]:
-            warnings.append(
-                f"Agent '{manifest.agent_id}' stores data indefinitely"
-            )
+            warnings.append(f"Agent '{manifest.agent_id}' stores data indefinitely")
 
         # Human review warning
         if manifest.privacy_contract.human_review:
-            warnings.append(
-                f"Agent '{manifest.agent_id}' may have humans review your data"
-            )
+            warnings.append(f"Agent '{manifest.agent_id}' may have humans review your data")
 
         if warnings:
             return "⚠️  WARNING:\n" + "\n".join(f"  • {w}" for w in warnings)
@@ -205,11 +190,11 @@ class SecurityValidator:
         if trust_score < 3:
             return True
 
-        if (manifest.capabilities.reversibility == ReversibilityLevel.NONE and
-            manifest.privacy_contract.retention in [
-                RetentionPolicy.PERMANENT,
-                RetentionPolicy.FOREVER
-            ]):
+        if (
+            manifest.capabilities.reversibility == ReversibilityLevel.NONE
+            and manifest.privacy_contract.retention
+            in [RetentionPolicy.PERMANENT, RetentionPolicy.FOREVER]
+        ):
             return True
 
         return manifest.trust_level == TrustLevel.UNTRUSTED
@@ -232,38 +217,26 @@ class PrivacyScrubber:
         # Redact credit cards
         if SecurityValidator.CREDIT_CARD_PATTERN.search(payload_str):
             scrubbed = PrivacyScrubber._redact_in_dict(
-                scrubbed,
-                SecurityValidator.CREDIT_CARD_PATTERN,
-                "[CREDIT_CARD_REDACTED]"
+                scrubbed, SecurityValidator.CREDIT_CARD_PATTERN, "[CREDIT_CARD_REDACTED]"
             )
 
         # Redact SSN
         if SecurityValidator.SSN_PATTERN.search(payload_str):
             scrubbed = PrivacyScrubber._redact_in_dict(
-                scrubbed,
-                SecurityValidator.SSN_PATTERN,
-                "[SSN_REDACTED]"
+                scrubbed, SecurityValidator.SSN_PATTERN, "[SSN_REDACTED]"
             )
 
         return scrubbed
 
     @staticmethod
-    def _redact_in_dict(
-        data: Any,
-        pattern: re.Pattern,
-        replacement: str
-    ) -> Any:
+    def _redact_in_dict(data: Any, pattern: re.Pattern, replacement: str) -> Any:
         """Recursively redact patterns in dictionary."""
         if isinstance(data, dict):
             return {
-                k: PrivacyScrubber._redact_in_dict(v, pattern, replacement)
-                for k, v in data.items()
+                k: PrivacyScrubber._redact_in_dict(v, pattern, replacement) for k, v in data.items()
             }
         elif isinstance(data, list):
-            return [
-                PrivacyScrubber._redact_in_dict(item, pattern, replacement)
-                for item in data
-            ]
+            return [PrivacyScrubber._redact_in_dict(item, pattern, replacement) for item in data]
         elif isinstance(data, str):
             return pattern.sub(replacement, data)
         else:

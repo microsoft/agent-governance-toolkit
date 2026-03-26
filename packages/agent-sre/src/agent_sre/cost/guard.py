@@ -137,21 +137,27 @@ class CostGuard:
         # Validate numeric inputs before any assignment to prevent
         # partially-initialized objects with corrupt state (NaN/Inf/negative).
         if not math.isfinite(org_monthly_budget) or org_monthly_budget < 0:
-            raise ValueError(f"org_monthly_budget must be finite and non-negative, got {org_monthly_budget}")
+            raise ValueError(
+                f"org_monthly_budget must be finite and non-negative, got {org_monthly_budget}"
+            )
         if not math.isfinite(per_task_limit) or per_task_limit < 0:
-            raise ValueError(f"per_task_limit must be finite and non-negative, got {per_task_limit}")
+            raise ValueError(
+                f"per_task_limit must be finite and non-negative, got {per_task_limit}"
+            )
         if not math.isfinite(per_agent_daily_limit) or per_agent_daily_limit < 0:
-            raise ValueError(f"per_agent_daily_limit must be finite and non-negative, got {per_agent_daily_limit}")
+            raise ValueError(
+                f"per_agent_daily_limit must be finite and non-negative, got {per_agent_daily_limit}"
+            )
         if not math.isfinite(kill_switch_threshold) or not (0.0 <= kill_switch_threshold <= 1.0):
             raise ValueError(
                 f"kill_switch_threshold must be finite and in [0.0, 1.0], got {kill_switch_threshold}"
             )
-        resolved_thresholds = alert_thresholds if alert_thresholds is not None else [0.50, 0.75, 0.90, 0.95]
+        resolved_thresholds = (
+            alert_thresholds if alert_thresholds is not None else [0.50, 0.75, 0.90, 0.95]
+        )
         for i, t in enumerate(resolved_thresholds):
             if not math.isfinite(t) or not (0.0 <= t <= 1.0):
-                raise ValueError(
-                    f"alert_thresholds[{i}] must be finite and in [0.0, 1.0], got {t}"
-                )
+                raise ValueError(f"alert_thresholds[{i}] must be finite and in [0.0, 1.0], got {t}")
 
         self.per_task_limit = per_task_limit
         self.per_agent_daily_limit = per_agent_daily_limit
@@ -202,7 +208,10 @@ class CostGuard:
             return False, "Agent throttled — approaching daily limit"
 
         if estimated_cost > self.per_task_limit:
-            return False, f"Estimated cost ${estimated_cost:.2f} exceeds per-task limit ${self.per_task_limit:.2f}"
+            return (
+                False,
+                f"Estimated cost ${estimated_cost:.2f} exceeds per-task limit ${self.per_task_limit:.2f}",
+            )
 
         if budget.spent_today_usd + estimated_cost > budget.daily_limit_usd:
             return False, f"Would exceed daily budget (${budget.remaining_today_usd:.2f} remaining)"
@@ -251,72 +260,89 @@ class CostGuard:
 
         # Per-task limit check
         if cost_usd > self.per_task_limit:
-            alerts.append(CostAlert(
-                severity=CostAlertSeverity.WARNING,
-                message=f"Task cost ${cost_usd:.2f} exceeded per-task limit ${self.per_task_limit:.2f}",
-                agent_id=agent_id,
-                current_value=cost_usd,
-                threshold=self.per_task_limit,
-            ))
+            alerts.append(
+                CostAlert(
+                    severity=CostAlertSeverity.WARNING,
+                    message=f"Task cost ${cost_usd:.2f} exceeded per-task limit ${self.per_task_limit:.2f}",
+                    agent_id=agent_id,
+                    current_value=cost_usd,
+                    threshold=self.per_task_limit,
+                )
+            )
 
         # Daily budget threshold alerts
         utilization = budget.utilization_percent / 100
         for threshold in self.alert_thresholds:
-            prev_util = (budget.spent_today_usd - cost_usd) / budget.daily_limit_usd if budget.daily_limit_usd > 0 else 0
+            prev_util = (
+                (budget.spent_today_usd - cost_usd) / budget.daily_limit_usd
+                if budget.daily_limit_usd > 0
+                else 0
+            )
             if prev_util < threshold <= utilization:
-                severity = CostAlertSeverity.CRITICAL if threshold >= 0.90 else CostAlertSeverity.WARNING
-                alerts.append(CostAlert(
-                    severity=severity,
-                    message=f"Agent {agent_id} at {utilization * 100:.0f}% daily budget",
-                    agent_id=agent_id,
-                    current_value=budget.spent_today_usd,
-                    threshold=budget.daily_limit_usd * threshold,
-                ))
+                severity = (
+                    CostAlertSeverity.CRITICAL if threshold >= 0.90 else CostAlertSeverity.WARNING
+                )
+                alerts.append(
+                    CostAlert(
+                        severity=severity,
+                        message=f"Agent {agent_id} at {utilization * 100:.0f}% daily budget",
+                        agent_id=agent_id,
+                        current_value=budget.spent_today_usd,
+                        threshold=budget.daily_limit_usd * threshold,
+                    )
+                )
 
         # Auto-throttle
         if self.auto_throttle and utilization >= self.kill_switch_threshold:
             budget.killed = True
-            alerts.append(CostAlert(
-                severity=CostAlertSeverity.CRITICAL,
-                message=f"Agent {agent_id} KILLED — {utilization * 100:.0f}% budget consumed",
-                agent_id=agent_id,
-                current_value=budget.spent_today_usd,
-                threshold=budget.daily_limit_usd * self.kill_switch_threshold,
-                action=BudgetAction.KILL,
-            ))
+            alerts.append(
+                CostAlert(
+                    severity=CostAlertSeverity.CRITICAL,
+                    message=f"Agent {agent_id} KILLED — {utilization * 100:.0f}% budget consumed",
+                    agent_id=agent_id,
+                    current_value=budget.spent_today_usd,
+                    threshold=budget.daily_limit_usd * self.kill_switch_threshold,
+                    action=BudgetAction.KILL,
+                )
+            )
         elif self.auto_throttle and utilization >= 0.85:
             budget.throttled = True
-            alerts.append(CostAlert(
-                severity=CostAlertSeverity.WARNING,
-                message=f"Agent {agent_id} THROTTLED — {utilization * 100:.0f}% budget consumed",
-                agent_id=agent_id,
-                current_value=budget.spent_today_usd,
-                threshold=budget.daily_limit_usd * 0.85,
-                action=BudgetAction.THROTTLE,
-            ))
+            alerts.append(
+                CostAlert(
+                    severity=CostAlertSeverity.WARNING,
+                    message=f"Agent {agent_id} THROTTLED — {utilization * 100:.0f}% budget consumed",
+                    agent_id=agent_id,
+                    current_value=budget.spent_today_usd,
+                    threshold=budget.daily_limit_usd * 0.85,
+                    action=BudgetAction.THROTTLE,
+                )
+            )
 
         # Org budget kill alert
         if self.auto_throttle and self.org_monthly_budget > 0:
             org_util = self._org_spent_month / self.org_monthly_budget
             prev_org_util = (
                 (self._org_spent_month - cost_usd) / self.org_monthly_budget
-                if self.org_monthly_budget > 0 else 0.0
+                if self.org_monthly_budget > 0
+                else 0.0
             )
             if prev_org_util < self.kill_switch_threshold <= org_util:
                 self._org_killed = True
                 for b in self._budgets.values():
                     b.killed = True
-                alerts.append(CostAlert(
-                    severity=CostAlertSeverity.CRITICAL,
-                    message=(
-                        f"Org budget kill switch triggered -- "
-                        f"{org_util * 100:.0f}% of monthly budget consumed"
-                    ),
-                    agent_id=agent_id,
-                    current_value=self._org_spent_month,
-                    threshold=self.org_monthly_budget * self.kill_switch_threshold,
-                    action=BudgetAction.KILL,
-                ))
+                alerts.append(
+                    CostAlert(
+                        severity=CostAlertSeverity.CRITICAL,
+                        message=(
+                            f"Org budget kill switch triggered -- "
+                            f"{org_util * 100:.0f}% of monthly budget consumed"
+                        ),
+                        agent_id=agent_id,
+                        current_value=self._org_spent_month,
+                        threshold=self.org_monthly_budget * self.kill_switch_threshold,
+                        action=BudgetAction.KILL,
+                    )
+                )
 
         # Anomaly detection
         if self.anomaly_detection and len(self._cost_history) >= 10:

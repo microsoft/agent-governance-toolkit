@@ -1,7 +1,7 @@
 # Satellite Data README
 #
 # This directory contains satellite imagery data for carbon auditing.
-# 
+#
 # IMPORTANT: Due to file size, actual satellite imagery is not included in the repo.
 # The demo uses synthetic data that models real Sentinel-2 patterns.
 

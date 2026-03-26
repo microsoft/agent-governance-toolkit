@@ -6,12 +6,6 @@ import time
 
 import pytest
 
-from agentmesh.services.rate_limiter import (
-    RateLimitConfig,
-    RateLimitResult,
-    RateLimiter,
-    TokenBucket,
-)
 from agentmesh.services.rate_limit_middleware import (
     HEADER_AGENT_DID,
     HEADER_BACKPRESSURE,
@@ -21,7 +15,12 @@ from agentmesh.services.rate_limit_middleware import (
     SimpleRequest,
     SimpleResponse,
 )
-
+from agentmesh.services.rate_limiter import (
+    RateLimitConfig,
+    RateLimiter,
+    RateLimitResult,
+    TokenBucket,
+)
 
 # ---------------------------------------------------------------------------
 # TokenBucket tests
@@ -80,7 +79,9 @@ class TestTokenBucket:
 
 class TestRateLimiter:
     def test_allow_within_limits(self) -> None:
-        limiter = RateLimiter(global_rate=100, global_capacity=200, per_agent_rate=10, per_agent_capacity=20)
+        limiter = RateLimiter(
+            global_rate=100, global_capacity=200, per_agent_rate=10, per_agent_capacity=20
+        )
         assert limiter.allow("did:mesh:agent1") is True
 
     def test_per_agent_isolation(self) -> None:

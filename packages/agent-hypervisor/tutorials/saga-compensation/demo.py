@@ -218,10 +218,7 @@ async def run_demo():
             if step.state == StepState.COMPENSATED:
                 print(f"◀ Compensating: {step.action_id} ... ✓ compensated")
             elif step.state == StepState.COMPENSATION_FAILED:
-                print(
-                    f"◀ Compensating: {step.action_id} ... "
-                    f"✗ FAILED ({step.error})"
-                )
+                print(f"◀ Compensating: {step.action_id} ... ✗ FAILED ({step.error})")
 
         if not failed_compensations:
             print("\n✓ Compensation complete — all committed steps rolled back.")
@@ -233,9 +230,7 @@ async def run_demo():
     else:
         # All steps succeeded — mark saga complete
         saga.transition(
-            __import__(
-                "hypervisor.saga.state_machine", fromlist=["SagaState"]
-            ).SagaState.COMPLETED
+            __import__("hypervisor.saga.state_machine", fromlist=["SagaState"]).SagaState.COMPLETED
         )
         print("\n✓ All steps completed successfully.")
 

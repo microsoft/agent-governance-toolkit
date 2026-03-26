@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 # Patterns used to detect potential PII / secrets in memory writes
 _PII_PATTERNS = [
-    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),           # SSN
+    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),  # SSN
     re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),  # email
     re.compile(r"\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+", re.IGNORECASE),
 ]
@@ -61,7 +61,11 @@ class CrewAIKernel(BaseIntegration):
         self._step_log: list[dict[str, Any]] = []
         self._memory_audit_log: list[dict[str, Any]] = []
         self._delegation_log: list[dict[str, Any]] = []
-        logger.debug("CrewAIKernel initialized with policy=%s deep_hooks_enabled=%s", policy, deep_hooks_enabled)
+        logger.debug(
+            "CrewAIKernel initialized with policy=%s deep_hooks_enabled=%s",
+            policy,
+            deep_hooks_enabled,
+        )
 
     def wrap(self, crew: Any) -> Any:
         """
@@ -73,8 +77,8 @@ class CrewAIKernel(BaseIntegration):
         - Individual tool calls within agents
         - Task completions
         """
-        crew_id = getattr(crew, 'id', None) or f"crew-{id(crew)}"
-        crew_name = getattr(crew, 'name', crew_id)
+        crew_id = getattr(crew, "id", None) or f"crew-{id(crew)}"
+        crew_name = getattr(crew, "name", crew_id)
         ctx = self.create_context(crew_id)
         logger.info("Wrapping crew with governance: crew_name=%s, crew_id=%s", crew_name, crew_id)
 
@@ -97,11 +101,15 @@ class CrewAIKernel(BaseIntegration):
                 logger.info("Crew execution started: crew_name=%s", self._crew_name)
                 allowed, reason = self._kernel.pre_execute(self._ctx, inputs)
                 if not allowed:
-                    logger.warning("Crew execution blocked by policy: crew_name=%s, reason=%s", self._crew_name, reason)
+                    logger.warning(
+                        "Crew execution blocked by policy: crew_name=%s, reason=%s",
+                        self._crew_name,
+                        reason,
+                    )
                     raise PolicyViolationError(reason)
 
                 # Wrap individual agents and their tools
-                if hasattr(self._original, 'agents'):
+                if hasattr(self._original, "agents"):
                     for agent in self._original.agents:
                         self._wrap_agent(agent)
 
@@ -109,7 +117,11 @@ class CrewAIKernel(BaseIntegration):
 
                 valid, reason = self._kernel.post_execute(self._ctx, result)
                 if not valid:
-                    logger.warning("Crew post-execution validation failed: crew_name=%s, reason=%s", self._crew_name, reason)
+                    logger.warning(
+                        "Crew post-execution validation failed: crew_name=%s, reason=%s",
+                        self._crew_name,
+                        reason,
+                    )
                     raise PolicyViolationError(reason)
 
                 logger.info("Crew execution completed: crew_name=%s", self._crew_name)
@@ -120,11 +132,15 @@ class CrewAIKernel(BaseIntegration):
                 logger.info("Async crew execution started: crew_name=%s", self._crew_name)
                 allowed, reason = self._kernel.pre_execute(self._ctx, inputs)
                 if not allowed:
-                    logger.warning("Async crew execution blocked by policy: crew_name=%s, reason=%s", self._crew_name, reason)
+                    logger.warning(
+                        "Async crew execution blocked by policy: crew_name=%s, reason=%s",
+                        self._crew_name,
+                        reason,
+                    )
                     raise PolicyViolationError(reason)
 
                 # Wrap individual agents and their tools
-                if hasattr(self._original, 'agents'):
+                if hasattr(self._original, "agents"):
                     for agent in self._original.agents:
                         self._wrap_agent(agent)
 
@@ -132,7 +148,11 @@ class CrewAIKernel(BaseIntegration):
 
                 valid, reason = self._kernel.post_execute(self._ctx, result)
                 if not valid:
-                    logger.warning("Async crew post-execution validation failed: crew_name=%s, reason=%s", self._crew_name, reason)
+                    logger.warning(
+                        "Async crew post-execution validation failed: crew_name=%s, reason=%s",
+                        self._crew_name,
+                        reason,
+                    )
                     raise PolicyViolationError(reason)
 
                 logger.info("Async crew execution completed: crew_name=%s", self._crew_name)
@@ -141,11 +161,11 @@ class CrewAIKernel(BaseIntegration):
             def _wrap_tool(self, tool, agent_name: str):
                 """Wrap a CrewAI tool's _run method with governance interception."""
                 interceptor = PolicyInterceptor(self._kernel.policy, self._ctx)
-                original_run = getattr(tool, '_run', None)
-                if not original_run or getattr(tool, '_governed', False):
+                original_run = getattr(tool, "_run", None)
+                if not original_run or getattr(tool, "_governed", False):
                     return
 
-                tool_name = getattr(tool, 'name', type(tool).__name__)
+                tool_name = getattr(tool, "name", type(tool).__name__)
                 ctx = self._ctx
                 crew_name = self._crew_name
 
@@ -159,15 +179,18 @@ class CrewAIKernel(BaseIntegration):
                     if not result.allowed:
                         logger.warning(
                             "Tool call blocked: crew=%s, agent=%s, tool=%s, reason=%s",
-                            crew_name, agent_name, tool_name, result.reason,
+                            crew_name,
+                            agent_name,
+                            tool_name,
+                            result.reason,
                         )
-                        raise PolicyViolationError(
-                            f"Tool '{tool_name}' blocked: {result.reason}"
-                        )
+                        raise PolicyViolationError(f"Tool '{tool_name}' blocked: {result.reason}")
                     ctx.call_count += 1
                     logger.info(
                         "Tool call allowed: crew=%s, agent=%s, tool=%s",
-                        crew_name, agent_name, tool_name,
+                        crew_name,
+                        agent_name,
+                        tool_name,
                     )
                     return original_run(*args, **kwargs)
 
@@ -181,21 +204,27 @@ class CrewAIKernel(BaseIntegration):
                 also applies step-level execution interception, memory write
                 validation, and delegation detection.
                 """
-                agent_name = getattr(agent, 'name', str(id(agent)))
-                logger.debug("Wrapping individual agent: crew_name=%s, agent=%s", self._crew_name, agent_name)
+                agent_name = getattr(agent, "name", str(id(agent)))
+                logger.debug(
+                    "Wrapping individual agent: crew_name=%s, agent=%s", self._crew_name, agent_name
+                )
 
                 # Wrap individual tools for per-call interception
-                agent_tools = getattr(agent, 'tools', None) or []
+                agent_tools = getattr(agent, "tools", None) or []
                 for tool in agent_tools:
                     self._wrap_tool(tool, agent_name)
 
-                original_execute = getattr(agent, 'execute_task', None)
+                original_execute = getattr(agent, "execute_task", None)
                 if original_execute:
                     crew_name = self._crew_name
 
                     def governed_execute(task, *args, **kwargs):
-                        task_id = getattr(task, 'id', None) or str(id(task))
-                        logger.info("Agent task execution started: crew_name=%s, task_id=%s", crew_name, task_id)
+                        task_id = getattr(task, "id", None) or str(id(task))
+                        logger.info(
+                            "Agent task execution started: crew_name=%s, task_id=%s",
+                            crew_name,
+                            task_id,
+                        )
                         if self._kernel.policy.require_human_approval:
                             raise PolicyViolationError(
                                 f"Task '{task_id}' requires human approval per governance policy"
@@ -207,9 +236,19 @@ class CrewAIKernel(BaseIntegration):
                         result = original_execute(task, *args, **kwargs)
                         valid, drift_reason = self._kernel.post_execute(self._ctx, result)
                         if not valid:
-                            logger.warning("Post-execute violation: crew_name=%s, task_id=%s, reason=%s", crew_name, task_id, drift_reason)
-                        logger.info("Agent task execution completed: crew_name=%s, task_id=%s", crew_name, task_id)
+                            logger.warning(
+                                "Post-execute violation: crew_name=%s, task_id=%s, reason=%s",
+                                crew_name,
+                                task_id,
+                                drift_reason,
+                            )
+                        logger.info(
+                            "Agent task execution completed: crew_name=%s, task_id=%s",
+                            crew_name,
+                            task_id,
+                        )
                         return result
+
                     agent.execute_task = governed_execute
 
                 # Deep hooks at agent level
@@ -230,9 +269,7 @@ class CrewAIKernel(BaseIntegration):
 
     # ── Deep Integration Hooks ────────────────────────────────────
 
-    def _intercept_task_steps(
-        self, agent: Any, agent_name: str, crew_name: str
-    ) -> None:
+    def _intercept_task_steps(self, agent: Any, agent_name: str, crew_name: str) -> None:
         """Hook into individual step execution within a task.
 
         If the agent exposes a ``step`` or ``_execute_step`` method, it is
@@ -252,7 +289,9 @@ class CrewAIKernel(BaseIntegration):
             kernel = self
 
             @functools.wraps(original_step)
-            def governed_step(*args: Any, _orig=original_step, _attr=step_attr, **kwargs: Any) -> Any:
+            def governed_step(
+                *args: Any, _orig=original_step, _attr=step_attr, **kwargs: Any
+            ) -> Any:
                 step_record = {
                     "crew": crew_name,
                     "agent": agent_name,
@@ -262,7 +301,9 @@ class CrewAIKernel(BaseIntegration):
                 kernel._step_log.append(step_record)
                 logger.debug(
                     "Step intercepted: crew=%s agent=%s step=%s",
-                    crew_name, agent_name, _attr,
+                    crew_name,
+                    agent_name,
+                    _attr,
                 )
 
                 # Validate step input against policy
@@ -278,9 +319,7 @@ class CrewAIKernel(BaseIntegration):
             governed_step._step_governed = True
             setattr(agent, step_attr, governed_step)
 
-    def _intercept_crew_memory(
-        self, agent: Any, ctx: Any, agent_name: str
-    ) -> None:
+    def _intercept_crew_memory(self, agent: Any, ctx: Any, agent_name: str) -> None:
         """Intercept memory writes for a CrewAI agent's shared memory.
 
         CrewAI agents may have a ``memory`` or ``shared_memory`` attribute.
@@ -305,7 +344,9 @@ class CrewAIKernel(BaseIntegration):
                 kernel = self
 
                 @functools.wraps(save_fn)
-                def governed_save(*args: Any, _orig=save_fn, _mname=save_method_name, **kwargs: Any) -> Any:
+                def governed_save(
+                    *args: Any, _orig=save_fn, _mname=save_method_name, **kwargs: Any
+                ) -> Any:
                     combined = str(args) + str(kwargs)
 
                     # PII / secrets check
@@ -324,20 +365,20 @@ class CrewAIKernel(BaseIntegration):
                         )
 
                     result = _orig(*args, **kwargs)
-                    kernel._memory_audit_log.append({
-                        "agent": agent_name,
-                        "method": _mname,
-                        "content_summary": combined[:200],
-                        "timestamp": datetime.now().isoformat(),
-                    })
+                    kernel._memory_audit_log.append(
+                        {
+                            "agent": agent_name,
+                            "method": _mname,
+                            "content_summary": combined[:200],
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
                     return result
 
                 governed_save._mem_governed = True
                 setattr(memory, save_method_name, governed_save)
 
-    def _detect_crew_delegation(
-        self, agent: Any, ctx: Any, agent_name: str
-    ) -> None:
+    def _detect_crew_delegation(self, agent: Any, ctx: Any, agent_name: str) -> None:
         """Detect when a CrewAI agent delegates work to another agent.
 
         Wraps the ``delegate_work`` or ``execute_task`` related delegation
@@ -372,7 +413,8 @@ class CrewAIKernel(BaseIntegration):
             kernel._delegation_log.append(record)
             logger.info(
                 "Crew delegation detected: agent=%s depth=%d",
-                agent_name, depth,
+                agent_name,
+                depth,
             )
             return delegate_fn(*args, **kwargs)
 

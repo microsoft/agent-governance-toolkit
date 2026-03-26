@@ -8,9 +8,10 @@ SIGKILL) across all supported frameworks — enabling pause/resume/kill
 regardless of the underlying agent runtime.
 """
 
-from agent_os.integrations import GovernancePolicy, AutoGenKernel, LlamaIndexKernel
-from agent_os.integrations.langchain_adapter import PolicyViolationError
 from unittest.mock import MagicMock
+
+from agent_os.integrations import AutoGenKernel, GovernancePolicy, LlamaIndexKernel
+from agent_os.integrations.langchain_adapter import PolicyViolationError
 
 
 def demo_autogen_signals():

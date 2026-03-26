@@ -3,6 +3,7 @@
 Tests that adversarial condition strings don't cause crashes,
 injection, or resource exhaustion in the expression evaluator.
 """
+
 import re
 import sys
 import atheris
@@ -57,7 +58,12 @@ def fuzz_condition_eval(data: bytes) -> None:
         if len(parts) < 4:
             return
 
-        operator, field_path, expected, context_json = parts[0], parts[1], parts[2], parts[3]
+        operator, field_path, expected, context_json = (
+            parts[0],
+            parts[1],
+            parts[2],
+            parts[3],
+        )
 
         if operator not in OPERATORS:
             return
@@ -72,8 +78,14 @@ def fuzz_condition_eval(data: bytes) -> None:
         field_value = _get_nested(context, field_path)
         _eval_condition_safe(operator, field_value, expected)
 
-    except (ValueError, TypeError, KeyError, UnicodeDecodeError,
-            RecursionError, MemoryError):
+    except (
+        ValueError,
+        TypeError,
+        KeyError,
+        UnicodeDecodeError,
+        RecursionError,
+        MemoryError,
+    ):
         pass
 
 

@@ -3,6 +3,7 @@
 """Tests for the Semantic Policy Engine."""
 
 import pytest
+
 from agent_os.semantic_policy import (
     IntentCategory,
     IntentClassification,
@@ -62,7 +63,9 @@ class TestDestructiveData:
 
 class TestDataExfiltration:
     def test_sql_into_outfile(self, engine):
-        r = engine.classify("database_query", {"query": "SELECT * FROM users INTO OUTFILE '/tmp/dump'"})
+        r = engine.classify(
+            "database_query", {"query": "SELECT * FROM users INTO OUTFILE '/tmp/dump'"}
+        )
         assert r.category == IntentCategory.DATA_EXFILTRATION
 
     def test_full_dump(self, engine):
@@ -88,7 +91,10 @@ class TestPrivilegeEscalation:
     def test_sudo(self, engine):
         r = engine.classify("shell", {"cmd": "sudo rm -rf /var/log"})
         # Could match system_modification (rm -rf) or privilege (sudo)
-        assert r.category in {IntentCategory.SYSTEM_MODIFICATION, IntentCategory.PRIVILEGE_ESCALATION}
+        assert r.category in {
+            IntentCategory.SYSTEM_MODIFICATION,
+            IntentCategory.PRIVILEGE_ESCALATION,
+        }
 
     def test_chmod_777(self, engine):
         r = engine.classify("shell", {"cmd": "chmod 777 /etc/shadow"})

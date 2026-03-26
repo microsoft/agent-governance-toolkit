@@ -6,11 +6,12 @@ Escrow Routes
 API endpoints for the Proof-of-Outcome escrow system.
 """
 
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Literal, Optional
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from typing import Optional, Literal
-from datetime import datetime, timedelta, timezone
-import uuid
 
 router = APIRouter()
 
@@ -66,7 +67,7 @@ _agent_credits: dict[str, int] = {}
 async def create_escrow(request: CreateEscrowRequest):
     """
     Create an escrow for a task.
-    
+
     Locks credits from requester until task completion or timeout.
     """
     # Check credits
@@ -79,15 +80,15 @@ async def create_escrow(request: CreateEscrowRequest):
                 "message": f"Insufficient credits: required={request.credits}, available={available}",
                 "required": request.credits,
                 "available": available,
-            }
+            },
         )
-    
+
     # Generate escrow ID
     escrow_id = f"escrow_{uuid.uuid4().hex[:16]}"
-    
+
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(seconds=request.timeout_seconds)
-    
+
     # Create escrow
     escrow = {
         "escrow_id": escrow_id,
@@ -102,13 +103,13 @@ async def create_escrow(request: CreateEscrowRequest):
         "created_at": now.isoformat(),
         "expires_at": expires_at.isoformat(),
     }
-    
+
     # Lock credits
     _agent_credits[request.requester_did] = available - request.credits
-    
+
     # Store
     _escrows[escrow_id] = escrow
-    
+
     return EscrowReceiptResponse(
         escrow_id=escrow_id,
         status="pending",
@@ -130,9 +131,9 @@ async def get_escrow(escrow_id: str):
             detail={
                 "error": "ESCROW_NOT_FOUND",
                 "message": f"Escrow {escrow_id} not found",
-            }
+            },
         )
-    
+
     escrow = _escrows[escrow_id]
     return EscrowReceiptResponse(
         escrow_id=escrow["escrow_id"],
@@ -150,18 +151,17 @@ async def activate_escrow(escrow_id: str):
     """Mark escrow as active (task in progress)."""
     if escrow_id not in _escrows:
         raise HTTPException(status_code=404, detail="Escrow not found")
-    
+
     escrow = _escrows[escrow_id]
-    
+
     if escrow["status"] != "pending":
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot activate escrow in status: {escrow['status']}"
+            status_code=400, detail=f"Cannot activate escrow in status: {escrow['status']}"
         )
-    
+
     escrow["status"] = "active"
     escrow["activated_at"] = datetime.now(timezone.utc).isoformat()
-    
+
     return {"success": True, "status": "active"}
 
 
@@ -169,42 +169,39 @@ async def activate_escrow(escrow_id: str):
 async def release_escrow(escrow_id: str, request: ReleaseEscrowRequest):
     """
     Release escrow based on outcome.
-    
+
     - success: Credits go to provider
-    - failure: Credits returned to requester  
+    - failure: Credits returned to requester
     - dispute: Escalate to Arbiter
     """
     if escrow_id not in _escrows:
         raise HTTPException(status_code=404, detail="Escrow not found")
-    
+
     escrow = _escrows[escrow_id]
-    
+
     if escrow["status"] not in ("pending", "active", "awaiting_validation"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Escrow already resolved: {escrow['status']}"
-        )
-    
+        raise HTTPException(status_code=400, detail=f"Escrow already resolved: {escrow['status']}")
+
     credits = escrow["credits"]
     requester = escrow["requester_did"]
     provider = escrow["provider_did"]
-    
+
     if request.outcome == "success":
         # Check SCAK if required
         if escrow.get("require_scak") and request.scak_drift_score is not None:
             if request.scak_drift_score > escrow.get("scak_threshold", 0.15):
                 # SCAK failed - treat as failure
                 return await _resolve_failure(escrow_id, escrow)
-        
+
         return await _resolve_success(escrow_id, escrow)
-    
+
     elif request.outcome == "failure":
         return await _resolve_failure(escrow_id, escrow)
-    
+
     else:  # dispute
         escrow["status"] = "disputed"
         escrow["dispute_reason"] = request.dispute_reason
-        
+
         return EscrowResolutionResponse(
             escrow_id=escrow_id,
             final_status="disputed",
@@ -222,11 +219,11 @@ async def raise_dispute(escrow_id: str, reason: str):
     """Raise a dispute on an escrow."""
     if escrow_id not in _escrows:
         raise HTTPException(status_code=404, detail="Escrow not found")
-    
+
     escrow = _escrows[escrow_id]
     escrow["status"] = "disputed"
     escrow["dispute_reason"] = reason
-    
+
     return {
         "success": True,
         "escrow_id": escrow_id,
@@ -243,20 +240,20 @@ async def list_escrows(
 ):
     """List escrows with optional filtering."""
     results = list(_escrows.values())
-    
+
     if agent_did:
         results = [
-            e for e in results
-            if e["requester_did"] == agent_did or e["provider_did"] == agent_did
+            e for e in results if e["requester_did"] == agent_did or e["provider_did"] == agent_did
         ]
-    
+
     if status:
         results = [e for e in results if e["status"] == status]
-    
+
     return {"escrows": results[:limit], "total": len(results)}
 
 
 # Credit management endpoints
+
 
 @router.get("/credits/{agent_did}")
 async def get_credits(agent_did: str):
@@ -277,13 +274,13 @@ async def _resolve_success(escrow_id: str, escrow: dict) -> EscrowResolutionResp
     """Resolve escrow as success."""
     credits = escrow["credits"]
     provider = escrow["provider_did"]
-    
+
     # Transfer credits to provider
     _agent_credits[provider] = _agent_credits.get(provider, 1000) + credits
-    
+
     escrow["status"] = "released"
     escrow["resolved_at"] = datetime.now(timezone.utc).isoformat()
-    
+
     return EscrowResolutionResponse(
         escrow_id=escrow_id,
         final_status="released",
@@ -300,13 +297,13 @@ async def _resolve_failure(escrow_id: str, escrow: dict) -> EscrowResolutionResp
     """Resolve escrow as failure."""
     credits = escrow["credits"]
     requester = escrow["requester_did"]
-    
+
     # Return credits to requester
     _agent_credits[requester] = _agent_credits.get(requester, 1000) + credits
-    
+
     escrow["status"] = "refunded"
     escrow["resolved_at"] = datetime.now(timezone.utc).isoformat()
-    
+
     return EscrowResolutionResponse(
         escrow_id=escrow_id,
         final_status="refunded",

@@ -158,7 +158,9 @@ class AgentSRECallback:
         rid = self._run_id_str(run_id)
         model = ""
         if serialized:
-            model = serialized.get("name", serialized.get("id", [""])[-1] if serialized.get("id") else "")
+            model = serialized.get(
+                "name", serialized.get("id", [""])[-1] if serialized.get("id") else ""
+            )
         record = LLMCallRecord(run_id=rid, model=model, started_at=time.time())
         self._active_llm[rid] = record
 
@@ -269,7 +271,9 @@ class AgentSRECallback:
         rid = self._run_id_str(run_id)
         chain_type = ""
         if serialized:
-            chain_type = serialized.get("name", serialized.get("id", [""])[-1] if serialized.get("id") else "")
+            chain_type = serialized.get(
+                "name", serialized.get("id", [""])[-1] if serialized.get("id") else ""
+            )
         record = ChainRecord(run_id=rid, chain_type=chain_type, started_at=time.time())
         self._active_chains[rid] = record
 

@@ -15,10 +15,10 @@ This implements "The Nudge" pattern from industry best practices:
 
 import logging
 import uuid
-from typing import Optional, List
 from datetime import datetime
+from typing import List, Optional
 
-from .models import AgentOutcome, NudgeResult, GiveUpSignal
+from .models import AgentOutcome, GiveUpSignal, NudgeResult
 
 logger = logging.getLogger(__name__)
 
@@ -26,21 +26,21 @@ logger = logging.getLogger(__name__)
 class NudgeMechanism:
     """
     Implements automatic nudging when agents give up.
-    
+
     The "nudge" is a system prompt injection that asks the agent
     to confirm it executed the task correctly and encourages
     a more thorough attempt.
-    
+
     Example nudge:
-    "You claimed no data was found. Please confirm you executed the 
+    "You claimed no data was found. Please confirm you executed the
     search tool with the correct parameters and checked all data sources."
     """
-    
+
     def __init__(self):
         """Initialize the nudge mechanism."""
         self.nudge_history: List[NudgeResult] = []
         self.nudge_templates = self._load_nudge_templates()
-        
+
     def _load_nudge_templates(self) -> dict:
         """Load nudge prompt templates for different give-up signals."""
         return {
@@ -85,29 +85,25 @@ class NudgeMechanism:
                 "2. Use all available tools to attempt the task\n"
                 "3. Provide a specific explanation if truly impossible\n"
                 "Please retry with full effort."
-            )
+            ),
         }
-    
-    def generate_nudge(
-        self,
-        outcome: AgentOutcome,
-        include_tool_reminder: bool = True
-    ) -> str:
+
+    def generate_nudge(self, outcome: AgentOutcome, include_tool_reminder: bool = True) -> str:
         """
         Generate a nudge prompt for the given outcome.
-        
+
         Args:
             outcome: The agent outcome that triggered the nudge
             include_tool_reminder: Whether to include tool usage reminder
-            
+
         Returns:
             Nudge prompt string
         """
         signal = outcome.give_up_signal or GiveUpSignal.UNKNOWN
         template = self.nudge_templates.get(signal, self.nudge_templates[GiveUpSignal.UNKNOWN])
-        
+
         nudge_prompt = template
-        
+
         # Add context-specific enhancements
         if include_tool_reminder and outcome.tool_telemetry:
             called_tools = [t.tool_name for t in outcome.tool_telemetry]
@@ -120,112 +116,101 @@ class NudgeMechanism:
         elif include_tool_reminder:
             # No telemetry at all
             nudge_prompt += "\n\nNote: It appears no tools were called. Please use available tools to complete the task."
-        
+
         # Add original prompt reminder
         nudge_prompt += f"\n\nOriginal request: {outcome.user_prompt}"
-        
+
         return nudge_prompt
-    
-    def should_nudge(
-        self,
-        outcome: AgentOutcome,
-        max_nudges: int = 1
-    ) -> bool:
+
+    def should_nudge(self, outcome: AgentOutcome, max_nudges: int = 1) -> bool:
         """
         Determine if we should nudge for this outcome.
-        
+
         Args:
             outcome: The agent outcome
             max_nudges: Maximum number of nudges per agent/task
-            
+
         Returns:
             True if nudge should be applied
         """
         # Check if outcome is a give-up
         from .models import OutcomeType
+
         if outcome.outcome_type != OutcomeType.GIVE_UP:
             return False
-        
+
         # Check if we've already nudged this agent recently
         recent_nudges = [
-            n for n in self.nudge_history
+            n
+            for n in self.nudge_history
             if n.original_outcome.agent_id == outcome.agent_id
             and (datetime.utcnow() - n.original_outcome.timestamp).total_seconds() < 300  # 5 min
         ]
-        
+
         if len(recent_nudges) >= max_nudges:
             logger.info(f"Max nudges ({max_nudges}) reached for agent {outcome.agent_id}")
             return False
-        
+
         return True
-    
+
     def record_nudge_result(
-        self,
-        outcome: AgentOutcome,
-        nudge_prompt: str,
-        retry_response: str,
-        retry_successful: bool
+        self, outcome: AgentOutcome, nudge_prompt: str, retry_response: str, retry_successful: bool
     ) -> NudgeResult:
         """
         Record the result of a nudge attempt.
-        
+
         Args:
             outcome: Original outcome that triggered nudge
             nudge_prompt: The nudge prompt that was used
             retry_response: Agent's response after nudge
             retry_successful: Whether the retry was successful
-            
+
         Returns:
             NudgeResult object
         """
         nudge_id = f"nudge-{uuid.uuid4().hex[:8]}"
-        
+
         # Detect improvement
         improvement = self._detect_improvement(
-            original_response=outcome.agent_response,
-            retry_response=retry_response
+            original_response=outcome.agent_response, retry_response=retry_response
         )
-        
+
         result = NudgeResult(
             nudge_id=nudge_id,
             original_outcome=outcome,
             nudge_prompt=nudge_prompt,
             retry_response=retry_response,
             retry_successful=retry_successful,
-            improvement_detected=improvement
+            improvement_detected=improvement,
         )
-        
+
         self.nudge_history.append(result)
-        
+
         logger.info(f"Nudge {nudge_id}: success={retry_successful}, improvement={improvement}")
-        
+
         return result
-    
-    def _detect_improvement(
-        self,
-        original_response: str,
-        retry_response: str
-    ) -> bool:
+
+    def _detect_improvement(self, original_response: str, retry_response: str) -> bool:
         """
         Detect if retry response shows improvement over original.
-        
+
         Simple heuristic: longer response with less refusal language.
         """
         # Length improvement
         length_improved = len(retry_response) > len(original_response) * 1.2
-        
+
         # Refusal language reduction
         refusal_words = ["no data", "cannot", "can't", "unable", "not found"]
         original_refusals = sum(1 for word in refusal_words if word in original_response.lower())
         retry_refusals = sum(1 for word in refusal_words if word in retry_response.lower())
         refusal_reduced = retry_refusals < original_refusals
-        
+
         # Check for data/results mention
         data_indicators = ["found", "results", "data shows", "here is", "here are"]
         has_data_now = any(indicator in retry_response.lower() for indicator in data_indicators)
-        
+
         return length_improved or refusal_reduced or has_data_now
-    
+
     def get_nudge_stats(self) -> dict:
         """Get statistics about nudge effectiveness."""
         if not self.nudge_history:
@@ -234,30 +219,28 @@ class NudgeMechanism:
                 "successful_nudges": 0,
                 "success_rate": 0.0,
                 "improvements": 0,
-                "improvement_rate": 0.0
+                "improvement_rate": 0.0,
             }
-        
+
         successful = sum(1 for n in self.nudge_history if n.retry_successful)
         improvements = sum(1 for n in self.nudge_history if n.improvement_detected)
-        
+
         return {
             "total_nudges": len(self.nudge_history),
             "successful_nudges": successful,
             "success_rate": successful / len(self.nudge_history),
             "improvements": improvements,
             "improvement_rate": improvements / len(self.nudge_history),
-            "recent_nudges": self.nudge_history[-10:]  # Last 10 nudges
+            "recent_nudges": self.nudge_history[-10:],  # Last 10 nudges
         }
-    
+
     def get_nudge_history(
-        self,
-        agent_id: Optional[str] = None,
-        limit: int = 100
+        self, agent_id: Optional[str] = None, limit: int = 100
     ) -> List[NudgeResult]:
         """Get nudge history with optional filtering."""
         history = self.nudge_history[-limit:]
-        
+
         if agent_id:
             history = [n for n in history if n.original_outcome.agent_id == agent_id]
-        
+
         return history

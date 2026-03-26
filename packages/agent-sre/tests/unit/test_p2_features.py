@@ -14,6 +14,7 @@ from agent_sre.replay.distributed import DistributedReplayEngine
 
 # --- Trace Replay ---
 
+
 class TestDistributedReplay:
     def _make_trace(self, agent_id, trace_id="t1"):
         trace = Trace(trace_id=trace_id, agent_id=agent_id, task_input="test")
@@ -49,7 +50,10 @@ class TestDistributedReplay:
         engine = DistributedReplayEngine()
         trace = Trace(trace_id="t1", agent_id="agent-a")
         span = Span(
-            span_id="d1", trace_id="t1", kind=SpanKind.DELEGATION, name="delegate",
+            span_id="d1",
+            trace_id="t1",
+            kind=SpanKind.DELEGATION,
+            name="delegate",
             attributes={"target_agent": "agent-b", "target_trace_id": "t2"},
         )
         span.finish(output={"result": "ok"})
@@ -62,6 +66,7 @@ class TestDistributedReplay:
 
 
 # --- GitOps Rollout Spec ---
+
 
 class TestGitOpsSpec:
     def test_default_canary(self):
@@ -98,6 +103,7 @@ class TestGitOpsSpec:
 
     def test_step_weights_validation(self):
         from agent_sre.delivery.rollout import RolloutStep
+
         spec = RolloutSpec(
             name="test",
             candidate=AgentRef(name="agent", version="v1"),
@@ -111,6 +117,7 @@ class TestGitOpsSpec:
 
 
 # --- Chaos Library ---
+
 
 class TestChaosLibrary:
     def test_builtin_templates(self):
@@ -174,6 +181,7 @@ class TestChaosLibrary:
 
 # --- Cost Anomaly Detection ---
 
+
 class TestCostAnomalyDetector:
     def test_needs_min_samples(self):
         detector = CostAnomalyDetector(min_samples=10)
@@ -235,6 +243,7 @@ class TestCostAnomalyDetector:
 
 
 # --- Postmortems ---
+
 
 class TestPostmortem:
     def _make_incident(self):

@@ -4,9 +4,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
-import pytest
+from datetime import UTC, datetime, timedelta
 
 from agentmesh.dashboard import (
     AuditLogEntry,
@@ -18,7 +16,6 @@ from agentmesh.dashboard import (
     TrustTrend,
 )
 from agentmesh.events import AnalyticsPlane, Event, InMemoryEventBus
-
 
 # ---------------------------------------------------------------------------
 # Data model tests
@@ -34,7 +31,7 @@ class TestDashboardModels:
             source_did="did:mesh:a",
             target_did="did:mesh:b",
             event_type="handshake.completed",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             trust_score=850.0,
         )
         assert entry.source_did == "did:mesh:a"
@@ -55,7 +52,7 @@ class TestDashboardModels:
         """TrustTrend stores a time-series data point."""
         trend = TrustTrend(
             agent_did="did:mesh:a",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             trust_score=800.0,
             event_type="trust.verified",
         )
@@ -65,7 +62,7 @@ class TestDashboardModels:
         """AuditLogEntry stores audit data."""
         entry = AuditLogEntry(
             entry_id="aud-1",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             agent_did="did:mesh:a",
             action="handshake",
             outcome="success",
@@ -77,7 +74,7 @@ class TestDashboardModels:
         """ComplianceReportData stores compliance summary."""
         report = ComplianceReportData(
             framework="soc2",
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
             compliance_score=95.5,
             total_controls=64,
             controls_met=61,
@@ -119,10 +116,16 @@ class TestDashboardAPI:
         """get_live_traffic returns recent agent communications."""
         bus, _, api = _make_api()
 
-        bus.emit(Event(event_type="handshake.completed", source="did:mesh:a",
-                        payload={"target_did": "did:mesh:b", "trust_score": 800}))
-        bus.emit(Event(event_type="trust.verified", source="did:mesh:c",
-                        payload={"trust_score": 700}))
+        bus.emit(
+            Event(
+                event_type="handshake.completed",
+                source="did:mesh:a",
+                payload={"target_did": "did:mesh:b", "trust_score": 800},
+            )
+        )
+        bus.emit(
+            Event(event_type="trust.verified", source="did:mesh:c", payload={"trust_score": 700})
+        )
 
         traffic = api.get_live_traffic()
         assert len(traffic) == 2
@@ -143,12 +146,15 @@ class TestDashboardAPI:
         """get_leaderboard ranks agents by trust score descending."""
         bus, _, api = _make_api()
 
-        bus.emit(Event(event_type="trust.verified", source="did:mesh:low",
-                        payload={"trust_score": 300}))
-        bus.emit(Event(event_type="trust.verified", source="did:mesh:high",
-                        payload={"trust_score": 900}))
-        bus.emit(Event(event_type="trust.verified", source="did:mesh:mid",
-                        payload={"trust_score": 600}))
+        bus.emit(
+            Event(event_type="trust.verified", source="did:mesh:low", payload={"trust_score": 300})
+        )
+        bus.emit(
+            Event(event_type="trust.verified", source="did:mesh:high", payload={"trust_score": 900})
+        )
+        bus.emit(
+            Event(event_type="trust.verified", source="did:mesh:mid", payload={"trust_score": 600})
+        )
 
         board = api.get_leaderboard()
         assert len(board) == 3
@@ -161,12 +167,15 @@ class TestDashboardAPI:
         """get_trust_trends returns score history for an agent."""
         bus, _, api = _make_api()
 
-        bus.emit(Event(event_type="trust.verified", source="did:mesh:a",
-                        payload={"trust_score": 700}))
-        bus.emit(Event(event_type="trust.verified", source="did:mesh:a",
-                        payload={"trust_score": 750}))
-        bus.emit(Event(event_type="trust.verified", source="did:mesh:b",
-                        payload={"trust_score": 500}))
+        bus.emit(
+            Event(event_type="trust.verified", source="did:mesh:a", payload={"trust_score": 700})
+        )
+        bus.emit(
+            Event(event_type="trust.verified", source="did:mesh:a", payload={"trust_score": 750})
+        )
+        bus.emit(
+            Event(event_type="trust.verified", source="did:mesh:b", payload={"trust_score": 500})
+        )
 
         trends = api.get_trust_trends("did:mesh:a")
         assert len(trends) == 2
@@ -182,10 +191,20 @@ class TestDashboardAPI:
         """get_audit_log returns audit entries."""
         bus, _, api = _make_api()
 
-        bus.emit(Event(event_type="audit.entry", source="did:mesh:a",
-                        payload={"action": "login", "outcome": "success"}))
-        bus.emit(Event(event_type="audit.entry", source="did:mesh:b",
-                        payload={"action": "access", "outcome": "denied"}))
+        bus.emit(
+            Event(
+                event_type="audit.entry",
+                source="did:mesh:a",
+                payload={"action": "login", "outcome": "success"},
+            )
+        )
+        bus.emit(
+            Event(
+                event_type="audit.entry",
+                source="did:mesh:b",
+                payload={"action": "access", "outcome": "denied"},
+            )
+        )
 
         log = api.get_audit_log()
         assert len(log) == 2
@@ -194,10 +213,8 @@ class TestDashboardAPI:
         """get_audit_log filters by agent DID."""
         bus, _, api = _make_api()
 
-        bus.emit(Event(event_type="audit.entry", source="did:mesh:a",
-                        payload={"action": "login"}))
-        bus.emit(Event(event_type="audit.entry", source="did:mesh:b",
-                        payload={"action": "login"}))
+        bus.emit(Event(event_type="audit.entry", source="did:mesh:a", payload={"action": "login"}))
+        bus.emit(Event(event_type="audit.entry", source="did:mesh:b", payload={"action": "login"}))
 
         log = api.get_audit_log(filters={"agent": "did:mesh:a"})
         assert len(log) == 1
@@ -207,10 +224,8 @@ class TestDashboardAPI:
         """get_audit_log filters by action type."""
         bus, _, api = _make_api()
 
-        bus.emit(Event(event_type="audit.entry", source="did:mesh:a",
-                        payload={"action": "login"}))
-        bus.emit(Event(event_type="audit.entry", source="did:mesh:a",
-                        payload={"action": "access"}))
+        bus.emit(Event(event_type="audit.entry", source="did:mesh:a", payload={"action": "login"}))
+        bus.emit(Event(event_type="audit.entry", source="did:mesh:a", payload={"action": "access"}))
 
         log = api.get_audit_log(filters={"action": "access"})
         assert len(log) == 1
@@ -220,20 +235,16 @@ class TestDashboardAPI:
         """get_audit_log filters by date range."""
         bus, _, api = _make_api()
 
-        now = datetime.now(timezone.utc)
-        old_event = Event(event_type="audit.entry", source="did:mesh:a",
-                          payload={"action": "old"})
+        now = datetime.now(UTC)
+        old_event = Event(event_type="audit.entry", source="did:mesh:a", payload={"action": "old"})
         old_event.timestamp = now - timedelta(days=10)
 
-        new_event = Event(event_type="audit.entry", source="did:mesh:a",
-                          payload={"action": "new"})
+        new_event = Event(event_type="audit.entry", source="did:mesh:a", payload={"action": "new"})
 
         bus.emit(old_event)
         bus.emit(new_event)
 
-        log = api.get_audit_log(
-            filters={"date_from": now - timedelta(days=1)}
-        )
+        log = api.get_audit_log(filters={"date_from": now - timedelta(days=1)})
         assert len(log) == 1
         assert log[0].action == "new"
 
@@ -257,8 +268,13 @@ class TestDashboardAPI:
         bus, _, api = _make_api()
 
         bus.emit(Event(event_type="agent.registered", source="did:mesh:a"))
-        bus.emit(Event(event_type="audit.entry", source="did:mesh:a",
-                        payload={"action": "access", "outcome": "denied"}))
+        bus.emit(
+            Event(
+                event_type="audit.entry",
+                source="did:mesh:a",
+                payload={"action": "access", "outcome": "denied"},
+            )
+        )
 
         report = api.get_compliance_report("hipaa")
         assert report.controls_failed >= 1
@@ -268,10 +284,16 @@ class TestDashboardAPI:
         """get_overview returns a complete dashboard summary."""
         bus, _, api = _make_api()
 
-        bus.emit(Event(event_type="handshake.completed", source="did:mesh:a",
-                        payload={"trust_score": 800, "target_did": "did:mesh:b"}))
-        bus.emit(Event(event_type="trust.verified", source="did:mesh:c",
-                        payload={"trust_score": 600}))
+        bus.emit(
+            Event(
+                event_type="handshake.completed",
+                source="did:mesh:a",
+                payload={"trust_score": 800, "target_did": "did:mesh:b"},
+            )
+        )
+        bus.emit(
+            Event(event_type="trust.verified", source="did:mesh:c", payload={"trust_score": 600})
+        )
         bus.emit(Event(event_type="policy.violated", source="did:mesh:d"))
 
         overview = api.get_overview()
@@ -296,8 +318,13 @@ class TestDashboardAPI:
         bus, _, api = _make_api()
 
         for _ in range(3):
-            bus.emit(Event(event_type="handshake.completed", source="did:mesh:a",
-                            payload={"trust_score": 800}))
+            bus.emit(
+                Event(
+                    event_type="handshake.completed",
+                    source="did:mesh:a",
+                    payload={"trust_score": 800},
+                )
+            )
 
         board = api.get_leaderboard()
         assert board[0].handshake_count == 3
@@ -306,8 +333,9 @@ class TestDashboardAPI:
         """Leaderboard entries reflect violation counts."""
         bus, _, api = _make_api()
 
-        bus.emit(Event(event_type="trust.verified", source="did:mesh:a",
-                        payload={"trust_score": 500}))
+        bus.emit(
+            Event(event_type="trust.verified", source="did:mesh:a", payload={"trust_score": 500})
+        )
         bus.emit(Event(event_type="policy.violated", source="did:mesh:a"))
         bus.emit(Event(event_type="trust.failed", source="did:mesh:a"))
 

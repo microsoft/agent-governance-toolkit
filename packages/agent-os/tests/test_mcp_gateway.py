@@ -4,18 +4,15 @@
 
 from __future__ import annotations
 
-import pytest
-
 from agent_os.integrations.base import GovernancePolicy, PatternType
 from agent_os.mcp_gateway import (
     ApprovalStatus,
-    AuditEntry,
     GatewayConfig,
     MCPGateway,
 )
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_policy(**overrides) -> GovernancePolicy:
     """Create a GovernancePolicy with sensible test defaults."""
@@ -32,6 +29,7 @@ def _make_policy(**overrides) -> GovernancePolicy:
 
 
 # ── Tool allow / deny filtering ─────────────────────────────────────────────
+
 
 class TestToolFiltering:
     def test_allow_when_allowlist_empty(self):
@@ -61,12 +59,15 @@ class TestToolFiltering:
         assert "deny list" in reason
 
     def test_deny_list_blocks_even_without_allowlist(self):
-        gw = MCPGateway(_make_policy(), denied_tools=["evil_tool"], enable_builtin_sanitization=False)
+        gw = MCPGateway(
+            _make_policy(), denied_tools=["evil_tool"], enable_builtin_sanitization=False
+        )
         allowed, reason = gw.intercept_tool_call("a1", "evil_tool", {})
         assert allowed is False
 
 
 # ── Parameter pattern blocking ──────────────────────────────────────────────
+
 
 class TestParameterSanitization:
     def test_blocked_substring_pattern(self):
@@ -112,6 +113,7 @@ class TestParameterSanitization:
 
 
 # ── Rate limit enforcement ──────────────────────────────────────────────────
+
 
 class TestRateLimiting:
     def test_allows_up_to_budget(self):
@@ -163,6 +165,7 @@ class TestRateLimiting:
 
 # ── Audit log recording ────────────────────────────────────────────────────
 
+
 class TestAuditLog:
     def test_records_allowed_call(self):
         gw = MCPGateway(_make_policy(), enable_builtin_sanitization=False)
@@ -201,6 +204,7 @@ class TestAuditLog:
 
 
 # ── Human approval workflow ─────────────────────────────────────────────────
+
 
 class TestHumanApproval:
     def test_pending_when_no_callback(self):
@@ -272,6 +276,7 @@ class TestHumanApproval:
 
 
 # ── wrap_mcp_server ─────────────────────────────────────────────────────────
+
 
 class TestWrapMCPServer:
     def test_returns_gateway_config(self):

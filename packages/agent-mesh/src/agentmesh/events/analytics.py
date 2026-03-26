@@ -63,9 +63,7 @@ class AnalyticsPlane:
         """Route events to the appropriate aggregator."""
         now = time.monotonic()
         self._total_events += 1
-        self._events_by_type[event.event_type] = (
-            self._events_by_type.get(event.event_type, 0) + 1
-        )
+        self._events_by_type[event.event_type] = self._events_by_type.get(event.event_type, 0) + 1
 
         if event.event_type == "handshake.completed":
             self._handshakes.append(now)

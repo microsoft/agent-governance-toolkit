@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 class MeshReplayState(Enum):
     """State of a trace replay session."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -30,6 +31,7 @@ class MeshReplayState(Enum):
 @dataclass
 class AgentTraceRef:
     """Reference to a trace belonging to a specific agent in the mesh."""
+
     agent_id: str
     trace_id: str
     trace: Trace | None = None
@@ -47,6 +49,7 @@ class AgentTraceRef:
 @dataclass
 class DelegationLink:
     """A delegation link between two agents in a distributed trace."""
+
     from_agent: str
     to_agent: str
     from_span_id: str
@@ -66,6 +69,7 @@ class DelegationLink:
 @dataclass
 class DistributedReplayResult:
     """Result of replaying a distributed multi-agent trace."""
+
     session_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     state: MeshReplayState = MeshReplayState.PENDING
     agent_results: dict[str, ReplayResult] = field(default_factory=dict)
@@ -94,9 +98,7 @@ class DistributedReplayResult:
             "agents_total": self.agents_total,
             "total_diffs": len(self.all_diffs),
             "cross_agent_diffs": [d.to_dict() for d in self.cross_agent_diffs],
-            "agent_results": {
-                aid: r.to_dict() for aid, r in self.agent_results.items()
-            },
+            "agent_results": {aid: r.to_dict() for aid, r in self.agent_results.items()},
         }
 
 
@@ -129,31 +131,27 @@ class DistributedReplayEngine:
         task_description: str = "",
     ) -> None:
         """Link a delegation span to the delegated agent's trace."""
-        self._delegation_links.append(DelegationLink(
-            from_agent=from_agent,
-            to_agent=to_agent,
-            from_span_id=from_span_id,
-            to_trace_id=to_trace_id,
-            task_description=task_description,
-        ))
+        self._delegation_links.append(
+            DelegationLink(
+                from_agent=from_agent,
+                to_agent=to_agent,
+                from_span_id=from_span_id,
+                to_trace_id=to_trace_id,
+                task_description=task_description,
+            )
+        )
 
     def discover_links(self) -> list[DelegationLink]:
         """Auto-discover delegation links — not available in Community Edition."""
-        raise NotImplementedError(
-            "Not available in Community Edition"
-        )
+        raise NotImplementedError("Not available in Community Edition")
 
     def replay(self) -> DistributedReplayResult:
         """Replay all agent traces — not available in Community Edition."""
-        raise NotImplementedError(
-            "Not available in Community Edition"
-        )
+        raise NotImplementedError("Not available in Community Edition")
 
     def _check_cross_agent(self, result: DistributedReplayResult) -> list[TraceDiff]:
         """Check consistency across delegation boundaries — not available in Community Edition."""
-        raise NotImplementedError(
-            "Not available in Community Edition"
-        )
+        raise NotImplementedError("Not available in Community Edition")
 
     def execution_order(self) -> list[str]:
         """Get the execution order of agents based on delegation links."""

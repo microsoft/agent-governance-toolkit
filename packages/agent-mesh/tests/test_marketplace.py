@@ -2,11 +2,9 @@
 # Licensed under the MIT License.
 """Tests for AgentMesh Plugin Marketplace."""
 
-import json
 from pathlib import Path
 
 import pytest
-import yaml
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 from agentmesh.marketplace import (
@@ -21,7 +19,6 @@ from agentmesh.marketplace import (
     save_manifest,
     verify_signature,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -204,9 +201,7 @@ class TestPluginRegistry:
 
     def test_list_plugins_type_filter(self) -> None:
         registry = PluginRegistry()
-        registry.register(
-            _make_manifest(name="policy-tpl", plugin_type=PluginType.POLICY_TEMPLATE)
-        )
+        registry.register(_make_manifest(name="policy-tpl", plugin_type=PluginType.POLICY_TEMPLATE))
         registry.register(_make_manifest(name="int-plugin", plugin_type=PluginType.INTEGRATION))
         results = registry.list_plugins(type_filter=PluginType.POLICY_TEMPLATE)
         assert len(results) == 1

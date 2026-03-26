@@ -23,6 +23,7 @@ from agent_sre.tracing import (
 # TraceContext
 # ---------------------------------------------------------------------------
 
+
 class TestTraceContext:
     """W3C trace context propagation."""
 
@@ -65,7 +66,9 @@ class TestTraceContext:
 
     def test_to_headers(self):
         ctx = TraceContext(
-            trace_id="tid", span_id="sid", sampled=True,
+            trace_id="tid",
+            span_id="sid",
+            sampled=True,
             baggage={"key1": "val1", "key2": "val2"},
         )
         headers = ctx.to_headers()
@@ -82,8 +85,10 @@ class TestTraceContext:
     def test_from_headers_roundtrip(self):
         # Use IDs without hyphens (W3C traceparent uses '-' as delimiter)
         original = TraceContext(
-            trace_id="abcdef1234567890abcdef1234567890", span_id="1234567890abcdef",
-            sampled=True, baggage={"env": "staging"},
+            trace_id="abcdef1234567890abcdef1234567890",
+            span_id="1234567890abcdef",
+            sampled=True,
+            baggage={"env": "staging"},
         )
         headers = original.to_headers()
         restored = TraceContext.from_headers(headers)
@@ -102,10 +107,12 @@ class TestTraceContext:
 # SpanLink
 # ---------------------------------------------------------------------------
 
+
 class TestSpanLink:
     def test_to_dict(self):
         link = SpanLink(
-            trace_id="t1", span_id="s1",
+            trace_id="t1",
+            span_id="s1",
             relationship="caused_by",
             attributes={"source": "test"},
         )
@@ -120,9 +127,11 @@ class TestSpanLink:
 # ProtocolSpan
 # ---------------------------------------------------------------------------
 
+
 class TestProtocolSpan:
     def test_set_response_dict(self):
         from agent_sre.replay.capture import Span
+
         span = Span(kind=SpanKind.TOOL_CALL, name="test")
         ps = ProtocolSpan(span=span, protocol=ProtocolType.MCP)
         ps.set_response({"data": 42}, cost_usd=0.01)
@@ -132,6 +141,7 @@ class TestProtocolSpan:
 
     def test_set_response_string(self):
         from agent_sre.replay.capture import Span
+
         span = Span(kind=SpanKind.DELEGATION, name="test")
         ps = ProtocolSpan(span=span, protocol=ProtocolType.A2A)
         ps.set_response("hello world")
@@ -139,6 +149,7 @@ class TestProtocolSpan:
 
     def test_set_error(self):
         from agent_sre.replay.capture import Span
+
         span = Span(kind=SpanKind.TOOL_CALL, name="test")
         ps = ProtocolSpan(span=span)
         ps.set_error("connection refused")
@@ -147,6 +158,7 @@ class TestProtocolSpan:
 
     def test_add_link(self):
         from agent_sre.replay.capture import Span
+
         span = Span(kind=SpanKind.INTERNAL, name="test")
         ps = ProtocolSpan(span=span)
         ps.add_link("trace-1", "span-1", "follows_from")
@@ -155,6 +167,7 @@ class TestProtocolSpan:
 
     def test_to_dict_a2a(self):
         from agent_sre.replay.capture import Span
+
         span = Span(kind=SpanKind.DELEGATION, name="a2a:worker/summarize")
         ps = ProtocolSpan(
             span=span,
@@ -173,6 +186,7 @@ class TestProtocolSpan:
 
     def test_to_dict_mcp(self):
         from agent_sre.replay.capture import Span
+
         span = Span(kind=SpanKind.TOOL_CALL, name="mcp:search/web_search")
         ps = ProtocolSpan(
             span=span,
@@ -189,6 +203,7 @@ class TestProtocolSpan:
 
     def test_span_id_property(self):
         from agent_sre.replay.capture import Span
+
         span = Span(span_id="test-id", kind=SpanKind.INTERNAL, name="test")
         ps = ProtocolSpan(span=span)
         assert ps.span_id == "test-id"
@@ -197,6 +212,7 @@ class TestProtocolSpan:
 # ---------------------------------------------------------------------------
 # ProtocolTracer — A2A calls
 # ---------------------------------------------------------------------------
+
 
 class TestProtocolTracerA2A:
     def test_a2a_call_creates_span(self):
@@ -217,7 +233,10 @@ class TestProtocolTracerA2A:
 
     def test_a2a_call_error_propagates(self):
         tracer = ProtocolTracer(agent_id="orchestrator")
-        with pytest.raises(RuntimeError, match="agent down"), tracer.a2a_call("worker", task="fail") as span:
+        with (
+            pytest.raises(RuntimeError, match="agent down"),
+            tracer.a2a_call("worker", task="fail") as span,
+        ):
             raise RuntimeError("agent down")
         assert span.span.status == SpanStatus.ERROR
         assert span.span.error == "agent down"
@@ -240,6 +259,7 @@ class TestProtocolTracerA2A:
 # ---------------------------------------------------------------------------
 # ProtocolTracer — MCP calls
 # ---------------------------------------------------------------------------
+
 
 class TestProtocolTracerMCP:
     def test_mcp_call_creates_span(self):
@@ -275,6 +295,7 @@ class TestProtocolTracerMCP:
 # ProtocolTracer — HTTP calls
 # ---------------------------------------------------------------------------
 
+
 class TestProtocolTracerHTTP:
     def test_http_call_creates_span(self):
         tracer = ProtocolTracer(agent_id="agent-1")
@@ -287,6 +308,7 @@ class TestProtocolTracerHTTP:
 # ---------------------------------------------------------------------------
 # ProtocolTracer — context propagation
 # ---------------------------------------------------------------------------
+
 
 class TestContextPropagation:
     def test_inject_creates_headers(self):
@@ -345,6 +367,7 @@ class TestContextPropagation:
 # ---------------------------------------------------------------------------
 # ProtocolTracer — report & timeline
 # ---------------------------------------------------------------------------
+
 
 class TestTracingReport:
     def test_report_counts(self):
@@ -455,6 +478,7 @@ class TestTracingReport:
 # Multi-agent scenario
 # ---------------------------------------------------------------------------
 
+
 class TestMultiAgentScenario:
     def test_orchestrator_two_workers(self):
         """Orchestrator calls two workers via A2A, each calls MCP tools."""
@@ -464,7 +488,9 @@ class TestMultiAgentScenario:
         with orchestrator.a2a_call("worker-1", task="search") as span1:
             headers1 = orchestrator.inject(span1)
             # Worker-1 receives and calls MCP
-            w1 = ProtocolTracer(agent_id="worker-1", parent_context=TraceContext.from_headers(headers1))
+            w1 = ProtocolTracer(
+                agent_id="worker-1", parent_context=TraceContext.from_headers(headers1)
+            )
             w1_recv = w1.receive_a2a("orchestrator", headers1, task="search")
             with w1.mcp_call("search-server", tool="web_search", params={"q": "test"}) as mcp_span:
                 mcp_span.set_response({"results": ["r1"]})
@@ -474,7 +500,9 @@ class TestMultiAgentScenario:
         # Call worker-2
         with orchestrator.a2a_call("worker-2", task="analyze") as span2:
             headers2 = orchestrator.inject(span2)
-            w2 = ProtocolTracer(agent_id="worker-2", parent_context=TraceContext.from_headers(headers2))
+            w2 = ProtocolTracer(
+                agent_id="worker-2", parent_context=TraceContext.from_headers(headers2)
+            )
             w2_recv = w2.receive_a2a("orchestrator", headers2, task="analyze")
             w2_recv.set_response({"analysis": "complete"})
             span2.set_response({"analysis": "complete"})
@@ -498,13 +526,17 @@ class TestMultiAgentScenario:
         with agent_a.a2a_call("B", task="step1") as span_a:
             headers_ab = agent_a.inject(span_a)
 
-            agent_b = ProtocolTracer(agent_id="B", parent_context=TraceContext.from_headers(headers_ab))
+            agent_b = ProtocolTracer(
+                agent_id="B", parent_context=TraceContext.from_headers(headers_ab)
+            )
             b_recv = agent_b.receive_a2a("A", headers_ab, task="step1")
 
             with agent_b.a2a_call("C", task="step2") as span_b:
                 headers_bc = agent_b.inject(span_b)
 
-                agent_c = ProtocolTracer(agent_id="C", parent_context=TraceContext.from_headers(headers_bc))
+                agent_c = ProtocolTracer(
+                    agent_id="C", parent_context=TraceContext.from_headers(headers_bc)
+                )
                 c_recv = agent_c.receive_a2a("B", headers_bc, task="step2")
                 c_recv.set_response({"done": True})
                 span_b.set_response({"done": True})
@@ -537,6 +569,7 @@ class TestMultiAgentScenario:
 # ---------------------------------------------------------------------------
 # Tracer properties
 # ---------------------------------------------------------------------------
+
 
 class TestTracerProperties:
     def test_trace_id(self):

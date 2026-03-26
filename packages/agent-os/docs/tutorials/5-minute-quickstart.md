@@ -60,7 +60,7 @@ async def analyze_data(task: str):
 # Execute with governance
 if __name__ == "__main__":
     import asyncio
-    
+
     result = asyncio.run(
         kernel.execute(analyze_data, "Summarize Q4 sales data")
     )

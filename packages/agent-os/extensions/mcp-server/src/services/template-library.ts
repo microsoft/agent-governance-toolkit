@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Template Library Service
- * 
+ *
  * Provides pre-built agent and policy templates for common use cases.
  */
 
@@ -518,11 +518,11 @@ const POLICY_TEMPLATES: PolicyTemplate[] = [
 export class TemplateLibrary {
   private agentTemplates: Map<string, AgentTemplate>;
   private policyTemplates: Map<string, PolicyTemplate>;
-  
+
   constructor() {
     this.agentTemplates = new Map();
     this.policyTemplates = new Map();
-    
+
     // Load built-in templates
     for (const template of AGENT_TEMPLATES) {
       this.agentTemplates.set(template.id, template);
@@ -531,7 +531,7 @@ export class TemplateLibrary {
       this.policyTemplates.set(template.id, template);
     }
   }
-  
+
   /**
    * List all agent templates.
    */
@@ -541,11 +541,11 @@ export class TemplateLibrary {
     tags?: string[];
   }): AgentTemplate[] {
     let templates = Array.from(this.agentTemplates.values());
-    
+
     if (options?.category) {
       templates = templates.filter(t => t.category === options.category);
     }
-    
+
     if (options?.search) {
       const search = options.search.toLowerCase();
       templates = templates.filter(t =>
@@ -554,16 +554,16 @@ export class TemplateLibrary {
         t.tags.some(tag => tag.includes(search))
       );
     }
-    
+
     if (options?.tags?.length) {
       templates = templates.filter(t =>
         options.tags!.some(tag => t.tags.includes(tag))
       );
     }
-    
+
     return templates;
   }
-  
+
   /**
    * List all policy templates.
    */
@@ -573,15 +573,15 @@ export class TemplateLibrary {
     search?: string;
   }): PolicyTemplate[] {
     let templates = Array.from(this.policyTemplates.values());
-    
+
     if (options?.category) {
       templates = templates.filter(t => t.category === options.category);
     }
-    
+
     if (options?.framework) {
       templates = templates.filter(t => t.framework === options.framework);
     }
-    
+
     if (options?.search) {
       const search = options.search.toLowerCase();
       templates = templates.filter(t =>
@@ -590,24 +590,24 @@ export class TemplateLibrary {
         t.tags.some(tag => tag.includes(search))
       );
     }
-    
+
     return templates;
   }
-  
+
   /**
    * Get agent template by ID.
    */
   getAgentTemplate(id: string): AgentTemplate | undefined {
     return this.agentTemplates.get(id);
   }
-  
+
   /**
    * Get policy template by ID.
    */
   getPolicyTemplate(id: string): PolicyTemplate | undefined {
     return this.policyTemplates.get(id);
   }
-  
+
   /**
    * Get all available categories.
    */
@@ -618,13 +618,13 @@ export class TemplateLibrary {
     const policyCategories = new Set(
       Array.from(this.policyTemplates.values()).map(t => t.category)
     );
-    
+
     return {
       agents: Array.from(agentCategories),
       policies: Array.from(policyCategories),
     };
   }
-  
+
   /**
    * Get all compliance frameworks.
    */
@@ -636,7 +636,7 @@ export class TemplateLibrary {
     );
     return Array.from(frameworks);
   }
-  
+
   /**
    * Suggest templates based on description.
    */
@@ -645,7 +645,7 @@ export class TemplateLibrary {
     policies: PolicyTemplate[];
   } {
     const lowerDesc = description.toLowerCase();
-    
+
     // Score templates based on keyword matches
     const scoreAgent = (t: AgentTemplate): number => {
       let score = 0;
@@ -661,7 +661,7 @@ export class TemplateLibrary {
       }
       return score;
     };
-    
+
     const scorePolicy = (t: PolicyTemplate): number => {
       let score = 0;
       if (lowerDesc.includes(t.category)) score += 3;
@@ -671,21 +671,21 @@ export class TemplateLibrary {
       }
       return score;
     };
-    
+
     const agents = Array.from(this.agentTemplates.values())
       .map(t => ({ template: t, score: scoreAgent(t) }))
       .filter(x => x.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 3)
       .map(x => x.template);
-    
+
     const policies = Array.from(this.policyTemplates.values())
       .map(t => ({ template: t, score: scorePolicy(t) }))
       .filter(x => x.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 3)
       .map(x => x.template);
-    
+
     return { agents, policies };
   }
 }

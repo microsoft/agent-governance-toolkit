@@ -3,13 +3,13 @@
 import os
 import tempfile
 
-import pytest
 import yaml
 
 from haystack_agentmesh.governance import GovernancePolicyChecker
 
 
 # ── Helpers ───────────────────────────────────────────────────────
+
 
 def _write_policy(policy: dict) -> str:
     fd, path = tempfile.mkstemp(suffix=".yaml")
@@ -32,8 +32,8 @@ BASIC_POLICY = {
 
 # ── Tests ─────────────────────────────────────────────────────────
 
-class TestGovernancePolicyChecker:
 
+class TestGovernancePolicyChecker:
     def test_allow_valid_tool(self):
         checker = GovernancePolicyChecker(policy_dict=BASIC_POLICY)
         result = checker.run(action="search", params={"query": "hello"})

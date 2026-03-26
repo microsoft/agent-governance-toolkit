@@ -31,9 +31,7 @@ class Policy:
                 return False
         # If allowlist is defined, tool must match
         if self.allowed_tools:
-            return any(
-                fnmatch.fnmatch(tool_name, pat) for pat in self.allowed_tools
-            )
+            return any(fnmatch.fnmatch(tool_name, pat) for pat in self.allowed_tools)
         # No allowlist defined — fall back to default action
         return self.default_action == "allow"
 
@@ -61,8 +59,10 @@ def load_policy(source: str | Path | dict) -> Policy:
     if isinstance(source, dict):
         raw = source
     elif isinstance(source, Path) or (
-        isinstance(source, str) and not source.strip().startswith("{")
-        and "\n" not in source and Path(source).suffix in (".yaml", ".yml")
+        isinstance(source, str)
+        and not source.strip().startswith("{")
+        and "\n" not in source
+        and Path(source).suffix in (".yaml", ".yml")
     ):
         path = Path(source)
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))

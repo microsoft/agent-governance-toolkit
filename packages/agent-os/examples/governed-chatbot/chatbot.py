@@ -22,32 +22,34 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 # Import from agent_os — works with just `pip install agent-os-kernel`
 from agent_os.stateless import (
-    StatelessKernel,
     ExecutionContext,
-    ExecutionResult,
-    MemoryBackend,
+    StatelessKernel,
 )
-
 
 # ─── Policy Templates ────────────────────────────────────────────
 
 CHATBOT_POLICIES = {
     "no_pii": {
         "blocked_patterns": [
-            "ssn", "social_security", "credit_card",
-            "password", "secret", "api_key",
+            "ssn",
+            "social_security",
+            "credit_card",
+            "password",
+            "secret",
+            "api_key",
         ]
     },
     "safe_content": {
         "blocked_patterns": [
-            "hack", "exploit", "jailbreak",
+            "hack",
+            "exploit",
+            "jailbreak",
             "ignore previous instructions",
         ]
     },
@@ -60,6 +62,7 @@ CHATBOT_POLICIES = {
 
 
 # ─── Rate Limiter ─────────────────────────────────────────────────
+
 
 class RateLimiter:
     """Token-bucket rate limiter for chat requests."""
@@ -88,6 +91,7 @@ class RateLimiter:
 
 # ─── Conversation Memory ─────────────────────────────────────────
 
+
 @dataclass
 class ConversationTurn:
     role: str  # "user" or "assistant"
@@ -105,7 +109,7 @@ class ConversationMemory:
     def add(self, role: str, content: str) -> None:
         self.turns.append(ConversationTurn(role=role, content=content))
         if len(self.turns) > self.max_turns:
-            self.turns = self.turns[-self.max_turns:]
+            self.turns = self.turns[-self.max_turns :]
 
     def to_context(self) -> List[Dict[str, str]]:
         """Export as LLM-compatible message list."""
@@ -116,6 +120,7 @@ class ConversationMemory:
 
 
 # ─── Audit Logger ─────────────────────────────────────────────────
+
 
 @dataclass
 class AuditEntry:
@@ -133,15 +138,24 @@ class AuditLog:
     def __init__(self):
         self.entries: List[AuditEntry] = []
 
-    def log(self, agent_id: str, action: str, user_input: str, policy_result: str, response_length: int = 0) -> None:
-        self.entries.append(AuditEntry(
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            agent_id=agent_id,
-            action=action,
-            input_hash=hashlib.sha256(user_input.encode()).hexdigest()[:16],
-            policy_result=policy_result,
-            response_length=response_length,
-        ))
+    def log(
+        self,
+        agent_id: str,
+        action: str,
+        user_input: str,
+        policy_result: str,
+        response_length: int = 0,
+    ) -> None:
+        self.entries.append(
+            AuditEntry(
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                agent_id=agent_id,
+                action=action,
+                input_hash=hashlib.sha256(user_input.encode()).hexdigest()[:16],
+                policy_result=policy_result,
+                response_length=response_length,
+            )
+        )
 
     def export(self) -> List[Dict]:
         return [
@@ -158,6 +172,7 @@ class AuditLog:
 
 
 # ─── Governed Chatbot ─────────────────────────────────────────────
+
 
 class GovernedChatbot:
     """
@@ -265,18 +280,23 @@ class GovernedChatbot:
         if any(w in lower for w in ["hello", "hi", "hey"]):
             return "Hello! I'm a governed chatbot. How can I help you today?"
         elif "password" in lower and "reset" in lower:
-            return ("To reset your password, go to Settings → Security → Reset Password. "
-                    "You'll receive a confirmation email.")
+            return (
+                "To reset your password, go to Settings → Security → Reset Password. "
+                "You'll receive a confirmation email."
+            )
         elif "help" in lower:
-            return ("I can help with account management, billing, and general questions. "
-                    "What would you like to know?")
+            return (
+                "I can help with account management, billing, and general questions. "
+                "What would you like to know?"
+            )
         elif "status" in lower:
             return "All systems are operational. No incidents reported."
         elif "bye" in lower or "thanks" in lower:
             return "You're welcome! Have a great day."
         else:
-            return (f"I received your message about '{user_input[:50]}'. "
-                    "Let me look into that for you.")
+            return (
+                f"I received your message about '{user_input[:50]}'. Let me look into that for you."
+            )
 
     def get_stats(self) -> Dict[str, Any]:
         """Get chatbot statistics."""
@@ -290,6 +310,7 @@ class GovernedChatbot:
 
 
 # ─── Interactive CLI ──────────────────────────────────────────────
+
 
 async def main():
     """Run an interactive governed chatbot session."""

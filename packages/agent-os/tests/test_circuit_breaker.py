@@ -2,8 +2,9 @@
 # Licensed under the MIT License.
 """Tests for CircuitBreaker state transitions and call protection."""
 
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 from agent_os.circuit_breaker import (
     CircuitBreaker,

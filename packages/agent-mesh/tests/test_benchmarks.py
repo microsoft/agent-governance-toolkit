@@ -10,14 +10,11 @@ Run benchmarks only:
     pytest tests/test_benchmarks.py -v -m benchmark
 """
 
-import asyncio
-import base64
 import statistics
 import time
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ed25519
-from cryptography.hazmat.primitives import serialization
 
 from agentmesh.identity.agent_id import AgentDID, AgentIdentity, IdentityRegistry
 from agentmesh.trust.handshake import TrustHandshake
@@ -32,6 +29,7 @@ PAYLOAD_1KB = b"x" * 1024
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _bench(fn, n: int = ITERATIONS) -> dict:
     """Run *fn* n times and return timing stats in milliseconds."""
@@ -61,6 +59,7 @@ def _make_identity(name: str = "bench") -> AgentIdentity:
 # ---------------------------------------------------------------------------
 # Benchmarks
 # ---------------------------------------------------------------------------
+
 
 class TestCryptoBenchmarks:
     """Crypto operation benchmarks."""
@@ -117,7 +116,9 @@ class TestCryptoBenchmarks:
         times: list[float] = []
         for _ in range(ITERATIONS):
             hs = TrustHandshake(
-                agent_did=str(agent_a.did), identity=agent_a, registry=registry,
+                agent_did=str(agent_a.did),
+                identity=agent_a,
+                registry=registry,
             )
             start = time.perf_counter()
             result = await hs.initiate(
@@ -131,10 +132,7 @@ class TestCryptoBenchmarks:
 
         mean_ms = statistics.mean(times)
         median_ms = statistics.median(times)
-        print(
-            f"\nHandshake: mean={mean_ms:.1f} ms, median={median_ms:.1f} ms "
-            f"({ITERATIONS} iters)"
-        )
+        print(f"\nHandshake: mean={mean_ms:.1f} ms, median={median_ms:.1f} ms ({ITERATIONS} iters)")
         # The crypto portion targets <10 ms; allow a realistic
         # upper bound of 200 ms for slow CI.
         assert mean_ms < 200
@@ -142,8 +140,5 @@ class TestCryptoBenchmarks:
     def test_identity_creation(self):
         """Benchmark full AgentIdentity.create (keygen + DID + model)."""
         stats = _bench(lambda: _make_identity("bench-create"))
-        print(
-            f"\nIdentity.create: {stats['mean_ms']:.3f} ms mean "
-            f"({stats['iterations']} iters)"
-        )
+        print(f"\nIdentity.create: {stats['mean_ms']:.3f} ms mean ({stats['iterations']} iters)")
         assert stats["mean_ms"] < 100

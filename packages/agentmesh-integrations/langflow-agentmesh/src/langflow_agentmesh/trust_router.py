@@ -162,7 +162,11 @@ class TrustRouter:
         score = self.get_score(agent_id)
         dims = dimensions or ["reliability"]
         for dim in dims:
-            if hasattr(score, dim) and dim not in ("overall", "last_updated", "_WEIGHTS"):
+            if hasattr(score, dim) and dim not in (
+                "overall",
+                "last_updated",
+                "_WEIGHTS",
+            ):
                 current = getattr(score, dim)
                 new_val = min(current + self.reward_rate, 1.0)
                 setattr(score, dim, round(new_val, 4))
@@ -178,7 +182,11 @@ class TrustRouter:
         score = self.get_score(agent_id)
         dims = dimensions or ["reliability"]
         for dim in dims:
-            if hasattr(score, dim) and dim not in ("overall", "last_updated", "_WEIGHTS"):
+            if hasattr(score, dim) and dim not in (
+                "overall",
+                "last_updated",
+                "_WEIGHTS",
+            ):
                 current = getattr(score, dim)
                 new_val = max(current - self.penalty_rate, 0.0)
                 setattr(score, dim, round(new_val, 4))

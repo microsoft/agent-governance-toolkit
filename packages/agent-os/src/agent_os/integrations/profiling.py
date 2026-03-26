@@ -17,6 +17,7 @@ from typing import Any, Callable, Optional
 @dataclass
 class MethodStats:
     """Statistics for a single profiled method."""
+
     name: str
     call_count: int = 0
     total_time_ms: float = 0.0
@@ -32,6 +33,7 @@ class MethodStats:
 @dataclass
 class ProfilingReport:
     """Aggregated profiling results."""
+
     methods: dict[str, MethodStats] = field(default_factory=dict)
 
     @property
@@ -84,6 +86,7 @@ def profile_governance(func: Optional[Callable] = None, *, track_memory: bool = 
         @profile_governance(track_memory=True)
         def my_method(self, ...): ...
     """
+
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:

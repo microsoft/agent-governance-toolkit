@@ -372,7 +372,7 @@ Tabs: Trust Network | Trust Scores | Credential Lifecycle | Protocol Traffic | C
 
 **What you get:**
 - 🔒 **Policy Enforcement** - Block dangerous operations before they execute
-- 📊 **Trust Scoring** - Per-agent trust scoring (800-1000 scale)  
+- 📊 **Trust Scoring** - Per-agent trust scoring (800-1000 scale)
 - 📝 **Audit Logs** - Record of every action
 - ✅ **Verification Footers** - Visual confirmation in outputs
 
@@ -462,11 +462,11 @@ rules:
   - name: "no-pii-export"
     condition: "action.type == 'export' and data.contains_pii"
     action: "deny"
-    
+
   - name: "rate-limit-api"
     condition: "action.type == 'api_call'"
     limit: "100/hour"
-    
+
   - name: "require-approval-for-delete"
     condition: "action.type == 'delete'"
     action: "require_approval"

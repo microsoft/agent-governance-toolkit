@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -99,7 +99,7 @@ class CapabilityGate:
         else:
             if agent.has_any_capability(required_capabilities):
                 return True, "At least one capability matched"
-            return False, f"No matching capabilities"
+            return False, "No matching capabilities"
 
 
 class TrustTracker:
@@ -130,29 +130,37 @@ class TrustTracker:
         """Record a successful task completion. Returns new trust score."""
         old_score = agent.trust_score
         agent.trust_score = min(agent.trust_score + self.success_reward, self.max_score)
-        self._history.append({
-            "did": agent.did,
-            "event": "success",
-            "old_score": old_score,
-            "new_score": agent.trust_score,
-            "task": task_description,
-            "timestamp": time.time(),
-        })
+        self._history.append(
+            {
+                "did": agent.did,
+                "event": "success",
+                "old_score": old_score,
+                "new_score": agent.trust_score,
+                "task": task_description,
+                "timestamp": time.time(),
+            }
+        )
         return agent.trust_score
 
-    def record_failure(self, agent: AgentProfile, task_description: str = "", reason: str = "") -> int:
+    def record_failure(
+        self, agent: AgentProfile, task_description: str = "", reason: str = ""
+    ) -> int:
         """Record a task failure. Returns new trust score."""
         old_score = agent.trust_score
-        agent.trust_score = max(agent.trust_score - self.failure_penalty, self.min_score)
-        self._history.append({
-            "did": agent.did,
-            "event": "failure",
-            "old_score": old_score,
-            "new_score": agent.trust_score,
-            "task": task_description,
-            "reason": reason,
-            "timestamp": time.time(),
-        })
+        agent.trust_score = max(
+            agent.trust_score - self.failure_penalty, self.min_score
+        )
+        self._history.append(
+            {
+                "did": agent.did,
+                "event": "failure",
+                "old_score": old_score,
+                "new_score": agent.trust_score,
+                "task": task_description,
+                "reason": reason,
+                "timestamp": time.time(),
+            }
+        )
         return agent.trust_score
 
     def get_history(self, did: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -210,7 +218,8 @@ class TrustedCrew:
     @property
     def trusted_agents(self) -> List[AgentProfile]:
         return [
-            a for a in self._agents
+            a
+            for a in self._agents
             if a.is_active and a.trust_score >= self.min_trust_score
         ]
 
@@ -268,11 +277,15 @@ class TrustedCrew:
         cap_ok = True
         cap_reason = ""
         if required_capabilities:
-            cap_ok, cap_reason = self.capability_gate.check(agent, required_capabilities)
+            cap_ok, cap_reason = self.capability_gate.check(
+                agent, required_capabilities
+            )
 
         reason = ""
         if not trust_ok:
-            reason = f"Trust score {agent.trust_score} below minimum {self.min_trust_score}"
+            reason = (
+                f"Trust score {agent.trust_score} below minimum {self.min_trust_score}"
+            )
         elif not cap_ok:
             reason = cap_reason
 

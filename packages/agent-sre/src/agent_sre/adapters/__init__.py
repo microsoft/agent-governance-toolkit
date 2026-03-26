@@ -215,11 +215,13 @@ class CrewAIAdapter(BaseAdapter):
     def on_agent_task(self, agent_role: str, task_description: str = "") -> None:
         if self._current:
             self._current.steps += 1
-            self._agent_tasks.append({
-                "agent_role": agent_role,
-                "task": task_description,
-                "started_at": time.time(),
-            })
+            self._agent_tasks.append(
+                {
+                    "agent_role": agent_role,
+                    "task": task_description,
+                    "started_at": time.time(),
+                }
+            )
 
     def on_agent_complete(
         self,
@@ -393,14 +395,17 @@ class SemanticKernelAdapter(BaseAdapter):
             self._current.tool_calls += 1
             if error:
                 self._current.tool_errors += 1
-            self._plugin_calls.append({
-                "plugin": plugin_name,
-                "function": function_name,
-                "error": error,
-            })
+            self._plugin_calls.append(
+                {
+                    "plugin": plugin_name,
+                    "function": function_name,
+                    "error": error,
+                }
+            )
 
-    def on_function_result(self, plugin_name: str, function_name: str = "",
-                           success: bool = True, cost_usd: float = 0.0) -> None:
+    def on_function_result(
+        self, plugin_name: str, function_name: str = "", success: bool = True, cost_usd: float = 0.0
+    ) -> None:
         if self._current:
             self._current.cost_usd += cost_usd
             if not success:
@@ -410,8 +415,9 @@ class SemanticKernelAdapter(BaseAdapter):
         if self._current:
             self._current.steps += 1
 
-    def on_llm_call(self, input_tokens: int = 0, output_tokens: int = 0,
-                    cost_usd: float = 0.0) -> None:
+    def on_llm_call(
+        self, input_tokens: int = 0, output_tokens: int = 0, cost_usd: float = 0.0
+    ) -> None:
         if self._current:
             self._current.input_tokens += input_tokens
             self._current.output_tokens += output_tokens
@@ -465,8 +471,9 @@ class DifyAdapter(BaseAdapter):
             if error:
                 self._current.tool_errors += 1
 
-    def on_llm_call(self, input_tokens: int = 0, output_tokens: int = 0,
-                    cost_usd: float = 0.0) -> None:
+    def on_llm_call(
+        self, input_tokens: int = 0, output_tokens: int = 0, cost_usd: float = 0.0
+    ) -> None:
         if self._current:
             self._current.input_tokens += input_tokens
             self._current.output_tokens += output_tokens

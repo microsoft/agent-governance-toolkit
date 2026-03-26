@@ -6,7 +6,6 @@ In-Memory Storage Provider.
 Simple in-memory implementation for development and testing.
 """
 
-from typing import Optional
 from collections import defaultdict
 
 from .provider import AbstractStorageProvider, StorageConfig
@@ -44,7 +43,7 @@ class MemoryStorageProvider(AbstractStorageProvider):
 
     # Key-Value Operations
 
-    async def get(self, key: str) -> Optional[str]:
+    async def get(self, key: str) -> str | None:
         """Get value by key."""
         return self._data.get(key)
 
@@ -52,12 +51,13 @@ class MemoryStorageProvider(AbstractStorageProvider):
         self,
         key: str,
         value: str,
-        ttl_seconds: Optional[int] = None,
+        ttl_seconds: int | None = None,
     ) -> bool:
         """Set value with optional TTL."""
         self._data[key] = value
         if ttl_seconds is not None:
             import time
+
             self._ttls[key] = time.time() + ttl_seconds
         return True
 
@@ -74,7 +74,7 @@ class MemoryStorageProvider(AbstractStorageProvider):
 
     # Hash Operations
 
-    async def hget(self, key: str, field: str) -> Optional[str]:
+    async def hget(self, key: str, field: str) -> str | None:
         """Get hash field value."""
         return self._hashes.get(key, {}).get(field)
 
@@ -115,7 +115,7 @@ class MemoryStorageProvider(AbstractStorageProvider):
         lst = self._lists.get(key, [])
         if stop == -1:
             return lst[start:]
-        return lst[start:stop + 1]
+        return lst[start : stop + 1]
 
     async def llen(self, key: str) -> int:
         """Get list length."""
@@ -128,7 +128,7 @@ class MemoryStorageProvider(AbstractStorageProvider):
         self._sorted_sets[key][member] = score
         return True
 
-    async def zscore(self, key: str, member: str) -> Optional[float]:
+    async def zscore(self, key: str, member: str) -> float | None:
         """Get score of member in sorted set."""
         return self._sorted_sets.get(key, {}).get(member)
 
@@ -146,7 +146,7 @@ class MemoryStorageProvider(AbstractStorageProvider):
         if stop == -1:
             items = sorted_items[start:]
         else:
-            items = sorted_items[start:stop + 1]
+            items = sorted_items[start : stop + 1]
 
         if with_scores:
             return items
@@ -196,7 +196,7 @@ class MemoryStorageProvider(AbstractStorageProvider):
 
     # Batch Operations
 
-    async def mget(self, keys: list[str]) -> list[Optional[str]]:
+    async def mget(self, keys: list[str]) -> list[str | None]:
         """Get multiple values."""
         return [self._data.get(key) for key in keys]
 
@@ -210,12 +210,13 @@ class MemoryStorageProvider(AbstractStorageProvider):
     async def keys(self, pattern: str) -> list[str]:
         """Get keys matching pattern."""
         import fnmatch
+
         return [key for key in self._data.keys() if fnmatch.fnmatch(key, pattern)]
 
     async def scan(
         self,
         cursor: int = 0,
-        match: Optional[str] = None,
+        match: str | None = None,
         count: int = 100,
     ) -> tuple[int, list[str]]:
         """Scan keys with cursor."""
@@ -223,6 +224,7 @@ class MemoryStorageProvider(AbstractStorageProvider):
 
         if match:
             import fnmatch
+
             all_keys = [key for key in all_keys if fnmatch.fnmatch(key, match)]
 
         start = cursor

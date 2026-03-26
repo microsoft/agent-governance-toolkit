@@ -19,6 +19,7 @@ class TestStatelessKernel:
             ExecutionContext,
             StatelessKernel,
         )
+
         assert StatelessKernel is not None
         assert ExecutionContext is not None
 
@@ -34,11 +35,7 @@ class TestStatelessKernel:
         """Test ExecutionContext creation."""
         from agent_os.stateless import ExecutionContext
 
-        ctx = ExecutionContext(
-            agent_id="test-agent",
-            policies=["read_only"],
-            history=[]
-        )
+        ctx = ExecutionContext(agent_id="test-agent", policies=["read_only"], history=[])
 
         assert ctx.agent_id == "test-agent"
         assert "read_only" in ctx.policies
@@ -49,9 +46,7 @@ class TestStatelessKernel:
         from agent_os.stateless import ExecutionContext
 
         ctx = ExecutionContext(
-            agent_id="test-agent",
-            policies=["strict"],
-            metadata={"key": "value"}
+            agent_id="test-agent", policies=["strict"], metadata={"key": "value"}
         )
 
         d = ctx.to_dict()
@@ -68,9 +63,7 @@ class TestStatelessKernel:
         context = ExecutionContext(agent_id="test", policies=[])
 
         result = await kernel.execute(
-            action="database_query",
-            params={"query": "SELECT 1"},
-            context=context
+            action="database_query", params={"query": "SELECT 1"}, context=context
         )
 
         assert result.success is True
@@ -83,15 +76,10 @@ class TestStatelessKernel:
         from agent_os.stateless import ExecutionContext, StatelessKernel
 
         kernel = StatelessKernel()
-        context = ExecutionContext(
-            agent_id="test",
-            policies=["read_only"]
-        )
+        context = ExecutionContext(agent_id="test", policies=["read_only"])
 
         result = await kernel.execute(
-            action="file_write",
-            params={"path": "/data/file.txt"},
-            context=context
+            action="file_write", params={"path": "/data/file.txt"}, context=context
         )
 
         assert result.success is False
@@ -104,15 +92,10 @@ class TestStatelessKernel:
         from agent_os.stateless import ExecutionContext, StatelessKernel
 
         kernel = StatelessKernel()
-        context = ExecutionContext(
-            agent_id="test",
-            policies=["no_pii"]
-        )
+        context = ExecutionContext(agent_id="test", policies=["no_pii"])
 
         result = await kernel.execute(
-            action="database_query",
-            params={"query": "SELECT ssn FROM users"},
-            context=context
+            action="database_query", params={"query": "SELECT ssn FROM users"}, context=context
         )
 
         assert result.success is False
@@ -125,16 +108,10 @@ class TestStatelessKernel:
         from agent_os.stateless import ExecutionContext, StatelessKernel
 
         kernel = StatelessKernel()
-        context = ExecutionContext(
-            agent_id="test",
-            policies=[],
-            history=[]
-        )
+        context = ExecutionContext(agent_id="test", policies=[], history=[])
 
         result = await kernel.execute(
-            action="api_call",
-            params={"url": "https://example.com"},
-            context=context
+            action="api_call", params={"url": "https://example.com"}, context=context
         )
 
         assert result.success is True
@@ -151,7 +128,7 @@ class TestStatelessKernel:
             action="database_query",
             params={"query": "SELECT 1"},
             agent_id="test-agent",
-            policies=[]
+            policies=[],
         )
 
         assert result.success is True
@@ -240,13 +217,9 @@ class TestRedisBackend:
 
         await backend.set(test_key, test_value, ttl=60)
 
-        mock_client.set.assert_called_with(
-            expected_redis_key,
-            json.dumps(test_value),
-            ex=60
-        )
+        mock_client.set.assert_called_with(expected_redis_key, json.dumps(test_value), ex=60)
 
-        mock_client.get.return_value = json.dumps(test_value).encode('utf-8')
+        mock_client.get.return_value = json.dumps(test_value).encode("utf-8")
 
         result = await backend.get(test_key)
 
@@ -331,7 +304,7 @@ class TestRedisConfig:
     @pytest.mark.asyncio
     async def test_get_client_creates_pool_with_config(self):
         """Test that _get_client creates a ConnectionPool when config is provided."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         from agent_os.stateless import RedisBackend, RedisConfig
 
@@ -346,8 +319,10 @@ class TestRedisConfig:
         mock_pool = MagicMock()
         mock_redis_cls = MagicMock()
 
-        with patch("redis.asyncio.ConnectionPool") as MockPool, \
-             patch("redis.asyncio.Redis") as MockRedis:
+        with (
+            patch("redis.asyncio.ConnectionPool") as MockPool,
+            patch("redis.asyncio.Redis") as MockRedis,
+        ):
             MockPool.from_url.return_value = mock_pool
             MockRedis.return_value = mock_redis_cls
 
@@ -366,7 +341,7 @@ class TestRedisConfig:
     @pytest.mark.asyncio
     async def test_get_client_without_config_uses_from_url(self):
         """Test that _get_client uses from_url when no config is given."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         from agent_os.stateless import RedisBackend
 
@@ -396,11 +371,7 @@ class TestPolicyChecking:
         """Test custom policies can be provided."""
         from agent_os.stateless import StatelessKernel
 
-        custom = {
-            "custom_policy": {
-                "blocked_actions": ["dangerous_action"]
-            }
-        }
+        custom = {"custom_policy": {"blocked_actions": ["dangerous_action"]}}
 
         kernel = StatelessKernel(policies=custom)
 
@@ -413,16 +384,11 @@ class TestPolicyChecking:
         from agent_os.stateless import ExecutionContext, StatelessKernel
 
         kernel = StatelessKernel()
-        context = ExecutionContext(
-            agent_id="test",
-            policies=["read_only", "no_pii"]
-        )
+        context = ExecutionContext(agent_id="test", policies=["read_only", "no_pii"])
 
         # This should be blocked by read_only
         result = await kernel.execute(
-            action="send_email",
-            params={"to": "user@example.com"},
-            context=context
+            action="send_email", params={"to": "user@example.com"}, context=context
         )
 
         assert result.success is False
@@ -435,6 +401,7 @@ class TestMemoryBackendTTL:
     async def test_ttl_entry_expires(self):
         """Test that an entry expires after TTL elapses."""
         from unittest.mock import patch
+
         from agent_os.stateless import MemoryBackend
 
         backend = MemoryBackend()
@@ -461,6 +428,7 @@ class TestMemoryBackendTTL:
     async def test_expired_entry_is_deleted(self):
         """Test that expired entry is removed from store on get."""
         from unittest.mock import patch
+
         from agent_os.stateless import MemoryBackend
 
         backend = MemoryBackend()
@@ -479,8 +447,8 @@ class TestSerializationErrorHandling:
     @pytest.mark.asyncio
     async def test_set_non_serializable_raises(self):
         """Test that non-JSON-serializable values raise SerializationError."""
-        from agent_os.stateless import RedisBackend
         from agent_os.exceptions import SerializationError
+        from agent_os.stateless import RedisBackend
 
         backend = RedisBackend()
         backend._client = AsyncMock()
@@ -495,8 +463,8 @@ class TestSerializationErrorHandling:
     @pytest.mark.asyncio
     async def test_get_corrupt_data_raises(self):
         """Test that corrupt stored data raises SerializationError."""
-        from agent_os.stateless import RedisBackend
         from agent_os.exceptions import SerializationError
+        from agent_os.stateless import RedisBackend
 
         backend = RedisBackend()
         mock_client = AsyncMock()

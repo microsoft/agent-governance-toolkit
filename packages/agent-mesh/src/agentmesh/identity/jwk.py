@@ -12,8 +12,8 @@ from __future__ import annotations
 import base64
 from typing import TYPE_CHECKING
 
-from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
 
 from agentmesh.exceptions import IdentityError
 
@@ -83,7 +83,7 @@ def from_jwk(jwk: dict) -> AgentIdentity:
     Raises:
         IdentityError: If the JWK is invalid or has wrong key type/curve.
     """
-    from agentmesh.identity.agent_id import AgentIdentity, AgentDID
+    from agentmesh.identity.agent_id import AgentDID, AgentIdentity
 
     if not isinstance(jwk, dict):
         raise IdentityError("JWK must be a dict")

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 /**
  * Status Bar Manager for Agent OS Cursor Extension
- * 
+ *
  * Shows current safety status in the Cursor status bar.
  * "Cursor + Agent OS" branding for the safest AI IDE.
  */

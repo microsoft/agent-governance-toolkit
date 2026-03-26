@@ -207,32 +207,34 @@ def format_teams(alert: Alert) -> dict[str, Any]:
 
     card = {
         "type": "message",
-        "attachments": [{
-            "contentType": "application/vnd.microsoft.card.adaptive",
-            "content": {
-                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                "type": "AdaptiveCard",
-                "version": "1.4",
-                "body": [
-                    {
-                        "type": "TextBlock",
-                        "text": alert.title,
-                        "weight": "bolder",
-                        "size": "large",
-                        "color": severity_color.get(alert.severity, "default"),
-                    },
-                    {
-                        "type": "TextBlock",
-                        "text": alert.message,
-                        "wrap": True,
-                    },
-                    {
-                        "type": "FactSet",
-                        "facts": facts,
-                    },
-                ],
-            },
-        }],
+        "attachments": [
+            {
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": {
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.4",
+                    "body": [
+                        {
+                            "type": "TextBlock",
+                            "text": alert.title,
+                            "weight": "bolder",
+                            "size": "large",
+                            "color": severity_color.get(alert.severity, "default"),
+                        },
+                        {
+                            "type": "TextBlock",
+                            "text": alert.message,
+                            "wrap": True,
+                        },
+                        {
+                            "type": "FactSet",
+                            "facts": facts,
+                        },
+                    ],
+                },
+            }
+        ],
     }
     return card
 
@@ -304,16 +306,26 @@ class AlertManager:
                 self._dedup_cache[alert.dedup_key] = now
 
         results: list[DeliveryResult] = []
-        severity_order = [AlertSeverity.INFO, AlertSeverity.WARNING,
-                          AlertSeverity.CRITICAL, AlertSeverity.RESOLVED]
+        severity_order = [
+            AlertSeverity.INFO,
+            AlertSeverity.WARNING,
+            AlertSeverity.CRITICAL,
+            AlertSeverity.RESOLVED,
+        ]
 
         for _name, config in self._channels.items():
             if not config.enabled:
                 continue
 
             # Check minimum severity
-            alert_idx = severity_order.index(alert.severity) if alert.severity in severity_order else 0
-            min_idx = severity_order.index(config.min_severity) if config.min_severity in severity_order else 0
+            alert_idx = (
+                severity_order.index(alert.severity) if alert.severity in severity_order else 0
+            )
+            min_idx = (
+                severity_order.index(config.min_severity)
+                if config.min_severity in severity_order
+                else 0
+            )
             if alert_idx < min_idx:
                 continue
 
@@ -351,8 +363,9 @@ class AlertManager:
                 error=str(e),
             )
 
-    def _http_post(self, channel_name: str, url: str, payload: dict,
-                   headers: dict[str, str] | None = None) -> DeliveryResult:
+    def _http_post(
+        self, channel_name: str, url: str, payload: dict, headers: dict[str, str] | None = None
+    ) -> DeliveryResult:
         """Send HTTP POST. Isolated for testability."""
         if not url:
             return DeliveryResult(
@@ -416,14 +429,16 @@ class PersistentAlertManager(AlertManager):
     for audit trail and post-incident analysis.
     """
 
-    def __init__(self, db_path: str = "agent_sre_alerts.db",
-                 dedup_window_seconds: float = 300.0) -> None:
+    def __init__(
+        self, db_path: str = "agent_sre_alerts.db", dedup_window_seconds: float = 300.0
+    ) -> None:
         super().__init__(dedup_window_seconds=dedup_window_seconds)
         self._db_path = db_path
         self._init_db()
 
     def _init_db(self) -> None:
         import sqlite3
+
         conn = sqlite3.connect(self._db_path)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS alerts (
@@ -462,30 +477,40 @@ class PersistentAlertManager(AlertManager):
     def _persist_alert(self, alert: Alert, results: list[DeliveryResult]) -> None:
         import json as _json
         import sqlite3
+
         conn = sqlite3.connect(self._db_path)
         cursor = conn.execute(
             "INSERT INTO alerts (title, message, severity, source, agent_id, "
             "slo_name, dedup_key, metadata, timestamp) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (alert.title, alert.message, alert.severity.value, alert.source,
-             alert.agent_id, alert.slo_name, alert.dedup_key,
-             _json.dumps(alert.metadata), alert.timestamp),
+            (
+                alert.title,
+                alert.message,
+                alert.severity.value,
+                alert.source,
+                alert.agent_id,
+                alert.slo_name,
+                alert.dedup_key,
+                _json.dumps(alert.metadata),
+                alert.timestamp,
+            ),
         )
         alert_id = cursor.lastrowid
         for r in results:
             conn.execute(
                 "INSERT INTO delivery_results (alert_id, channel_name, success, "
                 "status_code, error, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                (alert_id, r.channel_name, int(r.success), r.status_code,
-                 r.error, r.timestamp),
+                (alert_id, r.channel_name, int(r.success), r.status_code, r.error, r.timestamp),
             )
         conn.commit()
         conn.close()
 
-    def query_alerts(self, agent_id: str = "", severity: str = "",
-                     limit: int = 100) -> list[dict[str, Any]]:
+    def query_alerts(
+        self, agent_id: str = "", severity: str = "", limit: int = 100
+    ) -> list[dict[str, Any]]:
         """Query persisted alerts."""
         import sqlite3
+
         conn = sqlite3.connect(self._db_path)
         conn.row_factory = sqlite3.Row
         query = "SELECT * FROM alerts WHERE 1=1"
@@ -505,6 +530,7 @@ class PersistentAlertManager(AlertManager):
     def alert_count(self) -> int:
         """Get total persisted alert count."""
         import sqlite3
+
         conn = sqlite3.connect(self._db_path)
         count = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
         conn.close()

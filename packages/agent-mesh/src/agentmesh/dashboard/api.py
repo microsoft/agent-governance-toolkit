@@ -10,7 +10,7 @@ and the event bus — no external web framework dependency required.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ..events import AnalyticsPlane, Event, EventBus
@@ -60,7 +60,7 @@ class DashboardAPI:
         )
         self._traffic.append(entry)
         if len(self._traffic) > self._max_traffic:
-            self._traffic = self._traffic[-self._max_traffic:]
+            self._traffic = self._traffic[-self._max_traffic :]
 
         # Track agent info
         agent_did = event.source
@@ -110,7 +110,7 @@ class DashboardAPI:
             )
             self._audit_entries.append(audit)
             if len(self._audit_entries) > self._max_audit:
-                self._audit_entries = self._audit_entries[-self._max_audit:]
+                self._audit_entries = self._audit_entries[-self._max_audit :]
 
     def get_live_traffic(self, limit: int = 100) -> list[TrafficEntry]:
         """Returns the most recent agent communications.
@@ -145,16 +145,14 @@ class DashboardAPI:
             )
         return result
 
-    def get_trust_trends(
-        self, agent_id: str, days: int = 7
-    ) -> list[TrustTrend]:
+    def get_trust_trends(self, agent_id: str, days: int = 7) -> list[TrustTrend]:
         """Returns trust score history for an agent over a time period.
 
         Args:
             agent_id: The agent DID to query.
             days: Number of days of history to return.
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         trends = self._trust_history.get(agent_id, [])
         return [t for t in trends if t.timestamp >= cutoff]
 
@@ -197,9 +195,7 @@ class DashboardAPI:
             framework: Compliance framework identifier (e.g., ``soc2``, ``hipaa``).
         """
         agent_list = list(self._agents.keys())
-        violations = [
-            e for e in self._audit_entries if e.outcome in ("failure", "denied")
-        ]
+        violations = [e for e in self._audit_entries if e.outcome in ("failure", "denied")]
 
         total_controls = _framework_control_count(framework)
         controls_failed = min(len(violations), total_controls)
@@ -208,7 +204,7 @@ class DashboardAPI:
 
         return ComplianceReportData(
             framework=framework,
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
             compliance_score=round(score, 2),
             total_controls=total_controls,
             controls_met=controls_met,
@@ -225,7 +221,7 @@ class DashboardAPI:
     def get_overview(self) -> DashboardOverview:
         """Returns a summary overview for the main dashboard."""
         self._analytics.get_stats()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         one_hour_ago = now - timedelta(hours=1)
 
         recent_handshakes = sum(
@@ -236,8 +232,7 @@ class DashboardAPI:
         recent_violations = sum(
             1
             for t in self._traffic
-            if t.event_type in ("policy.violated", "trust.failed")
-            and t.timestamp >= one_hour_ago
+            if t.event_type in ("policy.violated", "trust.failed") and t.timestamp >= one_hour_ago
         )
 
         scores = [a.get("trust_score", 0.0) for a in self._agents.values()]

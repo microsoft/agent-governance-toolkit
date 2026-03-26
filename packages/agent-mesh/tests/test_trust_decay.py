@@ -3,7 +3,9 @@
 """Tests for Trust Decay."""
 
 import time
+
 import pytest
+
 from agentmesh.reward.trust_decay import (
     NetworkTrustEngine,
     TrustEvent,
@@ -402,8 +404,8 @@ class TestDecayProportionality:
         now = time.time()
         for e in (e1, e2):
             e.set_score("a", 800.0)
-        e1._last_positive["a"] = now - 3600   # 1 hour
-        e2._last_positive["a"] = now - 7200   # 2 hours
+        e1._last_positive["a"] = now - 3600  # 1 hour
+        e2._last_positive["a"] = now - 7200  # 2 hours
 
         d1 = e1.apply_temporal_decay(now=now)
         d2 = e2.apply_temporal_decay(now=now)
@@ -432,8 +434,8 @@ class TestMultiAgentDecay:
         engine.set_score("a", 800.0)
         engine.set_score("b", 800.0)
         now = time.time()
-        engine._last_positive["a"] = now - 3600   # 1 hour
-        engine._last_positive["b"] = now - 7200   # 2 hours
+        engine._last_positive["a"] = now - 3600  # 1 hour
+        engine._last_positive["b"] = now - 7200  # 2 hours
 
         deltas = engine.apply_temporal_decay(now=now)
         assert deltas["a"] == pytest.approx(-10.0, abs=0.01)
@@ -444,7 +446,7 @@ class TestMultiAgentDecay:
         engine.set_score("active", 800.0)
         engine.set_score("inactive", 800.0)
         now = time.time()
-        engine._last_positive["active"] = now        # just now
+        engine._last_positive["active"] = now  # just now
         engine._last_positive["inactive"] = now - 36000  # 10 hours ago
 
         deltas = engine.apply_temporal_decay(now=now)
@@ -610,6 +612,7 @@ class TestThresholdGatesDuringDecay:
 
     def test_decay_below_warning_threshold(self):
         from agentmesh.constants import TRUST_WARNING_THRESHOLD
+
         engine = NetworkTrustEngine(decay_rate=50.0)
         engine.set_score("a", 600.0)
         now = time.time()
@@ -619,6 +622,7 @@ class TestThresholdGatesDuringDecay:
 
     def test_decay_below_revocation_threshold(self):
         from agentmesh.constants import TRUST_REVOCATION_THRESHOLD
+
         engine = NetworkTrustEngine(decay_rate=50.0)
         engine.set_score("a", 500.0)
         now = time.time()
@@ -628,6 +632,7 @@ class TestThresholdGatesDuringDecay:
 
     def test_decay_crosses_tier_boundary(self):
         from agentmesh.constants import TIER_TRUSTED_THRESHOLD
+
         engine = NetworkTrustEngine(decay_rate=20.0)
         engine.set_score("a", 750.0)
         now = time.time()

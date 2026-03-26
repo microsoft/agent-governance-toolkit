@@ -102,8 +102,7 @@ class PolicyCheckpoint:
             calls = state.get(self.tool_calls_key)
             if isinstance(calls, list) and len(calls) > self.policy.max_tool_calls:
                 violations.append(
-                    "Tool call limit exceeded: %d > %d"
-                    % (len(calls), self.policy.max_tool_calls)
+                    "Tool call limit exceeded: %d > %d" % (len(calls), self.policy.max_tool_calls)
                 )
 
         # Blocked tools

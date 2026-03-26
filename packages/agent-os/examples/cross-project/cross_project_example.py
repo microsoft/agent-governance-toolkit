@@ -41,7 +41,7 @@ import json
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 # ── Agent-OS: Local Governance ────────────────────────────────────
 
@@ -51,6 +51,7 @@ from typing import Any, Optional
 @dataclass
 class Policy:
     """Agent-OS policy for local agent governance."""
+
     max_tool_calls: int = 10
     blocked_patterns: list[str] = field(default_factory=list)
     allowed_tools: list[str] = field(default_factory=list)
@@ -84,12 +85,14 @@ class KernelGate:
         return True, ""
 
     def _record(self, action: str, outcome: str, data: Any = None):
-        self.flight_log.append({
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "action": action,
-            "outcome": outcome,
-            "call_count": self.call_count,
-        })
+        self.flight_log.append(
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "action": action,
+                "outcome": outcome,
+                "call_count": self.call_count,
+            }
+        )
 
 
 # ── Agent-Mesh: Inter-Agent Trust ─────────────────────────────────
@@ -100,6 +103,7 @@ class KernelGate:
 @dataclass
 class AgentIdentity:
     """Agent-Mesh DID-based identity."""
+
     did: str
     name: str
     capabilities: list[str]
@@ -124,7 +128,9 @@ class TrustRegistry:
         self.agents[identity.did] = identity
         self._append_audit("agent_registered", {"did": identity.did, "name": identity.name})
 
-    def verify_peer(self, requester_did: str, peer_did: str, required_capabilities: list[str] = None) -> tuple[bool, str]:
+    def verify_peer(
+        self, requester_did: str, peer_did: str, required_capabilities: list[str] = None
+    ) -> tuple[bool, str]:
         """Verify a peer before inter-agent communication."""
         peer = self.agents.get(peer_did)
         if not peer:
@@ -138,11 +144,14 @@ class TrustRegistry:
             if missing:
                 return False, f"Missing capabilities: {missing}"
 
-        self._append_audit("peer_verified", {
-            "requester": requester_did,
-            "peer": peer_did,
-            "trust_score": peer.trust_score,
-        })
+        self._append_audit(
+            "peer_verified",
+            {
+                "requester": requester_did,
+                "peer": peer_did,
+                "trust_score": peer.trust_score,
+            },
+        )
         return True, ""
 
     def update_trust(self, did: str, delta: float, reason: str):
@@ -150,9 +159,10 @@ class TrustRegistry:
         agent = self.agents.get(did)
         if agent:
             agent.trust_score = max(0, min(100, agent.trust_score + delta))
-            self._append_audit("trust_updated", {
-                "did": did, "delta": delta, "new_score": agent.trust_score, "reason": reason
-            })
+            self._append_audit(
+                "trust_updated",
+                {"did": did, "delta": delta, "new_score": agent.trust_score, "reason": reason},
+            )
 
     def _append_audit(self, event_type: str, data: dict):
         entry = {
@@ -209,8 +219,12 @@ def run_example():
 
     researcher_gate = KernelGate(researcher_policy)
     writer_gate = KernelGate(writer_policy)
-    print(f"   Researcher: max {researcher_policy.max_tool_calls} tool calls, {len(researcher_policy.blocked_patterns)} blocked patterns")
-    print(f"   Writer: max {writer_policy.max_tool_calls} tool calls, {len(writer_policy.blocked_patterns)} blocked patterns")
+    print(
+        f"   Researcher: max {researcher_policy.max_tool_calls} tool calls, {len(researcher_policy.blocked_patterns)} blocked patterns"
+    )
+    print(
+        f"   Writer: max {writer_policy.max_tool_calls} tool calls, {len(writer_policy.blocked_patterns)} blocked patterns"
+    )
     print()
 
     # ── Step 3: Researcher gathers data (Agent-OS governed)
@@ -277,8 +291,12 @@ def run_example():
     # ── Step 7: Combined audit report
     print("7️⃣  Combined Governance Report")
     print("─" * 50)
-    print(f"  Agent-OS (Researcher): {len(researcher_gate.flight_log)} events, {researcher_gate.call_count} calls")
-    print(f"  Agent-OS (Writer):     {len(writer_gate.flight_log)} events, {writer_gate.call_count} calls")
+    print(
+        f"  Agent-OS (Researcher): {len(researcher_gate.flight_log)} events, {researcher_gate.call_count} calls"
+    )
+    print(
+        f"  Agent-OS (Writer):     {len(writer_gate.flight_log)} events, {writer_gate.call_count} calls"
+    )
     print(f"  Agent-Mesh:            {len(registry.audit_chain)} audit entries")
     print(f"  Hash chain valid:    ✅ ({len(registry.audit_chain)} entries)")
     print()

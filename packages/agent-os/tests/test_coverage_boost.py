@@ -6,20 +6,26 @@ Coverage boost tests for agent-os.
 Targets: openai_agents_sdk.py, autogen_adapter.py, semantic_kernel_adapter.py, base_agent.py
 """
 
-import asyncio
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+from agent_os.integrations.openai_agents_sdk import (
+    ExecutionContext as OAIExecutionContext,
+)
 
 # ---------------------------------------------------------------------------
 # 1. OpenAI Agents SDK Integration
 # ---------------------------------------------------------------------------
 from agent_os.integrations.openai_agents_sdk import (
     GovernancePolicy as OAIGovernancePolicy,
-    ExecutionContext as OAIExecutionContext,
-    PolicyViolationError as OAIPolicyViolationError,
+)
+from agent_os.integrations.openai_agents_sdk import (
     OpenAIAgentsKernel,
+)
+from agent_os.integrations.openai_agents_sdk import (
+    PolicyViolationError as OAIPolicyViolationError,
 )
 
 
@@ -326,7 +332,7 @@ class TestOpenAIAgentsKernel:
 # 2. AutoGen Adapter
 # ---------------------------------------------------------------------------
 from agent_os.integrations.autogen_adapter import AutoGenKernel
-from agent_os.integrations.base import GovernancePolicy, ExecutionContext
+from agent_os.integrations.base import ExecutionContext, GovernancePolicy
 
 
 class TestAutoGenKernel:
@@ -380,6 +386,7 @@ class TestAutoGenKernel:
 
     def test_wrap_initiate_chat_blocked(self):
         from agent_os.integrations.base import PolicyViolationError
+
         p = GovernancePolicy(blocked_patterns=["evil"])
         k = AutoGenKernel(policy=p)
         agent = MagicMock()
@@ -422,6 +429,7 @@ class TestAutoGenKernel:
 
     def test_wrap_receive_blocked(self):
         from agent_os.integrations.base import PolicyViolationError
+
         p = GovernancePolicy(blocked_patterns=["password"])
         k = AutoGenKernel(policy=p)
         agent = MagicMock()
@@ -457,6 +465,7 @@ class TestAutoGenKernel:
 
     def test_signal_sigstop_blocks_execution(self):
         from agent_os.integrations.base import PolicyViolationError
+
         k = AutoGenKernel()
         agent = MagicMock()
         agent.name = "stoppable"
@@ -528,6 +537,7 @@ class TestLlamaIndexKernel:
 
     def test_query_blocked_pattern(self):
         from agent_os.integrations.langchain_adapter import PolicyViolationError
+
         p = GovernancePolicy(blocked_patterns=["secret"])
         k = LlamaIndexKernel(policy=p)
         engine = MagicMock()
@@ -549,6 +559,7 @@ class TestLlamaIndexKernel:
 
     def test_chat_blocked_pattern(self):
         from agent_os.integrations.langchain_adapter import PolicyViolationError
+
         p = GovernancePolicy(blocked_patterns=["password"])
         k = LlamaIndexKernel(policy=p)
         engine = MagicMock()
@@ -603,6 +614,7 @@ class TestLlamaIndexKernel:
 
     def test_max_calls_exceeded(self):
         from agent_os.integrations.langchain_adapter import PolicyViolationError
+
         p = GovernancePolicy(max_tool_calls=2)
         k = LlamaIndexKernel(policy=p)
         engine = MagicMock()
@@ -617,6 +629,7 @@ class TestLlamaIndexKernel:
 
     def test_signal_sigstop(self):
         from agent_os.integrations.langchain_adapter import PolicyViolationError
+
         k = LlamaIndexKernel()
         engine = MagicMock()
         engine.name = "stoppable"
@@ -654,12 +667,14 @@ class TestLlamaIndexKernel:
 # Async Integration Tests (LangChain, CrewAI, LlamaIndex)
 # ---------------------------------------------------------------------------
 
+
 class TestLangChainAsync:
     """Async tests for LangChain adapter."""
 
     @pytest.mark.asyncio
     async def test_ainvoke_governed(self):
         from agent_os.integrations.langchain_adapter import LangChainKernel
+
         k = LangChainKernel()
         chain = MagicMock()
         chain.name = "async-chain"
@@ -672,6 +687,7 @@ class TestLangChainAsync:
     @pytest.mark.asyncio
     async def test_ainvoke_blocked(self):
         from agent_os.integrations.langchain_adapter import LangChainKernel, PolicyViolationError
+
         p = GovernancePolicy(blocked_patterns=["evil"])
         k = LangChainKernel(policy=p)
         chain = MagicMock()
@@ -685,6 +701,7 @@ class TestLangChainAsync:
     @pytest.mark.asyncio
     async def test_ainvoke_call_count(self):
         from agent_os.integrations.langchain_adapter import LangChainKernel
+
         k = LangChainKernel()
         chain = MagicMock()
         chain.name = "counter-async"
@@ -704,6 +721,7 @@ class TestCrewAIAsync:
     @pytest.mark.asyncio
     async def test_kickoff_async_governed(self):
         from agent_os.integrations.crewai_adapter import CrewAIKernel
+
         k = CrewAIKernel()
         crew = MagicMock()
         crew.id = "async-crew"
@@ -717,8 +735,9 @@ class TestCrewAIAsync:
 
     @pytest.mark.asyncio
     async def test_kickoff_async_blocked(self):
-        from agent_os.integrations.crewai_adapter import CrewAIKernel
         from agent_os.integrations.base import PolicyViolationError
+        from agent_os.integrations.crewai_adapter import CrewAIKernel
+
         p = GovernancePolicy(blocked_patterns=["forbidden"])
         k = CrewAIKernel(policy=p)
         crew = MagicMock()
@@ -732,8 +751,9 @@ class TestCrewAIAsync:
 
     @pytest.mark.asyncio
     async def test_kickoff_async_max_calls(self):
-        from agent_os.integrations.crewai_adapter import CrewAIKernel
         from agent_os.integrations.base import PolicyViolationError
+        from agent_os.integrations.crewai_adapter import CrewAIKernel
+
         p = GovernancePolicy(max_tool_calls=1)
         k = CrewAIKernel(policy=p)
         crew = MagicMock()
@@ -766,6 +786,7 @@ class TestLlamaIndexAsync:
     @pytest.mark.asyncio
     async def test_aquery_blocked(self):
         from agent_os.integrations.langchain_adapter import PolicyViolationError
+
         p = GovernancePolicy(blocked_patterns=["secret"])
         k = LlamaIndexKernel(policy=p)
         engine = MagicMock()
@@ -789,6 +810,7 @@ class TestLlamaIndexAsync:
     @pytest.mark.asyncio
     async def test_aquery_stopped(self):
         from agent_os.integrations.langchain_adapter import PolicyViolationError
+
         k = LlamaIndexKernel()
         engine = MagicMock()
         engine.name = "stopped-async"
@@ -807,6 +829,7 @@ class TestCrossAdapterSignals:
     def test_langchain_signal_not_shared_with_llamaindex(self):
         """Signals are isolated per adapter instance."""
         from agent_os.integrations.langchain_adapter import LangChainKernel
+
         lc = LangChainKernel()
         li = LlamaIndexKernel()
 
@@ -829,6 +852,7 @@ class TestCrossAdapterSignals:
     def test_autogen_signal_isolated(self):
         """AutoGen signals don't affect other adapters."""
         from agent_os.integrations.langchain_adapter import LangChainKernel
+
         lc = LangChainKernel()
         ag = AutoGenKernel()
 
@@ -852,22 +876,22 @@ class TestCrossAdapterSignals:
 # 3. Semantic Kernel Adapter
 # ---------------------------------------------------------------------------
 from agent_os.integrations.semantic_kernel_adapter import (
-    SKContext,
-    SemanticKernelWrapper,
-    GovernedSemanticKernel,
-    GovernedPlan,
-    PolicyViolationError as SKPolicyViolationError,
-    ExecutionStoppedError,
     ExecutionKilledError,
+    ExecutionStoppedError,
+    GovernedPlan,
+    GovernedSemanticKernel,
+    SemanticKernelWrapper,
+    SKContext,
+)
+from agent_os.integrations.semantic_kernel_adapter import (
+    PolicyViolationError as SKPolicyViolationError,
 )
 
 
 class TestSKContext:
     def test_creation(self):
         p = GovernancePolicy()
-        ctx = SKContext(
-            agent_id="a1", session_id="s1", policy=p, kernel_id="sk-1"
-        )
+        ctx = SKContext(agent_id="a1", session_id="s1", policy=p, kernel_id="sk-1")
         assert ctx.kernel_id == "sk-1"
         assert ctx.plugins_loaded == []
         assert ctx.functions_invoked == []
@@ -1114,14 +1138,14 @@ class TestSKExceptions:
 # 4. Base Agent
 # ---------------------------------------------------------------------------
 from agent_os.base_agent import (
+    AgentConfig,
     AuditEntry,
     BaseAgent,
-    AgentConfig,
     PolicyDecision,
     ToolUsingAgent,
     TypedResult,
 )
-from agent_os.stateless import ExecutionResult, ExecutionContext as StatelessExecutionContext
+from agent_os.stateless import ExecutionResult
 
 
 class TestAuditEntry:
@@ -1165,6 +1189,7 @@ class TestAuditEntry:
 
 class ConcreteAgent(BaseAgent):
     """Concrete implementation for testing."""
+
     async def run(self, task: str = "") -> ExecutionResult:
         return await self._execute("run_task", {"task": task})
 
@@ -1231,6 +1256,7 @@ class TestBaseAgent:
 
 class ConcreteToolAgent(ToolUsingAgent):
     """Concrete implementation for testing."""
+
     async def run(self, task: str = "") -> ExecutionResult:
         return await self._use_tool("default_tool", {"task": task})
 
@@ -1326,9 +1352,7 @@ class TestOpenAIAgentsKernelWrapRunner:
 
     @pytest.mark.asyncio
     async def test_wrap_runner_content_blocked_with_approval(self):
-        p = OAIGovernancePolicy(
-            blocked_patterns=["bad"], require_human_approval=True
-        )
+        p = OAIGovernancePolicy(blocked_patterns=["bad"], require_human_approval=True)
         k = OpenAIAgentsKernel(policy=p)
         agent = MagicMock()
         agent.name = "a"
@@ -1342,9 +1366,7 @@ class TestOpenAIAgentsKernelWrapRunner:
 
     @pytest.mark.asyncio
     async def test_wrap_runner_content_blocked_no_approval(self):
-        p = OAIGovernancePolicy(
-            blocked_patterns=["bad"], require_human_approval=False
-        )
+        p = OAIGovernancePolicy(blocked_patterns=["bad"], require_human_approval=False)
         handler = MagicMock()
         k = OpenAIAgentsKernel(policy=p, on_violation=handler)
         agent = MagicMock()
@@ -1458,8 +1480,10 @@ class TestGovernedSKMemory:
         kernel.invoke_prompt = AsyncMock(return_value="bad_result")
         # Override post_execute to block
         original_post = w.post_execute
+
         def blocking_post(ctx, output):
             return False, "Output blocked"
+
         w.post_execute = blocking_post
         with pytest.raises(SKPolicyViolationError, match="Result blocked"):
             await governed.invoke_prompt("prompt")
@@ -1469,11 +1493,11 @@ class TestGovernedSKMemory:
 # 7. Additional: base integration interceptors coverage
 # ---------------------------------------------------------------------------
 from agent_os.integrations.base import (
+    BoundedSemaphore,
+    CompositeInterceptor,
+    PolicyInterceptor,
     ToolCallRequest,
     ToolCallResult,
-    PolicyInterceptor,
-    CompositeInterceptor,
-    BoundedSemaphore,
 )
 
 

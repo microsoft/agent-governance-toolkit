@@ -1,5 +1,5 @@
 # AgentMesh MCP Proxy - Enterprise Policy
-# 
+#
 # Full enterprise security: Rate limiting, PII detection, comprehensive audit.
 # Use for production environments with compliance requirements.
 
@@ -31,9 +31,9 @@ rules:
     action: allow
     conditions:
       # Block access to sensitive file types
-      - path_not_contains: 
+      - path_not_contains:
         - ".env"
-        - ".secret" 
+        - ".secret"
         - "id_rsa"
         - "id_ed25519"
         - ".pem"

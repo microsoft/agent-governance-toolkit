@@ -116,9 +116,12 @@ class TestReplayEngine:
     def test_replay_with_overrides(self) -> None:
         engine = ReplayEngine()
         trace = self._make_trace()
-        result = engine.replay(trace, overrides={
-            "calculator": {"result": 5},  # Wrong answer
-        })
+        result = engine.replay(
+            trace,
+            overrides={
+                "calculator": {"result": 5},  # Wrong answer
+            },
+        )
         assert result.has_divergence is True
         assert any(d.diff_type == DiffType.OUTPUT_MISMATCH for d in result.diffs)
 
@@ -126,9 +129,12 @@ class TestReplayEngine:
         engine = ReplayEngine()
         trace = self._make_trace()
         with pytest.raises(NotImplementedError):
-            engine.what_if(trace, overrides={
-                "calculator": {"result": 5},
-            })
+            engine.what_if(
+                trace,
+                overrides={
+                    "calculator": {"result": 5},
+                },
+            )
 
     def test_steps(self) -> None:
         engine = ReplayEngine()

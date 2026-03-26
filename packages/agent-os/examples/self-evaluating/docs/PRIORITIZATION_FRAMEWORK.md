@@ -18,8 +18,8 @@ The Prioritization Framework is a Graph RAG-inspired system that sits between th
 **Example:**
 ```
 ⚠️ CRITICAL SAFETY WARNINGS (Highest Priority)
-1. [WARNING] Task similar to 'calculate mathematical expression' failed recently 
-   (2x in last 168h). Issue: Agent calculated mentally instead of using calculator 
+1. [WARNING] Task similar to 'calculate mathematical expression' failed recently
+   (2x in last 168h). Issue: Agent calculated mentally instead of using calculator
    tool. MUST DO: MUST explicitly use the calculate() tool for any mathematical operations
 ```
 
@@ -49,7 +49,7 @@ You must respect these user-specific constraints:
 
 **Example:**
 ```
-You are a helpful AI assistant with access to tools. Your goal is to provide 
+You are a helpful AI assistant with access to tools. Your goal is to provide
 accurate and useful responses to user queries.
 ```
 
@@ -167,7 +167,7 @@ class PrioritizedContext:
     safety_items: List[str]           # High priority warnings
     personalization_items: List[str]  # Medium priority preferences
     global_wisdom: str                # Low priority base instructions
-    
+
     def build_system_prompt() -> str:
         # Builds system prompt with proper layering
 ```

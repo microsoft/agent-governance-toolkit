@@ -11,7 +11,6 @@ from pydantic_ai_governance.policy import (
     GovernancePolicy,
     GovernanceEventType,
     PatternType,
-    PolicyCheckResult,
 )
 from pydantic_ai_governance.intent import (
     SemanticIntent,
@@ -45,9 +44,7 @@ class TestGovernancePolicy:
         assert result.allowed is True
 
     def test_check_content_substring_match(self):
-        policy = GovernancePolicy(
-            blocked_patterns=[("rm -rf", PatternType.SUBSTRING)]
-        )
+        policy = GovernancePolicy(blocked_patterns=[("rm -rf", PatternType.SUBSTRING)])
         result = policy.check_content("please run rm -rf /tmp")
         assert result.allowed is False
         assert "rm -rf" in result.reason
@@ -67,9 +64,7 @@ class TestGovernancePolicy:
         assert result.allowed is True
 
     def test_check_content_glob_match(self):
-        policy = GovernancePolicy(
-            blocked_patterns=[("*.exe", PatternType.GLOB)]
-        )
+        policy = GovernancePolicy(blocked_patterns=[("*.exe", PatternType.GLOB)])
         result = policy.check_content("download malware.exe")
         assert result.allowed is False
 
@@ -222,16 +217,22 @@ class TestTrustScore:
 
     def test_compute_overall(self):
         score = TrustScore(
-            reliability=1.0, capability=1.0, security=1.0,
-            compliance=1.0, history=1.0,
+            reliability=1.0,
+            capability=1.0,
+            security=1.0,
+            compliance=1.0,
+            history=1.0,
         )
         result = score.compute_overall()
         assert result == 1.0
 
     def test_compute_overall_zero(self):
         score = TrustScore(
-            reliability=0.0, capability=0.0, security=0.0,
-            compliance=0.0, history=0.0,
+            reliability=0.0,
+            capability=0.0,
+            security=0.0,
+            compliance=0.0,
+            history=0.0,
         )
         result = score.compute_overall()
         assert result == 0.0
@@ -292,12 +293,8 @@ class TestTrustScorer:
 
     def test_check_trust_dimension_threshold(self):
         scorer = TrustScorer()
-        assert scorer.check_trust(
-            "agent-1", min_dimensions={"security": 0.4}
-        ) is True
-        assert scorer.check_trust(
-            "agent-1", min_dimensions={"security": 0.9}
-        ) is False
+        assert scorer.check_trust("agent-1", min_dimensions={"security": 0.4}) is True
+        assert scorer.check_trust("agent-1", min_dimensions={"security": 0.9}) is False
 
 
 # ─── Audit Trail ─────────────────────────────────────────────────────
@@ -344,7 +341,9 @@ class TestAuditTrail:
     def test_entry_to_dict(self):
         trail = AuditTrail()
         entry = trail.record(
-            GovernanceEventType.TOOL_CALL_ALLOWED, "search", True,
+            GovernanceEventType.TOOL_CALL_ALLOWED,
+            "search",
+            True,
             agent_id="agent-1",
         )
         d = entry.to_dict()
@@ -363,13 +362,9 @@ class TestGovernanceToolset:
         assert result.allowed is True
 
     def test_blocked_pattern(self):
-        policy = GovernancePolicy(
-            blocked_patterns=[("rm -rf", PatternType.SUBSTRING)]
-        )
+        policy = GovernancePolicy(blocked_patterns=[("rm -rf", PatternType.SUBSTRING)])
         toolset = GovernanceToolset(policy=policy)
-        result = toolset.check_tool_call(
-            "execute", {"command": "rm -rf /important"}
-        )
+        result = toolset.check_tool_call("execute", {"command": "rm -rf /important"})
         assert result.allowed is False
         assert "rm -rf" in result.reason
 
@@ -382,25 +377,23 @@ class TestGovernanceToolset:
     def test_call_count_limit(self):
         policy = GovernancePolicy(max_tool_calls_per_request=2)
         toolset = GovernanceToolset(policy=policy)
-        assert toolset.check_tool_call("a", {}).allowed is True   # call 1
-        assert toolset.check_tool_call("a", {}).allowed is True   # call 2
+        assert toolset.check_tool_call("a", {}).allowed is True  # call 1
+        assert toolset.check_tool_call("a", {}).allowed is True  # call 2
         assert toolset.check_tool_call("a", {}).allowed is False  # call 3
 
     def test_reset_counter(self):
         policy = GovernancePolicy(max_tool_calls_per_request=2)
         toolset = GovernanceToolset(policy=policy)
-        assert toolset.check_tool_call("a", {}).allowed is True   # call 1
-        assert toolset.check_tool_call("a", {}).allowed is True   # call 2
+        assert toolset.check_tool_call("a", {}).allowed is True  # call 1
+        assert toolset.check_tool_call("a", {}).allowed is True  # call 2
         assert toolset.check_tool_call("a", {}).allowed is False  # call 3
         toolset.reset()
-        assert toolset.check_tool_call("a", {}).allowed is True   # reset, call 1
+        assert toolset.check_tool_call("a", {}).allowed is True  # reset, call 1
 
     def test_semantic_intent_blocks_dangerous(self):
         policy = GovernancePolicy(confidence_threshold=0.8)
         toolset = GovernanceToolset(policy=policy)
-        result = toolset.check_tool_call(
-            "execute", {"command": "rm -rf /"}
-        )
+        result = toolset.check_tool_call("execute", {"command": "rm -rf /"})
         assert result.allowed is False
 
     def test_audit_trail_populated(self):
@@ -481,9 +474,7 @@ class TestGovernDecorator:
 
     def test_on_violation_callback(self):
         violations = []
-        policy = GovernancePolicy(
-            blocked_patterns=[("bad", PatternType.SUBSTRING)]
-        )
+        policy = GovernancePolicy(blocked_patterns=[("bad", PatternType.SUBSTRING)])
 
         @govern(policy, on_violation=lambda r: violations.append(r))
         def my_tool(ctx, text: str) -> str:
@@ -508,9 +499,7 @@ class TestGovernDecorator:
 
     @pytest.mark.asyncio
     async def test_async_function_blocked(self):
-        policy = GovernancePolicy(
-            blocked_patterns=[("rm -rf", PatternType.SUBSTRING)]
-        )
+        policy = GovernancePolicy(blocked_patterns=[("rm -rf", PatternType.SUBSTRING)])
 
         @govern(policy)
         async def my_tool(ctx, cmd: str) -> str:

@@ -4,13 +4,11 @@ import json
 import os
 import tempfile
 
-import pytest
 
 from haystack_agentmesh.audit import AuditLogger, _hash_entry
 
 
 class TestAuditLogger:
-
     def test_run_returns_entry_id_and_hash(self):
         logger = AuditLogger()
         result = logger.run(action="search", agent_id="a1", decision="allow")

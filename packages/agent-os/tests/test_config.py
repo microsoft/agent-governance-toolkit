@@ -3,10 +3,11 @@
 """Tests for environment variable configuration."""
 
 import os
+
 import pytest
 
-from agent_os.integrations.config import AgentOSConfig, get_config, reset_config
 from agent_os.integrations.base import GovernancePolicy
+from agent_os.integrations.config import AgentOSConfig, get_config, reset_config
 
 
 @pytest.fixture(autouse=True)

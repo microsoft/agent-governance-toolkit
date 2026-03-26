@@ -11,8 +11,11 @@ class CompletenessAuditor:
 
     def __init__(self):
         self.lazy_signals = [
-            "i cannot", "i'm sorry", "no data found",
-            "unable to access", "context does not contain",
+            "i cannot",
+            "i'm sorry",
+            "no data found",
+            "unable to access",
+            "context does not contain",
         ]
 
     def audit_response(self, agent_response: str, tool_output: str = "") -> bool:
