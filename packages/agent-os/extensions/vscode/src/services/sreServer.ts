@@ -28,6 +28,16 @@ export interface ServerStartResult {
     message: string;
 }
 
+/** Shell metacharacters that must not appear in a spawn() path argument. */
+const SHELL_METACHAR = /[;&|`$(){}]/;
+
+/** Validate a Python path is non-empty and free of shell injection characters. */
+export function isValidPythonPath(p: string): boolean {
+    if (!p || !p.trim()) { return false; }
+    if (SHELL_METACHAR.test(p)) { return false; }
+    return true;
+}
+
 /**
  * Check if agent-failsafe is importable by the given Python interpreter.
  *
@@ -35,7 +45,7 @@ export interface ServerStartResult {
  * @returns true if agent_failsafe.rest_server is importable
  */
 export async function isAgentFailsafeAvailable(pythonPath: string): Promise<boolean> {
-    if (!pythonPath || !pythonPath.trim()) { return false; }
+    if (!isValidPythonPath(pythonPath)) { return false; }
     return new Promise((resolve) => {
         const proc = spawn(pythonPath, [
             '-c', 'import agent_failsafe.rest_server; print("ok")',
@@ -67,6 +77,7 @@ export async function promptAndInstall(pythonPath: string): Promise<boolean> {
 }
 
 function runPipInstall(pythonPath: string): Promise<boolean> {
+    if (!isValidPythonPath(pythonPath)) { return Promise.resolve(false); }
     return new Promise((resolve) => {
         const proc = spawn(pythonPath, [
             '-m', 'pip', 'install', 'agent-failsafe[server]',
@@ -104,7 +115,7 @@ export class SREServerManager {
     private _pythonPath: string;
 
     constructor(pythonPath: string, port?: number) {
-        this._pythonPath = pythonPath;
+        this._pythonPath = pythonPath.trim();
         this._port = port ?? DEFAULT_PORT;
     }
 
@@ -114,6 +125,9 @@ export class SREServerManager {
      * @returns Result with endpoint URL if successful
      */
     async start(): Promise<ServerStartResult> {
+        if (!isValidPythonPath(this._pythonPath)) {
+            return { ok: false, endpoint: '', message: 'Invalid python path' };
+        }
         const endpoint = `http://127.0.0.1:${this._port}`;
 
         // Check if something is already running on the port

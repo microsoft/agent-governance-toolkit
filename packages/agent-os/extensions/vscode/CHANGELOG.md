@@ -7,12 +7,15 @@ All notable changes to the Agent OS VS Code extension will be documented in this
 ### Security
 - Rate limiting added to GovernanceServer (100 requests/minute per client)
 - Session token authentication for WebSocket connections
-- SRI hashes for external CDN scripts (D3.js v7.8.5)
-- Removed Chart.js CDN dependency (unused)
+- Bundled D3.js v7.8.5 and Chart.js v4.4.1 locally (removed CDN dependency on cdn.jsdelivr.net)
+- Eliminated innerHTML XSS vectors via shared `escapeHtml` utility across all legacy panels
+- Pinned axios (1.13.6) and ws (8.20.0) to exact versions for reproducible builds
+- Python path validation: rejects shell metacharacters before subprocess spawn
+- axios retained over VS Code built-in fetch: provides timeout, maxContentLength, and maxRedirects guards not available in built-in fetch API
 
 ### Removed
-- `S3StorageProvider` - Cloud export to AWS S3 (planned for v1.2.0 as optional dependency)
-- `AzureBlobStorageProvider` - Cloud export to Azure Blob Storage (planned for v1.2.0)
+- `S3StorageProvider` - Cloud export to AWS S3 (stub, never implemented)
+- `AzureBlobStorageProvider` - Cloud export to Azure Blob Storage (stub, never implemented)
 - Backend service layer (out of scope for this release)
 
 ### Added

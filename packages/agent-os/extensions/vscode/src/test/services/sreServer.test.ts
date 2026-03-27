@@ -8,7 +8,19 @@
  */
 
 import * as assert from 'assert';
-import { isAgentFailsafeAvailable, SREServerManager } from '../../services/sreServer';
+import { isAgentFailsafeAvailable, isValidPythonPath, SREServerManager } from '../../services/sreServer';
+
+suite('isValidPythonPath', () => {
+    test('rejects empty string', () => { assert.strictEqual(isValidPythonPath(''), false); });
+    test('rejects whitespace', () => { assert.strictEqual(isValidPythonPath('   '), false); });
+    test('rejects semicolons', () => { assert.strictEqual(isValidPythonPath('python; rm -rf /'), false); });
+    test('rejects backticks', () => { assert.strictEqual(isValidPythonPath('`whoami`'), false); });
+    test('rejects pipe', () => { assert.strictEqual(isValidPythonPath('python | cat'), false); });
+    test('rejects dollar sign', () => { assert.strictEqual(isValidPythonPath('$HOME/python'), false); });
+    test('accepts python3', () => { assert.strictEqual(isValidPythonPath('python3'), true); });
+    test('accepts unix path', () => { assert.strictEqual(isValidPythonPath('/usr/bin/python'), true); });
+    test('accepts windows path', () => { assert.strictEqual(isValidPythonPath('C:\\Python311\\python.exe'), true); });
+});
 
 suite('isAgentFailsafeAvailable', () => {
     test('returns false for nonexistent python binary', async () => {
