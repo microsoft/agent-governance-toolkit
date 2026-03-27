@@ -53,6 +53,44 @@ parameters:
     displayName: '.NET SDK version'
     default: '8.0.x'
 
+  - name: pypiPackages
+    type: object
+    displayName: 'Python packages to publish'
+    default:
+      - name: agent-os
+        path: packages/agent-os
+      - name: agent-mesh
+        path: packages/agent-mesh
+      - name: agent-hypervisor
+        path: packages/agent-hypervisor
+      - name: agent-sre
+        path: packages/agent-sre
+      - name: agent-compliance
+        path: packages/agent-compliance
+      - name: agent-runtime
+        path: packages/agent-runtime
+      - name: agent-lightning
+        path: packages/agent-lightning
+
+  - name: npmPackages
+    type: object
+    displayName: 'npm packages to publish'
+    default:
+      - name: agentmesh-copilot-governance
+        path: packages/agentmesh-integrations/copilot-governance
+      - name: agentmesh-mastra
+        path: packages/agentmesh-integrations/mastra-agentmesh
+      - name: agentmesh-api
+        path: packages/agent-mesh/services/api
+      - name: agentmesh-mcp-proxy
+        path: packages/agent-mesh/packages/mcp-proxy
+      - name: agentmesh-sdk
+        path: packages/agent-mesh/sdks/typescript
+      - name: agent-os-copilot-extension
+        path: packages/agent-os/extensions/copilot
+      - name: agentos-mcp-server
+        path: packages/agent-os/extensions/mcp-server
+
 # -------------------------------------------------------
 # ESRP Configuration
 # Service connection name is hardcoded (required at compile time by ADO).
@@ -80,9 +118,9 @@ stages:
     displayName: 'Build Python Packages'
     condition: and(succeeded(), or(eq('${{ parameters.target }}', 'pypi'), eq('${{ parameters.target }}', 'all')))
     jobs:
-      - ${{ each pkg in split('agent-os,agent-mesh,agent-hypervisor,agent-sre,agent-compliance,agent-runtime,agent-lightning', ',') }}:
-        - job: Build_PyPI_${{ replace(pkg, '-', '_') }}
-          displayName: 'Build ${{ pkg }}'
+      - ${{ each pkg in parameters.pypiPackages }}:
+        - job: Build_PyPI_${{ replace(pkg.name, '-', '_') }}
+          displayName: 'Build ${{ pkg.name }}'
           steps:
             - checkout: self
 
@@ -98,43 +136,43 @@ stages:
 
             - script: |
                 python -m build
-              workingDirectory: 'packages/${{ pkg }}'
-              displayName: 'Build ${{ pkg }} (sdist + wheel)'
+              workingDirectory: '${{ pkg.path }}'
+              displayName: 'Build ${{ pkg.name }} (sdist + wheel)'
 
             - script: |
-                echo "=== Built artifacts for ${{ pkg }} ==="
+                echo "=== Built artifacts for ${{ pkg.name }} ==="
                 ls -la dist/
                 if ! ls dist/*.whl 1>/dev/null 2>&1; then
                   echo "##[error]No wheel (.whl) found"
                   exit 1
                 fi
-              workingDirectory: 'packages/${{ pkg }}'
+              workingDirectory: '${{ pkg.path }}'
               displayName: 'Validate build artifacts'
 
             - task: PublishPipelineArtifact@1
               inputs:
-                targetPath: 'packages/${{ pkg }}/dist'
-                artifact: 'pypi-${{ pkg }}'
+                targetPath: '${{ pkg.path }}/dist'
+                artifact: 'pypi-${{ pkg.name }}'
                 publishLocation: 'pipeline'
-              displayName: 'Publish ${{ pkg }} artifacts'
+              displayName: 'Publish ${{ pkg.name }} artifacts'
 
   - stage: Publish_PyPI
     displayName: 'Publish to PyPI via ESRP'
     dependsOn: Build_PyPI
     condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'pypi'), eq('${{ parameters.target }}', 'all')))
     jobs:
-      - ${{ each pkg in split('agent-os,agent-mesh,agent-hypervisor,agent-sre,agent-compliance,agent-runtime,agent-lightning', ',') }}:
-        - job: Publish_PyPI_${{ replace(pkg, '-', '_') }}
-          displayName: 'Publish ${{ pkg }} to PyPI'
+      - ${{ each pkg in parameters.pypiPackages }}:
+        - job: Publish_PyPI_${{ replace(pkg.name, '-', '_') }}
+          displayName: 'Publish ${{ pkg.name }} to PyPI'
           steps:
             - task: DownloadPipelineArtifact@2
               inputs:
-                artifact: 'pypi-${{ pkg }}'
-                targetPath: '$(Pipeline.Workspace)/dist-${{ pkg }}'
-              displayName: 'Download ${{ pkg }} artifacts'
+                artifact: 'pypi-${{ pkg.name }}'
+                targetPath: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
+              displayName: 'Download ${{ pkg.name }} artifacts'
 
             - task: EsrpRelease@11
-              displayName: 'ESRP Publish ${{ pkg }} to PyPI'
+              displayName: 'ESRP Publish ${{ pkg.name }} to PyPI'
               inputs:
                 connectedservicename: '$(esrpServiceConnection)'
                 usemanagedidentity: true
@@ -144,7 +182,7 @@ stages:
                 intent: 'PackageDistribution'
                 contenttype: 'PyPi'
                 contentsource: 'Folder'
-                folderlocation: '$(Pipeline.Workspace)/dist-${{ pkg }}'
+                folderlocation: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
                 waitforreleasecompletion: true
                 owners: '$(esrpOwners)'
                 approvers: '$(esrpApprovers)'
@@ -159,53 +197,45 @@ stages:
     displayName: 'Build & Pack npm Packages'
     condition: and(succeeded(), or(eq('${{ parameters.target }}', 'npm'), eq('${{ parameters.target }}', 'all')))
     jobs:
-      - ${{ each pkg in split('agentmesh-copilot-governance:packages/agentmesh-integrations/copilot-governance,agentmesh-mastra:packages/agentmesh-integrations/mastra-agentmesh,agentmesh-api:packages/agent-mesh/services/api,agentmesh-mcp-proxy:packages/agent-mesh/packages/mcp-proxy,agentmesh-sdk:packages/agent-mesh/sdks/typescript,agent-os-copilot-extension:packages/agent-os/extensions/copilot,agentos-mcp-server:packages/agent-os/extensions/mcp-server', ',') }}:
-        - job: Build_npm_${{ replace(split(pkg, ':')[0], '-', '_') }}
-          displayName: 'Build ${{ split(pkg, ":")[0] }}'
-          variables:
-            npmName: ${{ split(pkg, ':')[0] }}
-            npmPath: ${{ split(pkg, ':')[1] }}
+      - ${{ each pkg in parameters.npmPackages }}:
+        - job: Build_npm_${{ replace(pkg.name, '-', '_') }}
+          displayName: 'Build ${{ pkg.name }}'
           steps:
             - checkout: self
 
             - task: UseNode@1
               inputs:
                 version: '${{ parameters.nodeVersion }}'
-              displayName: 'Use Node.js ${{ parameters.nodeVersion }}'
 
-            - script: |
-                npm ci --ignore-scripts 2>/dev/null || npm install
-              workingDirectory: '$(npmPath)'
+            - script: npm ci --ignore-scripts 2>/dev/null || npm install
+              workingDirectory: '${{ pkg.path }}'
               displayName: 'Install dependencies'
 
-            - script: |
-                npm run build
-              workingDirectory: '$(npmPath)'
-              displayName: 'Build $(npmName)'
+            - script: npm run build
+              workingDirectory: '${{ pkg.path }}'
+              displayName: 'Build ${{ pkg.name }}'
 
             - script: |
-                mkdir -p $(Pipeline.Workspace)/npm-packages/$(npmName)
-                npm pack --pack-destination $(Pipeline.Workspace)/npm-packages/$(npmName)
-                echo "=== Packed ==="
-                ls -la $(Pipeline.Workspace)/npm-packages/$(npmName)/
-                if ! ls $(Pipeline.Workspace)/npm-packages/$(npmName)/*.tgz 1>/dev/null 2>&1; then
-                  echo "##[error]No .tgz found for $(npmName)"
+                mkdir -p $(Pipeline.Workspace)/npm-out
+                npm pack --pack-destination $(Pipeline.Workspace)/npm-out
+                if ! ls $(Pipeline.Workspace)/npm-out/*.tgz 1>/dev/null 2>&1; then
+                  echo "##[error]No .tgz found for ${{ pkg.name }}"
                   exit 1
                 fi
                 PRIVATE=$(node -e "console.log(require('./package.json').private || false)")
                 if [ "$PRIVATE" = "true" ]; then
-                  echo "##[error]$(npmName) is marked private"
+                  echo "##[error]${{ pkg.name }} is marked private"
                   exit 1
                 fi
-              workingDirectory: '$(npmPath)'
-              displayName: 'Pack & validate $(npmName)'
+              workingDirectory: '${{ pkg.path }}'
+              displayName: 'Pack & validate ${{ pkg.name }}'
 
             - task: PublishPipelineArtifact@1
               inputs:
-                targetPath: '$(Pipeline.Workspace)/npm-packages/$(npmName)'
-                artifact: 'npm-$(npmName)'
+                targetPath: '$(Pipeline.Workspace)/npm-out'
+                artifact: 'npm-${{ pkg.name }}'
                 publishLocation: 'pipeline'
-              displayName: 'Publish $(npmName) artifact'
+              displayName: 'Publish ${{ pkg.name }} artifact'
 
   - stage: Publish_npm
     displayName: 'Publish to npm via ESRP'
@@ -215,12 +245,12 @@ stages:
       - job: Publish_npm
         displayName: 'Publish all packages to npm'
         steps:
-          - ${{ each pkg in split('agentmesh-copilot-governance,agentmesh-mastra,agentmesh-api,agentmesh-mcp-proxy,agentmesh-sdk,agent-os-copilot-extension,agentos-mcp-server', ',') }}:
+          - ${{ each pkg in parameters.npmPackages }}:
             - task: DownloadPipelineArtifact@2
               inputs:
-                artifact: 'npm-${{ pkg }}'
+                artifact: 'npm-${{ pkg.name }}'
                 targetPath: '$(Pipeline.Workspace)/npm-publish'
-              displayName: 'Download ${{ pkg }}'
+              displayName: 'Download ${{ pkg.name }}'
 
           - script: |
               echo "=== All packages to publish ==="
