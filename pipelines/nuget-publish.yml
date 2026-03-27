@@ -51,7 +51,7 @@ parameters:
 #   NUGET_API_KEY
 # -------------------------------------------------------
 variables:
-  esrpServiceConnection: 'Agent Governance Toolkit'
+  esrpServiceConnection: 'ESRP Release AzureRM'
   esrpKeyVaultName: $(ESRP_KEYVAULT_NAME)
   esrpSignCertName: $(ESRP_CERT_IDENTIFIER)
   esrpClientId: $(ESRP_CLIENT_ID)
