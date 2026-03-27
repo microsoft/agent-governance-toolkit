@@ -21,8 +21,8 @@ The extension operates in three security contexts:
 | Vector | Mitigation | Source |
 |--------|-----------|--------|
 | Cross-origin WebSocket hijacking | Session token on WS upgrade | `GovernanceServer.ts:197-198` |
-| CDN script tampering | SRI hashes | `browserTemplate.ts:99,124` |
-| XSS via dashboard content | CSP nonces + `esc()` sanitizer | `GovernanceServer.ts:176`, `browserScripts.ts:13-15` |
+| Script tampering | Local vendor bundling (no CDN) | `assets/vendor/d3.v7.8.5.min.js`, `assets/vendor/chart.v4.4.1.umd.min.js` |
+| XSS via dashboard content | CSP nonces + shared `escapeHtml` utility | `GovernanceServer.ts:176`, `utils/escapeHtml.ts` |
 | Local DoS via request flooding | Rate limiting (100 req/min) | `serverHelpers.ts:99-112` |
 | REST response memory exhaustion | 5MB cap + array size limits | `liveClient.ts:89`, `translators.ts:19-22` |
 | Token exfiltration via redirect | `maxRedirects: 0` | `liveClient.ts:91` |
@@ -78,7 +78,7 @@ Both the HTTP header and HTML meta tag enforce a restrictive CSP with per-reques
 
 ```
 default-src 'self';
-script-src 'nonce-{random}' https://cdn.jsdelivr.net;
+script-src 'nonce-{random}';
 style-src 'self' 'unsafe-inline';
 connect-src 'self'
 ```
@@ -96,14 +96,14 @@ Script nonces: browserTemplate.ts:122,130-131 — nonce on all 3 script tags
 Nonce generation: GovernanceServer.ts:161 — generateNonce() per request
 ```
 
-### 5. Subresource Integrity (SRI)
+### 5. Local Asset Bundling
 
-D3.js v7.8.5 is loaded from cdn.jsdelivr.net with a SHA-384 integrity hash. If the CDN serves a modified file, the browser refuses to execute it.
+D3.js v7.8.5 and Chart.js v4.4.1 are vendored locally under `assets/vendor/`. No external CDN is referenced at runtime. Scripts are inlined into HTML templates via `fs.readFileSync` and protected by CSP nonces.
 
 ```
-Verify: curl -s https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js | openssl dgst -sha384 -binary | openssl base64 -A
-Source: browserTemplate.ts:99 — D3_SRI constant
-Usage: browserTemplate.ts:122-125 — script tag with integrity attribute
+Source: assets/vendor/d3.v7.8.5.min.js (vendored, 280KB)
+Source: assets/vendor/chart.v4.4.1.umd.min.js (vendored, 205KB)
+Usage: browserTemplate.ts — inlined into <script nonce="..."> tag
 ```
 
 ### 6. XSS Prevention
@@ -187,12 +187,12 @@ Detached false: sreServer.ts:123 — detached: false
 
 | Suite | Tests | What It Verifies |
 |-------|-------|------------------|
-| Server Security | 5 | CSP, SRI, no placeholders, crypto randomness, loopback binding |
+| Server Security | 5 | CSP, local vendor, no placeholders, crypto randomness, loopback binding |
 | Session Token | 3 | Format (32 hex), uniqueness, embedding in WS URL |
 | Rate Limiting | 4 | Allow under limit, block at 101, window reset, per-IP isolation |
 | WebSocket Token Validation | 5 | Valid, invalid, missing, missing URL, malformed URL |
 | CSP Nonce | 3 | Nonce on scripts, nonce in CSP, connect-src |
-| CDN Security | 2 | D3.js version pin, Chart.js removal |
+| Vendor Assets | 3 | D3 exists + size, Chart.js exists + size, no CDN in source |
 | isLoopbackEndpoint | 8 | Loopback accepted, external/empty/javascript: rejected |
 | LiveSREClient | 5 | Non-loopback rejected, initial state, interval clamp, dispose |
 | translateSLO | 10 | Mapping, boundaries, snake_case, rejection, no fabrication |
@@ -214,8 +214,8 @@ Detached false: sreServer.ts:123 — detached: false
 | CSP with per-request nonces | implemented | `GovernanceServer.ts:174-178` |
 | CSP connect-src for WebSocket | implemented | `GovernanceServer.ts:178` |
 | Nonce on all inline script tags | implemented | `browserTemplate.ts:122,130-131` |
-| D3.js SRI hash verified | implemented | `browserTemplate.ts:99` |
-| XSS escaping via esc() | implemented | `browserScripts.ts:13-15` |
+| D3.js vendored locally (no CDN) | implemented | `assets/vendor/d3.v7.8.5.min.js` |
+| XSS escaping via escapeHtml | implemented | `utils/escapeHtml.ts`, inline `esc()` in browser scripts |
 | Staleness display uses textContent only | implemented | `browserScripts.ts:46-49` |
 | Loopback endpoint validation | implemented | `liveClient.ts:60-63` |
 | Constructor rejects non-loopback | implemented | `liveClient.ts:81` |

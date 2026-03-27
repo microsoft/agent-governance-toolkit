@@ -69,16 +69,22 @@ Unified dashboard for real-time governance monitoring:
 - **SLO Dashboard** -- Availability, latency P50/P95/P99, policy compliance, trust scores with error budgets and burn rates
 - **Agent Topology** -- Force-directed graph of agent mesh, trust rings, bridge status, delegation chains
 - **Audit Stream** -- Filterable event log with drill-down
-- **Sidebar + Panel** -- Compact sidebar view and full-window panel
+- **3-Slot Sidebar** -- Configurable panel system with 8 available views, panel picker for slot assignment
+- **Scanning Mode** -- Auto-rotates visual focus through slots (4s cadence), pauses on hover/focus, respects prefers-reduced-motion
+- **Priority Engine** -- Auto-reorders slots by health urgency in Auto mode (critical > warning > healthy)
+- **Attention Toggle** -- Manual/Auto switch in sidebar header; manual locks to user config
 - **Browser Experience** -- Open dashboard in external browser via local server
 
 ### Server Security Hardening
 The Governance Server that powers the browser dashboard includes defense-in-depth security controls:
 - **Session token authentication** -- WebSocket connections require a cryptographically random token generated per server session. Connections without a valid token are rejected with close code 4001.
 - **Rate limiting** -- HTTP requests are limited to 100 per minute per client IP. Excess requests receive HTTP 429 with `Retry-After` header.
-- **Subresource Integrity (SRI)** -- All CDN-loaded scripts include integrity hashes. Tampered files are blocked by the browser.
-- **Content Security Policy (CSP)** -- Restricts script execution to `self` and `cdn.jsdelivr.net`. Blocks inline script injection and eval.
+- **Local asset bundling** -- D3.js and Chart.js vendored locally (no CDN dependency). Eliminates supply-chain risk from external script loading.
+- **Content Security Policy (CSP)** -- Restricts script execution to nonce-only (`'nonce-...'`). No CDN allowlisting, no `unsafe-eval`. WebSocket connect-src explicitly scoped to `ws://127.0.0.1:*`.
+- **HTML escaping** -- Shared `escapeHtml` utility applied to all dynamic data in innerHTML assignments across legacy panels. Prevents XSS from agent DIDs, policy names, and audit data.
 - **Loopback-only binding** -- Server binds exclusively to `127.0.0.1`. Remote connections are structurally impossible.
+- **Python path validation** -- Rejects shell metacharacters before subprocess spawn to prevent command injection.
+- **Dependency pinning** -- Production dependencies (axios, ws) pinned to exact versions for reproducible builds.
 
 For the full security model, threat analysis, and accepted risks, see [SECURITY.md](SECURITY.md).
 

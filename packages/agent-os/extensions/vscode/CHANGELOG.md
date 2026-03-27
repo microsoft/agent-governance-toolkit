@@ -32,6 +32,18 @@ All notable changes to the Agent OS VS Code extension will be documented in this
 - Policy diagnostics: Real-time governance rule validation with code actions
 - Local report export: Self-contained HTML governance report
 - Metrics exporter: Push dashboard metrics to observability endpoints
+- 3-slot configurable sidebar replacing 8 stacked tree views with React + Tailwind panel system
+- Panel picker overlay for drag-and-drop slot configuration
+- GovernanceStore: centralized state management with JSON deduplication and visibility gating
+- Event-driven refresh: sidebar reacts instantly to data changes via vscode.EventEmitter, 30s heartbeat safety net
+- Scanning mode: 4-second auto-rotation through sidebar slots with hover/focus pause and prefers-reduced-motion support
+- Attention toggle: Manual/Auto switch — manual locks to user config, auto enables scanning and priority reordering
+- Priority engine: ranks panels by health urgency (critical > warning > healthy > unknown), auto-reorders slots in auto mode
+- Per-panel latency isolation: slow data sources automatically split to offset refresh cadence with staleness indicator
+
+### Changed
+- SidebarProvider refactored from monolithic 213-line data owner to 133-line thin webview bridge
+- Sidebar polling replaced with event-driven architecture — LiveSREClient and AuditLogger emit change events
 
 ## [1.0.1] - 2026-01-29
 
