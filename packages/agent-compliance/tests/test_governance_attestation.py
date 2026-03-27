@@ -426,3 +426,102 @@ End.
         missing = [e for e in result.errors if "Missing section" in e]
         assert len(missing) == 7
         assert result.sections_found == {}
+
+    def test_h3_headings_supported(self):
+        """Test that ### (h3) headings are accepted (GitHub Issue Forms render these)."""
+        pr_body = """
+### 1) Security review
+- [x] ✅ Yes
+- [ ] ❌ No
+
+### 2) Privacy review
+- [x] ✅ Yes
+
+### 3) CELA review
+- [x] ✅ Yes
+
+### 4) Responsible AI review
+- [x] ✅ Yes
+
+### 5) Accessibility review
+- [x] ✅ Yes
+
+### 6) Release Readiness / Safe Deployment
+- [x] ✅ Yes
+
+### 7) Org-specific Launch Gates
+- [x] ✅ Yes
+"""
+        result = validate_attestation(pr_body)
+        assert result.valid is True
+        assert len(result.errors) == 0
+        assert len(result.sections_found) == 7
+
+    def test_h3_headings_mixed_with_h2(self):
+        """Test that ## and ### headings can coexist in the same document."""
+        pr_body = """
+## 1) Security review
+- [x] ✅ Yes
+
+### 2) Privacy review
+- [x] ✅ Yes
+
+## 3) CELA review
+- [x] ✅ Yes
+
+### 4) Responsible AI review
+- [x] ✅ Yes
+
+## 5) Accessibility review
+- [x] ✅ Yes
+
+### 6) Release Readiness / Safe Deployment
+- [x] ✅ Yes
+
+## 7) Org-specific Launch Gates
+- [x] ✅ Yes
+"""
+        result = validate_attestation(pr_body)
+        assert result.valid is True
+        assert len(result.errors) == 0
+
+    def test_h3_no_checkbox_marked(self):
+        """Test that h3 sections still enforce exactly-one-checked rule."""
+        pr_body = """
+### 1) Security review
+- [ ] ✅ Yes
+- [ ] ❌ No
+
+### 2) Privacy review
+- [x] ✅ Yes
+
+### 3) CELA review
+- [x] ✅ Yes
+
+### 4) Responsible AI review
+- [x] ✅ Yes
+
+### 5) Accessibility review
+- [x] ✅ Yes
+
+### 6) Release Readiness / Safe Deployment
+- [x] ✅ Yes
+
+### 7) Org-specific Launch Gates
+- [x] ✅ Yes
+"""
+        result = validate_attestation(pr_body)
+        assert result.valid is False
+        assert any("found 0" in e for e in result.errors)
+        assert result.sections_found["1) Security review"] == 0
+
+    def test_h4_headings_not_supported(self):
+        """Test that #### (h4) headings are NOT matched — only h2 and h3 are valid."""
+        pr_body = """
+#### 1) Security review
+- [x] ✅ Yes
+"""
+        custom_sections = ["1) Security review"]
+        result = validate_attestation(pr_body, required_sections=custom_sections)
+        assert result.valid is False
+        assert any("Missing section" in e for e in result.errors)
