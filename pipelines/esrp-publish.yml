@@ -325,122 +325,29 @@ stages:
               publishLocation: 'pipeline'
             displayName: 'Publish unsigned NuGet artifacts'
 
-  - stage: Sign_NuGet
-    displayName: 'ESRP Sign NuGet'
+  - stage: Publish_NuGet
+    displayName: 'Publish to NuGet.org'
     dependsOn: Build_NuGet
-    condition: and(succeeded(), or(eq('${{ parameters.target }}', 'nuget'), eq('${{ parameters.target }}', 'all')))
+    condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'nuget'), eq('${{ parameters.target }}', 'all')))
     jobs:
-      - job: ESRPSign
-        displayName: 'Authenticode + NuGet Sign'
+      - job: PublishNuGet
+        displayName: 'Push to NuGet.org'
         steps:
           - task: DownloadPipelineArtifact@2
             inputs:
               artifact: 'nuget-unsigned'
-              targetPath: '$(Pipeline.Workspace)/nuget-unsigned'
-            displayName: 'Download unsigned NuGet artifacts'
+              targetPath: '$(Pipeline.Workspace)/nuget-publish'
+            displayName: 'Download NuGet artifacts'
 
-          - task: EsrpCodeSigning@5
-            displayName: 'ESRP Authenticode Sign DLLs'
-            inputs:
-              connectedservicename: 'Agent Governance Toolkit'
-              appregistrationclientid: '$(ESRP_CLIENT_ID)'
-              appregistrationtenantid: '$(ESRP_DOMAIN_TENANT_ID)'
-              usemanagedidentity: true
-              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              authcertname: '$(ESRP_CERT_IDENTIFIER)'
-              signfolder: '$(Pipeline.Workspace)/nuget-unsigned'
-              pattern: '**/*.dll'
-              signConfigType: inlineSignParams
-              inlinesignparams: |
-                [
-                  {
-                    "keyCode": "CP-230012",
-                    "operationSetCode": "SigntoolSign",
-                    "parameters": [
-                      { "parameterName": "OpusName", "parameterValue": "Microsoft.AgentGovernance" },
-                      { "parameterName": "OpusInfo", "parameterValue": "https://github.com/microsoft/agent-governance-toolkit" },
-                      { "parameterName": "PageHash", "parameterValue": "/NPH" },
-                      { "parameterName": "TimeStamp", "parameterValue": "/tr \"http://rfc3161.gtm.corp.microsoft.com/TSS/HttpTspServer\" /td sha256" },
-                      { "parameterName": "FileDigest", "parameterValue": "/fd \"SHA256\"" }
-                    ],
-                    "toolName": "sign",
-                    "toolVersion": "1.0"
-                  },
-                  {
-                    "keyCode": "CP-230012",
-                    "operationSetCode": "SigntoolVerify",
-                    "parameters": [],
-                    "toolName": "sign",
-                    "toolVersion": "1.0"
-                  }
-                ]
+          - script: |
+              echo "=== Packages to publish ==="
+              ls -la $(Pipeline.Workspace)/nuget-publish/
+            displayName: 'List packages'
 
-          - task: EsrpCodeSigning@5
-            displayName: 'ESRP NuGet Sign Package'
+          - task: NuGetCommand@2
+            displayName: 'Push to NuGet.org'
             inputs:
-              connectedservicename: 'Agent Governance Toolkit'
-              appregistrationclientid: '$(ESRP_CLIENT_ID)'
-              appregistrationtenantid: '$(ESRP_DOMAIN_TENANT_ID)'
-              usemanagedidentity: true
-              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              authcertname: '$(ESRP_CERT_IDENTIFIER)'
-              signfolder: '$(Pipeline.Workspace)/nuget-unsigned'
-              pattern: '**/*.nupkg'
-              signConfigType: inlineSignParams
-              inlinesignparams: |
-                [
-                  {
-                    "keyCode": "CP-401405",
-                    "operationSetCode": "NuGetSign",
-                    "parameters": [],
-                    "toolName": "sign",
-                    "toolVersion": "1.0"
-                  },
-                  {
-                    "keyCode": "CP-401405",
-                    "operationSetCode": "NuGetVerify",
-                    "parameters": [],
-                    "toolName": "sign",
-                    "toolVersion": "1.0"
-                  }
-                ]
-
-          - task: PublishPipelineArtifact@1
-            inputs:
-              targetPath: '$(Pipeline.Workspace)/nuget-unsigned'
-              artifact: 'nuget-signed'
-              publishLocation: 'pipeline'
-            displayName: 'Publish signed NuGet artifacts'
-
-  - stage: Publish_NuGet
-    displayName: 'Publish to NuGet via ESRP'
-    dependsOn: Sign_NuGet
-    condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'nuget'), eq('${{ parameters.target }}', 'all')))
-    jobs:
-      - job: PublishNuGet
-        displayName: 'ESRP Release to NuGet.org'
-        steps:
-          - task: DownloadPipelineArtifact@2
-            inputs:
-              artifact: 'nuget-signed'
-              targetPath: '$(Pipeline.Workspace)/nuget-signed'
-            displayName: 'Download signed NuGet artifacts'
-
-          - task: EsrpRelease@11
-            displayName: 'ESRP Publish to NuGet.org'
-            inputs:
-              connectedservicename: 'Agent Governance Toolkit'
-              usemanagedidentity: true
-              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              signcertname: '$(ESRP_CERT_IDENTIFIER)'
-              clientid: '$(ESRP_CLIENT_ID)'
-              intent: 'PackageDistribution'
-              contenttype: 'NuGet'
-              contentsource: 'Folder'
-              folderlocation: '$(Pipeline.Workspace)/nuget-signed'
-              waitforreleasecompletion: true
-              owners: '$(ESRP_OWNERS)'
-              approvers: '$(ESRP_APPROVERS)'
-              serviceendpointurl: 'https://api.esrp.microsoft.com'
-              mainpublisher: 'ESRPRELPACMAN'
-              domaintenantid: '$(ESRP_DOMAIN_TENANT_ID)'
+              command: 'push'
+              packagesToPush: '$(Pipeline.Workspace)/nuget-publish/**/*.nupkg;!$(Pipeline.Workspace)/nuget-publish/**/*.symbols.nupkg'
+              nuGetFeedType: 'external'
+              publishFeedCredentials: 'NuGet.org'
