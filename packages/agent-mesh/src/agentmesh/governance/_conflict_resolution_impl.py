@@ -31,11 +31,12 @@ class ConflictResolutionStrategy(str, Enum):
 class PolicyScope(str, Enum):
     """Breadth of a policy's applicability.
 
-    Specificity order (most → least): AGENT > TENANT > GLOBAL.
+    Specificity order (most → least): AGENT > ORGANIZATION > TENANT > GLOBAL.
     """
 
     GLOBAL = "global"
     TENANT = "tenant"
+    ORGANIZATION = "organization"
     AGENT = "agent"
 
 
@@ -43,7 +44,8 @@ class PolicyScope(str, Enum):
 _SCOPE_SPECIFICITY: dict[Any, int] = {
     PolicyScope.GLOBAL: 0,
     PolicyScope.TENANT: 1,
-    PolicyScope.AGENT: 2,
+    PolicyScope.ORGANIZATION: 2,
+    PolicyScope.AGENT: 3,
 }
 
 

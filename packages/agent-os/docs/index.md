@@ -38,6 +38,7 @@ Learn by doing with our Jupyter notebooks:
 ### 🔧 Reference
 
 - [Framework Integrations](integrations.md) - LangChain, OpenAI, CrewAI
+- [AgentConfig File Reference](agent-config-reference.md) - Supported YAML keys and validation rules
 - [Dependencies](dependencies.md) - Package dependencies
 - [Security Specification](security-spec.md) - Security model
 - [FAQ](faq.md) - Common questions and answers

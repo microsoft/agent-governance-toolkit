@@ -73,6 +73,7 @@ pip install agentmesh-lightning        # RL training governance
 - **[Azure Deployment](docs/deployment/README.md)** — AKS, Azure AI Foundry, Container Apps, OpenClaw sidecar
 - **[NVIDIA OpenShell Integration](docs/integrations/openshell.md)** — Combine sandbox isolation with governance intelligence
 - **[OWASP Compliance](docs/OWASP-COMPLIANCE.md)** — Full ASI-01 through ASI-10 mapping
+- **[Threat Model](docs/THREAT_MODEL.md)** — Trust boundaries, attack surfaces, and STRIDE analysis
 - **[Architecture](docs/ARCHITECTURE.md)** — System design, security model, trust scoring
 - **[NIST RFI Mapping](docs/nist-rfi-mapping.md)** — Mapping to NIST AI Agent Security RFI (2026-00206)
 
@@ -92,6 +93,8 @@ Still have questions? File a [GitHub issue](https://github.com/microsoft/agent-g
   - [Framework quickstarts](examples/quickstart/) | [Integration proposals](docs/proposals/)
 - **Full OWASP Coverage**: 10/10 Agentic Top 10 risks addressed with dedicated controls for each ASI category
   - [OWASP Compliance](docs/OWASP-COMPLIANCE.md) | [Competitive Comparison](docs/COMPARISON.md)
+- **GitHub Actions for CI/CD**: Automated security scanning and governance attestation for PR workflows
+  - [Security Scan Action](action/security-scan/) | [Governance Attestation Action](action/governance-attestation/)
 
 ### 💬 **We want your feedback!**
 

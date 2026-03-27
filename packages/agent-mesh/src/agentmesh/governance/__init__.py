@@ -46,6 +46,20 @@ from .trust_policy import (
 from .async_policy_evaluator import AsyncTrustPolicyEvaluator
 from .async_policy_evaluator import ConcurrencyStats as TrustConcurrencyStats
 from .policy_evaluator import PolicyEvaluator, TrustPolicyDecision
+from .federation import (
+    PolicyCategory,
+    OrgPolicyRule,
+    DataClassification,
+    OrgPolicy,
+    OrgPolicyDecision,
+    OrgTrustAgreement,
+    PolicyDelegation,
+    FederationDecision,
+    FederationStore,
+    InMemoryFederationStore,
+    FileFederationStore,
+    FederationEngine,
+)
 
 __all__ = [
     "AsyncTrustPolicyEvaluator",
@@ -92,4 +106,18 @@ __all__ = [
     "load_policies",
     "PolicyEvaluator",
     "TrustPolicyDecision",
+    # Federation (issue #93)
+    "PolicyCategory",
+    "OrgPolicyRule",
+    "DataClassification",
+    "OrgPolicy",
+    "OrgPolicyDecision",
+    "OrgTrustAgreement",
+    "PolicyDelegation",
+    "FederationDecision",
+    "FederationStore",
+    "InMemoryFederationStore",
+    "FileFederationStore",
+    "FederationEngine",
 ]
+

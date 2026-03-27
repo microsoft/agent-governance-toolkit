@@ -1,11 +1,31 @@
-# Example Agent OS configuration file
+# Example Agent OS configuration file.
 # Load with: AgentConfig.from_file("examples/agent_config.yaml")
+# Supported keys are documented in ../docs/agent-config-reference.md.
 
+# Required in practice. Must be 3-64 characters, start with an alphanumeric
+# character, and then use only letters, numbers, or dashes.
 agent_id: my-example-agent
+
+# Optional alias for mixed-style configs. Use either `agent_id` or `agentId`,
+# not both.
+# agentId: my-example-agent
+
+# Optional. Policies are applied in order and passed through to the execution
+# context for every request made by this agent.
 policies:
   - read_only
   - no_pii
+
+# Optional free-form metadata copied into the execution context. Keep values
+# small enough to fit within `max_metadata_size_bytes`.
 metadata:
   environment: development
   owner: team-platform
   version: "1.0"
+
+# Optional. Maximum number of in-memory audit entries retained for this agent.
+max_audit_log_size: 10000
+
+# Optional. Per-value byte limit enforced when metadata is copied into a new
+# execution context.
+max_metadata_size_bytes: 1048576
