@@ -352,3 +352,77 @@ Some text ## 1) Security review
         result = validate_attestation(pr_body, min_body_length=50)
         # Will fail due to length
         assert any("too short" in error for error in result.errors)
+
+    def test_pr_body_no_checkboxes_at_all(self):
+        """Test validation when sections exist but contain no checkboxes."""
+        pr_body = """
+## 1) Security review
+This section has no checkboxes at all.
+
+## 2) Privacy review
+Just plain text.
+
+## 3) CELA review
+Nothing here either.
+
+## 4) Responsible AI review
+More prose.
+
+## 5) Accessibility review
+Nope.
+
+## 6) Release Readiness / Safe Deployment
+Still nothing.
+
+## 7) Org-specific Launch Gates
+End.
+"""
+        result = validate_attestation(pr_body)
+        assert result.valid is False
+        # Every section found but 0 checked boxes
+        zero_errors = [e for e in result.errors if "found 0" in e]
+        assert len(zero_errors) == 7
+
+    def test_pr_body_html_encoded_checkboxes(self):
+        """Test that HTML-encoded checkbox characters are NOT counted as checked."""
+        pr_body = """
+## 1) Security review
+- &#91;x&#93; Yes
+- [ ] No
+
+## 2) Privacy review
+- [x] Yes
+"""
+        custom_sections = ["1) Security review", "2) Privacy review"]
+        result = validate_attestation(pr_body, required_sections=custom_sections)
+        # Section 1 uses HTML entities — should NOT match as a checked box
+        assert result.sections_found.get("1) Security review", 0) == 0
+        assert result.sections_found.get("2) Privacy review", 0) == 1
+
+    def test_pr_body_multiple_governance_sections_all_validated(self):
+        """Test that ALL required governance sections are validated."""
+        pr_body = """
+## Alpha
+- [x] Done
+
+## Beta
+- [x] Done
+
+## Gamma
+- [ ] Not done
+"""
+        custom_sections = ["Alpha", "Beta", "Gamma"]
+        result = validate_attestation(pr_body, required_sections=custom_sections)
+        assert result.valid is False
+        assert result.sections_found["Alpha"] == 1
+        assert result.sections_found["Beta"] == 1
+        assert result.sections_found["Gamma"] == 0
+        assert any("found 0" in e for e in result.errors)
+
+    def test_empty_string_pr_body(self):
+        """Test validation with a completely empty string PR body."""
+        result = validate_attestation("")
+        assert result.valid is False
+        missing = [e for e in result.errors if "Missing section" in e]
+        assert len(missing) == 7
+        assert result.sections_found == {}

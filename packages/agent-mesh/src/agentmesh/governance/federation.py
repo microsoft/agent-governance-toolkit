@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, Optional, Protocol, runtime_checkable
@@ -169,8 +169,12 @@ class OrgPolicy(BaseModel):
         description="Blocked org IDs — always deny",
     )
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+    )
 
     def evaluate(self, context: dict) -> OrgPolicyDecision:
         """Evaluate all rules against the given context.
@@ -310,7 +314,9 @@ class OrgTrustAgreement(BaseModel):
         default=DataClassification.INTERNAL,
     )
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+    )
     expires_at: Optional[datetime] = Field(None)
     revoked: bool = Field(default=False)
     revocation_reason: Optional[str] = Field(None)
@@ -324,7 +330,7 @@ class OrgTrustAgreement(BaseModel):
         """Check if this agreement is active (not expired or revoked)."""
         if self.revoked:
             return False
-        if self.expires_at and datetime.utcnow() > self.expires_at:
+        if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
             return False
         return True
 
@@ -405,7 +411,9 @@ class PolicyDelegation(BaseModel):
         default_factory=dict,
         description="Additional constraints",
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+    )
     expires_at: Optional[datetime] = Field(None)
     active: bool = Field(default=True)
 
@@ -413,7 +421,7 @@ class PolicyDelegation(BaseModel):
         """Check if delegation is active and not expired."""
         if not self.active:
             return False
-        if self.expires_at and datetime.utcnow() > self.expires_at:
+        if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
             return False
         return True
 
@@ -471,7 +479,9 @@ class FederationDecision(BaseModel):
     delegations_applied: list[str] = Field(default_factory=list)
     reason: str = ""
     trace: list[str] = Field(default_factory=list)
-    evaluated_at: datetime = Field(default_factory=datetime.utcnow)
+    evaluated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+    )
 
 
 # ── Persistence Interface ─────────────────────────────────────
@@ -504,6 +514,7 @@ class InMemoryFederationStore:
     """
 
     def __init__(self) -> None:
+        """Initialize empty in-memory stores for policies, agreements, and delegations."""
         self._org_policies: dict[str, OrgPolicy] = {}
         self._trust_agreements: list[OrgTrustAgreement] = []
         self._delegations: list[PolicyDelegation] = []
@@ -641,6 +652,12 @@ class FederationEngine:
         self,
         store: Optional[InMemoryFederationStore] = None,
     ) -> None:
+        """Initialize the federation engine with the given store.
+
+        Args:
+            store: Federation data store. Defaults to a new
+                ``InMemoryFederationStore`` if not provided.
+        """
         self.store = store or InMemoryFederationStore()
 
     # ── Primary evaluation ─────────────────────────────────
@@ -920,6 +937,13 @@ class FileFederationStore(InMemoryFederationStore):
     """
 
     def __init__(self, directory: str | Path) -> None:
+        """Initialize and load federation data from the given directory.
+
+        Args:
+            directory: Path to the federation config directory containing
+                ``org_policies/``, ``trust_agreements.yaml``, and
+                ``delegations.yaml``.
+        """
         super().__init__()
         self._directory = Path(directory)
         self._load()

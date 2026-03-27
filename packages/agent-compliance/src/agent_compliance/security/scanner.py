@@ -35,7 +35,7 @@ SEVERITY_CONFIG = {
 }
 
 # Files/patterns to exclude from scanning
-SECURITY_SCAN_EXCLUSIONS = [
+SECURITY_SCAN_EXCLUSIONS = (
     "**/tests/fixtures/**",
     "**/test/fixtures/**",
     "**/__tests__/mocks/**",
@@ -56,10 +56,10 @@ SECURITY_SCAN_EXCLUSIONS = [
     "**/__pycache__/**",
     "**/README.md",
     "**/CONTRIBUTING.md",
-]
+)
 
 # Test credential patterns to allow
-ALLOWED_TEST_PATTERNS = [
+ALLOWED_TEST_PATTERNS = (
     r"sk_test_",
     r"test[-_]?key",
     r"mock[-_]?token",
@@ -68,7 +68,7 @@ ALLOWED_TEST_PATTERNS = [
     r"example\.com",
     r"localhost",
     r"127\.0\.0\.1",
-]
+)
 
 
 class SecurityFinding:
@@ -87,6 +87,20 @@ class SecurityFinding:
         cwe: str | None = None,
         cve: str | None = None,
     ):
+        """Create a security finding.
+
+        Args:
+            severity: One of "critical", "high", "medium", "low".
+            category: Finding category (e.g. "secrets", "cve", "code-pattern").
+            title: Short summary of the finding.
+            file: File path where the issue was found.
+            line: Line number in the file, if applicable.
+            code: Code snippet that triggered the finding.
+            description: Detailed description of the issue.
+            recommendation: Suggested fix for the issue.
+            cwe: Common Weakness Enumeration ID (e.g. "CWE-798").
+            cve: Common Vulnerabilities and Exposures ID.
+        """
         self.severity = severity
         self.category = category
         self.title = title
@@ -146,14 +160,72 @@ class SecurityFinding:
 class SecurityScanner:
     """Security scanner for plugin directories."""
 
+    # Pre-compiled regex patterns for performance
+    _CODE_BLOCK_RE = re.compile(r"```(\w+)\n(.*?)```", re.DOTALL)
+    _SECRET_LOCATION_RE = re.compile(r"(\S+):(\d+)")
+    _PYTHON_DANGEROUS_PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
+        (
+            re.compile(r"\beval\s*\("),
+            "eval() detected",
+            "Avoid eval() - use ast.literal_eval or safer alternatives",
+        ),
+        (
+            re.compile(r"\bexec\s*\("),
+            "exec() detected",
+            "Avoid exec() - use safer alternatives",
+        ),
+        (
+            re.compile(r"pickle\.loads?\s*\("),
+            "pickle usage detected",
+            "Use JSON or safer serialization",
+        ),
+        (
+            re.compile(r"os\.system\s*\("),
+            "os.system() detected",
+            "Use subprocess.run() with argument list",
+        ),
+    ]
+    _JS_DANGEROUS_PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
+        (re.compile(r"\beval\s*\("), "eval() detected", "Use JSON.parse or safer alternatives"),
+        (
+            re.compile(r"new\s+Function\s*\("),
+            "Function constructor detected",
+            "Avoid dynamic code generation",
+        ),
+        (
+            re.compile(r"innerHTML\s*="),
+            "innerHTML assignment",
+            "Use textContent or DOMPurify for sanitization",
+        ),
+    ]
+    _SHELL_DANGEROUS_PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
+        (
+            re.compile(r"\brm\s+-rf\s+/"),
+            "Dangerous recursive delete",
+            "Never delete from root - use specific paths",
+        ),
+        (
+            re.compile(r"\$\(.*curl\s+.*\|.*bash"),
+            "Pipe to bash from curl",
+            "Download and inspect scripts before execution",
+        ),
+    ]
+
     def __init__(self, plugin_dir: Path, plugin_name: str, verbose: bool = False):
+        """Initialize security scanner.
+
+        Args:
+            plugin_dir: Path to the plugin directory to scan.
+            plugin_name: Human-readable plugin name for reports.
+            verbose: If True, print detailed progress to stdout.
+        """
         self.plugin_dir = plugin_dir
         self.plugin_name = plugin_name
         self.verbose = verbose
         self.findings: list[SecurityFinding] = []
         self.exemptions = self._load_exemptions()
 
-    def _load_exemptions(self) -> dict:
+    def _load_exemptions(self) -> dict[str, list[dict[str, object]]]:
         """Load security exemptions from plugin config.
 
         Validates the exemptions file against a strict schema to prevent
@@ -226,17 +298,25 @@ class SecurityScanner:
         return {"exemptions": []}
 
     def _is_exempted(self, finding: SecurityFinding) -> bool:
-        """Check if a finding is exempted."""
+        """Check if a finding is exempted.
+
+        Matches exemptions against findings using three strategies (in order):
+        1. Exact match on category + file + line number
+        2. Match on category + file (any line in that file)
+        3. Match on CVE identifier
+        """
         for exemption in self.exemptions.get("exemptions", []):
-            # Match by file and line
+            # Match by category, file, and line
             if (
-                exemption.get("file") == finding.file
+                exemption.get("category") == finding.category
+                and exemption.get("file") == finding.file
+                and exemption.get("line") is not None
                 and exemption.get("line") == finding.line
             ):
                 return True
             # Match by category and file pattern
             if exemption.get("category") == finding.category:
-                if exemption.get("file") == finding.file:
+                if exemption.get("file") == finding.file and exemption.get("line") is None:
                     return True
             # Match by CVE
             if finding.cve and exemption.get("cve") == finding.cve:
@@ -272,8 +352,7 @@ class SecurityScanner:
                 output = result.stdout + result.stderr
 
                 # Simple pattern matching for file:line
-                pattern = r"(\S+):(\d+)"
-                matches = re.finditer(pattern, output)
+                matches = self._SECRET_LOCATION_RE.finditer(output)
 
                 for match in matches:
                     file_path = match.group(1)
@@ -577,8 +656,7 @@ class SecurityScanner:
             return
 
         # Extract code blocks
-        pattern = r"```(\w+)\n(.*?)```"
-        blocks = re.findall(pattern, content, re.DOTALL)
+        blocks = self._CODE_BLOCK_RE.findall(content)
 
         for i, (lang, code) in enumerate(blocks):
             lang = lang.lower()
@@ -595,31 +673,8 @@ class SecurityScanner:
         self, file_path: Path, code: str, block_index: int
     ) -> None:
         """Check Python code block for dangerous patterns."""
-        dangerous_patterns = [
-            (
-                r"\beval\s*\(",
-                "eval() detected",
-                "Avoid eval() - use ast.literal_eval or safer alternatives",
-            ),
-            (
-                r"\bexec\s*\(",
-                "exec() detected",
-                "Avoid exec() - use safer alternatives",
-            ),
-            (
-                r"pickle\.loads?\s*\(",
-                "pickle usage detected",
-                "Use JSON or safer serialization",
-            ),
-            (
-                r"os\.system\s*\(",
-                "os.system() detected",
-                "Use subprocess.run() with argument list",
-            ),
-        ]
-
-        for pattern, title, recommendation in dangerous_patterns:
-            if re.search(pattern, code):
+        for compiled_re, title, recommendation in self._PYTHON_DANGEROUS_PATTERNS:
+            if compiled_re.search(code):
                 rel_file = file_path.relative_to(self.plugin_dir)
                 self.findings.append(
                     SecurityFinding(
@@ -636,22 +691,8 @@ class SecurityScanner:
         self, file_path: Path, code: str, block_index: int
     ) -> None:
         """Check JavaScript code block for dangerous patterns."""
-        dangerous_patterns = [
-            (r"\beval\s*\(", "eval() detected", "Use JSON.parse or safer alternatives"),
-            (
-                r"new\s+Function\s*\(",
-                "Function constructor detected",
-                "Avoid dynamic code generation",
-            ),
-            (
-                r"innerHTML\s*=",
-                "innerHTML assignment",
-                "Use textContent or DOMPurify for sanitization",
-            ),
-        ]
-
-        for pattern, title, recommendation in dangerous_patterns:
-            if re.search(pattern, code):
+        for compiled_re, title, recommendation in self._JS_DANGEROUS_PATTERNS:
+            if compiled_re.search(code):
                 rel_file = file_path.relative_to(self.plugin_dir)
                 self.findings.append(
                     SecurityFinding(
@@ -668,27 +709,12 @@ class SecurityScanner:
         self, file_path: Path, code: str, block_index: int
     ) -> None:
         """Check shell code block for dangerous patterns."""
-        dangerous_patterns = [
-            (
-                r"\brm\s+-rf\s+/",
-                "Dangerous recursive delete",
-                "Never delete from root - use specific paths",
-            ),
-            (
-                r"\$\(.*curl\s+.*\|.*bash",
-                "Pipe to bash from curl",
-                "Download and inspect scripts before execution",
-            ),
-        ]
-
-        for pattern, title, recommendation in dangerous_patterns:
-            if re.search(pattern, code):
+        for compiled_re, title, recommendation in self._SHELL_DANGEROUS_PATTERNS:
+            if compiled_re.search(code):
                 rel_file = file_path.relative_to(self.plugin_dir)
-                # Shell examples in docs are often demonstrative - lower severity
-                severity = "medium"
                 self.findings.append(
                     SecurityFinding(
-                        severity=severity,
+                        severity="medium",
                         category="code-pattern",
                         title=title,
                         file=f"{rel_file} (code block #{block_index + 1})",
