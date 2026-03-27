@@ -45,16 +45,12 @@ suite('MockPolicyBackend Test Suite', () => {
         });
     });
 
-    test('Evaluation counts increase over calls', async () => {
+    test('Evaluation counts are at least the base values', async () => {
         const backend = createMockPolicyBackend();
-        const snapshot1 = await backend.getSnapshot();
-        const snapshot2 = await backend.getSnapshot();
-
-        const total1 = snapshot1.rules.reduce((s, r) => s + r.evaluationsToday, 0);
-        const total2 = snapshot2.rules.reduce((s, r) => s + r.evaluationsToday, 0);
-
-        // Counts should be equal or higher (randomness)
-        assert.ok(total2 >= total1, 'Evaluation counts should not decrease');
+        const snapshot = await backend.getSnapshot();
+        const total = snapshot.rules.reduce((s, r) => s + r.evaluationsToday, 0);
+        // Base: 342 + 156 + 28 + 89 + 0 = 615. Random adds 0-4 per enabled rule.
+        assert.ok(total >= 615, `Total evaluations should be >= base (615), got ${total}`);
     });
 
     test('Totals match rule sums', async () => {

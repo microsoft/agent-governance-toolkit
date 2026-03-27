@@ -8,9 +8,19 @@
  */
 
 import * as assert from 'assert';
+import * as vscode from 'vscode';
 import { createProviders } from '../../services/providerFactory';
 
 suite('providerFactory', () => {
+    let originalShowInfo: typeof vscode.window.showInformationMessage;
+    setup(() => {
+        originalShowInfo = vscode.window.showInformationMessage;
+        (vscode.window as any).showInformationMessage = async () => undefined;
+    });
+    teardown(() => {
+        (vscode.window as any).showInformationMessage = originalShowInfo;
+    });
+
     test('unavailable python returns not-installed providers', async () => {
         const providers = await createProviders({ pythonPath: 'nonexistent-python-binary' });
         assert.strictEqual(providers.status, 'not-installed');
