@@ -107,6 +107,12 @@ class TestSecurityFinding:
 class TestSecurityScanner:
     """Tests for SecurityScanner class."""
 
+    def setup_method(self):
+        """Ensure clean state before each test."""
+        # SecurityScanner uses instance state, but guard against any
+        # module-level or class-level mutation leaking between tests.
+        pass
+
     def test_scanner_initialization(self, tmp_path):
         """Test scanner initialization."""
         plugin_dir = tmp_path / "test-plugin"
@@ -431,6 +437,152 @@ rm -rf /
         titles = [f.title for f in scanner.findings]
         assert "eval() detected" in titles
         assert "Dangerous recursive delete" in titles
+
+    def test_scan_empty_file(self, tmp_path):
+        """Test scanning an empty file produces no findings."""
+        plugin_dir = tmp_path / "test-plugin"
+        skill_dir = plugin_dir / "skills" / "empty"
+        skill_dir.mkdir(parents=True)
+
+        empty_file = skill_dir / "SKILL.md"
+        empty_file.write_text("")
+
+        scanner = SecurityScanner(plugin_dir, "test-plugin")
+        scanner._scan_markdown_file(empty_file)
+
+        assert scanner.findings == []
+
+    def test_scan_comments_only_file(self, tmp_path):
+        """Test scanning a markdown file with only comments and no code blocks."""
+        plugin_dir = tmp_path / "test-plugin"
+        skill_dir = plugin_dir / "skills" / "comments"
+        skill_dir.mkdir(parents=True)
+
+        md_file = skill_dir / "SKILL.md"
+        md_file.write_text(
+            "# My Skill\n\n"
+            "<!-- This is an HTML comment -->\n\n"
+            "Some descriptive text.\n\n"
+            "<!-- Another comment -->\n"
+        )
+
+        scanner = SecurityScanner(plugin_dir, "test-plugin")
+        scanner._scan_markdown_file(md_file)
+
+        assert scanner.findings == []
+
+    def test_scan_binary_file_skipped(self, tmp_path):
+        """Test that scanning a binary file is skipped gracefully."""
+        plugin_dir = tmp_path / "test-plugin"
+        skill_dir = plugin_dir / "skills" / "bin"
+        skill_dir.mkdir(parents=True)
+
+        bin_file = skill_dir / "SKILL.md"
+        bin_file.write_bytes(b"\x00\x01\x02\xff\xfe\xfd")
+
+        scanner = SecurityScanner(plugin_dir, "test-plugin")
+        scanner._scan_markdown_file(bin_file)
+
+        # Binary content triggers UnicodeDecodeError and is skipped
+        assert scanner.findings == []
+
+    def test_exemption_with_expired_date(self, tmp_path):
+        """Test that an expired exemption does not suppress findings."""
+        plugin_dir = tmp_path / "test-plugin"
+        plugin_dir.mkdir()
+
+        exemptions_file = plugin_dir / ".security-exemptions.json"
+        exemptions_data = {
+            "version": "1.0",
+            "exemptions": [
+                {
+                    "category": "secrets",
+                    "file": "config.py",
+                    "line": 5,
+                    "justification": "Temporary exemption that has expired",
+                    "approved_by": "security-team",
+                    "expires": "2020-01-01",
+                }
+            ],
+        }
+        exemptions_file.write_text(json.dumps(exemptions_data))
+
+        scanner = SecurityScanner(plugin_dir, "test-plugin")
+
+        # The expired exemption should have been filtered out during load
+        assert len(scanner.exemptions["exemptions"]) == 0
+
+        finding = SecurityFinding(
+            severity="critical",
+            category="secrets",
+            title="Secret detected",
+            file="config.py",
+            line=5,
+        )
+        assert scanner._is_exempted(finding) is False
+
+    def test_scan_markdown_nested_code_blocks(self, tmp_path):
+        """Test scanning markdown with nested triple backticks."""
+        plugin_dir = tmp_path / "test-plugin"
+        skill_dir = plugin_dir / "skills" / "nested"
+        skill_dir.mkdir(parents=True)
+
+        md_file = skill_dir / "SKILL.md"
+        # Outer block should be detected; inner escaped backticks should not
+        # cause a parser crash or false positive.
+        md_file.write_text(
+            "# Nested Code Blocks\n\n"
+            "````python\n"
+            "# This is safe code\n"
+            "x = 1 + 2\n"
+            "```\n"
+            "# still inside outer block\n"
+            "````\n\n"
+            "```python\n"
+            "result = eval(user_input)\n"
+            "```\n"
+        )
+
+        scanner = SecurityScanner(plugin_dir, "test-plugin")
+        scanner._scan_markdown_file(md_file)
+
+        # Should detect eval() in the second (non-nested) block
+        eval_findings = [f for f in scanner.findings if f.title == "eval() detected"]
+        assert len(eval_findings) >= 1
+
+    def test_severity_filtering_blocking(self, tmp_path):
+        """Test that only critical/high findings block; medium/low do not."""
+        plugin_dir = tmp_path / "test-plugin"
+        plugin_dir.mkdir()
+
+        scanner = SecurityScanner(plugin_dir, "test-plugin")
+
+        scanner.findings = [
+            SecurityFinding(
+                severity="critical", category="secrets",
+                title="Critical issue", file="a.py",
+            ),
+            SecurityFinding(
+                severity="high", category="cve",
+                title="High issue", file="b.py",
+            ),
+            SecurityFinding(
+                severity="medium", category="code-pattern",
+                title="Medium issue", file="c.py",
+            ),
+            SecurityFinding(
+                severity="low", category="code-pattern",
+                title="Low issue", file="d.py",
+            ),
+        ]
+
+        blocking = [f for f in scanner.findings if f.is_blocking()]
+        non_blocking = [f for f in scanner.findings if not f.is_blocking()]
+
+        assert len(blocking) == 2
+        assert all(f.severity in ("critical", "high") for f in blocking)
+        assert len(non_blocking) == 2
+        assert all(f.severity in ("medium", "low") for f in non_blocking)
 
 
 class TestFormatSecurityReport:

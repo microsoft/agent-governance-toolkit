@@ -11,7 +11,7 @@ Covers:
 - ORGANIZATION scope in conflict resolution
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -199,7 +199,7 @@ class TestOrgTrustAgreement:
         expired = OrgTrustAgreement(
             org_a_id="org-a",
             org_b_id="org-b",
-            expires_at=datetime.utcnow() - timedelta(hours=1),
+            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
         )
         assert expired.is_active() is False
 
@@ -207,7 +207,7 @@ class TestOrgTrustAgreement:
         valid = OrgTrustAgreement(
             org_a_id="org-a",
             org_b_id="org-b",
-            expires_at=datetime.utcnow() + timedelta(days=30),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
         )
         assert valid.is_active() is True
 
@@ -267,7 +267,7 @@ class TestPolicyDelegation:
             source_org_id="org-a",
             target_org_id="org-b",
             delegated_categories=[PolicyCategory.GENERAL],
-            expires_at=datetime.utcnow() - timedelta(hours=1),
+            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
         )
         assert deleg.is_active() is False
 
@@ -427,7 +427,7 @@ class TestFederationEngine:
             agreements=[OrgTrustAgreement(
                 org_a_id="org-a",
                 org_b_id="org-b",
-                expires_at=datetime.utcnow() - timedelta(hours=1),
+                expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
             )],
         )
         result = engine.evaluate("org-a", "org-b", 800, {})
@@ -566,7 +566,7 @@ class TestFederationDelegation:
                 source_org_id="org-a",
                 target_org_id="org-b",
                 delegated_categories=[PolicyCategory.PII_HANDLING],
-                expires_at=datetime.utcnow() - timedelta(hours=1),
+                expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
             )],
         )
         result = engine.evaluate("org-a", "org-b", 800, {"data": {"contains_pii": True}})
@@ -688,3 +688,201 @@ class TestPolicyCategory:
         cat = PolicyCategory("pii_handling")
         assert cat == PolicyCategory.PII_HANDLING
         assert cat.value == "pii_handling"
+
+
+# ── Additional Edge-Case Tests ─────────────────────────────────
+
+
+class TestMutualEnforcementBothDeny:
+    """Verify that when BOTH orgs deny, both denial reasons appear in trace."""
+
+    def test_both_deny_reasons_in_trace(self):
+        """Both caller and callee deny — trace must contain both reasons."""
+        engine = _setup_engine(
+            caller_policy=_org_policy("org-a", rules=[_pii_deny_rule()]),
+            callee_policy=_org_policy("org-b", rules=[_pii_deny_rule()]),
+            agreements=[
+                OrgTrustAgreement(org_a_id="org-a", org_b_id="org-b")
+            ],
+        )
+        result = engine.evaluate(
+            "org-a", "org-b", 800, {"data": {"contains_pii": True}}
+        )
+        assert result.allowed is False
+        assert result.caller_decision is not None
+        assert result.callee_decision is not None
+        assert result.caller_decision.allowed is False
+        assert result.callee_decision.allowed is False
+
+        # Both denial reasons must appear in the merged reason/trace
+        merged_trace = " ".join(result.trace)
+        assert "org-a" in merged_trace
+        assert "org-b" in merged_trace
+        assert "caller" in result.reason.lower()
+        assert "callee" in result.reason.lower()
+
+
+class TestDelegationWithExpiredTrust:
+    """Delegation should not help if the trust agreement is expired."""
+
+    def test_delegation_with_expired_trust_agreement_fails(self):
+        """Even with a valid delegation, an expired trust agreement → deny."""
+        engine = _setup_engine(
+            caller_policy=_org_policy("org-a", rules=[_pii_deny_rule()]),
+            callee_policy=_org_policy("org-b"),
+            agreements=[
+                OrgTrustAgreement(
+                    org_a_id="org-a",
+                    org_b_id="org-b",
+                    expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+                )
+            ],
+            delegations=[
+                PolicyDelegation(
+                    source_org_id="org-a",
+                    target_org_id="org-b",
+                    delegated_categories=[PolicyCategory.PII_HANDLING],
+                )
+            ],
+        )
+        result = engine.evaluate(
+            "org-a", "org-b", 800, {"data": {"contains_pii": True}}
+        )
+        assert result.allowed is False
+        assert "no trust agreement" in result.reason.lower()
+        assert len(result.delegations_applied) == 0
+
+
+class TestFileFederationStoreYamlYml:
+    """FileFederationStore handles both .yaml and .yml without duplicates."""
+
+    def test_yaml_and_yml_same_org_no_duplicate(self, tmp_path):
+        """If org_a.yaml and org_a.yml both define 'org-a', store has one entry."""
+        from agentmesh.governance.federation import FileFederationStore
+
+        fed_dir = tmp_path / "federation"
+        policies_dir = fed_dir / "org_policies"
+        policies_dir.mkdir(parents=True)
+
+        yaml_content = (
+            "org_id: org-a\n"
+            "org_name: Org A YAML\n"
+            "default_action: allow\n"
+            "rules: []\n"
+        )
+        yml_content = (
+            "org_id: org-a\n"
+            "org_name: Org A YML\n"
+            "default_action: deny\n"
+            "rules: []\n"
+        )
+
+        (policies_dir / "org_a.yaml").write_text(yaml_content)
+        (policies_dir / "org_a.yml").write_text(yml_content)
+
+        store = FileFederationStore(fed_dir)
+        policies = store.list_org_policies()
+
+        # Only one policy for org-a (no duplicates)
+        assert len(policies) == 1
+        assert policies[0].org_id == "org-a"
+        # .yml is loaded second, so it overwrites .yaml
+        assert policies[0].org_name == "Org A YML"
+
+    def test_different_orgs_yaml_and_yml(self, tmp_path):
+        """Different orgs in .yaml and .yml are both loaded."""
+        from agentmesh.governance.federation import FileFederationStore
+
+        fed_dir = tmp_path / "federation"
+        policies_dir = fed_dir / "org_policies"
+        policies_dir.mkdir(parents=True)
+
+        (policies_dir / "org_a.yaml").write_text(
+            "org_id: org-a\norg_name: A\ndefault_action: allow\nrules: []\n"
+        )
+        (policies_dir / "org_b.yml").write_text(
+            "org_id: org-b\norg_name: B\ndefault_action: deny\nrules: []\n"
+        )
+
+        store = FileFederationStore(fed_dir)
+        policies = store.list_org_policies()
+        org_ids = {p.org_id for p in policies}
+
+        assert len(policies) == 2
+        assert org_ids == {"org-a", "org-b"}
+
+
+class TestFederationEngineEmptyStore:
+    """FederationEngine with an empty store (no policies, no agreements)."""
+
+    def test_same_org_still_allowed_with_empty_store(self):
+        """Same-org bypass works even with empty store."""
+        engine = FederationEngine()
+        result = engine.evaluate("org-a", "org-a", 800, {})
+        assert result.allowed is True
+
+    def test_cross_org_denied_with_empty_store(self):
+        """Cross-org with no policies and no agreements → deny."""
+        engine = FederationEngine()
+        result = engine.evaluate("org-a", "org-b", 800, {})
+        assert result.allowed is False
+        assert "no trust agreement" in result.reason.lower()
+
+    def test_empty_store_has_no_policies(self):
+        """Verify the store is truly empty."""
+        engine = FederationEngine()
+        assert engine.store.list_org_policies() == []
+        assert engine.store.list_trust_agreements() == []
+        assert engine.store.list_delegations() == []
+
+
+class TestOrganizationScopeOrdering:
+    """ORGANIZATION scope must rank between AGENT and GLOBAL."""
+
+    def test_organization_between_agent_and_global(self):
+        """ORGANIZATION specificity is greater than GLOBAL, less than AGENT."""
+        from agentmesh.governance.conflict_resolution import (
+            CandidateDecision,
+            PolicyScope,
+        )
+
+        global_c = CandidateDecision(
+            action="deny", scope=PolicyScope.GLOBAL, rule_name="g", priority=0
+        )
+        org_c = CandidateDecision(
+            action="deny", scope=PolicyScope.ORGANIZATION, rule_name="o", priority=0
+        )
+        agent_c = CandidateDecision(
+            action="deny", scope=PolicyScope.AGENT, rule_name="a", priority=0
+        )
+
+        assert global_c.specificity < org_c.specificity < agent_c.specificity
+
+    def test_organization_wins_over_global_in_resolver(self):
+        """Resolver picks ORGANIZATION over GLOBAL at same priority."""
+        from agentmesh.governance.conflict_resolution import (
+            CandidateDecision,
+            PolicyConflictResolver,
+            ConflictResolutionStrategy,
+            PolicyScope,
+        )
+
+        resolver = PolicyConflictResolver(
+            ConflictResolutionStrategy.MOST_SPECIFIC_WINS
+        )
+        candidates = [
+            CandidateDecision(
+                action="deny",
+                priority=10,
+                scope=PolicyScope.GLOBAL,
+                rule_name="global-deny",
+            ),
+            CandidateDecision(
+                action="allow",
+                priority=10,
+                scope=PolicyScope.ORGANIZATION,
+                rule_name="org-allow",
+            ),
+        ]
+        result = resolver.resolve(candidates)
+        assert result.winning_decision.rule_name == "org-allow"
