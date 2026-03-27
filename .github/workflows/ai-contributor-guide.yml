@@ -20,6 +20,7 @@ permissions:
   issues: write
   models: read
 
+# SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
 jobs:
   guide-issue:
     name: Guide First-Time Issue Author

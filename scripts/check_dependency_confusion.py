@@ -15,6 +15,9 @@ Usage:
     python scripts/check_dependency_confusion.py [files...]
 """
 
+import argparse
+import glob
+import json
 import re
 import subprocess
 import sys
@@ -95,10 +98,70 @@ def check_file(filepath: str) -> list[str]:
     return findings
 
 
+def check_requirements_file(filepath: str) -> list[str]:
+    """Check a requirements*.txt file for unregistered package names."""
+    findings = []
+    try:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+    except (OSError, UnicodeDecodeError):
+        return findings
+
+    registered_lower = {p.lower() for p in REGISTERED_PACKAGES}
+    for line_num, line in enumerate(lines, 1):
+        line = line.strip()
+        if not line or line.startswith("#") or line.startswith("-"):
+            continue
+        if line.startswith((".", "/", "\\", "http", "git+")):
+            continue
+        # Strip extras and version specifiers
+        base = re.sub(r'\[.*\]', '', line)
+        base = re.split(r'[><=!~;@\s]', base)[0].strip()
+        if base and base.lower() not in registered_lower:
+            findings.append(
+                f"  {filepath}:{line_num}: "
+                f"'{base}' may not be registered on PyPI"
+            )
+    return findings
+
+
+def check_notebook(filepath: str) -> list[str]:
+    """Check a Jupyter notebook for pip install of unregistered packages."""
+    findings = []
+    try:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
+            nb = json.load(f)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return findings
+
+    registered_lower = {p.lower() for p in REGISTERED_PACKAGES}
+    for cell in nb.get("cells", []):
+        for line in cell.get("source", []):
+            if "pip install" in line and not line.strip().startswith("#"):
+                packages = extract_package_names(line)
+                for pkg in packages:
+                    if pkg.lower() not in registered_lower:
+                        findings.append(
+                            f"  {filepath}: "
+                            f"'{pkg}' may not be registered on PyPI"
+                        )
+    return findings
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Detect unregistered PyPI package names in pip install commands.",
+    )
+    parser.add_argument(
+        "--strict", action="store_true",
+        help="Also scan notebooks and requirements*.txt files; exit 1 on any violation",
+    )
+    parser.add_argument("files", nargs="*", help="Files to check")
+    args = parser.parse_args()
+
     # Get files to check
-    if len(sys.argv) > 1:
-        files = sys.argv[1:]
+    if args.files:
+        files = args.files
     else:
         # Pre-commit mode: check staged files
         result = subprocess.run(
@@ -113,6 +176,18 @@ def main() -> int:
     all_findings = []
     for f in files:
         all_findings.extend(check_file(f))
+
+    # --strict: additionally scan all notebooks and requirements files in the repo
+    if args.strict:
+        for nb in glob.glob("**/*.ipynb", recursive=True):
+            if "node_modules" in nb or ".ipynb_checkpoints" in nb:
+                continue
+            all_findings.extend(check_notebook(nb))
+
+        for req in glob.glob("**/requirements*.txt", recursive=True):
+            if "node_modules" in req:
+                continue
+            all_findings.extend(check_requirements_file(req))
 
     if all_findings:
         print("⚠️  Potential dependency confusion detected:")

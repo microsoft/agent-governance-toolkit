@@ -25,6 +25,7 @@ permissions:
   issues: write
   models: read
 
+# SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
 jobs:
   pr-security-scan:
     name: PR Security Analysis

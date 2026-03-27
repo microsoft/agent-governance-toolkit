@@ -19,6 +19,7 @@ permissions:
   pull-requests: write
   models: read
 
+# SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
 jobs:
   suggest-tests:
     name: Test Coverage Advisor

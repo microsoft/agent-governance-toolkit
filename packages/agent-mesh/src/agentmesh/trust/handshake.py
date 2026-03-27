@@ -447,6 +447,9 @@ class TrustHandshake:
                 "reason": f"Peer identity is {peer_identity.status}",
             }
 
+        if not self.registry.is_trusted(response.agent_did):
+            raise HandshakeError(f"Agent {response.agent_did} is not trusted in registry")
+
         # Verify Ed25519 signature over the challenge payload
         payload = f"{response.challenge_id}:{challenge.nonce}:{response.response_nonce}:{response.agent_did}"
         if not peer_identity.verify_signature(payload.encode(), response.signature):

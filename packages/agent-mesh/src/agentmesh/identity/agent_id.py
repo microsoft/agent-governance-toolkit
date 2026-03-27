@@ -17,7 +17,7 @@ import logging
 import uuid
 import base64
 
-from agentmesh.exceptions import IdentityError
+from agentmesh.exceptions import IdentityError, HandshakeError
 
 logger = logging.getLogger(__name__)
 
@@ -430,12 +430,20 @@ class IdentityRegistry:
     In production, this would be backed by a database and the AgentMesh CA.
     """
 
-    def __init__(self):
+    def __init__(self, require_attestation: bool = False):
         self._identities: dict[str, AgentIdentity] = {}
         self._by_sponsor: dict[str, list[str]] = {}  # sponsor -> list of DIDs
+        self._require_attestation = require_attestation
 
     def register(self, identity: AgentIdentity) -> None:
         """Register an identity."""
+        if self._require_attestation:
+            attestation = getattr(identity, 'attestation', None)
+            if not attestation or not getattr(attestation, 'verified', False):
+                raise HandshakeError(
+                    f"Identity {identity.did} rejected: attestation required but not verified"
+                )
+
         did_str = str(identity.did)
 
         if did_str in self._identities:
@@ -452,6 +460,16 @@ class IdentityRegistry:
         """Get an identity by DID."""
         did_str = str(did) if isinstance(did, AgentDID) else did
         return self._identities.get(did_str)
+
+    def is_trusted(self, agent_did: str) -> bool:
+        """Check if an agent DID is trusted in the registry."""
+        identity = self._identities.get(agent_did)
+        if identity is None:
+            return False
+        if self._require_attestation:
+            attestation = getattr(identity, 'attestation', None)
+            return bool(attestation and getattr(attestation, 'verified', False))
+        return True
 
     def revoke(self, did: str | AgentDID, reason: str) -> bool:
         """Revoke an identity and all its delegates."""
