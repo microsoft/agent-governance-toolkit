@@ -24,6 +24,10 @@ export class AuditLogger {
     private storageKey = 'agent-os.auditLogs';
     private context: vscode.ExtensionContext;
     private maxLogs = 1000;
+    private readonly _onDidChange = new vscode.EventEmitter<void>();
+
+    /** Fires when audit log entries are added, cleared, or cleaned up. */
+    readonly onDidChange: vscode.Event<void> = this._onDidChange.event;
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
@@ -43,6 +47,7 @@ export class AuditLogger {
         }
 
         this.saveLogs();
+        this._onDidChange.fire();
     }
 
     /**
@@ -114,6 +119,7 @@ export class AuditLogger {
     clear(): void {
         this.logs = [];
         this.saveLogs();
+        this._onDidChange.fire();
     }
 
     /**
@@ -149,6 +155,12 @@ export class AuditLogger {
 
         if (this.logs.length !== originalCount) {
             this.saveLogs();
+            this._onDidChange.fire();
         }
+    }
+
+    /** Release the change event emitter. */
+    dispose(): void {
+        this._onDidChange.dispose();
     }
 }

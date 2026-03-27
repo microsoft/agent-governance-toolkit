@@ -142,6 +142,9 @@ export async function activate(context: vscode.ExtensionContext) {
         governanceEventBus,
         context.workspaceState,
         providerConfig.refreshIntervalMs ?? 10000,
+        undefined,  // thresholdMs
+        activeProviders?.liveClient ?? undefined,
+        auditLogger,
     );
     sidebarProvider = new SidebarProvider(
         context.extensionUri,
@@ -150,6 +153,8 @@ export async function activate(context: vscode.ExtensionContext) {
     );
     context.subscriptions.push(governanceStore);
     context.subscriptions.push(governanceEventBus);
+    context.subscriptions.push(auditLogger);
+    if (activeProviders) { context.subscriptions.push(activeProviders); }
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
             SidebarProvider.viewType,

@@ -36,6 +36,8 @@ export interface Providers {
     topology: AgentTopologyDataProvider;
     /** Policy data source. */
     policy: PolicyDataProvider;
+    /** LiveSREClient instance for event subscription (null if disconnected). */
+    liveClient: LiveSREClient | null;
     /** Status message describing the connection state. */
     status: 'live' | 'disconnected' | 'not-installed';
     /** Release all resources (HTTP client + subprocess). */
@@ -94,6 +96,7 @@ function createDisconnectedProviders(status: 'disconnected' | 'not-installed'): 
         slo: { getSnapshot: async () => emptySnapshot() },
         topology: { getAgents: () => [], getBridges: () => [], getDelegations: () => [] },
         policy: { getSnapshot: async () => emptyPolicy() },
+        liveClient: null,
         status,
         dispose() { /* nothing to release */ },
     };
@@ -135,6 +138,7 @@ function createLiveProviders(
                 return translatePolicy(snap.data);
             },
         },
+        liveClient: client,
         status: 'live',
         dispose() {
             client.dispose();

@@ -1,12 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-/**
- * Governance Store
- *
- * Extension-scoped state owner for the 3-slot governance sidebar.
- * Wraps the existing polling model with deduplication, visibility
- * gating, and per-panel latency isolation.
- */
+/** Extension-scoped state owner for the governance sidebar.
+ * Event-driven refresh from LiveSREClient/AuditLogger with heartbeat safety net. */
 
 import type * as vscode from 'vscode';
 import type { SidebarState, SlotConfig, PanelId, AttentionMode } from './types';
@@ -23,27 +18,24 @@ import {
     recordFastTick, resetFastTick,
 } from './panelLatencyTracker';
 import { rankPanelsByUrgency } from './priorityEngine';
+import { wireStoreEvents, ChangeSource } from './storeEventWiring';
 
 const SLOT_CONFIG_KEY = 'agentOS.slotConfig';
 const ATTENTION_MODE_KEY = 'agentOS.attentionMode';
 const DEFAULT_THRESHOLD_MS = 2000;
+const HEARTBEAT_MULTIPLIER = 3;
+const MIN_HEARTBEAT_MS = 15000;
 
-/** Data source keys that map to individual fetch functions. */
 type DataSourceKey = 'slo' | 'topology' | 'audit' | 'policy' | 'stats' | 'kernel' | 'memory';
-
 const ALL_SOURCES: DataSourceKey[] = ['slo', 'topology', 'audit', 'policy', 'stats', 'kernel', 'memory'];
-
-/** Map from data source key to the PanelId that consumes it. */
+const LIVE_SOURCES: DataSourceKey[] = ['slo', 'topology', 'policy'];
+const LOCAL_SOURCES: DataSourceKey[] = ['audit', 'stats', 'kernel', 'memory'];
 const SOURCE_TO_PANEL: Record<DataSourceKey, PanelId> = {
     slo: 'slo-dashboard', topology: 'agent-topology', audit: 'audit-log',
     policy: 'active-policies', stats: 'safety-stats',
     kernel: 'kernel-debugger', memory: 'memory-browser',
 };
 
-/**
- * Central state store for the governance sidebar.
- * Owns polling, deduplication, visibility gating, and latency isolation.
- */
 export class GovernanceStore {
     private _state: SidebarState;
     private _lastJson = '';
@@ -52,6 +44,7 @@ export class GovernanceStore {
     private _interval: ReturnType<typeof setInterval> | undefined;
     private readonly _timings = new Map<DataSourceKey, PanelTiming>();
     private readonly _isolatedTimers = new Map<DataSourceKey, ReturnType<typeof setInterval>>();
+    private readonly _eventSubs: vscode.Disposable[] = [];
     private readonly _thresholdMs: number;
 
     constructor(
@@ -60,6 +53,8 @@ export class GovernanceStore {
         private readonly _workspaceState: vscode.Memento,
         private readonly _refreshIntervalMs: number,
         thresholdMs?: number,
+        liveClient?: ChangeSource,
+        auditLogger?: ChangeSource,
     ) {
         this._thresholdMs = thresholdMs ?? DEFAULT_THRESHOLD_MS;
         const persisted = _workspaceState.get<SlotConfig>(SLOT_CONFIG_KEY);
@@ -74,7 +69,13 @@ export class GovernanceStore {
         for (const key of ALL_SOURCES) {
             this._timings.set(key, createTiming());
         }
-        this._interval = setInterval(() => this._tick(), this._refreshIntervalMs);
+        const heartbeat = Math.max(this._refreshIntervalMs * HEARTBEAT_MULTIPLIER, MIN_HEARTBEAT_MS);
+        this._interval = setInterval(() => this._tick(), heartbeat);
+        this._eventSubs = wireStoreEvents(
+            liveClient, auditLogger,
+            () => this._fetchGroupAndEmit(LIVE_SOURCES),
+            () => this._fetchGroupAndEmit(LOCAL_SOURCES),
+        );
     }
 
     getState(): SidebarState { return this._state; }
@@ -114,6 +115,8 @@ export class GovernanceStore {
         if (this._interval) { clearInterval(this._interval); this._interval = undefined; }
         for (const timer of this._isolatedTimers.values()) { clearInterval(timer); }
         this._isolatedTimers.clear();
+        for (const sub of this._eventSubs) { sub.dispose(); }
+        this._eventSubs.length = 0;
     }
 
     private async _tick(): Promise<void> {
@@ -205,6 +208,20 @@ export class GovernanceStore {
             this._state = { ...this._state, stalePanels: [...current, panelId] };
         } else if (!stale) {
             this._state = { ...this._state, stalePanels: current.filter(p => p !== panelId) };
+        }
+    }
+
+    /** Fetch a source group (live or local), apply priority, and emit. */
+    private async _fetchGroupAndEmit(sources: DataSourceKey[]): Promise<void> {
+        if (this._fetching) { return; }
+        this._fetching = true;
+        try {
+            const active = sources.filter(k => !this._isIsolated(k));
+            await this._fetchSources(active);
+            this._applyPriority();
+            this._emitIfChanged();
+        } finally {
+            this._fetching = false;
         }
     }
 

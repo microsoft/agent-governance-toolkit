@@ -8,6 +8,7 @@
  * fetching when response latency exceeds a threshold.
  */
 
+import * as vscode from 'vscode';
 import axios, { AxiosInstance } from 'axios';
 
 // ---------------------------------------------------------------------------
@@ -76,6 +77,11 @@ export class LiveSREClient {
     private _latencies: number[] = [];
     private _consecutiveFast = 0;
     private _polling = false;
+    private _disposed = false;
+    private readonly _onDidChange = new vscode.EventEmitter<void>();
+
+    /** Fires after each successful poll that updates the cache. */
+    readonly onDidChange: vscode.Event<void> = this._onDidChange.event;
 
     constructor(private readonly _options: SREClientOptions) {
         if (!isLoopbackEndpoint(_options.endpoint)) {
@@ -105,10 +111,12 @@ export class LiveSREClient {
 
     /** Stop polling and release resources. */
     dispose(): void {
+        this._disposed = true;
         if (this._timer) {
             clearInterval(this._timer);
             this._timer = undefined;
         }
+        this._onDidChange.dispose();
     }
 
     /** Get the current cached snapshot (read-only). */
@@ -140,6 +148,7 @@ export class LiveSREClient {
             const latency = Date.now() - start;
             this._cache = { data, lastUpdatedAt: new Date(), error: null, stale: false, escalated: this._cache.escalated };
             this._trackLatency(latency);
+            if (!this._disposed) { this._onDidChange.fire(); }
         } catch (err: unknown) {
             this._cache = { ...this._cache, error: _sanitizeError(err), stale: true };
         } finally {
