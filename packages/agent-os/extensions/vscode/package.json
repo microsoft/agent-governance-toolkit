@@ -203,43 +203,7 @@
           "when": "editorHasSelection"
         }
       ],
-      "view/title": [
-        {
-          "command": "agent-os.showSLOWebview",
-          "when": "view == agent-os.sloDashboard",
-          "group": "navigation@1"
-        },
-        {
-          "command": "agent-os.openSLOInBrowser",
-          "when": "view == agent-os.sloDashboard",
-          "group": "navigation@2"
-        },
-        {
-          "command": "agent-os.refreshSLO",
-          "when": "view == agent-os.sloDashboard",
-          "group": "navigation@3"
-        },
-        {
-          "command": "agent-os.showTopologyGraph",
-          "when": "view == agent-os.agentTopology",
-          "group": "navigation@1"
-        },
-        {
-          "command": "agent-os.openTopologyInBrowser",
-          "when": "view == agent-os.agentTopology",
-          "group": "navigation@2"
-        },
-        {
-          "command": "agent-os.refreshTopology",
-          "when": "view == agent-os.agentTopology",
-          "group": "navigation@3"
-        },
-        {
-          "command": "agent-os.showGovernanceHub",
-          "when": "view == agent-os.kernelDebugger",
-          "group": "navigation"
-        }
-      ],
+      "view/title": [],
       "commandPalette": [
         {
           "command": "agent-os.reviewCode",
@@ -259,61 +223,14 @@
     "views": {
       "agent-os-sidebar": [
         {
-          "id": "agent-os.governanceHub",
-          "name": "Governance Hub",
+          "id": "agent-os.sidebar",
+          "name": "Agent OS",
           "type": "webview",
           "visibility": "visible"
-        },
-        {
-          "id": "agent-os.kernelDebugger",
-          "name": "Kernel Debugger"
-        },
-        {
-          "id": "agent-os.memoryBrowser",
-          "name": "Agent Memory (VFS)"
-        },
-        {
-          "id": "agent-os.sloDashboard",
-          "name": "SLO Dashboard",
-          "visibility": "visible"
-        },
-        {
-          "id": "agent-os.agentTopology",
-          "name": "Agent Topology",
-          "visibility": "visible"
-        },
-        {
-          "id": "agent-os.auditLog",
-          "name": "Audit Log"
-        },
-        {
-          "id": "agent-os.policies",
-          "name": "Active Policies"
-        },
-        {
-          "id": "agent-os.stats",
-          "name": "Safety Stats"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "agent-os.sloDashboard",
-        "contents": "View real-time SLO metrics with interactive gauges and charts.\n[Open Visual Dashboard](command:agent-os.showSLOWebview)\n[Open in Browser](command:agent-os.openSLOInBrowser)"
-      },
-      {
-        "view": "agent-os.agentTopology",
-        "contents": "Explore the agent mesh with an interactive force-directed graph.\n[Open Topology Graph](command:agent-os.showTopologyGraph)\n[Open in Browser](command:agent-os.openTopologyInBrowser)"
-      },
-      {
-        "view": "agent-os.kernelDebugger",
-        "contents": "Monitor kernel state, active agents, and time-travel debugging.\n[Open Governance Hub](command:agent-os.showGovernanceHub)"
-      },
-      {
-        "view": "agent-os.auditLog",
-        "contents": "No audit events recorded yet.\nAgent OS logs all policy decisions and blocked operations here.\n[Run Safety Test](command:agent-os.runSafetyTest)"
-      }
-    ],
+    "viewsWelcome": [],
     "configuration": {
       "title": "Agent OS",
       "properties": {

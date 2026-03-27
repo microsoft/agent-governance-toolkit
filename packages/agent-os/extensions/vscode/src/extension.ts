@@ -39,7 +39,9 @@ import { TopologyGraphPanel } from './webviews/agentTopology/TopologyGraphPanel'
 
 // Governance Hub (Issue #39 - Unified Dashboard)
 import { GovernanceHubPanel } from './webviews/governanceHub/GovernanceHubPanel';
-import { GovernanceHubViewProvider } from './webviews/governanceHub/GovernanceHubViewProvider';
+
+// 3-Slot Sidebar (Sidebar Redesign)
+import { SidebarProvider } from './webviews/sidebar/SidebarProvider';
 
 // Governance Server (Issue #39 - Browser Experience)
 import { GovernanceServer } from './server/GovernanceServer';
@@ -75,7 +77,7 @@ let diagnosticProvider: AgentOSDiagnosticProvider;
 let governanceDiagnosticProvider: GovernanceDiagnosticProvider;
 let governanceStatusBar: GovernanceStatusBar;
 let governanceServer: GovernanceServer | undefined;
-let governanceHubViewProvider: GovernanceHubViewProvider | undefined;
+let sidebarProvider: SidebarProvider | undefined;
 let activeProviders: Providers | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -110,13 +112,8 @@ export async function activate(context: vscode.ExtensionContext) {
         const kernelDebuggerProvider = new KernelDebuggerProvider();
         const memoryBrowserProvider = new MemoryBrowserProvider();
 
-        // Register tree views
-        console.log('Registering tree views...');
-        vscode.window.registerTreeDataProvider('agent-os.auditLog', auditLogProvider);
-        vscode.window.registerTreeDataProvider('agent-os.policies', policiesProvider);
-        vscode.window.registerTreeDataProvider('agent-os.stats', statsProvider);
-        vscode.window.registerTreeDataProvider('agent-os.kernelDebugger', kernelDebuggerProvider);
-        vscode.window.registerTreeDataProvider('agent-os.memoryBrowser', memoryBrowserProvider);
+        // Tree data providers are kept as data sources but no longer registered as views.
+        // The new SidebarProvider aggregates their data into a single webview.
 
         // Register governance visualization (Issue #39)
         const govConfig = vscode.workspace.getConfiguration('agentOS.governance');
@@ -132,20 +129,21 @@ export async function activate(context: vscode.ExtensionContext) {
         const agentTopologyProvider = new AgentTopologyProvider(agentTopologyDataProvider);
         const policyDataProvider = activeProviders.policy;
 
-    vscode.window.registerTreeDataProvider('agent-os.sloDashboard', sloDashboardProvider);
-    vscode.window.registerTreeDataProvider('agent-os.agentTopology', agentTopologyProvider);
-
-    // Register Governance Hub sidebar webview (Issue #39 - Unified Dashboard)
-    governanceHubViewProvider = new GovernanceHubViewProvider(
+    // Register 3-slot sidebar webview (Sidebar Redesign)
+    sidebarProvider = new SidebarProvider(
         context.extensionUri,
+        context,
         sloDataProvider,
         agentTopologyDataProvider,
-        auditLogger
+        auditLogger,
+        policyDataProvider,
+        kernelDebuggerProvider,
+        memoryBrowserProvider,
     );
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
-            'agent-os.governanceHub',
-            governanceHubViewProvider
+            SidebarProvider.viewType,
+            sidebarProvider,
         )
     );
 
@@ -651,7 +649,7 @@ safe_query = "SELECT * FROM users WHERE id = ?"
         showAgentTopologyCmd,
         refreshSLOCmd,
         refreshTopologyCmd,
-        sloDashboardProvider,
+        sidebarProvider!,
         governanceStatusBar,
         // Governance Hub & Browser Experience
         showGovernanceHubCmd,
@@ -700,9 +698,9 @@ export async function deactivate() {
     }
 
     // Clean up sidebar provider
-    if (governanceHubViewProvider) {
-        governanceHubViewProvider.dispose();
-        governanceHubViewProvider = undefined;
+    if (sidebarProvider) {
+        sidebarProvider.dispose();
+        sidebarProvider = undefined;
     }
 }
 

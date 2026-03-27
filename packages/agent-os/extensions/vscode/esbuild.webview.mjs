@@ -17,6 +17,7 @@ const isProd = process.env.NODE_ENV === 'production';
 const config = {
     entryPoints: [
         'src/webviews/sloDashboard/main.tsx',
+        'src/webviews/sidebar/main.tsx',
     ],
     bundle: true,
     outdir: 'out/webviews',

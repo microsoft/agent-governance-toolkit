@@ -287,6 +287,21 @@ export class KernelDebuggerProvider implements vscode.TreeDataProvider<DebuggerI
         this.kernelState.policyViolations++;
         this._onDidChangeTreeData.fire();
     }
+
+    /** Returns a compact kernel summary for the sidebar. */
+    getKernelSummary(): {
+        activeAgents: number;
+        policyViolations: number;
+        totalCheckpoints: number;
+        uptime: number;
+    } {
+        return {
+            activeAgents: this.kernelState.activeAgents.length,
+            policyViolations: this.kernelState.policyViolations,
+            totalCheckpoints: this.kernelState.totalCheckpoints,
+            uptime: this.kernelState.uptime,
+        };
+    }
 }
 
 export class DebuggerItem extends vscode.TreeItem {
@@ -451,6 +466,35 @@ export class MemoryBrowserProvider implements vscode.TreeDataProvider<MemoryItem
         }
 
         this._onDidChangeTreeData.fire();
+    }
+
+    /** Returns a compact VFS summary for the sidebar. */
+    getVfsSummary(): {
+        directoryCount: number;
+        fileCount: number;
+        rootPaths: string[];
+    } {
+        let dirs = 0;
+        let files = 0;
+        const rootPaths: string[] = [];
+
+        const walk = (node: VFSNode): void => {
+            if (node.type === 'directory') {
+                dirs++;
+                node.children?.forEach(walk);
+            } else {
+                files++;
+            }
+        };
+
+        if (this.vfsRoot.children) {
+            for (const child of this.vfsRoot.children) {
+                rootPaths.push('/' + child.name);
+                walk(child);
+            }
+        }
+
+        return { directoryCount: dirs, fileCount: files, rootPaths };
     }
 }
 
