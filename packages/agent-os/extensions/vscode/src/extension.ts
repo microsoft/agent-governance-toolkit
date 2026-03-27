@@ -42,6 +42,8 @@ import { GovernanceHubPanel } from './webviews/governanceHub/GovernanceHubPanel'
 
 // 3-Slot Sidebar (Sidebar Redesign)
 import { SidebarProvider } from './webviews/sidebar/SidebarProvider';
+import { GovernanceEventBus } from './webviews/sidebar/governanceEventBus';
+import { GovernanceStore } from './webviews/sidebar/GovernanceStore';
 
 // Governance Server (Issue #39 - Browser Experience)
 import { GovernanceServer } from './server/GovernanceServer';
@@ -130,16 +132,24 @@ export async function activate(context: vscode.ExtensionContext) {
         const policyDataProvider = activeProviders.policy;
 
     // Register 3-slot sidebar webview (Sidebar Redesign)
+    const governanceEventBus = new GovernanceEventBus();
+    const governanceStore = new GovernanceStore(
+        {
+            slo: sloDataProvider, topology: agentTopologyDataProvider,
+            audit: auditLogger, policy: policyDataProvider,
+            kernel: kernelDebuggerProvider, memory: memoryBrowserProvider,
+        },
+        governanceEventBus,
+        context.workspaceState,
+        providerConfig.refreshIntervalMs ?? 10000,
+    );
     sidebarProvider = new SidebarProvider(
         context.extensionUri,
         context,
-        sloDataProvider,
-        agentTopologyDataProvider,
-        auditLogger,
-        policyDataProvider,
-        kernelDebuggerProvider,
-        memoryBrowserProvider,
+        governanceStore,
     );
+    context.subscriptions.push(governanceStore);
+    context.subscriptions.push(governanceEventBus);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
             SidebarProvider.viewType,

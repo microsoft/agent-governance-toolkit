@@ -145,21 +145,3 @@ export function deriveHub(state: SidebarState): GovernanceHubData {
     return { overallHealth: health, activeAlerts: alerts, policyCompliance: compliance, agentCount: agents };
 }
 
-/** Fetches all data and returns a complete state update. */
-export async function fetchAllData(
-    p: DataProviders,
-    currentState: SidebarState,
-): Promise<SidebarState> {
-    const slo = await fetchSLO(p) ?? currentState.slo;
-    const topology = fetchTopology(p) ?? currentState.topology;
-    const audit = fetchAudit(p) ?? currentState.audit;
-    const policy = await fetchPolicy(p) ?? currentState.policy;
-    const stats = fetchStats(p) ?? currentState.stats;
-    const kernel = fetchKernel(p) ?? currentState.kernel;
-    const memory = fetchMemory(p) ?? currentState.memory;
-
-    const partial = { ...currentState, slo, topology, audit, policy, stats, kernel, memory };
-    const hub = deriveHub(partial);
-
-    return { ...partial, hub };
-}

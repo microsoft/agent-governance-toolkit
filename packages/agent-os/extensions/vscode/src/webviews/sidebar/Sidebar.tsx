@@ -19,9 +19,9 @@ import { PanelPicker } from './PanelPicker';
 
 const INITIAL_STATE: SidebarState = {
     slots: DEFAULT_SLOTS,
-    slo: null,
-    audit: null,
-    topology: null,
+    slo: null, audit: null, topology: null,
+    policy: null, stats: null, kernel: null, memory: null, hub: null,
+    stalePanels: [],
 };
 
 /** Inline 14x14 gear SVG for the settings button. */
@@ -118,13 +118,14 @@ function SlotStack(
     const { state, onPromote } = props;
     const { slots } = state;
 
+    const stalePanels = state.stalePanels ?? [];
     return (
         <div className="flex-1 flex flex-col min-h-0">
-            <Slot position="A" panelId={slots.slotA} state={state} onPromote={onPromote} />
+            <Slot position="A" panelId={slots.slotA} state={state} stale={stalePanels.includes(slots.slotA)} onPromote={onPromote} />
             <div className="border-t border-ml-border" />
-            <Slot position="B" panelId={slots.slotB} state={state} onPromote={onPromote} />
+            <Slot position="B" panelId={slots.slotB} state={state} stale={stalePanels.includes(slots.slotB)} onPromote={onPromote} />
             <div className="border-t border-ml-border" />
-            <Slot position="C" panelId={slots.slotC} state={state} onPromote={onPromote} />
+            <Slot position="C" panelId={slots.slotC} state={state} stale={stalePanels.includes(slots.slotC)} onPromote={onPromote} />
         </div>
     );
 }

@@ -51,17 +51,32 @@ interface SlotProps {
     position: 'A' | 'B' | 'C';
     panelId: PanelId;
     state: SidebarState;
+    stale?: boolean;
     onPromote: (panelId: PanelId) => void;
 }
 
-/** Renders the slot header with label and expand button. */
+/** Inline 10x10 clock SVG for the staleness indicator. */
+function ClockIcon(): React.ReactElement {
+    return (
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M8 1C4.1 1 1 4.1 1 8s3.1 7 7 7 7-3.1 7-7-3.1-7-7-7zm0 12.5c-3 0-5.5-2.5-5.5-5.5S5 2.5 8 2.5s5.5 2.5 5.5 5.5-2.5 5.5-5.5 5.5zM8.5 4H7v5l4.3 2.5.7-1.2-3.5-2V4z" />
+        </svg>
+    );
+}
+
+/** Renders the slot header with label, stale badge, and expand button. */
 function SlotHeader(
-    props: { panelId: PanelId; onPromote: () => void },
+    props: { panelId: PanelId; stale?: boolean; onPromote: () => void },
 ): React.ReactElement {
     return (
         <div className="flex items-center justify-between px-ml-sm py-ml-xs">
-            <span className="text-[10px] uppercase tracking-wider text-ml-text-muted font-medium">
+            <span className="text-[10px] uppercase tracking-wider text-ml-text-muted font-medium flex items-center gap-1">
                 {PANEL_LABELS[props.panelId]}
+                {props.stale && (
+                    <span className="text-ml-text-muted opacity-60" title="Refreshing on a slower cadence due to latency">
+                        <ClockIcon />
+                    </span>
+                )}
             </span>
             <button
                 className="p-0.5 rounded hover:bg-ml-surface-hover text-ml-text-muted hover:text-ml-text"
@@ -77,12 +92,13 @@ function SlotHeader(
 
 /** Single slot container rendering the appropriate panel summary. */
 export function Slot(props: SlotProps): React.ReactElement {
-    const { panelId, state, onPromote } = props;
+    const { panelId, state, stale, onPromote } = props;
 
     return (
         <div className="flex-1 flex flex-col min-h-0">
             <SlotHeader
                 panelId={panelId}
+                stale={stale}
                 onPromote={() => onPromote(panelId)}
             />
             <div className="flex-1 overflow-auto px-ml-sm pb-ml-xs">

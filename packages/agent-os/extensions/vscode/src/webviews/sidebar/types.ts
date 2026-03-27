@@ -137,7 +137,17 @@ export interface SidebarState {
     kernel: KernelSummaryData | null;
     memory: MemorySummaryData | null;
     hub: GovernanceHubData | null;
+    stalePanels: PanelId[];
 }
+
+/** Typed events for host-side coordination via GovernanceEventBus. */
+export type GovernanceEvent =
+    | { type: 'stateChanged'; state: SidebarState }
+    | { type: 'slotConfigChanged'; slots: SlotConfig }
+    | { type: 'refreshRequested' }
+    | { type: 'visibilityChanged'; visible: boolean }
+    | { type: 'panelIsolated'; panelId: PanelId }
+    | { type: 'panelRejoined'; panelId: PanelId };
 
 /** Messages from extension host to webview. */
 export type HostMessage =
