@@ -9,6 +9,7 @@
 
 import * as vscode from 'vscode';
 import { AuditLogger, AuditEntry } from '../../auditLogger';
+import { escapeHtml } from '../../utils/escapeHtml';
 
 interface MetricsData {
     blockedToday: number;
@@ -152,7 +153,23 @@ export class MetricsDashboardPanel {
 
     private _sendMetricsUpdate(timeRange: string = 'today'): void {
         const metrics = this._getMetrics(timeRange);
-        this._panel.webview.postMessage({ type: 'metricsUpdate', metrics });
+
+        // Escape dynamic string values before sending to webview where
+        // they may be interpolated into innerHTML.
+        const safeMetrics = {
+            ...metrics,
+            topViolations: metrics.topViolations.map(v => ({
+                ...v,
+                name: escapeHtml(v.name)
+            })),
+            policyViolationsByType: Object.fromEntries(
+                Object.entries(metrics.policyViolationsByType).map(
+                    ([key, val]) => [escapeHtml(key), val]
+                )
+            )
+        };
+
+        this._panel.webview.postMessage({ type: 'metricsUpdate', metrics: safeMetrics });
     }
 
     private async _exportReport(format: 'json' | 'csv'): Promise<void> {

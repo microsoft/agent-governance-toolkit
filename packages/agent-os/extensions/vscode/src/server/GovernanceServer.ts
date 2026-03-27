@@ -9,6 +9,7 @@
  */
 
 import * as http from 'http';
+import * as path from 'path';
 import { SLODataProvider } from '../views/sloTypes';
 import { AgentTopologyDataProvider } from '../views/topologyTypes';
 import { AuditLogger } from '../auditLogger';
@@ -162,7 +163,8 @@ export class GovernanceServer {
         this._setSecurityHeaders(res, nonce);
         if (req.url === '/' || req.url === '/index.html') {
             res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(renderBrowserDashboard(this._port, this._sessionToken, nonce));
+            const extensionRoot = path.resolve(__dirname, '..', '..');
+            res.end(renderBrowserDashboard(this._port, this._sessionToken, nonce, extensionRoot));
             return;
         }
         res.writeHead(404);
@@ -173,9 +175,9 @@ export class GovernanceServer {
     private _setSecurityHeaders(res: http.ServerResponse, nonce: string): void {
         res.setHeader('Content-Security-Policy',
             "default-src 'self'; " +
-            `script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; ` +
+            `script-src 'nonce-${nonce}'; ` +
             "style-src 'self' 'unsafe-inline'; " +
-            "connect-src 'self'");
+            "connect-src 'self' ws://127.0.0.1:*");
         res.setHeader('X-Content-Type-Options', 'nosniff');
     }
 

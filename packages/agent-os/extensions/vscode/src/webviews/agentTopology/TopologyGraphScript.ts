@@ -19,7 +19,7 @@ export function topologyScript(nonce: string): string {
         var frame = 0, dragIndex = -1, animId = 0, zoomLevel = 1;
 
         function esc(s) {
-            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
         }
         function trustClass(s) {
             return s > 700 ? 'node-trust-high' : s >= 400 ? 'node-trust-mid' : 'node-trust-low';

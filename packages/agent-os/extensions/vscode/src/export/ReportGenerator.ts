@@ -6,6 +6,8 @@
  * Produces self-contained HTML reports with embedded data and visualizations.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { SLOSnapshot } from '../views/sloTypes';
 import { AgentNode, BridgeStatus, DelegationChain } from '../views/topologyTypes';
 
@@ -82,7 +84,7 @@ export class ReportGenerator {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Governance Report</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>${fs.readFileSync(path.resolve(__dirname, '..', '..', 'assets', 'vendor', 'chart.v4.4.1.umd.min.js'), 'utf8')}</script>
     <style>${this.getStyles()}</style>
 </head>
 <body>
@@ -101,7 +103,7 @@ export class ReportGenerator {
     <footer class="report-footer">
         <p>Agent Governance Toolkit - Microsoft</p>
     </footer>
-    <script id="report-data" type="application/json">${jsonData}</script>
+    <script id="report-data" type="application/json">${jsonData.replace(/<\//g, '<\\/')}</script>
     <script>${this.getRenderScript()}</script>
 </body>
 </html>`;
@@ -133,6 +135,7 @@ th { background: #e8e8e8; }
     private getRenderScript(): string {
         return `
 (function() {
+    var esc = function(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); };
     const data = JSON.parse(document.getElementById('report-data').textContent);
     renderSLO(data.sloSnapshot);
     renderTopology(data.agents, data.bridges, data.delegations);
@@ -150,21 +153,21 @@ th { background: #e8e8e8; }
     }
 
     function metricCard(label, value, status) {
-        return '<div class="metric-card"><div class="metric-label">' + label + '</div><div class="metric-value ' + status + '">' + value + '</div></div>';
+        return '<div class="metric-card"><div class="metric-label">' + esc(label) + '</div><div class="metric-value ' + esc(status) + '">' + esc(value) + '</div></div>';
     }
 
     function renderTopology(agents, bridges, delegations) {
         const section = document.getElementById('topology-section');
         section.innerHTML += '<h3>Agents (' + agents.length + ')</h3><table><tr><th>DID</th><th>Trust</th><th>Ring</th></tr>' +
-            agents.map(a => '<tr><td>' + a.did + '</td><td>' + a.trustScore + '</td><td>Ring ' + a.ring + '</td></tr>').join('') + '</table>';
+            agents.map(a => '<tr><td>' + esc(a.did) + '</td><td>' + esc(a.trustScore) + '</td><td>Ring ' + esc(a.ring) + '</td></tr>').join('') + '</table>';
         section.innerHTML += '<h3>Bridges</h3><table><tr><th>Protocol</th><th>Status</th><th>Peers</th></tr>' +
-            bridges.map(b => '<tr><td>' + b.protocol + '</td><td>' + (b.connected ? 'Connected' : 'Disconnected') + '</td><td>' + b.peerCount + '</td></tr>').join('') + '</table>';
+            bridges.map(b => '<tr><td>' + esc(b.protocol) + '</td><td>' + (b.connected ? 'Connected' : 'Disconnected') + '</td><td>' + esc(b.peerCount) + '</td></tr>').join('') + '</table>';
     }
 
     function renderAudit(events) {
         const section = document.getElementById('audit-section');
         section.innerHTML += '<table><tr><th>Timestamp</th><th>Type</th><th>Details</th></tr>' +
-            events.map(e => '<tr><td>' + e.timestamp + '</td><td>' + e.type + '</td><td>' + JSON.stringify(e.details) + '</td></tr>').join('') + '</table>';
+            events.map(e => '<tr><td>' + esc(e.timestamp) + '</td><td>' + esc(e.type) + '</td><td>' + esc(JSON.stringify(e.details)) + '</td></tr>').join('') + '</table>';
     }
 })();`;
     }

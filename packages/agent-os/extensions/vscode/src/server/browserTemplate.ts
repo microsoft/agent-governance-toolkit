@@ -8,6 +8,8 @@
  * and WebSocket client for real-time updates.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { buildBrowserStyles } from './browserStyles';
 import { buildClientScript, buildTopologyScript } from './browserScripts';
 
@@ -93,36 +95,30 @@ function buildAuditTab(): string {
 }
 
 /**
- * SRI hash for D3.js v7.8.5 from cdn.jsdelivr.net (computed 2026-03-26).
- * Verify: curl -s https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js | openssl dgst -sha384 -binary | openssl base64 -A
- */
-const D3_SRI = 'sha384-su5kReKyYlIFrI62mbQRKXHzFobMa7BHp1cK6julLPbnYcCW9NIZKJiTODjLPeDh';
-
-/**
  * Render the complete browser dashboard HTML document.
  *
  * @param wsPort - WebSocket port for real-time updates
  * @param sessionToken - Session token for WebSocket authentication
  * @param nonce - CSP nonce for inline script allowlisting
+ * @param extensionPath - Root path of the extension for loading vendored assets
  * @returns Full HTML document string
  */
 export function renderBrowserDashboard(
     wsPort: number,
     sessionToken: string,
-    nonce: string
+    nonce: string,
+    extensionPath: string,
 ): string {
+    const d3Source = fs.readFileSync(path.join(extensionPath, 'assets', 'vendor', 'd3.v7.8.5.min.js'), 'utf8');
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
-          content="default-src 'self'; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self'">
+          content="default-src 'self'; script-src 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:*">
     <title>Agent OS Governance Dashboard</title>
-    <script nonce="${nonce}"
-            src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"
-            integrity="${D3_SRI}"
-            crossorigin="anonymous"></script>
+    <script nonce="${nonce}">${d3Source}</script>
     <style>${buildBrowserStyles()}</style>
 </head>
 <body>

@@ -8,6 +8,7 @@
  */
 
 import * as vscode from 'vscode';
+import { escapeHtml } from '../../utils/escapeHtml';
 
 interface OnboardingStep {
     id: string;
@@ -428,10 +429,10 @@ export class OnboardingPanel {
         <div class="progress-container">
             <div class="progress-header">
                 <span class="progress-label">Getting Started</span>
-                <span class="progress-count">${completedCount} of ${totalSteps} completed</span>
+                <span class="progress-count">${escapeHtml(completedCount)} of ${escapeHtml(totalSteps)} completed</span>
             </div>
             <div class="progress-bar">
-                <div class="progress-fill" style="width: ${progress}%"></div>
+                <div class="progress-fill" style="width: ${escapeHtml(progress)}%"></div>
             </div>
         </div>
 
@@ -453,24 +454,33 @@ export class OnboardingPanel {
     <script>
         const vscode = acquireVsCodeApi();
         const steps = ${stepsJson};
-        
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function renderSteps() {
             const container = document.getElementById('steps');
             container.innerHTML = steps.map((step, index) => \`
-                <div class="step \${step.completed ? 'completed' : ''}" id="step-\${step.id}">
+                <div class="step \${step.completed ? 'completed' : ''}" id="step-\${escapeHtml(step.id)}">
                     <div class="step-header">
                         <div class="step-number">\${step.completed ? '✓' : index + 1}</div>
                         <div class="step-content">
-                            <h3 class="step-title">\${step.title}</h3>
-                            <p class="step-description">\${step.description}</p>
+                            <h3 class="step-title">\${escapeHtml(step.title)}</h3>
+                            <p class="step-description">\${escapeHtml(step.description)}</p>
                             <div class="step-actions">
                                 \${step.action ? \`
-                                    <button onclick="executeAction('\${step.action.command}')" \${step.completed ? 'disabled' : ''}>
-                                        \${step.action.label}
+                                    <button onclick="executeAction('\${escapeHtml(step.action.command)}')" \${step.completed ? 'disabled' : ''}>
+                                        \${escapeHtml(step.action.label)}
                                     </button>
                                 \` : ''}
                                 \${!step.completed ? \`
-                                    <button class="secondary" onclick="completeStep('\${step.id}')">
+                                    <button class="secondary" onclick="completeStep('\${escapeHtml(step.id)}')">
                                         Mark Complete
                                     </button>
                                 \` : ''}

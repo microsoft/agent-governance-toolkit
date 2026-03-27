@@ -9,6 +9,7 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { escapeHtml } from '../../utils/escapeHtml';
 
 interface PolicyTemplate {
     id: string;
@@ -853,6 +854,14 @@ policies:
     </div>
 
     <script>
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
         const vscode = acquireVsCodeApi();
         const templates = ${templatesJson};
         const editor = document.getElementById('editor');
@@ -864,9 +873,9 @@ policies:
             const card = document.createElement('div');
             card.className = 'template-card';
             card.innerHTML = \`
-                <h3>\${template.name}</h3>
-                <p>\${template.description}</p>
-                <span class="category category-\${template.category}">\${template.category}</span>
+                <h3>\${escapeHtml(template.name)}</h3>
+                <p>\${escapeHtml(template.description)}</p>
+                <span class="category category-\${escapeHtml(template.category)}">\${escapeHtml(template.category)}</span>
             \`;
             card.onclick = () => loadTemplate(template.id);
             templatesContainer.appendChild(card);
@@ -949,16 +958,16 @@ policies:
             result.errors.forEach(error => {
                 const div = document.createElement('div');
                 div.className = 'error';
-                div.innerHTML = \`<strong>Line \${error.line}:</strong> \${error.message}\`;
+                div.innerHTML = \`<strong>Line \${error.line}:</strong> \${escapeHtml(error.message)}\`;
                 container.appendChild(div);
             });
 
             result.warnings.forEach(warning => {
                 const div = document.createElement('div');
                 div.className = 'warning';
-                div.innerHTML = \`<strong>Line \${warning.line}:</strong> \${warning.message}\`;
+                div.innerHTML = \`<strong>Line \${warning.line}:</strong> \${escapeHtml(warning.message)}\`;
                 if (warning.suggestion) {
-                    div.innerHTML += \`<br><small>💡 \${warning.suggestion}</small>\`;
+                    div.innerHTML += \`<br><small>💡 \${escapeHtml(warning.suggestion)}</small>\`;
                 }
                 container.appendChild(div);
             });
@@ -973,7 +982,7 @@ policies:
                 div.className = \`test-result \${result.blocked ? 'blocked' : 'allowed'}\`;
                 div.innerHTML = \`
                     <span class="status-indicator \${result.blocked ? 'blocked' : 'allowed'}"></span>
-                    <span><strong>\${result.name}:</strong> \${result.blocked ? '🛡️ Blocked' : '⚠️ Allowed'}</span>
+                    <span><strong>\${escapeHtml(result.name)}:</strong> \${result.blocked ? '🛡️ Blocked' : '⚠️ Allowed'}</span>
                 \`;
                 container.appendChild(div);
             });

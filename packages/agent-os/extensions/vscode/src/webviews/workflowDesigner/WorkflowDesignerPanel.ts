@@ -8,6 +8,7 @@
  */
 
 import * as vscode from 'vscode';
+import { escapeHtml } from '../../utils/escapeHtml';
 
 interface WorkflowNode {
     id: string;
@@ -908,6 +909,15 @@ ${functionDefs}
         let draggingNode = null;
         let connectingFrom = null;
 
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         // Render palette
         const palette = document.getElementById('palette');
         nodeTypes.forEach(nt => {
@@ -916,10 +926,10 @@ ${functionDefs}
             item.draggable = true;
             item.dataset.type = nt.type;
             item.innerHTML = \`
-                <span class="palette-icon">\${nt.icon}</span>
+                <span class="palette-icon">\${escapeHtml(nt.icon)}</span>
                 <div class="palette-info">
-                    <h4>\${nt.label}</h4>
-                    <p>\${nt.description}</p>
+                    <h4>\${escapeHtml(nt.label)}</h4>
+                    <p>\${escapeHtml(nt.description)}</p>
                 </div>
             \`;
             item.addEventListener('dragstart', e => {
@@ -946,10 +956,10 @@ ${functionDefs}
                 
                 div.innerHTML = \`
                     <div class="node-header">
-                        <span class="node-icon">\${icon}</span>
-                        <span class="node-label">\${node.label}</span>
+                        <span class="node-icon">\${escapeHtml(icon)}</span>
+                        <span class="node-label">\${escapeHtml(node.label)}</span>
                     </div>
-                    \${node.policy ? \`<div class="node-policy">🛡️ \${node.policy}</div>\` : ''}
+                    \${node.policy ? \`<div class="node-policy">🛡️ \${escapeHtml(node.policy)}</div>\` : ''}
                     <div class="node-connectors">
                         \${node.type !== 'start' ? '<div class="connector input" data-connector="input"></div>' : ''}
                         \${node.type !== 'end' ? '<div class="connector output" data-connector="output"></div>' : ''}
@@ -1031,22 +1041,22 @@ ${functionDefs}
             const nodeType = nodeTypes.find(t => t.type === node.type);
             
             panel.innerHTML = \`
-                <h3>\${node.label} Properties</h3>
+                <h3>\${escapeHtml(node.label)} Properties</h3>
                 <div class="property-group">
                     <label>Label</label>
-                    <input type="text" id="prop-label" value="\${node.label}">
+                    <input type="text" id="prop-label" value="\${escapeHtml(node.label)}">
                 </div>
                 \${node.type === 'action' && nodeType?.actions ? \`
                 <div class="property-group">
                     <label>Action Type</label>
                     <select id="prop-action">
-                        \${nodeType.actions.map(a => \`<option value="\${a}" \${node.config.action === a ? 'selected' : ''}>\${a}</option>\`).join('')}
+                        \${nodeType.actions.map(a => \`<option value="\${escapeHtml(a)}" \${node.config.action === a ? 'selected' : ''}>\${escapeHtml(a)}</option>\`).join('')}
                     </select>
                 </div>
                 \` : ''}
                 <div class="property-group">
                     <label>Description</label>
-                    <textarea id="prop-description">\${node.config.description || ''}</textarea>
+                    <textarea id="prop-description">\${escapeHtml(node.config.description || '')}</textarea>
                 </div>
                 <div class="property-group">
                     <label>Policy</label>
@@ -1059,7 +1069,7 @@ ${functionDefs}
                 </div>
                 \${node.type !== 'start' && node.type !== 'end' ? \`
                 <div class="property-group">
-                    <button class="secondary delete-btn" data-node-id="\${node.id}" style="width:100%">🗑️ Delete Node</button>
+                    <button class="secondary delete-btn" data-node-id="\${escapeHtml(node.id)}" style="width:100%">🗑️ Delete Node</button>
                 </div>
                 \` : ''}
             \`;

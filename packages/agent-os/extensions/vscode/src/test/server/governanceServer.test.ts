@@ -7,6 +7,9 @@
  */
 
 import * as assert from 'assert';
+import * as path from 'path';
+
+const EXTENSION_ROOT = path.resolve(__dirname, '..', '..', '..');
 import {
     findAvailablePort,
     isPortAvailable,
@@ -52,7 +55,7 @@ suite('Server Security', () => {
     });
 
     test('browser template includes CSP meta tag', () => {
-        const html = renderBrowserDashboard(9845, 'test-token', 'test-nonce');
+        const html = renderBrowserDashboard(9845, 'test-token', 'test-nonce', EXTENSION_ROOT);
         assert.ok(
             html.includes('http-equiv="Content-Security-Policy"'),
             'CSP meta tag should be present in the HTML head'
@@ -63,20 +66,20 @@ suite('Server Security', () => {
         );
     });
 
-    test('browser template includes SRI integrity attributes', () => {
-        const html = renderBrowserDashboard(9845, 'test-token', 'test-nonce');
+    test('browser template loads D3 from local vendor (no CDN)', () => {
+        const html = renderBrowserDashboard(9845, 'test-token', 'test-nonce', EXTENSION_ROOT);
         assert.ok(
-            html.includes('integrity="sha384-'),
-            'CDN scripts should have SRI integrity attributes'
+            !html.includes('cdn.jsdelivr.net'),
+            'Should not reference CDN — D3 is vendored locally'
         );
         assert.ok(
-            html.includes('crossorigin="anonymous"'),
-            'CDN scripts should have crossorigin attribute'
+            html.includes('https://d3js.org v7.8.5'),
+            'D3 source should be inlined in the HTML'
         );
     });
 
     test('SRI hash is not a placeholder', () => {
-        const html = renderBrowserDashboard(9845, 'test-token', 'test-nonce');
+        const html = renderBrowserDashboard(9845, 'test-token', 'test-nonce', EXTENSION_ROOT);
         assert.ok(
             !html.includes('PLACEHOLDER'),
             'SRI hash should not be a placeholder value'
@@ -106,7 +109,7 @@ suite('Session Token', () => {
     });
     test('session token is embedded in WebSocket URL', () => {
         const token = 'abc123def456789012345678abcdef01';
-        const html = renderBrowserDashboard(9845, token, 'test-nonce');
+        const html = renderBrowserDashboard(9845, token, 'test-nonce', EXTENSION_ROOT);
         assert.ok(
             html.includes(`?token=${token}`),
             'WebSocket URL should include session token as query parameter'
@@ -182,13 +185,13 @@ suite('WebSocket Token Validation', () => {
 
 suite('CSP Nonce', () => {
     test('inline scripts include nonce attribute', () => {
-        const html = renderBrowserDashboard(9845, 'test-token', 'abc123nonce');
+        const html = renderBrowserDashboard(9845, 'test-token', 'abc123nonce', EXTENSION_ROOT);
         const nonceCount = (html.match(/nonce="abc123nonce"/g) || []).length;
         assert.ok(nonceCount >= 3, 'should have nonce on D3 + topology + client scripts');
     });
 
     test('CSP meta tag includes nonce directive', () => {
-        const html = renderBrowserDashboard(9845, 'test-token', 'abc123nonce');
+        const html = renderBrowserDashboard(9845, 'test-token', 'abc123nonce', EXTENSION_ROOT);
         assert.ok(
             html.includes("'nonce-abc123nonce'"),
             'CSP should include nonce directive'
@@ -196,7 +199,7 @@ suite('CSP Nonce', () => {
     });
 
     test('CSP includes connect-src directive', () => {
-        const html = renderBrowserDashboard(9845, 'test-token', 'test-nonce');
+        const html = renderBrowserDashboard(9845, 'test-token', 'test-nonce', EXTENSION_ROOT);
         assert.ok(
             html.includes("connect-src 'self'"),
             'CSP should include connect-src for WebSocket'
@@ -231,17 +234,17 @@ suite('GovernanceServer Class', () => {
     });
 });
 
-suite('CDN Security', () => {
-    test('D3.js loaded from jsdelivr with version pin', () => {
-        const html = renderBrowserDashboard(9845, 'test-token', 'test-nonce');
+suite('Local Vendor Security', () => {
+    test('D3.js inlined from local vendor file', () => {
+        const html = renderBrowserDashboard(9845, 'test-token', 'test-nonce', EXTENSION_ROOT);
         assert.ok(
-            html.includes('cdn.jsdelivr.net/npm/d3@7.8.5'),
-            'D3.js should be loaded from jsdelivr with version pin'
+            !html.includes('cdn.jsdelivr.net'),
+            'Should not reference any CDN'
         );
     });
 
     test('Chart.js CDN dependency removed', () => {
-        const html = renderBrowserDashboard(9845, 'test-token', 'test-nonce');
+        const html = renderBrowserDashboard(9845, 'test-token', 'test-nonce', EXTENSION_ROOT);
         assert.ok(
             !html.includes('chart.js'),
             'Chart.js CDN script should be removed'
