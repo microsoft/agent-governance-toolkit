@@ -155,21 +155,21 @@ class SecurityScanner:
 
     def _load_exemptions(self) -> dict:
         """Load security exemptions from plugin config.
-        
+
         Validates the exemptions file against a strict schema to prevent
         malicious or malformed exemptions from bypassing security checks.
-        
+
         Required fields per exemption:
         - category: One of "secrets", "cve", "code-pattern"
         - file: File path (string)
         - justification: Reason for exemption (min 10 chars)
         - approved_by: Person/role who approved (string)
-        
+
         Optional fields:
         - line: Line number (integer or null)
         - cve: CVE identifier (string or null)
         - expires: ISO 8601 datetime (string or null)
-        
+
         Returns:
             Dict with "exemptions" key containing valid, non-expired exemptions.
             Returns empty list if file doesn't exist or validation fails.
@@ -179,36 +179,36 @@ class SecurityScanner:
             try:
                 with open(exemption_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                
+
                 # Validate structure
                 if not isinstance(data, dict) or "exemptions" not in data:
                     return {"exemptions": []}
-                
+
                 if not isinstance(data["exemptions"], list):
                     return {"exemptions": []}
-                
+
                 # Validate and filter each exemption
                 valid_exemptions = []
                 for ex in data["exemptions"]:
                     # Validate required fields
                     if not isinstance(ex, dict):
                         continue
-                    
+
                     if not all(k in ex for k in ["category", "file", "justification", "approved_by"]):
                         continue
-                    
+
                     # Validate category enum
                     if ex["category"] not in ["secrets", "cve", "code-pattern"]:
                         continue
-                    
+
                     # Validate justification length
                     if not isinstance(ex["justification"], str) or len(ex["justification"]) < 10:
                         continue
-                    
+
                     # Validate types
                     if not isinstance(ex["file"], str) or not isinstance(ex["approved_by"], str):
                         continue
-                    
+
                     # Check expiration if present
                     if "expires" in ex and ex["expires"] is not None:
                         try:
@@ -217,9 +217,9 @@ class SecurityScanner:
                                 continue  # Skip expired
                         except (ValueError, TypeError):
                             continue  # Invalid date format
-                    
+
                     valid_exemptions.append(ex)
-                
+
                 return {"exemptions": valid_exemptions}
             except (json.JSONDecodeError, ValueError, OSError):
                 return {"exemptions": []}

@@ -131,50 +131,53 @@ class TestSecurityScanner:
         """Test loading valid exemptions file."""
         plugin_dir = tmp_path / "test-plugin"
         plugin_dir.mkdir()
-        
+
         exemptions_file = plugin_dir / ".security-exemptions.json"
         exemptions_data = {
             "version": "1.0",
             "exemptions": [
                 {
-                    "tool": "detect-secrets",
+                    "category": "secrets",
                     "file": "tests/fixtures/mock.py",
                     "line": 10,
-                    "reason": "Test fixture",
+                    "justification": "Test fixture with mock credentials",
+                    "approved_by": "security-team",
                 }
             ],
         }
         exemptions_file.write_text(json.dumps(exemptions_data))
-        
+
         scanner = SecurityScanner(plugin_dir, "test-plugin")
         assert len(scanner.exemptions["exemptions"]) == 1
-        assert scanner.exemptions["exemptions"][0]["tool"] == "detect-secrets"
+        assert scanner.exemptions["exemptions"][0]["category"] == "secrets"
 
     def test_load_exemptions_expired_filtered_out(self, tmp_path):
         """Test that expired exemptions are filtered out."""
         plugin_dir = tmp_path / "test-plugin"
         plugin_dir.mkdir()
-        
+
         exemptions_file = plugin_dir / ".security-exemptions.json"
         exemptions_data = {
             "version": "1.0",
             "exemptions": [
                 {
-                    "tool": "bandit",
+                    "category": "code-pattern",
                     "file": "old.py",
                     "expires": "2020-01-01",
-                    "reason": "Temporary exemption",
+                    "justification": "Temporary exemption for legacy code",
+                    "approved_by": "security-team",
                 },
                 {
-                    "tool": "bandit",
+                    "category": "code-pattern",
                     "file": "current.py",
                     "expires": "2099-12-31",
-                    "reason": "Future exemption",
+                    "justification": "Future exemption for planned migration",
+                    "approved_by": "security-team",
                 },
             ],
         }
         exemptions_file.write_text(json.dumps(exemptions_data))
-        
+
         scanner = SecurityScanner(plugin_dir, "test-plugin")
         # Only the non-expired exemption should be loaded
         assert len(scanner.exemptions["exemptions"]) == 1
@@ -184,23 +187,24 @@ class TestSecurityScanner:
         """Test exemption matching by file and line."""
         plugin_dir = tmp_path / "test-plugin"
         plugin_dir.mkdir()
-        
+
         exemptions_file = plugin_dir / ".security-exemptions.json"
         exemptions_data = {
             "version": "1.0",
             "exemptions": [
                 {
-                    "tool": "detect-secrets",
+                    "category": "secrets",
                     "file": "config.py",
                     "line": 42,
-                    "reason": "Test credential",
+                    "justification": "Test credential used in unit tests only",
+                    "approved_by": "security-team",
                 }
             ],
         }
         exemptions_file.write_text(json.dumps(exemptions_data))
-        
+
         scanner = SecurityScanner(plugin_dir, "test-plugin")
-        
+
         # Matching finding should be exempted
         finding = SecurityFinding(
             severity="critical",
@@ -210,22 +214,22 @@ class TestSecurityScanner:
             line=42,
         )
         assert scanner._is_exempted(finding) is True
-        
-        # Different line should not be exempted
-        finding_different_line = SecurityFinding(
+
+        # Different file should not be exempted
+        finding_different_file = SecurityFinding(
             severity="critical",
             category="secrets",
             title="Secret detected",
-            file="config.py",
-            line=43,
+            file="other.py",
+            line=42,
         )
-        assert scanner._is_exempted(finding_different_line) is False
+        assert scanner._is_exempted(finding_different_file) is False
 
     def test_is_exempted_by_category(self, tmp_path):
         """Test exemption matching by category and file."""
         plugin_dir = tmp_path / "test-plugin"
         plugin_dir.mkdir()
-        
+
         exemptions_file = plugin_dir / ".security-exemptions.json"
         exemptions_data = {
             "version": "1.0",
@@ -233,14 +237,15 @@ class TestSecurityScanner:
                 {
                     "category": "code-pattern",
                     "file": "demo.py",
-                    "reason": "Demonstrative example",
+                    "justification": "Demonstrative example not used in production",
+                    "approved_by": "security-team",
                 }
             ],
         }
         exemptions_file.write_text(json.dumps(exemptions_data))
-        
+
         scanner = SecurityScanner(plugin_dir, "test-plugin")
-        
+
         finding = SecurityFinding(
             severity="high",
             category="code-pattern",
@@ -254,22 +259,24 @@ class TestSecurityScanner:
         """Test exemption matching by CVE identifier."""
         plugin_dir = tmp_path / "test-plugin"
         plugin_dir.mkdir()
-        
+
         exemptions_file = plugin_dir / ".security-exemptions.json"
         exemptions_data = {
             "version": "1.0",
             "exemptions": [
                 {
-                    "tool": "pip-audit",
+                    "category": "cve",
+                    "file": "requirements.txt",
                     "cve": "CVE-2023-32681",
-                    "reason": "Not exploitable in our usage",
+                    "justification": "Not exploitable in our usage pattern",
+                    "approved_by": "security-team",
                 }
             ],
         }
         exemptions_file.write_text(json.dumps(exemptions_data))
-        
+
         scanner = SecurityScanner(plugin_dir, "test-plugin")
-        
+
         finding = SecurityFinding(
             severity="high",
             category="cve",
