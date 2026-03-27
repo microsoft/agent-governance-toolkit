@@ -343,10 +343,12 @@ stages:
             displayName: 'ESRP Authenticode Sign DLLs'
             inputs:
               connectedservicename: 'Agent Governance Toolkit'
+              appregistrationclientid: '$(ESRP_CLIENT_ID)'
+              appregistrationtenantid: '$(ESRP_DOMAIN_TENANT_ID)'
               usemanagedidentity: true
               keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              signcertname: '$(ESRP_CERT_IDENTIFIER)'
-              folderlocation: '$(Pipeline.Workspace)/nuget-unsigned'
+              authcertname: '$(ESRP_CERT_IDENTIFIER)'
+              signfolder: '$(Pipeline.Workspace)/nuget-unsigned'
               pattern: '**/*.dll'
               signConfigType: inlineSignParams
               inlinesignparams: |
@@ -377,10 +379,12 @@ stages:
             displayName: 'ESRP NuGet Sign Package'
             inputs:
               connectedservicename: 'Agent Governance Toolkit'
+              appregistrationclientid: '$(ESRP_CLIENT_ID)'
+              appregistrationtenantid: '$(ESRP_DOMAIN_TENANT_ID)'
               usemanagedidentity: true
               keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              signcertname: '$(ESRP_CERT_IDENTIFIER)'
-              folderlocation: '$(Pipeline.Workspace)/nuget-unsigned'
+              authcertname: '$(ESRP_CERT_IDENTIFIER)'
+              signfolder: '$(Pipeline.Workspace)/nuget-unsigned'
               pattern: '**/*.nupkg'
               signConfigType: inlineSignParams
               inlinesignparams: |
