@@ -80,6 +80,8 @@ Each section must have **exactly one** checkbox marked:
 
 Your `.github/pull_request_template.md` should follow this structure:
 
+> **GitHub Issue Forms compatibility:** GitHub Issue Forms with `type: checkboxes` automatically render checkbox group labels as `###` (h3) headings. Both `##` (h2) and `###` (h3) heading levels are accepted, so Issue Form–generated bodies and hand-written PR templates work without any extra configuration.
+
 ```markdown
 # Governance Attestations (required)
 

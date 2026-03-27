@@ -52,8 +52,10 @@ def _count_section_checkboxes(section_title: str, pr_body: str) -> dict:
     # Escape special regex characters in section title
     escaped_title = re.escape(section_title)
 
-    # Find section header and capture content until next ## or end
-    pattern = rf"(^|\n)##\s+{escaped_title}\n([\s\S]*?)(?=\n##\s+|$)"
+    # Find section header and capture content until next ## / ### or end.
+    # Supports both ## (h2) and ### (h3) headings for compatibility with
+    # GitHub Issue Forms, which render checkbox group labels as ### headings.
+    pattern = rf"(^|\n)#{{2,3}}\s+{escaped_title}\n([\s\S]*?)(?=\n#{{2,3}}\s+|$)"
     match = re.search(pattern, pr_body, re.IGNORECASE)
 
     if not match:
