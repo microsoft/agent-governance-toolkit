@@ -445,10 +445,19 @@
         },
         "agentOS.governanceHub.tabs": {
           "type": "array",
-          "default": ["slo", "topology", "audit"],
+          "default": [
+            "slo",
+            "topology",
+            "audit"
+          ],
           "items": {
             "type": "string",
-            "enum": ["slo", "topology", "audit", "policies"]
+            "enum": [
+              "slo",
+              "topology",
+              "audit",
+              "policies"
+            ]
           },
           "description": "Tabs to display in the Governance Hub"
         },
@@ -548,8 +557,11 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && npm run build:webviews",
+    "build:css": "npx tailwindcss -i src/webviews/shared/index.css -o out/webviews/index.css",
+    "build:webviews": "npm run build:css && node esbuild.webview.mjs",
     "watch": "tsc -watch -p ./",
+    "watch:webviews": "node esbuild.webview.mjs --watch",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
@@ -560,15 +572,23 @@
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.0",
     "@types/node": "^20.0.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@types/vscode": "^1.85.0",
     "@types/ws": "^8.5.10",
-    "glob": "^10.3.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "@vscode/test-electron": "^2.3.0",
     "@vscode/vsce": "^2.22.0",
+    "autoprefixer": "^10.4.27",
+    "esbuild": "^0.25.12",
     "eslint": "^8.0.0",
+    "glob": "^10.3.0",
     "mocha": "^10.0.0",
+    "postcss": "^8.5.8",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwindcss": "^3.4.19",
     "typescript": "^5.3.0"
   },
   "dependencies": {

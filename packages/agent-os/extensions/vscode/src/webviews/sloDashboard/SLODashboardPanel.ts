@@ -11,7 +11,6 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import { SLODataProvider } from '../../views/sloTypes';
-import { renderSLODashboard } from './SLODashboardTemplate';
 
 /**
  * Manages the SLO Dashboard webview panel lifecycle.
@@ -28,6 +27,7 @@ export class SLODashboardPanel {
     private static _currentPanel: SLODashboardPanel | undefined;
 
     private readonly _panel: vscode.WebviewPanel;
+    private readonly _extensionUri: vscode.Uri;
     private readonly _sloDataProvider: SLODataProvider;
     private readonly _disposables: vscode.Disposable[] = [];
     private _refreshInterval: ReturnType<typeof setInterval> | undefined;
@@ -57,12 +57,14 @@ export class SLODashboardPanel {
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
-                retainContextWhenHidden: true
+                retainContextWhenHidden: true,
+                localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'out', 'webviews')],
             }
         );
 
         SLODashboardPanel._currentPanel = new SLODashboardPanel(
             panel,
+            extensionUri,
             sloDataProvider
         );
     }
@@ -74,9 +76,11 @@ export class SLODashboardPanel {
 
     private constructor(
         panel: vscode.WebviewPanel,
+        extensionUri: vscode.Uri,
         sloDataProvider: SLODataProvider
     ) {
         this._panel = panel;
+        this._extensionUri = extensionUri;
         this._sloDataProvider = sloDataProvider;
 
         this._setWebviewContent();
@@ -88,13 +92,35 @@ export class SLODashboardPanel {
     }
 
     /**
-     * Generate the webview HTML with a fresh CSP nonce.
+     * Generate minimal HTML shell that loads the React bundle.
      */
     private _setWebviewContent(): void {
         const nonce = crypto.randomBytes(16).toString('hex');
-        const cspSource = this._panel.webview.cspSource;
+        const webview = this._panel.webview;
+
+        const scriptUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'out', 'webviews', 'main.js')
+        );
+        const cssUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'out', 'webviews', 'index.css')
+        );
+
         this._panel.title = 'SLO Dashboard';
-        this._panel.webview.html = renderSLODashboard(nonce, cspSource);
+        webview.html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <link rel="stylesheet" href="${cssUri}">
+    <title>SLO Dashboard</title>
+</head>
+<body>
+    <div id="root"></div>
+    <script nonce="${nonce}" src="${scriptUri}"></script>
+</body>
+</html>`;
     }
 
     /**
