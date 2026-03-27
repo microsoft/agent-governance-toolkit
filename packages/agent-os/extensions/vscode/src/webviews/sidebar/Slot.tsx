@@ -52,6 +52,7 @@ interface SlotProps {
     panelId: PanelId;
     state: SidebarState;
     stale?: boolean;
+    active?: boolean;
     onPromote: (panelId: PanelId) => void;
 }
 
@@ -92,10 +93,11 @@ function SlotHeader(
 
 /** Single slot container rendering the appropriate panel summary. */
 export function Slot(props: SlotProps): React.ReactElement {
-    const { panelId, state, stale, onPromote } = props;
+    const { panelId, state, stale, active, onPromote } = props;
+    const borderClass = active ? 'border-l-2 border-ml-accent' : 'border-l-2 border-transparent';
 
     return (
-        <div className="flex-1 flex flex-col min-h-0">
+        <div className={`flex-1 flex flex-col min-h-0 ${borderClass}`}>
             <SlotHeader
                 panelId={panelId}
                 stale={stale}

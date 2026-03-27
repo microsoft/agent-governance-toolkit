@@ -138,7 +138,18 @@ export interface SidebarState {
     memory: MemorySummaryData | null;
     hub: GovernanceHubData | null;
     stalePanels: PanelId[];
+    attentionMode: AttentionMode;
+    userSlots: SlotConfig;
 }
+
+/** Attention mode: manual locks to user config, auto enables scanning + priority. */
+export type AttentionMode = 'manual' | 'auto';
+
+/** Slot position keys for scan rotation. */
+export type SlotKey = 'slotA' | 'slotB' | 'slotC';
+
+/** Health urgency level for priority ranking. */
+export type UrgencyLevel = 'critical' | 'warning' | 'healthy' | 'unknown';
 
 /** Typed events for host-side coordination via GovernanceEventBus. */
 export type GovernanceEvent =
@@ -158,4 +169,5 @@ export type WebviewMessage =
     | { type: 'ready' }
     | { type: 'setSlots'; slots: SlotConfig }
     | { type: 'promotePanelToWebview'; panelId: PanelId }
-    | { type: 'refresh' };
+    | { type: 'refresh' }
+    | { type: 'setAttentionMode'; mode: AttentionMode };

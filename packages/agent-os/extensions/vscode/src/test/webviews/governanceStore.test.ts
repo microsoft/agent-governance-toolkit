@@ -178,4 +178,52 @@ suite('GovernanceStore', () => {
         await new Promise(r => setTimeout(r, 50));
         assert.ok(states.length >= 1, 'Should forward stateChanged events');
     });
+
+    test('setAttentionMode manual restores userSlots', () => {
+        store = new GovernanceStore(createMockProviders(), bus, createMockMemento() as any, 60000);
+        const originalSlots = store.getState().userSlots;
+        // Simulate priority changing slots
+        store.setVisible(true);
+        store.setAttentionMode('manual');
+        assert.deepStrictEqual(store.getState().slots, originalSlots);
+        assert.strictEqual(store.getState().attentionMode, 'manual');
+    });
+
+    test('setAttentionMode auto captures current slots as userSlots', () => {
+        const memento = createMockMemento();
+        store = new GovernanceStore(createMockProviders(), bus, memento as any, 60000);
+        const newSlots = { slotA: 'governance-hub' as const, slotB: 'audit-log' as const, slotC: 'safety-stats' as const };
+        store.setSlots(newSlots);
+        store.setAttentionMode('auto');
+        assert.deepStrictEqual(store.getState().userSlots, newSlots);
+    });
+
+    test('setAttentionMode persists to workspace state', () => {
+        const memento = createMockMemento();
+        store = new GovernanceStore(createMockProviders(), bus, memento as any, 60000);
+        store.setAttentionMode('manual');
+        assert.strictEqual(memento.get('agentOS.attentionMode'), 'manual');
+    });
+
+    test('setSlots also updates userSlots', () => {
+        store = new GovernanceStore(createMockProviders(), bus, createMockMemento() as any, 60000);
+        const newSlots = { slotA: 'governance-hub' as const, slotB: 'slo-dashboard' as const, slotC: 'audit-log' as const };
+        store.setSlots(newSlots);
+        assert.deepStrictEqual(store.getState().userSlots, newSlots);
+    });
+
+    test('priority reorder does not persist to workspace state', async () => {
+        const memento = createMockMemento();
+        store = new GovernanceStore(createMockProviders(), bus, memento as any, 60000);
+        store.setVisible(true);
+        store.refreshNow();
+        await new Promise(r => setTimeout(r, 50));
+        // Priority may reorder slots, but workspace state should still have original
+        const persisted = memento.get<any>('agentOS.slotConfig');
+        // If persisted is undefined, that's fine — priority doesn't write it
+        // If it exists, it should be the default (set only by setSlots)
+        if (persisted) {
+            assert.deepStrictEqual(persisted, store.getState().userSlots);
+        }
+    });
 });

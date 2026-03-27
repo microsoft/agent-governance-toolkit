@@ -7,7 +7,7 @@ import { DEFAULT_SLOTS } from '../../webviews/sidebar/types';
 
 function makeState(): SidebarState {
     return {
-        slots: DEFAULT_SLOTS,
+        slots: DEFAULT_SLOTS, userSlots: DEFAULT_SLOTS, attentionMode: 'auto',
         slo: null, audit: null, topology: null, policy: null,
         stats: null, kernel: null, memory: null, hub: null,
         stalePanels: [],

@@ -118,6 +118,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
             case 'refresh':
                 this._store.refreshNow();
                 break;
+            case 'setAttentionMode':
+                this._store.setAttentionMode(message.mode);
+                break;
         }
     }
 

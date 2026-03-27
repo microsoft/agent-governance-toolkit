@@ -9,7 +9,7 @@
  */
 
 import type * as vscode from 'vscode';
-import type { SidebarState, SlotConfig, PanelId } from './types';
+import type { SidebarState, SlotConfig, PanelId, AttentionMode } from './types';
 import { DEFAULT_SLOTS } from './types';
 import { GovernanceEventBus, Disposable } from './governanceEventBus';
 import {
@@ -22,8 +22,10 @@ import {
     shouldIsolate, shouldRejoin, markIsolated, markRejoined,
     recordFastTick, resetFastTick,
 } from './panelLatencyTracker';
+import { rankPanelsByUrgency } from './priorityEngine';
 
 const SLOT_CONFIG_KEY = 'agentOS.slotConfig';
+const ATTENTION_MODE_KEY = 'agentOS.attentionMode';
 const DEFAULT_THRESHOLD_MS = 2000;
 
 /** Data source keys that map to individual fetch functions. */
@@ -61,8 +63,10 @@ export class GovernanceStore {
     ) {
         this._thresholdMs = thresholdMs ?? DEFAULT_THRESHOLD_MS;
         const persisted = _workspaceState.get<SlotConfig>(SLOT_CONFIG_KEY);
+        const slots = persisted ?? DEFAULT_SLOTS;
+        const mode = _workspaceState.get<AttentionMode>(ATTENTION_MODE_KEY) ?? 'auto';
         this._state = {
-            slots: persisted ?? DEFAULT_SLOTS,
+            slots, userSlots: slots, attentionMode: mode,
             slo: null, audit: null, topology: null, policy: null,
             stats: null, kernel: null, memory: null, hub: null,
             stalePanels: [],
@@ -84,9 +88,19 @@ export class GovernanceStore {
     refreshNow(): void { this._tick(); }
 
     setSlots(slots: SlotConfig): void {
-        this._state = { ...this._state, slots };
+        this._state = { ...this._state, slots, userSlots: slots };
         this._workspaceState.update(SLOT_CONFIG_KEY, slots);
         this._bus.publish({ type: 'slotConfigChanged', slots });
+        this._emitIfChanged();
+    }
+
+    setAttentionMode(mode: AttentionMode): void {
+        if (mode === 'manual') {
+            this._state = { ...this._state, attentionMode: mode, slots: this._state.userSlots };
+        } else {
+            this._state = { ...this._state, attentionMode: mode, userSlots: this._state.slots };
+        }
+        this._workspaceState.update(ATTENTION_MODE_KEY, mode);
         this._emitIfChanged();
     }
 
@@ -108,6 +122,7 @@ export class GovernanceStore {
         try {
             const activeSources = ALL_SOURCES.filter(k => !this._isIsolated(k));
             await this._fetchSources(activeSources);
+            this._applyPriority();
             this._emitIfChanged();
         } finally {
             this._fetching = false;
@@ -128,15 +143,17 @@ export class GovernanceStore {
     }
 
     private async _fetchOne(key: DataSourceKey): Promise<unknown> {
-        switch (key) {
-            case 'slo': return await fetchSLO(this._providers) ?? this._state.slo;
-            case 'topology': return fetchTopology(this._providers) ?? this._state.topology;
-            case 'audit': return fetchAudit(this._providers) ?? this._state.audit;
-            case 'policy': return await fetchPolicy(this._providers) ?? this._state.policy;
-            case 'stats': return fetchStats(this._providers) ?? this._state.stats;
-            case 'kernel': return fetchKernel(this._providers) ?? this._state.kernel;
-            case 'memory': return fetchMemory(this._providers) ?? this._state.memory;
-        }
+        try {
+            switch (key) {
+                case 'slo': return await fetchSLO(this._providers) ?? this._state.slo;
+                case 'topology': return fetchTopology(this._providers) ?? this._state.topology;
+                case 'audit': return fetchAudit(this._providers) ?? this._state.audit;
+                case 'policy': return await fetchPolicy(this._providers) ?? this._state.policy;
+                case 'stats': return fetchStats(this._providers) ?? this._state.stats;
+                case 'kernel': return fetchKernel(this._providers) ?? this._state.kernel;
+                case 'memory': return fetchMemory(this._providers) ?? this._state.memory;
+            }
+        } catch { return this._state[key]; }
     }
 
     private _trackLatency(key: DataSourceKey, elapsed: number): void {
@@ -170,7 +187,7 @@ export class GovernanceStore {
         const offset = this._refreshIntervalMs / 2;
         const timer = setInterval(() => {
             this._fetchSources([key])
-                .then(() => this._emitIfChanged())
+                .then(() => { this._applyPriority(); this._emitIfChanged(); })
                 .catch(() => { /* provider errors handled by fetchOne fallbacks */ });
         }, offset);
         this._isolatedTimers.set(key, timer);
@@ -188,6 +205,15 @@ export class GovernanceStore {
             this._state = { ...this._state, stalePanels: [...current, panelId] };
         } else if (!stale) {
             this._state = { ...this._state, stalePanels: current.filter(p => p !== panelId) };
+        }
+    }
+
+    private _applyPriority(): void {
+        if (this._state.attentionMode !== 'auto') { return; }
+        const ranked = rankPanelsByUrgency(this._state, this._state.userSlots);
+        const { slots } = this._state;
+        if (ranked.slotA !== slots.slotA || ranked.slotB !== slots.slotB || ranked.slotC !== slots.slotC) {
+            this._state = { ...this._state, slots: ranked };
         }
     }
 
