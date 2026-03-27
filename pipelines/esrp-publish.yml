@@ -116,7 +116,8 @@ stages:
   # =======================================================
   - stage: Build_PyPI
     displayName: 'Build Python Packages'
-    condition: and(succeeded(), or(eq('${{ parameters.target }}', 'pypi'), eq('${{ parameters.target }}', 'all')))
+    dependsOn: []
+    condition: or(eq('${{ parameters.target }}', 'pypi'), eq('${{ parameters.target }}', 'all'))
     jobs:
       - ${{ each pkg in parameters.pypiPackages }}:
         - job: Build_PyPI_${{ replace(pkg.name, '-', '_') }}
@@ -195,7 +196,8 @@ stages:
   # =======================================================
   - stage: Build_npm
     displayName: 'Build & Pack npm Packages'
-    condition: and(succeeded(), or(eq('${{ parameters.target }}', 'npm'), eq('${{ parameters.target }}', 'all')))
+    dependsOn: []
+    condition: or(eq('${{ parameters.target }}', 'npm'), eq('${{ parameters.target }}', 'all'))
     jobs:
       - ${{ each pkg in parameters.npmPackages }}:
         - job: Build_npm_${{ replace(pkg.name, '-', '_') }}
@@ -283,7 +285,8 @@ stages:
   # =======================================================
   - stage: Build_NuGet
     displayName: 'Build & Test .NET SDK'
-    condition: and(succeeded(), or(eq('${{ parameters.target }}', 'nuget'), eq('${{ parameters.target }}', 'all')))
+    dependsOn: []
+    condition: or(eq('${{ parameters.target }}', 'nuget'), eq('${{ parameters.target }}', 'all'))
     jobs:
       - job: BuildAndPack
         displayName: 'Build, Test, Pack'
