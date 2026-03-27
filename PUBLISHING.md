@@ -119,8 +119,16 @@ All packages must include:
 
 ## .NET Packages (NuGet)
 
-The .NET SDK (`packages/agent-governance-dotnet`) is published to NuGet with
-ESRP Authenticode and NuGet signing.
+The .NET SDK (`packages/agent-governance-dotnet`) is published to NuGet via **ESRP Release**
+using an Azure DevOps pipeline (`pipelines/nuget-publish.yml`).
+
+| Package | NuGet Name | Directory |
+|---------|------------|-----------|
+| Agent Governance .NET SDK | `Microsoft.AgentGovernance` | `packages/agent-governance-dotnet` |
+
+> **⚠️ GitHub Actions is not used for NuGet publishing.**
+> The GitHub Actions workflow builds and attests packages but does **not**
+> publish them. Actual publishing goes through the ADO pipeline.
 
 ## Contact
 

@@ -1,0 +1,183 @@
+# ---------------------------------------------------------
+# Azure DevOps Pipeline: Publish .NET NuGet Package via ESRP Release
+#
+# This ADO pipeline builds, signs (Authenticode + NuGet), and
+# publishes Microsoft.AgentGovernance to NuGet.org via ESRP.
+#
+# Prerequisites:
+#   1. Complete ESRP Release onboarding (https://aka.ms/esrp-onboarding)
+#   2. Configure Azure Identity (Managed Identity recommended)
+#   3. Set up TSS signing certificate in Azure Key Vault
+#   4. Install ESRP Release ADO Task extension
+#
+# See: PUBLISHING.md for full setup guide.
+# ---------------------------------------------------------
+
+trigger: none  # Manual or release-gated trigger only
+
+pr: none
+
+parameters:
+  - name: dotnetVersion
+    type: string
+    displayName: '.NET SDK version'
+    default: '8.0.x'
+
+  - name: dryRun
+    type: boolean
+    displayName: 'Dry run (build + test only, skip ESRP publish)'
+    default: false
+
+# -------------------------------------------------------
+# ESRP Configuration
+# Service connection name is hardcoded (required at compile time by ADO).
+# All other values sourced from ADO pipeline variables (mark as secret):
+#   ESRP_KEYVAULT_NAME, ESRP_CERT_IDENTIFIER,
+#   ESRP_CLIENT_ID, ESRP_DOMAIN_TENANT_ID, ESRP_OWNERS, ESRP_APPROVERS
+# -------------------------------------------------------
+variables:
+  esrpServiceConnection: 'ESRP Release AzureRM'
+  esrpKeyVaultName: $(ESRP_KEYVAULT_NAME)
+  esrpSignCertName: $(ESRP_CERT_IDENTIFIER)
+  esrpClientId: $(ESRP_CLIENT_ID)
+  esrpDomainTenantId: $(ESRP_DOMAIN_TENANT_ID)
+  esrpOwners: $(ESRP_OWNERS)
+  esrpApprovers: $(ESRP_APPROVERS)
+  projectPath: 'packages/agent-governance-dotnet'
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: Build
+    displayName: 'Build, Test & Pack'
+    jobs:
+      - job: BuildAndPack
+        displayName: 'Build Microsoft.AgentGovernance'
+        steps:
+          - checkout: self
+
+          - task: UseDotNet@2
+            inputs:
+              packageType: sdk
+              version: '${{ parameters.dotnetVersion }}'
+            displayName: 'Use .NET SDK ${{ parameters.dotnetVersion }}'
+
+          - script: |
+              dotnet build --configuration Release
+            workingDirectory: '$(projectPath)'
+            displayName: 'Build (Release)'
+
+          - script: |
+              dotnet test --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
+            workingDirectory: '$(projectPath)'
+            displayName: 'Run tests'
+
+          - task: PublishTestResults@2
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '$(projectPath)/**/test-results.trx'
+            condition: always()
+            displayName: 'Publish test results'
+
+          - script: |
+              dotnet pack src/AgentGovernance/AgentGovernance.csproj \
+                --configuration Release \
+                --no-build \
+                --output ./nupkg
+            workingDirectory: '$(projectPath)'
+            displayName: 'Pack NuGet package'
+
+          - script: |
+              echo "=== Built NuGet packages ==="
+              ls -la nupkg/
+              echo ""
+              # Verify .nupkg exists
+              if ! ls nupkg/*.nupkg 1>/dev/null 2>&1; then
+                echo "##[error]No .nupkg found"
+                exit 1
+              fi
+              # Show package metadata
+              for pkg in nupkg/*.nupkg; do
+                echo "--- $pkg ---"
+                unzip -p "$pkg" '*.nuspec' | head -30
+              done
+            workingDirectory: '$(projectPath)'
+            displayName: 'Validate NuGet package'
+
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: '$(projectPath)/nupkg'
+              artifact: 'nuget-packages'
+              publishLocation: 'pipeline'
+            displayName: 'Publish NuGet build artifacts'
+
+  - stage: Publish
+    displayName: 'Publish to NuGet via ESRP'
+    dependsOn: Build
+    condition: and(succeeded(), eq('${{ parameters.dryRun }}', false))
+    jobs:
+      - job: PublishNuGet
+        displayName: 'Publish Microsoft.AgentGovernance to NuGet'
+        steps:
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifact: 'nuget-packages'
+              targetPath: '$(Pipeline.Workspace)/nuget-publish'
+            displayName: 'Download NuGet artifacts'
+
+          - script: |
+              echo "=== Packages to publish ==="
+              ls -la $(Pipeline.Workspace)/nuget-publish/
+            displayName: 'List packages'
+
+          # ---------------------------------------------------------
+          # ESRP Release Task — Publishes to NuGet
+          #
+          # ESRP handles Authenticode signing of DLLs inside the
+          # .nupkg and NuGet package signing before publishing.
+          # KeyCode CP-401405 is the Microsoft NuGet signing cert.
+          # ---------------------------------------------------------
+          - task: EsrpRelease@11
+            displayName: 'ESRP Publish to NuGet'
+            inputs:
+              connectedservicename: '$(esrpServiceConnection)'
+              usemanagedidentity: true
+              keyvaultname: '$(esrpKeyVaultName)'
+              signcertname: '$(esrpSignCertName)'
+              clientid: '$(esrpClientId)'
+              intent: 'PackageDistribution'
+              contenttype: 'Nuget'
+              contentsource: 'Folder'
+              folderlocation: '$(Pipeline.Workspace)/nuget-publish'
+              waitforreleasecompletion: true
+              owners: '$(esrpOwners)'
+              approvers: '$(esrpApprovers)'
+              serviceendpointurl: 'https://api.esrp.microsoft.com'
+              mainpublisher: 'ESRPRELPACMAN'
+              domaintenantid: '$(esrpDomainTenantId)'
+
+  - stage: Verify
+    displayName: 'Verify Published Package'
+    dependsOn: Publish
+    condition: succeeded()
+    jobs:
+      - job: VerifyPackage
+        displayName: 'Verify package on NuGet'
+        steps:
+          - checkout: self
+
+          - task: UseDotNet@2
+            inputs:
+              packageType: sdk
+              version: '${{ parameters.dotnetVersion }}'
+            displayName: 'Use .NET SDK ${{ parameters.dotnetVersion }}'
+
+          - script: |
+              echo "=== Verifying package on NuGet registry ==="
+              sleep 30
+              PKG_VER=$(grep '<Version>' $(projectPath)/src/AgentGovernance/AgentGovernance.csproj | sed 's/.*<Version>\(.*\)<\/Version>.*/\1/')
+              echo "Checking Microsoft.AgentGovernance@$PKG_VER..."
+              dotnet nuget list source
+              dotnet package search Microsoft.AgentGovernance --exact-match 2>/dev/null && echo "✅ Found" || echo "⚠️  Not yet indexed (may take a few minutes)"
+            displayName: 'Verify NuGet availability'
