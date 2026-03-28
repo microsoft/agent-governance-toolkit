@@ -7,8 +7,10 @@ for LangChain agents, using Ed25519 for cryptographic operations.
 from __future__ import annotations
 
 import base64
+import hmac
 import hashlib
 import time
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -21,13 +23,11 @@ try:
     CRYPTO_AVAILABLE = True
 except ImportError:
     CRYPTO_AVAILABLE = False
-    import warnings
-
     warnings.warn(
         "cryptography package not installed — using INSECURE simulation mode. "
         "Signatures are NOT cryptographically verified. Install cryptography: "
         "pip install 'langchain-agentmesh[crypto]' or pip install cryptography>=44.0.0",
-        SecurityWarning,
+        RuntimeWarning,
         stacklevel=2,
     )
 
@@ -188,7 +188,10 @@ class VerificationIdentity:
         Returns:
             True if signature is valid, False otherwise
         """
-        if signature.public_key != self.public_key:
+        if signature.algorithm != "verification-Ed25519":
+            return False
+
+        if not hmac.compare_digest(signature.public_key, self.public_key):
             return False
 
         if CRYPTO_AVAILABLE:
@@ -203,9 +206,8 @@ class VerificationIdentity:
             except (InvalidSignature, ValueError):
                 return False
         else:
-            # SECURITY WARNING: Fallback verification — NOT cryptographically secure.
-            # Accepts any non-empty signature. Only for demo/development.
-            return len(signature.signature) > 0
+            # Fail closed when cryptography is unavailable.
+            return False
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize identity to dictionary (excludes private key)."""
