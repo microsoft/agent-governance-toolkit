@@ -9,11 +9,9 @@
 /** Build the WebSocket client script. */
 export function buildClientScript(wsPort: number, sessionToken: string): string {
     return `
-    /** Escape HTML entities to prevent XSS. */
+    /** Escape HTML entities to prevent XSS (string-based, no DOM allocation). */
     function esc(s) {
-        var d = document.createElement('div');
-        d.textContent = String(s);
-        return d.innerHTML;
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
     let ws;
