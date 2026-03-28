@@ -214,6 +214,7 @@ app.get('/auth/callback', async (req: Request, res: Response) => {
     // In production, exchange code for token and complete setup
     logger.info('OAuth callback received', { hasCode: !!code, hasState: !!state });
     
+    res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'unsafe-inline'");
     res.send(`
         <html>
         <head><title>AgentOS Setup Complete</title></head>
@@ -232,6 +233,7 @@ app.get('/auth/callback', async (req: Request, res: Response) => {
  * GET /setup
  */
 app.get('/setup', (req: Request, res: Response) => {
+    res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'unsafe-inline'");
     res.send(`
         <html>
         <head>
