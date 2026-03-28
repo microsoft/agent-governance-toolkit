@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from threading import RLock
 from typing import Any, Dict, List, Optional
 
 from langchain_agentmesh.identity import VerificationIdentity, VerificationSignature, UserContext
@@ -85,6 +87,8 @@ class TrustPolicy:
     replay_window_seconds: int = 300
     replay_detection_enabled: bool = True
     max_seen_scope_chain_fingerprints: int = 2048
+    max_scope_chain_attempts_per_window: int = 120
+    scope_chain_rate_limit_window_seconds: int = 60
 
 
 @dataclass
@@ -270,48 +274,82 @@ class TrustHandshake:
         self._verified_peers: Dict[str, tuple[TrustVerificationResult, datetime]] = {}
         self._cache_ttl = timedelta(seconds=self.policy.cache_ttl_seconds)
         self._seen_scope_chains: Dict[str, datetime] = {}
+        self._scope_chain_attempts: Dict[str, deque[datetime]] = {}
+        self._state_lock = RLock()
 
     def _get_cached_result(self, did: str) -> Optional[TrustVerificationResult]:
         """Get cached verification result if still valid."""
-        if did in self._verified_peers:
-            result, timestamp = self._verified_peers[did]
-            if datetime.now(timezone.utc) - timestamp < self._cache_ttl:
-                return result
-            del self._verified_peers[did]
+        with self._state_lock:
+            if did in self._verified_peers:
+                result, timestamp = self._verified_peers[did]
+                if datetime.now(timezone.utc) - timestamp < self._cache_ttl:
+                    return result
+                del self._verified_peers[did]
         return None
 
     def _cache_result(self, did: str, result: TrustVerificationResult) -> None:
         """Cache a verification result."""
-        self._verified_peers[did] = (result, datetime.now(timezone.utc))
+        with self._state_lock:
+            self._verified_peers[did] = (result, datetime.now(timezone.utc))
 
     def _prune_seen_scope_chains(self, now: datetime) -> None:
         """Remove scope chain fingerprints outside replay window."""
-        replay_window = timedelta(seconds=self.policy.replay_window_seconds)
-        expired = [
-            fingerprint
-            for fingerprint, seen_at in self._seen_scope_chains.items()
-            if now - seen_at > replay_window
-        ]
-        for fingerprint in expired:
-            del self._seen_scope_chains[fingerprint]
+        with self._state_lock:
+            replay_window = timedelta(seconds=self.policy.replay_window_seconds)
+            expired = [
+                fingerprint
+                for fingerprint, seen_at in self._seen_scope_chains.items()
+                if now - seen_at > replay_window
+            ]
+            for fingerprint in expired:
+                del self._seen_scope_chains[fingerprint]
 
     def _record_scope_chain_fingerprint(self, fingerprint: str, now: datetime) -> None:
         """Record fingerprint with bounded memory growth."""
-        self._seen_scope_chains[fingerprint] = now
-        max_entries = max(self.policy.max_seen_scope_chain_fingerprints, 0)
-        if max_entries == 0:
-            self._seen_scope_chains.clear()
-            return
-        while len(self._seen_scope_chains) > max_entries:
-            oldest_fingerprint = min(
-                self._seen_scope_chains,
-                key=self._seen_scope_chains.__getitem__,
-            )
-            del self._seen_scope_chains[oldest_fingerprint]
+        with self._state_lock:
+            self._seen_scope_chains[fingerprint] = now
+            max_entries = max(self.policy.max_seen_scope_chain_fingerprints, 0)
+            if max_entries == 0:
+                self._seen_scope_chains.clear()
+                return
+            while len(self._seen_scope_chains) > max_entries:
+                oldest_fingerprint = min(
+                    self._seen_scope_chains,
+                    key=self._seen_scope_chains.__getitem__,
+                )
+                del self._seen_scope_chains[oldest_fingerprint]
 
-    def _scope_chain_failure(self, detail: str) -> tuple[bool, str]:
+    def _is_replay_scope_chain(self, fingerprint: str, now: datetime) -> bool:
+        """Check replay set membership under lock."""
+        with self._state_lock:
+            return fingerprint in self._seen_scope_chains
+
+    def _enforce_scope_chain_rate_limit(self, actor_id: str, now: datetime) -> bool:
+        """Bound verification attempts per actor in a sliding window."""
+        window = timedelta(seconds=self.policy.scope_chain_rate_limit_window_seconds)
+        with self._state_lock:
+            attempts = self._scope_chain_attempts.setdefault(actor_id, deque())
+            while attempts and now - attempts[0] > window:
+                attempts.popleft()
+            if len(attempts) >= self.policy.max_scope_chain_attempts_per_window:
+                return False
+            attempts.append(now)
+            return True
+
+    def _scope_chain_failure(
+        self,
+        detail: str,
+        *,
+        peer_did: Optional[str] = None,
+        chain_root_did: Optional[str] = None,
+    ) -> tuple[bool, str]:
         """Return sanitized error for callers and log detailed reason."""
-        logger.warning("Scope chain verification failed: %s", detail)
+        logger.warning(
+            "Scope chain verification failed: peer_did=%s chain_root_did=%s detail=%s",
+            peer_did,
+            chain_root_did,
+            detail,
+        )
         if self.policy.expose_scope_chain_errors:
             return False, detail
         return False, "Scope chain verification failed"
@@ -320,7 +358,15 @@ class TrustHandshake:
         """Resolve allowed signature algorithms from policy."""
         if not self.policy.allowed_signature_algorithms:
             return set(DEFAULT_SIGNATURE_ALGORITHMS)
-        return set(self.policy.allowed_signature_algorithms)
+
+        requested = set(self.policy.allowed_signature_algorithms)
+        supported = requested.intersection(DEFAULT_SIGNATURE_ALGORITHMS)
+        if requested - supported:
+            logger.warning(
+                "Unsupported signature algorithms ignored: %s",
+                sorted(requested - supported),
+            )
+        return supported
 
     def _verify_scope_chain(
         self,
@@ -336,27 +382,42 @@ class TrustHandshake:
 
         now = datetime.now(timezone.utc)
         delegations = peer_card.scope_chain
+        peer_did = peer_card.identity.did
+        chain_root_did = delegations[0].delegator if delegations else None
+
+        if not self._enforce_scope_chain_rate_limit(peer_did, now):
+            return self._scope_chain_failure(
+                "Scope chain rate limit exceeded",
+                peer_did=peer_did,
+                chain_root_did=chain_root_did,
+            )
 
         # Anchor trust to this verifier's identity.
         first = delegations[0]
         if first.delegator != self.my_identity.did:
             return self._scope_chain_failure(
-                "Scope chain error: root delegator does not match verifier identity"
+                "Scope chain error: root delegator does not match verifier identity",
+                peer_did=peer_did,
+                chain_root_did=chain_root_did,
             )
 
         # Chain must terminate at the advertised peer identity.
         if delegations[-1].delegatee != peer_card.identity.did:
             return self._scope_chain_failure(
-                "Scope chain error: chain does not terminate at peer identity"
+                "Scope chain error: chain does not terminate at peer identity",
+                peer_did=peer_did,
+                chain_root_did=chain_root_did,
             )
 
         allowed_algorithms = self._allowed_signature_algorithms()
         scope_chain_fingerprint = _scope_chain_fingerprint(delegations)
         if self.policy.replay_detection_enabled:
             self._prune_seen_scope_chains(now)
-            if scope_chain_fingerprint in self._seen_scope_chains:
+            if self._is_replay_scope_chain(scope_chain_fingerprint, now):
                 return self._scope_chain_failure(
-                    "Scope chain error: replay detected within replay window"
+                    "Scope chain error: replay detected within replay window",
+                    peer_did=peer_did,
+                    chain_root_did=chain_root_did,
                 )
 
         known_public_keys: Dict[str, str] = {self.my_identity.did: self.my_identity.public_key}
@@ -365,27 +426,37 @@ class TrustHandshake:
         for i, delegation in enumerate(delegations):
             if not delegation.delegator.startswith("did:verification:"):
                 return self._scope_chain_failure(
-                    f"Scope chain error at index {i}: invalid delegator DID"
+                    f"Scope chain error at index {i}: invalid delegator DID",
+                    peer_did=peer_did,
+                    chain_root_did=chain_root_did,
                 )
 
             if not delegation.delegatee.startswith("did:verification:"):
                 return self._scope_chain_failure(
-                    f"Scope chain error at index {i}: invalid delegatee DID"
+                    f"Scope chain error at index {i}: invalid delegatee DID",
+                    peer_did=peer_did,
+                    chain_root_did=chain_root_did,
                 )
 
             if delegation.expires_at and delegation.expires_at + expiry_skew < now:
                 return self._scope_chain_failure(
-                    f"Scope chain error at index {i}: delegation is expired"
+                    f"Scope chain error at index {i}: delegation is expired",
+                    peer_did=peer_did,
+                    chain_root_did=chain_root_did,
                 )
 
             if not delegation.signature:
                 return self._scope_chain_failure(
-                    f"Scope chain error at index {i}: missing signature"
+                    f"Scope chain error at index {i}: missing signature",
+                    peer_did=peer_did,
+                    chain_root_did=chain_root_did,
                 )
 
             if delegation.signature.algorithm not in allowed_algorithms:
                 return self._scope_chain_failure(
-                    f"Scope chain error at index {i}: unsupported signature algorithm"
+                    f"Scope chain error at index {i}: unsupported signature algorithm",
+                    peer_did=peer_did,
+                    chain_root_did=chain_root_did,
                 )
 
             signature_timestamp = delegation.signature.timestamp
@@ -396,14 +467,18 @@ class TrustHandshake:
                 seconds=self.policy.max_signature_clock_skew_seconds
             ):
                 return self._scope_chain_failure(
-                    f"Scope chain error at index {i}: signature timestamp is in the future"
+                    f"Scope chain error at index {i}: signature timestamp is in the future",
+                    peer_did=peer_did,
+                    chain_root_did=chain_root_did,
                 )
 
             if now - signature_timestamp > timedelta(
                 seconds=self.policy.max_delegation_signature_age_seconds
             ):
                 return self._scope_chain_failure(
-                    f"Scope chain error at index {i}: signature is stale"
+                    f"Scope chain error at index {i}: signature is stale",
+                    peer_did=peer_did,
+                    chain_root_did=chain_root_did,
                 )
 
             # Enforce deterministic linkage between adjacent delegations.
@@ -411,13 +486,17 @@ class TrustHandshake:
                 prev = delegations[i - 1]
                 if delegation.delegator != prev.delegatee:
                     return self._scope_chain_failure(
-                        f"Scope chain error at index {i}: delegation linkage broken"
+                        f"Scope chain error at index {i}: delegation linkage broken",
+                        peer_did=peer_did,
+                        chain_root_did=chain_root_did,
                     )
 
             expected_public_key = known_public_keys.get(delegation.delegator)
             if expected_public_key and delegation.signature.public_key != expected_public_key:
                 return self._scope_chain_failure(
-                    f"Scope chain error at index {i}: delegator public key mismatch"
+                    f"Scope chain error at index {i}: delegator public key mismatch",
+                    peer_did=peer_did,
+                    chain_root_did=chain_root_did,
                 )
 
             delegation_data = _delegation_signing_payload(
@@ -434,7 +513,9 @@ class TrustHandshake:
             )
             if not delegator_identity.verify_signature(delegation_data, delegation.signature):
                 return self._scope_chain_failure(
-                    f"Scope chain error at index {i}: invalid delegation signature"
+                    f"Scope chain error at index {i}: invalid delegation signature",
+                    peer_did=peer_did,
+                    chain_root_did=chain_root_did,
                 )
 
             known_public_keys[delegation.delegator] = delegation.signature.public_key
@@ -544,8 +625,10 @@ class TrustHandshake:
 
     def clear_cache(self) -> None:
         """Clear all cached verification results."""
-        self._verified_peers.clear()
-        self._seen_scope_chains.clear()
+        with self._state_lock:
+            self._verified_peers.clear()
+            self._seen_scope_chains.clear()
+            self._scope_chain_attempts.clear()
 
 
 class DelegationChain:
