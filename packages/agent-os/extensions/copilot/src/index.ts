@@ -36,6 +36,13 @@ const DEFAULT_ALLOWED_ORIGINS = [
     'https://copilot.github.com'
 ];
 
+const CORS_EXCLUDED_PATHS = new Set([
+    '/',
+    '/health',
+    '/auth/callback',
+    '/api/webhook'
+]);
+
 function normalizeOrigin(origin: string): string | null {
     try {
         const parsed = new URL(origin.trim());
@@ -54,11 +61,18 @@ function getAllowedOrigins(): Set<string> {
         ? configured.split(',').map((v) => v.trim()).filter(Boolean)
         : DEFAULT_ALLOWED_ORIGINS;
 
-    const normalized = source
-        .map(normalizeOrigin)
-        .filter((v): v is string => v !== null);
+    const normalized: string[] = [];
+    for (const entry of source) {
+        const value = normalizeOrigin(entry);
+        if (!value) {
+            logger.warn('Ignoring invalid CORS origin from ALLOWED_ORIGINS', { origin: entry });
+            continue;
+        }
+        normalized.push(value);
+    }
 
     if (normalized.length === 0) {
+        logger.warn('No valid ALLOWED_ORIGINS provided, falling back to secure defaults');
         return new Set(DEFAULT_ALLOWED_ORIGINS);
     }
 
@@ -66,6 +80,10 @@ function getAllowedOrigins(): Set<string> {
 }
 
 const allowedOrigins = getAllowedOrigins();
+
+function isCorsProtectedPath(path: string): boolean {
+    return !CORS_EXCLUDED_PATHS.has(path);
+}
 
 // Raw body for webhook signature verification
 app.use(express.json({
@@ -84,6 +102,7 @@ const policyLibrary = new PolicyLibrary();
 
 // CORS origin allowlist (configurable via ALLOWED_ORIGINS).
 app.use((req, res, next) => {
+    const isProtectedPath = isCorsProtectedPath(req.path);
     const origin = req.header('Origin');
     const normalizedOrigin = origin ? normalizeOrigin(origin) : null;
     const isAllowedOrigin = normalizedOrigin !== null && allowedOrigins.has(normalizedOrigin);
@@ -96,10 +115,28 @@ app.use((req, res, next) => {
     }
 
     if (req.method === 'OPTIONS') {
-        if (origin && !isAllowedOrigin) {
+        if (!isProtectedPath) {
+            return res.sendStatus(204);
+        }
+        if (!origin || !isAllowedOrigin) {
+            logger.warn('Rejected CORS preflight request', { origin: origin || 'missing' });
             return res.sendStatus(403);
         }
         return res.sendStatus(204);
+    }
+
+    if (!isProtectedPath) {
+        return next();
+    }
+
+    if (!origin) {
+        logger.warn('Rejected request due to missing CORS origin header', { path: req.path });
+        return res.sendStatus(403);
+    }
+
+    if (!isAllowedOrigin) {
+        logger.warn('Rejected request due to disallowed CORS origin', { origin });
+        return res.sendStatus(403);
     }
 
     next();
@@ -367,8 +404,8 @@ app.get('/api/templates', (req: Request, res: Response) => {
  * GET /api/templates/:id
  */
 app.get('/api/templates/:id', (req: Request, res: Response) => {
-    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const template = templateGallery.getById(id);
+    const templateId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const template = templateGallery.getById(templateId);
     if (template) {
         res.json(template);
     } else {

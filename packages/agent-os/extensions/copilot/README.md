@@ -158,6 +158,9 @@ ALLOWED_ORIGINS=https://github.com,https://api.github.com,https://copilot.github
 `ALLOWED_ORIGINS` is a comma-separated CORS allowlist. If not set, the extension
 defaults to GitHub production origins.
 
+Do not use wildcard or overly broad origins in production. Keep this list
+restricted to trusted GitHub domains used by your deployment.
+
 ### Repository Policy
 
 Create `.github/agent-os.json`:
