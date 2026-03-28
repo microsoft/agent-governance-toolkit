@@ -41,6 +41,39 @@ describe('CORS allowlist middleware', () => {
     expect(response.status).toBe(403);
   });
 
+  test('rejects github-like malicious subdomain', async () => {
+    const response = await fetch(`${baseUrl}/api/status`, {
+      headers: { Origin: 'https://github.com.evil.com' },
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  test('allows trailing slash origin after normalization', async () => {
+    const response = await fetch(`${baseUrl}/api/status`, {
+      headers: { Origin: 'https://github.com/' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://github.com');
+  });
+
+  test('rejects non-standard port when not allowlisted', async () => {
+    const response = await fetch(`${baseUrl}/api/status`, {
+      headers: { Origin: 'https://github.com:8080' },
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  test('rejects malformed origin header', async () => {
+    const response = await fetch(`${baseUrl}/api/status`, {
+      headers: { Origin: 'http://' },
+    });
+
+    expect(response.status).toBe(403);
+  });
+
   test('rejects missing origin on protected API route', async () => {
     const response = await fetch(`${baseUrl}/api/status`);
     expect(response.status).toBe(403);
