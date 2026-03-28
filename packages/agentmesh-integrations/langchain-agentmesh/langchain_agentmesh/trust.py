@@ -222,6 +222,68 @@ class TrustHandshake:
         """Cache a verification result."""
         self._verified_peers[did] = (result, datetime.now(timezone.utc))
 
+    def _verify_scope_chain(
+        self,
+        peer_card: TrustedAgentCard,
+    ) -> tuple[bool, str]:
+        """Verify cryptographic validity and integrity of a peer scope chain.
+
+        The chain is anchored to this agent's identity as trust root and must
+        terminate at the peer card DID.
+        """
+        if not peer_card.scope_chain or not peer_card.identity:
+            return True, ""
+
+        now = datetime.now(timezone.utc)
+        delegations = peer_card.scope_chain
+
+        # Anchor trust to this verifier's identity.
+        first = delegations[0]
+        if first.delegator != self.my_identity.did:
+            return False, "Scope chain root delegator does not match verifier identity"
+
+        # Chain must terminate at the advertised peer identity.
+        if delegations[-1].delegatee != peer_card.identity.did:
+            return False, "Scope chain does not terminate at peer identity"
+
+        known_public_keys: Dict[str, str] = {self.my_identity.did: self.my_identity.public_key}
+
+        for i, delegation in enumerate(delegations):
+            if delegation.expires_at and delegation.expires_at < now:
+                return False, f"Scope delegation at index {i} is expired"
+
+            if not delegation.signature:
+                return False, f"Scope delegation at index {i} is missing signature"
+
+            # Enforce deterministic linkage between adjacent delegations.
+            if i > 0:
+                prev = delegations[i - 1]
+                if delegation.delegator != prev.delegatee:
+                    return False, f"Scope delegation linkage broken at index {i}"
+
+            expected_public_key = known_public_keys.get(delegation.delegator)
+            if expected_public_key and delegation.signature.public_key != expected_public_key:
+                return False, f"Delegator public key mismatch at index {i}"
+
+            delegation_data = json.dumps({
+                "delegator": delegation.delegator,
+                "delegatee": delegation.delegatee,
+                "capabilities": sorted(delegation.capabilities),
+                "expires_at": delegation.expires_at.isoformat() if delegation.expires_at else None,
+            }, sort_keys=True)
+
+            delegator_identity = VerificationIdentity(
+                did=delegation.delegator,
+                agent_name=f"delegator-{i}",
+                public_key=delegation.signature.public_key,
+            )
+            if not delegator_identity.verify_signature(delegation_data, delegation.signature):
+                return False, f"Invalid scope delegation signature at index {i}"
+
+            known_public_keys[delegation.delegator] = delegation.signature.public_key
+
+        return True, ""
+
     def verify_peer(
         self,
         peer_card: TrustedAgentCard,
@@ -293,12 +355,15 @@ class TrustHandshake:
 
         # Check scope chain if present
         if peer_card.scope_chain:
-            # TODO: A full cryptographic verification of the scope chain is needed.
-            # This should verify the signature of each delegation and the integrity of the
-            # entire chain. The current check for expiration is insufficient.
-            warnings.append(
-                "Scope chain is present but its cryptographic validity is not verified."
-            )
+            scope_chain_valid, scope_chain_error = self._verify_scope_chain(peer_card)
+            if not scope_chain_valid:
+                return TrustVerificationResult(
+                    trusted=False,
+                    trust_score=peer_card.trust_score,
+                    reason=scope_chain_error,
+                    verified_capabilities=verified_caps,
+                    warnings=warnings,
+                )
 
         # All checks passed
         result = TrustVerificationResult(
