@@ -3,7 +3,7 @@
 # This is a safety net — branch protection rules should also enforce this.
 #
 # Context: PRs #357 and #362 were auto-merged without maintainer review,
-# reintroducing shell=True (CWE-78) that we fixed for MSRC Case 111178.
+# reintroducing shell=True (CWE-78) that was previously fixed.
 
 name: Require Maintainer Approval
 
