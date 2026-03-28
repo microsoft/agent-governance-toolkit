@@ -8,6 +8,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
 
 interface OnboardingStep {
     id: string;
@@ -215,6 +216,8 @@ export class OnboardingPanel {
     }
 
     private _getHtmlForWebview() {
+        const nonce = crypto.randomBytes(16).toString('base64');
+        const cspSource = this._panel.webview.cspSource;
         const stepsJson = JSON.stringify(this._steps);
         const completedCount = this._steps.filter(s => s.completed).length;
         const totalSteps = this._steps.length;
@@ -224,6 +227,7 @@ export class OnboardingPanel {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${cspSource} https:; font-src ${cspSource};">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome to Agent OS</title>
     <style>
@@ -450,7 +454,7 @@ export class OnboardingPanel {
         </div>
     </div>
 
-    <script>
+    <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
         const steps = ${stepsJson};
         
