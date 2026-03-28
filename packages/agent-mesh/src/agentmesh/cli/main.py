@@ -16,6 +16,7 @@ Commands:
 import logging
 import json
 import yaml
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -285,10 +286,26 @@ def register(agent_dir: str, name: str = None, output_json: bool = False):
         from agentmesh.identity import AgentIdentity
         identity = AgentIdentity.create(agent_name)
     except ImportError:
+        err_msg = "Required dependency is missing. Please install 'agentmesh-platform'."
         if output_json:
-            print(json.dumps({"status": "error", "message": "agentmesh not installed"}, indent=2))
+            print(json.dumps({"status": "error", "message": err_msg, "type": "MissingDependency"}, indent=2))
         else:
-            console.print("[red]Error: agentmesh is not installed. Run: pip install agentmesh-platform[/red]")
+            console.print(f"[red]Error: {err_msg}[/red]")
+        return
+    except (ValueError, KeyError, PermissionError) as e:
+        # Catch safe, expected exceptions
+        if output_json:
+            print(json.dumps({"status": "error", "message": str(e), "type": e.__class__.__name__}, indent=2))
+        else:
+            console.print(f"[red]Error: {e}[/red]")
+        return
+    except Exception:
+        # Catch-all for unexpected errors
+        err_msg = "An internal error occurred during registration. Check logs for details."
+        if output_json:
+            print(json.dumps({"status": "error", "message": err_msg, "type": "InternalError"}, indent=2))
+        else:
+            console.print(f"[red]Error: {err_msg}[/red]")
         return
 
     if not output_json:
@@ -429,11 +446,17 @@ def policy(policy_file: str, validate: bool, output_json: bool):
         else:
             console.print(f"\n[green]Successfully loaded {len(policies)} policies[/green]")
 
-    except Exception as e:
+    except (yaml.YAMLError, ValueError, json.JSONDecodeError) as e:
         if output_json:
-            print(json.dumps({"status": "error", "message": str(e)}, indent=2))
+            print(json.dumps({"status": "error", "message": str(e), "type": e.__class__.__name__}, indent=2))
         else:
             console.print(f"[red]Error: {e}[/red]")
+    except Exception:
+        err_msg = "An unexpected error occurred while loading the policy. Access AGENTOS_DEBUG for details."
+        if output_json:
+            print(json.dumps({"status": "error", "message": err_msg, "type": "InternalError"}, indent=2))
+        else:
+            console.print(f"[red]Error: {err_msg}[/red]")
 
 
 @app.command()
@@ -453,16 +476,27 @@ def audit(agent: str, limit: int, fmt: str, output_json: bool):
     ]
 
     if agent:
+        # Validate agent DID format to prevent injection or invalid lookups
+        if not re.match(r"^agent-[a-zA-Z0-9_-]+$|^did:agentmesh:[a-zA-Z0-9._-]+$", agent):
+            err_msg = f"Invalid agent identifier format: {agent}"
+            if output_json:
+                print(json.dumps({"status": "error", "message": err_msg, "type": "ValidationError"}, indent=2))
+            else:
+                console.print(f"[red]Error: {err_msg}[/red]")
+            return
         entries = [e for e in entries if e["agent"] == agent]
 
     entries = entries[:limit]
     
-    # Sanitize entries for JSON output to prevent information leakage/injection
+    # Sanitize entries for JSON output with strict key whitelisting and value validation
     allowed_keys = {"timestamp", "agent", "action", "status"}
-    sanitized_entries = [
-        {k: v for k, v in e.items() if k in allowed_keys}
-        for e in entries
-    ]
+    sanitized_entries = []
+    for e in entries:
+        # Only include whitelisted keys and ensure they are strings
+        item = {k: str(v) for k, v in e.items() if k in allowed_keys}
+        # Final safety check: ensure all required keys are present
+        if all(k in item for k in allowed_keys):
+            sanitized_entries.append(item)
 
     if output_json or fmt == "json":
         click.echo(json.dumps(sanitized_entries, indent=2))

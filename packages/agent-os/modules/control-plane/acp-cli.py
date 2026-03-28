@@ -21,6 +21,7 @@ Usage:
 import sys
 import argparse
 import json
+import re
 from typing import Optional
 from pathlib import Path
 
@@ -121,19 +122,34 @@ def cmd_agent_create(args, control_plane):
             ActionType.API_CALL: PermissionLevel.READ_ONLY,
         }
     
-    agent = control_plane.create_agent(args.agent_id, permissions)
-    
-    if getattr(args, "json", False):
-        print(json.dumps({
-            "status": "success",
-            "agent_id": args.agent_id,
-            "session_id": agent.session_id,
-            "permissions_count": len(permissions)
-        }, indent=2))
-    else:
-        print(f"✓ Created agent: {args.agent_id}")
-        print(f"  Session: {agent.session_id}")
-        print(f"  Permissions: {len(permissions)} action types")
+    try:
+        if not re.match(r"^[a-zA-Z0-9_-]+$", args.agent_id):
+            raise ValueError(f"Invalid agent_id format: {args.agent_id}")
+            
+        agent = control_plane.create_agent(args.agent_id, permissions)
+        
+        if getattr(args, "json", False):
+            print(json.dumps({
+                "status": "success",
+                "agent_id": str(args.agent_id),
+                "session_id": str(agent.session_id),
+                "permissions_count": int(len(permissions))
+            }, indent=2))
+        else:
+            print(f"✓ Created agent: {args.agent_id}")
+            print(f"  Session: {agent.session_id}")
+            print(f"  Permissions: {len(permissions)} action types")
+    except (ValueError, KeyError, PermissionError) as e:
+        if getattr(args, "json", False):
+            print(json.dumps({"status": "error", "message": str(e), "type": e.__class__.__name__}, indent=2))
+        else:
+            print(f"Error: {e}")
+    except Exception:
+        err_msg = "An unexpected error occurred during agent creation."
+        if getattr(args, "json", False):
+            print(json.dumps({"status": "error", "message": err_msg, "type": "InternalError"}, indent=2))
+        else:
+            print(f"Error: {err_msg}")
 
 
 def cmd_agent_list(args, control_plane):
@@ -170,12 +186,14 @@ def cmd_audit_show(args, control_plane):
         events = recorder.get_recent_events(limit=args.limit or 10)
         
         if args.format == "json" or getattr(args, "json", False):
-            # Sanitize events to prevent information disclosure
+            # Strict sanitization to prevent information leakage
             allowed_keys = {"timestamp", "event_type", "agent_id", "status"}
-            sanitized_events = [
-                {k: v for k, v in event.items() if k in allowed_keys}
-                for event in events
-            ]
+            sanitized_events = []
+            for event in events:
+                # Ensure all values are strings and keys are whitelisted
+                item = {str(k): str(v) for k, v in event.items() if k in allowed_keys}
+                if all(k in item for k in allowed_keys):
+                    sanitized_events.append(item)
             print(json.dumps(sanitized_events, indent=2))
         else:
             print(f"Recent Audit Events (last {len(events)}):")
@@ -214,10 +232,11 @@ def main():
         from agent_control_plane import AgentControlPlane
         control_plane = AgentControlPlane()
     except ImportError:
+        err_msg = "Required dependency 'agent_control_plane' is missing."
         if getattr(args, "json", False):
-            print(json.dumps({"error": "agent_control_plane package not installed"}, indent=2))
+            print(json.dumps({"status": "error", "message": err_msg, "type": "MissingDependency"}, indent=2))
         else:
-            print("Error: agent_control_plane package not installed")
+            print(f"Error: {err_msg}")
             print("Install with: pip install -e .")
         return 1
     
