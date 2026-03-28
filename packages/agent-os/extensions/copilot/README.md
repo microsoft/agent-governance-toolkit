@@ -152,7 +152,11 @@ npm start
 PORT=3000
 LOG_LEVEL=info
 CMVK_API_ENDPOINT=https://api.agent-os.dev/cmvk
+ALLOWED_ORIGINS=https://github.com,https://api.github.com,https://copilot.github.com
 ```
+
+`ALLOWED_ORIGINS` is a comma-separated CORS allowlist. If not set, the extension
+defaults to GitHub production origins.
 
 ### Repository Policy
 

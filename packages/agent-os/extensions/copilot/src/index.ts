@@ -30,6 +30,43 @@ dotenv.config();
 
 const app = express();
 
+const DEFAULT_ALLOWED_ORIGINS = [
+    'https://github.com',
+    'https://api.github.com',
+    'https://copilot.github.com'
+];
+
+function normalizeOrigin(origin: string): string | null {
+    try {
+        const parsed = new URL(origin.trim());
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return null;
+        }
+        return parsed.origin;
+    } catch {
+        return null;
+    }
+}
+
+function getAllowedOrigins(): Set<string> {
+    const configured = process.env.ALLOWED_ORIGINS;
+    const source = configured
+        ? configured.split(',').map((v) => v.trim()).filter(Boolean)
+        : DEFAULT_ALLOWED_ORIGINS;
+
+    const normalized = source
+        .map(normalizeOrigin)
+        .filter((v): v is string => v !== null);
+
+    if (normalized.length === 0) {
+        return new Set(DEFAULT_ALLOWED_ORIGINS);
+    }
+
+    return new Set(normalized);
+}
+
+const allowedOrigins = getAllowedOrigins();
+
 // Raw body for webhook signature verification
 app.use(express.json({
     verify: (req: any, res, buf) => {
@@ -45,14 +82,26 @@ const extension = new CopilotExtension(policyEngine, cmvkClient, auditLogger);
 const templateGallery = new TemplateGallery();
 const policyLibrary = new PolicyLibrary();
 
-// CORS for GitHub
+// CORS origin allowlist (configurable via ALLOWED_ORIGINS).
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-GitHub-Token, X-Hub-Signature-256');
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
+    const origin = req.header('Origin');
+    const normalizedOrigin = origin ? normalizeOrigin(origin) : null;
+    const isAllowedOrigin = normalizedOrigin !== null && allowedOrigins.has(normalizedOrigin);
+
+    if (isAllowedOrigin && normalizedOrigin) {
+        res.header('Access-Control-Allow-Origin', normalizedOrigin);
+        res.header('Vary', 'Origin');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-GitHub-Token, X-Hub-Signature-256');
     }
+
+    if (req.method === 'OPTIONS') {
+        if (origin && !isAllowedOrigin) {
+            return res.sendStatus(403);
+        }
+        return res.sendStatus(204);
+    }
+
     next();
 });
 
