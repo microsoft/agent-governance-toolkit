@@ -362,9 +362,9 @@ export class AgentIdentity {
 
   /** Reconstruct an AgentIdentity from its JSON representation. */
   static fromJSON(json: AgentIdentityJSON): AgentIdentity {
-    const pubKey = new Uint8Array(Buffer.from(json.publicKey, 'base64'));
+    const pubKey = new Uint8Array(safeBase64Decode(json.publicKey));
     const privKey = json.privateKey
-      ? new Uint8Array(Buffer.from(json.privateKey, 'base64'))
+      ? new Uint8Array(safeBase64Decode(json.privateKey))
       : new Uint8Array(0);
     return new AgentIdentity({
       did: json.did,
@@ -459,6 +459,41 @@ export class IdentityRegistry {
   get size(): number {
     return this._identities.size;
   }
+}
+
+// ── Key prefix stripping ──
+// Ported from AzureClaw vendor SDK — keys serialized with type prefixes
+// (e.g. "ed25519:<base64>") fail to decode without stripping the prefix first.
+
+/**
+ * Strip a key type prefix (e.g. "ed25519:", "x25519:") before base64 decoding.
+ * Handles three cases:
+ *   1. Key starts with the expected prefix → strips it.
+ *   2. Key starts with a *different* known prefix → strips it with a warning.
+ *   3. Key has no prefix → returns as-is with a warning.
+ */
+export function stripKeyPrefix(keyStr: string, expectedPrefix: string): string {
+  if (keyStr.startsWith(expectedPrefix)) {
+    return keyStr.slice(expectedPrefix.length);
+  }
+  if (keyStr.includes(':')) {
+    const [, rest] = keyStr.split(':', 2);
+    console.warn(`Key has unexpected prefix, expected '${expectedPrefix}'`);
+    return rest ?? keyStr;
+  }
+  // No prefix at all — still valid, just not prefixed
+  return keyStr;
+}
+
+/**
+ * Safely decode a base64 key string that may carry a type prefix.
+ * Strips "ed25519:" / "x25519:" before decoding.
+ */
+export function safeBase64Decode(b64: string): Buffer {
+  let raw = b64;
+  if (raw.startsWith('ed25519:')) raw = raw.slice(8);
+  else if (raw.startsWith('x25519:')) raw = raw.slice(7);
+  return Buffer.from(raw, 'base64');
 }
 
 // ── Ed25519 DER prefixes ──
