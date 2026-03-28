@@ -47,6 +47,8 @@ interface TraceableRequest extends Request {
     spanId?: string;
 }
 
+type TrustProxySetting = boolean | number | string;
+
 function parsePositiveInteger(value: string | undefined, fallback: number): number {
     const parsed = Number.parseInt(value || '', 10);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -65,6 +67,27 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
         return false;
     }
     return fallback;
+}
+
+function parseTrustProxy(value: string | undefined): TrustProxySetting {
+    if (!value) {
+        return false;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(normalized)) {
+        return true;
+    }
+    if (['false', '0', 'no', 'off'].includes(normalized)) {
+        return false;
+    }
+
+    const numericValue = Number.parseInt(value, 10);
+    if (Number.isFinite(numericValue) && numericValue >= 0) {
+        return numericValue;
+    }
+
+    return value;
 }
 
 function verifyWebhookSignature(rawBody: Buffer | undefined, signature: string, secret: string): boolean {
@@ -92,6 +115,7 @@ export function createApp(): express.Express {
     initializeTelemetry();
 
     const app = express();
+    app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
     const tracer = getTracer();
     const startedAt = Date.now();
 
@@ -149,6 +173,17 @@ export function createApp(): express.Express {
         if (req.method === 'OPTIONS') {
             return res.sendStatus(200);
         }
+        next();
+    });
+
+    app.use((_req, res, next) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('X-Frame-Options', 'DENY');
+        res.setHeader('Referrer-Policy', 'no-referrer');
+        res.setHeader(
+            'Content-Security-Policy',
+            "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+        );
         next();
     });
 

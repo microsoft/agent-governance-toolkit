@@ -48,6 +48,16 @@ describe('copilot extension HTTP hardening', () => {
         expect(response.headers['x-trace-id']).toBeTruthy();
     });
 
+    it('adds security headers to responses', async () => {
+        const app = createApp();
+
+        const response = await request(app).get('/health');
+
+        expect(response.headers['x-content-type-options']).toBe('nosniff');
+        expect(response.headers['x-frame-options']).toBe('DENY');
+        expect(response.headers['content-security-policy']).toContain("default-src 'none'");
+    });
+
     it('rate limits repeated API requests', async () => {
         process.env.RATE_LIMIT_MAX_REQUESTS = '1';
         const app = createApp();
@@ -58,5 +68,19 @@ describe('copilot extension HTTP hardening', () => {
         expect(first.status).toBe(200);
         expect(second.status).toBe(429);
         expect(second.body.error).toBe('Too many requests');
+    });
+
+    it('can skip counting successful requests when configured', async () => {
+        process.env.RATE_LIMIT_MAX_REQUESTS = '1';
+        process.env.RATE_LIMIT_SKIP_SUCCESSFUL_REQUESTS = 'true';
+        const app = createApp();
+
+        const first = await request(app).get('/api/compliance');
+        const second = await request(app).get('/api/compliance');
+        const third = await request(app).get('/api/compliance');
+
+        expect(first.status).toBe(200);
+        expect(second.status).toBe(200);
+        expect(third.status).toBe(200);
     });
 });

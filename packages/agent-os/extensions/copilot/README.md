@@ -154,14 +154,32 @@ LOG_LEVEL=info
 CMVK_API_ENDPOINT=https://api.agent-os.dev/cmvk
 RATE_LIMIT_WINDOW_MS=60000
 RATE_LIMIT_MAX_REQUESTS=100
+RATE_LIMIT_SKIP_SUCCESSFUL_REQUESTS=false
+TRUST_PROXY=false
 OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces
 ```
 
 ### HTTP Safety Defaults
 
 - `POST /api/*` request bodies are schema-validated and return `400` for malformed input
 - API routes are protected with configurable rate limiting via environment variables
+- proxy-aware deployments can enable Express `trust proxy` behavior with `TRUST_PROXY=true` (or a hop count)
 - Every response includes an `X-Trace-Id` header to correlate requests with OpenTelemetry spans
+- common hardening headers are attached to all responses (`CSP`, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`)
+
+### OpenTelemetry Notes
+
+- Set `OTEL_ENABLED=true` to initialize tracing.
+- If you are using an OTLP collector, configure `OTEL_EXPORTER_OTLP_ENDPOINT` in the environment used by your runtime.
+- The extension returns `X-Trace-Id` on every response so server logs, traces, and client-side diagnostics can be correlated quickly.
+
+### Rate Limiting Notes
+
+- `RATE_LIMIT_WINDOW_MS` controls the rolling window duration.
+- `RATE_LIMIT_MAX_REQUESTS` controls the maximum requests allowed in each window.
+- `RATE_LIMIT_SKIP_SUCCESSFUL_REQUESTS=true` prevents successful requests from counting against the limit.
+- `TRUST_PROXY` should be enabled only when the extension runs behind a trusted reverse proxy or ingress.
 
 ### Repository Policy
 
