@@ -13,6 +13,10 @@ import {
     fetchStats, fetchKernel, fetchMemory, deriveHub,
 } from './dataAggregator';
 import {
+    fetchSLODetail, fetchTopologyDetail, fetchAuditDetail,
+    fetchPolicyDetail, fetchHubDetail,
+} from './detailFetchers';
+import {
     type PanelTiming, createTiming, recordDuration,
     shouldIsolate, shouldRejoin, markIsolated, markRejoined,
     recordFastTick, resetFastTick,
@@ -25,15 +29,13 @@ const ATTENTION_MODE_KEY = 'agentOS.attentionMode';
 const DEFAULT_THRESHOLD_MS = 2000;
 const HEARTBEAT_MULTIPLIER = 3;
 const MIN_HEARTBEAT_MS = 15000;
-
 type DataSourceKey = 'slo' | 'topology' | 'audit' | 'policy' | 'stats' | 'kernel' | 'memory';
 const ALL_SOURCES: DataSourceKey[] = ['slo', 'topology', 'audit', 'policy', 'stats', 'kernel', 'memory'];
 const LIVE_SOURCES: DataSourceKey[] = ['slo', 'topology', 'policy'];
 const LOCAL_SOURCES: DataSourceKey[] = ['audit', 'stats', 'kernel', 'memory'];
 const SOURCE_TO_PANEL: Record<DataSourceKey, PanelId> = {
     slo: 'slo-dashboard', topology: 'agent-topology', audit: 'audit-log',
-    policy: 'active-policies', stats: 'safety-stats',
-    kernel: 'kernel-debugger', memory: 'memory-browser',
+    policy: 'active-policies', stats: 'safety-stats', kernel: 'kernel-debugger', memory: 'memory-browser',
 };
 
 export class GovernanceStore {
@@ -46,7 +48,7 @@ export class GovernanceStore {
     private readonly _isolatedTimers = new Map<DataSourceKey, ReturnType<typeof setInterval>>();
     private readonly _eventSubs: vscode.Disposable[] = [];
     private readonly _thresholdMs: number;
-
+    private readonly _detailSubs = new Map<string, Set<(data: unknown) => void>>();
     constructor(
         private readonly _providers: DataProviders,
         private readonly _bus: GovernanceEventBus,
@@ -57,8 +59,7 @@ export class GovernanceStore {
         auditLogger?: ChangeSource,
     ) {
         this._thresholdMs = thresholdMs ?? DEFAULT_THRESHOLD_MS;
-        const persisted = _workspaceState.get<SlotConfig>(SLOT_CONFIG_KEY);
-        const slots = persisted ?? DEFAULT_SLOTS;
+        const slots = _workspaceState.get<SlotConfig>(SLOT_CONFIG_KEY) ?? DEFAULT_SLOTS;
         const mode = _workspaceState.get<AttentionMode>(ATTENTION_MODE_KEY) ?? 'auto';
         this._state = {
             slots, userSlots: slots, attentionMode: mode,
@@ -66,59 +67,62 @@ export class GovernanceStore {
             stats: null, kernel: null, memory: null, hub: null,
             stalePanels: [],
         };
-        for (const key of ALL_SOURCES) {
-            this._timings.set(key, createTiming());
-        }
-        const heartbeat = Math.max(this._refreshIntervalMs * HEARTBEAT_MULTIPLIER, MIN_HEARTBEAT_MS);
-        this._interval = setInterval(() => this._tick(), heartbeat);
+        for (const k of ALL_SOURCES) { this._timings.set(k, createTiming()); }
+        this._interval = setInterval(() => this._tick(),
+            Math.max(this._refreshIntervalMs * HEARTBEAT_MULTIPLIER, MIN_HEARTBEAT_MS));
         this._eventSubs = wireStoreEvents(
             liveClient, auditLogger,
             () => this._fetchGroupAndEmit(LIVE_SOURCES),
             () => this._fetchGroupAndEmit(LOCAL_SOURCES),
         );
     }
-
     getState(): SidebarState { return this._state; }
-
     subscribe(listener: (state: SidebarState) => void): Disposable {
         return this._bus.subscribe((event) => {
             if (event.type === 'stateChanged') { listener(event.state); }
         });
     }
-
+    /** Subscribe a detail panel to receive rich data on each refresh cycle. */
+    onDetailSubscribe(panelType: string, cb: (data: unknown) => void): Disposable {
+        if (!this._detailSubs.has(panelType)) { this._detailSubs.set(panelType, new Set()); }
+        this._detailSubs.get(panelType)!.add(cb);
+        this._fetchDetailAndNotify(panelType).catch(() => { /* initial fetch error is non-fatal */ });
+        return {
+            dispose: () => {
+                const set = this._detailSubs.get(panelType);
+                set?.delete(cb);
+                if (set?.size === 0) { this._detailSubs.delete(panelType); }
+            },
+        };
+    }
     refreshNow(): void { this._tick(); }
-
     setSlots(slots: SlotConfig): void {
         this._state = { ...this._state, slots, userSlots: slots };
         this._workspaceState.update(SLOT_CONFIG_KEY, slots);
         this._bus.publish({ type: 'slotConfigChanged', slots });
         this._emitIfChanged();
     }
-
     setAttentionMode(mode: AttentionMode): void {
-        if (mode === 'manual') {
-            this._state = { ...this._state, attentionMode: mode, slots: this._state.userSlots };
-        } else {
-            this._state = { ...this._state, attentionMode: mode, userSlots: this._state.slots };
-        }
+        const s = this._state;
+        this._state = mode === 'manual'
+            ? { ...s, attentionMode: mode, slots: s.userSlots }
+            : { ...s, attentionMode: mode, userSlots: s.slots };
         this._workspaceState.update(ATTENTION_MODE_KEY, mode);
         this._emitIfChanged();
     }
-
     setVisible(visible: boolean): void {
         this._visible = visible;
         this._bus.publish({ type: 'visibilityChanged', visible });
         if (visible) { this._emitIfChanged(); }
     }
-
     dispose(): void {
         if (this._interval) { clearInterval(this._interval); this._interval = undefined; }
-        for (const timer of this._isolatedTimers.values()) { clearInterval(timer); }
+        for (const t of this._isolatedTimers.values()) { clearInterval(t); }
         this._isolatedTimers.clear();
         for (const sub of this._eventSubs) { sub.dispose(); }
         this._eventSubs.length = 0;
+        this._detailSubs.clear();
     }
-
     private async _tick(): Promise<void> {
         if (this._fetching) { return; }
         this._fetching = true;
@@ -127,24 +131,39 @@ export class GovernanceStore {
             await this._fetchSources(activeSources);
             this._applyPriority();
             this._emitIfChanged();
+            for (const pt of this._detailSubs.keys()) {
+                this._fetchDetailAndNotify(pt).catch(() => { /* detail fetch errors are non-fatal */ });
+            }
         } finally {
             this._fetching = false;
         }
     }
-
-    private async _fetchSources(sources: DataSourceKey[]): Promise<void> {
-        const patch: Partial<Record<DataSourceKey, unknown>> = {};
-        for (const key of sources) {
-            const start = performance.now();
-            patch[key] = await this._fetchOne(key);
-            const elapsed = performance.now() - start;
-            this._trackLatency(key, elapsed);
-        }
-        this._state = { ...this._state, ...patch } as SidebarState;
-        const hub = deriveHub(this._state);
-        this._state = { ...this._state, hub };
+    /** Fetch detail data for a panel type and notify its subscribers. */
+    private async _fetchDetailAndNotify(panelType: string): Promise<void> {
+        const subs = this._detailSubs.get(panelType);
+        if (!subs || subs.size === 0) { return; }
+        const fetchers: Record<string, () => Promise<unknown>> = {
+            slo: () => fetchSLODetail(this._providers),
+            topology: async () => fetchTopologyDetail(this._providers),
+            audit: async () => fetchAuditDetail(this._providers),
+            policy: () => fetchPolicyDetail(this._providers),
+            hub: () => fetchHubDetail(this._providers),
+        };
+        const data = await (fetchers[panelType]?.() ?? Promise.resolve(null));
+        for (const cb of subs) { cb(data); }
     }
-
+    private async _fetchSources(sources: DataSourceKey[]): Promise<void> {
+        const results = await Promise.all(sources.map(async (k) => {
+            const t0 = performance.now();
+            const value = await this._fetchOne(k);
+            this._trackLatency(k, performance.now() - t0);
+            return [k, value] as const;
+        }));
+        const patch: Partial<Record<DataSourceKey, unknown>> = {};
+        for (const [k, value] of results) { patch[k] = value; }
+        const merged = { ...this._state, ...patch } as SidebarState;
+        this._state = { ...merged, hub: deriveHub(merged) };
+    }
     private async _fetchOne(key: DataSourceKey): Promise<unknown> {
         try {
             switch (key) {
@@ -158,12 +177,9 @@ export class GovernanceStore {
             }
         } catch { return this._state[key]; }
     }
-
     private _trackLatency(key: DataSourceKey, elapsed: number): void {
-        let timing = this._timings.get(key)!;
-        timing = recordDuration(timing, elapsed);
+        let timing = recordDuration(this._timings.get(key)!, elapsed);
         const panelId = SOURCE_TO_PANEL[key];
-
         if (timing.isolated) {
             timing = elapsed <= this._thresholdMs ? recordFastTick(timing) : resetFastTick(timing);
             if (shouldRejoin(timing)) {
@@ -178,40 +194,32 @@ export class GovernanceStore {
             this._updateStalePanels(key, true);
             this._bus.publish({ type: 'panelIsolated', panelId });
         }
-
         this._timings.set(key, timing);
     }
 
-    private _isIsolated(key: DataSourceKey): boolean {
-        return this._timings.get(key)?.isolated === true;
-    }
-
+    private _isIsolated(key: DataSourceKey): boolean { return this._timings.get(key)?.isolated === true; }
     private _startIsolatedTimer(key: DataSourceKey): void {
-        const offset = this._refreshIntervalMs / 2;
         const timer = setInterval(() => {
             this._fetchSources([key])
                 .then(() => { this._applyPriority(); this._emitIfChanged(); })
                 .catch(() => { /* provider errors handled by fetchOne fallbacks */ });
-        }, offset);
+        }, this._refreshIntervalMs / 2);
         this._isolatedTimers.set(key, timer);
     }
 
     private _clearIsolatedTimer(key: DataSourceKey): void {
-        const timer = this._isolatedTimers.get(key);
-        if (timer) { clearInterval(timer); this._isolatedTimers.delete(key); }
+        const t = this._isolatedTimers.get(key);
+        if (t) { clearInterval(t); this._isolatedTimers.delete(key); }
     }
-
     private _updateStalePanels(key: DataSourceKey, stale: boolean): void {
-        const current = this._state.stalePanels;
         const panelId = SOURCE_TO_PANEL[key];
+        const current = this._state.stalePanels;
         if (stale && !current.includes(panelId)) {
             this._state = { ...this._state, stalePanels: [...current, panelId] };
         } else if (!stale) {
             this._state = { ...this._state, stalePanels: current.filter(p => p !== panelId) };
         }
     }
-
-    /** Fetch a source group (live or local), apply priority, and emit. */
     private async _fetchGroupAndEmit(sources: DataSourceKey[]): Promise<void> {
         if (this._fetching) { return; }
         this._fetching = true;
@@ -224,16 +232,14 @@ export class GovernanceStore {
             this._fetching = false;
         }
     }
-
     private _applyPriority(): void {
         if (this._state.attentionMode !== 'auto') { return; }
         const ranked = rankPanelsByUrgency(this._state, this._state.userSlots);
-        const { slots } = this._state;
-        if (ranked.slotA !== slots.slotA || ranked.slotB !== slots.slotB || ranked.slotC !== slots.slotC) {
+        const s = this._state.slots;
+        if (ranked.slotA !== s.slotA || ranked.slotB !== s.slotB || ranked.slotC !== s.slotC) {
             this._state = { ...this._state, slots: ranked };
         }
     }
-
     private _emitIfChanged(): void {
         if (!this._visible) { return; }
         const json = JSON.stringify(this._state);

@@ -16,8 +16,10 @@ const isProd = process.env.NODE_ENV === 'production';
 /** @type {import('esbuild').BuildOptions} */
 const config = {
     entryPoints: [
-        'src/webviews/sloDashboard/main.tsx',
         'src/webviews/sidebar/main.tsx',
+        'src/webviews/sloDetail/main.tsx',
+        'src/webviews/topologyDetail/main.tsx',
+        'src/webviews/hubDetail/main.tsx',
     ],
     bundle: true,
     outdir: 'out/webviews',

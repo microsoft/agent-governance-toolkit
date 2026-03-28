@@ -21,6 +21,11 @@ import type {
     MemorySummaryData,
     GovernanceHubData,
 } from './types';
+// Re-export detail fetchers from dedicated module (Section 4 file-size compliance)
+export {
+    fetchSLODetail, fetchTopologyDetail, fetchAuditDetail,
+    fetchPolicyDetail, fetchHubDetail,
+} from './detailFetchers';
 
 /** Providers bundle passed to the aggregator. */
 export interface DataProviders {
@@ -144,4 +149,5 @@ export function deriveHub(state: SidebarState): GovernanceHubData {
 
     return { overallHealth: health, activeAlerts: alerts, policyCompliance: compliance, agentCount: agents };
 }
+
 

@@ -9,26 +9,32 @@
 
 import React from 'react';
 import type { PolicySummaryData } from '../types';
+import { Tooltip } from '../../shared/Tooltip';
+import { HELP } from '../../shared/helpContent';
 
 function MetricCell(props: {
-    label: string; value: number; colorClass: string;
+    label: string; value: number; colorClass: string; tooltip: string;
 }): React.ReactElement {
     return (
         <div className="flex flex-col items-start">
-            <span className="text-xs text-ml-text-muted">{props.label}</span>
+            <Tooltip text={props.tooltip}><span className="text-xs text-ml-text-muted">{props.label}</span></Tooltip>
             <span className={`text-sm font-bold ${props.colorClass}`}>{props.value}</span>
         </div>
     );
 }
 
 function buildMetrics(data: PolicySummaryData): Array<{
-    label: string; value: number; colorClass: string;
+    label: string; value: number; colorClass: string; tooltip: string;
 }> {
     return [
-        { label: 'DENY', value: data.denyRules, colorClass: data.denyRules > 0 ? 'text-ml-error' : 'text-ml-text' },
-        { label: 'BLOCK', value: data.blockRules, colorClass: data.blockRules > 0 ? 'text-ml-error' : 'text-ml-text' },
-        { label: 'Evals Today', value: data.evaluationsToday, colorClass: 'text-ml-text' },
-        { label: 'Violations', value: data.violationsToday, colorClass: data.violationsToday > 0 ? 'text-ml-error' : 'text-ml-text' },
+        { label: 'DENY', value: data.denyRules, colorClass: data.denyRules > 0 ? 'text-ml-error' : 'text-ml-text',
+          tooltip: HELP.policy.deny },
+        { label: 'BLOCK', value: data.blockRules, colorClass: data.blockRules > 0 ? 'text-ml-error' : 'text-ml-text',
+          tooltip: HELP.policy.block },
+        { label: 'Evals Today', value: data.evaluationsToday, colorClass: 'text-ml-text',
+          tooltip: HELP.policy.evaluations },
+        { label: 'Violations', value: data.violationsToday, colorClass: data.violationsToday > 0 ? 'text-ml-error' : 'text-ml-text',
+          tooltip: HELP.policy.violations },
     ];
 }
 

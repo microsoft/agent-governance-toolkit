@@ -11,7 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { buildBrowserStyles } from './browserStyles';
-import { buildClientScript, buildTopologyScript } from './browserScripts';
+import { buildClientScript, buildTopologyScript, buildHelpContent } from './browserScripts';
 
 /** Build the HTML structure for the dashboard body. */
 function buildBodyContent(): string {
@@ -39,11 +39,20 @@ function buildBodyContent(): string {
                     <span class="status-dot disconnected" id="status-dot"></span>
                     <span>Live</span>
                     <span id="staleness-badge" style="font-size:11px;opacity:0.7;margin-left:8px"></span>
+                    <button id="help-toggle" class="help-btn" title="Help" aria-expanded="false" aria-controls="help-panel">?</button>
                 </div>
             </div>
             ${buildSLOTab()}
             ${buildTopologyTab()}
             ${buildAuditTab()}
+            <aside id="help-panel" class="help-panel" aria-label="Help panel">
+                <div class="help-header">
+                    <h2>Help</h2>
+                    <button id="help-close" class="help-close-btn">&times;</button>
+                </div>
+                <input type="text" id="help-search" class="help-search" placeholder="Search help..." />
+                <div id="help-content" class="help-body">${buildHelpContent()}</div>
+            </aside>
         </main>
     </div>`;
 }

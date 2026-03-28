@@ -98,7 +98,84 @@ export function buildClientScript(wsPort: number, sessionToken: string): string 
 
     document.getElementById('toggle-sidebar')?.addEventListener('click', () => {
         document.querySelector('.sidebar').classList.toggle('collapsed');
-    });`;
+    });
+
+    var helpToggle = document.getElementById('help-toggle');
+    var helpPanel = document.getElementById('help-panel');
+    var helpClose = document.getElementById('help-close');
+    var helpSearch = document.getElementById('help-search');
+
+    if (helpToggle) {
+        helpToggle.addEventListener('click', function() {
+            if (!helpPanel) { return; }
+            var isOpen = helpPanel.classList.toggle('visible');
+            helpToggle.setAttribute('aria-expanded', String(isOpen));
+            if (isOpen && helpSearch) { helpSearch.focus(); }
+        });
+    }
+    if (helpClose) {
+        helpClose.addEventListener('click', function() {
+            if (!helpPanel) { return; }
+            helpPanel.classList.remove('visible');
+            if (helpToggle) { helpToggle.setAttribute('aria-expanded', 'false'); helpToggle.focus(); }
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && helpPanel && helpPanel.classList.contains('visible')) {
+            helpPanel.classList.remove('visible');
+            if (helpToggle) { helpToggle.setAttribute('aria-expanded', 'false'); helpToggle.focus(); }
+        }
+    });
+    if (helpSearch) {
+        helpSearch.addEventListener('input', function(e) {
+            var q = e.target.value.toLowerCase();
+            var sections = helpPanel ? helpPanel.querySelectorAll('section') : [];
+            sections.forEach(function(s) {
+                s.style.display = (s.textContent || '').toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+            });
+        });
+    }`;
+}
+
+/** Build static help content as HTML sections for the browser dashboard. */
+export function buildHelpContent(): string {
+    return `
+<section data-help="overview"><h2>Overview</h2>
+<p>Agent OS provides kernel-level safety for AI coding assistants. It intercepts tool calls, enforces policies, and produces tamper-proof audit trails.</p></section>
+<section data-help="slo"><h2>SLO Dashboard</h2>
+<p><strong>Availability</strong>: Percentage of successful governance evaluations in the current window.</p>
+<p><strong>Latency P99</strong>: 99th-percentile response time for policy evaluation calls.</p>
+<p><strong>Burn Rate</strong>: Ratio of actual error consumption to budgeted rate. Values above 1.0 indicate the budget is depleting faster than planned.</p>
+<p><strong>Error Budgets</strong>: Remaining tolerance for failures before the SLO is breached.</p>
+<p><strong>Trust Distribution</strong>: Histogram of agent trust scores across four buckets (0-250, 251-500, 501-750, 751-1000).</p></section>
+<section data-help="topology"><h2>Agent Topology</h2>
+<p><strong>Agents</strong>: Registered AI agents identified by DID (Decentralized Identifier).</p>
+<p><strong>Bridges</strong>: Protocol connectors (A2A, MCP, IATP) linking agents across trust boundaries.</p>
+<p><strong>Trust Score</strong>: Mean trust across all agents (0-1000 scale).</p></section>
+<section data-help="audit"><h2>Audit Log</h2>
+<p>Chronological record of governance decisions. Filter by severity (info, warning, critical) or search by action, DID, or file path.</p></section>
+<section data-help="policy"><h2>Active Policies</h2>
+<p><strong>DENY</strong>: Rejects the tool call and returns an error to the agent.</p>
+<p><strong>BLOCK</strong>: Silently prevents execution without notifying the agent.</p>
+<p><strong>AUDIT</strong>: Allows execution but logs a compliance event.</p>
+<p><strong>ALLOW</strong>: Permits execution with no additional overhead.</p></section>
+<section data-help="glossary"><h2>Glossary</h2>
+<table><tr><th>Term</th><th>Definition</th></tr>
+<tr><td>SLO</td><td>Service Level Objective - a target reliability metric</td></tr>
+<tr><td>SLI</td><td>Service Level Indicator - measured value tracking an SLO</td></tr>
+<tr><td>DID</td><td>Decentralized Identifier for agent identity</td></tr>
+<tr><td>Burn Rate</td><td>Speed at which error budget is consumed</td></tr>
+<tr><td>Trust Score</td><td>0-1000 composite reliability rating</td></tr></table></section>
+<section data-help="troubleshooting"><h2>Troubleshooting</h2>
+<table><tr><th>Symptom</th><th>Fix</th></tr>
+<tr><td>Dashboard shows no data</td><td>Check that the governance backend is running and agentOS.governance settings are configured.</td></tr>
+<tr><td>WebSocket disconnected</td><td>Verify the server is running on the expected port. The client auto-reconnects every 3 seconds.</td></tr>
+<tr><td>Stale data warning</td><td>Increase agentOS.governance.refreshIntervalMs or check backend health.</td></tr></table></section>
+<section data-help="security"><h2>Security Design Decisions</h2>
+<table><tr><th>Decision</th><th>Rationale</th></tr>
+<tr><td>CSP nonce-gated scripts</td><td>Prevents injection of unauthorized scripts into webviews.</td></tr>
+<tr><td>Session token on WebSocket</td><td>Authenticates browser clients to the local governance server.</td></tr>
+<tr><td>Loopback-only binding</td><td>Server binds to 127.0.0.1, not exposed to network.</td></tr></table></section>`;
 }
 
 /** Build the D3.js topology graph script. */

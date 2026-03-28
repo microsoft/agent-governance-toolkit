@@ -9,6 +9,8 @@
 
 import React from 'react';
 import type { GovernanceHubData } from '../types';
+import { Tooltip } from '../../shared/Tooltip';
+import { HELP } from '../../shared/helpContent';
 
 const HEALTH_MAP: Record<GovernanceHubData['overallHealth'], {
     label: string; colorClass: string; dotClass: string;
@@ -25,7 +27,7 @@ function HealthIndicator(
     return (
         <div className="flex items-center gap-ml-xs">
             <span className={`inline-block w-3 h-3 rounded-full ${dotClass}`} />
-            <span className={`text-lg font-bold ${colorClass}`}>{label}</span>
+            <Tooltip text={HELP.governanceHub.health}><span className={`text-lg font-bold ${colorClass}`}>{label}</span></Tooltip>
         </div>
     );
 }
@@ -36,17 +38,17 @@ function StatRow(props: {
     return (
         <div className="grid grid-cols-3 gap-ml-xs mt-2">
             <div className="flex flex-col items-start">
-                <span className="text-xs text-ml-text-muted">Alerts</span>
+                <Tooltip text={HELP.governanceHub.activeAlerts}><span className="text-xs text-ml-text-muted">Alerts</span></Tooltip>
                 <span className={`text-sm font-bold ${props.alerts > 0 ? 'text-ml-error' : 'text-ml-text'}`}>
                     {props.alerts}
                 </span>
             </div>
             <div className="flex flex-col items-start">
-                <span className="text-xs text-ml-text-muted">Compliance</span>
+                <Tooltip text={HELP.governanceHub.compliance}><span className="text-xs text-ml-text-muted">Compliance</span></Tooltip>
                 <span className="text-sm font-bold text-ml-text">{props.compliance}%</span>
             </div>
             <div className="flex flex-col items-start">
-                <span className="text-xs text-ml-text-muted">Agents</span>
+                <Tooltip text={HELP.governanceHub.agents}><span className="text-xs text-ml-text-muted">Agents</span></Tooltip>
                 <span className="text-sm font-bold text-ml-text">{props.agents}</span>
             </div>
         </div>

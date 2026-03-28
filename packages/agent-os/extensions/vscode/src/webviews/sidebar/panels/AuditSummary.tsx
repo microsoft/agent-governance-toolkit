@@ -10,6 +10,8 @@
 import React from 'react';
 import type { AuditSummaryData } from '../types';
 import { timeAgo } from '../timeUtils';
+import { Tooltip } from '../../shared/Tooltip';
+import { HELP } from '../../shared/helpContent';
 
 export function AuditSummary(
     { data }: { data: AuditSummaryData | null }
@@ -32,16 +34,16 @@ export function AuditSummary(
                 <span className={`text-2xl font-bold ${violationColor}`}>
                     {data.violationsToday}
                 </span>
-                <span className="text-xs text-ml-text-muted">violations</span>
+                <Tooltip text={HELP.audit.violations}><span className="text-xs text-ml-text-muted">violations</span></Tooltip>
             </div>
             <div className="flex items-center justify-between">
-                <span className="text-xs text-ml-text-muted">
+                <Tooltip text={HELP.audit.totalToday}><span className="text-xs text-ml-text-muted">
                     {data.totalToday} total today
-                </span>
+                </span></Tooltip>
                 {data.lastEventTime && (
-                    <span className="text-xs text-ml-text-muted">
+                    <Tooltip text={HELP.audit.lastEvent}><span className="text-xs text-ml-text-muted">
                         {timeAgo(data.lastEventTime)}
-                    </span>
+                    </span></Tooltip>
                 )}
             </div>
             {data.lastEventAction && (

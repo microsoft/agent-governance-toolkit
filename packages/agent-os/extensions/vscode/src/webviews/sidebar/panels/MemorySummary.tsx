@@ -9,6 +9,8 @@
 
 import React from 'react';
 import type { MemorySummaryData } from '../types';
+import { Tooltip } from '../../shared/Tooltip';
+import { HELP } from '../../shared/helpContent';
 
 const MAX_VISIBLE_PATHS = 3;
 
@@ -42,8 +44,8 @@ export function MemorySummary(
     return (
         <div className="p-ml-sm">
             <div className="flex items-center gap-ml-sm text-sm text-ml-text">
-                <span><span className="font-bold">{data.directoryCount}</span> dirs</span>
-                <span><span className="font-bold">{data.fileCount}</span> files</span>
+                <Tooltip text={HELP.memory.directories}><span><span className="font-bold">{data.directoryCount}</span> dirs</span></Tooltip>
+                <Tooltip text={HELP.memory.files}><span><span className="font-bold">{data.fileCount}</span> files</span></Tooltip>
             </div>
             {data.rootPaths.length > 0 && <PathList paths={data.rootPaths} />}
         </div>

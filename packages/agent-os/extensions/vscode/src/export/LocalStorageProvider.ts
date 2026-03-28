@@ -49,10 +49,14 @@ export class LocalStorageProvider implements StorageProvider {
         await this.validateCredentials();
 
         const filePath = path.join(this.outputDir, filename);
-        await fs.promises.writeFile(filePath, html, 'utf8');
+        const resolved = path.resolve(filePath);
+        if (!resolved.startsWith(path.resolve(this.outputDir) + path.sep)) {
+            throw new Error('Export path must be within output directory');
+        }
+        await fs.promises.writeFile(resolved, html, 'utf8');
 
         return {
-            url: `file://${filePath}`,
+            url: `file://${resolved}`,
             expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
         };
     }

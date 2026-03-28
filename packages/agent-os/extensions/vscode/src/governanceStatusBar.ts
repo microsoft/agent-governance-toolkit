@@ -50,7 +50,7 @@ class GovernanceStatusBar implements vscode.Disposable {
         this.sloItem.command = 'agent-os.showMetrics';
 
         this.agentItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 94);
-        this.agentItem.command = 'agent-os.showAgentTopology';
+        this.agentItem.command = 'agent-os.showTopologyGraph';
         this.agentItem.text = `$(organization) 0 agents`;
         this.agentItem.tooltip = 'No agents registered';
         this.agentItem.show();

@@ -42,8 +42,24 @@ All notable changes to the Agent OS VS Code extension will be documented in this
 - Per-panel latency isolation: slow data sources automatically split to offset refresh cadence with staleness indicator
 
 ### Changed
+- SLO Dashboard, Agent Topology, and Governance Hub panels migrated from HTML template strings to React + Tailwind
+- Panel host classes replaced with shared `panelHost.ts` factory (280 lines of duplication removed)
+- GovernanceStore data fetches parallelized via Promise.all (latency: sum of all sources → max)
+- ForceGraph DOM rendering optimized (build elements once, update positions per frame)
+- Refresh commands (`refreshSLO`, `refreshTopology`) now route through GovernanceStore
 - SidebarProvider refactored from monolithic 213-line data owner to 133-line thin webview bridge
 - Sidebar polling replaced with event-driven architecture — LiveSREClient and AuditLogger emit change events
+
+### Removed
+- Legacy tree view commands: `showSLODashboard`, `showAgentTopology` (replaced by `showSLOWebview`, `showTopologyGraph`)
+- Legacy HTML template panels: SLODashboardPanel, TopologyGraphPanel, GovernanceHubPanel (replaced by React detail panels)
+- Legacy hub formatters: hubSLOFormatter, hubTopologyFormatter, hubAuditFormatter, hubAuditHelpers
+
+### Fixed
+- Path traversal vulnerability in LocalStorageProvider (export directory escape)
+- KernelDebuggerProvider 1-second timer never disposed (memory/CPU leak)
+- GovernanceStore detail subscriptions leaked empty Sets on dispose
+- Panel host title HTML injection vulnerability (now stripped)
 
 ## [1.0.1] - 2026-01-29
 

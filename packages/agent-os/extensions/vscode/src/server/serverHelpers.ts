@@ -70,6 +70,8 @@ export function generateClientId(): string {
  *
  * @returns 32-character hex token
  */
+// SECURITY: 128 bits of crypto.randomBytes for session auth. Transmitted in WS URL
+// query param (WebSocket upgrade has no custom header support per RFC 6455).
 export function generateSessionToken(): string {
     return randomBytes(16).toString('hex');
 }

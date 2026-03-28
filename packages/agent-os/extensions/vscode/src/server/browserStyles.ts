@@ -128,5 +128,47 @@ export function buildBrowserStyles(): string {
         cursor: pointer;
         font-size: 18px;
     }
-    .chart-container { height: 120px; }`;
+    .chart-container { height: 120px; }
+    .help-btn {
+        background: var(--bg-secondary); border: 1px solid var(--border);
+        border-radius: 4px; width: 28px; height: 28px;
+        cursor: pointer; font-size: 14px; color: var(--text-primary);
+        display: flex; align-items: center; justify-content: center;
+        margin-left: 8px;
+    }
+    .help-btn:hover { background: var(--bg-tertiary); }
+    .help-panel {
+        position: fixed; top: 0; right: 0; bottom: 0; width: 380px;
+        background: var(--bg-primary); border-left: 1px solid var(--border);
+        z-index: 100; transform: translateX(100%); transition: transform 0.2s ease;
+        display: flex; flex-direction: column;
+    }
+    .help-panel.visible { transform: translateX(0); }
+    .help-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 16px; border-bottom: 1px solid var(--border);
+    }
+    .help-header h2 { margin: 0; font-size: 16px; }
+    .help-close-btn {
+        background: none; border: none; font-size: 20px;
+        cursor: pointer; color: var(--text-primary); padding: 4px 8px;
+    }
+    .help-search {
+        margin: 12px 16px; padding: 6px 10px;
+        background: var(--bg-secondary); border: 1px solid var(--border);
+        border-radius: 4px; color: var(--text-primary); font-size: 13px;
+    }
+    .help-body {
+        flex: 1; overflow-y: auto; padding: 16px;
+        font-size: 13px; line-height: 1.6;
+    }
+    .help-body h2 { font-size: 15px; margin: 16px 0 8px; color: var(--text-primary); }
+    .help-body p { margin: 0 0 8px; }
+    .help-body strong { color: var(--text-primary); }
+    .help-body table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+    .help-body td, .help-body th {
+        padding: 6px 8px; border-bottom: 1px solid var(--border);
+        text-align: left; font-size: 12px;
+    }
+    .help-body th { color: var(--text-primary); }`;
 }

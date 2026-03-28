@@ -120,16 +120,6 @@
         "title": "Agent OS: Open Documentation"
       },
       {
-        "command": "agent-os.showSLODashboard",
-        "title": "Agent OS: Show SLO Dashboard (Tree)",
-        "icon": "$(pulse)"
-      },
-      {
-        "command": "agent-os.showAgentTopology",
-        "title": "Agent OS: Show Agent Topology (Tree)",
-        "icon": "$(organization)"
-      },
-      {
         "command": "agent-os.showSLOWebview",
         "title": "Agent OS: SLO Dashboard (Visual)",
         "icon": "$(graph)"
@@ -193,6 +183,11 @@
         "command": "agent-os.exportReport",
         "title": "Agent OS: Export Governance Report",
         "icon": "$(export)"
+      },
+      {
+        "command": "agent-os.showHelp",
+        "title": "Agent OS: Help",
+        "icon": "$(question)"
       }
     ],
     "menus": {
@@ -359,24 +354,6 @@
           ],
           "default": "warning",
           "description": "Minimum severity level for diagnostics"
-        },
-        "agentOS.governanceHub.tabs": {
-          "type": "array",
-          "default": [
-            "slo",
-            "topology",
-            "audit"
-          ],
-          "items": {
-            "type": "string",
-            "enum": [
-              "slo",
-              "topology",
-              "audit",
-              "policies"
-            ]
-          },
-          "description": "Tabs to display in the Governance Hub"
         },
         "agentOS.export.localPath": {
           "type": "string",

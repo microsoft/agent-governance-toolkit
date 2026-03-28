@@ -199,8 +199,6 @@ Share policies via `.vscode/agent-os.json`:
 | `Agent OS: Setup CI/CD Integration` | Generate CI/CD configuration |
 | `Agent OS: Check Compliance` | Run compliance validation |
 | `Agent OS: Sign In (Enterprise)` | Enterprise SSO authentication |
-| `Agent OS: Show SLO Dashboard (Tree)` | SLO metrics in sidebar tree view |
-| `Agent OS: Show Agent Topology (Tree)` | Agent mesh in sidebar tree view |
 | `Agent OS: SLO Dashboard (Visual)` | Rich webview SLO dashboard |
 | `Agent OS: Agent Topology Graph` | Force-directed agent topology graph |
 | `Agent OS: Refresh SLO Data` | Refresh SLO metrics |
@@ -225,7 +223,6 @@ Open Settings (Ctrl+,) and search for "Agent OS":
 | `agentOS.diagnostics.enabled` | true | Real-time diagnostics |
 | `agentOS.enterprise.sso.enabled` | false | Enterprise SSO |
 | `agentOS.enterprise.compliance.framework` | - | Default compliance framework |
-| `agentOS.governanceHub.tabs` | ["slo", "topology", "audit"] | Enabled Governance Hub tabs |
 | `agentOS.export.localPath` | "" | Local directory for exported reports |
 | `agentOS.observability.endpoint` | "" | Metrics push endpoint (OTEL compatible) |
 | `agentOS.diagnostics.severity` | "warning" | Minimum diagnostic severity |

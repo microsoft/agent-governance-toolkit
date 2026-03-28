@@ -9,29 +9,36 @@
 
 import React from 'react';
 import type { StatsSummaryData } from '../types';
+import { Tooltip } from '../../shared/Tooltip';
+import { HELP } from '../../shared/helpContent';
 
 function MetricRow(props: {
-    label: string; value: number; colorClass: string;
+    label: string; value: number; colorClass: string; tooltip: string;
 }): React.ReactElement {
     return (
         <div className="flex items-center justify-between py-0.5">
-            <span className="text-xs text-ml-text-muted">{props.label}</span>
+            <Tooltip text={props.tooltip}><span className="text-xs text-ml-text-muted">{props.label}</span></Tooltip>
             <span className={`text-sm font-bold ${props.colorClass}`}>{props.value}</span>
         </div>
     );
 }
 
 function buildRows(data: StatsSummaryData): Array<{
-    label: string; value: number; colorClass: string;
+    label: string; value: number; colorClass: string; tooltip: string;
 }> {
     return [
         { label: 'Blocked Today', value: data.blockedToday,
-          colorClass: data.blockedToday > 0 ? 'text-ml-error' : 'text-ml-text' },
-        { label: 'Blocked This Week', value: data.blockedThisWeek, colorClass: 'text-ml-text' },
+          colorClass: data.blockedToday > 0 ? 'text-ml-error' : 'text-ml-text',
+          tooltip: HELP.stats.blockedToday },
+        { label: 'Blocked This Week', value: data.blockedThisWeek, colorClass: 'text-ml-text',
+          tooltip: HELP.stats.blockedThisWeek },
         { label: 'Warnings Today', value: data.warningsToday,
-          colorClass: data.warningsToday > 0 ? 'text-ml-warning' : 'text-ml-text' },
-        { label: 'CMVK Reviews', value: data.cmvkReviews, colorClass: 'text-ml-text' },
-        { label: 'Total Logs', value: data.totalLogs, colorClass: 'text-ml-text' },
+          colorClass: data.warningsToday > 0 ? 'text-ml-warning' : 'text-ml-text',
+          tooltip: HELP.stats.warnings },
+        { label: 'CMVK Reviews', value: data.cmvkReviews, colorClass: 'text-ml-text',
+          tooltip: HELP.stats.cmvkReviews },
+        { label: 'Total Logs', value: data.totalLogs, colorClass: 'text-ml-text',
+          tooltip: HELP.stats.totalLogs },
     ];
 }
 

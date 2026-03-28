@@ -10,6 +10,8 @@
 import React from 'react';
 import type { SLOSummaryData } from '../types';
 import { percentColor, latencyColor, trustColor } from '../healthColors';
+import { Tooltip } from '../../shared/Tooltip';
+import { HELP } from '../../shared/helpContent';
 
 /** A single compact metric cell with label, value, and suffix. */
 function MiniMetric(props: {
@@ -17,10 +19,11 @@ function MiniMetric(props: {
     value: string;
     suffix: string;
     colorClass: string;
+    tooltip: string;
 }): React.ReactElement {
     return (
         <div className="flex flex-col items-start">
-            <span className="text-xs text-ml-text-muted">{props.label}</span>
+            <Tooltip text={props.tooltip}><span className="text-xs text-ml-text-muted">{props.label}</span></Tooltip>
             <span className={`text-lg font-bold ${props.colorClass}`}>
                 {props.value}
                 <span className="text-xs font-normal text-ml-text-muted ml-0.5">
@@ -33,17 +36,21 @@ function MiniMetric(props: {
 
 /** Builds the array of metric props from SLO data. */
 function buildMetrics(data: SLOSummaryData): Array<{
-    label: string; value: string; suffix: string; colorClass: string;
+    label: string; value: string; suffix: string; colorClass: string; tooltip: string;
 }> {
     return [
         { label: 'Avail', value: data.availability.toFixed(1), suffix: '%',
-          colorClass: percentColor(data.availability, data.availabilityTarget) },
+          colorClass: percentColor(data.availability, data.availabilityTarget),
+          tooltip: HELP.slo.availability },
         { label: 'P99', value: Math.round(data.latencyP99).toString(), suffix: 'ms',
-          colorClass: latencyColor(data.latencyP99, data.latencyTarget) },
+          colorClass: latencyColor(data.latencyP99, data.latencyTarget),
+          tooltip: HELP.slo.latencyP99 },
         { label: 'Comply', value: data.compliancePercent.toFixed(1), suffix: '%',
-          colorClass: percentColor(data.compliancePercent, 100) },
+          colorClass: percentColor(data.compliancePercent, 100),
+          tooltip: HELP.slo.compliance },
         { label: 'Trust', value: Math.round(data.trustMean).toString(), suffix: '',
-          colorClass: trustColor(data.trustMean) },
+          colorClass: trustColor(data.trustMean),
+          tooltip: HELP.slo.trust },
     ];
 }
 

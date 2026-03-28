@@ -4,7 +4,7 @@
  * Agent Drill-Down Unit Tests
  *
  * Tests for the agent selection and trust tier helpers
- * defined in GovernanceHubScript.ts
+ * originally from GovernanceHubScript.ts, now tested independently
  */
 
 import * as assert from 'assert';

@@ -42,9 +42,9 @@ interface KernelState {
 }
 
 export class KernelDebuggerProvider implements vscode.TreeDataProvider<DebuggerItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<DebuggerItem | undefined | null | void> = 
+    private _onDidChangeTreeData: vscode.EventEmitter<DebuggerItem | undefined | null | void> =
         new vscode.EventEmitter<DebuggerItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<DebuggerItem | undefined | null | void> = 
+    readonly onDidChangeTreeData: vscode.Event<DebuggerItem | undefined | null | void> =
         this._onDidChangeTreeData.event;
 
     private kernelState: KernelState = {
@@ -55,14 +55,24 @@ export class KernelDebuggerProvider implements vscode.TreeDataProvider<DebuggerI
     };
 
     private selectedCheckpoint: Checkpoint | null = null;
+    private _refreshInterval: ReturnType<typeof setInterval> | undefined;
 
     constructor() {
         // Start polling for kernel state updates
         this.startPolling();
     }
 
+    /** Release the polling timer and event emitter. */
+    dispose(): void {
+        if (this._refreshInterval) {
+            clearInterval(this._refreshInterval);
+            this._refreshInterval = undefined;
+        }
+        this._onDidChangeTreeData.dispose();
+    }
+
     private startPolling(): void {
-        setInterval(() => {
+        this._refreshInterval = setInterval(() => {
             this.updateKernelState();
             this._onDidChangeTreeData.fire();
         }, 1000);

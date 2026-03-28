@@ -10,16 +10,19 @@
 import React from 'react';
 import type { TopologySummaryData } from '../types';
 import { trustColor } from '../healthColors';
+import { Tooltip } from '../../shared/Tooltip';
+import { HELP } from '../../shared/helpContent';
 
 /** A single compact metric cell with label and value. */
 function MetricCell(props: {
     label: string;
     value: string;
     colorClass?: string;
+    tooltip: string;
 }): React.ReactElement {
     return (
         <div className="flex flex-col items-start">
-            <span className="text-xs text-ml-text-muted">{props.label}</span>
+            <Tooltip text={props.tooltip}><span className="text-xs text-ml-text-muted">{props.label}</span></Tooltip>
             <span className={`text-lg font-bold ${props.colorClass ?? 'text-ml-text'}`}>
                 {props.value}
             </span>
@@ -43,19 +46,23 @@ export function TopologySummary(
             <MetricCell
                 label="Agents"
                 value={data.agentCount.toString()}
+                tooltip={HELP.topology.agents}
             />
             <MetricCell
                 label="Bridges"
                 value={data.bridgeCount.toString()}
+                tooltip={HELP.topology.bridges}
             />
             <MetricCell
                 label="Trust"
                 value={Math.round(data.meanTrust).toString()}
                 colorClass={trustColor(data.meanTrust)}
+                tooltip={HELP.topology.trust}
             />
             <MetricCell
                 label="Chains"
                 value={data.delegationCount.toString()}
+                tooltip={HELP.topology.chains}
             />
         </div>
     );

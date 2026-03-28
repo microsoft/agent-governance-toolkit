@@ -4,7 +4,7 @@
  * Audit Filter Unit Tests
  *
  * Tests for the client-side audit filtering logic
- * defined in GovernanceHubScript.ts
+ * originally from GovernanceHubScript.ts, now tested independently
  */
 
 import * as assert from 'assert';

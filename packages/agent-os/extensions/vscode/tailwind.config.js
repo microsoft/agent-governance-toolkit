@@ -16,6 +16,7 @@ module.exports = {
                     success: 'var(--ml-success)',
                     warning: 'var(--ml-warning)',
                     error: 'var(--ml-error)',
+                    info: 'var(--ml-info)',
                     text: 'var(--ml-text)',
                     'text-muted': 'var(--ml-text-muted)',
                     'text-bright': 'var(--ml-text-bright)',

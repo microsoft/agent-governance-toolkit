@@ -10,6 +10,8 @@
  */
 
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PolicyEngine } from './policyEngine';
 import { CMVKClient } from './cmvkClient';
 import { AuditLogger } from './auditLogger';
@@ -29,16 +31,12 @@ import { AgentOSDiagnosticProvider } from './language/diagnosticProvider';
 import { GovernanceDiagnosticProvider } from './language/governanceDiagnosticProvider';
 
 // Governance Visualization (Issue #39)
-import { SLODashboardProvider } from './views/sloDashboardView';
-import { AgentTopologyProvider, createMockTopologyProvider } from './views/agentTopologyView';
 import { GovernanceStatusBar } from './governanceStatusBar';
 
-// Governance Webview Panels (Issue #39 - Rich Visualization)
-import { SLODashboardPanel } from './webviews/sloDashboard/SLODashboardPanel';
-import { TopologyGraphPanel } from './webviews/agentTopology/TopologyGraphPanel';
-
-// Governance Hub (Issue #39 - Unified Dashboard)
-import { GovernanceHubPanel } from './webviews/governanceHub/GovernanceHubPanel';
+// Governance Webview Panels — React detail panels (D1 migration)
+import { showSLODetail } from './webviews/sloDetail/SLODetailPanel';
+import { showTopologyDetail } from './webviews/topologyDetail/TopologyDetailPanel';
+import { showHubDetail } from './webviews/hubDetail/HubDetailPanel';
 
 // 3-Slot Sidebar (Sidebar Redesign)
 import { SidebarProvider } from './webviews/sidebar/SidebarProvider';
@@ -112,6 +110,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const policiesProvider = new PoliciesProvider(policyEngine);
         const statsProvider = new StatsProvider(auditLogger);
         const kernelDebuggerProvider = new KernelDebuggerProvider();
+        context.subscriptions.push(kernelDebuggerProvider);
         const memoryBrowserProvider = new MemoryBrowserProvider();
 
         // Tree data providers are kept as data sources but no longer registered as views.
@@ -126,9 +125,7 @@ export async function activate(context: vscode.ExtensionContext) {
         };
         activeProviders = await createProviders(providerConfig);
         const sloDataProvider = activeProviders.slo;
-        const sloDashboardProvider = new SLODashboardProvider(sloDataProvider);
         const agentTopologyDataProvider = activeProviders.topology;
-        const agentTopologyProvider = new AgentTopologyProvider(agentTopologyDataProvider);
         const policyDataProvider = activeProviders.policy;
 
     // Register 3-slot sidebar webview (Sidebar Redesign)
@@ -384,40 +381,25 @@ safe_query = "SELECT * FROM users WHERE id = ?"
     // Register Governance Visualization Commands (Issue #39)
     // ========================================
 
-    const showSLODashboardCmd = vscode.commands.registerCommand('agent-os.showSLODashboard', () => {
-        vscode.commands.executeCommand('agent-os.sloDashboard.focus');
-    });
-
-    const showAgentTopologyCmd = vscode.commands.registerCommand('agent-os.showAgentTopology', () => {
-        vscode.commands.executeCommand('agent-os.agentTopology.focus');
-    });
-
     const refreshSLOCmd = vscode.commands.registerCommand('agent-os.refreshSLO', () => {
-        sloDashboardProvider.refresh();
+        governanceStore.refreshNow();
     });
 
     const refreshTopologyCmd = vscode.commands.registerCommand('agent-os.refreshTopology', () => {
-        agentTopologyProvider.refresh();
+        governanceStore.refreshNow();
     });
 
-    // Governance Webview Panels (Issue #39 - Rich Visualization)
+    // Governance Webview Panels — React detail panels (D1 migration)
     const showSLOWebviewCmd = vscode.commands.registerCommand('agent-os.showSLOWebview', () => {
-        SLODashboardPanel.createOrShow(context.extensionUri, sloDataProvider);
+        showSLODetail(context.extensionUri, governanceStore);
     });
 
     const showTopologyGraphCmd = vscode.commands.registerCommand('agent-os.showTopologyGraph', () => {
-        TopologyGraphPanel.createOrShow(context.extensionUri, agentTopologyDataProvider);
+        showTopologyDetail(context.extensionUri, governanceStore);
     });
 
-    // Governance Hub Panel (Issue #39 - Unified Dashboard)
     const showGovernanceHubCmd = vscode.commands.registerCommand('agent-os.showGovernanceHub', () => {
-        GovernanceHubPanel.createOrShow(
-            context.extensionUri,
-            sloDataProvider,
-            agentTopologyDataProvider,
-            auditLogger,
-            policyDataProvider
-        );
+        showHubDetail(context.extensionUri, governanceStore);
     });
 
     // Agent Drill-Down Command (Dashboard Feature Completeness - Phase 2)
@@ -600,6 +582,21 @@ safe_query = "SELECT * FROM users WHERE id = ?"
     );
 
     // ========================================
+    // Help Command
+    // ========================================
+
+    const showHelpCmd = vscode.commands.registerCommand('agent-os.showHelp', () => {
+        const panel = vscode.window.createWebviewPanel(
+            'agent-os.help', 'Agent OS Help', vscode.ViewColumn.Beside,
+            { enableScripts: false, localResourceRoots: [] },
+        );
+        const helpPath = path.join(context.extensionPath, 'HELP.md');
+        let content = '';
+        try { content = fs.readFileSync(helpPath, 'utf8'); } catch { content = '# Help\n\nHelp file not found.'; }
+        panel.webview.html = renderMarkdownHtml(content);
+    });
+
+    // ========================================
     // Register Enterprise Commands
     // ========================================
 
@@ -660,8 +657,6 @@ safe_query = "SELECT * FROM users WHERE id = ?"
         // Governance Visualization
         showSLOWebviewCmd,
         showTopologyGraphCmd,
-        showSLODashboardCmd,
-        showAgentTopologyCmd,
         refreshSLOCmd,
         refreshTopologyCmd,
         sidebarProvider!,
@@ -674,6 +669,8 @@ safe_query = "SELECT * FROM users WHERE id = ?"
         openSLOInBrowserCmd,
         openTopologyInBrowserCmd,
         exportReportCmd,
+        // Help
+        showHelpCmd,
         // Enterprise Features
         signInCmd,
         signOutCmd,
@@ -966,6 +963,58 @@ async function exportAuditLog(): Promise<void> {
         await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(logs, null, 2)));
         vscode.window.showInformationMessage(`Audit log exported to ${uri.fsPath}`);
     }
+}
+
+/** Escape HTML entities for safe rendering. */
+function escHtml(s: string): string { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+/** Apply inline Markdown formatting (bold, code). */
+function inlineMdFormat(s: string): string {
+    let out = escHtml(s);
+    out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    return out.replace(/`(.+?)`/g, '<code>$1</code>');
+}
+
+/** CSS for the help panel webview. */
+const HELP_CSS = [
+    'body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);background:var(--vscode-editor-background);padding:20px;line-height:1.6}',
+    'h1{font-size:1.4em;border-bottom:1px solid var(--vscode-panel-border);padding-bottom:8px}',
+    'h2{font-size:1.2em;margin-top:24px} h3{font-size:1.05em;margin-top:16px}',
+    'table{width:100%;border-collapse:collapse;margin:12px 0}',
+    'th,td{padding:6px 10px;border:1px solid var(--vscode-panel-border);text-align:left}',
+    'th{background:var(--vscode-sideBar-background)}',
+    'code{background:var(--vscode-textCodeBlock-background);padding:2px 4px;border-radius:3px;font-family:var(--vscode-editor-font-family)}',
+    'ul{padding-left:20px;margin:8px 0} li{margin:4px 0}',
+].join('\n');
+
+/** Convert Markdown text to a simple themed HTML document. */
+function renderMarkdownHtml(md: string): string {
+    const out: string[] = [];
+    let inList = false, inTable = false;
+    function close(): void {
+        if (inList) { out.push('</ul>'); inList = false; }
+        if (inTable) { out.push('</table>'); inTable = false; }
+    }
+    for (const line of md.split('\n')) {
+        const t = line.trim();
+        if (t.startsWith('### ')) { close(); out.push(`<h3>${escHtml(t.slice(4))}</h3>`); }
+        else if (t.startsWith('## ')) { close(); out.push(`<h2>${escHtml(t.slice(3))}</h2>`); }
+        else if (t.startsWith('# ')) { close(); out.push(`<h1>${escHtml(t.slice(2))}</h1>`); }
+        else if (t.startsWith('| ')) {
+            const cells = t.split('|').filter(c => c.trim() !== '');
+            if (!cells.every(c => /^[\s-:]+$/.test(c))) {
+                const tag = !inTable ? 'th' : 'td';
+                if (!inTable) { out.push('<table>'); inTable = true; }
+                out.push('<tr>' + cells.map(c => `<${tag}>${inlineMdFormat(c.trim())}</${tag}>`).join('') + '</tr>');
+            }
+        } else if (t.startsWith('- ')) {
+            if (!inList) { out.push('<ul>'); inList = true; }
+            out.push(`<li>${inlineMdFormat(t.slice(2))}</li>`);
+        } else if (t === '') { close(); }
+        else { close(); out.push(`<p>${inlineMdFormat(t)}</p>`); }
+    }
+    close();
+    return `<!DOCTYPE html><html lang="en"><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"><style>${HELP_CSS}</style></head><body>${out.join('\n')}</body></html>`;
 }
 
 function showWelcomeMessage(): void {

@@ -79,6 +79,8 @@ export class GovernanceServer {
             return this._port;
         }
         this._port = await findAvailablePort(port ?? DEFAULT_PORT, DEFAULT_HOST);
+        // SECURITY: Session token in WebSocket URL query string — standard WS auth pattern (RFC 6455).
+        // Server binds to 127.0.0.1 only; token never traverses a network.
         this._sessionToken = generateSessionToken();
         await this._createHttpServer();
         await this._createWebSocketServer();
@@ -144,6 +146,7 @@ export class GovernanceServer {
                 this._handleRequest(req, res);
             });
             this._httpServer.once('error', reject);
+            // SECURITY: Loopback binding prevents external access. Validated by DEFAULT_HOST = '127.0.0.1'.
             this._httpServer.listen(this._port, DEFAULT_HOST, () => resolve());
         });
     }
@@ -154,6 +157,7 @@ export class GovernanceServer {
         res: http.ServerResponse
     ): void {
         const ip = req.socket.remoteAddress || 'unknown';
+        // SECURITY: Rate limiter Map without TTL eviction. Loopback-only = at most 1 entry.
         if (!checkRateLimit(ip, this._requestCounts)) {
             res.writeHead(429, { 'Retry-After': '60' });
             res.end('Rate limit exceeded');
