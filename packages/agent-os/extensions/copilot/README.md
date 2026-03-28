@@ -154,7 +154,7 @@ You can configure the extension using the following environment variables (e.g.,
 | `PORT` | `3000` | Port for the express server to listen on. |
 | `LOG_LEVEL` | `info` | Verbosity of the logger (`debug`, `info`, `warn`, `error`). |
 | `CMVK_API_ENDPOINT`| `https://api.agent-os.dev/cmvk` | Upstream CMVK verification service endpoint. |
-| `PAYLOAD_LIMIT` | `1mb` | Maximum allowed size for incoming JSON webhook payloads. The limit mitigates memory-exhaustion DoS attacks. You may increase it (e.g., `5mb`) if your existing AgentOS integrations legitimately require enormous JSON payloads. |
+| `PAYLOAD_LIMIT` | `1mb` | Maximum allowed size for incoming JSON webhook payloads. The limit mitigates memory-exhaustion DoS attacks. You may increase it (e.g., `5mb`) if your existing AgentOS integrations legitimately require enormous JSON payloads.<br><br>**Security Implications:** Increasing this limit exposes the Node.js process to higher memory consumption during JSON parsing. If you must set this above `5mb`, it is strongly recommended to continuously monitor your active memory usage (`RSS`) and implement aggressive IP-based rate limiting upstream to prevent abuse. |
 
 ### Repository Policy
 

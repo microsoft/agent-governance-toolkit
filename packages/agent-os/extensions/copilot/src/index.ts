@@ -30,13 +30,31 @@ dotenv.config();
 
 const app = express();
 
+function parseLimitToBytes(limit: string | number): number {
+    if (typeof limit === 'number') return limit;
+    const match = limit.match(/^(\d+)(mb|kb|gb|b)?$/i);
+    if (!match) return 1024 * 1024; // default 1mb
+    const val = parseInt(match[1], 10);
+    const unit = match[2]?.toLowerCase();
+    switch (unit) {
+        case 'gb': return val * 1024 * 1024 * 1024;
+        case 'mb': return val * 1024 * 1024;
+        case 'kb': return val * 1024;
+        default: return val;
+    }
+}
+
 const payloadLimit = process.env.PAYLOAD_LIMIT || '1mb';
+const payloadLimitBytes = parseLimitToBytes(payloadLimit);
 
 // Raw body for webhook signature verification
 app.use(express.json({
     limit: payloadLimit, // Limit payload size to prevent DoS attacks via large webhook requests
     verify: (req: any, res, buf) => {
         try {
+            if (buf.length > payloadLimitBytes) {
+                throw new Error('Payload exceeds limit');
+            }
             req.rawBody = buf;
         } catch (err) {
             logger.error('Error in express.json verify function:', { error: err });
@@ -47,13 +65,20 @@ app.use(express.json({
 
 // Error handling middleware specifically for DoS oversized payloads
 app.use((err: any, req: Request, res: Response, next: express.NextFunction) => {
-    if (err.type === 'entity.too.large') {
+    if (err.type === 'entity.too.large' || err.message === 'Payload exceeds limit') {
+        const safeHeaders = { ...req.headers };
+        delete safeHeaders['authorization'];
+        delete safeHeaders['x-github-token'];
+
         logger.warn('Payload too large rejected', { 
             ip: req.ip, 
             userAgent: req.headers['user-agent'],
+            path: req.originalUrl,
+            headers: safeHeaders,
+            timestamp: new Date().toISOString(),
             limit: payloadLimit
         });
-        return res.status(413).json({ error: `Payload exceeds ${payloadLimit} limit` });
+        return res.status(413).json({ error: `Request payload is too large. Maximum allowed size is ${payloadLimit}.` });
     }
     next(err);
 });
