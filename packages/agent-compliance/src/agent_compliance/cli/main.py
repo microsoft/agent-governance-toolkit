@@ -21,17 +21,25 @@ def cmd_verify(args: argparse.Namespace) -> int:
     """Run governance verification."""
     from agent_compliance.verify import GovernanceVerifier
 
-    verifier = GovernanceVerifier()
-    attestation = verifier.verify()
+    try:
+        verifier = GovernanceVerifier()
+        attestation = verifier.verify()
 
-    if args.json:
-        print(attestation.to_json())
-    elif args.badge:
-        print(attestation.badge_markdown())
-    else:
-        print(attestation.summary())
+        if args.json:
+            print(attestation.to_json())
+        elif args.badge:
+            print(attestation.badge_markdown())
+        else:
+            print(attestation.summary())
 
-    return 0 if attestation.passed else 1
+        return 0 if attestation.passed else 1
+    except Exception as e:
+        if args.json:
+            import json
+            print(json.dumps({"status": "fail", "error": "Governance verification failed", "type": "InternalError"}, indent=2))
+        else:
+            print(f"Error: {e}", file=sys.stderr)
+        return 1
 
 
 def cmd_integrity(args: argparse.Namespace) -> int:
@@ -73,7 +81,11 @@ def cmd_integrity(args: argparse.Namespace) -> int:
 
         return 0 if report.passed else 1
     except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        if args.json:
+            import json
+            print(json.dumps({"status": "error", "message": "Integrity manifest processing failed", "type": "InternalError"}, indent=2))
+        else:
+            print(f"Error: {e}", file=sys.stderr)
         return 1
 
 
@@ -99,7 +111,11 @@ def cmd_lint_policy(args: argparse.Namespace) -> int:
             return 1
         return 0 if result.passed else 1
     except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        if args.json:
+            import json
+            print(json.dumps({"status": "error", "message": "Policy linting failed", "type": "InternalError"}, indent=2))
+        else:
+            print(f"Error: {e}", file=sys.stderr)
         return 1
 
 
