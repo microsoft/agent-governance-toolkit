@@ -5,7 +5,7 @@
 name: AI Code Review
 # SECURITY: Uses pull_request_target for write access to post PR comments.
 # All checkouts pin to BASE ref (never HEAD) to prevent RCE via modified
-# composite actions in fork PRs. See MSRC Case 111178.
+# composite actions in fork PRs. See workflow security audit.
 
 on:
   pull_request_target:
@@ -36,7 +36,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           # SECURITY: pull_request_target defaults to base branch checkout (safe).
-          # Do NOT add ref: head.sha — see MSRC Case 111178.
+          # SECURITY: base-only checkout required for pull_request_target context.
           persist-credentials: false
           fetch-depth: 1
 
