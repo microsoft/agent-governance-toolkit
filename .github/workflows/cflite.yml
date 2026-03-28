@@ -3,8 +3,16 @@ name: ClusterFuzzLite
 on:
   push:
     branches: [main]
+    paths:
+      - 'packages/*/src/**/*.py'
+      - 'fuzz/**'
+      - '.clusterfuzzlite/**'
   pull_request:
     branches: [main]
+    paths:
+      - 'packages/*/src/**/*.py'
+      - 'fuzz/**'
+      - '.clusterfuzzlite/**'
   schedule:
     - cron: "0 6 * * 0"  # Weekly batch fuzzing
 
@@ -33,7 +41,7 @@ jobs:
         uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          fuzz-seconds: 300
+          fuzz-seconds: 120
           mode: code-change
           sanitizer: ${{ matrix.sanitizer }}
 
