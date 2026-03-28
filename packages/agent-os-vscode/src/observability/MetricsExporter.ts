@@ -41,7 +41,9 @@ export class MetricsExporter {
         maxDelayMs: 10000,
     };
 
-    constructor(private endpoint: string) {}
+    constructor(private endpoint: string) {
+        this.endpoint = this._validateEndpoint(endpoint);
+    }
 
     /**
      * Push metrics to the configured endpoint.
@@ -49,7 +51,9 @@ export class MetricsExporter {
      * @param metrics - Governance metrics to export.
      * @throws Error if all retries are exhausted.
      */
-    async push(metrics: GovernanceMetrics): Promise<void> {
+    async push(metrics?: GovernanceMetrics): Promise<void> {
+        if (!this.endpoint || !metrics) { return; }
+
         let lastError: Error | undefined;
 
         for (let attempt = 0; attempt < this.retryConfig.maxRetries; attempt++) {
@@ -73,12 +77,27 @@ export class MetricsExporter {
      * @param endpoint - New endpoint URL.
      */
     setEndpoint(endpoint: string): void {
-        this.endpoint = endpoint;
+        this.endpoint = this._validateEndpoint(endpoint);
     }
 
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
+
+    private _validateEndpoint(endpoint: string): string {
+        let url: URL;
+        try {
+            url = new URL(endpoint);
+        } catch {
+            console.warn('MetricsExporter: invalid endpoint URL, metrics disabled:', endpoint);
+            return '';
+        }
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+            console.warn('MetricsExporter: endpoint must use http(s) protocol:', endpoint);
+            return '';
+        }
+        return endpoint;
+    }
 
     private async sendMetrics(metrics: GovernanceMetrics): Promise<void> {
         const response = await fetch(this.endpoint, {

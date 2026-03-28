@@ -185,6 +185,23 @@ function SlotStack(props: {
     const { slots } = state;
     const stalePanels = state.stalePanels ?? [];
 
+    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+        const target = e.target as HTMLElement;
+        const slots = target.closest('.flex-1')?.querySelectorAll('[role="region"]');
+        if (!slots) { return; }
+        const slotArray = Array.from(slots);
+        const currentIndex = slotArray.indexOf(target);
+        if (currentIndex < 0) { return; }
+
+        if (e.key === 'ArrowDown' && currentIndex < slotArray.length - 1) {
+            e.preventDefault();
+            (slotArray[currentIndex + 1] as HTMLElement).focus();
+        } else if (e.key === 'ArrowUp' && currentIndex > 0) {
+            e.preventDefault();
+            (slotArray[currentIndex - 1] as HTMLElement).focus();
+        }
+    }, []);
+
     return (
         <div
             className="flex-1 flex flex-col min-h-0"
@@ -192,6 +209,7 @@ function SlotStack(props: {
             onPointerLeave={onPointerLeave}
             onFocus={onPointerEnter}
             onBlur={onPointerLeave}
+            onKeyDown={handleKeyDown}
         >
             <Slot position="A" panelId={slots.slotA} state={state} stale={stalePanels.includes(slots.slotA)} active={scanning && activeSlot === 'slotA'} onPromote={onPromote} />
             <div className="border-t border-ml-border" />

@@ -97,7 +97,12 @@ export function Slot(props: SlotProps): React.ReactElement {
     const borderClass = active ? 'border-l-2 border-ml-accent' : 'border-l-2 border-transparent';
 
     return (
-        <div className={`flex-1 flex flex-col min-h-0 ${borderClass}`}>
+        <div
+            className={`flex-1 flex flex-col min-h-0 ${borderClass} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ml-accent`}
+            tabIndex={0}
+            role="region"
+            aria-label={PANEL_LABELS[panelId]}
+        >
             <SlotHeader
                 panelId={panelId}
                 stale={stale}

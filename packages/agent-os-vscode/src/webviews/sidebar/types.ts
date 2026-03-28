@@ -145,6 +145,9 @@ export interface SidebarState {
 /** Attention mode: manual locks to user config, auto enables scanning + priority. */
 export type AttentionMode = 'manual' | 'auto';
 
+/** Valid panel types for detail subscriptions (rich data pushed to full panels). */
+export type DetailPanelType = 'slo' | 'topology' | 'audit' | 'policy' | 'hub';
+
 /** Slot position keys for scan rotation. */
 export type SlotKey = 'slotA' | 'slotB' | 'slotC';
 

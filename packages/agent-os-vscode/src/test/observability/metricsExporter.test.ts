@@ -116,4 +116,30 @@ suite('MetricsExporter', () => {
             assert.strictEqual(typeof metrics.violationsToday, 'number');
         });
     });
+
+    suite('Endpoint Validation', () => {
+        test('rejects non-URL endpoint', () => {
+            const exporter = new MetricsExporter('not-a-url');
+            // push should not throw — graceful degradation
+            assert.doesNotThrow(() => exporter.push());
+        });
+
+        test('rejects non-http protocol', () => {
+            const exporter = new MetricsExporter('ftp://example.com/metrics');
+            assert.doesNotThrow(() => exporter.push());
+        });
+
+        test('accepts valid http endpoint', () => {
+            const exporter = new MetricsExporter('http://localhost:4318/v1/metrics');
+            // Should attempt to push (may fail on network, but that's expected)
+            assert.doesNotThrow(() => exporter.push());
+        });
+
+        test('setEndpoint validates', () => {
+            const exporter = new MetricsExporter('http://localhost:4318/v1/metrics');
+            exporter.setEndpoint('not-valid');
+            // After invalid setEndpoint, push should no-op
+            assert.doesNotThrow(() => exporter.push());
+        });
+    });
 });

@@ -188,6 +188,28 @@
         "command": "agent-os.showHelp",
         "title": "Agent OS: Help",
         "icon": "$(question)"
+      },
+      {
+        "command": "agent-os.sidebar.focusNextSlot",
+        "title": "Focus Next Panel Slot",
+        "category": "Agent OS"
+      },
+      {
+        "command": "agent-os.sidebar.focusPrevSlot",
+        "title": "Focus Previous Panel Slot",
+        "category": "Agent OS"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "agent-os.sidebar.focusNextSlot",
+        "key": "ctrl+shift+down",
+        "when": "focusedView == 'agent-os.sidebar'"
+      },
+      {
+        "command": "agent-os.sidebar.focusPrevSlot",
+        "key": "ctrl+shift+up",
+        "when": "focusedView == 'agent-os.sidebar'"
       }
     ],
     "menus": {

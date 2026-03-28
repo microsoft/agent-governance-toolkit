@@ -4,7 +4,7 @@
  * Event-driven refresh from LiveSREClient/AuditLogger with heartbeat safety net. */
 
 import type * as vscode from 'vscode';
-import type { SidebarState, SlotConfig, PanelId, AttentionMode } from './types';
+import type { SidebarState, SlotConfig, PanelId, AttentionMode, DetailPanelType } from './types';
 import { DEFAULT_SLOTS } from './types';
 import { GovernanceEventBus, Disposable } from './governanceEventBus';
 import {
@@ -48,7 +48,7 @@ export class GovernanceStore {
     private readonly _isolatedTimers = new Map<DataSourceKey, ReturnType<typeof setInterval>>();
     private readonly _eventSubs: vscode.Disposable[] = [];
     private readonly _thresholdMs: number;
-    private readonly _detailSubs = new Map<string, Set<(data: unknown) => void>>();
+    private readonly _detailSubs = new Map<DetailPanelType, Set<(data: unknown) => void>>();
     constructor(
         private _providers: DataProviders,
         private readonly _bus: GovernanceEventBus,
@@ -83,7 +83,7 @@ export class GovernanceStore {
         });
     }
     /** Subscribe a detail panel to receive rich data on each refresh cycle. */
-    onDetailSubscribe(panelType: string, cb: (data: unknown) => void): Disposable {
+    onDetailSubscribe(panelType: DetailPanelType, cb: (data: unknown) => void): Disposable {
         if (!this._detailSubs.has(panelType)) { this._detailSubs.set(panelType, new Set()); }
         this._detailSubs.get(panelType)!.add(cb);
         this._fetchDetailAndNotify(panelType).catch(() => { /* initial fetch error is non-fatal */ });
@@ -153,10 +153,10 @@ export class GovernanceStore {
         }
     }
     /** Fetch detail data for a panel type and notify its subscribers. */
-    private async _fetchDetailAndNotify(panelType: string): Promise<void> {
+    private async _fetchDetailAndNotify(panelType: DetailPanelType): Promise<void> {
         const subs = this._detailSubs.get(panelType);
         if (!subs || subs.size === 0) { return; }
-        const fetchers: Record<string, () => Promise<unknown>> = {
+        const fetchers: Record<DetailPanelType, () => Promise<unknown>> = {
             slo: () => fetchSLODetail(this._providers),
             topology: async () => fetchTopologyDetail(this._providers),
             audit: async () => fetchAuditDetail(this._providers),
