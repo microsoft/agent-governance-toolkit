@@ -10,6 +10,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
 import { PolicyEngine } from './policyEngine';
 import { CMVKClient } from './cmvkClient';
 import { AuditLogger } from './auditLogger';
@@ -481,7 +482,7 @@ async function reviewCodeWithCMVK(code: string, language: string): Promise<void>
                 { enableScripts: true }
             );
 
-            panel.webview.html = generateCMVKResultsHTML(result);
+            panel.webview.html = generateCMVKResultsHTML(result, panel.webview);
 
             // Log the review
             auditLogger.log({
@@ -501,7 +502,9 @@ async function reviewCodeWithCMVK(code: string, language: string): Promise<void>
     });
 }
 
-function generateCMVKResultsHTML(result: any): string {
+function generateCMVKResultsHTML(result: any, webview: vscode.Webview): string {
+    const nonce = crypto.randomBytes(16).toString('base64');
+    const cspSource = webview.cspSource;
     const consensusColor = result.consensus >= 0.8 ? '#28a745' 
         : result.consensus >= 0.5 ? '#ffc107' 
         : '#dc3545';
@@ -522,6 +525,8 @@ function generateCMVKResultsHTML(result: any): string {
     <!DOCTYPE html>
     <html>
     <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${cspSource} https:; font-src ${cspSource};">
         <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; }
             .consensus { font-size: 24px; font-weight: bold; color: ${consensusColor}; }
