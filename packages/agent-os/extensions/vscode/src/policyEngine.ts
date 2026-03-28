@@ -9,6 +9,19 @@
 
 import * as vscode from 'vscode';
 
+function safeRegExp(pattern: string, flags?: string): RegExp | null {
+    // Reject patterns with known ReDoS constructs
+    const redosPatterns = /(\+\+|\*\+|\+\*|\{\d+,\}\+|(\.\*){2}|\(\?:.*\)\+\$)/;
+    if (redosPatterns.test(pattern)) {
+        return null;
+    }
+    try {
+        return new RegExp(pattern, flags || 'i');
+    } catch {
+        return null;
+    }
+}
+
 export interface PolicyViolation {
     blocked: boolean;
     reason: string;
@@ -269,9 +282,14 @@ export class PolicyEngine {
                     if (config.customRules && Array.isArray(config.customRules)) {
                         for (const rule of config.customRules) {
                             if (rule.pattern && rule.message) {
+                                const compiledPattern = safeRegExp(rule.pattern, rule.flags);
+                                if (!compiledPattern) {
+                                    console.warn(`Skipping rule "${rule.name || 'custom_rule'}": unsafe or invalid regex pattern`);
+                                    continue;
+                                }
                                 this.rules.push({
                                     name: rule.name || 'custom_rule',
-                                    pattern: new RegExp(rule.pattern, rule.flags || 'i'),
+                                    pattern: compiledPattern,
                                     severity: rule.severity || 'medium',
                                     message: rule.message,
                                     suggestion: rule.suggestion,
