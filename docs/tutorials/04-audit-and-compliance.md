@@ -475,6 +475,20 @@ agent-governance verify --json
 agent-governance verify --badge
 ```
 
+### Secure Audit Handling
+
+The CLI is hardened against information disclosure. If a command fails in machine-readable mode, it returns a sanitized error:
+
+```json
+{
+  "status": "error",
+  "message": "Audit log processing failed",
+  "type": "InternalError"
+}
+```
+
+This prevents leaking internal system details in CI/CD pipeline logs.
+
 Output:
 
 ```markdown

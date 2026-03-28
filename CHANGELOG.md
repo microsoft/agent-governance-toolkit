@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > and production-quality but may have breaking changes before GA.
 
 ## [Unreleased]
+
+### Security
+- **Hardened CLI Error Handling** — standardized sanitized JSON error output across all 7 ecosystem tools to prevent internal information disclosure (CWE-209).
+- **Audit Log Whitelisting** — implemented strict key-whitelisting in `agentmesh audit` JSON output to prevent accidental leakage of sensitive agent internal state.
+- **CLI Input Validation** — added regex-based validation for agent identifiers (DIDs/names) in registration and verification commands to prevent injection attacks.
+
+### Documentation
+- Updated `QUICKSTART.md` and `Tutorial 04 — Audit & Compliance` with secure JSON error handling examples and schema details.
+- Added "Secure Error Handling" sections to primary documentation to guide users on interpreting sanitized machine-readable outputs.
 
 ## [3.0.0] - 2026-03-26
 
