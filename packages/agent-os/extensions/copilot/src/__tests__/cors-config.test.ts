@@ -23,4 +23,10 @@ describe('CORS allowlist configuration', () => {
 
     await expect(import('../index')).resolves.toBeDefined();
   });
+
+  test('boots with secure default allowlist when ALLOWED_ORIGINS is not set', async () => {
+    delete process.env.ALLOWED_ORIGINS;
+
+    await expect(import('../index')).resolves.toBeDefined();
+  });
 });

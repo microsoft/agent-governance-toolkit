@@ -168,6 +168,17 @@ Examples:
 If `ALLOWED_ORIGINS` is set but contains no valid `http/https` origins, the
 service fails fast at startup with a configuration error.
 
+### CORS Migration Notes
+
+This extension no longer uses wildcard CORS (`*`). Requests to protected API
+routes must include an allowed `Origin` header.
+
+Migration steps:
+- Set `ALLOWED_ORIGINS` explicitly for your deployment.
+- Update clients and browser integrations to send an `Origin` header.
+- Expect `403` responses for disallowed origins and missing-origin requests on
+  protected routes.
+
 ### Repository Policy
 
 Create `.github/agent-os.json`:
