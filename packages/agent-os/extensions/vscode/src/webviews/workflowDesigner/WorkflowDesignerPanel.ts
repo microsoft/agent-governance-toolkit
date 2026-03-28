@@ -8,7 +8,7 @@
  */
 
 import * as vscode from 'vscode';
-
+import * as crypto from 'crypto';
 interface WorkflowNode {
     id: string;
     type: 'start' | 'end' | 'action' | 'condition' | 'loop' | 'parallel';
@@ -185,10 +185,16 @@ export class WorkflowDesignerPanel {
         this._panel.webview.postMessage({ type: 'nodeRemoved', nodeId });
     }
 
-    private _updateNode(nodeId: string, updates: Partial<WorkflowNode>): void {
+    private _updateNode(nodeId: string, updates: Record<string, unknown>): void {
         const node = this._workflow.nodes.find(n => n.id === nodeId);
-        if (node) {
-            Object.assign(node, updates);
+        if (!node) { return; }
+        const ALLOWED_KEYS: ReadonlySet<string> = new Set([
+            'name', 'description', 'type', 'position', 'config', 'enabled', 'label',
+        ]);
+        for (const key of Object.keys(updates)) {
+            if (ALLOWED_KEYS.has(key) && key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
+                (node as unknown as Record<string, unknown>)[key] = updates[key];
+            }
         }
     }
 
@@ -607,6 +613,8 @@ ${functionDefs}
     }
 
     private _getHtmlForWebview() {
+        const nonce = crypto.randomBytes(16).toString('base64');
+        const cspSource = this._panel.webview.cspSource;
         const nodeTypesJson = JSON.stringify(WorkflowDesignerPanel.nodeTypes);
         const workflowJson = JSON.stringify(this._workflow);
 
@@ -614,6 +622,7 @@ ${functionDefs}
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${cspSource} https:; font-src ${cspSource};">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Workflow Designer</title>
     <style>
@@ -900,7 +909,7 @@ ${functionDefs}
         </div>
     </div>
 
-    <script>
+    <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
         const nodeTypes = ${nodeTypesJson};
         let workflow = ${workflowJson};

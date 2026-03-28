@@ -8,6 +8,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
 import { AuditLogger, AuditEntry } from '../../auditLogger';
 
 interface MetricsData {
@@ -217,10 +218,14 @@ export class MetricsDashboardPanel {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {
+        const nonce = crypto.randomBytes(16).toString('base64');
+        const cspSource = webview.cspSource;
+
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${cspSource} https:; font-src ${cspSource};">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Metrics Dashboard</title>
     <style>
@@ -503,7 +508,7 @@ export class MetricsDashboardPanel {
         </p>
     </div>
 
-    <script>
+    <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
 
         function refresh() {
