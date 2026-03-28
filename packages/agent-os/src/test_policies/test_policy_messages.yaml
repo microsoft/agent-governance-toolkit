@@ -1,0 +1,19 @@
+name: Test Policy Messages
+version: "1.0"
+rules:
+  - name: allow_rule
+    action: allow
+    condition:
+      type: always_true
+  - name: audit_rule
+    action: audit
+    condition:
+      type: always_true
+  - name: block_rule
+    action: block
+    condition:
+      type: always_true
+  - name: deny_rule
+    action: deny
+    condition:
+      type: always_true

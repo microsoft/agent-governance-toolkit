@@ -24,19 +24,37 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
+from rich import print
 
 # ---------------------------------------------------------------------------
-# Lazy imports — keep startup fast and give clear messages when deps missing.
+# function for colored output
 # ---------------------------------------------------------------------------
 
+def error(msg):
+    print(f"[red]{msg}[/red]", file=sys.stderr)
+
+def success(msg):
+    print(f"[green]{msg}[/green]", file=sys.stderr)
+
+def warn(msg):
+    print(f"[yellow]{msg}[/yellow]", file=sys.stderr)
+
+def policy_violation(msg):
+    print(f"[bold red]{msg}[/bold red]", file=sys.stderr)
+
+def passed_check(msg):
+    print(f"[green]✔ {msg}[/green]", file=sys.stderr)
+
+# ---------------------------------------------------------------------------
+# Lazy imports
+# ---------------------------------------------------------------------------
 
 def _import_yaml() -> Any:
     try:
         import yaml
-
         return yaml
     except ImportError:
-        print("ERROR: pyyaml is required — pip install pyyaml", file=sys.stderr)
+        error("ERROR: pyyaml is required — pip install pyyaml")
         sys.exit(2)
 
 
@@ -49,21 +67,19 @@ def _load_file(path: Path) -> dict[str, Any]:
     elif path.suffix == ".json":
         data = json.loads(text)
     else:
-        # Try YAML first, fall back to JSON
         yaml = _import_yaml()
         try:
             data = yaml.safe_load(text)
         except Exception:
             data = json.loads(text)
+
     if not isinstance(data, dict):
         raise ValueError(f"Expected a mapping at top level, got {type(data).__name__}")
     return data
 
-
 # ============================================================================
 # validate
 # ============================================================================
-
 
 def cmd_validate(args: argparse.Namespace) -> int:
     """Validate a policy YAML/JSON file against the PolicyDocument schema."""
@@ -71,13 +87,13 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     path = Path(args.path)
     if not path.exists():
-        print(f"ERROR: file not found: {path}", file=sys.stderr)
+        error(f"ERROR: file not found: {path}")
         return 2
 
     try:
         data = _load_file(path)
     except Exception as exc:
-        print(f"ERROR: failed to parse {path}: {exc}", file=sys.stderr)
+        error(f"ERROR: failed to parse {path}: {exc}")
         return 2
 
     # --- Optional JSON-Schema validation (best-effort) --------------------
@@ -89,31 +105,29 @@ def cmd_validate(args: argparse.Namespace) -> int:
             schema = json.loads(schema_path.read_text(encoding="utf-8"))
             jsonschema.validate(instance=data, schema=schema)
         except ImportError:
-            pass  # jsonschema not installed — skip, rely on Pydantic
+            pass
         except jsonschema.ValidationError as ve:
-            print(f"FAIL: {path}")
-            print(f"  JSON-Schema error: {ve.message}")
+            policy_violation(f"FAIL: {path}")
+            error(f"  JSON-Schema error: {ve.message}")
             if ve.absolute_path:
-                print(f"  Location: {' -> '.join(str(p) for p in ve.absolute_path)}")
+                warn(f"  Location: {' -> '.join(str(p) for p in ve.absolute_path)}")
             return 1
 
     # --- Pydantic validation (authoritative) ------------------------------
     try:
         PolicyDocument.model_validate(data)
     except Exception as exc:
-        print(f"FAIL: {path}")
+        policy_violation(f"FAIL: {path}")
         for line in str(exc).splitlines():
-            print(f"  {line}")
+            error(f"  {line}")
         return 1
 
-    print(f"OK: {path}")
+    success(f"OK: {path}")
     return 0
-
 
 # ============================================================================
 # test
 # ============================================================================
-
 
 def cmd_test(args: argparse.Namespace) -> int:
     """Test a policy against a set of scenarios."""
@@ -125,7 +139,7 @@ def cmd_test(args: argparse.Namespace) -> int:
 
     for p in (policy_path, scenarios_path):
         if not p.exists():
-            print(f"ERROR: file not found: {p}", file=sys.stderr)
+            error(f"ERROR: file not found: {p}")
             return 2
 
     # Load the policy
@@ -135,19 +149,19 @@ def cmd_test(args: argparse.Namespace) -> int:
         try:
             doc = PolicyDocument.from_json(policy_path)
         except Exception:
-            print(f"ERROR: failed to load policy {policy_path}: {exc}", file=sys.stderr)
+            error(f"ERROR: failed to load policy {policy_path}: {exc}")
             return 2
 
     # Load scenarios
     try:
         scenarios_data = _load_file(scenarios_path)
     except Exception as exc:
-        print(f"ERROR: failed to parse scenarios {scenarios_path}: {exc}", file=sys.stderr)
+        error(f"ERROR: failed to parse scenarios {scenarios_path}: {exc}")
         return 2
 
     scenarios = scenarios_data.get("scenarios", [])
     if not scenarios:
-        print("ERROR: no scenarios found in test file", file=sys.stderr)
+        error("ERROR: no scenarios found in test file")
         return 2
 
     evaluator = PolicyEvaluator(policies=[doc])
@@ -175,21 +189,19 @@ def cmd_test(args: argparse.Namespace) -> int:
 
         if errors:
             failed += 1
-            print(f"  FAIL: {name}")
+            policy_violation(f"FAIL: {name}")
             for err in errors:
-                print(f"    - {err}")
+                error(f"  - {err}")
         else:
             passed += 1
-            print(f"  PASS: {name}")
+            passed_check(name)
 
-    print(f"\n{passed}/{total} scenarios passed.")
+    success(f"\n{passed}/{total} scenarios passed.")
     return 1 if failed > 0 else 0
-
 
 # ============================================================================
 # diff
 # ============================================================================
-
 
 def cmd_diff(args: argparse.Namespace) -> int:
     """Show differences between two policy files."""
@@ -200,14 +212,14 @@ def cmd_diff(args: argparse.Namespace) -> int:
 
     for p in (path1, path2):
         if not p.exists():
-            print(f"ERROR: file not found: {p}", file=sys.stderr)
+            error(f"ERROR: file not found: {p}")
             return 2
 
     try:
         doc1 = PolicyDocument.model_validate(_load_file(path1))
         doc2 = PolicyDocument.model_validate(_load_file(path2))
     except Exception as exc:
-        print(f"ERROR: failed to load policies: {exc}", file=sys.stderr)
+        error(f"ERROR: failed to load policies: {exc}")
         return 2
 
     differences: list[str] = []
@@ -271,19 +283,17 @@ def cmd_diff(args: argparse.Namespace) -> int:
             differences.append(f"  rule '{name}' message changed")
 
     if differences:
-        print(f"Differences between {path1} and {path2}:")
+        success(f"Differences between {path1} and {path2}:")
         for diff in differences:
             print(diff)
         return 1
     else:
-        print(f"No differences between {path1} and {path2}.")
+        success(f"No differences between {path1} and {path2}.")
         return 0
-
 
 # ============================================================================
 # Main entry point
 # ============================================================================
-
 
 def main(argv: list[str] | None = None) -> int:
     """Parse arguments and dispatch to the appropriate subcommand."""
@@ -293,14 +303,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # -- validate ----------------------------------------------------------
+    # -- validate
     p_validate = subparsers.add_parser(
         "validate",
         help="Validate a policy YAML/JSON file against the schema.",
     )
     p_validate.add_argument("path", help="Path to the policy file to validate.")
 
-    # -- test --------------------------------------------------------------
+    # -- test
     p_test = subparsers.add_parser(
         "test",
         help="Test a policy against a set of scenarios.",
@@ -308,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
     p_test.add_argument("policy_path", help="Path to the policy file.")
     p_test.add_argument("test_scenarios_path", help="Path to the test scenarios YAML.")
 
-    # -- diff --------------------------------------------------------------
+    # -- diff
     p_diff = subparsers.add_parser(
         "diff",
         help="Show differences between two policy files.",

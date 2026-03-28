@@ -1,0 +1,10 @@
+# test_policies/test_success.yaml
+name: Test Success
+version: "1.0"
+description: Minimal valid policy
+defaults:
+  action: allow
+  max_tokens: 10
+  max_tool_calls: 2
+  confidence_threshold: 0.5
+rules: []

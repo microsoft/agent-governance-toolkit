@@ -1,0 +1,20 @@
+scenarios:
+  - name: Scenario Allow
+    context: {"type": "allow"}
+    expected_allowed: true
+    expected_action: allow
+
+  - name: Scenario Audit
+    context: {"type": "audit"}
+    expected_allowed: true
+    expected_action: audit
+
+  - name: Scenario Block
+    context: {"type": "block"}
+    expected_allowed: false
+    expected_action: block
+
+  - name: Scenario Deny
+    context: {"type": "deny"}
+    expected_allowed: false
+    expected_action: deny
