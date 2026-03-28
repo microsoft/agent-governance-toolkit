@@ -9,9 +9,54 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 from typing import Any, Dict, List, Optional
 
 from langchain_agentmesh.identity import VerificationIdentity, VerificationSignature, UserContext
+
+
+def _canonical_json(data: Dict[str, Any]) -> str:
+    """Serialize JSON deterministically for signing and verification."""
+    return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _delegation_signing_payload(
+    delegator: str,
+    delegatee: str,
+    capabilities: List[str],
+    expires_at: Optional[datetime],
+) -> str:
+    """Build the canonical delegation payload used for signatures."""
+    payload = {
+        "delegator": delegator,
+        "delegatee": delegatee,
+        "capabilities": sorted(capabilities),
+        "expires_at": expires_at.isoformat() if expires_at else None,
+    }
+    return _canonical_json(payload)
+
+
+def _scope_chain_fingerprint(scope_chain: List["Delegation"]) -> str:
+    """Generate deterministic digest for replay-window tracking."""
+    payload = []
+    for delegation in scope_chain:
+        payload.append({
+            "delegator": delegation.delegator,
+            "delegatee": delegation.delegatee,
+            "capabilities": sorted(delegation.capabilities),
+            "expires_at": delegation.expires_at.isoformat() if delegation.expires_at else None,
+            "signature_algorithm": delegation.signature.algorithm if delegation.signature else None,
+            "signature_public_key": (
+                delegation.signature.public_key if delegation.signature else None
+            ),
+            "signature": delegation.signature.signature if delegation.signature else None,
+            "signature_timestamp": (
+                delegation.signature.timestamp.isoformat()
+                if delegation.signature and delegation.signature.timestamp
+                else None
+            ),
+        })
+    return sha256(_canonical_json({"scope_chain": payload}).encode("utf-8")).hexdigest()
 
 
 @dataclass
@@ -24,6 +69,9 @@ class TrustPolicy:
     audit_all_calls: bool = False
     block_unverified: bool = True
     cache_ttl_seconds: int = 900  # 15 minutes
+    max_delegation_signature_age_seconds: int = 900
+    max_signature_clock_skew_seconds: int = 60
+    replay_window_seconds: int = 300
 
 
 @dataclass
@@ -208,6 +256,7 @@ class TrustHandshake:
         self.policy = policy or TrustPolicy()
         self._verified_peers: Dict[str, tuple[TrustVerificationResult, datetime]] = {}
         self._cache_ttl = timedelta(seconds=self.policy.cache_ttl_seconds)
+        self._seen_scope_chains: Dict[str, datetime] = {}
 
     def _get_cached_result(self, did: str) -> Optional[TrustVerificationResult]:
         """Get cached verification result if still valid."""
@@ -221,6 +270,17 @@ class TrustHandshake:
     def _cache_result(self, did: str, result: TrustVerificationResult) -> None:
         """Cache a verification result."""
         self._verified_peers[did] = (result, datetime.now(timezone.utc))
+
+    def _prune_seen_scope_chains(self, now: datetime) -> None:
+        """Remove scope chain fingerprints outside replay window."""
+        replay_window = timedelta(seconds=self.policy.replay_window_seconds)
+        expired = [
+            fingerprint
+            for fingerprint, seen_at in self._seen_scope_chains.items()
+            if now - seen_at > replay_window
+        ]
+        for fingerprint in expired:
+            del self._seen_scope_chains[fingerprint]
 
     def _verify_scope_chain(
         self,
@@ -240,37 +300,65 @@ class TrustHandshake:
         # Anchor trust to this verifier's identity.
         first = delegations[0]
         if first.delegator != self.my_identity.did:
-            return False, "Scope chain root delegator does not match verifier identity"
+            return False, "Scope chain error: root delegator does not match verifier identity"
 
         # Chain must terminate at the advertised peer identity.
         if delegations[-1].delegatee != peer_card.identity.did:
-            return False, "Scope chain does not terminate at peer identity"
+            return False, "Scope chain error: chain does not terminate at peer identity"
+
+        scope_chain_fingerprint = _scope_chain_fingerprint(delegations)
+        self._prune_seen_scope_chains(now)
+        if scope_chain_fingerprint in self._seen_scope_chains:
+            return False, "Scope chain error: replay detected within replay window"
 
         known_public_keys: Dict[str, str] = {self.my_identity.did: self.my_identity.public_key}
 
         for i, delegation in enumerate(delegations):
+            if not delegation.delegator.startswith("did:verification:"):
+                return False, f"Scope chain error at index {i}: invalid delegator DID"
+
+            if not delegation.delegatee.startswith("did:verification:"):
+                return False, f"Scope chain error at index {i}: invalid delegatee DID"
+
             if delegation.expires_at and delegation.expires_at < now:
-                return False, f"Scope delegation at index {i} is expired"
+                return False, f"Scope chain error at index {i}: delegation is expired"
 
             if not delegation.signature:
-                return False, f"Scope delegation at index {i} is missing signature"
+                return False, f"Scope chain error at index {i}: missing signature"
+
+            if delegation.signature.algorithm != "verification-Ed25519":
+                return False, f"Scope chain error at index {i}: unsupported signature algorithm"
+
+            signature_timestamp = delegation.signature.timestamp
+            if signature_timestamp.tzinfo is None:
+                signature_timestamp = signature_timestamp.replace(tzinfo=timezone.utc)
+
+            if signature_timestamp > now + timedelta(
+                seconds=self.policy.max_signature_clock_skew_seconds
+            ):
+                return False, f"Scope chain error at index {i}: signature timestamp is in the future"
+
+            if now - signature_timestamp > timedelta(
+                seconds=self.policy.max_delegation_signature_age_seconds
+            ):
+                return False, f"Scope chain error at index {i}: signature is stale"
 
             # Enforce deterministic linkage between adjacent delegations.
             if i > 0:
                 prev = delegations[i - 1]
                 if delegation.delegator != prev.delegatee:
-                    return False, f"Scope delegation linkage broken at index {i}"
+                    return False, f"Scope chain error at index {i}: delegation linkage broken"
 
             expected_public_key = known_public_keys.get(delegation.delegator)
             if expected_public_key and delegation.signature.public_key != expected_public_key:
-                return False, f"Delegator public key mismatch at index {i}"
+                return False, f"Scope chain error at index {i}: delegator public key mismatch"
 
-            delegation_data = json.dumps({
-                "delegator": delegation.delegator,
-                "delegatee": delegation.delegatee,
-                "capabilities": sorted(delegation.capabilities),
-                "expires_at": delegation.expires_at.isoformat() if delegation.expires_at else None,
-            }, sort_keys=True)
+            delegation_data = _delegation_signing_payload(
+                delegation.delegator,
+                delegation.delegatee,
+                delegation.capabilities,
+                delegation.expires_at,
+            )
 
             delegator_identity = VerificationIdentity(
                 did=delegation.delegator,
@@ -278,9 +366,11 @@ class TrustHandshake:
                 public_key=delegation.signature.public_key,
             )
             if not delegator_identity.verify_signature(delegation_data, delegation.signature):
-                return False, f"Invalid scope delegation signature at index {i}"
+                return False, f"Scope chain error at index {i}: invalid delegation signature"
 
             known_public_keys[delegation.delegator] = delegation.signature.public_key
+
+        self._seen_scope_chains[scope_chain_fingerprint] = now
 
         return True, ""
 
@@ -382,6 +472,7 @@ class TrustHandshake:
     def clear_cache(self) -> None:
         """Clear all cached verification results."""
         self._verified_peers.clear()
+        self._seen_scope_chains.clear()
 
 
 class DelegationChain:
@@ -421,7 +512,9 @@ class DelegationChain:
             ValueError: If delegatee lacks identity
         """
         if not delegatee.identity:
-            raise ValueError("Delegatee must have a VerificationIdentity to be part of a delegation")
+            raise ValueError(
+                "Delegatee must have a VerificationIdentity to be part of a delegation"
+            )
 
         delegator = delegator_identity or self.root_identity
         delegatee_did = delegatee.identity.did
@@ -431,12 +524,12 @@ class DelegationChain:
             expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)
 
         # Create delegation data for signing
-        delegation_data = json.dumps({
-            "delegator": delegator.did,
-            "delegatee": delegatee_did,
-            "capabilities": sorted(capabilities),
-            "expires_at": expires_at.isoformat() if expires_at else None,
-        }, sort_keys=True)
+        delegation_data = _delegation_signing_payload(
+            delegator.did,
+            delegatee_did,
+            capabilities,
+            expires_at,
+        )
 
         # Sign with delegator's identity
         signature = delegator.sign(delegation_data)
@@ -480,12 +573,15 @@ class DelegationChain:
                 return False
 
             # Verify delegation signature
-            delegation_data = json.dumps({
-                "delegator": delegation.delegator,
-                "delegatee": delegation.delegatee,
-                "capabilities": sorted(delegation.capabilities),
-                "expires_at": delegation.expires_at.isoformat() if delegation.expires_at else None,
-            }, sort_keys=True)
+            if delegation.signature.algorithm != "verification-Ed25519":
+                return False
+
+            delegation_data = _delegation_signing_payload(
+                delegation.delegator,
+                delegation.delegatee,
+                delegation.capabilities,
+                delegation.expires_at,
+            )
 
             if not delegator_identity.verify_signature(delegation_data, delegation.signature):
                 return False

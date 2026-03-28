@@ -94,6 +94,24 @@ agent = create_agent(callbacks=[callback])
 | `audit_logging` | False | Enable audit trail |
 | `cache_ttl` | 900 | Verification cache TTL (seconds) |
 
+### Scope Chain Verification
+
+`TrustHandshake` now performs strict cryptographic verification for `scope_chain` when present.
+
+- Canonical payload verification is used for delegation signatures.
+- Delegation signatures must use `verification-Ed25519`.
+- Chain integrity is enforced end-to-end (root anchoring, linkage, and peer termination).
+- Expired delegations are rejected.
+- Replay-hardening is applied through signature freshness checks and replay-window detection.
+
+Policy knobs available in `TrustPolicy`:
+
+- `max_delegation_signature_age_seconds` (default: 900)
+- `max_signature_clock_skew_seconds` (default: 60)
+- `replay_window_seconds` (default: 300)
+
+Important: integrations that previously relied on warning-only behavior for invalid scope chains must provide valid chains to pass verification.
+
 ## Related
 
 - [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) - Core trust mesh platform
