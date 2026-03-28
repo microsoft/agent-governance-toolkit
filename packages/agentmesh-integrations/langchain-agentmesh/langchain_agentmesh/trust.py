@@ -7,12 +7,17 @@ agent cards, handshakes, and scope chains.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from typing import Any, Dict, List, Optional
 
 from langchain_agentmesh.identity import VerificationIdentity, VerificationSignature, UserContext
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_SIGNATURE_ALGORITHMS = ["verification-Ed25519"]
 
 
 def _canonical_json(data: Dict[str, Any]) -> str:
@@ -69,9 +74,17 @@ class TrustPolicy:
     audit_all_calls: bool = False
     block_unverified: bool = True
     cache_ttl_seconds: int = 900  # 15 minutes
+    strict_scope_chain_verification: bool = True
+    expose_scope_chain_errors: bool = False
+    allowed_signature_algorithms: List[str] = field(
+        default_factory=lambda: DEFAULT_SIGNATURE_ALGORITHMS.copy()
+    )
     max_delegation_signature_age_seconds: int = 900
     max_signature_clock_skew_seconds: int = 60
+    max_delegation_expiry_clock_skew_seconds: int = 60
     replay_window_seconds: int = 300
+    replay_detection_enabled: bool = True
+    max_seen_scope_chain_fingerprints: int = 2048
 
 
 @dataclass
@@ -282,6 +295,33 @@ class TrustHandshake:
         for fingerprint in expired:
             del self._seen_scope_chains[fingerprint]
 
+    def _record_scope_chain_fingerprint(self, fingerprint: str, now: datetime) -> None:
+        """Record fingerprint with bounded memory growth."""
+        self._seen_scope_chains[fingerprint] = now
+        max_entries = max(self.policy.max_seen_scope_chain_fingerprints, 0)
+        if max_entries == 0:
+            self._seen_scope_chains.clear()
+            return
+        while len(self._seen_scope_chains) > max_entries:
+            oldest_fingerprint = min(
+                self._seen_scope_chains,
+                key=self._seen_scope_chains.__getitem__,
+            )
+            del self._seen_scope_chains[oldest_fingerprint]
+
+    def _scope_chain_failure(self, detail: str) -> tuple[bool, str]:
+        """Return sanitized error for callers and log detailed reason."""
+        logger.warning("Scope chain verification failed: %s", detail)
+        if self.policy.expose_scope_chain_errors:
+            return False, detail
+        return False, "Scope chain verification failed"
+
+    def _allowed_signature_algorithms(self) -> set[str]:
+        """Resolve allowed signature algorithms from policy."""
+        if not self.policy.allowed_signature_algorithms:
+            return set(DEFAULT_SIGNATURE_ALGORITHMS)
+        return set(self.policy.allowed_signature_algorithms)
+
     def _verify_scope_chain(
         self,
         peer_card: TrustedAgentCard,
@@ -300,34 +340,53 @@ class TrustHandshake:
         # Anchor trust to this verifier's identity.
         first = delegations[0]
         if first.delegator != self.my_identity.did:
-            return False, "Scope chain error: root delegator does not match verifier identity"
+            return self._scope_chain_failure(
+                "Scope chain error: root delegator does not match verifier identity"
+            )
 
         # Chain must terminate at the advertised peer identity.
         if delegations[-1].delegatee != peer_card.identity.did:
-            return False, "Scope chain error: chain does not terminate at peer identity"
+            return self._scope_chain_failure(
+                "Scope chain error: chain does not terminate at peer identity"
+            )
 
+        allowed_algorithms = self._allowed_signature_algorithms()
         scope_chain_fingerprint = _scope_chain_fingerprint(delegations)
-        self._prune_seen_scope_chains(now)
-        if scope_chain_fingerprint in self._seen_scope_chains:
-            return False, "Scope chain error: replay detected within replay window"
+        if self.policy.replay_detection_enabled:
+            self._prune_seen_scope_chains(now)
+            if scope_chain_fingerprint in self._seen_scope_chains:
+                return self._scope_chain_failure(
+                    "Scope chain error: replay detected within replay window"
+                )
 
         known_public_keys: Dict[str, str] = {self.my_identity.did: self.my_identity.public_key}
+        expiry_skew = timedelta(seconds=self.policy.max_delegation_expiry_clock_skew_seconds)
 
         for i, delegation in enumerate(delegations):
             if not delegation.delegator.startswith("did:verification:"):
-                return False, f"Scope chain error at index {i}: invalid delegator DID"
+                return self._scope_chain_failure(
+                    f"Scope chain error at index {i}: invalid delegator DID"
+                )
 
             if not delegation.delegatee.startswith("did:verification:"):
-                return False, f"Scope chain error at index {i}: invalid delegatee DID"
+                return self._scope_chain_failure(
+                    f"Scope chain error at index {i}: invalid delegatee DID"
+                )
 
-            if delegation.expires_at and delegation.expires_at < now:
-                return False, f"Scope chain error at index {i}: delegation is expired"
+            if delegation.expires_at and delegation.expires_at + expiry_skew < now:
+                return self._scope_chain_failure(
+                    f"Scope chain error at index {i}: delegation is expired"
+                )
 
             if not delegation.signature:
-                return False, f"Scope chain error at index {i}: missing signature"
+                return self._scope_chain_failure(
+                    f"Scope chain error at index {i}: missing signature"
+                )
 
-            if delegation.signature.algorithm != "verification-Ed25519":
-                return False, f"Scope chain error at index {i}: unsupported signature algorithm"
+            if delegation.signature.algorithm not in allowed_algorithms:
+                return self._scope_chain_failure(
+                    f"Scope chain error at index {i}: unsupported signature algorithm"
+                )
 
             signature_timestamp = delegation.signature.timestamp
             if signature_timestamp.tzinfo is None:
@@ -336,22 +395,30 @@ class TrustHandshake:
             if signature_timestamp > now + timedelta(
                 seconds=self.policy.max_signature_clock_skew_seconds
             ):
-                return False, f"Scope chain error at index {i}: signature timestamp is in the future"
+                return self._scope_chain_failure(
+                    f"Scope chain error at index {i}: signature timestamp is in the future"
+                )
 
             if now - signature_timestamp > timedelta(
                 seconds=self.policy.max_delegation_signature_age_seconds
             ):
-                return False, f"Scope chain error at index {i}: signature is stale"
+                return self._scope_chain_failure(
+                    f"Scope chain error at index {i}: signature is stale"
+                )
 
             # Enforce deterministic linkage between adjacent delegations.
             if i > 0:
                 prev = delegations[i - 1]
                 if delegation.delegator != prev.delegatee:
-                    return False, f"Scope chain error at index {i}: delegation linkage broken"
+                    return self._scope_chain_failure(
+                        f"Scope chain error at index {i}: delegation linkage broken"
+                    )
 
             expected_public_key = known_public_keys.get(delegation.delegator)
             if expected_public_key and delegation.signature.public_key != expected_public_key:
-                return False, f"Scope chain error at index {i}: delegator public key mismatch"
+                return self._scope_chain_failure(
+                    f"Scope chain error at index {i}: delegator public key mismatch"
+                )
 
             delegation_data = _delegation_signing_payload(
                 delegation.delegator,
@@ -366,11 +433,14 @@ class TrustHandshake:
                 public_key=delegation.signature.public_key,
             )
             if not delegator_identity.verify_signature(delegation_data, delegation.signature):
-                return False, f"Scope chain error at index {i}: invalid delegation signature"
+                return self._scope_chain_failure(
+                    f"Scope chain error at index {i}: invalid delegation signature"
+                )
 
             known_public_keys[delegation.delegator] = delegation.signature.public_key
 
-        self._seen_scope_chains[scope_chain_fingerprint] = now
+        if self.policy.replay_detection_enabled:
+            self._record_scope_chain_fingerprint(scope_chain_fingerprint, now)
 
         return True, ""
 
@@ -447,13 +517,16 @@ class TrustHandshake:
         if peer_card.scope_chain:
             scope_chain_valid, scope_chain_error = self._verify_scope_chain(peer_card)
             if not scope_chain_valid:
-                return TrustVerificationResult(
-                    trusted=False,
-                    trust_score=peer_card.trust_score,
-                    reason=scope_chain_error,
-                    verified_capabilities=verified_caps,
-                    warnings=warnings,
-                )
+                if not self.policy.strict_scope_chain_verification:
+                    warnings.append(scope_chain_error)
+                else:
+                    return TrustVerificationResult(
+                        trusted=False,
+                        trust_score=peer_card.trust_score,
+                        reason=scope_chain_error,
+                        verified_capabilities=verified_caps,
+                        warnings=warnings,
+                    )
 
         # All checks passed
         result = TrustVerificationResult(
@@ -573,7 +646,7 @@ class DelegationChain:
                 return False
 
             # Verify delegation signature
-            if delegation.signature.algorithm != "verification-Ed25519":
+            if delegation.signature.algorithm not in DEFAULT_SIGNATURE_ALGORITHMS:
                 return False
 
             delegation_data = _delegation_signing_payload(
