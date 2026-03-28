@@ -161,6 +161,13 @@ defaults to GitHub production origins.
 Do not use wildcard or overly broad origins in production. Keep this list
 restricted to trusted GitHub domains used by your deployment.
 
+Examples:
+- Valid: `ALLOWED_ORIGINS=https://github.com,https://copilot.github.com`
+- Invalid: `ALLOWED_ORIGINS=*` or `ALLOWED_ORIGINS=ftp://example.com`
+
+If `ALLOWED_ORIGINS` is set but contains no valid `http/https` origins, the
+service fails fast at startup with a configuration error.
+
 ### Repository Policy
 
 Create `.github/agent-os.json`:

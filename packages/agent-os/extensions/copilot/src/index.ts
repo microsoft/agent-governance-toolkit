@@ -55,8 +55,24 @@ function normalizeOrigin(origin: string): string | null {
     }
 }
 
+function getOriginHostForLog(origin: string | undefined): string {
+    if (!origin) {
+        return 'missing';
+    }
+    const normalized = normalizeOrigin(origin);
+    if (!normalized) {
+        return 'invalid';
+    }
+    try {
+        return new URL(normalized).host;
+    } catch {
+        return 'invalid';
+    }
+}
+
 function getAllowedOrigins(): Set<string> {
     const configured = process.env.ALLOWED_ORIGINS;
+    const hasConfiguredAllowlist = typeof configured === 'string';
     const source = configured
         ? configured.split(',').map((v) => v.trim()).filter(Boolean)
         : DEFAULT_ALLOWED_ORIGINS;
@@ -72,6 +88,11 @@ function getAllowedOrigins(): Set<string> {
     }
 
     if (normalized.length === 0) {
+        if (hasConfiguredAllowlist) {
+            throw new Error(
+                'Invalid ALLOWED_ORIGINS configuration. Provide one or more valid http/https origins separated by commas.'
+            );
+        }
         logger.warn('No valid ALLOWED_ORIGINS provided, falling back to secure defaults');
         return new Set(DEFAULT_ALLOWED_ORIGINS);
     }
@@ -119,7 +140,7 @@ app.use((req, res, next) => {
             return res.sendStatus(204);
         }
         if (!origin || !isAllowedOrigin) {
-            logger.warn('Rejected CORS preflight request', { origin: origin || 'missing' });
+            logger.warn('Rejected CORS preflight request', { originHost: getOriginHostForLog(origin) });
             return res.sendStatus(403);
         }
         return res.sendStatus(204);
@@ -135,7 +156,7 @@ app.use((req, res, next) => {
     }
 
     if (!isAllowedOrigin) {
-        logger.warn('Rejected request due to disallowed CORS origin', { origin });
+        logger.warn('Rejected request due to disallowed CORS origin', { originHost: getOriginHostForLog(origin) });
         return res.sendStatus(403);
     }
 
