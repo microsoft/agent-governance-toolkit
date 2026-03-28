@@ -1,22 +1,3 @@
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT License.
-"""
-Policy-as-code CLI for Agent-OS governance.
-
-Provides commands to validate, test, and diff declarative policy documents
-without external dependencies beyond the standard library and pydantic/pyyaml.
-
-Usage:
-    python -m agent_os.policies.cli validate <path>
-    python -m agent_os.policies.cli test <policy_path> <test_scenarios_path>
-    python -m agent_os.policies.cli diff <path1> <path2>
-
-Exit codes:
-    0 - Success
-    1 - Validation failure / test failure
-    2 - Runtime error (file not found, parse error, etc.)
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -24,27 +5,32 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
-from rich import print
 
 # ---------------------------------------------------------------------------
-# function for colored output
+# Colored output functions using rich
 # ---------------------------------------------------------------------------
+
+try:
+    from rich import print as rprint
+except ImportError:
+    # fallback to normal print if rich not installed
+    def rprint(msg, **kwargs):
+        print(msg)
 
 def error(msg):
-    print(f"[red]{msg}[/red]", file=sys.stderr)
+    rprint(f"[red]{msg}[/red]", file=sys.stderr)
 
 def success(msg):
-    print(f"[green]{msg}[/green]", file=sys.stderr)
+    rprint(f"[green]{msg}[/green]")
 
 def warn(msg):
-    print(f"[yellow]{msg}[/yellow]", file=sys.stderr)
+    rprint(f"[yellow]{msg}[/yellow]")
 
 def policy_violation(msg):
-    print(f"[bold red]{msg}[/bold red]", file=sys.stderr)
+    rprint(f"[bold red]{msg}[/bold red]")
 
 def passed_check(msg):
-    print(f"[green]✔ {msg}[/green]", file=sys.stderr)
-    
+    rprint(f"[green]✔ {msg}[/green]")
 
 # ---------------------------------------------------------------------------
 # Lazy imports
@@ -58,7 +44,6 @@ def _import_yaml() -> Any:
         error("ERROR: pyyaml is required — pip install pyyaml")
         sys.exit(2)
 
-
 def _load_file(path: Path) -> dict[str, Any]:
     """Load a YAML or JSON file and return the parsed dict."""
     text = path.read_text(encoding="utf-8")
@@ -68,12 +53,12 @@ def _load_file(path: Path) -> dict[str, Any]:
     elif path.suffix == ".json":
         data = json.loads(text)
     else:
+        # Try YAML first, fallback to JSON
         yaml = _import_yaml()
         try:
             data = yaml.safe_load(text)
         except Exception:
             data = json.loads(text)
-
     if not isinstance(data, dict):
         raise ValueError(f"Expected a mapping at top level, got {type(data).__name__}")
     return data
@@ -83,7 +68,6 @@ def _load_file(path: Path) -> dict[str, Any]:
 # ============================================================================
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    """Validate a policy YAML/JSON file against the PolicyDocument schema."""
     from .schema import PolicyDocument  # noqa: E402
 
     path = Path(args.path)
@@ -97,12 +81,11 @@ def cmd_validate(args: argparse.Namespace) -> int:
         error(f"ERROR: failed to parse {path}: {exc}")
         return 2
 
-    # --- Optional JSON-Schema validation (best-effort) --------------------
+    # Optional JSON-Schema validation
     schema_path = Path(__file__).with_name("policy_schema.json")
     if schema_path.exists():
         try:
             import jsonschema  # type: ignore[import-untyped]
-
             schema = json.loads(schema_path.read_text(encoding="utf-8"))
             jsonschema.validate(instance=data, schema=schema)
         except ImportError:
@@ -114,7 +97,6 @@ def cmd_validate(args: argparse.Namespace) -> int:
                 warn(f"  Location: {' -> '.join(str(p) for p in ve.absolute_path)}")
             return 1
 
-    # --- Pydantic validation (authoritative) ------------------------------
     try:
         PolicyDocument.model_validate(data)
     except Exception as exc:
@@ -131,7 +113,6 @@ def cmd_validate(args: argparse.Namespace) -> int:
 # ============================================================================
 
 def cmd_test(args: argparse.Namespace) -> int:
-    """Test a policy against a set of scenarios."""
     from .evaluator import PolicyEvaluator  # noqa: E402
     from .schema import PolicyDocument  # noqa: E402
 
@@ -143,7 +124,7 @@ def cmd_test(args: argparse.Namespace) -> int:
             error(f"ERROR: file not found: {p}")
             return 2
 
-    # Load the policy
+    # Load policy
     try:
         doc = PolicyDocument.from_yaml(policy_path)
     except Exception as exc:
@@ -180,13 +161,9 @@ def cmd_test(args: argparse.Namespace) -> int:
         errors: list[str] = []
 
         if expected_allowed is not None and decision.allowed != expected_allowed:
-            errors.append(
-                f"expected allowed={expected_allowed}, got allowed={decision.allowed}"
-            )
+            errors.append(f"expected allowed={expected_allowed}, got allowed={decision.allowed}")
         if expected_action is not None and decision.action != expected_action:
-            errors.append(
-                f"expected action='{expected_action}', got action='{decision.action}'"
-            )
+            errors.append(f"expected action='{expected_action}', got action='{decision.action}'")
 
         if errors:
             failed += 1
@@ -205,7 +182,6 @@ def cmd_test(args: argparse.Namespace) -> int:
 # ============================================================================
 
 def cmd_diff(args: argparse.Namespace) -> int:
-    """Show differences between two policy files."""
     from .schema import PolicyDocument  # noqa: E402
 
     path1 = Path(args.path1)
@@ -235,23 +211,13 @@ def cmd_diff(args: argparse.Namespace) -> int:
 
     # Default changes
     if doc1.defaults.action != doc2.defaults.action:
-        differences.append(
-            f"  defaults.action: '{doc1.defaults.action.value}' -> '{doc2.defaults.action.value}'"
-        )
+        differences.append(f"  defaults.action: '{doc1.defaults.action.value}' -> '{doc2.defaults.action.value}'")
     if doc1.defaults.max_tokens != doc2.defaults.max_tokens:
-        differences.append(
-            f"  defaults.max_tokens: {doc1.defaults.max_tokens} -> {doc2.defaults.max_tokens}"
-        )
+        differences.append(f"  defaults.max_tokens: {doc1.defaults.max_tokens} -> {doc2.defaults.max_tokens}")
     if doc1.defaults.max_tool_calls != doc2.defaults.max_tool_calls:
-        differences.append(
-            f"  defaults.max_tool_calls: "
-            f"{doc1.defaults.max_tool_calls} -> {doc2.defaults.max_tool_calls}"
-        )
+        differences.append(f"  defaults.max_tool_calls: {doc1.defaults.max_tool_calls} -> {doc2.defaults.max_tool_calls}")
     if doc1.defaults.confidence_threshold != doc2.defaults.confidence_threshold:
-        differences.append(
-            f"  defaults.confidence_threshold: "
-            f"{doc1.defaults.confidence_threshold} -> {doc2.defaults.confidence_threshold}"
-        )
+        differences.append(f"  defaults.confidence_threshold: {doc1.defaults.confidence_threshold} -> {doc2.defaults.confidence_threshold}")
 
     # Rule changes
     rules1 = {r.name: r for r in doc1.rules}
@@ -271,13 +237,9 @@ def cmd_diff(args: argparse.Namespace) -> int:
         r1 = rules1[name]
         r2 = rules2[name]
         if r1.action != r2.action:
-            differences.append(
-                f"  rule '{name}' action: '{r1.action.value}' -> '{r2.action.value}'"
-            )
+            differences.append(f"  rule '{name}' action: '{r1.action.value}' -> '{r2.action.value}'")
         if r1.priority != r2.priority:
-            differences.append(
-                f"  rule '{name}' priority: {r1.priority} -> {r2.priority}"
-            )
+            differences.append(f"  rule '{name}' priority: {r1.priority} -> {r2.priority}")
         if r1.condition != r2.condition:
             differences.append(f"  rule '{name}' condition changed")
         if r1.message != r2.message:
@@ -297,47 +259,32 @@ def cmd_diff(args: argparse.Namespace) -> int:
 # ============================================================================
 
 def main(argv: list[str] | None = None) -> int:
-    """Parse arguments and dispatch to the appropriate subcommand."""
     parser = argparse.ArgumentParser(
         prog="policy-cli",
         description="Agent-OS policy-as-code CLI for validation, testing, and diffing.",
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # -- validate
-    p_validate = subparsers.add_parser(
-        "validate",
-        help="Validate a policy YAML/JSON file against the schema.",
-    )
+    # validate
+    p_validate = subparsers.add_parser("validate", help="Validate a policy YAML/JSON file.")
     p_validate.add_argument("path", help="Path to the policy file to validate.")
 
-    # -- test
-    p_test = subparsers.add_parser(
-        "test",
-        help="Test a policy against a set of scenarios.",
-    )
+    # test
+    p_test = subparsers.add_parser("test", help="Test a policy against scenarios.")
     p_test.add_argument("policy_path", help="Path to the policy file.")
-    p_test.add_argument("test_scenarios_path", help="Path to the test scenarios YAML.")
+    p_test.add_argument("test_scenarios_path", help="Path to test scenarios YAML.")
 
-    # -- diff
-    p_diff = subparsers.add_parser(
-        "diff",
-        help="Show differences between two policy files.",
-    )
-    p_diff.add_argument("path1", help="Path to the first policy file.")
-    p_diff.add_argument("path2", help="Path to the second policy file.")
+    # diff
+    p_diff = subparsers.add_parser("diff", help="Show differences between two policy files.")
+    p_diff.add_argument("path1", help="Path to first policy file.")
+    p_diff.add_argument("path2", help="Path to second policy file.")
 
     args = parser.parse_args(argv)
-
     if args.command is None:
         parser.print_help()
         return 2
 
-    dispatch = {
-        "validate": cmd_validate,
-        "test": cmd_test,
-        "diff": cmd_diff,
-    }
+    dispatch = {"validate": cmd_validate, "test": cmd_test, "diff": cmd_diff}
     return dispatch[args.command](args)
 
 
