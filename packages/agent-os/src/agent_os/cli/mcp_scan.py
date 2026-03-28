@@ -159,97 +159,106 @@ def main(argv: List[str] | None = None) -> int:
 
     output_format = "json" if getattr(args, "json", False) or getattr(args, "format", "table") == "json" else "table"
 
-    if args.command == "scan":
-        findings = scan_config(config_path, args.server)
-        
-        if args.severity:
-            findings = [f for f in findings if f.severity == args.severity or f.severity == "critical"]
-
-        if output_format == "json":
-            print(json.dumps([f.to_dict() for f in findings], indent=2))
-        elif output_format == "table":
-            table = Table(title=f"Security Scan: {args.config}")
-            table.add_column("Server", style="cyan")
-            table.add_column("Severity", style="bold")
-            table.add_column("Category", style="dim")
-            table.add_column("Finding")
-
-            for f in findings:
-                sev_color = "red" if f.severity == "critical" else "yellow"
-                table.add_row(f.server, f"[{sev_color}]{f.severity.upper()}[/{sev_color}]", f.category, f.message)
-
-            console.print(table)
-        
-        return 1 if any(f.severity == "critical" for f in findings) else 0
-
-    elif args.command == "fingerprint":
-        fingerprints = get_fingerprints(config_path)
-        
-        if args.compare:
-            with open(args.compare) as f:
-                saved = json.load(f)
+    try:
+        if args.command == "scan":
+            findings = scan_config(config_path, args.server)
             
-            diffs = {}
-            for name, h in fingerprints.items():
-                if name not in saved:
-                    diffs[name] = "new"
-                elif saved[name] != h:
-                    diffs[name] = "changed"
+            if args.severity:
+                findings = [f for f in findings if f.severity == args.severity or f.severity == "critical"]
+
+            if output_format == "json":
+                print(json.dumps([f.to_dict() for f in findings], indent=2))
+            elif output_format == "table":
+                table = Table(title=f"Security Scan: {args.config}")
+                table.add_column("Server", style="cyan")
+                table.add_column("Severity", style="bold")
+                table.add_column("Category", style="dim")
+                table.add_column("Finding")
+
+                for f in findings:
+                    sev_color = "red" if f.severity == "critical" else "yellow"
+                    table.add_row(f.server, f"[{sev_color}]{f.severity.upper()}[/{sev_color}]", f.category, f.message)
+
+                console.print(table)
             
-            if output_format == "json":
-                print(json.dumps({"current": fingerprints, "diffs": diffs}, indent=2))
-            else:
-                print(f"Comparison results for {args.config}:")
-                for name, status in diffs.items():
-                    print(f"  {name}: {status}")
-                if not diffs:
-                    print("  Identical fingerprints.")
-        
-        elif args.output:
-            with open(args.output, "w") as f:
-                json.dump(fingerprints, f, indent=2)
-            if output_format != "json":
-                print(f"Fingerprints saved to {args.output}")
-            else:
-                print(json.dumps({"status": "success", "file": args.output}, indent=2))
-        
-        else:
-            if output_format == "json":
-                print(json.dumps(fingerprints, indent=2))
-            else:
+            return 1 if any(f.severity == "critical" for f in findings) else 0
+
+        elif args.command == "fingerprint":
+            fingerprints = get_fingerprints(config_path)
+            
+            if args.compare:
+                with open(args.compare) as f:
+                    saved = json.load(f)
+                
+                diffs = {}
                 for name, h in fingerprints.items():
-                    print(f"{name:20} {h}")
+                    if name not in saved:
+                        diffs[name] = "new"
+                    elif saved[name] != h:
+                        diffs[name] = "changed"
+                
+                if output_format == "json":
+                    print(json.dumps({"current": fingerprints, "diffs": diffs}, indent=2))
+                else:
+                    print(f"Comparison results for {args.config}:")
+                    for name, status in diffs.items():
+                        print(f"  {name}: {status}")
+                    if not diffs:
+                        print("  Identical fingerprints.")
+            
+            elif args.output:
+                with open(args.output, "w") as f:
+                    json.dump(fingerprints, f, indent=2)
+                if output_format != "json":
+                    print(f"Fingerprints saved to {args.output}")
+                else:
+                    print(json.dumps({"status": "success", "file": args.output}, indent=2))
+            
+            else:
+                if output_format == "json":
+                    print(json.dumps(fingerprints, indent=2))
+                else:
+                    for name, h in fingerprints.items():
+                        print(f"{name:20} {h}")
 
-    elif args.command == "report":
-        findings = scan_config(config_path)
-        fingerprints = get_fingerprints(config_path)
-        
-        report = {
-            "config": str(config_path),
-            "summary": {
-                "total_servers": len(fingerprints),
-                "total_findings": len(findings),
-                "critical": len([f for f in findings if f.severity == "critical"]),
-                "warning": len([f for f in findings if f.severity == "warning"])
-            },
-            "findings": [f.to_dict() for f in findings],
-            "fingerprints": fingerprints
-        }
-        
-        if output_format == "json" or getattr(args, "format", "markdown") == "json":
-            print(json.dumps(report, indent=2))
+        elif args.command == "report":
+            findings = scan_config(config_path)
+            fingerprints = get_fingerprints(config_path)
+            
+            report = {
+                "config": str(config_path),
+                "summary": {
+                    "total_servers": len(fingerprints),
+                    "total_findings": len(findings),
+                    "critical": len([f for f in findings if f.severity == "critical"]),
+                    "warning": len([f for f in findings if f.severity == "warning"])
+                },
+                "findings": [f.to_dict() for f in findings],
+                "fingerprints": fingerprints
+            }
+            
+            if output_format == "json" or getattr(args, "format", "markdown") == "json":
+                print(json.dumps(report, indent=2))
+            else:
+                # Simple markdown report
+                print(f"# Security Report: {args.config}")
+                print()
+                print(f"- Total Servers: {report['summary']['total_servers']}")
+                print(f"- Total Findings: {report['summary']['total_findings']}")
+                print()
+                print("## Findings")
+                for f in findings:
+                    print(f"- **{f.server}** ({f.severity.upper()}): {f.message}")
+
+        return 0
+    except Exception as e:
+        is_known = isinstance(e, (FileNotFoundError, ValueError, yaml.YAMLError))
+        msg = str(e) if is_known else "An error occurred during scanning"
+        if output_format == "json":
+            print(json.dumps({"status": "error", "message": msg, "type": e.__class__.__name__ if is_known else "InternalError"}, indent=2))
         else:
-            # Simple markdown report
-            print(f"# Security Report: {args.config}")
-            print()
-            print(f"- Total Servers: {report['summary']['total_servers']}")
-            print(f"- Total Findings: {report['summary']['total_findings']}")
-            print()
-            print("## Findings")
-            for f in findings:
-                print(f"- **{f.server}** ({f.severity.upper()}): {f.message}")
-
-    return 0
+            print(f"Error: {msg}")
+        return 1
 
 
 if __name__ == "__main__":

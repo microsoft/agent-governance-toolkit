@@ -1220,10 +1220,19 @@ def main() -> int:
     except KeyboardInterrupt:
         return 130
     except Exception as e:
+        # Sanitize exception message to avoid leaking internal details
+        # For public output, we prefer generic messages for unexpected exceptions
+        is_known_error = isinstance(e, (FileNotFoundError, ValueError, PermissionError))
+        error_msg = str(e) if is_known_error else "An internal error occurred. Use AGENTOS_DEBUG=1 for details."
+        
         if getattr(args, "json", False) or (hasattr(args, "format") and args.format == "json"):
-            print(json.dumps({"error": str(e)}, indent=2))
+            print(json.dumps({
+                "status": "error",
+                "message": error_msg,
+                "error_type": e.__class__.__name__ if is_known_error else "InternalError"
+            }, indent=2))
         else:
-            print(format_error(str(e)))
+            print(format_error(error_msg))
             if os.environ.get("AGENTOS_DEBUG"):
                 import traceback
                 traceback.print_exc()

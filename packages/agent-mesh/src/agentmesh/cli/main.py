@@ -313,7 +313,6 @@ def register(agent_dir: str, name: str = None, output_json: bool = False):
             "status": "success",
             "agent_name": agent_name,
             "did": identity.did,
-            "public_key": identity.public_key,
             "identity_file": str(identity_file)
         }, indent=2))
     else:
@@ -457,9 +456,16 @@ def audit(agent: str, limit: int, fmt: str, output_json: bool):
         entries = [e for e in entries if e["agent"] == agent]
 
     entries = entries[:limit]
+    
+    # Sanitize entries for JSON output to prevent information leakage/injection
+    allowed_keys = {"timestamp", "agent", "action", "status"}
+    sanitized_entries = [
+        {k: v for k, v in e.items() if k in allowed_keys}
+        for e in entries
+    ]
 
     if output_json or fmt == "json":
-        click.echo(json.dumps(entries, indent=2))
+        click.echo(json.dumps(sanitized_entries, indent=2))
     else:
         console.print("\n[bold blue]📋 Audit Log[/bold blue]\n")
         table = Table(box=box.SIMPLE)

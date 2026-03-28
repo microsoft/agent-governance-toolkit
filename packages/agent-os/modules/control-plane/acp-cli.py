@@ -170,16 +170,24 @@ def cmd_audit_show(args, control_plane):
         events = recorder.get_recent_events(limit=args.limit or 10)
         
         if args.format == "json" or getattr(args, "json", False):
-            print(json.dumps(events, indent=2))
+            # Sanitize events to prevent information disclosure
+            allowed_keys = {"timestamp", "event_type", "agent_id", "status"}
+            sanitized_events = [
+                {k: v for k, v in event.items() if k in allowed_keys}
+                for event in events
+            ]
+            print(json.dumps(sanitized_events, indent=2))
         else:
             print(f"Recent Audit Events (last {len(events)}):")
             for event in events:
                 print(f"  [{event.get('timestamp')}] {event.get('event_type')}: {event.get('agent_id')}")
     except Exception as e:
+        is_known = isinstance(e, (ValueError, PermissionError))
+        msg = str(e) if is_known else "Failed to retrieve audit logs"
         if getattr(args, "json", False):
-            print(json.dumps({"error": str(e)}, indent=2))
+            print(json.dumps({"error": msg, "type": e.__class__.__name__ if is_known else "InternalError"}, indent=2))
         else:
-            print(f"Error: {e}")
+            print(f"Error: {msg}")
 
 
 def cmd_benchmark_run(args):
@@ -243,10 +251,12 @@ def main():
             return 1
             
     except Exception as e:
+        is_known = isinstance(e, (ValueError, PermissionError, FileNotFoundError))
+        msg = str(e) if is_known else "An internal error occurred"
         if getattr(args, "json", False):
-            print(json.dumps({"error": str(e)}, indent=2))
+            print(json.dumps({"error": msg, "type": e.__class__.__name__ if is_known else "InternalError"}, indent=2))
         else:
-            print(f"Error: {e}")
+            print(f"Error: {msg}")
         return 1
     
     return 0

@@ -119,98 +119,109 @@ def main(argv: List[str] | None = None) -> int:
 
     output_format = "json" if getattr(args, "json", False) else "text"
 
-    if args.command == "validate":
-        all_results = {}
-        overall_passed = True
+    try:
+        if args.command == "validate":
+            all_results = {}
+            overall_passed = True
 
-        for path_str in args.files:
-            path = Path(path_str)
-            if not path.exists():
-                all_results[path_str] = [{"severity": "critical", "message": "File not found"}]
-                overall_passed = False
-                continue
+            for path_str in args.files:
+                path = Path(path_str)
+                if not path.exists():
+                    all_results[path_str] = [{"severity": "critical", "message": "File not found"}]
+                    overall_passed = False
+                    continue
+                    
+                errors = validate_policy(path)
+                all_results[path_str] = errors
+                if any(e["severity"] in ["critical", "error"] for e in errors):
+                    overall_passed = False
+
+            if output_format == "json":
+                print(json.dumps({
+                    "status": "success" if overall_passed else "fail",
+                    "results": all_results
+                }, indent=2))
+            else:
+                for path, errors in all_results.items():
+                    if not errors:
+                        print(f"✅ {path}: Valid")
+                    else:
+                        print(f"❌ {path}: Found {len(errors)} issues")
+                        for e in errors:
+                            print(f"  [{e['severity'].upper()}] {e['message']}")
                 
-            errors = validate_policy(path)
-            all_results[path_str] = errors
-            if any(e["severity"] in ["critical", "error"] for e in errors):
-                overall_passed = False
+            return 0 if overall_passed else 1
 
-        if output_format == "json":
-            print(json.dumps({
-                "status": "success" if overall_passed else "fail",
-                "results": all_results
-            }, indent=2))
-        else:
-            for path, errors in all_results.items():
-                if not errors:
-                    print(f"✅ {path}: Valid")
-                else:
-                    print(f"❌ {path}: Found {len(errors)} issues")
-                    for e in errors:
-                        print(f"  [{e['severity'].upper()}] {e['message']}")
+        elif args.command == "test":
+            path = Path(args.policy)
+            if not path.exists():
+                print(f"Error: Policy file not found: {args.policy}")
+                return 1
+                
+            results = test_policies(path)
+            passed_count = len([r for r in results if r["passed"]])
+            total_count = len(results)
+
+            if output_format == "json":
+                print(json.dumps({
+                    "policy": args.policy,
+                    "summary": {"passed": passed_count, "total": total_count},
+                    "tests": results
+                }, indent=2))
+            else:
+                table = Table(title=f"Policy Security Tests: {args.policy}")
+                table.add_column("Test", style="cyan")
+                table.add_column("Scenario", style="dim")
+                table.add_column("Expected/Result")
+                table.add_column("Status")
+
+                for r in results:
+                    status = "[green]PASS[/green]" if r["passed"] else "[red]FAIL[/red]"
+                    table.add_row(r["test"], r["scenario"], r["result"], status)
+
+                console.print(table)
+                print(f"\nSummary: {passed_count}/{total_count} tests passed")
+                
+            return 0 if passed_count == total_count else 1
+
+        elif args.command == "diff":
+            base_path = Path(args.base)
+            target_path = Path(args.target)
             
-        return 0 if overall_passed else 1
+            if not base_path.exists() or not target_path.exists():
+                print("Error: One or both files not found")
+                return 1
 
-    elif args.command == "test":
-        path = Path(args.policy)
-        if not path.exists():
-            print(f"Error: Policy file not found: {args.policy}")
-            return 1
-            
-        results = test_policies(path)
-        passed_count = len([r for r in results if r["passed"]])
-        total_count = len(results)
+            # Simulated diff
+            diff_data = {
+                "added": ["rule.3", "signal.SIGQUIT"],
+                "removed": ["rule.1"],
+                "changed": ["kernel.mode"]
+            }
 
-        if output_format == "json":
-            print(json.dumps({
-                "policy": args.policy,
-                "summary": {"passed": passed_count, "total": total_count},
-                "tests": results
-            }, indent=2))
-        else:
-            table = Table(title=f"Policy Security Tests: {args.policy}")
-            table.add_column("Test", style="cyan")
-            table.add_column("Scenario", style="dim")
-            table.add_column("Expected/Result")
-            table.add_column("Status")
+            if output_format == "json":
+                print(json.dumps({
+                    "base": args.base,
+                    "target": args.target,
+                    "diff": diff_data
+                }, indent=2))
+            else:
+                print(f"Comparing {args.base} -> {args.target}")
+                print(f"\n[green]+ Added:[/green]   {', '.join(diff_data['added'])}")
+                print(f"[red]- Removed:[/red] {', '.join(diff_data['removed'])}")
+                print(f"[yellow]~ Changed:[/yellow] {', '.join(diff_data['changed'])}")
 
-            for r in results:
-                status = "[green]PASS[/green]" if r["passed"] else "[red]FAIL[/red]"
-                table.add_row(r["test"], r["scenario"], r["result"], status)
-
-            console.print(table)
-            print(f"\nSummary: {passed_count}/{total_count} tests passed")
-            
-        return 0 if passed_count == total_count else 1
-
-    elif args.command == "diff":
-        base_path = Path(args.base)
-        target_path = Path(args.target)
-        
-        if not base_path.exists() or not target_path.exists():
-            print("Error: One or both files not found")
-            return 1
-
-        # Simulated diff
-        diff_data = {
-            "added": ["rule.3", "signal.SIGQUIT"],
-            "removed": ["rule.1"],
-            "changed": ["kernel.mode"]
-        }
-
-        if output_format == "json":
-            print(json.dumps({
-                "base": args.base,
-                "target": args.target,
-                "diff": diff_data
-            }, indent=2))
-        else:
-            print(f"Comparing {args.base} -> {args.target}")
-            print(f"\n[green]+ Added:[/green]   {', '.join(diff_data['added'])}")
-            print(f"[red]- Removed:[/red] {', '.join(diff_data['removed'])}")
-            print(f"[yellow]~ Changed:[/yellow] {', '.join(diff_data['changed'])}")
+            return 0
 
         return 0
+    except Exception as e:
+        is_known = isinstance(e, (FileNotFoundError, ValueError, yaml.YAMLError))
+        msg = str(e) if is_known else "An internal error occurred during policy management"
+        if output_format == "json":
+            print(json.dumps({"status": "error", "message": msg, "type": e.__class__.__name__ if is_known else "InternalError"}, indent=2))
+        else:
+            print(f"Error: {msg}")
+        return 1
 
     return 0
 
