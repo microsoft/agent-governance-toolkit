@@ -93,6 +93,7 @@ export interface RateLimitRecord {
 
 /**
  * Check if an IP has exceeded the rate limit (100 requests per minute).
+ * Evicts stale entries on each call to prevent unbounded Map growth.
  *
  * @param ip - Client IP address
  * @param requestCounts - Map tracking per-IP request counts
@@ -105,6 +106,11 @@ export function checkRateLimit(
     const now = Date.now();
     const windowMs = 60_000;
     const maxRequests = 100;
+
+    // Evict stale entries to prevent unbounded memory growth
+    for (const [key, rec] of requestCounts) {
+        if (now > rec.resetAt) { requestCounts.delete(key); }
+    }
 
     const record = requestCounts.get(ip);
     if (!record || now > record.resetAt) {
@@ -119,28 +125,33 @@ export function checkRateLimit(
 }
 
 /**
- * Validate a session token from a WebSocket upgrade request URL.
+ * Validate a session token from a WebSocket upgrade request.
+ *
+ * Uses the Sec-WebSocket-Protocol header (subprotocol negotiation) instead
+ * of URL query strings. Query strings can leak into proxy logs, browser
+ * history, and debug tools. Subprotocol headers are not logged by default.
+ *
+ * Client sends: `new WebSocket(url, ['governance-v1', token])`
+ * Server validates the second protocol value against the expected token.
  *
  * @param req - Incoming HTTP request (from ws connection event)
  * @param expectedToken - The expected session token
- * @param port - Server port for URL parsing
  * @returns true if the token matches
  */
 export function validateWebSocketToken(
     req: unknown,
     expectedToken: string,
-    port: number
 ): boolean {
     try {
-        const incomingReq = req as { url?: string };
-        const url = incomingReq?.url;
-        if (!url) {
-            return false;
-        }
-        const parsed = new URL(url, `http://localhost:${port}`);
-        return parsed.searchParams.get('token') === expectedToken;
+        const incomingReq = req as { headers?: Record<string, string | string[] | undefined> };
+        const protocolHeader = incomingReq?.headers?.['sec-websocket-protocol'];
+        if (!protocolHeader) { return false; }
+        // Header value is comma-separated: "governance-v1, <token>"
+        const protocols = (typeof protocolHeader === 'string' ? protocolHeader : protocolHeader[0] ?? '')
+            .split(',').map(s => s.trim());
+        return protocols.includes(expectedToken);
     } catch {
-        return false; // Malformed URL in upgrade request
+        return false;
     }
 }
 

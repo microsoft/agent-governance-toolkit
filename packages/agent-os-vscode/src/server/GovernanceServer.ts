@@ -79,8 +79,8 @@ export class GovernanceServer {
             return this._port;
         }
         this._port = await findAvailablePort(port ?? DEFAULT_PORT, DEFAULT_HOST);
-        // SECURITY: Session token in WebSocket URL query string — standard WS auth pattern (RFC 6455).
-        // Server binds to 127.0.0.1 only; token never traverses a network.
+        // SECURITY: Session token via Sec-WebSocket-Protocol subprotocol header.
+        // Avoids query string logging by proxies/debug tools. Server binds to 127.0.0.1 only.
         this._sessionToken = generateSessionToken();
         await this._createHttpServer();
         await this._createWebSocketServer();
@@ -196,11 +196,19 @@ export class GovernanceServer {
             }
             this._wsServer = new WebSocketModule.WebSocketServer({
                 server: this._httpServer,
-                path: '/'
+                path: '/',
+                // Validate session token via subprotocol negotiation.
+                // Client sends ['governance-v1', token]; we validate and accept 'governance-v1'.
+                handleProtocols: (protocols: Set<string>) => {
+                    if (protocols.has(this._sessionToken)) {
+                        return 'governance-v1';
+                    }
+                    return false; // reject connection
+                },
             }) as WebSocketServerLike;
 
             this._wsServer.on('connection', (ws: WebSocketLike, req: unknown) => {
-                if (!validateWebSocketToken(req, this._sessionToken, this._port)) {
+                if (!validateWebSocketToken(req, this._sessionToken)) {
                     ws.close(4001, 'Invalid session token');
                     return;
                 }

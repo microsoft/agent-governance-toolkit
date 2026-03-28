@@ -31,10 +31,17 @@ export interface ServerStartResult {
 /** Shell metacharacters that must not appear in a spawn() path argument. */
 const SHELL_METACHAR = /[;&|`$(){}]/;
 
-/** Validate a Python path is non-empty and free of shell injection characters. */
+/**
+ * Validate a Python path is non-empty and free of shell metacharacters.
+ *
+ * spawn() uses array args (no shell: true), so metacharacters cannot cause
+ * injection — this regex is defense-in-depth. Null bytes are rejected to
+ * prevent path truncation attacks on POSIX systems.
+ */
 export function isValidPythonPath(p: string): boolean {
     if (!p || !p.trim()) { return false; }
     if (SHELL_METACHAR.test(p)) { return false; }
+    if (p.includes('\0')) { return false; }
     return true;
 }
 

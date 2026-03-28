@@ -107,12 +107,16 @@ suite('Session Token', () => {
         const t2 = generateSessionToken();
         assert.notStrictEqual(t1, t2, 'tokens should be unique');
     });
-    test('session token is embedded in WebSocket URL', () => {
+    test('session token is embedded as WebSocket subprotocol', () => {
         const token = 'abc123def456789012345678abcdef01';
         const html = renderBrowserDashboard(9845, token, 'test-nonce', EXTENSION_ROOT);
         assert.ok(
-            html.includes(`?token=${token}`),
-            'WebSocket URL should include session token as query parameter'
+            html.includes(`'governance-v1', '${token}'`),
+            'WebSocket should use subprotocol for token, not query string'
+        );
+        assert.ok(
+            !html.includes(`?token=${token}`),
+            'Token must not appear in URL query string'
         );
     });
 });
@@ -156,30 +160,30 @@ suite('Rate Limiting', () => {
     });
 });
 
-suite('WebSocket Token Validation', () => {
-    test('accepts valid token', () => {
-        const req = { url: '/?token=abc123' };
-        assert.ok(validateWebSocketToken(req, 'abc123', 9845));
+suite('WebSocket Token Validation (Subprotocol)', () => {
+    test('accepts valid token in sec-websocket-protocol header', () => {
+        const req = { headers: { 'sec-websocket-protocol': 'governance-v1, abc123' } };
+        assert.ok(validateWebSocketToken(req, 'abc123'));
     });
 
     test('rejects invalid token', () => {
-        const req = { url: '/?token=wrong' };
-        assert.ok(!validateWebSocketToken(req, 'abc123', 9845));
+        const req = { headers: { 'sec-websocket-protocol': 'governance-v1, wrong' } };
+        assert.ok(!validateWebSocketToken(req, 'abc123'));
     });
 
-    test('rejects missing token', () => {
-        const req = { url: '/' };
-        assert.ok(!validateWebSocketToken(req, 'abc123', 9845));
+    test('rejects missing protocol header', () => {
+        const req = { headers: {} };
+        assert.ok(!validateWebSocketToken(req, 'abc123'));
     });
 
-    test('rejects missing url', () => {
-        assert.ok(!validateWebSocketToken({}, 'abc123', 9845));
-        assert.ok(!validateWebSocketToken(null, 'abc123', 9845));
+    test('rejects missing headers', () => {
+        assert.ok(!validateWebSocketToken({}, 'abc123'));
+        assert.ok(!validateWebSocketToken(null, 'abc123'));
     });
 
-    test('rejects malformed url without throwing', () => {
-        const req = { url: '://bad\x00url' };
-        assert.ok(!validateWebSocketToken(req, 'abc123', 9845));
+    test('accepts token as array header value', () => {
+        const req = { headers: { 'sec-websocket-protocol': ['governance-v1, abc123'] } };
+        assert.ok(validateWebSocketToken(req, 'abc123'));
     });
 });
 

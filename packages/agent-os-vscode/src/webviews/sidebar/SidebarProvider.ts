@@ -75,6 +75,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- SECURITY: 'unsafe-inline' for styles required by VS Code theme CSS variable injection on <body>. -->
+    <!-- Cannot use style nonces/hashes: VS Code injects theme tokens at runtime, outside extension control. -->
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'none';
                    style-src ${webview.cspSource} 'unsafe-inline';

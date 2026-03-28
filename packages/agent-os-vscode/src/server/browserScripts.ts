@@ -19,8 +19,10 @@ export function buildClientScript(wsPort: number, sessionToken: string): string 
     const statusDot = document.getElementById('status-dot');
 
     function connect() {
-        // Intentionally ws:// (not wss://): server binds to 127.0.0.1 only, TLS unnecessary for loopback
-        ws = new WebSocket('ws://127.0.0.1:${wsPort}?token=${sessionToken}');
+        // Token sent via Sec-WebSocket-Protocol header (subprotocol negotiation),
+        // not URL query string, to avoid logging by proxies/debug tools.
+        // Intentionally ws:// (not wss://): server binds to 127.0.0.1 only.
+        ws = new WebSocket('ws://127.0.0.1:${wsPort}', ['governance-v1', '${sessionToken}']);
         ws.onopen = () => { statusDot.classList.remove('disconnected'); };
         ws.onclose = () => { statusDot.classList.add('disconnected'); scheduleReconnect(); };
         ws.onerror = () => { ws.close(); };
