@@ -44,6 +44,7 @@ def policy_violation(msg):
 
 def passed_check(msg):
     print(f"[green]✔ {msg}[/green]", file=sys.stderr)
+    
 
 # ---------------------------------------------------------------------------
 # Lazy imports
