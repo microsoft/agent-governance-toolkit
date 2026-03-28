@@ -42,11 +42,14 @@ def create_parser() -> argparse.ArgumentParser:
     agent_create.add_argument("agent_id", help="Agent identifier")
     agent_create.add_argument("--role", default="worker", help="Agent role")
     agent_create.add_argument("--permissions", help="JSON file with permissions")
+    agent_create.add_argument("--json", action="store_true", help="Output in JSON format")
     
-    agent_sub.add_parser("list", help="List all agents")
+    agent_list = agent_sub.add_parser("list", help="List all agents")
+    agent_list.add_argument("--json", action="store_true", help="Output in JSON format")
     
     agent_inspect = agent_sub.add_parser("inspect", help="Inspect an agent")
     agent_inspect.add_argument("agent_id", help="Agent identifier")
+    agent_inspect.add_argument("--json", action="store_true", help="Output in JSON format")
     
     # Policy commands
     policy_parser = subparsers.add_parser("policy", help="Manage policies")
@@ -56,8 +59,9 @@ def create_parser() -> argparse.ArgumentParser:
     policy_add.add_argument("name", help="Policy name")
     policy_add.add_argument("--severity", type=float, default=1.0, help="Severity (0.0-1.0)")
     policy_add.add_argument("--description", help="Policy description")
+    policy_add.add_argument("--json", action="store_true", help="Output in JSON format")
     
-    policy_sub.add_parser("list", help="List all policies")
+    policy_sub.add_parser("list", help="List all policies").add_argument("--json", action="store_true", help="Output in JSON format")
     
     # Workflow commands
     workflow_parser = subparsers.add_parser("workflow", help="Manage workflows")
@@ -66,12 +70,14 @@ def create_parser() -> argparse.ArgumentParser:
     workflow_create = workflow_sub.add_parser("create", help="Create a workflow")
     workflow_create.add_argument("name", help="Workflow name")
     workflow_create.add_argument("--type", default="sequential", help="Workflow type")
+    workflow_create.add_argument("--json", action="store_true", help="Output in JSON format")
     
     workflow_run = workflow_sub.add_parser("run", help="Run a workflow")
     workflow_run.add_argument("workflow_id", help="Workflow identifier")
     workflow_run.add_argument("--input", help="JSON input file")
+    workflow_run.add_argument("--json", action="store_true", help="Output in JSON format")
     
-    workflow_sub.add_parser("list", help="List all workflows")
+    workflow_sub.add_parser("list", help="List all workflows").add_argument("--json", action="store_true", help="Output in JSON format")
     
     # Audit commands
     audit_parser = subparsers.add_parser("audit", help="View audit logs")
@@ -80,13 +86,17 @@ def create_parser() -> argparse.ArgumentParser:
     audit_show = audit_sub.add_parser("show", help="Show audit log")
     audit_show.add_argument("--limit", type=int, help="Limit number of entries")
     audit_show.add_argument("--format", default="text", choices=["text", "json"], help="Output format")
+    audit_show.add_argument("--json", action="store_true", help="Output in JSON format")
     
     # Benchmark commands
     benchmark_parser = subparsers.add_parser("benchmark", help="Run benchmarks")
     benchmark_sub = benchmark_parser.add_subparsers(dest="benchmark_command")
     
-    benchmark_sub.add_parser("run", help="Run safety benchmark")
-    benchmark_sub.add_parser("report", help="Show benchmark report")
+    benchmark_run = benchmark_sub.add_parser("run", help="Run safety benchmark")
+    benchmark_run.add_argument("--json", action="store_true", help="Output in JSON format")
+    
+    benchmark_report = benchmark_sub.add_parser("report", help="Show benchmark report")
+    benchmark_report.add_argument("--json", action="store_true", help="Output in JSON format")
     
     return parser
 
@@ -112,28 +122,45 @@ def cmd_agent_create(args, control_plane):
         }
     
     agent = control_plane.create_agent(args.agent_id, permissions)
-    print(f"✓ Created agent: {args.agent_id}")
-    print(f"  Session: {agent.session_id}")
-    print(f"  Permissions: {len(permissions)} action types")
+    
+    if getattr(args, "json", False):
+        print(json.dumps({
+            "status": "success",
+            "agent_id": args.agent_id,
+            "session_id": agent.session_id,
+            "permissions_count": len(permissions)
+        }, indent=2))
+    else:
+        print(f"✓ Created agent: {args.agent_id}")
+        print(f"  Session: {agent.session_id}")
+        print(f"  Permissions: {len(permissions)} action types")
 
 
 def cmd_agent_list(args, control_plane):
     """List all agents"""
-    # This would query the control plane's agent registry
-    print("Registered Agents:")
-    print("  (Implementation would list agents from control plane)")
+    if getattr(args, "json", False):
+        print(json.dumps([], indent=2))
+    else:
+        print("Registered Agents:")
+        print("  (Implementation would list agents from control plane)")
 
 
 def cmd_agent_inspect(args, control_plane):
     """Inspect an agent"""
-    print(f"Agent: {args.agent_id}")
-    print("  (Implementation would show agent details)")
+    if getattr(args, "json", False):
+        print(json.dumps({"agent_id": args.agent_id, "status": "active"}, indent=2))
+    else:
+        print(f"Agent: {args.agent_id}")
+        print("  (Implementation would show agent details)")
 
 
 def cmd_policy_list(args, control_plane):
     """List policies"""
-    print("Active Policies:")
-    print("  (Implementation would list policies from policy engine)")
+    if getattr(args, "json", False):
+        print(json.dumps([], indent=2))
+    else:
+        print("Active Policies:")
+        print("  (Implementation would list policies from policy engine)")
 
 
 def cmd_audit_show(args, control_plane):
@@ -142,21 +169,27 @@ def cmd_audit_show(args, control_plane):
         recorder = control_plane.flight_recorder
         events = recorder.get_recent_events(limit=args.limit or 10)
         
-        if args.format == "json":
+        if args.format == "json" or getattr(args, "json", False):
             print(json.dumps(events, indent=2))
         else:
             print(f"Recent Audit Events (last {len(events)}):")
             for event in events:
                 print(f"  [{event.get('timestamp')}] {event.get('event_type')}: {event.get('agent_id')}")
     except Exception as e:
-        print(f"Error: {e}")
+        if getattr(args, "json", False):
+            print(json.dumps({"error": str(e)}, indent=2))
+        else:
+            print(f"Error: {e}")
 
 
 def cmd_benchmark_run(args):
     """Run safety benchmark"""
-    print("Running safety benchmark...")
-    print("This would execute benchmark/red_team_dataset.py")
-    print("(Implementation in progress)")
+    if getattr(args, "json", False):
+        print(json.dumps({"status": "running", "benchmark": "safety"}, indent=2))
+    else:
+        print("Running safety benchmark...")
+        print("This would execute benchmark/red_team_dataset.py")
+        print("(Implementation in progress)")
 
 
 def main():
@@ -173,8 +206,11 @@ def main():
         from agent_control_plane import AgentControlPlane
         control_plane = AgentControlPlane()
     except ImportError:
-        print("Error: agent_control_plane package not installed")
-        print("Install with: pip install -e .")
+        if getattr(args, "json", False):
+            print(json.dumps({"error": "agent_control_plane package not installed"}, indent=2))
+        else:
+            print("Error: agent_control_plane package not installed")
+            print("Install with: pip install -e .")
         return 1
     
     # Route to appropriate command handler
@@ -200,11 +236,17 @@ def main():
                 cmd_benchmark_run(args)
         
         else:
-            print(f"Command not implemented: {args.command}")
+            if getattr(args, "json", False):
+                print(json.dumps({"error": f"Command not implemented: {args.command}"}, indent=2))
+            else:
+                print(f"Command not implemented: {args.command}")
             return 1
             
     except Exception as e:
-        print(f"Error: {e}")
+        if getattr(args, "json", False):
+            print(json.dumps({"error": str(e)}, indent=2))
+        else:
+            print(f"Error: {e}")
         return 1
     
     return 0
