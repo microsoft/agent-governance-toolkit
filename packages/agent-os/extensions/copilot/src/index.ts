@@ -30,13 +30,33 @@ dotenv.config();
 
 const app = express();
 
+const payloadLimit = process.env.PAYLOAD_LIMIT || '1mb';
+
 // Raw body for webhook signature verification
 app.use(express.json({
-    limit: '1mb',
+    limit: payloadLimit, // Limit payload size to prevent DoS attacks via large webhook requests
     verify: (req: any, res, buf) => {
-        req.rawBody = buf;
+        try {
+            req.rawBody = buf;
+        } catch (err) {
+            logger.error('Error in express.json verify function:', { error: err });
+            throw err;
+        }
     }
 }));
+
+// Error handling middleware specifically for DoS oversized payloads
+app.use((err: any, req: Request, res: Response, next: express.NextFunction) => {
+    if (err.type === 'entity.too.large') {
+        logger.warn('Payload too large rejected', { 
+            ip: req.ip, 
+            userAgent: req.headers['user-agent'],
+            limit: payloadLimit
+        });
+        return res.status(413).json({ error: `Payload exceeds ${payloadLimit} limit` });
+    }
+    next(err);
+});
 
 // Initialize components
 const policyEngine = new PolicyEngine();
@@ -93,8 +113,8 @@ app.post('/api/copilot', async (req: Request, res: Response) => {
     try {
         const { messages, copilot_references, copilot_confirmations } = req.body;
         const githubToken = req.headers['x-github-token'] as string;
-        
-        logger.info('Copilot request received', { 
+
+        logger.info('Copilot request received', {
             messageCount: messages?.length,
             hasToken: !!githubToken
         });
@@ -114,7 +134,7 @@ app.post('/api/copilot', async (req: Request, res: Response) => {
 
         // Extract command from message
         const content = userMessage.content || '';
-        
+
         // Handle the chat message
         const response = await extension.handleChatMessage(content, {
             user: { id: 'copilot-user' }
@@ -151,7 +171,7 @@ app.post('/api/webhook', async (req: Request, res: Response) => {
     try {
         const signature = req.headers['x-hub-signature-256'] as string;
         const event = req.headers['x-github-event'] as string;
-        
+
         // Verify webhook signature if secret is configured
         if (process.env.GITHUB_WEBHOOK_SECRET && signature) {
             const rawBody = (req as any).rawBody;
@@ -159,7 +179,7 @@ app.post('/api/webhook', async (req: Request, res: Response) => {
                 .createHmac('sha256', process.env.GITHUB_WEBHOOK_SECRET)
                 .update(rawBody)
                 .digest('hex');
-            
+
             if (signature !== expectedSignature) {
                 logger.warn('Invalid webhook signature');
                 return res.status(401).json({ error: 'Invalid signature' });
@@ -172,24 +192,24 @@ app.post('/api/webhook', async (req: Request, res: Response) => {
         switch (event) {
             case 'installation':
                 if (req.body.action === 'created') {
-                    logger.info('New installation', { 
+                    logger.info('New installation', {
                         installationId: req.body.installation?.id,
                         account: req.body.installation?.account?.login
                     });
                 }
                 break;
-            
+
             case 'installation_repositories':
                 logger.info('Repository access changed', {
                     action: req.body.action,
                     repos: req.body.repositories_added?.length || req.body.repositories_removed?.length
                 });
                 break;
-            
+
             case 'ping':
                 logger.info('Webhook ping received');
                 break;
-            
+
             default:
                 logger.info('Unhandled webhook event', { event });
         }
@@ -207,14 +227,14 @@ app.post('/api/webhook', async (req: Request, res: Response) => {
  */
 app.get('/auth/callback', async (req: Request, res: Response) => {
     const { code, state } = req.query;
-    
+
     if (!code) {
         return res.status(400).send('Missing authorization code');
     }
 
     // In production, exchange code for token and complete setup
     logger.info('OAuth callback received', { hasCode: !!code, hasState: !!state });
-    
+
     res.send(`
         <html>
         <head><title>AgentOS Setup Complete</title></head>
@@ -309,7 +329,7 @@ app.get('/api/templates', (req: Request, res: Response) => {
     const query = req.query.q as string;
     const category = req.query.category as string;
     const limit = parseInt(req.query.limit as string) || 20;
-    
+
     const results = templateGallery.search(query, category as any, undefined, limit);
     res.json(results);
 });

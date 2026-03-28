@@ -147,12 +147,14 @@ npm start
 
 ### Environment Variables
 
-```bash
-# .env
-PORT=3000
-LOG_LEVEL=info
-CMVK_API_ENDPOINT=https://api.agent-os.dev/cmvk
-```
+You can configure the extension using the following environment variables (e.g., via a `.env` file):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | Port for the express server to listen on. |
+| `LOG_LEVEL` | `info` | Verbosity of the logger (`debug`, `info`, `warn`, `error`). |
+| `CMVK_API_ENDPOINT`| `https://api.agent-os.dev/cmvk` | Upstream CMVK verification service endpoint. |
+| `PAYLOAD_LIMIT` | `1mb` | Maximum allowed size for incoming JSON webhook payloads. The limit mitigates memory-exhaustion DoS attacks. You may increase it (e.g., `5mb`) if your existing AgentOS integrations legitimately require enormous JSON payloads. |
 
 ### Repository Policy
 
