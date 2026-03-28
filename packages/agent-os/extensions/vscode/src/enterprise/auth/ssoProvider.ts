@@ -50,13 +50,20 @@ export class EnterpriseAuthProvider {
         this._registerProviders();
     }
 
-    private _loadState(): void {
+    private async _loadState(): Promise<void> {
         const savedState = this._context.globalState.get<AuthState>('agent-os.authState');
         if (savedState) {
             this._state = savedState;
             // Check if token expired
             if (this._state.user?.expiresAt && new Date(this._state.user.expiresAt) < new Date()) {
                 this._state = { isAuthenticated: false };
+            }
+        }
+        // Restore token from SecretStorage
+        if (this._state?.user) {
+            const token = await this._context.secrets.get('agent-os.authToken');
+            if (token) {
+                this._state.user.token = token;
             }
         }
     }
@@ -185,7 +192,16 @@ export class EnterpriseAuthProvider {
     }
 
     private async _saveState(): Promise<void> {
-        await this._context.globalState.update('agent-os.authState', this._state);
+        // Store token in SecretStorage, not globalState
+        if (this._state?.user?.token) {
+            await this._context.secrets.store('agent-os.authToken', this._state.user.token);
+        }
+        // Strip token from globalState persistence
+        const safeState = this._state ? {
+            ...this._state,
+            user: this._state.user ? { ...this._state.user, token: undefined } : undefined,
+        } : null;
+        await this._context.globalState.update('agent-os.authState', safeState);
     }
 
     hasRole(role: string): boolean {
