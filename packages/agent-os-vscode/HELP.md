@@ -124,8 +124,8 @@ violations today. Sortable and filterable.
 |---|---|---|
 | `'unsafe-inline'` for `style-src` in CSP | Required for VS Code theme CSS variable injection (`var(--vscode-*)`). Scripts remain nonce-gated. | Low -- style-only; no script injection vector. |
 | `retainContextWhenHidden: true` on Topology Detail | Preserves force-simulation state across tab switches (~120 animation frames). | Low -- adds ~2 MB memory when backgrounded. |
-| Session token in WebSocket URL query string | WebSocket upgrade requests cannot carry custom headers (RFC 6455). Token is 128-bit `crypto.randomBytes`. | Low -- server binds to 127.0.0.1; token never leaves loopback. |
-| Rate limiter Map without TTL eviction | Server is loopback-only, so the map holds at most one entry (127.0.0.1). | Negligible -- no memory growth risk. |
+| Session token via `Sec-WebSocket-Protocol` subprotocol | Token sent as subprotocol (not URL query string) to avoid proxy/debug logging. 128-bit `crypto.randomBytes`. | Low -- server binds to 127.0.0.1; token never leaves loopback. |
+| Rate limiter Map with TTL eviction | Stale entries evicted on each request. Server is loopback-only, so the map holds at most one entry (127.0.0.1). | Negligible -- no memory growth risk. |
 | `Math.random()` for burn-rate sparkline jitter | Synthetic demo data only, not used for any security or cryptographic purpose. | None -- replaced by real SRE data when backend connects. |
 | `axios` not used; `http` module for server | The governance server uses Node built-in `http`. No external HTTP client dependency. | N/A |
 

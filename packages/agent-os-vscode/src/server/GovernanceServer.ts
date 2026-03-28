@@ -197,13 +197,15 @@ export class GovernanceServer {
             this._wsServer = new WebSocketModule.WebSocketServer({
                 server: this._httpServer,
                 path: '/',
-                // Validate session token via subprotocol negotiation.
-                // Client sends ['governance-v1', token]; we validate and accept 'governance-v1'.
+                // Select 'governance-v1' subprotocol when token is present.
+                // NOTE: handleProtocols does NOT reject connections — ws completes
+                // the upgrade even when false is returned. Real auth is enforced
+                // in the connection handler via validateWebSocketToken().
                 handleProtocols: (protocols: Set<string>) => {
                     if (protocols.has(this._sessionToken)) {
                         return 'governance-v1';
                     }
-                    return false; // reject connection
+                    return false;
                 },
             }) as WebSocketServerLike;
 
