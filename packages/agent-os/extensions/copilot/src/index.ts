@@ -32,6 +32,7 @@ const app = express();
 
 // Raw body for webhook signature verification
 app.use(express.json({
+    limit: '1mb',
     verify: (req: any, res, buf) => {
         req.rawBody = buf;
     }
