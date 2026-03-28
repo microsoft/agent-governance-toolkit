@@ -152,7 +152,16 @@ npm start
 PORT=3000
 LOG_LEVEL=info
 CMVK_API_ENDPOINT=https://api.agent-os.dev/cmvk
+RATE_LIMIT_WINDOW_MS=60000
+RATE_LIMIT_MAX_REQUESTS=100
+OTEL_ENABLED=true
 ```
+
+### HTTP Safety Defaults
+
+- `POST /api/*` request bodies are schema-validated and return `400` for malformed input
+- API routes are protected with configurable rate limiting via environment variables
+- Every response includes an `X-Trace-Id` header to correlate requests with OpenTelemetry spans
 
 ### Repository Policy
 
@@ -213,7 +222,7 @@ tests/
 - All policy checks run locally
 - CMVK is opt-in (code sent only when explicitly requested)
 - Audit logs stored locally only
-- No telemetry or analytics
+- OpenTelemetry tracing is supported for request correlation and can be disabled with `OTEL_ENABLED=false`
 - Secrets never logged or transmitted
 
 ## Performance

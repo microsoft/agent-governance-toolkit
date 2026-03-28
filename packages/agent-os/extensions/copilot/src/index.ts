@@ -15,7 +15,9 @@
  * - GitHub Actions deployment
  */
 
-import express, { Request, Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
+import { context, propagation, SpanStatusCode, trace } from '@opentelemetry/api';
 import { CopilotExtension } from './copilotExtension';
 import { PolicyEngine } from './policyEngine';
 import { CMVKClient } from './cmvkClient';
@@ -23,79 +25,204 @@ import { AuditLogger } from './auditLogger';
 import { TemplateGallery } from './templateGallery';
 import { PolicyLibrary } from './policyLibrary';
 import { logger } from './logger';
+import {
+    complianceValidationSchema,
+    copilotRequestSchema,
+    policyUpdateSchema,
+    validateBody,
+    webhookRequestSchema
+} from './validation';
+import { getTracer, initializeTelemetry, telemetryEnabled } from './telemetry';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 
 dotenv.config();
 
-const app = express();
+const SERVICE_NAME = 'agent-os-copilot-extension';
+const SERVICE_VERSION = '1.0.0';
 
-// Raw body for webhook signature verification
-app.use(express.json({
-    verify: (req: any, res, buf) => {
-        req.rawBody = buf;
+interface TraceableRequest extends Request {
+    rawBody?: Buffer;
+    traceId?: string;
+    spanId?: string;
+}
+
+function parsePositiveInteger(value: string | undefined, fallback: number): number {
+    const parsed = Number.parseInt(value || '', 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+    if (!value) {
+        return fallback;
     }
-}));
 
-// Initialize components
-const policyEngine = new PolicyEngine();
-const cmvkClient = new CMVKClient();
-const auditLogger = new AuditLogger();
-const extension = new CopilotExtension(policyEngine, cmvkClient, auditLogger);
-const templateGallery = new TemplateGallery();
-const policyLibrary = new PolicyLibrary();
-
-// CORS for GitHub
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-GitHub-Token, X-Hub-Signature-256');
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
+    const normalized = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+        return true;
     }
-    next();
-});
+    if (['0', 'false', 'no', 'off'].includes(normalized)) {
+        return false;
+    }
+    return fallback;
+}
 
-// Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
-    res.json({
-        status: 'healthy',
-        version: '1.0.0',
-        service: 'agent-os-copilot-extension',
-        timestamp: new Date().toISOString()
+function verifyWebhookSignature(rawBody: Buffer | undefined, signature: string, secret: string): boolean {
+    if (!rawBody || !signature.startsWith('sha256=')) {
+        return false;
+    }
+
+    const expectedSignature = Buffer.from(
+        'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
+    );
+    const providedSignature = Buffer.from(signature);
+
+    return expectedSignature.length === providedSignature.length
+        && crypto.timingSafeEqual(expectedSignature, providedSignature);
+}
+
+    function resolveTraceId(candidate: string): string {
+        const emptyTraceId = '00000000000000000000000000000000';
+        return candidate && candidate !== emptyTraceId
+        ? candidate
+        : crypto.randomBytes(16).toString('hex');
+    }
+
+export function createApp(): express.Express {
+    initializeTelemetry();
+
+    const app = express();
+    const tracer = getTracer();
+    const startedAt = Date.now();
+
+    // Initialize components
+    const policyEngine = new PolicyEngine();
+    const cmvkClient = new CMVKClient();
+    const auditLogger = new AuditLogger();
+    const extension = new CopilotExtension(policyEngine, cmvkClient, auditLogger);
+    const templateGallery = new TemplateGallery();
+    const policyLibrary = new PolicyLibrary();
+
+    app.disable('x-powered-by');
+
+    // Raw body for webhook signature verification
+    app.use(express.json({
+        limit: process.env.REQUEST_BODY_LIMIT || '1mb',
+        verify: (req: TraceableRequest, _res, buf) => {
+            req.rawBody = Buffer.from(buf);
+        }
+    }));
+
+    app.use((req: TraceableRequest, res: Response, next: NextFunction) => {
+        const extractedContext = propagation.extract(context.active(), req.headers);
+
+        context.with(extractedContext, () => {
+            const span = tracer.startSpan(`${req.method} ${req.path}`);
+            const spanContext = span.spanContext();
+            const traceId = resolveTraceId(spanContext.traceId);
+            req.traceId = traceId;
+            req.spanId = spanContext.spanId;
+            res.setHeader('X-Trace-Id', traceId);
+
+            res.on('finish', () => {
+                span.setAttributes({
+                    'http.method': req.method,
+                    'http.route': req.path,
+                    'http.status_code': res.statusCode,
+                    'agentos.trace_id': traceId
+                });
+                span.setStatus({
+                    code: res.statusCode >= 500 ? SpanStatusCode.ERROR : SpanStatusCode.OK
+                });
+                span.end();
+            });
+
+            context.with(trace.setSpan(context.active(), span), next);
+        });
     });
-});
 
-// Root endpoint - service info
-app.get('/', (req: Request, res: Response) => {
-    res.json({
-        name: 'AgentOS Copilot Extension',
-        version: '1.0.0',
-        description: 'Build safe AI agents with natural language',
-        documentation: 'https://github.com/microsoft/agent-governance-toolkit/tree/main/docstutorials/copilot-extension/',
-        endpoints: {
-            health: '/health',
-            copilot: '/api/copilot',
-            webhook: '/api/webhook',
-            templates: '/api/templates',
-            compliance: '/api/compliance'
+    // CORS for GitHub
+    app.use((req, res, next) => {
+        res.header('Access-Control-Allow-Origin', '*');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-GitHub-Token, X-Hub-Signature-256, Traceparent');
+        if (req.method === 'OPTIONS') {
+            return res.sendStatus(200);
+        }
+        next();
+    });
+
+    const apiRateLimiter = rateLimit({
+        windowMs: parsePositiveInteger(process.env.RATE_LIMIT_WINDOW_MS, 60_000),
+        limit: parsePositiveInteger(process.env.RATE_LIMIT_MAX_REQUESTS, 100),
+        standardHeaders: 'draft-8',
+        legacyHeaders: false,
+        skipSuccessfulRequests: parseBoolean(process.env.RATE_LIMIT_SKIP_SUCCESSFUL_REQUESTS, false),
+        message: {
+            error: 'Too many requests',
+            details: 'Rate limit exceeded for AgentOS API endpoints. Please retry later.'
+        },
+        handler: (req: TraceableRequest, res: Response) => {
+            logger.warn('Rate limit exceeded', {
+                path: req.path,
+                method: req.method,
+                traceId: req.traceId,
+                ip: req.ip
+            });
+            res.status(429).json({
+                error: 'Too many requests',
+                details: 'Rate limit exceeded for AgentOS API endpoints. Please retry later.'
+            });
         }
     });
-});
+
+    app.use('/api', apiRateLimiter);
+
+    // Health check endpoint
+    app.get('/health', (req: TraceableRequest, res: Response) => {
+        res.json({
+            status: 'healthy',
+            version: SERVICE_VERSION,
+            service: SERVICE_NAME,
+            timestamp: new Date().toISOString(),
+            uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
+            traceId: req.traceId,
+            telemetry: telemetryEnabled()
+        });
+    });
+
+// Root endpoint - service info
+    app.get('/', (req: TraceableRequest, res: Response) => {
+        res.json({
+            name: 'AgentOS Copilot Extension',
+            version: SERVICE_VERSION,
+            description: 'Build safe AI agents with natural language',
+            documentation: 'https://github.com/microsoft/agent-governance-toolkit/tree/main/docs/tutorials/copilot-extension/',
+            traceId: req.traceId,
+            endpoints: {
+                health: '/health',
+                copilot: '/api/copilot',
+                webhook: '/api/webhook',
+                templates: '/api/templates',
+                compliance: '/api/compliance'
+            }
+        });
+    });
 
 /**
  * GitHub Copilot Extension endpoint
  * This is the main endpoint that GitHub Copilot calls
  * POST /api/copilot
  */
-app.post('/api/copilot', async (req: Request, res: Response) => {
+    app.post('/api/copilot', validateBody(copilotRequestSchema), async (req: TraceableRequest, res: Response) => {
     try {
         const { messages, copilot_references, copilot_confirmations } = req.body;
         const githubToken = req.headers['x-github-token'] as string;
         
         logger.info('Copilot request received', { 
             messageCount: messages?.length,
-            hasToken: !!githubToken
+            hasToken: !!githubToken,
+            traceId: req.traceId
         });
 
         // Get the latest user message
@@ -129,7 +256,7 @@ app.post('/api/copilot', async (req: Request, res: Response) => {
             }]
         });
     } catch (error) {
-        logger.error('Copilot endpoint error', { error });
+        logger.error('Copilot endpoint error', { error, traceId: req.traceId });
         res.json({
             choices: [{
                 message: {
@@ -146,26 +273,21 @@ app.post('/api/copilot', async (req: Request, res: Response) => {
  * Handles installation and other GitHub events
  * POST /api/webhook
  */
-app.post('/api/webhook', async (req: Request, res: Response) => {
+    app.post('/api/webhook', validateBody(webhookRequestSchema), async (req: TraceableRequest, res: Response) => {
     try {
         const signature = req.headers['x-hub-signature-256'] as string;
         const event = req.headers['x-github-event'] as string;
         
         // Verify webhook signature if secret is configured
         if (process.env.GITHUB_WEBHOOK_SECRET && signature) {
-            const rawBody = (req as any).rawBody;
-            const expectedSignature = 'sha256=' + crypto
-                .createHmac('sha256', process.env.GITHUB_WEBHOOK_SECRET)
-                .update(rawBody)
-                .digest('hex');
-            
-            if (signature !== expectedSignature) {
-                logger.warn('Invalid webhook signature');
+            const rawBody = req.rawBody;
+            if (!verifyWebhookSignature(rawBody, signature, process.env.GITHUB_WEBHOOK_SECRET)) {
+                logger.warn('Invalid webhook signature', { traceId: req.traceId, event });
                 return res.status(401).json({ error: 'Invalid signature' });
             }
         }
 
-        logger.info('Webhook received', { event, action: req.body.action });
+        logger.info('Webhook received', { event, action: req.body.action, traceId: req.traceId });
 
         // Handle different webhook events
         switch (event) {
@@ -173,7 +295,8 @@ app.post('/api/webhook', async (req: Request, res: Response) => {
                 if (req.body.action === 'created') {
                     logger.info('New installation', { 
                         installationId: req.body.installation?.id,
-                        account: req.body.installation?.account?.login
+                        account: req.body.installation?.account?.login,
+                        traceId: req.traceId
                     });
                 }
                 break;
@@ -181,7 +304,8 @@ app.post('/api/webhook', async (req: Request, res: Response) => {
             case 'installation_repositories':
                 logger.info('Repository access changed', {
                     action: req.body.action,
-                    repos: req.body.repositories_added?.length || req.body.repositories_removed?.length
+                    repos: req.body.repositories_added?.length || req.body.repositories_removed?.length,
+                    traceId: req.traceId
                 });
                 break;
             
@@ -195,16 +319,16 @@ app.post('/api/webhook', async (req: Request, res: Response) => {
 
         res.json({ received: true });
     } catch (error) {
-        logger.error('Webhook error', { error });
+        logger.error('Webhook error', { error, traceId: req.traceId });
         res.status(500).json({ error: 'Webhook processing failed' });
     }
-});
+    });
 
 /**
  * OAuth callback endpoint
  * GET /auth/callback
  */
-app.get('/auth/callback', async (req: Request, res: Response) => {
+    app.get('/auth/callback', async (req: TraceableRequest, res: Response) => {
     const { code, state } = req.query;
     
     if (!code) {
@@ -212,7 +336,7 @@ app.get('/auth/callback', async (req: Request, res: Response) => {
     }
 
     // In production, exchange code for token and complete setup
-    logger.info('OAuth callback received', { hasCode: !!code, hasState: !!state });
+    logger.info('OAuth callback received', { hasCode: !!code, hasState: !!state, traceId: req.traceId });
     
     res.send(`
         <html>
@@ -231,7 +355,7 @@ app.get('/auth/callback', async (req: Request, res: Response) => {
  * Setup page
  * GET /setup
  */
-app.get('/setup', (req: Request, res: Response) => {
+    app.get('/setup', (_req: Request, res: Response) => {
     res.send(`
         <html>
         <head>
@@ -275,22 +399,22 @@ app.get('/setup', (req: Request, res: Response) => {
  * Audit endpoint - Get audit log
  * GET /api/audit
  */
-app.get('/api/audit', (req: Request, res: Response) => {
-    const limit = parseInt(req.query.limit as string) || 20;
-    const logs = auditLogger.getRecent(limit);
-    res.json({ logs });
-});
+    app.get('/api/audit', (req: Request, res: Response) => {
+        const limit = parseInt(req.query.limit as string) || 20;
+        const logs = auditLogger.getRecent(limit);
+        res.json({ logs });
+    });
 
 /**
  * Policy endpoint - Get or update policies
  * GET/POST /api/policy
  */
-app.get('/api/policy', (req: Request, res: Response) => {
-    const policies = policyEngine.getActivePolicies();
-    res.json({ policies });
-});
+    app.get('/api/policy', (_req: Request, res: Response) => {
+        const policies = policyEngine.getActivePolicies();
+        res.json({ policies });
+    });
 
-app.post('/api/policy', async (req: Request, res: Response) => {
+    app.post('/api/policy', validateBody(policyUpdateSchema), async (req: TraceableRequest, res: Response) => {
     try {
         const { policy, enabled } = req.body;
         policyEngine.setPolicy(policy, enabled);
@@ -298,48 +422,49 @@ app.post('/api/policy', async (req: Request, res: Response) => {
     } catch (error) {
         res.status(400).json({ error: 'Invalid policy configuration' });
     }
-});
+    });
 
 /**
  * Templates endpoint - List and search templates
  * GET /api/templates
  */
-app.get('/api/templates', (req: Request, res: Response) => {
-    const query = req.query.q as string;
-    const category = req.query.category as string;
-    const limit = parseInt(req.query.limit as string) || 20;
-    
-    const results = templateGallery.search(query, category as any, undefined, limit);
-    res.json(results);
-});
+    app.get('/api/templates', (req: Request, res: Response) => {
+        const query = req.query.q as string;
+        const category = req.query.category as string;
+        const limit = parseInt(req.query.limit as string) || 20;
+        
+        const results = templateGallery.search(query, category as any, undefined, limit);
+        res.json(results);
+    });
 
 /**
  * Template by ID
  * GET /api/templates/:id
  */
-app.get('/api/templates/:id', (req: Request, res: Response) => {
-    const template = templateGallery.getById(req.params.id);
-    if (template) {
-        res.json(template);
-    } else {
-        res.status(404).json({ error: 'Template not found' });
-    }
-});
+    app.get('/api/templates/:id', (req: Request, res: Response) => {
+        const templateId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+        const template = templateGallery.getById(templateId);
+        if (template) {
+            res.json(template);
+        } else {
+            res.status(404).json({ error: 'Template not found' });
+        }
+    });
 
 /**
  * Compliance frameworks
  * GET /api/compliance
  */
-app.get('/api/compliance', (req: Request, res: Response) => {
-    const frameworks = policyLibrary.getFrameworks();
-    res.json({ frameworks });
-});
+    app.get('/api/compliance', (_req: Request, res: Response) => {
+        const frameworks = policyLibrary.getFrameworks();
+        res.json({ frameworks });
+    });
 
 /**
  * Validate code against compliance framework
  * POST /api/compliance/validate
  */
-app.post('/api/compliance/validate', (req: Request, res: Response) => {
+    app.post('/api/compliance/validate', validateBody(complianceValidationSchema), (req: TraceableRequest, res: Response) => {
     try {
         const { code, language, framework } = req.body;
         const policyId = `${framework}-standard`;
@@ -348,31 +473,39 @@ app.post('/api/compliance/validate', (req: Request, res: Response) => {
     } catch (error) {
         res.status(400).json({ error: 'Validation failed' });
     }
-});
+    });
 
 /**
  * Health check with detailed status
  * GET /api/status
  */
-app.get('/api/status', (req: Request, res: Response) => {
-    const stats = auditLogger.getStats();
-    res.json({
-        status: 'healthy',
-        version: '1.0.0',
-        service: 'agent-os-copilot-extension',
-        stats: {
-            blockedToday: stats.blockedToday,
-            reviewsToday: stats.cmvkReviewsToday,
-            templatesAvailable: templateGallery.search().totalCount,
-            activePolicies: policyEngine.getActivePolicies().filter(p => p.enabled).length
-        }
+    app.get('/api/status', (req: TraceableRequest, res: Response) => {
+        const stats = auditLogger.getStats();
+        res.json({
+            status: 'healthy',
+            version: SERVICE_VERSION,
+            service: SERVICE_NAME,
+            traceId: req.traceId,
+            uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
+            telemetry: telemetryEnabled(),
+            stats: {
+                blockedToday: stats.blockedToday,
+                reviewsToday: stats.cmvkReviewsToday,
+                templatesAvailable: templateGallery.search().totalCount,
+                activePolicies: policyEngine.getActivePolicies().filter(p => p.enabled).length
+            }
+        });
     });
-});
+
+    return app;
+}
+
+const app = createApp();
 
 // Start server only if not in serverless environment
 const PORT = process.env.PORT || 3000;
 
-if (process.env.VERCEL !== '1') {
+if (process.env.VERCEL !== '1' && process.env.NODE_ENV !== 'test') {
     app.listen(PORT, () => {
         logger.info(`Agent OS Copilot Extension running on port ${PORT}`);
         logger.info('Endpoints:');
