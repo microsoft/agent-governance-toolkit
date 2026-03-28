@@ -702,11 +702,11 @@ def _fallback_sql_check(query: str, config: Optional[SQLPolicyConfig] = None) ->
 
     for stmt in config.blocked_statements:
         if stmt == "DROP":
-            patterns.append(r'\bDROP\s+(TABLE|DATABASE|INDEX|VIEW|SCHEMA|PROCEDURE|FUNCTION|TRIGGER)\b')
+            patterns.append(r'\bDROP\s+(TABLE|DATABASE|INDEX|VIEW|SCHEMA|PROCEDURE|FUNCTION|TRIGGER|MATERIALIZED\s+VIEW|ROLE|USER)\b')
         elif stmt == "TRUNCATE":
             patterns.append(r'\bTRUNCATE\s+(TABLE\s+)?\w+')
         elif stmt == "ALTER":
-            patterns.append(r'\bALTER\s+(TABLE|DATABASE|SCHEMA)\b')
+            patterns.append(r'\bALTER\s+(TABLE|DATABASE|SCHEMA|ROLE|USER)\b')
         elif stmt == "GRANT":
             patterns.append(r'\bGRANT\b')
         elif stmt == "REVOKE":
@@ -843,9 +843,10 @@ def _build_policy_rules(sql_config: SQLPolicyConfig) -> List[PolicyRule]:
             # Parse the SQL query into AST
             try:
                 statements = sqlglot.parse(query)
-            except sqlglot.errors.ParseError:
-                # If parsing fails, fall back to conservative blocking
-                return _fallback_sql_check(query, sql_config)
+            except Exception:
+                # Fail-closed: deny when SQL parsing fails
+                logger.warning("SQL parsing failed — denying query as fail-safe.")
+                return False
 
             for statement in statements:
                 if statement is None:
@@ -918,8 +919,12 @@ def _build_policy_rules(sql_config: SQLPolicyConfig) -> List[PolicyRule]:
             return True
 
         except ImportError:
-            # sqlglot not installed, fall back to keyword matching
-            return _fallback_sql_check(query, sql_config)
+            # Fail-closed: deny when sqlglot is not available
+            logger.warning(
+                "sqlglot not installed — denying SQL query as fail-safe. "
+                "Install sqlglot for proper SQL validation."
+            )
+            return False
 
     return [
         PolicyRule(

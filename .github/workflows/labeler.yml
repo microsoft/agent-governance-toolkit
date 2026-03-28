@@ -6,6 +6,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+# SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
 jobs:
   label:
     runs-on: ubuntu-latest

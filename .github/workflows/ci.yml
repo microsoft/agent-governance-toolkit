@@ -160,6 +160,76 @@ jobs:
             echo "No tests/ directory — smoke import passed"
           fi
 
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Dependency confusion scan
+        run: python scripts/check_dependency_confusion.py --strict
+      - name: Notebook pip-install audit
+        run: |
+          python -c "
+          import json, glob, sys, re
+          REGISTERED = {
+              'agent-os-kernel','agentmesh-platform','agent-hypervisor',
+              'agentmesh-runtime','agent-sre','agent-governance-toolkit',
+              'agentmesh-lightning','agentmesh-marketplace',
+              'pydantic','pyyaml','cryptography','pynacl','click','rich',
+              'httpx','aiohttp','fastapi','uvicorn','structlog','numpy',
+              'scipy','openai','anthropic','langchain','crewai',
+          }
+          bad = []
+          for nb in glob.glob('**/*.ipynb', recursive=True):
+              if 'node_modules' in nb or '.ipynb_checkpoints' in nb:
+                  continue
+              try:
+                  cells = json.load(open(nb))['cells']
+              except Exception:
+                  continue
+              for c in cells:
+                  for line in c.get('source', []):
+                      if 'pip install' in line and not line.strip().startswith('#'):
+                          pkgs = re.findall(r'(?:pip install\s+)(.+)', line)
+                          if pkgs:
+                              for p in pkgs[0].split():
+                                  name = re.sub(r'\[.*\]', '', p).strip()
+                                  if (name and not name.startswith('-') and not name.startswith('.')
+                                      and not name.startswith('http') and name not in REGISTERED
+                                      and not name.startswith('--')):
+                                      bad.append(f'{nb}: {name}')
+          if bad:
+              print('UNREGISTERED PACKAGES IN NOTEBOOKS:')
+              for b in bad:
+                  print(f'  {b}')
+              sys.exit(1)
+          print(f'OK: All notebook pip install packages are registered')
+          "
+
+  workflow-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Audit pull_request_target workflows
+        run: |
+          echo "=== Checking pull_request_target safety ==="
+          UNSAFE=0
+          for f in .github/workflows/*.yml; do
+            if grep -q 'pull_request_target' "$f"; then
+              # Only flag if actions/checkout has ref: pointing to head (unsafe)
+              # Uses awk to check checkout blocks specifically, not unrelated lines
+              if awk '/actions\/checkout/{found=1} found && /ref:.*head\.(ref|sha)/{print; exit 1}' "$f" 2>/dev/null; then
+                echo "UNSAFE: $f checks out PR head in pull_request_target context"
+                UNSAFE=1
+              else
+                echo "OK: $f (pull_request_target, base-only checkout)"
+              fi
+            fi
+          done
+          if [ $UNSAFE -eq 1 ]; then exit 1; fi
+
   test-integrations-ts:
     runs-on: ubuntu-latest
     steps:
