@@ -344,7 +344,7 @@ stages:
               ls -la $(Pipeline.Workspace)/nuget-publish/
             displayName: 'List packages'
 
-          - task: NuGetCommand@2
+          - task: DotNetCoreCLI@2
             displayName: 'Push to NuGet.org'
             inputs:
               command: 'push'
