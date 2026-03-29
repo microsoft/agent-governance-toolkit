@@ -1,18 +1,20 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
-"""Chaos scheduler — manual trigger only in Public Preview.
+# Community Edition — basic implementation
+"""Chaos scheduler — cron-based scheduling with blackout windows.
 
-Cron-based scheduling is not available. Use manual triggering instead.
+Supports cron-based schedule matching, blackout window enforcement,
+and progressive severity escalation.
 """
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from datetime import datetime
+from croniter import croniter
 
+if TYPE_CHECKING:
     from agent_sre.chaos.scheduler import (
         ChaosSchedule,
         ScheduleExecution,
@@ -20,7 +22,7 @@ if TYPE_CHECKING:
 
 
 class ChaosScheduler:
-    """Manages chaos experiment schedules (manual trigger only in Public Preview)."""
+    """Manages chaos experiment schedules with cron matching and blackout windows."""
 
     def __init__(self, schedules: list[ChaosSchedule] | None = None) -> None:
         self._schedules: dict[str, ChaosSchedule] = {
@@ -29,24 +31,41 @@ class ChaosScheduler:
         self._executions: dict[str, list[ScheduleExecution]] = {}
 
     def should_run(self, schedule_id: str, now: datetime | None = None) -> bool:
-        """Check if a schedule should fire — not available in Public Preview."""
-        raise NotImplementedError(
-            "Cron-based scheduling is not available in Public Preview. "
-            "Use manual triggering instead."
-        )
+        """Check if a schedule should fire at the given time.
+
+        Evaluates the cron expression against the current time,
+        checks that the schedule is enabled, and verifies it is
+        not in a blackout window.
+        """
+        schedule = self._schedules.get(schedule_id)
+        if schedule is None:
+            return False
+
+        if not schedule.enabled:
+            return False
+
+        now = now or datetime.now(tz=timezone.utc)
+
+        # Check blackout first
+        if self.is_in_blackout(schedule, now):
+            return False
+
+        # Use croniter.match to check if 'now' matches the cron expression
+        return croniter.match(schedule.cron_expression, now)
 
     def get_due_schedules(self, now: datetime | None = None) -> list[ChaosSchedule]:
-        """Return all schedules that are due — not available in Public Preview."""
-        raise NotImplementedError(
-            "Cron-based scheduling is not available in Public Preview. "
-            "Use manual triggering instead."
-        )
+        """Return all schedules that are due to run at the given time."""
+        now = now or datetime.now(tz=timezone.utc)
+        return [
+            schedule
+            for schedule in self._schedules.values()
+            if self.should_run(schedule.id, now)
+        ]
 
     def is_in_blackout(self, schedule: ChaosSchedule, now: datetime | None = None) -> bool:
-        """Check if in blackout window — not available in Public Preview."""
-        raise NotImplementedError(
-            "Cron-based scheduling is not available in Public Preview."
-        )
+        """Check if the current time falls within any of the schedule's blackout windows."""
+        now = now or datetime.now(tz=timezone.utc)
+        return any(bw.contains(now) for bw in schedule.blackout_windows)
 
     def get_current_severity(self, schedule_id: str) -> float:
         """Compute current severity based on progressive config and execution history."""

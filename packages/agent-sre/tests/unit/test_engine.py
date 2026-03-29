@@ -125,10 +125,11 @@ class TestReplayEngine:
     def test_what_if(self) -> None:
         engine = ReplayEngine()
         trace = self._make_trace()
-        with pytest.raises(NotImplementedError):
-            engine.what_if(trace, overrides={
-                "calculator": {"result": 5},
-            })
+        result = engine.what_if(trace, overrides={
+            "calculator": {"result": 5},
+        })
+        assert result.has_divergence is True
+        assert any(d.diff_type == DiffType.OUTPUT_MISMATCH for d in result.diffs)
 
     def test_steps(self) -> None:
         engine = ReplayEngine()
