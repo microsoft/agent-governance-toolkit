@@ -1,6 +1,7 @@
 package agentmesh
 
 import (
+	"path/filepath"
 	"testing"
 )
 
@@ -99,5 +100,34 @@ func TestScoreBounds(t *testing.T) {
 	s = tm.GetTrustScore("bounded")
 	if s.Overall < 0.0 {
 		t.Errorf("score = %f, should not go below 0.0", s.Overall)
+	}
+}
+
+func TestTrustPersistence(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "trust.json")
+
+	cfg := DefaultTrustConfig()
+	cfg.PersistPath = path
+
+	tm := NewTrustManager(cfg)
+	tm.RecordSuccess("agent-p1", 0.1)
+	score1 := tm.GetTrustScore("agent-p1")
+
+	// Create a new manager that loads from disk
+	tm2 := NewTrustManager(cfg)
+	score2 := tm2.GetTrustScore("agent-p1")
+
+	if score2.Overall != score1.Overall {
+		t.Errorf("persisted score = %f, want %f", score2.Overall, score1.Overall)
+	}
+}
+
+func TestTrustPersistenceNoPath(t *testing.T) {
+	tm := NewTrustManager(DefaultTrustConfig())
+	tm.RecordSuccess("agent-np", 0.1)
+	score := tm.GetTrustScore("agent-np")
+	if score.Overall <= 0.5 {
+		t.Errorf("score = %f, want > 0.5", score.Overall)
 	}
 }
