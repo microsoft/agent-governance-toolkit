@@ -6,6 +6,9 @@ using Xunit;
 
 namespace AgentGovernance.Tests;
 
+// Serialize metrics tests to avoid .NET Meter global state interference
+// when multiple test classes create GovernanceMetrics instances in parallel.
+[Collection("MetricsTests")]
 public class GovernanceMetricsTests : IDisposable
 {
     private readonly GovernanceMetrics _metrics = new();
