@@ -36,6 +36,15 @@ class ChaosScheduler:
         Evaluates the cron expression against the current time,
         checks that the schedule is enabled, and verifies it is
         not in a blackout window.
+
+        Args:
+            schedule_id: Identifier of the schedule to check.
+            now: Point in time to evaluate. Defaults to UTC now.
+
+        Returns:
+            True if the schedule's cron expression matches *now*,
+            the schedule is enabled, and *now* is not inside a
+            blackout window. False otherwise.
         """
         schedule = self._schedules.get(schedule_id)
         if schedule is None:
@@ -54,7 +63,15 @@ class ChaosScheduler:
         return croniter.match(schedule.cron_expression, now)
 
     def get_due_schedules(self, now: datetime | None = None) -> list[ChaosSchedule]:
-        """Return all schedules that are due to run at the given time."""
+        """Return all schedules that are due to run at the given time.
+
+        Args:
+            now: Point in time to evaluate. Defaults to UTC now.
+
+        Returns:
+            List of enabled ChaosSchedule objects whose cron expression
+            matches *now* and that are not in a blackout window.
+        """
         now = now or datetime.now(tz=timezone.utc)
         return [
             schedule
@@ -63,7 +80,16 @@ class ChaosScheduler:
         ]
 
     def is_in_blackout(self, schedule: ChaosSchedule, now: datetime | None = None) -> bool:
-        """Check if the current time falls within any of the schedule's blackout windows."""
+        """Check if the current time falls within any blackout window.
+
+        Args:
+            schedule: The schedule whose blackout windows to check.
+            now: Point in time to evaluate. Defaults to UTC now.
+
+        Returns:
+            True if *now* falls inside any of the schedule's
+            blackout windows (supports midnight-wrap).
+        """
         now = now or datetime.now(tz=timezone.utc)
         return any(bw.contains(now) for bw in schedule.blackout_windows)
 

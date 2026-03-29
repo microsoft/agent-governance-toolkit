@@ -112,8 +112,12 @@ class CostOptimizer:
         A model is Pareto-optimal if no other model is both cheaper
         AND higher quality while meeting the task constraints.
 
+        Args:
+            task: Task profile specifying quality and latency constraints.
+
         Returns:
-            List of Pareto-optimal CostEstimate objects, sorted by cost.
+            List of Pareto-optimal ``CostEstimate`` objects sorted by
+            ascending cost. Empty if no model meets the constraints.
         """
         # Get all feasible estimates
         feasible: list[CostEstimate] = []

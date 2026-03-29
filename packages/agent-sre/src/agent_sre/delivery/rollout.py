@@ -308,7 +308,20 @@ class ShadowMode:
         """Record a comparison between current and candidate agent outputs.
 
         Uses the custom similarity function if set, otherwise falls back
-        to exact equality.
+        to exact equality (1.0 for equal, 0.0 otherwise).
+
+        Args:
+            request_id: Unique identifier for this comparison.
+            current_output: Output from the current (production) agent.
+            candidate_output: Output from the candidate agent.
+            current_latency_ms: Latency of the current agent in ms.
+            candidate_latency_ms: Latency of the candidate agent in ms.
+            current_cost_usd: Cost of the current agent invocation.
+            candidate_cost_usd: Cost of the candidate agent invocation.
+
+        Returns:
+            A ``ShadowComparison`` recording match status, similarity
+            score, and latency/cost deltas.
         """
         if self._similarity_fn is not None:
             similarity = self._similarity_fn(current_output, candidate_output)
@@ -336,11 +349,24 @@ class ShadowMode:
         return self._result
 
     def is_passing(self, min_confidence: float = 0.8) -> bool:
-        """Check if the delivery preview confidence meets the threshold."""
+        """Check if the shadow evaluation confidence meets the threshold.
+
+        Args:
+            min_confidence: Minimum required confidence score (0.0–1.0).
+
+        Returns:
+            True if the accumulated result's confidence score is at
+            or above *min_confidence*.
+        """
         return self._result.confidence_score >= min_confidence
 
     def finish(self) -> ShadowResult:
-        """Complete the delivery preview session and return the result."""
+        """Complete the shadow evaluation session.
+
+        Returns:
+            The finalized ``ShadowResult`` with ``end_time`` set and
+            all accumulated comparisons.
+        """
         self._result.finish()
         return self._result
 
@@ -539,7 +565,11 @@ class CanaryRollout:
         return ((self.current_step_index + 1) / len(self.steps)) * 100
 
     def start(self) -> None:
-        """Begin the rollout, moving to the first step."""
+        """Begin the rollout, moving to the first step.
+
+        Sets state to ``CANARY``, ``current_step_index`` to 0, and
+        records a ``step_start`` event. No-op if the rollout has no steps.
+        """
         if not self.steps:
             return
         self.state = RolloutState.CANARY
@@ -548,9 +578,14 @@ class CanaryRollout:
         self._record_event("step_start", details={"weight": self.steps[0].weight})
 
     def advance(self) -> bool:
-        """Move to the next step. Returns True if advanced, False if already at last step.
+        """Move to the next step in the rollout.
 
-        Automatically promotes the rollout if advancing past the last step.
+        Automatically promotes (completes) the rollout if advancing
+        past the last step.
+
+        Returns:
+            True if advanced to the next step. False if already at the
+            last step (rollout is promoted) or the rollout is not active.
         """
         if self.state not in (RolloutState.CANARY, RolloutState.SHADOW):
             return False
@@ -570,9 +605,15 @@ class CanaryRollout:
         return True
 
     def check_rollback(self, metrics: dict[str, float]) -> bool:
-        """Evaluate rollback conditions against provided metrics.
+        """Evaluate rollback conditions against live metrics.
 
-        Returns True and triggers rollback if any condition is met.
+        Args:
+            metrics: Dict mapping metric names to their current values
+                (e.g., ``{"error_rate": 0.10}``).
+
+        Returns:
+            True if any rollback condition was triggered (rollout is
+            now in ROLLED_BACK state). False if all conditions pass.
         """
         for condition in self.rollback_conditions:
             value = metrics.get(condition.metric)
@@ -586,7 +627,13 @@ class CanaryRollout:
     def analyze_step(self, metrics: dict[str, float]) -> bool:
         """Evaluate the current step's analysis criteria against metrics.
 
-        Returns True if all criteria pass, False otherwise.
+        Args:
+            metrics: Dict mapping metric names to their current values
+                (e.g., ``{"success_rate": 0.995}``).
+
+        Returns:
+            True if **all** criteria for the current step pass.
+            False if any criterion fails or no step is active.
         """
         step = self.current_step
         if step is None:
@@ -612,7 +659,12 @@ class CanaryRollout:
         return all_pass
 
     def rollback(self, reason: str = "") -> None:
-        """Roll back the rollout to the previous stable state."""
+        """Roll back the rollout to the previous stable state.
+
+        Args:
+            reason: Human-readable explanation for the rollback,
+                recorded in the rollback event.
+        """
         self.state = RolloutState.ROLLED_BACK
         self.completed_at = time.time()
         self._record_event("rollback", details={"reason": reason})

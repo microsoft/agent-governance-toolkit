@@ -226,6 +226,13 @@ class IncidentDetector:
 
         Groups signals into a single incident, using the highest severity
         among the signals and combining their descriptions.
+
+        Args:
+            signals: List of correlated signals to merge into one incident.
+
+        Returns:
+            A new ``Incident`` with aggregated severity, combined title,
+            and auto-response actions applied for all signal types.
         """
         # Use the highest severity (lowest P-number) among all signals
         severity_order = [IncidentSeverity.P1, IncidentSeverity.P2, IncidentSeverity.P3, IncidentSeverity.P4]
@@ -275,6 +282,13 @@ class IncidentDetector:
         Signals are correlated if they come from the same source and
         fall within the correlation window. Only returns non-duplicate
         signals with distinct signal types.
+
+        Args:
+            signal: The incoming signal to find correlates for.
+
+        Returns:
+            List of distinct-type signals from the same source that
+            arrived within the correlation window. May be empty.
         """
         cutoff = time.time() - self.correlation_window
         seen_types = {signal.signal_type}
