@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 package agentmesh
 
 import "time"
@@ -6,9 +9,11 @@ import "time"
 type PolicyDecision string
 
 const (
-	Allow  PolicyDecision = "allow"
-	Deny   PolicyDecision = "deny"
-	Review PolicyDecision = "review"
+	Allow            PolicyDecision = "allow"
+	Deny             PolicyDecision = "deny"
+	Review           PolicyDecision = "review"
+	RateLimit        PolicyDecision = "rate_limit"
+	RequiresApproval PolicyDecision = "requires_approval"
 )
 
 // TrustConfig holds configuration for the TrustManager.
@@ -19,6 +24,7 @@ type TrustConfig struct {
 	PenaltyFactor   float64
 	TierThresholds  TierThresholds
 	MinInteractions int
+	PersistPath     string
 }
 
 // TierThresholds defines score boundaries for trust tiers.
