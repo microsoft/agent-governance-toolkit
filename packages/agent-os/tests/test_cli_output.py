@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 from agent_os.policies.cli import success,error,warn,policy_violation,passed_check
 
 def test_success(capsys):
