@@ -97,8 +97,6 @@ jobs:
             import-module: a2a_agentmesh
           - package: crewai-agentmesh
             import-module: crewai_agentmesh
-          - package: dify-plugin
-            import-module: provider
           - package: flowise-agentmesh
             import-module: flowise_agentmesh
           - package: haystack-agentmesh
