@@ -4,14 +4,16 @@
 //! YAML-based policy evaluation engine with four-way decisions:
 //! allow, deny, requires-approval, and rate-limit.
 
-use crate::types::PolicyDecision;
-use serde::Deserialize;
+use crate::types::{
+    CandidateDecision, ConflictResolutionStrategy, PolicyDecision, PolicyScope, ResolutionResult,
+};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Mutex, RwLock};
 use std::time::Instant;
 
 /// A single rule inside a policy profile.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolicyRule {
     pub name: String,
     #[serde(rename = "type")]
@@ -30,10 +32,16 @@ pub struct PolicyRule {
     pub window: String,
     #[serde(default)]
     pub conditions: HashMap<String, serde_yaml::Value>,
+    /// Rule priority — higher values are evaluated first.
+    #[serde(default)]
+    pub priority: u32,
+    /// The scope at which this rule applies.
+    #[serde(default)]
+    pub scope: PolicyScope,
 }
 
 /// A loaded policy profile parsed from YAML.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolicyProfile {
     pub version: String,
     pub agent: String,
@@ -47,14 +55,105 @@ pub struct PolicyProfile {
 pub struct PolicyEngine {
     profile: RwLock<Option<PolicyProfile>>,
     rate_counters: Mutex<HashMap<String, (u64, Instant)>>,
+    conflict_strategy: ConflictResolutionStrategy,
 }
 
 impl PolicyEngine {
-    /// Create an empty policy engine (allows everything).
+    /// Create an empty policy engine (allows everything) with default
+    /// [`ConflictResolutionStrategy::PriorityFirstMatch`].
     pub fn new() -> Self {
         Self {
             profile: RwLock::new(None),
             rate_counters: Mutex::new(HashMap::new()),
+            conflict_strategy: ConflictResolutionStrategy::PriorityFirstMatch,
+        }
+    }
+
+    /// Create a policy engine with a specific conflict resolution strategy.
+    pub fn with_strategy(strategy: ConflictResolutionStrategy) -> Self {
+        Self {
+            profile: RwLock::new(None),
+            rate_counters: Mutex::new(HashMap::new()),
+            conflict_strategy: strategy,
+        }
+    }
+
+    /// Return the active conflict resolution strategy.
+    pub fn strategy(&self) -> ConflictResolutionStrategy {
+        self.conflict_strategy
+    }
+
+    /// Resolve conflicts among multiple candidate decisions using the
+    /// configured strategy.
+    ///
+    /// Returns a [`ResolutionResult`] describing which decision won,
+    /// whether a conflict was detected, and how many candidates were
+    /// evaluated.
+    pub fn resolve_conflicts(&self, candidates: &[CandidateDecision]) -> ResolutionResult {
+        if candidates.is_empty() {
+            return ResolutionResult {
+                winning_decision: PolicyDecision::Allow,
+                strategy_used: self.conflict_strategy,
+                conflict_detected: false,
+                candidates_evaluated: 0,
+            };
+        }
+
+        if candidates.len() == 1 {
+            return ResolutionResult {
+                winning_decision: candidates[0].decision.clone(),
+                strategy_used: self.conflict_strategy,
+                conflict_detected: false,
+                candidates_evaluated: 1,
+            };
+        }
+
+        let has_allow = candidates.iter().any(|c| c.decision.is_allowed());
+        let has_deny = candidates
+            .iter()
+            .any(|c| matches!(c.decision, PolicyDecision::Deny(_)));
+        let conflict_detected = has_allow && has_deny;
+
+        let mut sorted = candidates.to_vec();
+
+        let winning = match self.conflict_strategy {
+            ConflictResolutionStrategy::DenyOverrides => {
+                sorted.sort_by(|a, b| b.priority.cmp(&a.priority));
+                match sorted
+                    .iter()
+                    .find(|c| matches!(c.decision, PolicyDecision::Deny(_)))
+                {
+                    Some(d) => d.clone(),
+                    None => sorted[0].clone(),
+                }
+            }
+            ConflictResolutionStrategy::AllowOverrides => {
+                sorted.sort_by(|a, b| b.priority.cmp(&a.priority));
+                match sorted.iter().find(|c| c.decision.is_allowed()) {
+                    Some(a) => a.clone(),
+                    None => sorted[0].clone(),
+                }
+            }
+            ConflictResolutionStrategy::PriorityFirstMatch => {
+                sorted.sort_by(|a, b| b.priority.cmp(&a.priority));
+                sorted[0].clone()
+            }
+            ConflictResolutionStrategy::MostSpecificWins => {
+                sorted.sort_by(|a, b| {
+                    b.scope
+                        .specificity()
+                        .cmp(&a.scope.specificity())
+                        .then(b.priority.cmp(&a.priority))
+                });
+                sorted[0].clone()
+            }
+        };
+
+        ResolutionResult {
+            winning_decision: winning.decision,
+            strategy_used: self.conflict_strategy,
+            conflict_detected,
+            candidates_evaluated: candidates.len(),
         }
     }
 
@@ -343,5 +442,211 @@ policies:
         assert!(action_matches("anything", "*"));
         assert!(action_matches("data.read", "data.read"));
         assert!(!action_matches("data.write", "data.read"));
+    }
+
+    #[test]
+    fn test_with_strategy_constructor() {
+        let engine = PolicyEngine::with_strategy(ConflictResolutionStrategy::DenyOverrides);
+        assert_eq!(engine.strategy(), ConflictResolutionStrategy::DenyOverrides);
+    }
+
+    #[test]
+    fn test_default_strategy_is_priority_first_match() {
+        let engine = PolicyEngine::new();
+        assert_eq!(
+            engine.strategy(),
+            ConflictResolutionStrategy::PriorityFirstMatch
+        );
+    }
+
+    #[test]
+    fn test_resolve_conflicts_empty() {
+        let engine = PolicyEngine::new();
+        let result = engine.resolve_conflicts(&[]);
+        assert_eq!(result.winning_decision, PolicyDecision::Allow);
+        assert!(!result.conflict_detected);
+        assert_eq!(result.candidates_evaluated, 0);
+    }
+
+    #[test]
+    fn test_resolve_conflicts_single() {
+        let engine = PolicyEngine::new();
+        let candidates = vec![CandidateDecision {
+            decision: PolicyDecision::Deny("blocked".into()),
+            priority: 1,
+            scope: PolicyScope::Global,
+            rule_name: "rule-1".into(),
+        }];
+        let result = engine.resolve_conflicts(&candidates);
+        assert!(matches!(result.winning_decision, PolicyDecision::Deny(_)));
+        assert!(!result.conflict_detected);
+        assert_eq!(result.candidates_evaluated, 1);
+    }
+
+    #[test]
+    fn test_resolve_conflicts_deny_overrides() {
+        let engine = PolicyEngine::with_strategy(ConflictResolutionStrategy::DenyOverrides);
+        let candidates = vec![
+            CandidateDecision {
+                decision: PolicyDecision::Allow,
+                priority: 10,
+                scope: PolicyScope::Global,
+                rule_name: "allow-rule".into(),
+            },
+            CandidateDecision {
+                decision: PolicyDecision::Deny("no".into()),
+                priority: 5,
+                scope: PolicyScope::Global,
+                rule_name: "deny-rule".into(),
+            },
+        ];
+        let result = engine.resolve_conflicts(&candidates);
+        assert!(matches!(result.winning_decision, PolicyDecision::Deny(_)));
+        assert!(result.conflict_detected);
+    }
+
+    #[test]
+    fn test_resolve_conflicts_allow_overrides() {
+        let engine = PolicyEngine::with_strategy(ConflictResolutionStrategy::AllowOverrides);
+        let candidates = vec![
+            CandidateDecision {
+                decision: PolicyDecision::Deny("blocked".into()),
+                priority: 10,
+                scope: PolicyScope::Global,
+                rule_name: "deny-rule".into(),
+            },
+            CandidateDecision {
+                decision: PolicyDecision::Allow,
+                priority: 5,
+                scope: PolicyScope::Global,
+                rule_name: "allow-rule".into(),
+            },
+        ];
+        let result = engine.resolve_conflicts(&candidates);
+        assert_eq!(result.winning_decision, PolicyDecision::Allow);
+        assert!(result.conflict_detected);
+    }
+
+    #[test]
+    fn test_resolve_conflicts_priority_first_match() {
+        let engine = PolicyEngine::with_strategy(ConflictResolutionStrategy::PriorityFirstMatch);
+        let candidates = vec![
+            CandidateDecision {
+                decision: PolicyDecision::Deny("low".into()),
+                priority: 1,
+                scope: PolicyScope::Global,
+                rule_name: "low-rule".into(),
+            },
+            CandidateDecision {
+                decision: PolicyDecision::Allow,
+                priority: 10,
+                scope: PolicyScope::Global,
+                rule_name: "high-rule".into(),
+            },
+        ];
+        let result = engine.resolve_conflicts(&candidates);
+        assert_eq!(result.winning_decision, PolicyDecision::Allow);
+        assert!(result.conflict_detected);
+    }
+
+    #[test]
+    fn test_resolve_conflicts_most_specific_wins() {
+        let engine = PolicyEngine::with_strategy(ConflictResolutionStrategy::MostSpecificWins);
+        let candidates = vec![
+            CandidateDecision {
+                decision: PolicyDecision::Allow,
+                priority: 100,
+                scope: PolicyScope::Global,
+                rule_name: "global-allow".into(),
+            },
+            CandidateDecision {
+                decision: PolicyDecision::Deny("agent-deny".into()),
+                priority: 1,
+                scope: PolicyScope::Agent,
+                rule_name: "agent-deny".into(),
+            },
+        ];
+        let result = engine.resolve_conflicts(&candidates);
+        assert!(matches!(result.winning_decision, PolicyDecision::Deny(_)));
+        assert!(result.conflict_detected);
+    }
+
+    #[test]
+    fn test_resolve_conflicts_most_specific_tiebreaker() {
+        let engine = PolicyEngine::with_strategy(ConflictResolutionStrategy::MostSpecificWins);
+        let candidates = vec![
+            CandidateDecision {
+                decision: PolicyDecision::Deny("low".into()),
+                priority: 1,
+                scope: PolicyScope::Tenant,
+                rule_name: "tenant-low".into(),
+            },
+            CandidateDecision {
+                decision: PolicyDecision::Allow,
+                priority: 10,
+                scope: PolicyScope::Tenant,
+                rule_name: "tenant-high".into(),
+            },
+        ];
+        let result = engine.resolve_conflicts(&candidates);
+        assert_eq!(result.winning_decision, PolicyDecision::Allow);
+    }
+
+    #[test]
+    fn test_policy_rule_priority_and_scope_defaults() {
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: simple-rule
+    type: capability
+    allowed_actions:
+      - "data.read"
+"#;
+        let profile: PolicyProfile = serde_yaml::from_str(yaml).unwrap();
+        let rule = &profile.policies[0];
+        assert_eq!(rule.priority, 0);
+        assert_eq!(rule.scope, PolicyScope::Global);
+    }
+
+    #[test]
+    fn test_policy_rule_with_priority_and_scope() {
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: agent-rule
+    type: capability
+    allowed_actions:
+      - "data.read"
+    priority: 10
+    scope: agent
+"#;
+        let profile: PolicyProfile = serde_yaml::from_str(yaml).unwrap();
+        let rule = &profile.policies[0];
+        assert_eq!(rule.priority, 10);
+        assert_eq!(rule.scope, PolicyScope::Agent);
+    }
+
+    #[test]
+    fn test_no_conflict_when_all_same_decision() {
+        let engine = PolicyEngine::with_strategy(ConflictResolutionStrategy::DenyOverrides);
+        let candidates = vec![
+            CandidateDecision {
+                decision: PolicyDecision::Allow,
+                priority: 5,
+                scope: PolicyScope::Global,
+                rule_name: "r1".into(),
+            },
+            CandidateDecision {
+                decision: PolicyDecision::Allow,
+                priority: 10,
+                scope: PolicyScope::Tenant,
+                rule_name: "r2".into(),
+            },
+        ];
+        let result = engine.resolve_conflicts(&candidates);
+        assert!(!result.conflict_detected);
+        assert_eq!(result.winning_decision, PolicyDecision::Allow);
     }
 }
