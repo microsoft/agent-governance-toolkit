@@ -160,3 +160,74 @@ service AgentMeshIdentityService {
   // Verify trust of a peer agent
   rpc VerifyPeerTrust(TrustVerificationRequest) returns (TrustVerificationResponse);
 }
+
+// ─── Governance Service ───────────────────────────────────────────────────────
+// Issue #558: Governance RPCs for policy evaluation, audit recording,
+// and trust-score queries.
+
+// PolicyRequest describes an action an agent wants to take,
+// evaluated against the mesh-wide policy engine.
+message PolicyRequest {
+  string agent_did = 1;                       // Requesting agent's DID
+  string action = 2;                          // Action to evaluate (e.g. "write:data")
+  string resource = 3;                        // Target resource
+  map<string, string> context = 4;            // Additional context for policy evaluation
+  google.protobuf.Timestamp requested_at = 5;
+}
+
+// PolicyDecision is the governance engine's verdict.
+message PolicyDecision {
+  bool allowed = 1;                           // Whether the action is permitted
+  string effect = 2;                          // "allow" | "deny" | "warn" | "require_approval"
+  string matched_rule = 3;                    // Name of the matching policy rule
+  string reason = 4;                          // Human-readable explanation
+  repeated string required_approvers = 5;     // Approvers if effect is require_approval
+  google.protobuf.Timestamp evaluated_at = 6;
+}
+
+// AuditEntry records a governance event in the tamper-evident audit log.
+message AuditEntry {
+  string agent_did = 1;                       // Agent that performed the action
+  string action = 2;                          // What was done
+  string decision = 3;                        // Policy decision that applied
+  string resource = 4;                        // Target resource
+  map<string, string> metadata = 5;           // Arbitrary metadata
+  string hash = 6;                            // SHA-256 hash of this entry
+  string previous_hash = 7;                   // Hash of previous entry (chain)
+  google.protobuf.Timestamp timestamp = 8;
+}
+
+// AuditAck confirms that an audit entry was persisted.
+message AuditAck {
+  bool accepted = 1;                          // Whether the entry was stored
+  string entry_id = 2;                        // Unique ID assigned to the entry
+  string hash = 3;                            // Confirmed hash
+  google.protobuf.Timestamp recorded_at = 4;
+}
+
+// TrustQuery asks for the current trust score of a specific agent.
+message TrustQuery {
+  string agent_did = 1;                       // Agent to query
+  bool include_dimensions = 2;               // Whether to include per-dimension breakdown
+}
+
+// TrustScoreResult returns the trust score and optional dimensional breakdown.
+message TrustScoreResult {
+  string agent_did = 1;                       // Queried agent
+  int32 overall_score = 2;                    // 0-1000 overall trust score
+  string tier = 3;                            // "Untrusted" | "Provisional" | "Trusted" | "Verified"
+  TrustScoreDimensions dimensions = 4;        // Per-dimension scores (if requested)
+  google.protobuf.Timestamp evaluated_at = 5;
+}
+
+// GovernanceService provides policy evaluation, audit recording, and trust queries.
+service GovernanceService {
+  // Evaluate a proposed action against the policy engine.
+  rpc EvaluatePolicy (PolicyRequest) returns (PolicyDecision);
+
+  // Record an audit entry in the tamper-evident log.
+  rpc RecordAudit (AuditEntry) returns (AuditAck);
+
+  // Get the current trust score for an agent.
+  rpc GetTrustScore (TrustQuery) returns (TrustScoreResult);
+}
