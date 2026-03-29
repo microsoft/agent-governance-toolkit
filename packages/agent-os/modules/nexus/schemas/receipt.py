@@ -6,7 +6,7 @@ Job Receipt Schemas
 Defines receipts for job completion and outcome verification.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional, Any
 from pydantic import BaseModel, Field
 import hashlib
@@ -37,7 +37,7 @@ class JobReceipt(BaseModel):
         description="SHA-256 hash of the task specification"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When the receipt was created"
     )
     
@@ -63,7 +63,7 @@ class JobCompletionReceipt(JobReceipt):
         description="Outcome of the job"
     )
     completed_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When the job completed"
     )
     duration_ms: int = Field(
@@ -203,6 +203,6 @@ class DisputeReceipt(BaseModel):
     )
     
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When dispute was raised"
     )

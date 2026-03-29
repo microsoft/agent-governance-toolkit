@@ -44,7 +44,7 @@ class TrustScore:
     uptime_days: int = 0
     
     # Timestamps
-    calculated_at: datetime = field(default_factory=datetime.utcnow)
+    calculated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_activity: Optional[datetime] = None
     
     @classmethod
@@ -127,7 +127,7 @@ class SlashEvent:
     trace_id: Optional[str] = None
     
     # Timestamps
-    occurred_at: datetime = field(default_factory=datetime.utcnow)
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Broadcasting
     broadcast_to_network: bool = True

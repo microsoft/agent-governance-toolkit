@@ -12,6 +12,7 @@ from typing import Optional, Literal
 import hashlib
 import uuid
 import asyncio
+from . import crypto
 
 from .schemas.escrow import (
     EscrowRequest,
@@ -345,6 +346,7 @@ class ProofOfOutcome:
         timeout_seconds: int = 3600,
         require_scak: bool = True,
         drift_threshold: float = 0.15,
+        private_key: Optional[any] = None,
     ) -> EscrowReceipt:
         """Create an escrow for a task."""
         request = EscrowRequest(
@@ -357,8 +359,12 @@ class ProofOfOutcome:
             scak_drift_threshold=drift_threshold,
         )
         
-        # TODO: Generate actual signature
-        signature = f"sig_{requester_did}_{task_hash[:8]}"
+        # Generate actual signature if private key is provided
+        if private_key:
+            signature = crypto.sign_data(private_key, request)
+        else:
+            # Legacy signature for backward compatibility
+            signature = f"sig_{requester_did}_{task_hash[:8]}"
         
         return await self.escrow_manager.create_escrow(request, signature)
     
