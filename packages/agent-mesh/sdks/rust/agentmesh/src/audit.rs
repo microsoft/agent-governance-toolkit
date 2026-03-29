@@ -14,19 +14,30 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// creating a tamper-evident chain from the genesis entry.
 pub struct AuditLogger {
     entries: Mutex<Vec<AuditEntry>>,
+    max_entries: Option<usize>,
 }
 
 impl AuditLogger {
-    /// Create an empty audit logger.
+    /// Create an empty audit logger with no entry limit.
     pub fn new() -> Self {
         Self {
             entries: Mutex::new(Vec::new()),
+            max_entries: None,
+        }
+    }
+
+    /// Create an audit logger that retains at most `max` entries,
+    /// evicting the oldest when the limit is exceeded.
+    pub fn with_max_entries(max: usize) -> Self {
+        Self {
+            entries: Mutex::new(Vec::new()),
+            max_entries: Some(max),
         }
     }
 
     /// Append a new entry to the audit chain and return it.
     pub fn log(&self, agent_id: &str, action: &str, decision: &str) -> AuditEntry {
-        let mut entries = self.entries.lock().unwrap();
+        let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
         let seq = entries.len() as u64;
         let prev_hash = entries
             .last()
@@ -51,6 +62,15 @@ impl AuditLogger {
         };
 
         entries.push(entry.clone());
+
+        // Evict oldest entries when the retention limit is exceeded.
+        if let Some(max) = self.max_entries {
+            if entries.len() > max {
+                let overflow = entries.len() - max;
+                entries.drain(..overflow);
+            }
+        }
+
         entry
     }
 
@@ -59,7 +79,7 @@ impl AuditLogger {
     /// Returns `true` if every entry's hash is correct and linked to the
     /// previous entry's hash.
     pub fn verify(&self) -> bool {
-        let entries = self.entries.lock().unwrap();
+        let entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
         for (i, entry) in entries.iter().enumerate() {
             let expected_prev = if i == 0 {
                 String::new()
@@ -87,14 +107,23 @@ impl AuditLogger {
 
     /// Return all audit entries.
     pub fn entries(&self) -> Vec<AuditEntry> {
-        self.entries.lock().unwrap().clone()
+        self.entries
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Serialise all audit entries to a JSON string.
+    pub fn export_json(&self) -> String {
+        let entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
+        serde_json::to_string(&*entries).unwrap_or_else(|_| "[]".to_string())
     }
 
     /// Return entries matching the given filter.
     pub fn get_entries(&self, filter: &AuditFilter) -> Vec<AuditEntry> {
         self.entries
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .iter()
             .filter(|e| {
                 if let Some(ref id) = filter.agent_id {
@@ -239,5 +268,55 @@ mod tests {
             hash,
             "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
         );
+    }
+
+    #[test]
+    fn test_export_json() {
+        let logger = AuditLogger::new();
+        logger.log("agent-1", "data.read", "allow");
+        logger.log("agent-2", "shell:rm", "deny");
+        let json = logger.export_json();
+        let parsed: Vec<AuditEntry> = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].agent_id, "agent-1");
+        assert_eq!(parsed[1].agent_id, "agent-2");
+    }
+
+    #[test]
+    fn test_export_json_empty() {
+        let logger = AuditLogger::new();
+        let json = logger.export_json();
+        assert_eq!(json, "[]");
+    }
+
+    #[test]
+    fn test_max_entries_eviction() {
+        let logger = AuditLogger::with_max_entries(3);
+        for i in 0..5 {
+            logger.log("agent", &format!("action-{}", i), "allow");
+        }
+        let entries = logger.entries();
+        assert_eq!(entries.len(), 3);
+        // Oldest entries (action-0, action-1) should have been evicted
+        assert_eq!(entries[0].action, "action-2");
+        assert_eq!(entries[1].action, "action-3");
+        assert_eq!(entries[2].action, "action-4");
+    }
+
+    #[test]
+    fn test_max_entries_not_exceeded() {
+        let logger = AuditLogger::with_max_entries(10);
+        logger.log("a", "x", "allow");
+        logger.log("b", "y", "deny");
+        assert_eq!(logger.entries().len(), 2);
+    }
+
+    #[test]
+    fn test_no_limit_grows_unbounded() {
+        let logger = AuditLogger::new();
+        for i in 0..100 {
+            logger.log("a", &format!("act-{}", i), "allow");
+        }
+        assert_eq!(logger.entries().len(), 100);
     }
 }
