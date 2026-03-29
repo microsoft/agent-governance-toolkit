@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-export { AgentIdentity, IdentityRegistry } from './identity';
+export { AgentIdentity, IdentityRegistry, stripKeyPrefix, safeBase64Decode } from './identity';
 export { TrustManager } from './trust';
 export { PolicyEngine, PolicyConflictResolver } from './policy';
 export type { PolicyDecision } from './policy';

@@ -1,5 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+import * as fs from 'fs';
 import { AgentIdentity } from './identity';
 import {
   TrustConfig,
@@ -27,8 +28,9 @@ interface AgentTrustState {
  * with configurable decay.
  */
 export class TrustManager {
-  private readonly config: Required<TrustConfig>;
+  private readonly config: Required<Omit<TrustConfig, 'persistPath'>>;
   private readonly agents: Map<string, AgentTrustState> = new Map();
+  private readonly persistPath?: string;
 
   constructor(config?: TrustConfig) {
     this.config = {
@@ -36,6 +38,10 @@ export class TrustManager {
       decayFactor: config?.decayFactor ?? 0.95,
       thresholds: { ...DEFAULT_THRESHOLDS, ...config?.thresholds },
     };
+    this.persistPath = config?.persistPath;
+    if (this.persistPath) {
+      this.loadFromDisk();
+    }
   }
 
   /** Verify a peer agent's identity and return a trust result. */
@@ -83,6 +89,7 @@ export class TrustManager {
     state.successes += 1;
     state.score = Math.min(1, state.score + reward);
     state.lastUpdate = Date.now();
+    this.saveToDisk();
   }
 
   /** Record a failed interaction with an agent. */
@@ -92,6 +99,7 @@ export class TrustManager {
     state.failures += 1;
     state.score = Math.max(0, state.score - penalty);
     state.lastUpdate = Date.now();
+    this.saveToDisk();
   }
 
   // ── Private helpers ──
@@ -132,5 +140,31 @@ export class TrustManager {
     const total = state.successes + state.failures;
     if (total === 0) return this.config.initialScore;
     return Math.round((state.successes / total) * 1000) / 1000;
+  }
+
+  private saveToDisk(): void {
+    if (!this.persistPath) return;
+    try {
+      const data: Record<string, AgentTrustState> = {};
+      for (const [key, value] of this.agents) {
+        data[key] = value;
+      }
+      fs.writeFileSync(this.persistPath, JSON.stringify(data), 'utf-8');
+    } catch {
+      // best-effort: ignore write errors
+    }
+  }
+
+  private loadFromDisk(): void {
+    if (!this.persistPath) return;
+    try {
+      const raw = fs.readFileSync(this.persistPath, 'utf-8');
+      const data = JSON.parse(raw) as Record<string, AgentTrustState>;
+      for (const [key, value] of Object.entries(data)) {
+        this.agents.set(key, value);
+      }
+    } catch {
+      // best-effort: ignore missing or corrupt files
+    }
   }
 }
