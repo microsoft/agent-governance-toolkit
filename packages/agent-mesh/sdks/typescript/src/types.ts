@@ -36,6 +36,8 @@ export interface TrustConfig {
     trusted: number;
     verified: number;
   };
+  /** Optional file path for persisting trust scores across restarts */
+  persistPath?: string;
 }
 
 export type TrustTier = 'Untrusted' | 'Provisional' | 'Trusted' | 'Verified';
