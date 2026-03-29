@@ -26,7 +26,7 @@ impl AuditLogger {
 
     /// Append a new entry to the audit chain and return it.
     pub fn log(&self, agent_id: &str, action: &str, decision: &str) -> AuditEntry {
-        let mut entries = self.entries.lock().unwrap();
+        let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
         let seq = entries.len() as u64;
         let prev_hash = entries
             .last()
@@ -59,7 +59,7 @@ impl AuditLogger {
     /// Returns `true` if every entry's hash is correct and linked to the
     /// previous entry's hash.
     pub fn verify(&self) -> bool {
-        let entries = self.entries.lock().unwrap();
+        let entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
         for (i, entry) in entries.iter().enumerate() {
             let expected_prev = if i == 0 {
                 String::new()
@@ -87,14 +87,14 @@ impl AuditLogger {
 
     /// Return all audit entries.
     pub fn entries(&self) -> Vec<AuditEntry> {
-        self.entries.lock().unwrap().clone()
+        self.entries.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     /// Return entries matching the given filter.
     pub fn get_entries(&self, filter: &AuditFilter) -> Vec<AuditEntry> {
         self.entries
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .iter()
             .filter(|e| {
                 if let Some(ref id) = filter.agent_id {

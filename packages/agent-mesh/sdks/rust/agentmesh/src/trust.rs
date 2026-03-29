@@ -71,7 +71,7 @@ impl TrustManager {
     ///
     /// Returns the default score if the agent is unknown.
     pub fn get_trust_score(&self, agent_id: &str) -> TrustScore {
-        let agents = self.agents.read().unwrap();
+        let agents = self.agents.read().unwrap_or_else(|e| e.into_inner());
         match agents.get(agent_id) {
             Some(state) => TrustScore {
                 agent_id: state.agent_id.clone(),
@@ -95,7 +95,7 @@ impl TrustManager {
 
     /// Record a successful interaction (increases trust score).
     pub fn record_success(&self, agent_id: &str) {
-        let mut agents = self.agents.write().unwrap();
+        let mut agents = self.agents.write().unwrap_or_else(|e| e.into_inner());
         let state = agents
             .entry(agent_id.to_string())
             .or_insert_with(|| AgentState {
@@ -111,7 +111,7 @@ impl TrustManager {
 
     /// Record a failed or suspicious interaction (decreases trust score).
     pub fn record_failure(&self, agent_id: &str) {
-        let mut agents = self.agents.write().unwrap();
+        let mut agents = self.agents.write().unwrap_or_else(|e| e.into_inner());
         let state = agents
             .entry(agent_id.to_string())
             .or_insert_with(|| AgentState {
@@ -127,7 +127,7 @@ impl TrustManager {
 
     /// Set the trust score directly for an agent.
     pub fn set_trust(&self, agent_id: &str, score: u32) {
-        let mut agents = self.agents.write().unwrap();
+        let mut agents = self.agents.write().unwrap_or_else(|e| e.into_inner());
         let state = agents
             .entry(agent_id.to_string())
             .or_insert_with(|| AgentState {
@@ -144,7 +144,7 @@ impl TrustManager {
     pub fn all_agents(&self) -> Vec<TrustScore> {
         self.agents
             .read()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .map(|s| TrustScore {
                 agent_id: s.agent_id.clone(),
@@ -160,7 +160,7 @@ impl TrustManager {
         if let Some(path) = &self.config.persist_path {
             if let Ok(data) = std::fs::read_to_string(path) {
                 if let Ok(states) = serde_json::from_str::<Vec<AgentState>>(&data) {
-                    let mut agents = self.agents.write().unwrap();
+                    let mut agents = self.agents.write().unwrap_or_else(|e| e.into_inner());
                     for state in states {
                         agents.insert(state.agent_id.clone(), state);
                     }
@@ -172,7 +172,7 @@ impl TrustManager {
     /// Best-effort save to persistence file.
     fn save_to_disk(&self) {
         if let Some(path) = &self.config.persist_path {
-            let agents = self.agents.read().unwrap();
+            let agents = self.agents.read().unwrap_or_else(|e| e.into_inner());
             let states: Vec<&AgentState> = agents.values().collect();
             if let Ok(json) = serde_json::to_string(&states) {
                 let _ = std::fs::write(path, json);
