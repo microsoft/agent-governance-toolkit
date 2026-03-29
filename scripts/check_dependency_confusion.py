@@ -42,17 +42,36 @@ REGISTERED_PACKAGES = {
     "sentence-transformers", "prometheus-client", "opentelemetry-api",
     "opentelemetry-sdk", "fhir.resources", "hl7apy", "zenpy", "freshdesk",
     "google-adk", "safety", "jupyter", "vitest", "tsup", "typescript",
+    # Dashboard / visualization (used in examples)
+    "streamlit", "plotly", "pandas", "networkx", "matplotlib", "pyvis",
+    # Async / caching (used in examples)
+    "aioredis", "aiofiles", "aiosqlite",
+    # Document processing / NLP (used in examples)
+    "pypdf", "python-docx", "pdfplumber", "beautifulsoup4", "lxml",
+    "spacy", "nltk", "tiktoken", "scikit-learn",
+    # Dev tools
+    "black", "flake8", "types-PyYAML",
+    # Infrastructure / runtime (used in examples)
+    "docker", "huggingface-hub", "python-dotenv", "python-dateutil",
+    "python-multipart", "python-json-logger", "langchain-openai",
+    # Slack / messaging
+    "slack-sdk", "slack-bolt",
+    # Telemetry
+    "opentelemetry-instrumentation-fastapi",
+    # Internal cross-package references (not on PyPI)
+    "agent-primitives", "emk",
     # With extras (base name is what matters)
 }
 
-# Patterns that are always safe
+# Patterns that are always safe (not package names)
 SAFE_PATTERNS = {
     "-e", "--editable", "-r", "--requirement", "--upgrade", "--no-cache-dir",
     "--quiet", "--require-hashes", "--hash", ".", "..", "../..",
+    "pip", "install", "%pip",
 }
 
 PIP_INSTALL_RE = re.compile(
-    r'pip\s+install\s+(.+?)(?:\s*\\?\s*$|(?=\s*&&|\s*\||\s*;|\s*#))',
+    r'(?:%?pip)\s+install\s+(.+?)(?:\s*\\?\s*$|(?=\s*&&|\s*\||\s*;|\s*#))',
     re.MULTILINE,
 )
 
@@ -66,12 +85,15 @@ def extract_package_names(install_args: str) -> list[str]:
             continue
         if token.startswith((".", "/", "\\", "http", "git+")):
             continue
+        # Skip tokens that look like code, not package names
+        if any(c in token for c in ('(', ')', '=', '"', "'", ":")):
+            continue
         # Strip extras: package[extra] -> package
         base = re.sub(r'\[.*\]', '', token)
         # Strip version specifiers: package>=1.0 -> package
         base = re.split(r'[><=!~]', base)[0]
         # Strip markdown/quote artifacts
-        base = base.strip('`"\'(){}')
+        base = base.strip('`"\'(){}%')
         if base and base not in SAFE_PATTERNS:
             packages.append(base)
     return packages
