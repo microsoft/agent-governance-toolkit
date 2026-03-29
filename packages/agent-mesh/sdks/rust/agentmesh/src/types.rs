@@ -87,11 +87,78 @@ pub struct AuditEntry {
 }
 
 /// Filter for querying audit entries.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct AuditFilter {
     pub agent_id: Option<String>,
     pub action: Option<String>,
     pub decision: Option<String>,
+}
+
+/// Conflict resolution strategy when multiple policy rules produce different decisions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConflictResolutionStrategy {
+    /// Any deny decision overrides allows.
+    DenyOverrides,
+    /// Any allow decision overrides denies.
+    AllowOverrides,
+    /// The candidate with the highest priority wins.
+    PriorityFirstMatch,
+    /// The most specific scope wins, with priority as tiebreaker.
+    MostSpecificWins,
+}
+
+impl Default for ConflictResolutionStrategy {
+    fn default() -> Self {
+        ConflictResolutionStrategy::PriorityFirstMatch
+    }
+}
+
+/// The scope at which a policy rule applies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PolicyScope {
+    /// Applies to all tenants and agents.
+    Global,
+    /// Applies to a specific tenant.
+    Tenant,
+    /// Applies to a specific agent.
+    Agent,
+}
+
+impl PolicyScope {
+    /// Returns a numeric specificity value (higher = more specific).
+    pub fn specificity(self) -> u32 {
+        match self {
+            PolicyScope::Global => 0,
+            PolicyScope::Tenant => 1,
+            PolicyScope::Agent => 2,
+        }
+    }
+}
+
+impl Default for PolicyScope {
+    fn default() -> Self {
+        PolicyScope::Global
+    }
+}
+
+/// A candidate decision produced by a single policy rule evaluation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CandidateDecision {
+    pub decision: PolicyDecision,
+    pub priority: u32,
+    pub scope: PolicyScope,
+    pub rule_name: String,
+}
+
+/// Result of conflict resolution across multiple candidate decisions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolutionResult {
+    pub winning_decision: PolicyDecision,
+    pub strategy_used: ConflictResolutionStrategy,
+    pub conflict_detected: bool,
+    pub candidates_evaluated: usize,
 }
 
 /// Result returned by [`AgentMeshClient::execute_with_governance`].
