@@ -39,16 +39,13 @@ def _import_yaml() -> Any:
         print("ERROR: pyyaml is required — pip install pyyaml", file=sys.stderr)
         sys.exit(2)
 
-
-def _import_rprint() -> Any:
-    """Lazily import rich's print function, falling back to plain print."""
+def _import_console(no_color: bool = False, use_stderr: bool = False):
     try:
-        from rich import print as rprint
-
-        return rprint
-    except ImportError:
-        return None
-
+        from rich.console import Console
+        
+        return Console(stderr=use_stderr, no_color=no_color)
+    except Exception:
+        return None    
 
 def _load_file(path: Path) -> dict[str, Any]:
     """Load a YAML or JSON file and return the parsed dict."""
@@ -75,47 +72,43 @@ def _load_file(path: Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def error(msg: str) -> None:
+def error(msg: str, no_color: bool = False) -> None:
     """Print an error message in red to stderr."""
-    rprint = _import_rprint()
-    if rprint is not None:
-        rprint(f"[red]{msg}[/red]", file=sys.stderr)
+    console = _import_console(no_color, use_stderr=True)  
+    if console:
+        console.print(msg, style="red")
     else:
         print(msg, file=sys.stderr)
 
-
-def success(msg: str) -> None:
+def success(msg: str, no_color: bool = False) -> None:
     """Print a success message in green to stdout."""
-    rprint = _import_rprint()
-    if rprint is not None:
-        rprint(f"[green]{msg}[/green]")
+    console = _import_console(no_color, use_stderr=False) 
+    if console:
+        console.print(msg, style="green")
     else:
         print(msg)
 
-
-def warn(msg: str) -> None:
+def warn(msg: str, no_color: bool = False) -> None:
     """Print a warning message in yellow to stdout."""
-    rprint = _import_rprint()
-    if rprint is not None:
-        rprint(f"[yellow]{msg}[/yellow]")
+    console = _import_console(no_color, use_stderr=False)
+    if console:
+        console.print(msg, style="yellow")
     else:
         print(msg)
 
-
-def policy_violation(msg: str) -> None:
+def policy_violation(msg: str, no_color: bool = False) -> None:
     """Print a policy violation message in bold red to stdout."""
-    rprint = _import_rprint()
-    if rprint is not None:
-        rprint(f"[bold red]{msg}[/bold red]")
+    console = _import_console(no_color, use_stderr=False)
+    if console:
+        console.print(msg, style="bold red")
     else:
         print(msg)
 
-
-def passed_check(msg: str) -> None:
+def passed_check(msg: str, no_color: bool = False) -> None:
     """Print a passed-check message with a green checkmark to stdout."""
-    rprint = _import_rprint()
-    if rprint is not None:
-        rprint(f"[green]\u2714 {msg}[/green]")
+    console = _import_console(no_color, use_stderr=False)
+    if console:
+        console.print(f"\u2714 {msg}", style="green")
     else:
         print(f"\u2714 {msg}")
 
