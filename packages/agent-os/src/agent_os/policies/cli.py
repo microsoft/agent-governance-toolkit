@@ -44,7 +44,7 @@ def _import_console(no_color: bool = False, use_stderr: bool = False):
         from rich.console import Console
         
         return Console(stderr=use_stderr, no_color=no_color)
-    except Exception:
+    except (ModuleNotFoundError, ImportError):
         return None    
 
 def _load_file(path: Path) -> dict[str, Any]:
@@ -98,7 +98,7 @@ def warn(msg: str, no_color: bool = False) -> None:
 
 def policy_violation(msg: str, no_color: bool = False) -> None:
     """Print a policy violation message in bold red to stdout."""
-    console = _import_console(no_color, use_stderr=False)
+    console = _import_console(no_color, use_stderr=True)
     if console:
         console.print(msg, style="bold red")
     else:
