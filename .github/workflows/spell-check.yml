@@ -1,0 +1,36 @@
+name: Spell Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**/*.md"
+      - ".cspell.json"
+      - ".cspell-repo-terms.txt"
+      - ".github/workflows/spell-check.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  spell-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Get changed markdown files
+        id: changed-markdown
+        uses: tj-actions/changed-files@v46
+        with:
+          files: |
+            **/*.md
+
+      - name: Install cspell
+        run: npm install --global cspell@8
+
+      - name: Check spelling
+        if: steps.changed-markdown.outputs.any_changed == 'true'
+        run: cspell --config .cspell.json --no-progress ${{ steps.changed-markdown.outputs.all_changed_files }}

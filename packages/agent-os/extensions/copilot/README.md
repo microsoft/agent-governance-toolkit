@@ -155,6 +155,37 @@ You can configure the extension using the following environment variables (e.g.,
 | `LOG_LEVEL` | `info` | Verbosity of the logger (`debug`, `info`, `warn`, `error`). |
 | `CMVK_API_ENDPOINT`| `https://api.agent-os.dev/cmvk` | Upstream CMVK verification service endpoint. |
 | `PAYLOAD_LIMIT` | `1mb` | Maximum allowed size for incoming JSON webhook payloads. The limit mitigates memory-exhaustion DoS attacks. You may increase it (e.g., `5mb`) if your existing AgentOS integrations legitimately require enormous JSON payloads.<br><br>**Security Implications:** Increasing this limit exposes the Node.js process to higher memory consumption during JSON parsing. If you must set this above `5mb`, it is strongly recommended to continuously monitor your active memory usage (`RSS`) and implement aggressive IP-based rate limiting upstream to prevent abuse. |
+```bash
+# .env
+PORT=3000
+LOG_LEVEL=info
+CMVK_API_ENDPOINT=https://api.agent-os.dev/cmvk
+ALLOWED_ORIGINS=https://github.com,https://api.github.com,https://copilot.github.com
+```
+
+`ALLOWED_ORIGINS` is a comma-separated CORS allowlist. If not set, the extension
+defaults to GitHub production origins.
+
+Do not use wildcard or overly broad origins in production. Keep this list
+restricted to trusted GitHub domains used by your deployment.
+
+Examples:
+- Valid: `ALLOWED_ORIGINS=https://github.com,https://copilot.github.com`
+- Invalid: `ALLOWED_ORIGINS=*` or `ALLOWED_ORIGINS=ftp://example.com`
+
+If `ALLOWED_ORIGINS` is set but contains no valid `http/https` origins, the
+service fails fast at startup with a configuration error.
+
+### CORS Migration Notes
+
+This extension no longer uses wildcard CORS (`*`). Requests to protected API
+routes must include an allowed `Origin` header.
+
+Migration steps:
+- Set `ALLOWED_ORIGINS` explicitly for your deployment.
+- Update clients and browser integrations to send an `Origin` header.
+- Expect `403` responses for disallowed origins and missing-origin requests on
+  protected routes.
 
 ### Repository Policy
 

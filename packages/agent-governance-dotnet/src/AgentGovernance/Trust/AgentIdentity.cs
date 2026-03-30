@@ -6,6 +6,21 @@ using System.Text;
 namespace AgentGovernance.Trust;
 
 /// <summary>
+/// Represents the lifecycle status of an agent identity.
+/// </summary>
+public enum IdentityStatus
+{
+    /// <summary>The identity is active and can participate in governance operations.</summary>
+    Active,
+
+    /// <summary>The identity is temporarily suspended and cannot sign or verify.</summary>
+    Suspended,
+
+    /// <summary>The identity has been permanently revoked.</summary>
+    Revoked
+}
+
+/// <summary>
 /// Represents an agent identity with cryptographic signing and verification capabilities.
 /// <para>
 /// Uses HMAC-SHA256 as a portable signing mechanism for .NET 8.0 compatibility.
@@ -47,6 +62,60 @@ public sealed class AgentIdentity
     /// The private key bytes used for signing. <c>null</c> for verification-only identities.
     /// </summary>
     public byte[]? PrivateKey { get; }
+
+    /// <summary>
+    /// The current lifecycle status of this identity.
+    /// </summary>
+    public IdentityStatus Status { get; private set; } = IdentityStatus.Active;
+
+    /// <summary>
+    /// Suspends this identity, preventing it from participating in governance operations.
+    /// A suspended identity can be reactivated.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the identity is already revoked.
+    /// </exception>
+    public void Suspend()
+    {
+        if (Status == IdentityStatus.Revoked)
+        {
+            throw new InvalidOperationException(
+                "Cannot suspend a revoked identity.");
+        }
+
+        Status = IdentityStatus.Suspended;
+    }
+
+    /// <summary>
+    /// Permanently revokes this identity. A revoked identity cannot be reactivated.
+    /// </summary>
+    public void Revoke()
+    {
+        Status = IdentityStatus.Revoked;
+    }
+
+    /// <summary>
+    /// Reactivates a suspended identity, restoring it to active status.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the identity is revoked and cannot be reactivated.
+    /// </exception>
+    public void Reactivate()
+    {
+        if (Status == IdentityStatus.Revoked)
+        {
+            throw new InvalidOperationException(
+                "Cannot reactivate a revoked identity.");
+        }
+
+        Status = IdentityStatus.Active;
+    }
+
+    /// <summary>
+    /// Returns whether this identity is currently active.
+    /// </summary>
+    /// <returns><c>true</c> if the identity status is <see cref="IdentityStatus.Active"/>; otherwise <c>false</c>.</returns>
+    public bool IsActive() => Status == IdentityStatus.Active;
 
     /// <summary>
     /// Initializes a new <see cref="AgentIdentity"/> with the specified DID and key material.

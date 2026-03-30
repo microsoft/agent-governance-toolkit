@@ -428,4 +428,145 @@ mod tests {
             crate::identity::AgentIdentity::generate("peer-agent", vec!["cap".into()]).unwrap();
         assert!(tm.verify_peer("peer-agent", &peer));
     }
+
+    #[test]
+    fn test_multiple_agents_tracked_independently() {
+        let tm = TrustManager::with_defaults();
+        tm.record_success("agent-a");
+        tm.record_failure("agent-b");
+        let a = tm.get_trust_score("agent-a");
+        let b = tm.get_trust_score("agent-b");
+        assert_eq!(a.score, 510);
+        assert_eq!(b.score, 450);
+    }
+
+    #[test]
+    fn test_many_successes_never_exceed_1000() {
+        let config = TrustConfig {
+            initial_score: 900,
+            reward: 50,
+            ..TrustConfig::default()
+        };
+        let tm = TrustManager::new(config);
+        for _ in 0..100 {
+            tm.record_success("agent-1");
+        }
+        assert_eq!(tm.get_trust_score("agent-1").score, 1000);
+    }
+
+    #[test]
+    fn test_many_failures_never_go_below_0() {
+        let config = TrustConfig {
+            initial_score: 100,
+            penalty: 50,
+            ..TrustConfig::default()
+        };
+        let tm = TrustManager::new(config);
+        for _ in 0..100 {
+            tm.record_failure("agent-1");
+        }
+        assert_eq!(tm.get_trust_score("agent-1").score, 0);
+    }
+
+    #[test]
+    fn test_set_trust_to_specific_value() {
+        let tm = TrustManager::with_defaults();
+        tm.set_trust("agent-1", 750);
+        assert_eq!(tm.get_trust_score("agent-1").score, 750);
+        assert_eq!(tm.get_trust_score("agent-1").tier, TrustTier::Trusted);
+    }
+
+    #[test]
+    fn test_set_trust_above_1000_is_clamped() {
+        let tm = TrustManager::with_defaults();
+        tm.set_trust("agent-1", 2000);
+        assert_eq!(tm.get_trust_score("agent-1").score, 1000);
+    }
+
+    #[test]
+    fn test_all_agents_returns_correct_count() {
+        let tm = TrustManager::with_defaults();
+        tm.record_success("agent-a");
+        tm.record_success("agent-b");
+        tm.record_success("agent-c");
+        assert_eq!(tm.all_agents().len(), 3);
+    }
+
+    #[test]
+    fn test_all_agents_empty() {
+        let tm = TrustManager::with_defaults();
+        assert!(tm.all_agents().is_empty());
+    }
+
+    #[test]
+    fn test_custom_config_high_reward() {
+        let config = TrustConfig {
+            initial_score: 500,
+            reward: 200,
+            ..TrustConfig::default()
+        };
+        let tm = TrustManager::new(config);
+        tm.record_success("agent-1");
+        assert_eq!(tm.get_trust_score("agent-1").score, 700);
+    }
+
+    #[test]
+    fn test_custom_config_high_penalty() {
+        let config = TrustConfig {
+            initial_score: 500,
+            penalty: 300,
+            ..TrustConfig::default()
+        };
+        let tm = TrustManager::new(config);
+        tm.record_failure("agent-1");
+        assert_eq!(tm.get_trust_score("agent-1").score, 200);
+    }
+
+    #[test]
+    fn test_persistence_multiple_agents() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("trust_multi.json");
+        let path_str = path.to_str().unwrap().to_string();
+
+        {
+            let config = TrustConfig {
+                persist_path: Some(path_str.clone()),
+                ..TrustConfig::default()
+            };
+            let tm = TrustManager::new(config);
+            tm.record_success("agent-a"); // 510
+            tm.record_failure("agent-b"); // 450
+        }
+
+        {
+            let config = TrustConfig {
+                persist_path: Some(path_str),
+                ..TrustConfig::default()
+            };
+            let tm = TrustManager::new(config);
+            assert_eq!(tm.get_trust_score("agent-a").score, 510);
+            assert_eq!(tm.get_trust_score("agent-b").score, 450);
+        }
+    }
+
+    #[test]
+    fn test_is_trusted_custom_threshold() {
+        let config = TrustConfig {
+            initial_score: 500,
+            threshold: 700,
+            ..TrustConfig::default()
+        };
+        let tm = TrustManager::new(config);
+        // Initial score 500 < threshold 700
+        assert!(!tm.is_trusted("agent-1"));
+        tm.set_trust("agent-1", 700);
+        assert!(tm.is_trusted("agent-1"));
+    }
+
+    #[test]
+    fn test_default_initial_trust_tier_is_standard() {
+        let tm = TrustManager::with_defaults();
+        let score = tm.get_trust_score("any-agent");
+        assert_eq!(score.tier, TrustTier::Standard);
+    }
 }
