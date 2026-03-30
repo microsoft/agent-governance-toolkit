@@ -313,3 +313,23 @@ jobs:
       - name: Test copilot-governance
         working-directory: packages/agentmesh-integrations/copilot-governance
         run: npm test
+
+  # ── CI Gate — required status check that handles skipped jobs ────────
+  # When path-filters skip jobs (e.g. docs-only PRs skip tests), those
+  # jobs report "skipped" which doesn't satisfy required status checks.
+  # This gate job always runs, checks that no jobs FAILED, and reports
+  # success. Configure this as the single required status check.
+  ci-complete:
+    if: always()
+    needs: [changes, lint, test, security, test-dotnet, test-integrations, dependency-scan, workflow-security, test-integrations-ts]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check job results
+        run: |
+          results='${{ toJSON(needs.*.result) }}'
+          echo "Job results: $results"
+          if echo "$results" | grep -qE '"failure"|"cancelled"'; then
+            echo "One or more required jobs failed or were cancelled"
+            exit 1
+          fi
+          echo "All jobs passed or were correctly skipped"
