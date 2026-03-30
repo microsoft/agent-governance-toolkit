@@ -21,10 +21,10 @@ def test_warn(capsys):
     assert "warning message" in captured.out.lower()
 
 
-def test_policy_violation(capsys):
-    policy_violation("Policy violation detected!")
+def test_policy_violation_output(capsys):
+    policy_violation("FAIL: invalid policy")
     captured = capsys.readouterr()
-    assert "policy violation" in captured.err.lower()
+    assert "fail" in captured.err.lower()
 
 
 def test_passed_check(capsys):

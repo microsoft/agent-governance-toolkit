@@ -43,21 +43,21 @@ def _import_console(no_color: bool = False, use_stderr: bool = False):
     '''Lazy import for rich.console.Console.'''
     try:
         from rich.console import Console
-        
+
         return Console(stderr=use_stderr, no_color=no_color)
     except (ModuleNotFoundError, ImportError):
         print("WARNING: rich library not installed, using plain text output", file=sys.stderr)
-        return None 
+        return None
 
 def _import_rich_text() ->Any:
     '''Lazy import for rich.text.Text.'''
     try:
         from rich.text import Text
-        
+
         return Text
     except ImportError as e:
         print(f"WARNING: {e}", file=sys.stderr)
-        return None       
+        return None
 
 def _load_file(path: Path) -> dict[str, Any]:
     """Load a YAML or JSON file and return the parsed dict."""
@@ -86,7 +86,7 @@ def _load_file(path: Path) -> dict[str, Any]:
 
 def error(msg: str, no_color: bool = False) -> None:
     """Print an error message in red to stderr."""
-    console = _import_console(no_color, use_stderr=True)  
+    console = _import_console(no_color, use_stderr=True)
     Text = _import_rich_text()
     if console and Text:
         console.print(Text(msg), style="red")
@@ -95,7 +95,7 @@ def error(msg: str, no_color: bool = False) -> None:
 
 def success(msg: str, no_color: bool = False) -> None:
     """Print a success message in green to stdout."""
-    console = _import_console(no_color, use_stderr=False) 
+    console = _import_console(no_color, use_stderr=False)
     Text = _import_rich_text()
     if console and Text:
         console.print(Text(msg), style="green")
