@@ -49,6 +49,33 @@ pip install -e "packages/agent-lightning[dev]"
 pytest
 ```
 
+### Docker Quickstart
+
+If you prefer a containerized development environment, use the root Docker
+configuration. The image includes Python 3.11, Node.js 22, the core editable
+Python packages in this monorepo, and the TypeScript SDK dependencies.
+
+```bash
+# Build and start the development container
+docker compose up --build dev
+
+# Open a shell in the running container
+docker compose exec dev bash
+
+# Run the full test suite
+docker compose run --rm test
+```
+
+The repository is bind-mounted into `/workspace`, so Python source changes are
+available immediately without rebuilding the image. If you update package
+metadata or dependency definitions, rebuild with `docker compose build`.
+
+To launch the optional Agent Hypervisor dashboard:
+
+```bash
+docker compose --profile dashboard up --build dashboard
+```
+
 ### Package Structure
 
 This is a mono-repo with seven packages:
