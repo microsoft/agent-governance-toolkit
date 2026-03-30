@@ -65,3 +65,51 @@ func TestAuditHashesAreUnique(t *testing.T) {
 		t.Error("different entries should have different hashes")
 	}
 }
+
+func TestExportJSON(t *testing.T) {
+	al := NewAuditLogger()
+	al.Log("agent-1", "read", Allow)
+	al.Log("agent-2", "write", Deny)
+
+	jsonStr, err := al.ExportJSON()
+	if err != nil {
+		t.Fatalf("ExportJSON: %v", err)
+	}
+	if jsonStr == "" {
+		t.Error("ExportJSON returned empty string")
+	}
+	if len(jsonStr) < 10 {
+		t.Error("ExportJSON result too short")
+	}
+}
+
+func TestMaxEntriesRetention(t *testing.T) {
+	al := NewAuditLogger()
+	al.MaxEntries = 3
+
+	al.Log("a1", "action1", Allow)
+	al.Log("a2", "action2", Deny)
+	al.Log("a3", "action3", Allow)
+	al.Log("a4", "action4", Deny)
+
+	entries := al.GetEntries(AuditFilter{})
+	if len(entries) != 3 {
+		t.Errorf("entries after retention = %d, want 3", len(entries))
+	}
+	if entries[0].AgentID != "a2" {
+		t.Errorf("oldest entry agent = %q, want a2", entries[0].AgentID)
+	}
+}
+
+func TestMaxEntriesVerify(t *testing.T) {
+	al := NewAuditLogger()
+	al.MaxEntries = 2
+
+	al.Log("a1", "x", Allow)
+	al.Log("a2", "y", Deny)
+	al.Log("a3", "z", Allow)
+
+	if !al.Verify() {
+		t.Error("chain with retention eviction should still verify")
+	}
+}
