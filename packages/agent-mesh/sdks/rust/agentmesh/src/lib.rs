@@ -28,7 +28,10 @@ pub use audit::AuditLogger;
 pub use identity::{AgentIdentity, PublicIdentity};
 pub use policy::{PolicyEngine, PolicyError};
 pub use trust::{TrustConfig, TrustManager};
-pub use types::{AuditEntry, AuditFilter, GovernanceResult, PolicyDecision, TrustScore, TrustTier};
+pub use types::{
+    AuditEntry, AuditFilter, CandidateDecision, ConflictResolutionStrategy, GovernanceResult,
+    PolicyDecision, PolicyScope, ResolutionResult, TrustScore, TrustTier,
+};
 
 use std::collections::HashMap;
 
