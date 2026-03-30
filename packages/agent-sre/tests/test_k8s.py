@@ -141,18 +141,19 @@ SAMPLE_SPEC = {
 class TestReconcilerCreation:
     def test_create_rollout(self):
         r = Reconciler()
-        with pytest.raises(NotImplementedError):
-            r.reconcile("test", "default", SAMPLE_SPEC)
+        result = r.reconcile("test", "default", SAMPLE_SPEC)
+        assert result.action == ReconcileAction.CREATED
 
     def test_created_rollout_is_canary(self):
         r = Reconciler()
-        with pytest.raises(NotImplementedError):
-            r.reconcile("test", "default", SAMPLE_SPEC)
+        result = r.reconcile("test", "default", SAMPLE_SPEC)
+        assert result.status.phase == "canary"
 
     def test_status_after_create(self):
         r = Reconciler()
-        with pytest.raises(NotImplementedError):
-            r.reconcile("test", "default", SAMPLE_SPEC)
+        result = r.reconcile("test", "default", SAMPLE_SPEC)
+        assert result.status.current_weight == 0.05
+        assert result.status.observed_generation == 1
 
     def test_invalid_spec(self):
         r = Reconciler()
@@ -161,8 +162,10 @@ class TestReconcilerCreation:
 
     def test_generation_update_recreates(self):
         r = Reconciler()
-        with pytest.raises(NotImplementedError):
-            r.reconcile("test", "default", SAMPLE_SPEC, generation=1)
+        result1 = r.reconcile("test", "default", SAMPLE_SPEC, generation=1)
+        assert result1.action == ReconcileAction.CREATED
+        result2 = r.reconcile("test", "default", SAMPLE_SPEC, generation=2)
+        assert result2.action == ReconcileAction.CREATED
 
 
 # ---------------------------------------------------------------------------
@@ -172,13 +175,18 @@ class TestReconcilerCreation:
 class TestReconcilerAdvance:
     def test_advance(self):
         r = Reconciler()
-        with pytest.raises(NotImplementedError):
-            r.reconcile("test", "default", SAMPLE_SPEC)
+        r.reconcile("test", "default", SAMPLE_SPEC)
+        result = r.advance("test", "default")
+        assert result.action == ReconcileAction.ADVANCED
+        assert result.status.current_weight == 0.50
 
     def test_advance_to_completion(self):
         r = Reconciler()
-        with pytest.raises(NotImplementedError):
-            r.reconcile("test", "default", SAMPLE_SPEC)
+        r.reconcile("test", "default", SAMPLE_SPEC)
+        r.advance("test", "default")  # -> canary-50
+        r.advance("test", "default")  # -> full
+        result = r.advance("test", "default")  # Completed
+        assert result.action in (ReconcileAction.COMPLETED, ReconcileAction.NOOP)
 
     def test_advance_nonexistent(self):
         r = Reconciler()
@@ -187,8 +195,10 @@ class TestReconcilerAdvance:
 
     def test_rollback(self):
         r = Reconciler()
-        with pytest.raises(NotImplementedError):
-            r.reconcile("test", "default", SAMPLE_SPEC)
+        r.reconcile("test", "default", SAMPLE_SPEC)
+        result = r.rollback("test", "default", reason="test failure")
+        assert result.action == ReconcileAction.ROLLED_BACK
+        assert result.status.phase == "rolled_back"
 
     def test_rollback_nonexistent(self):
         r = Reconciler()
@@ -203,18 +213,24 @@ class TestReconcilerAdvance:
 class TestReconcilerSync:
     def test_noop_on_same_generation(self):
         r = Reconciler()
-        with pytest.raises(NotImplementedError):
-            r.reconcile("test", "default", SAMPLE_SPEC, generation=1)
+        r.reconcile("test", "default", SAMPLE_SPEC, generation=1)
+        result = r.reconcile("test", "default", SAMPLE_SPEC, generation=1)
+        assert result.action == ReconcileAction.NOOP
 
     def test_completed_stays_completed(self):
         r = Reconciler()
-        with pytest.raises(NotImplementedError):
-            r.reconcile("test", "default", SAMPLE_SPEC)
+        r.reconcile("test", "default", SAMPLE_SPEC)
+        rollout = r.get_rollout("test", "default")
+        rollout.promote()  # Complete it
+        result = r.reconcile("test", "default", SAMPLE_SPEC, generation=1)
+        assert result.action == ReconcileAction.COMPLETED
 
     def test_rolled_back_stays_rolled_back(self):
         r = Reconciler()
-        with pytest.raises(NotImplementedError):
-            r.reconcile("test", "default", SAMPLE_SPEC)
+        r.reconcile("test", "default", SAMPLE_SPEC)
+        r.rollback("test", "default", reason="test")
+        result = r.reconcile("test", "default", SAMPLE_SPEC, generation=1)
+        assert result.action == ReconcileAction.ROLLED_BACK
 
 
 # ---------------------------------------------------------------------------
@@ -224,18 +240,23 @@ class TestReconcilerSync:
 class TestReconcilerQueries:
     def test_list_rollouts(self):
         r = Reconciler()
-        with pytest.raises(NotImplementedError):
-            r.reconcile("a", "default", SAMPLE_SPEC)
+        r.reconcile("a", "default", SAMPLE_SPEC)
+        rollouts = r.list_rollouts()
+        assert len(rollouts) == 1
+        assert rollouts[0]["name"] == "a"
 
     def test_list_rollouts_filtered(self):
         r = Reconciler()
-        with pytest.raises(NotImplementedError):
-            r.reconcile("a", "default", SAMPLE_SPEC)
+        r.reconcile("a", "default", SAMPLE_SPEC)
+        r.reconcile("b", "staging", SAMPLE_SPEC)
+        rollouts = r.list_rollouts(namespace="default")
+        assert len(rollouts) == 1
+        assert rollouts[0]["name"] == "a"
 
     def test_active_count(self):
         r = Reconciler()
-        with pytest.raises(NotImplementedError):
-            r.reconcile("a", "default", SAMPLE_SPEC)
+        r.reconcile("a", "default", SAMPLE_SPEC)
+        assert r.active_count == 1
 
     def test_get_status_missing(self):
         r = Reconciler()
@@ -247,8 +268,11 @@ class TestReconcilerQueries:
 
     def test_reconcile_result_to_dict(self):
         r = Reconciler()
-        with pytest.raises(NotImplementedError):
-            r.reconcile("test", "default", SAMPLE_SPEC)
+        result = r.reconcile("test", "default", SAMPLE_SPEC)
+        d = result.to_dict()
+        assert d["action"] == "created"
+        assert "status" in d
+        assert d["name"] == "test"
 
 
 # ---------------------------------------------------------------------------
@@ -261,8 +285,8 @@ class TestSpecParsing:
         spec = {
             "candidate": {"name": "agent", "version": "v1"},
         }
-        with pytest.raises(NotImplementedError):
-            r.reconcile("minimal", "default", spec)
+        result = r.reconcile("minimal", "default", spec)
+        assert result.action == ReconcileAction.CREATED
 
     def test_shadow_strategy(self):
         r = Reconciler()
@@ -271,15 +295,15 @@ class TestSpecParsing:
             "candidate": {"name": "agent", "version": "v2"},
             "steps": [{"weight": 0.0, "durationSeconds": 86400}],
         }
-        with pytest.raises(NotImplementedError):
-            r.reconcile("shadow", "default", spec)
+        result = r.reconcile("shadow", "default", spec)
+        assert result.action == ReconcileAction.CREATED
 
     def test_spec_with_slo_requirements(self):
         r = Reconciler()
         spec = dict(SAMPLE_SPEC)
         spec["sloRequirements"] = [{"name": "accuracy", "target": 0.99}]
-        with pytest.raises(NotImplementedError):
-            r.reconcile("slo-test", "default", spec)
+        result = r.reconcile("slo-test", "default", spec)
+        assert result.action == ReconcileAction.CREATED
 
     def test_spec_with_analysis_criteria(self):
         r = Reconciler()
@@ -293,5 +317,5 @@ class TestSpecParsing:
                 {"weight": 1.0},
             ],
         }
-        with pytest.raises(NotImplementedError):
-            r.reconcile("analysis", "default", spec)
+        result = r.reconcile("analysis", "default", spec)
+        assert result.action == ReconcileAction.CREATED

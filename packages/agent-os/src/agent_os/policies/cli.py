@@ -39,6 +39,25 @@ def _import_yaml() -> Any:
         print("ERROR: pyyaml is required — pip install pyyaml", file=sys.stderr)
         sys.exit(2)
 
+def _import_console(no_color: bool = False, use_stderr: bool = False):
+    '''Lazy import for rich.console.Console.'''
+    try:
+        from rich.console import Console
+
+        return Console(stderr=use_stderr, no_color=no_color)
+    except (ModuleNotFoundError, ImportError):
+        print("WARNING: rich library not installed, using plain text output", file=sys.stderr)
+        return None
+
+def _import_rich_text() ->Any:
+    '''Lazy import for rich.text.Text.'''
+    try:
+        from rich.text import Text
+
+        return Text
+    except ImportError as e:
+        print(f"WARNING: {e}", file=sys.stderr)
+        return None
 
 def _load_file(path: Path) -> dict[str, Any]:
     """Load a YAML or JSON file and return the parsed dict."""
@@ -60,6 +79,57 @@ def _load_file(path: Path) -> dict[str, Any]:
     return data
 
 
+# ---------------------------------------------------------------------------
+# Colored output helpers — use rich when available, fall back to plain text.
+# ---------------------------------------------------------------------------
+
+
+def error(msg: str, no_color: bool = False) -> None:
+    """Print an error message in red to stderr."""
+    console = _import_console(no_color, use_stderr=True)
+    Text = _import_rich_text()
+    if console and Text:
+        console.print(Text(msg), style="red")
+    else:
+        print(msg, file=sys.stderr)
+
+def success(msg: str, no_color: bool = False) -> None:
+    """Print a success message in green to stdout."""
+    console = _import_console(no_color, use_stderr=False)
+    Text = _import_rich_text()
+    if console and Text:
+        console.print(Text(msg), style="green")
+    else:
+        print(msg)
+
+def warn(msg: str, no_color: bool = False) -> None:
+    """Print a warning message in yellow to stdout."""
+    console = _import_console(no_color, use_stderr=False)
+    Text = _import_rich_text()
+    if console and Text:
+        console.print(Text(msg), style="yellow")
+    else:
+        print(msg)
+
+def policy_violation(msg: str, no_color: bool = False) -> None:
+    """Print a policy violation message in bold red to stdout."""
+    console = _import_console(no_color, use_stderr=True)
+    Text = _import_rich_text()
+    if console and Text:
+        console.print(Text(msg), style="bold red")
+    else:
+        print(msg)
+
+def passed_check(msg: str, no_color: bool = False) -> None:
+    """Print a passed-check message with a green checkmark to stdout."""
+    console = _import_console(no_color, use_stderr=False)
+    Text = _import_rich_text()
+    if console and Text:
+        console.print(Text(f"\u2714 {msg}"), style="green")
+    else:
+        print(f"\u2714 {msg}")
+
+
 # ============================================================================
 # validate
 # ============================================================================
@@ -71,13 +141,13 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     path = Path(args.path)
     if not path.exists():
-        print(f"ERROR: file not found: {path}", file=sys.stderr)
+        error(f"ERROR: file not found: {path}")
         return 2
 
     try:
         data = _load_file(path)
     except Exception as exc:
-        print(f"ERROR: failed to parse {path}: {exc}", file=sys.stderr)
+        error(f"ERROR: failed to parse {path}: {exc}")
         return 2
 
     # --- Optional JSON-Schema validation (best-effort) --------------------
@@ -91,22 +161,22 @@ def cmd_validate(args: argparse.Namespace) -> int:
         except ImportError:
             pass  # jsonschema not installed — skip, rely on Pydantic
         except jsonschema.ValidationError as ve:
-            print(f"FAIL: {path}")
-            print(f"  JSON-Schema error: {ve.message}")
+            policy_violation(f"FAIL: {path}")
+            policy_violation(f"  JSON-Schema error: {ve.message}")
             if ve.absolute_path:
-                print(f"  Location: {' -> '.join(str(p) for p in ve.absolute_path)}")
+                policy_violation(f"  Location: {' -> '.join(str(p) for p in ve.absolute_path)}")
             return 1
 
     # --- Pydantic validation (authoritative) ------------------------------
     try:
         PolicyDocument.model_validate(data)
     except Exception as exc:
-        print(f"FAIL: {path}")
+        policy_violation(f"FAIL: {path}")
         for line in str(exc).splitlines():
-            print(f"  {line}")
+            policy_violation(f"  {line}")
         return 1
 
-    print(f"OK: {path}")
+    success(f"OK: {path}")
     return 0
 
 
@@ -125,7 +195,7 @@ def cmd_test(args: argparse.Namespace) -> int:
 
     for p in (policy_path, scenarios_path):
         if not p.exists():
-            print(f"ERROR: file not found: {p}", file=sys.stderr)
+            error(f"ERROR: file not found: {p}")
             return 2
 
     # Load the policy
@@ -135,19 +205,19 @@ def cmd_test(args: argparse.Namespace) -> int:
         try:
             doc = PolicyDocument.from_json(policy_path)
         except Exception:
-            print(f"ERROR: failed to load policy {policy_path}: {exc}", file=sys.stderr)
+            error(f"ERROR: failed to load policy {policy_path}: {exc}")
             return 2
 
     # Load scenarios
     try:
         scenarios_data = _load_file(scenarios_path)
     except Exception as exc:
-        print(f"ERROR: failed to parse scenarios {scenarios_path}: {exc}", file=sys.stderr)
+        error(f"ERROR: failed to parse scenarios {scenarios_path}: {exc}")
         return 2
 
     scenarios = scenarios_data.get("scenarios", [])
     if not scenarios:
-        print("ERROR: no scenarios found in test file", file=sys.stderr)
+        error("ERROR: no scenarios found in test file")
         return 2
 
     evaluator = PolicyEvaluator(policies=[doc])
@@ -175,14 +245,19 @@ def cmd_test(args: argparse.Namespace) -> int:
 
         if errors:
             failed += 1
-            print(f"  FAIL: {name}")
+            policy_violation(f"  FAIL: {name}")
             for err in errors:
-                print(f"    - {err}")
+                policy_violation(f"    - {err}")
         else:
             passed += 1
-            print(f"  PASS: {name}")
+            passed_check(f"  PASS: {name}")
 
-    print(f"\n{passed}/{total} scenarios passed.")
+    summary = f"\n{passed}/{total} scenarios passed."
+    if failed > 0:
+        warn(summary)
+    else:
+        success(summary)
+
     return 1 if failed > 0 else 0
 
 
@@ -200,14 +275,14 @@ def cmd_diff(args: argparse.Namespace) -> int:
 
     for p in (path1, path2):
         if not p.exists():
-            print(f"ERROR: file not found: {p}", file=sys.stderr)
+            error(f"ERROR: file not found: {p}")
             return 2
 
     try:
         doc1 = PolicyDocument.model_validate(_load_file(path1))
         doc2 = PolicyDocument.model_validate(_load_file(path2))
     except Exception as exc:
-        print(f"ERROR: failed to load policies: {exc}", file=sys.stderr)
+        error(f"ERROR: failed to load policies: {exc}")
         return 2
 
     differences: list[str] = []
@@ -271,12 +346,12 @@ def cmd_diff(args: argparse.Namespace) -> int:
             differences.append(f"  rule '{name}' message changed")
 
     if differences:
-        print(f"Differences between {path1} and {path2}:")
+        warn(f"Differences between {path1} and {path2}:")
         for diff in differences:
-            print(diff)
+            warn(diff)
         return 1
     else:
-        print(f"No differences between {path1} and {path2}.")
+        success(f"No differences between {path1} and {path2}.")
         return 0
 
 

@@ -1,9 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
-"""Trace replay — not available in Public Preview.
+# Community Edition — basic implementation
+"""Distributed trace replay — multi-agent replay with cross-boundary checks.
 
-Classes are retained for API compatibility. Use the local ReplayEngine instead.
+Supports automatic delegation link discovery, per-agent replay,
+and cross-agent consistency verification.
 """
 
 from __future__ import annotations
@@ -11,11 +12,10 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from agent_sre.replay.capture import Trace
-    from agent_sre.replay.engine import ReplayResult, TraceDiff
+from agent_sre.replay.capture import SpanKind, Trace
+from agent_sre.replay.engine import DiffType, ReplayEngine, ReplayResult, TraceDiff
 
 
 class MeshReplayState(Enum):
@@ -138,22 +138,139 @@ class DistributedReplayEngine:
         ))
 
     def discover_links(self) -> list[DelegationLink]:
-        """Auto-discover delegation links — not available in Public Preview."""
-        raise NotImplementedError(
-            "Not available in Public Preview"
-        )
+        """Auto-discover delegation links by scanning traces for DELEGATION spans.
+
+        Scans all registered agent traces for spans of kind DELEGATION,
+        then matches their output_data['delegated_trace_id'] to other
+        registered agents' traces.
+        """
+        discovered: list[DelegationLink] = []
+
+        # Build a reverse lookup: trace_id -> agent_id
+        trace_to_agent: dict[str, str] = {}
+        for agent_id, ref in self._agent_traces.items():
+            if ref.trace:
+                trace_to_agent[ref.trace.trace_id] = agent_id
+
+        # Scan each agent's trace for delegation spans
+        for agent_id, ref in self._agent_traces.items():
+            if ref.trace is None:
+                continue
+            for span in ref.trace.spans:
+                if span.kind != SpanKind.DELEGATION:
+                    continue
+                # Look for a delegated trace ID in the span's output
+                delegated_id = span.output_data.get("delegated_trace_id", "")
+                if not delegated_id:
+                    delegated_id = span.attributes.get("delegated_trace_id", "")
+                if not delegated_id:
+                    continue
+
+                to_agent = trace_to_agent.get(delegated_id)
+                if to_agent and to_agent != agent_id:
+                    link = DelegationLink(
+                        from_agent=agent_id,
+                        to_agent=to_agent,
+                        from_span_id=span.span_id,
+                        to_trace_id=delegated_id,
+                        task_description=span.name,
+                    )
+                    discovered.append(link)
+
+        # Merge with existing links (avoid duplicates)
+        existing = {
+            (l.from_agent, l.to_agent, l.to_trace_id) for l in self._delegation_links
+        }
+        for link in discovered:
+            key = (link.from_agent, link.to_agent, link.to_trace_id)
+            if key not in existing:
+                self._delegation_links.append(link)
+                existing.add(key)
+
+        return list(self._delegation_links)
 
     def replay(self) -> DistributedReplayResult:
-        """Replay all agent traces — not available in Public Preview."""
-        raise NotImplementedError(
-            "Not available in Public Preview"
+        """Replay all registered agent traces and check cross-agent consistency.
+
+        Iterates agents in execution order, replays each with a local
+        ReplayEngine, then validates delegation boundaries.
+        """
+        result = DistributedReplayResult(
+            agents_total=len(self._agent_traces),
         )
+        result.state = MeshReplayState.RUNNING
+
+        engine = ReplayEngine()
+        order = self.execution_order()
+
+        for agent_id in order:
+            ref = self._agent_traces.get(agent_id)
+            if ref is None or ref.trace is None:
+                continue
+
+            agent_result = engine.replay(ref.trace)
+            result.agent_results[agent_id] = agent_result
+            result.agents_completed += 1
+
+        # Cross-agent consistency checks
+        result.cross_agent_diffs = self._check_cross_agent(result)
+
+        if result.agents_completed == result.agents_total:
+            result.state = MeshReplayState.COMPLETED
+        elif result.agents_completed > 0:
+            result.state = MeshReplayState.PARTIAL
+        else:
+            result.state = MeshReplayState.FAILED
+
+        return result
 
     def _check_cross_agent(self, result: DistributedReplayResult) -> list[TraceDiff]:
-        """Check consistency across delegation boundaries — not available in Public Preview."""
-        raise NotImplementedError(
-            "Not available in Public Preview"
-        )
+        """Verify consistency across delegation boundaries.
+
+        For each delegation link, checks that the delegator's delegation
+        span output is consistent with the delegate's trace input.
+        """
+        diffs: list[TraceDiff] = []
+
+        for link in self._delegation_links:
+            from_ref = self._agent_traces.get(link.from_agent)
+            to_ref = self._agent_traces.get(link.to_agent)
+
+            if not from_ref or not from_ref.trace or not to_ref or not to_ref.trace:
+                continue
+
+            # Find the delegation span in the source agent
+            source_span = None
+            for span in from_ref.trace.spans:
+                if span.span_id == link.from_span_id:
+                    source_span = span
+                    break
+
+            if source_span is None:
+                diffs.append(TraceDiff(
+                    diff_type=DiffType.MISSING_SPAN,
+                    span_name=f"delegation:{link.from_agent}->{link.to_agent}",
+                    description=(
+                        f"Delegation span {link.from_span_id} not found "
+                        f"in {link.from_agent}'s trace"
+                    ),
+                ))
+                continue
+
+            # Check that the delegate trace actually exists and succeeded
+            delegate_trace = to_ref.trace
+            if delegate_trace.success is False:
+                diffs.append(TraceDiff(
+                    diff_type=DiffType.STATUS_CHANGE,
+                    span_name=f"delegation:{link.from_agent}->{link.to_agent}",
+                    original="expected_success",
+                    replayed="delegate_failed",
+                    description=(
+                        f"Delegated trace {link.to_trace_id} in {link.to_agent} failed"
+                    ),
+                ))
+
+        return diffs
 
     def execution_order(self) -> list[str]:
         """Get the execution order of agents based on delegation links."""
