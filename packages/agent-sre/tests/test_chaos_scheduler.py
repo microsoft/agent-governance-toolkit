@@ -67,39 +67,34 @@ def _make_execution(
 
 
 class TestCronMatching:
-    """Cron matching not available in Public Preview."""
+    """Cron-based schedule matching using croniter."""
 
     def test_weekday_9am_matches_monday(self) -> None:
         sched = _make_schedule(cron="0 9 * * 1-5")
         scheduler = ChaosScheduler([sched])
-        with pytest.raises(NotImplementedError):
-            scheduler.should_run("s1", MONDAY_9AM)
+        assert scheduler.should_run("s1", MONDAY_9AM) is True
 
     def test_weekday_9am_does_not_match_saturday(self) -> None:
         sched = _make_schedule(cron="0 9 * * 1-5")
         scheduler = ChaosScheduler([sched])
-        with pytest.raises(NotImplementedError):
-            scheduler.should_run("s1", SATURDAY_9AM)
+        assert scheduler.should_run("s1", SATURDAY_9AM) is False
 
     def test_every_day_at_10_30(self) -> None:
         sched = _make_schedule(cron="30 10 * * *")
         scheduler = ChaosScheduler([sched])
         at = datetime(2025, 1, 6, 10, 30, 0, tzinfo=timezone.utc)
-        with pytest.raises(NotImplementedError):
-            scheduler.should_run("s1", at)
+        assert scheduler.should_run("s1", at) is True
 
     def test_wrong_hour_does_not_match(self) -> None:
         sched = _make_schedule(cron="0 9 * * 1-5")
         scheduler = ChaosScheduler([sched])
         at = datetime(2025, 1, 6, 10, 0, 0, tzinfo=timezone.utc)
-        with pytest.raises(NotImplementedError):
-            scheduler.should_run("s1", at)
+        assert scheduler.should_run("s1", at) is False
 
     def test_wednesday_2pm_matches(self) -> None:
         sched = _make_schedule(cron="0 14 * * 3")
         scheduler = ChaosScheduler([sched])
-        with pytest.raises(NotImplementedError):
-            scheduler.should_run("s1", WEDNESDAY_2PM)
+        assert scheduler.should_run("s1", WEDNESDAY_2PM) is True
 
 
 # ---------------------------------------------------------------------------
@@ -108,28 +103,25 @@ class TestCronMatching:
 
 
 class TestBlackoutWindows:
-    """Blackout windows not available in Public Preview."""
+    """Blackout windows block chaos execution during protected periods."""
 
     def test_in_blackout_blocks_execution(self) -> None:
         bw = BlackoutWindow(start="00:00", end="06:00", reason="overnight")
         sched = _make_schedule(cron="0 3 * * 1-5", blackouts=[bw])
         scheduler = ChaosScheduler([sched])
-        with pytest.raises(NotImplementedError):
-            scheduler.is_in_blackout(sched, MONDAY_3AM)
+        assert scheduler.is_in_blackout(sched, MONDAY_3AM) is True
 
     def test_outside_blackout_allows_execution(self) -> None:
         bw = BlackoutWindow(start="17:00", end="23:59", reason="after hours")
         sched = _make_schedule(cron="0 9 * * 1-5", blackouts=[bw])
         scheduler = ChaosScheduler([sched])
-        with pytest.raises(NotImplementedError):
-            scheduler.is_in_blackout(sched, MONDAY_9AM)
+        assert scheduler.is_in_blackout(sched, MONDAY_9AM) is False
 
     def test_midnight_wrap_blackout(self) -> None:
         bw = BlackoutWindow(start="22:00", end="06:00", reason="overnight")
         sched = _make_schedule(blackouts=[bw])
         scheduler = ChaosScheduler([sched])
-        with pytest.raises(NotImplementedError):
-            scheduler.is_in_blackout(sched, MONDAY_3AM)
+        assert scheduler.is_in_blackout(sched, MONDAY_3AM) is True
 
     def test_multiple_blackouts(self) -> None:
         bw1 = BlackoutWindow(start="00:00", end="06:00", reason="overnight")
@@ -137,8 +129,7 @@ class TestBlackoutWindows:
         sched = _make_schedule(blackouts=[bw1, bw2])
         scheduler = ChaosScheduler([sched])
         at_noon = datetime(2025, 1, 6, 12, 30, 0, tzinfo=timezone.utc)
-        with pytest.raises(NotImplementedError):
-            scheduler.is_in_blackout(sched, at_noon)
+        assert scheduler.is_in_blackout(sched, at_noon) is True
 
 
 # ---------------------------------------------------------------------------
@@ -288,13 +279,11 @@ class TestEdgeCases:
     def test_disabled_schedule_never_runs(self) -> None:
         sched = _make_schedule(enabled=False)
         scheduler = ChaosScheduler([sched])
-        with pytest.raises(NotImplementedError):
-            scheduler.should_run("s1", MONDAY_9AM)
+        assert scheduler.should_run("s1", MONDAY_9AM) is False
 
     def test_unknown_schedule_id(self) -> None:
         scheduler = ChaosScheduler([])
-        with pytest.raises(NotImplementedError):
-            scheduler.should_run("nonexistent", MONDAY_9AM)
+        assert scheduler.should_run("nonexistent", MONDAY_9AM) is False
 
     def test_unknown_schedule_severity_is_zero(self) -> None:
         scheduler = ChaosScheduler([])
@@ -304,12 +293,14 @@ class TestEdgeCases:
         bw = BlackoutWindow(start="00:00", end="23:59", reason="full blackout")
         sched = _make_schedule(cron="0 9 * * 1-5", blackouts=[bw])
         scheduler = ChaosScheduler([sched])
-        with pytest.raises(NotImplementedError):
-            scheduler.should_run("s1", MONDAY_9AM)
+        # Schedule matches cron but is blocked by blackout
+        assert scheduler.should_run("s1", MONDAY_9AM) is False
 
     def test_get_due_schedules(self) -> None:
         s1 = _make_schedule(schedule_id="a", cron="0 9 * * 1-5")
         s2 = _make_schedule(schedule_id="b", cron="0 14 * * 3")
         scheduler = ChaosScheduler([s1, s2])
-        with pytest.raises(NotImplementedError):
-            scheduler.get_due_schedules(MONDAY_9AM)
+        due = scheduler.get_due_schedules(MONDAY_9AM)
+        ids = {s.id for s in due}
+        assert "a" in ids
+        assert "b" not in ids  # Wednesday-only schedule

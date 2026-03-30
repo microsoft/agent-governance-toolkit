@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
-"""Incident detection — simple alerting with severity levels."""
+# Community Edition — basic implementation
+"""Incident detection — alerting with severity levels and alert grouping."""
 
 from __future__ import annotations
 
@@ -163,8 +163,8 @@ class Incident:
 class IncidentDetector:
     """Detects incidents from reliability signals.
 
-    Creates incidents for P1/P2 severity signals with deduplication.
-    Alert grouping is not available in Public Preview.
+    Creates incidents for P1/P2 severity signals with deduplication
+    and alert grouping for correlated signals from the same source.
     """
 
     def __init__(
@@ -196,6 +196,10 @@ class IncidentDetector:
 
         # Create incident for critical/warning signals
         if signal.severity_hint in (IncidentSeverity.P1, IncidentSeverity.P2):
+            # Try correlation-based grouping first
+            correlated = self._find_correlated(signal)
+            if correlated:
+                return self._create_correlated_incident([signal, *correlated])
             return self._create_incident(signal)
 
         return None
@@ -218,10 +222,48 @@ class IncidentDetector:
         return incident
 
     def _create_correlated_incident(self, signals: list[Signal]) -> Incident:
-        """Alert grouping — not available in Public Preview."""
-        raise NotImplementedError(
-            "Not available in Public Preview"
+        """Create an incident from multiple correlated signals.
+
+        Groups signals into a single incident, using the highest severity
+        among the signals and combining their descriptions.
+
+        Args:
+            signals: List of correlated signals to merge into one incident.
+
+        Returns:
+            A new ``Incident`` with aggregated severity, combined title,
+            and auto-response actions applied for all signal types.
+        """
+        # Use the highest severity (lowest P-number) among all signals
+        severity_order = [IncidentSeverity.P1, IncidentSeverity.P2, IncidentSeverity.P3, IncidentSeverity.P4]
+        best_severity = IncidentSeverity.P4
+        for sig in signals:
+            hint = sig.severity_hint
+            if severity_order.index(hint) < severity_order.index(best_severity):
+                best_severity = hint
+
+        signal_types = {s.signal_type.value for s in signals}
+        primary = signals[0]
+        title = f"Correlated: {', '.join(sorted(signal_types))} from {primary.source}"
+
+        incident = Incident(
+            title=title,
+            severity=best_severity,
+            signals=list(signals),
+            agent_id=primary.source,
         )
+
+        # Apply auto-responses for all signal types
+        applied: set[str] = set()
+        for sig in signals:
+            actions = self._response_actions.get(sig.signal_type.value, [])
+            for action_type in actions:
+                if action_type not in applied:
+                    incident.add_action(action_type, executed=True, result="auto-triggered")
+                    applied.add(action_type)
+
+        self._incidents.append(incident)
+        return incident
 
     def _is_duplicate(self, signal: Signal) -> bool:
         """Check if a similar incident was recently created."""
@@ -235,10 +277,36 @@ class IncidentDetector:
         return False
 
     def _find_correlated(self, signal: Signal) -> list[Signal]:
-        """Alert grouping — not available in Public Preview."""
-        raise NotImplementedError(
-            "Not available in Public Preview"
-        )
+        """Find pending signals correlated with the given signal.
+
+        Signals are correlated if they come from the same source and
+        fall within the correlation window. Only returns non-duplicate
+        signals with distinct signal types.
+
+        Args:
+            signal: The incoming signal to find correlates for.
+
+        Returns:
+            List of distinct-type signals from the same source that
+            arrived within the correlation window. May be empty.
+        """
+        cutoff = time.time() - self.correlation_window
+        seen_types = {signal.signal_type}
+        correlated: list[Signal] = []
+
+        for pending in self._pending_signals:
+            if pending is signal:
+                continue
+            if pending.timestamp < cutoff:
+                continue
+            if pending.source != signal.source:
+                continue
+            if pending.signal_type in seen_types:
+                continue
+            seen_types.add(pending.signal_type)
+            correlated.append(pending)
+
+        return correlated
 
     def _prune_old_signals(self) -> None:
         """Remove signals outside the correlation window."""

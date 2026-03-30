@@ -50,28 +50,37 @@ class TestShadowResult:
 class TestShadowMode:
     def test_exact_match(self) -> None:
         shadow = ShadowMode()
-        with pytest.raises(NotImplementedError):
-            shadow.compare("r1", "hello world", "hello world")
+        comp = shadow.compare("r1", "hello world", "hello world")
+        assert comp.match is True
+        assert comp.similarity_score == 1.0
 
     def test_mismatch(self) -> None:
         shadow = ShadowMode()
-        with pytest.raises(NotImplementedError):
-            shadow.compare("r1", "hello", "goodbye")
+        comp = shadow.compare("r1", "hello", "goodbye")
+        assert comp.match is False
+        assert comp.similarity_score == 0.0
 
     def test_custom_similarity(self) -> None:
         shadow = ShadowMode(similarity_threshold=0.8)
-        with pytest.raises(NotImplementedError):
-            shadow.set_similarity_function(lambda a, b: 0.85)
+        shadow.set_similarity_function(lambda a, b: 0.85)
+        comp = shadow.compare("r1", "hello", "goodbye")
+        assert comp.match is True
+        assert comp.similarity_score == 0.85
 
     def test_is_passing(self) -> None:
         shadow = ShadowMode()
-        with pytest.raises(NotImplementedError):
-            shadow.is_passing(min_confidence=0.5)
+        # No comparisons — confidence is 0
+        assert shadow.is_passing(min_confidence=0.5) is False
+        # Add a perfect match
+        shadow.compare("r1", "same", "same")
+        assert shadow.is_passing(min_confidence=0.5) is True
 
     def test_finish(self) -> None:
         shadow = ShadowMode()
-        with pytest.raises(NotImplementedError):
-            shadow.finish()
+        shadow.compare("r1", "a", "a")
+        result = shadow.finish()
+        assert result.end_time is not None
+        assert result.total_requests == 1
 
 
 class TestAnalysisCriterion:
@@ -93,39 +102,59 @@ class TestCanaryRollout:
         assert r.state == RolloutState.PENDING
 
     def test_start(self) -> None:
-        r = CanaryRollout(name="test-v2")
-        with pytest.raises(NotImplementedError):
-            r.start()
+        steps = [RolloutStep(name="s1", weight=0.1)]
+        r = CanaryRollout(name="test-v2", steps=steps)
+        r.start()
+        assert r.state == RolloutState.CANARY
+        assert r.current_step_index == 0
+        assert r.started_at is not None
 
     def test_advance(self) -> None:
-        r = CanaryRollout(name="test-v2")
-        with pytest.raises(NotImplementedError):
-            r.advance()
+        steps = [
+            RolloutStep(name="s1", weight=0.1),
+            RolloutStep(name="s2", weight=0.5),
+        ]
+        r = CanaryRollout(name="test-v2", steps=steps)
+        r.start()
+        advanced = r.advance()
+        assert advanced is True
+        assert r.current_step_index == 1
 
     def test_rollback(self) -> None:
-        r = CanaryRollout(name="test-v2")
-        with pytest.raises(NotImplementedError):
-            r.rollback(reason="test failure")
+        steps = [RolloutStep(name="s1", weight=0.1)]
+        r = CanaryRollout(name="test-v2", steps=steps)
+        r.start()
+        r.rollback(reason="test failure")
+        assert r.state == RolloutState.ROLLED_BACK
+        assert r.completed_at is not None
 
     def test_auto_rollback(self) -> None:
+        steps = [RolloutStep(name="s1", weight=0.1)]
         r = CanaryRollout(
             name="test-v2",
+            steps=steps,
             rollback_conditions=[
                 RollbackCondition(metric="error_rate", threshold=0.05, comparator="gte"),
             ],
         )
-        with pytest.raises(NotImplementedError):
-            r.check_rollback({"error_rate": 0.10})
+        r.start()
+        triggered = r.check_rollback({"error_rate": 0.10})
+        assert triggered is True
+        assert r.state == RolloutState.ROLLED_BACK
 
     def test_no_rollback_when_healthy(self) -> None:
+        steps = [RolloutStep(name="s1", weight=0.1)]
         r = CanaryRollout(
             name="test-v2",
+            steps=steps,
             rollback_conditions=[
                 RollbackCondition(metric="error_rate", threshold=0.05, comparator="gte"),
             ],
         )
-        with pytest.raises(NotImplementedError):
-            r.check_rollback({"error_rate": 0.01})
+        r.start()
+        triggered = r.check_rollback({"error_rate": 0.01})
+        assert triggered is False
+        assert r.state == RolloutState.CANARY
 
     def test_analyze_step(self) -> None:
         r = CanaryRollout(
@@ -138,18 +167,26 @@ class TestCanaryRollout:
                 ),
             ],
         )
-        with pytest.raises(NotImplementedError):
-            r.analyze_step({"success_rate": 0.995})
+        r.start()
+        passing = r.analyze_step({"success_rate": 0.995})
+        assert passing is True
 
     def test_pause_resume(self) -> None:
-        r = CanaryRollout(name="test-v2")
-        with pytest.raises(NotImplementedError):
-            r.pause()
+        steps = [RolloutStep(name="s1", weight=0.1)]
+        r = CanaryRollout(name="test-v2", steps=steps)
+        r.start()
+        r.pause()
+        assert r.state == RolloutState.PAUSED
+        r.resume()
+        assert r.state == RolloutState.CANARY
 
     def test_promote(self) -> None:
-        r = CanaryRollout(name="test-v2")
-        with pytest.raises(NotImplementedError):
-            r.promote()
+        steps = [RolloutStep(name="s1", weight=0.1)]
+        r = CanaryRollout(name="test-v2", steps=steps)
+        r.start()
+        r.promote()
+        assert r.state == RolloutState.COMPLETE
+        assert r.completed_at is not None
 
     def test_progress(self) -> None:
         steps = [
