@@ -40,12 +40,24 @@ def _import_yaml() -> Any:
         sys.exit(2)
 
 def _import_console(no_color: bool = False, use_stderr: bool = False):
+    '''Lazy import for rich.console.Console.'''
     try:
         from rich.console import Console
         
         return Console(stderr=use_stderr, no_color=no_color)
     except (ModuleNotFoundError, ImportError):
-        return None    
+        print("WARNING: rich library not installed, using plain text output", file=sys.stderr)
+        return None 
+
+def _import_rich_text() ->Any:
+    '''Lazy import for rich.text.Text.'''
+    try:
+        from rich.text import Text
+        
+        return Text
+    except Exception:
+        print("WARNING: rich library not installed, using plain text output", file=sys.stderr)
+        return None       
 
 def _load_file(path: Path) -> dict[str, Any]:
     """Load a YAML or JSON file and return the parsed dict."""
@@ -75,40 +87,45 @@ def _load_file(path: Path) -> dict[str, Any]:
 def error(msg: str, no_color: bool = False) -> None:
     """Print an error message in red to stderr."""
     console = _import_console(no_color, use_stderr=True)  
-    if console:
-        console.print(msg, style="red")
+    Text = _import_rich_text()
+    if console and Text:
+        console.print(Text.from_markup(msg), style="red")
     else:
         print(msg, file=sys.stderr)
 
 def success(msg: str, no_color: bool = False) -> None:
     """Print a success message in green to stdout."""
     console = _import_console(no_color, use_stderr=False) 
-    if console:
-        console.print(msg, style="green")
+    Text = _import_rich_text()
+    if console and Text:
+        console.print(Text.from_markup(msg), style="green")
     else:
         print(msg)
 
 def warn(msg: str, no_color: bool = False) -> None:
     """Print a warning message in yellow to stdout."""
     console = _import_console(no_color, use_stderr=False)
+    Text = _import_rich_text()
     if console:
-        console.print(msg, style="yellow")
+        console.print(Text.from_markup(msg), style="yellow")
     else:
         print(msg)
 
 def policy_violation(msg: str, no_color: bool = False) -> None:
     """Print a policy violation message in bold red to stdout."""
     console = _import_console(no_color, use_stderr=True)
+    Text = _import_rich_text()
     if console:
-        console.print(msg, style="bold red")
+        console.print(Text.from_markup(msg), style="bold red")
     else:
         print(msg)
 
 def passed_check(msg: str, no_color: bool = False) -> None:
     """Print a passed-check message with a green checkmark to stdout."""
     console = _import_console(no_color, use_stderr=False)
+    Text = _import_rich_text()
     if console:
-        console.print(f"\u2714 {msg}", style="green")
+        console.print(Text.from_markup(f"\u2714 {msg}"), style="green")
     else:
         print(f"\u2714 {msg}")
 
