@@ -55,8 +55,8 @@ def _import_rich_text() ->Any:
         from rich.text import Text
         
         return Text
-    except Exception:
-        print("WARNING: rich library not installed, using plain text output", file=sys.stderr)
+    except ImportError as e:
+        print(f"WARNING: {e}", file=sys.stderr)
         return None       
 
 def _load_file(path: Path) -> dict[str, Any]:
