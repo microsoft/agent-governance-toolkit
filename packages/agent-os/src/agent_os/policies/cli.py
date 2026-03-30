@@ -89,7 +89,7 @@ def error(msg: str, no_color: bool = False) -> None:
     console = _import_console(no_color, use_stderr=True)  
     Text = _import_rich_text()
     if console and Text:
-        console.print(Text.from_markup(msg), style="red")
+        console.print(Text(msg), style="red")
     else:
         print(msg, file=sys.stderr)
 
@@ -98,7 +98,7 @@ def success(msg: str, no_color: bool = False) -> None:
     console = _import_console(no_color, use_stderr=False) 
     Text = _import_rich_text()
     if console and Text:
-        console.print(Text.from_markup(msg), style="green")
+        console.print(Text(msg), style="green")
     else:
         print(msg)
 
@@ -106,8 +106,8 @@ def warn(msg: str, no_color: bool = False) -> None:
     """Print a warning message in yellow to stdout."""
     console = _import_console(no_color, use_stderr=False)
     Text = _import_rich_text()
-    if console:
-        console.print(Text.from_markup(msg), style="yellow")
+    if console and Text:
+        console.print(Text(msg), style="yellow")
     else:
         print(msg)
 
@@ -115,8 +115,8 @@ def policy_violation(msg: str, no_color: bool = False) -> None:
     """Print a policy violation message in bold red to stdout."""
     console = _import_console(no_color, use_stderr=True)
     Text = _import_rich_text()
-    if console:
-        console.print(Text.from_markup(msg), style="bold red")
+    if console and Text:
+        console.print(Text(msg), style="bold red")
     else:
         print(msg)
 
@@ -124,8 +124,8 @@ def passed_check(msg: str, no_color: bool = False) -> None:
     """Print a passed-check message with a green checkmark to stdout."""
     console = _import_console(no_color, use_stderr=False)
     Text = _import_rich_text()
-    if console:
-        console.print(Text.from_markup(f"\u2714 {msg}"), style="green")
+    if console and Text:
+        console.print(Text(f"\u2714 {msg}"), style="green")
     else:
         print(f"\u2714 {msg}")
 
