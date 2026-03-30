@@ -19,3 +19,13 @@ workflows
 markdown
 spellcheck
 spellchecking
+ESRP
+esrp
+GOPROXY
+Dockerfiles
+SCAK
+scak
+caas
+HEALTHCHECK
+pmcrepo
+npmjs

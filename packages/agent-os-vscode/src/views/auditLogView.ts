@@ -44,6 +44,10 @@ class AuditLogItem extends vscode.TreeItem {
         this.tooltip = AuditLogItem.formatTooltip(entry);
         this.description = AuditLogItem.formatTime(entry.timestamp);
         this.iconPath = AuditLogItem.getIcon(entry.type);
+        this.accessibilityInformation = {
+            label: AuditLogItem.formatAccessibilityLabel(entry),
+            role: 'treeitem'
+        };
         
         if (entry.file) {
             this.command = {
@@ -72,10 +76,18 @@ class AuditLogItem extends vscode.TreeItem {
     private static formatTooltip(entry: AuditEntry): string {
         let tooltip = `Type: ${entry.type}\n`;
         tooltip += `Time: ${entry.timestamp.toLocaleString()}\n`;
-        if (entry.file) tooltip += `File: ${entry.file}\n`;
-        if (entry.language) tooltip += `Language: ${entry.language}\n`;
-        if (entry.reason) tooltip += `Reason: ${entry.reason}\n`;
-        if (entry.code) tooltip += `\nCode:\n${entry.code.substring(0, 100)}...`;
+        if (entry.file) {
+            tooltip += `File: ${entry.file}\n`;
+        }
+        if (entry.language) {
+            tooltip += `Language: ${entry.language}\n`;
+        }
+        if (entry.reason) {
+            tooltip += `Reason: ${entry.reason}\n`;
+        }
+        if (entry.code) {
+            tooltip += `\nCode:\n${entry.code.substring(0, 100)}...`;
+        }
         return tooltip;
     }
 
@@ -86,10 +98,28 @@ class AuditLogItem extends vscode.TreeItem {
         const hours = Math.floor(diff / 3600000);
         const days = Math.floor(diff / 86400000);
 
-        if (minutes < 1) return 'just now';
-        if (minutes < 60) return `${minutes}m ago`;
-        if (hours < 24) return `${hours}h ago`;
+        if (minutes < 1) {
+            return 'just now';
+        }
+        if (minutes < 60) {
+            return `${minutes}m ago`;
+        }
+        if (hours < 24) {
+            return `${hours}h ago`;
+        }
         return `${days}d ago`;
+    }
+
+    private static formatAccessibilityLabel(entry: AuditEntry): string {
+        const parts = [AuditLogItem.formatLabel(entry)];
+        parts.push(`Recorded ${entry.timestamp.toLocaleString()}`);
+        if (entry.file) {
+            parts.push(`File ${entry.file}`);
+        }
+        if (entry.reason) {
+            parts.push(`Reason ${entry.reason}`);
+        }
+        return parts.join('. ');
     }
 
     private static getIcon(type: AuditEntry['type']): vscode.ThemeIcon {

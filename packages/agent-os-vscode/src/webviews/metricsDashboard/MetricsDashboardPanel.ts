@@ -9,7 +9,7 @@
 
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
-import { AuditLogger, AuditEntry } from '../../auditLogger';
+import { AuditLogger } from '../../auditLogger';
 
 interface MetricsData {
     blockedToday: number;
@@ -420,16 +420,29 @@ export class MetricsDashboardPanel {
         @media (max-width: 800px) {
             .two-col { grid-template-columns: 1fr; }
         }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
     </style>
 </head>
 <body>
+    <main aria-labelledby="metrics-title">
     <div class="header">
         <h1>
             <span class="status-dot active"></span>
-            Agent OS Metrics Dashboard
+            <span id="metrics-title">Agent OS Metrics Dashboard</span>
         </h1>
-        <div class="controls">
-            <select id="timeRange" onchange="setTimeRange(this.value)">
+        <div class="controls" role="toolbar" aria-label="Metrics dashboard controls">
+            <label class="sr-only" for="timeRange">Time range</label>
+            <select id="timeRange" aria-label="Time range" onchange="setTimeRange(this.value)">
                 <option value="today">Today</option>
                 <option value="week">This Week</option>
                 <option value="month">This Month</option>
@@ -441,22 +454,22 @@ export class MetricsDashboardPanel {
     </div>
 
     <div class="grid">
-        <div class="card danger">
+        <div class="card danger" role="group" aria-label="Blocked operations today">
             <div class="card-title">Blocked Operations</div>
             <div class="card-value" id="blockedToday">0</div>
             <div class="card-subtitle">Today</div>
         </div>
-        <div class="card warning">
+        <div class="card warning" role="group" aria-label="Warnings today">
             <div class="card-title">Warnings</div>
             <div class="card-value" id="warningsToday">0</div>
             <div class="card-subtitle">Today</div>
         </div>
-        <div class="card success">
+        <div class="card success" role="group" aria-label="CMVK reviews today">
             <div class="card-title">CMVK Reviews</div>
             <div class="card-value" id="cmvkReviewsToday">0</div>
             <div class="card-subtitle">Today</div>
         </div>
-        <div class="card">
+        <div class="card" role="group" aria-label="Total events">
             <div class="card-title">Total Events</div>
             <div class="card-value" id="totalLogs">0</div>
             <div class="card-subtitle">All time</div>
@@ -464,9 +477,9 @@ export class MetricsDashboardPanel {
     </div>
 
     <div class="two-col">
-        <div class="chart-container">
+        <section class="chart-container" aria-label="Activity by hour">
             <div class="chart-title">📊 Activity by Hour</div>
-            <div class="bar-chart" id="activityChart"></div>
+            <div class="bar-chart" id="activityChart" role="img" aria-label="Activity by hour chart"></div>
             <div class="bar-labels">
                 <span>12 AM</span>
                 <span>6 AM</span>
@@ -474,17 +487,17 @@ export class MetricsDashboardPanel {
                 <span>6 PM</span>
                 <span>11 PM</span>
             </div>
-        </div>
+        </section>
 
-        <div class="chart-container">
+        <section class="chart-container" aria-label="Top policy violations">
             <div class="chart-title">🛡️ Top Policy Violations</div>
-            <div class="violations-list" id="topViolations">
+            <div class="violations-list" id="topViolations" role="list" aria-live="polite">
                 <p style="color: var(--vscode-descriptionForeground); text-align: center;">No violations recorded</p>
             </div>
-        </div>
+        </section>
     </div>
 
-    <div class="chart-container">
+    <section class="chart-container" aria-label="Policy check latency">
         <div class="chart-title">⚡ Policy Check Latency</div>
         <div class="latency-grid">
             <div class="latency-item">
@@ -506,7 +519,7 @@ export class MetricsDashboardPanel {
         <p style="text-align: center; font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 15px;">
             Target: &lt;50ms for P99 ✓
         </p>
-    </div>
+    </section>
 
     <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
@@ -526,9 +539,10 @@ export class MetricsDashboardPanel {
         function updateChart(data) {
             const chart = document.getElementById('activityChart');
             const max = Math.max(...data, 1);
+            chart.setAttribute('aria-label', 'Activity by hour. ' + data.map((value, hour) => hour + ':00 has ' + value + ' events').join('. '));
             
             chart.innerHTML = data.map((value, i) => 
-                \`<div class="bar" style="height: \${(value / max) * 100}%" data-value="\${value}"></div>\`
+                \`<div class="bar" style="height: \${(value / max) * 100}%" data-value="\${value}" aria-hidden="true"></div>\`
             ).join('');
         }
 
@@ -541,7 +555,7 @@ export class MetricsDashboardPanel {
             }
 
             container.innerHTML = violations.map(v => \`
-                <div class="violation-item">
+                <div class="violation-item" role="listitem">
                     <span class="violation-name">
                         <span style="color: #dc3545;">⚠️</span>
                         \${v.name.replace(/_/g, ' ')}
@@ -567,9 +581,15 @@ export class MetricsDashboardPanel {
                 
                 updateChart(m.activityByHour);
                 updateViolations(m.topViolations);
+                document.getElementById('metricsAnnouncer').textContent =
+                    'Metrics updated. ' + m.blockedToday + ' blocked operations, ' +
+                    m.warningsToday + ' warnings, and ' +
+                    m.cmvkReviewsToday + ' CMVK reviews.';
             }
         });
     </script>
+    <div id="metricsAnnouncer" class="sr-only" aria-live="polite"></div>
+    </main>
 </body>
 </html>`;
     }
