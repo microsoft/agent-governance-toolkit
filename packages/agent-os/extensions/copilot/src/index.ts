@@ -30,6 +30,67 @@ dotenv.config();
 
 const app = express();
 
+const DEFAULT_ALLOWED_ORIGINS = [
+    'https://github.com',
+    'https://api.github.com',
+    'https://copilot.github.com'
+];
+
+const CORS_EXCLUDED_PATHS = new Set([
+    '/',
+    '/health',
+    '/auth/callback',
+    '/api/webhook'
+]);
+
+function normalizeOrigin(origin: string): string | null {
+    try {
+        const parsed = new URL(origin.trim());
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return null;
+        }
+        return parsed.origin;
+    } catch {
+        return null;
+    }
+}
+
+function getAllowedOrigins(): Set<string> {
+    const configured = process.env.ALLOWED_ORIGINS;
+    const hasConfiguredAllowlist = typeof configured === 'string';
+    const source = configured
+        ? configured.split(',').map((v) => v.trim()).filter(Boolean)
+        : DEFAULT_ALLOWED_ORIGINS;
+
+    const normalized: string[] = [];
+    for (const entry of source) {
+        const value = normalizeOrigin(entry);
+        if (!value) {
+            logger.warn('Ignoring invalid CORS origin from ALLOWED_ORIGINS', { origin: entry });
+            continue;
+        }
+        normalized.push(value);
+    }
+
+    if (normalized.length === 0) {
+        if (hasConfiguredAllowlist) {
+            throw new Error(
+                'Invalid ALLOWED_ORIGINS configuration. Provide one or more valid origins, for example: https://github.com,https://copilot.github.com'
+            );
+        }
+        logger.warn('No valid ALLOWED_ORIGINS provided, falling back to secure defaults');
+        return new Set(DEFAULT_ALLOWED_ORIGINS);
+    }
+
+    return new Set(normalized);
+}
+
+const allowedOrigins = getAllowedOrigins();
+
+function isCorsProtectedPath(path: string): boolean {
+    return !CORS_EXCLUDED_PATHS.has(path);
+}
+
 // Raw body for webhook signature verification
 app.use(express.json({
     verify: (req: any, res, buf) => {
@@ -45,14 +106,45 @@ const extension = new CopilotExtension(policyEngine, cmvkClient, auditLogger);
 const templateGallery = new TemplateGallery();
 const policyLibrary = new PolicyLibrary();
 
-// CORS for GitHub
+// CORS origin allowlist (configurable via ALLOWED_ORIGINS).
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-GitHub-Token, X-Hub-Signature-256');
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
+    const isProtectedPath = isCorsProtectedPath(req.path);
+    const origin = req.header('Origin');
+    const normalizedOrigin = origin ? normalizeOrigin(origin) : null;
+    const isAllowedOrigin = normalizedOrigin !== null && allowedOrigins.has(normalizedOrigin);
+
+    if (isAllowedOrigin && normalizedOrigin) {
+        res.header('Access-Control-Allow-Origin', normalizedOrigin);
+        res.header('Vary', 'Origin');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-GitHub-Token, X-Hub-Signature-256');
     }
+
+    if (req.method === 'OPTIONS') {
+        if (!isProtectedPath) {
+            return res.sendStatus(204);
+        }
+        if (!origin || !isAllowedOrigin) {
+            logger.warn('Rejected CORS preflight request');
+            return res.sendStatus(403);
+        }
+        return res.sendStatus(204);
+    }
+
+    if (!isProtectedPath) {
+        return next();
+    }
+
+    if (!origin) {
+        logger.warn('Rejected request due to missing CORS origin header', { path: req.path });
+        return res.sendStatus(403);
+    }
+
+    if (!isAllowedOrigin) {
+        logger.warn('Rejected request due to disallowed CORS origin', { path: req.path });
+        return res.sendStatus(403);
+    }
+
     next();
 });
 
@@ -320,8 +412,8 @@ app.get('/api/templates', (req: Request, res: Response) => {
  * GET /api/templates/:id
  */
 app.get('/api/templates/:id', (req: Request, res: Response) => {
-    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const template = templateGallery.getById(id);
+    const templateId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const template = templateGallery.getById(templateId);
     if (template) {
         res.json(template);
     } else {

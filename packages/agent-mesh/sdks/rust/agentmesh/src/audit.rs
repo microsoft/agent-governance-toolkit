@@ -319,4 +319,150 @@ mod tests {
         }
         assert_eq!(logger.entries().len(), 100);
     }
+
+    #[test]
+    fn test_empty_log_verify_returns_true() {
+        let logger = AuditLogger::new();
+        assert!(logger.verify());
+    }
+
+    #[test]
+    fn test_large_chain_verifies() {
+        let logger = AuditLogger::new();
+        for i in 0..50 {
+            logger.log("agent", &format!("action.{}", i), "allow");
+        }
+        assert!(logger.verify());
+        assert_eq!(logger.entries().len(), 50);
+    }
+
+    #[test]
+    fn test_tamper_middle_of_chain() {
+        let logger = AuditLogger::new();
+        for i in 0..5 {
+            logger.log("agent", &format!("action.{}", i), "allow");
+        }
+        {
+            let mut entries = logger.entries.lock().unwrap();
+            entries[2].action = "tampered".to_string();
+        }
+        assert!(!logger.verify());
+    }
+
+    #[test]
+    fn test_tamper_previous_hash_field() {
+        let logger = AuditLogger::new();
+        logger.log("agent", "a", "allow");
+        logger.log("agent", "b", "allow");
+        logger.log("agent", "c", "allow");
+        {
+            let mut entries = logger.entries.lock().unwrap();
+            entries[1].previous_hash =
+                "0000000000000000000000000000000000000000000000000000000000000000"
+                    .to_string();
+        }
+        assert!(!logger.verify());
+    }
+
+    #[test]
+    fn test_filter_by_action_only() {
+        let logger = AuditLogger::new();
+        logger.log("agent-1", "data.read", "allow");
+        logger.log("agent-2", "data.read", "deny");
+        logger.log("agent-1", "data.write", "allow");
+        let filter = AuditFilter {
+            action: Some("data.read".to_string()),
+            ..Default::default()
+        };
+        let filtered = logger.get_entries(&filter);
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().all(|e| e.action == "data.read"));
+    }
+
+    #[test]
+    fn test_filter_by_decision_only() {
+        let logger = AuditLogger::new();
+        logger.log("agent-1", "data.read", "allow");
+        logger.log("agent-1", "shell:rm", "deny");
+        logger.log("agent-2", "data.write", "allow");
+        let filter = AuditFilter {
+            decision: Some("allow".to_string()),
+            ..Default::default()
+        };
+        let filtered = logger.get_entries(&filter);
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().all(|e| e.decision == "allow"));
+    }
+
+    #[test]
+    fn test_filter_multiple_criteria_and_logic() {
+        let logger = AuditLogger::new();
+        logger.log("agent-1", "data.read", "allow");
+        logger.log("agent-1", "data.read", "deny");
+        logger.log("agent-2", "data.read", "allow");
+        let filter = AuditFilter {
+            agent_id: Some("agent-1".to_string()),
+            action: Some("data.read".to_string()),
+            decision: Some("allow".to_string()),
+        };
+        let filtered = logger.get_entries(&filter);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].agent_id, "agent-1");
+        assert_eq!(filtered[0].action, "data.read");
+        assert_eq!(filtered[0].decision, "allow");
+    }
+
+    #[test]
+    fn test_filter_matching_nothing_returns_empty() {
+        let logger = AuditLogger::new();
+        logger.log("agent-1", "data.read", "allow");
+        let filter = AuditFilter {
+            agent_id: Some("nonexistent".to_string()),
+            ..Default::default()
+        };
+        let filtered = logger.get_entries(&filter);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn test_sequential_seq_numbers() {
+        let logger = AuditLogger::new();
+        for _ in 0..5 {
+            logger.log("agent", "action", "allow");
+        }
+        let entries = logger.entries();
+        for (i, entry) in entries.iter().enumerate() {
+            assert_eq!(entry.seq, i as u64);
+        }
+    }
+
+    #[test]
+    fn test_hash_is_64_hex_characters() {
+        let logger = AuditLogger::new();
+        let entry = logger.log("agent", "action", "allow");
+        assert_eq!(entry.hash.len(), 64);
+        assert!(entry.hash.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_iso8601_now_format() {
+        let ts = iso8601_now();
+        // Should match YYYY-MM-DDTHH:MM:SSZ
+        assert_eq!(ts.len(), 20);
+        assert_eq!(&ts[4..5], "-");
+        assert_eq!(&ts[7..8], "-");
+        assert_eq!(&ts[10..11], "T");
+        assert_eq!(&ts[13..14], ":");
+        assert_eq!(&ts[16..17], ":");
+        assert_eq!(&ts[19..20], "Z");
+    }
+
+    #[test]
+    fn test_hex_encode_lowercase() {
+        let bytes = [0xAB, 0xCD, 0xEF, 0x01];
+        let hex = hex_encode(&bytes);
+        assert_eq!(hex, "abcdef01");
+        // Confirm all lowercase
+        assert_eq!(hex, hex.to_lowercase());
+    }
 }
