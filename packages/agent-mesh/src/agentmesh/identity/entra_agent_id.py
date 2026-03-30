@@ -14,7 +14,6 @@ import base64
 import json
 import os
 import time
-from typing import Dict, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 

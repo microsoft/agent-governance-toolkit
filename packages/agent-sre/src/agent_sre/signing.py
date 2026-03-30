@@ -15,17 +15,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-    Ed25519PrivateKey,
-    Ed25519PublicKey,
-)
-from cryptography.hazmat.primitives.serialization import (
-    Encoding,
-    NoEncryption,
-    PrivateFormat,
-    PublicFormat,
-    load_pem_private_key,
-)
+try:
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+        Ed25519PrivateKey,
+        Ed25519PublicKey,
+    )
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        NoEncryption,
+        PrivateFormat,
+        PublicFormat,
+        load_pem_private_key,
+    )
+
+    _HAS_CRYPTO = True
+except ImportError:
+    _HAS_CRYPTO = False
 
 from agent_sre.sbom import AgentSBOM
 
@@ -71,6 +76,11 @@ class ArtifactSigner:
     """
 
     def __init__(self, private_key_path: str | None = None) -> None:
+        if not _HAS_CRYPTO:
+            raise ImportError(
+                "cryptography is required for artifact signing. "
+                "Install it with: pip install cryptography"
+            )
         if private_key_path is not None:
             pem_bytes = Path(private_key_path).read_bytes()
             key = load_pem_private_key(pem_bytes, password=None)

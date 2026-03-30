@@ -9,6 +9,8 @@ import textwrap
 
 import pytest
 
+pytest.importorskip("cryptography", reason="cryptography required for signing tests")
+
 from agent_sre.sbom import AgentSBOM, SBOMPackage
 from agent_sre.signing import ArtifactSigner, SignatureBundle
 
