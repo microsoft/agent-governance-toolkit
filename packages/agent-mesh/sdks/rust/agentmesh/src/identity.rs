@@ -136,4 +136,87 @@ mod tests {
         assert!(!id.verify(b"data", &[0u8; 64]));
         assert!(!id.verify(b"data", &[0u8; 32])); // wrong length
     }
+
+    #[test]
+    fn test_multiple_identities_different_dids() {
+        let id1 = AgentIdentity::generate("agent-1", vec![]).unwrap();
+        let id2 = AgentIdentity::generate("agent-2", vec![]).unwrap();
+        assert_ne!(id1.did, id2.did);
+    }
+
+    #[test]
+    fn test_multiple_identities_different_key_pairs() {
+        let id1 = AgentIdentity::generate("agent-a", vec![]).unwrap();
+        let id2 = AgentIdentity::generate("agent-b", vec![]).unwrap();
+        assert_ne!(id1.public_key.to_bytes(), id2.public_key.to_bytes());
+    }
+
+    #[test]
+    fn test_sign_empty_data() {
+        let id = AgentIdentity::generate("empty-signer", vec![]).unwrap();
+        let sig = id.sign(b"");
+        assert_eq!(sig.len(), 64);
+        assert!(id.verify(b"", &sig));
+    }
+
+    #[test]
+    fn test_cross_identity_verification_fails() {
+        let id1 = AgentIdentity::generate("signer-1", vec![]).unwrap();
+        let id2 = AgentIdentity::generate("signer-2", vec![]).unwrap();
+        let sig = id1.sign(b"test data");
+        // id2 should NOT verify a signature produced by id1
+        assert!(!id2.verify(b"test data", &sig));
+    }
+
+    #[test]
+    fn test_public_identity_from_json_verifies_signatures() {
+        let id = AgentIdentity::generate("json-verify", vec!["read".into()]).unwrap();
+        let json = id.to_json().unwrap();
+        let public = AgentIdentity::from_json(&json).unwrap();
+        let data = b"important payload";
+        let sig = id.sign(data);
+        assert!(public.verify(data, &sig));
+        // Should fail with wrong data
+        assert!(!public.verify(b"wrong data", &sig));
+    }
+
+    #[test]
+    fn test_invalid_json_returns_error() {
+        let result = AgentIdentity::from_json("not valid json {{{");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            IdentityError::Serialization(_)
+        ));
+    }
+
+    #[test]
+    fn test_public_identity_empty_public_key_rejects() {
+        let public = PublicIdentity {
+            did: "did:agentmesh:test".to_string(),
+            public_key: vec![], // empty
+            capabilities: vec![],
+        };
+        assert!(!public.verify(b"data", &[0u8; 64]));
+    }
+
+    #[test]
+    fn test_capabilities_roundtrip_json() {
+        let caps = vec![
+            "data.read".to_string(),
+            "data.write".to_string(),
+            "admin".to_string(),
+        ];
+        let id = AgentIdentity::generate("cap-agent", caps.clone()).unwrap();
+        let json = id.to_json().unwrap();
+        let public = AgentIdentity::from_json(&json).unwrap();
+        assert_eq!(public.capabilities, caps);
+    }
+
+    #[test]
+    fn test_did_format() {
+        let id = AgentIdentity::generate("my-agent", vec![]).unwrap();
+        assert!(id.did.starts_with("did:agentmesh:"));
+        assert_eq!(id.did, "did:agentmesh:my-agent");
+    }
 }
