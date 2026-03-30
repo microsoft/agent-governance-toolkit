@@ -649,4 +649,325 @@ policies:
         assert!(!result.conflict_detected);
         assert_eq!(result.winning_decision, PolicyDecision::Allow);
     }
+
+    #[test]
+    fn test_multiple_capability_rules_first_match_wins() {
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: deny-first
+    type: capability
+    denied_actions:
+      - "data.read"
+  - name: allow-second
+    type: capability
+    allowed_actions:
+      - "data.read"
+"#;
+        let engine = PolicyEngine::new();
+        engine.load_from_yaml(yaml).unwrap();
+        // First rule denies data.read, so it should be denied
+        let decision = engine.evaluate("data.read", None);
+        assert!(matches!(decision, PolicyDecision::Deny(_)));
+    }
+
+    #[test]
+    fn test_policy_with_only_deny_rules() {
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: deny-only
+    type: capability
+    denied_actions:
+      - "shell:*"
+      - "admin.*"
+"#;
+        let engine = PolicyEngine::new();
+        engine.load_from_yaml(yaml).unwrap();
+        assert!(matches!(
+            engine.evaluate("shell:ls", None),
+            PolicyDecision::Deny(_)
+        ));
+        assert!(matches!(
+            engine.evaluate("admin.delete", None),
+            PolicyDecision::Deny(_)
+        ));
+        // Actions outside denied scope are allowed
+        assert_eq!(engine.evaluate("data.read", None), PolicyDecision::Allow);
+    }
+
+    #[test]
+    fn test_policy_with_only_allow_rules() {
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: allow-only
+    type: capability
+    allowed_actions:
+      - "data.read"
+      - "data.write"
+"#;
+        let engine = PolicyEngine::new();
+        engine.load_from_yaml(yaml).unwrap();
+        assert_eq!(engine.evaluate("data.read", None), PolicyDecision::Allow);
+        assert_eq!(engine.evaluate("data.write", None), PolicyDecision::Allow);
+        // In-scope but not in allowlist
+        assert!(matches!(
+            engine.evaluate("data.delete", None),
+            PolicyDecision::Deny(_)
+        ));
+    }
+
+    #[test]
+    fn test_conditions_matching() {
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: env-gate
+    type: capability
+    denied_actions:
+      - "deploy.*"
+    conditions:
+      environment: "production"
+"#;
+        let engine = PolicyEngine::new();
+        engine.load_from_yaml(yaml).unwrap();
+        let mut context = HashMap::new();
+        context.insert(
+            "environment".to_string(),
+            serde_yaml::Value::String("production".to_string()),
+        );
+        let decision = engine.evaluate("deploy.app", Some(&context));
+        assert!(matches!(decision, PolicyDecision::Deny(_)));
+    }
+
+    #[test]
+    fn test_conditions_not_matching() {
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: env-gate
+    type: capability
+    denied_actions:
+      - "deploy.*"
+    conditions:
+      environment: "production"
+"#;
+        let engine = PolicyEngine::new();
+        engine.load_from_yaml(yaml).unwrap();
+        let mut context = HashMap::new();
+        context.insert(
+            "environment".to_string(),
+            serde_yaml::Value::String("staging".to_string()),
+        );
+        // Conditions don't match, rule is skipped, falls through to Allow
+        let decision = engine.evaluate("deploy.app", Some(&context));
+        assert_eq!(decision, PolicyDecision::Allow);
+    }
+
+    #[test]
+    fn test_conditions_no_context_skips_rule() {
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: env-gate
+    type: capability
+    denied_actions:
+      - "deploy.*"
+    conditions:
+      environment: "production"
+"#;
+        let engine = PolicyEngine::new();
+        engine.load_from_yaml(yaml).unwrap();
+        // No context provided - conditions require it, rule is skipped
+        let decision = engine.evaluate("deploy.app", None);
+        assert_eq!(decision, PolicyDecision::Allow);
+    }
+
+    #[test]
+    fn test_loading_invalid_yaml_returns_error() {
+        let engine = PolicyEngine::new();
+        let result = engine.load_from_yaml("{{not valid yaml");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), PolicyError::InvalidYaml(_)));
+    }
+
+    #[test]
+    fn test_loading_from_temp_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("policy.yaml");
+        std::fs::write(&path, POLICY_YAML).unwrap();
+        let engine = PolicyEngine::new();
+        engine.load_from_file(path.to_str().unwrap()).unwrap();
+        assert!(engine.is_loaded());
+        assert_eq!(engine.evaluate("data.read", None), PolicyDecision::Allow);
+    }
+
+    #[test]
+    fn test_multiple_rate_limit_rules_for_different_actions() {
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: api-limit
+    type: rate_limit
+    actions:
+      - "api.call"
+    max_calls: 2
+    window: "60s"
+  - name: db-limit
+    type: rate_limit
+    actions:
+      - "db.query"
+    max_calls: 1
+    window: "60s"
+"#;
+        let engine = PolicyEngine::new();
+        engine.load_from_yaml(yaml).unwrap();
+        // api.call: 2 allowed
+        assert_eq!(engine.evaluate("api.call", None), PolicyDecision::Allow);
+        assert_eq!(engine.evaluate("api.call", None), PolicyDecision::Allow);
+        assert!(matches!(
+            engine.evaluate("api.call", None),
+            PolicyDecision::RateLimited { .. }
+        ));
+        // db.query: 1 allowed (independent counter)
+        assert_eq!(engine.evaluate("db.query", None), PolicyDecision::Allow);
+        assert!(matches!(
+            engine.evaluate("db.query", None),
+            PolicyDecision::RateLimited { .. }
+        ));
+    }
+
+    #[test]
+    fn test_rate_limit_resets_after_window() {
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: fast-limit
+    type: rate_limit
+    actions:
+      - "api.call"
+    max_calls: 1
+    window: "0s"
+"#;
+        let engine = PolicyEngine::new();
+        engine.load_from_yaml(yaml).unwrap();
+        // First call is allowed
+        assert_eq!(engine.evaluate("api.call", None), PolicyDecision::Allow);
+        // Second call hits rate limit (within the 0s window)
+        assert!(matches!(
+            engine.evaluate("api.call", None),
+            PolicyDecision::RateLimited { .. }
+        ));
+        // Wait for the window to expire (0s window → needs >0 elapsed seconds)
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        // After window reset, call should be allowed again
+        assert_eq!(engine.evaluate("api.call", None), PolicyDecision::Allow);
+    }
+
+    #[test]
+    fn test_wildcard_matches_everything() {
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: deny-all
+    type: capability
+    denied_actions:
+      - "*"
+"#;
+        let engine = PolicyEngine::new();
+        engine.load_from_yaml(yaml).unwrap();
+        assert!(matches!(
+            engine.evaluate("anything", None),
+            PolicyDecision::Deny(_)
+        ));
+        assert!(matches!(
+            engine.evaluate("data.read", None),
+            PolicyDecision::Deny(_)
+        ));
+        assert!(matches!(
+            engine.evaluate("shell:ls", None),
+            PolicyDecision::Deny(_)
+        ));
+    }
+
+    #[test]
+    fn test_parse_duration_minutes() {
+        assert_eq!(parse_duration("5m"), 300);
+    }
+
+    #[test]
+    fn test_parse_duration_seconds() {
+        assert_eq!(parse_duration("30s"), 30);
+    }
+
+    #[test]
+    fn test_parse_duration_hours() {
+        assert_eq!(parse_duration("2h"), 7200);
+    }
+
+    #[test]
+    fn test_parse_duration_bare_number() {
+        assert_eq!(parse_duration("120"), 120);
+    }
+
+    #[test]
+    fn test_is_loaded_false_initially() {
+        let engine = PolicyEngine::new();
+        assert!(!engine.is_loaded());
+    }
+
+    #[test]
+    fn test_is_loaded_true_after_load() {
+        let engine = PolicyEngine::new();
+        engine.load_from_yaml(POLICY_YAML).unwrap();
+        assert!(engine.is_loaded());
+    }
+
+    #[test]
+    fn test_rules_present_but_none_match_falls_through() {
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: gate
+    type: capability
+    denied_actions:
+      - "shell:*"
+"#;
+        let engine = PolicyEngine::new();
+        engine.load_from_yaml(yaml).unwrap();
+        // "data.read" doesn't match any denied actions — falls through to Allow
+        assert_eq!(engine.evaluate("data.read", None), PolicyDecision::Allow);
+    }
+
+    #[test]
+    fn test_action_matches_empty_strings() {
+        assert!(action_matches("", ""));
+        assert!(!action_matches("", "data.read"));
+        assert!(!action_matches("data.read", ""));
+    }
+
+    #[test]
+    fn test_action_matches_exact_match() {
+        assert!(action_matches("data.read", "data.read"));
+        assert!(!action_matches("data.read", "data.write"));
+    }
+
+    #[test]
+    fn test_action_matches_partial_non_match() {
+        // "data" does not match "data.read" (no wildcard)
+        assert!(!action_matches("data", "data.read"));
+        // "data.rea" does not match "data.read"
+        assert!(!action_matches("data.rea", "data.read"));
+    }
 }

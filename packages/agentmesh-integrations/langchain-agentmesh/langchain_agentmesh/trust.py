@@ -368,21 +368,23 @@ class TrustHandshake:
             )
         return supported
 
-    def _verify_scope_chain(
+    def verify_scope_chain(
         self,
-        peer_card: TrustedAgentCard,
-    ) -> tuple[bool, str]:
-        """Verify cryptographic validity and integrity of a peer scope chain.
+        scope_chain: Optional[List[Delegation]],
+        *,
+        expected_leaf_did: Optional[str] = None,
+    ) -> tuple[bool, str, List[str]]:
+        """Verify cryptographic validity and effective permissions of a scope chain.
 
-        The chain is anchored to this agent's identity as trust root and must
-        terminate at the peer card DID.
+        Returns:
+            Tuple of ``(is_valid, error_message, effective_capabilities)``.
         """
-        if not peer_card.scope_chain or not peer_card.identity:
-            return True, ""
+        if not scope_chain:
+            return True, "", []
 
         now = datetime.now(timezone.utc)
-        delegations = peer_card.scope_chain
-        peer_did = peer_card.identity.did
+        delegations = scope_chain
+        peer_did = expected_leaf_did or delegations[-1].delegatee
         chain_root_did = delegations[0].delegator if delegations else None
 
         if not self._enforce_scope_chain_rate_limit(peer_did, now):
@@ -390,7 +392,7 @@ class TrustHandshake:
                 "Scope chain rate limit exceeded",
                 peer_did=peer_did,
                 chain_root_did=chain_root_did,
-            )
+            ) + ([],)
 
         # Anchor trust to this verifier's identity.
         first = delegations[0]
@@ -399,15 +401,15 @@ class TrustHandshake:
                 "Scope chain error: root delegator does not match verifier identity",
                 peer_did=peer_did,
                 chain_root_did=chain_root_did,
-            )
+            ) + ([],)
 
         # Chain must terminate at the advertised peer identity.
-        if delegations[-1].delegatee != peer_card.identity.did:
+        if expected_leaf_did and delegations[-1].delegatee != expected_leaf_did:
             return self._scope_chain_failure(
                 "Scope chain error: chain does not terminate at peer identity",
                 peer_did=peer_did,
                 chain_root_did=chain_root_did,
-            )
+            ) + ([],)
 
         allowed_algorithms = self._allowed_signature_algorithms()
         scope_chain_fingerprint = _scope_chain_fingerprint(delegations)
@@ -418,10 +420,12 @@ class TrustHandshake:
                     "Scope chain error: replay detected within replay window",
                     peer_did=peer_did,
                     chain_root_did=chain_root_did,
-                )
+                ) + ([],)
 
         known_public_keys: Dict[str, str] = {self.my_identity.did: self.my_identity.public_key}
         expiry_skew = timedelta(seconds=self.policy.max_delegation_expiry_clock_skew_seconds)
+        current_capabilities = self.my_identity.capabilities[:] or None
+        seen_dids = {self.my_identity.did}
 
         for i, delegation in enumerate(delegations):
             if not delegation.delegator.startswith("did:verification:"):
@@ -429,35 +433,35 @@ class TrustHandshake:
                     f"Scope chain error at index {i}: invalid delegator DID",
                     peer_did=peer_did,
                     chain_root_did=chain_root_did,
-                )
+                ) + ([],)
 
             if not delegation.delegatee.startswith("did:verification:"):
                 return self._scope_chain_failure(
                     f"Scope chain error at index {i}: invalid delegatee DID",
                     peer_did=peer_did,
                     chain_root_did=chain_root_did,
-                )
+                ) + ([],)
 
             if delegation.expires_at and delegation.expires_at + expiry_skew < now:
                 return self._scope_chain_failure(
                     f"Scope chain error at index {i}: delegation is expired",
                     peer_did=peer_did,
                     chain_root_did=chain_root_did,
-                )
+                ) + ([],)
 
             if not delegation.signature:
                 return self._scope_chain_failure(
                     f"Scope chain error at index {i}: missing signature",
                     peer_did=peer_did,
                     chain_root_did=chain_root_did,
-                )
+                ) + ([],)
 
             if delegation.signature.algorithm not in allowed_algorithms:
                 return self._scope_chain_failure(
                     f"Scope chain error at index {i}: unsupported signature algorithm",
                     peer_did=peer_did,
                     chain_root_did=chain_root_did,
-                )
+                ) + ([],)
 
             signature_timestamp = delegation.signature.timestamp
             if signature_timestamp.tzinfo is None:
@@ -470,7 +474,7 @@ class TrustHandshake:
                     f"Scope chain error at index {i}: signature timestamp is in the future",
                     peer_did=peer_did,
                     chain_root_did=chain_root_did,
-                )
+                ) + ([],)
 
             if now - signature_timestamp > timedelta(
                 seconds=self.policy.max_delegation_signature_age_seconds
@@ -479,7 +483,7 @@ class TrustHandshake:
                     f"Scope chain error at index {i}: signature is stale",
                     peer_did=peer_did,
                     chain_root_did=chain_root_did,
-                )
+                ) + ([],)
 
             # Enforce deterministic linkage between adjacent delegations.
             if i > 0:
@@ -489,7 +493,14 @@ class TrustHandshake:
                         f"Scope chain error at index {i}: delegation linkage broken",
                         peer_did=peer_did,
                         chain_root_did=chain_root_did,
-                    )
+                    ) + ([],)
+
+            if delegation.delegatee in seen_dids:
+                return self._scope_chain_failure(
+                    f"Scope chain error at index {i}: circular delegation detected",
+                    peer_did=peer_did,
+                    chain_root_did=chain_root_did,
+                ) + ([],)
 
             expected_public_key = known_public_keys.get(delegation.delegator)
             if expected_public_key and delegation.signature.public_key != expected_public_key:
@@ -497,7 +508,16 @@ class TrustHandshake:
                     f"Scope chain error at index {i}: delegator public key mismatch",
                     peer_did=peer_did,
                     chain_root_did=chain_root_did,
-                )
+                ) + ([],)
+
+            if current_capabilities is not None:
+                missing_capabilities = set(delegation.capabilities) - set(current_capabilities)
+                if missing_capabilities:
+                    return self._scope_chain_failure(
+                        f"Scope chain error at index {i}: missing delegated permissions",
+                        peer_did=peer_did,
+                        chain_root_did=chain_root_did,
+                    ) + ([],)
 
             delegation_data = _delegation_signing_payload(
                 delegation.delegator,
@@ -516,14 +536,29 @@ class TrustHandshake:
                     f"Scope chain error at index {i}: invalid delegation signature",
                     peer_did=peer_did,
                     chain_root_did=chain_root_did,
-                )
+                ) + ([],)
 
             known_public_keys[delegation.delegator] = delegation.signature.public_key
+            current_capabilities = delegation.capabilities[:]
+            seen_dids.add(delegation.delegatee)
 
         if self.policy.replay_detection_enabled:
             self._record_scope_chain_fingerprint(scope_chain_fingerprint, now)
 
-        return True, ""
+        return True, "", current_capabilities or []
+
+    def _verify_scope_chain(
+        self,
+        peer_card: TrustedAgentCard,
+    ) -> tuple[bool, str, List[str]]:
+        """Verify the peer scope chain and return the effective delegated capabilities."""
+        if not peer_card.scope_chain or not peer_card.identity:
+            return True, "", []
+
+        return self.verify_scope_chain(
+            peer_card.scope_chain,
+            expected_leaf_did=peer_card.identity.did,
+        )
 
     def verify_peer(
         self,
@@ -584,19 +619,10 @@ class TrustHandshake:
 
         # Verify capabilities
         verified_caps = peer_card.capabilities.copy()
-        if required_capabilities:
-            missing = set(required_capabilities) - set(peer_card.capabilities)
-            if missing:
-                return TrustVerificationResult(
-                    trusted=False,
-                    trust_score=peer_card.trust_score,
-                    reason=f"Missing required capabilities: {missing}",
-                    verified_capabilities=verified_caps,
-                )
 
         # Check scope chain if present
         if peer_card.scope_chain:
-            scope_chain_valid, scope_chain_error = self._verify_scope_chain(peer_card)
+            scope_chain_valid, scope_chain_error, delegated_caps = self._verify_scope_chain(peer_card)
             if not scope_chain_valid:
                 if not self.policy.strict_scope_chain_verification:
                     warnings.append(scope_chain_error)
@@ -608,6 +634,18 @@ class TrustHandshake:
                         verified_capabilities=verified_caps,
                         warnings=warnings,
                     )
+            else:
+                verified_caps = sorted(set(peer_card.capabilities).intersection(delegated_caps))
+
+        if required_capabilities:
+            missing = set(required_capabilities) - set(verified_caps)
+            if missing:
+                return TrustVerificationResult(
+                    trusted=False,
+                    trust_score=peer_card.trust_score,
+                    reason=f"Missing required capabilities: {missing}",
+                    verified_capabilities=verified_caps,
+                )
 
         # All checks passed
         result = TrustVerificationResult(

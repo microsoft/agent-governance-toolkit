@@ -180,7 +180,7 @@ jobs:
               'scipy','openai','anthropic','langchain','crewai',
               'streamlit','plotly','pandas','networkx','aioredis',
               'langchain-openai','langchain-core','python-dotenv',
-              'agent-primitives',
+              'agent-primitives','emk',
           }
           bad = []
           for nb in glob.glob('**/*.ipynb', recursive=True):
@@ -192,11 +192,11 @@ jobs:
                   continue
               for c in cells:
                   for line in c.get('source', []):
-                      if 'pip install' in line and not line.strip().startswith('#'):
+                      if 'pip install' in line and not line.strip().startswith('#') and not line.strip().startswith('>'):
                           pkgs = re.findall(r'(?:pip install\s+)(.+)', line)
                           if pkgs:
                               for p in pkgs[0].split():
-                                  name = re.sub(r'\[.*\]', '', p).strip()
+                                  name = re.sub(r'[^a-zA-Z0-9._-]', '', re.sub(r'\[.*\]', '', p))
                                   if (name and not name.startswith('-') and not name.startswith('.')
                                       and not name.startswith('http') and name not in REGISTERED
                                       and not name.startswith('--')):
