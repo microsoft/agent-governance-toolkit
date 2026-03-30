@@ -179,7 +179,7 @@ class DistributedReplayEngine:
 
         # Merge with existing links (avoid duplicates)
         existing = {
-            (l.from_agent, l.to_agent, l.to_trace_id) for l in self._delegation_links
+            (lk.from_agent, lk.to_agent, lk.to_trace_id) for lk in self._delegation_links
         }
         for link in discovered:
             key = (link.from_agent, link.to_agent, link.to_trace_id)
