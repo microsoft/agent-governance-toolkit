@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Tests for the MCP Security Gateway (Community Edition)."""
+"""Tests for the MCP Security Gateway (Public Preview)."""
 
 from __future__ import annotations
 

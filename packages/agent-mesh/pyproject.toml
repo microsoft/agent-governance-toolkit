@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentmesh-platform"
-version = "2.2.0"
-description = "Community Edition — The Secure Nervous System for Cloud-Native Agent Ecosystems - Identity, Trust, Reward, Governance"
+version = "3.0.0"
+description = "Public Preview — The Secure Nervous System for Cloud-Native Agent Ecosystems - Identity, Trust, Reward, Governance"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Microsoft Corporation", email = "agt@microsoft.com"},
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
 maintainers = [
-    {name = "Agent Governance Toolkit Team", email = "agt@microsoft.com"},
+    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
 ]
 keywords = [
     "ai",
@@ -31,7 +31,7 @@ keywords = [
     "eu-ai-act",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Information Technology",
     "License :: OSI Approved :: MIT License",

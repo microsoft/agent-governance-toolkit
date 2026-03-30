@@ -10,7 +10,7 @@ readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 authors = [
-    { name = "Imran Siddique", email = "agt@microsoft.com" }
+    { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
 ]
 keywords = [
     "verification",

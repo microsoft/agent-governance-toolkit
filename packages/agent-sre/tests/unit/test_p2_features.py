@@ -299,7 +299,7 @@ class TestPostmortem:
 
     def test_generator_summary(self):
         gen = PostmortemGenerator()
-        # No postmortems generated in Community Edition
+        # No postmortems generated in Public Preview
         s = gen.summary()
         assert s["total"] == 0
 

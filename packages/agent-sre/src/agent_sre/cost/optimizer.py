@@ -1,9 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """Cost optimization — basic model cost estimation and recommendation.
 
-Cost optimization analysis is not available in Community Edition.
+Cost optimization analysis is not available in Public Preview.
 """
 
 from __future__ import annotations
@@ -107,15 +107,15 @@ class CostOptimizer:
         )
 
     def pareto_frontier(self, task: TaskProfile) -> list[CostEstimate]:
-        """Cost optimization — not available in Community Edition."""
+        """Cost optimization — not available in Public Preview."""
         raise NotImplementedError(
-            "Not available in Community Edition"
+            "Not available in Public Preview"
         )
 
     def simulate(self, task: TaskProfile, model_name: str, volume: int) -> dict[str, object]:
-        """Cost simulation — not available in Community Edition."""
+        """Cost simulation — not available in Public Preview."""
         raise NotImplementedError(
-            "Cost simulation is not available in Community Edition"
+            "Cost simulation is not available in Public Preview"
         )
 
     def suggest_routing(self, tasks: list[TaskProfile]) -> dict[str, str]:

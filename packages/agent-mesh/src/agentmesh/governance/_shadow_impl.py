@@ -280,8 +280,8 @@ class ShadowMode:
         self._active_session: str | None = None
 
     def set_similarity_function(self, fn: Callable[[Any, Any], float]) -> None:
-        """Set custom similarity function — not available in Community Edition."""
-        raise NotImplementedError("Not available in Community Edition")
+        """Set custom similarity function — not available in Public Preview."""
+        raise NotImplementedError("Not available in Public Preview")
 
     def compare(
         self,
@@ -293,20 +293,20 @@ class ShadowMode:
         current_cost_usd: float = 0.0,
         candidate_cost_usd: float = 0.0,
     ) -> ShadowComparison:
-        """Record a comparison — not available in Community Edition."""
-        raise NotImplementedError("Not available in Community Edition")
+        """Record a comparison — not available in Public Preview."""
+        raise NotImplementedError("Not available in Public Preview")
 
     @property
     def result(self) -> ShadowResult:
         return self._result
 
     def is_passing(self, min_confidence: float = 0.8) -> bool:
-        """Check delivery preview results — not available in Community Edition."""
-        raise NotImplementedError("Not available in Community Edition")
+        """Check delivery preview results — not available in Public Preview."""
+        raise NotImplementedError("Not available in Public Preview")
 
     def finish(self) -> ShadowResult:
-        """Complete a delivery preview session — not available in Community Edition."""
-        raise NotImplementedError("Not available in Community Edition")
+        """Complete a delivery preview session — not available in Public Preview."""
+        raise NotImplementedError("Not available in Public Preview")
 
     def start_session(
         self,
@@ -453,7 +453,7 @@ class RolloutEvent:
 
 
 class CanaryRollout:
-    """Staged rollout — not available in Community Edition."""
+    """Staged rollout — not available in Public Preview."""
 
     def __init__(
         self,
@@ -489,36 +489,36 @@ class CanaryRollout:
         return ((self.current_step_index + 1) / len(self.steps)) * 100
 
     def start(self) -> None:
-        """Begin the rollout — not available in Community Edition."""
-        raise NotImplementedError("Not available in Community Edition")
+        """Begin the rollout — not available in Public Preview."""
+        raise NotImplementedError("Not available in Public Preview")
 
     def advance(self) -> bool:
-        """Move to the next step — not available in Community Edition."""
-        raise NotImplementedError("Not available in Community Edition")
+        """Move to the next step — not available in Public Preview."""
+        raise NotImplementedError("Not available in Public Preview")
 
     def check_rollback(self, metrics: dict[str, float]) -> bool:
-        """Check rollback conditions — not available in Community Edition."""
-        raise NotImplementedError("Not available in Community Edition")
+        """Check rollback conditions — not available in Public Preview."""
+        raise NotImplementedError("Not available in Public Preview")
 
     def analyze_step(self, metrics: dict[str, float]) -> bool:
-        """Check step analysis criteria — not available in Community Edition."""
-        raise NotImplementedError("Not available in Community Edition")
+        """Check step analysis criteria — not available in Public Preview."""
+        raise NotImplementedError("Not available in Public Preview")
 
     def rollback(self, reason: str = "") -> None:
-        """Roll back — not available in Community Edition."""
-        raise NotImplementedError("Not available in Community Edition")
+        """Roll back — not available in Public Preview."""
+        raise NotImplementedError("Not available in Public Preview")
 
     def pause(self) -> None:
-        """Pause the rollout — not available in Community Edition."""
-        raise NotImplementedError("Not available in Community Edition")
+        """Pause the rollout — not available in Public Preview."""
+        raise NotImplementedError("Not available in Public Preview")
 
     def resume(self) -> None:
-        """Resume a paused rollout — not available in Community Edition."""
-        raise NotImplementedError("Not available in Community Edition")
+        """Resume a paused rollout — not available in Public Preview."""
+        raise NotImplementedError("Not available in Public Preview")
 
     def promote(self) -> None:
-        """Immediately promote — not available in Community Edition."""
-        raise NotImplementedError("Not available in Community Edition")
+        """Immediately promote — not available in Public Preview."""
+        raise NotImplementedError("Not available in Public Preview")
 
     def to_dict(self) -> dict[str, Any]:
         return {

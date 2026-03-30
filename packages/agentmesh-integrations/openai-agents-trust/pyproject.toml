@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
 authors = [
-    { name = "Imran Siddique", email = "imran@agentmesh.dev" },
+    { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" },
 ]
 keywords = ["openai", "agents", "trust", "governance", "guardrails", "security", "audit"]
 classifiers = [
@@ -36,9 +36,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/imran-siddique/agentmesh-integrations/tree/main/openai-agents-trust"
-Repository = "https://github.com/imran-siddique/agentmesh-integrations"
-Issues = "https://github.com/imran-siddique/agentmesh-integrations/issues"
+Homepage = "https://github.com/microsoft/agent-governance-toolkit/tree/main/openai-agents-trust"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/openai_agents_trust"]

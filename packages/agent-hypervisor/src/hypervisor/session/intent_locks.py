@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Resource Locks — stub implementation.
 
-Community edition: locks are not enforced. All acquire calls succeed.
+Public Preview: locks are not enforced. All acquire calls succeed.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ class DeadlockError(Exception):
 
 class IntentLockManager:
     """
-    Resource lock stub (community edition: all locks succeed, no contention).
+    Resource lock stub (Public Preview: all locks succeed, no contention).
     """
 
     def __init__(self) -> None:
@@ -61,7 +61,7 @@ class IntentLockManager:
         intent: LockIntent,
         saga_step_id: str | None = None,
     ) -> IntentLock:
-        """Acquire a lock (community edition: always succeeds)."""
+        """Acquire a lock (Public Preview: always succeeds)."""
         lock = IntentLock(
             agent_did=agent_did,
             session_id=session_id,

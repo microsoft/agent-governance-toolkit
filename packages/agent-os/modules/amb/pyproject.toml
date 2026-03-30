@@ -8,7 +8,7 @@ version = "0.3.0"
 description = "A lightweight, broker-agnostic message bus designed specifically for AI Agents"
 readme = "README.md"
 authors = [
-    { name = "Imran Siddique" }
+    { name = "Microsoft Corporation" }
 ]
 requires-python = ">=3.8"
 classifiers = [

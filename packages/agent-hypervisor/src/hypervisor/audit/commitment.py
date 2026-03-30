@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Hash Commitment — stub implementation.
 
-Community edition: stores commitments in-memory only.
+Public Preview: stores commitments in-memory only.
 No blockchain anchoring.
 """
 
@@ -31,7 +31,7 @@ class CommitmentEngine:
     """
     Simple in-memory commitment store.
 
-    Community edition: stores commitments locally, no external anchoring.
+    Public Preview: stores commitments locally, no external anchoring.
     """
 
     def __init__(self) -> None:
@@ -63,7 +63,7 @@ class CommitmentEngine:
         return record.hash_chain_root == expected_root
 
     def queue_for_batch(self, record: CommitmentRecord) -> None:
-        """Queue a commitment (community edition: no-op)."""
+        """Queue a commitment (Public Preview: no-op)."""
         self._batch_queue.append(record)
 
     def flush_batch(self) -> list[CommitmentRecord]:

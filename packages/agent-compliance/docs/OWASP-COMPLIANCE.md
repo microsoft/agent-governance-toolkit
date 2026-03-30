@@ -250,7 +250,7 @@ This single command installs the complete governance stack:
 |-------|---------|-------------------|
 | **Kernel** | `agent-os-kernel` | ASI-01, ASI-02, ASI-06, ASI-09 |
 | **Trust Mesh** | `agentmesh-platform` | ASI-03, ASI-04, ASI-07, ASI-10 |
-| **Runtime** | `agent-runtime` | ASI-05, ASI-10 |
+| **Runtime** | `agentmesh-runtime` | ASI-05, ASI-10 |
 | **SRE** | `agent-sre` | ASI-08 |
 
 ---

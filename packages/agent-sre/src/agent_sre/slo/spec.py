@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """SLO-as-code: version-controlled SLO definitions in YAML."""
 
 from __future__ import annotations

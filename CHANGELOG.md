@@ -6,27 +6,78 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 > [!IMPORTANT]
-> All releases to date are **community preview releases** for testing and evaluation.
-> They are not official Microsoft-signed releases. Official signed packages are coming
-> in a future release.
+> All releases are currently **public preview releases**. They are Microsoft-signed
+> and production-quality but may have breaking changes before GA.
 
 ## [Unreleased]
 
+### Security
+- Copilot extension CORS policy changed from wildcard (`Access-Control-Allow-Origin: *`) to explicit origin allowlist via `ALLOWED_ORIGINS`, with secure GitHub defaults.
+
+### Breaking Changes
+- Clients calling protected Copilot extension API routes without an `Origin` header are now rejected (`403`).
+- Clients previously relying on unrestricted cross-origin access must configure `ALLOWED_ORIGINS` explicitly.
+
+
+## [3.0.0] - 2026-03-26
+
+### Changed
+- **Official Microsoft-Signed Public Preview** — all packages are now published
+  via ESRP Release with Microsoft signing
+- All package descriptions updated from "Community Edition" to "Public Preview"
+- All Development Status classifiers standardized to "4 - Beta"
+- Package `agent-lightning` renamed to `agentmesh-lightning` on PyPI
+- All personal author references replaced with Microsoft Corporation
+- Contact email updated to agentgovtoolkit@microsoft.com
+
+### Fixed
+- Removed all merge conflict markers from docs
+- Updated all old PyPI package name references (agent-runtime → agentmesh-runtime,
+  agent-lightning → agentmesh-lightning) across README, QUICKSTART, tutorials,
+  workflows, and scripts
+- ESRP pipeline service connection hardcoded for ADO compile-time requirement
+- ESRP pipeline `each` directive syntax fixed in Verify stages
+- License format updated to SPDX string (setuptools deprecation fix)
+
+## [2.3.0] - 2026-03-26
+
 ### Added
-- Demo `--include-attacks` flag for adversarial scenario testing (prompt injection, tool alias bypass, SQL bypass).
-- .NET `SagaStep.MaxAttempts` property replacing deprecated `MaxRetries`.
-- `ContentHashInterceptor` for SHA-256 tool identity verification at intercept time.
-- `ToolRegistry` content hashing — computes and verifies handler integrity at registration and execution.
-- `PolicyEngine.freeze()` method with `MappingProxyType` immutability and mutation audit log.
-- `QuorumConfig` for M-of-N approval requirements in `EscalationHandler`.
-- Escalation fatigue detection — auto-DENY when agents exceed configurable rate threshold.
-- `EscalationRequest.votes` field for per-approver vote tracking.
+- MCP server allowlist/blocklist and plugin trust tiers (#425, #426)
+- Plugin schema adapters and batch evaluation (#424, #429)
+- Governance policy linter CLI command (#404)
+- Pre-commit hooks for plugin manifest validation (#428)
+- GitHub Actions action for governance verification (#423)
+- Event bus, task outcomes, diff policy, and sandbox provider (#398, #396, #395, #394)
+- Graceful degradation, budget policies, and audit logger (#410, #409, #400)
+- JSON schema validation for governance policies (#305, #367)
+- 14 launch-ready tutorials (07–20) covering all toolkit features
+- Tutorials landing page README with learning paths (#422)
+- Copilot instructions with PR review checklist (#413)
+- Pytest markers for slow and integration tests (#375)
+- Reference integration example for plugin marketplace governance (#427)
+
+### Changed
+- Renamed PyPI package `agent-runtime` → `agentmesh-runtime` (name collision with AutoGen) (#444)
+- Renamed PyPI package `agent-marketplace` → `agentmesh-marketplace` (#439)
+- Renamed PyPI package `agent-lightning` → `agentmesh-lightning` (name collision on PyPI)
+
+### Fixed
+- ESRP pipeline `each` directive syntax in Verify stages
+- ESRP pipelines updated to use `ESRP_CERT_IDENTIFIER` secret
+- Hardcoded service connection name (ADO compile-time requirement) (#421)
+- License format updated to SPDX string (setuptools deprecation) in agent-compliance and agent-lightning
+- Corrected license reference in AgentMesh README from Apache 2.0 to MIT (#436)
+- .NET GovernanceMetrics test isolation — flush listener before baseline (#417)
+- Dependency confusion + pydantic dependency fix (#412)
+- Enforced maintainer approval for all external PRs (#392)
 
 ### Security
-- Replaced XOR placeholder encryption with AES-256-GCM in DMZ module.
-- Added Security Model & Limitations section to README.
-- Added security advisories to SECURITY.md for CostGuard and thread safety fixes.
-- Hardened against agent sandbox escape vectors (tool aliasing, runtime policy self-modification, approval fatigue).
+- Moved all ESRP config to pipeline secrets (#370)
+
+### Documentation
+- Standardized package README badges (#373)
+- Added README files to example and skill integration directories (#371, #372, #390)
+- Added requirements for example directories (#372)
 
 ## [2.2.0] - 2026-03-17
 
@@ -226,7 +277,7 @@ pip install agent-governance-toolkit[full]
 - **Microsoft org release** — First publish from `microsoft/agent-governance-toolkit`
 - Added MIT license headers to 1,159 source files across all packages.
 - Migrated all 215 documentation URLs from personal repos to Microsoft org.
-- Replaced personal email references with team alias (`agt@microsoft.com`).
+- Replaced personal email references with team alias (`agentgovtoolkit@microsoft.com`).
 - Enhanced README with hero section, CI badge, navigation links, CLA/Code of Conduct sections.
 - Bumped all 5 package versions from 1.0.0 to 1.0.1.
 

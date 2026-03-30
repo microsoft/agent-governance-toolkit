@@ -3,7 +3,7 @@
 """
 Provider Discovery System for Agent Hypervisor
 
-Enables plug-and-play upgrades from Community Edition to Advanced implementations.
+Enables plug-and-play upgrades from Public Preview to Advanced implementations.
 """
 
 from __future__ import annotations

@@ -38,6 +38,7 @@ Learn by doing with our Jupyter notebooks:
 ### 🔧 Reference
 
 - [Framework Integrations](integrations.md) - LangChain, OpenAI, CrewAI
+- [AgentConfig File Reference](agent-config-reference.md) - Supported YAML keys and validation rules
 - [Dependencies](dependencies.md) - Package dependencies
 - [Security Specification](security-spec.md) - Security model
 - [FAQ](faq.md) - Common questions and answers
@@ -133,7 +134,7 @@ policies:
 
 | IDE | Status | Link |
 |-----|--------|------|
-| VS Code | ✅ Available | [Marketplace](extensions/vscode/) |
+| VS Code | ✅ Available | [Marketplace](../../agent-os-vscode/) |
 | JetBrains | ✅ Available | [Plugin](extensions/jetbrains/) |
 | Cursor | ✅ Available | [Extension](extensions/cursor/) |
 | GitHub Copilot | ✅ Available | [Extension](extensions/copilot/) |

@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Sponsorship Protocol — stub implementation.
 
-Community edition: sponsorship is not enforced. All requests are approved.
+Public Preview: sponsorship is not enforced. All requests are approved.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ class VouchRecord:
 
 class VouchingEngine:
     """
-    Sponsorship stub (community edition: approves all, no bonding).
+    Sponsorship stub (Public Preview: approves all, no bonding).
     """
 
     SCORE_SCALE = VOUCHING_SCORE_SCALE
@@ -66,7 +66,7 @@ class VouchingEngine:
         bond_pct: float | None = None,
         expiry: datetime | None = None,
     ) -> VouchRecord:
-        """Create a sponsorship record (community edition: always succeeds, no bonding)."""
+        """Create a sponsorship record (Public Preview: always succeeds, no bonding)."""
         record = VouchRecord(
             vouch_id=f"sponsor:{uuid.uuid4()}",
             voucher_did=voucher_did,
@@ -85,7 +85,7 @@ class VouchingEngine:
         vouchee_sigma: float,
         risk_weight: float,
     ) -> float:
-        """Return sponsored agent's own score (community edition: no sponsor boost)."""
+        """Return sponsored agent's own score (Public Preview: no sponsor boost)."""
         return vouchee_sigma
 
     def get_vouchers_for(self, agent_did: str, session_id: str) -> list[VouchRecord]:
@@ -98,7 +98,7 @@ class VouchingEngine:
         ]
 
     def get_total_exposure(self, voucher_did: str, session_id: str) -> float:
-        """Always zero in community edition."""
+        """Always zero in Public Preview."""
         return 0.0
 
     def release_bond(self, vouch_id: str) -> None:

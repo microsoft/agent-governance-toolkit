@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Ephemeral Session Data Garbage Collection — stub implementation.
 
-Community edition: GC is a no-op. Data is retained in-memory for
+Public Preview: GC is a no-op. Data is retained in-memory for
 session lifetime only.
 """
 
@@ -50,7 +50,7 @@ class RetentionPolicy:
 
 class EphemeralGC:
     """
-    GC stub (community edition: logs collection requests, no actual purge).
+    GC stub (Public Preview: logs collection requests, no actual purge).
     """
 
     def __init__(self, policy: RetentionPolicy | None = None) -> None:
@@ -70,7 +70,7 @@ class EphemeralGC:
         estimated_cache_bytes: int = 0,
         estimated_delta_bytes: int = 0,
     ) -> GCResult:
-        """Log a GC request (community edition: no actual purge)."""
+        """Log a GC request (Public Preview: no actual purge)."""
         result = GCResult(
             session_id=session_id,
             retained_deltas=delta_count,

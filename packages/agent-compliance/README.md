@@ -12,9 +12,8 @@
 [![PyPI](https://img.shields.io/pypi/v/agent-governance-toolkit)](https://pypi.org/project/agent-governance-toolkit/)
 
 > [!IMPORTANT]
-> **Community Preview** — The `agent-governance-toolkit` package on PyPI is a community preview
-> release for testing and evaluation only. It is **not** an official Microsoft-signed release.
-> Official signed packages will be available in a future release.
+> **Public Preview** — The `agent-governance-toolkit` package on PyPI is a Microsoft-signed
+> public preview release. APIs may change before GA.
 
 ```
 pip install agent-governance-toolkit[full]
@@ -174,7 +173,7 @@ The meta-package ensures all components are version-compatible and properly inte
 agent-governance ─── The meta-package (you are here)
 ├── agent-os-kernel ─── Governance kernel
 ├── agentmesh-platform ─── Zero-trust mesh
-├── agent-runtime ─── Runtime supervisor (optional)
+├── agentmesh-runtime ─── Runtime supervisor (optional)
 └── agent-sre ─── Reliability engineering (optional)
 ```
 

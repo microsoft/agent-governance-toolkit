@@ -47,7 +47,7 @@ Installation:
 from __future__ import annotations
 
 __version__ = "2.0.2"
-__author__ = "Imran Siddique"
+__author__ = "Microsoft Corporation"
 __license__ = "MIT"
 
 import logging

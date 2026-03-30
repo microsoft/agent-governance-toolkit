@@ -96,8 +96,8 @@ agent = create_agent(callbacks=[callback])
 
 ## Related
 
-- [AgentMesh](https://github.com/imran-siddique/agent-mesh) - Core trust mesh platform
-- [Agent-OS](https://github.com/imran-siddique/agent-os) - Governance kernel
+- [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) - Core trust mesh platform
+- [Agent-OS](https://github.com/microsoft/agent-governance-toolkit) - Governance kernel
 
 ## License
 

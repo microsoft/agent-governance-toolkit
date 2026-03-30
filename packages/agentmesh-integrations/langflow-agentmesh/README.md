@@ -2,7 +2,7 @@
 
 Governance components for [Langflow](https://github.com/langflow-ai/langflow) — policy enforcement, trust-based routing, audit logging, and compliance checking for visual AI flows.
 
-> Part of the [AgentMesh](https://github.com/imran-siddique/agent-os) ecosystem.
+> Part of the [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) ecosystem.
 
 ## What This Does
 

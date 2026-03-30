@@ -13,7 +13,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Self-Correcting Agent Team",
-    author_email="research@scak.ai",
+    author_email="agentgovtoolkit@microsoft.com",
     url="https://github.com/microsoft/agent-governance-toolkit",
     project_urls={
         "Bug Tracker": "https://github.com/microsoft/agent-governance-toolkit/issues",

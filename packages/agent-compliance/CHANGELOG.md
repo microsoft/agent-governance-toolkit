@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Security Scan GitHub Action** (`action/security-scan`) - Automated security validation for AI agent code
+  - Hardcoded secret detection using detect-secrets
+  - Dependency vulnerability scanning (pip-audit, npm audit)
+  - Dangerous code pattern detection using bandit
+  - Markdown code block scanning for embedded executable code
+  - Exemption system via `.security-exemptions.json` with justification tracking and expiration dates
+  - Severity-based blocking (Critical/High blocks merge, Medium/Low warns)
+  
+- **Governance Attestation GitHub Action** (`action/governance-attestation`) - PR governance checklist validation
+  - Validates exactly one checkbox marked per required section
+  - Enforces governance attestation template usage
+  - Configurable required sections for organizational compliance
+  
+- **Test coverage** - 42 comprehensive tests with 100% coverage for new security and governance modules
+- **Documentation updates** - Added GitHub Actions integration examples to README.md and CONTRIBUTING.md
+- **AGENTS.md** - Developer guidance for agent-compliance package
+
 ## [1.1.0] - 2026-03-15
 
 ### Changed

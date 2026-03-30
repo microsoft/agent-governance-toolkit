@@ -14,7 +14,7 @@ class TestSlashingEngine:
         self.slashing = SlashingEngine(self.vouching)
         self.session = "session:test-penalize"
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_vouchee_blacklisted(self):
         """Sponsored agent σ → 0 on violation."""
         scores = {"did:mesh:bad": 0.7, "did:mesh:good": 0.9}
@@ -32,7 +32,7 @@ class TestSlashingEngine:
         assert scores["did:mesh:bad"] == 0.0
         assert result.vouchee_sigma_after == 0.0
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_voucher_collateral_clip(self):
         """σ_new = σ_old × (1 - ω)"""
         scores = {"did:mesh:bad": 0.5, "did:mesh:sponsor": 0.9}
@@ -70,7 +70,7 @@ class TestSlashingEngine:
 
         assert scores["did:mesh:sponsor"] >= SlashingEngine.SIGMA_FLOOR
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_multiple_vouchers_all_clipped(self):
         """All sponsors for a sponsored agent get clipped."""
         scores = {"did:mesh:bad": 0.4, "did:mesh:v1": 0.8, "did:mesh:v2": 0.7}

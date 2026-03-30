@@ -3,17 +3,17 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent-runtime"
-version = "2.2.0"
-description = "Community Edition — Agent Runtime: Execution supervisor for multi-agent sessions with privilege rings, saga orchestration, and audit trails"
+name = "agentmesh-runtime"
+version = "3.0.0"
+description = "Public Preview — AgentMesh Runtime: Execution supervisor for multi-agent sessions with privilege rings, saga orchestration, and audit trails"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [
-    {name = "Microsoft Corporation", email = "agt@microsoft.com"},
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
 maintainers = [
-    {name = "Agent Governance Toolkit Team", email = "agt@microsoft.com"},
+    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
 ]
 keywords = [
     "ai", "agents", "runtime", "trust", "multi-agent",

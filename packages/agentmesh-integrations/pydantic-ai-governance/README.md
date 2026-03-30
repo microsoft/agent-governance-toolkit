@@ -2,7 +2,7 @@
 
 Governance middleware for [PydanticAI](https://ai.pydantic.dev/) — semantic policy enforcement, trust scoring, and audit trails for agent tool execution.
 
-> Part of the [AgentMesh](https://github.com/imran-siddique/agent-os) ecosystem.
+> Part of the [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) ecosystem.
 
 ## What This Does
 

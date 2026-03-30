@@ -1,6 +1,6 @@
 <div align="center">
 
-# AgentMesh — Community Edition
+# AgentMesh — Public Preview
 
 **SSL for AI Agents**
 
@@ -17,9 +17,8 @@
 [![awesome-opentelemetry](https://img.shields.io/badge/awesome--opentelemetry-listed-orange)](https://github.com/magsther/awesome-opentelemetry/pull/24)
 
 > [!IMPORTANT]
-> **Community Preview** — The `agentmesh-platform` package on PyPI is a community preview release
-> for testing and evaluation only. It is **not** an official Microsoft-signed release.
-> Official signed packages will be available in a future release.
+> **Public Preview** — The `agentmesh-platform` package on PyPI is a Microsoft-signed
+> public preview release. APIs may change before GA.
 
 > ⭐ **If this project helps you, please star it!** It helps others discover AgentMesh.
 
@@ -579,7 +578,7 @@ report = compliance.generate_report(
 | Quarter | Milestone |
 |---------|-----------|
 | **Q1 2026** | ✅ Core trust layer, identity, governance engine, 6 framework integrations |
-| **Q2 2026** | TypeScript SDK, Go SDK, Dashboard UI. Marketplace is now a standalone `agent-marketplace` package. |
+| **Q2 2026** | TypeScript SDK, Go SDK, Dashboard UI. Marketplace is now a standalone `agentmesh-marketplace` package. |
 | **Q3 2026** | AI Card spec contribution, CNCF Sandbox application |
 | **Q4 2026** | Managed cloud service (AgentMesh Cloud), SOC2 Type II |
 
@@ -649,7 +648,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-Apache 2.0 — See [LICENSE](LICENSE) for details.
+MIT — See [LICENSE](LICENSE) for details.
 
 ---
 

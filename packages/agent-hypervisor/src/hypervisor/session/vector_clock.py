@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Version Counters — stub implementation.
 
-Community edition: no causal consistency enforcement.
+Public Preview: no causal consistency enforcement.
 VectorClock and VectorClockManager are retained for API compatibility.
 """
 
@@ -20,7 +20,7 @@ class CausalViolationError(Exception):
 
 @dataclass
 class VectorClock:
-    """A version counter (community edition: tracking only, no enforcement).
+    """A version counter (Public Preview: tracking only, no enforcement).
 
     Thread-safe: all reads and mutations are guarded by an internal lock
     to prevent data races when multiple agents tick/merge concurrently.
@@ -77,7 +77,7 @@ class VectorClock:
 
 class VectorClockManager:
     """
-    Version counter stub (community edition: no causal enforcement).
+    Version counter stub (Public Preview: no causal enforcement).
     Reads and writes always succeed.
     """
 
@@ -96,7 +96,7 @@ class VectorClockManager:
         agent_did: str,
         strict: bool = True,
     ) -> VectorClock:
-        """Record a write (community edition: never rejects)."""
+        """Record a write (Public Preview: never rejects)."""
         agent_clock = self._agent_clocks.get(agent_did, VectorClock())
         agent_clock.tick(agent_did)
         self._path_clocks[path] = agent_clock.copy()

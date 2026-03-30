@@ -12,7 +12,7 @@ keywords:
   - zero-trust
 home: https://github.com/microsoft/agent-governance-toolkit
 maintainers:
-  - name: Imran Siddique
-    email: agt@microsoft.com
+  - name: Microsoft Corporation
+    email: agentgovtoolkit@microsoft.com
 sources:
   - https://github.com/microsoft/agent-governance-toolkit

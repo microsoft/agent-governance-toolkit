@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """Replay engine for deterministic re-execution of agent traces."""
 
 from __future__ import annotations
@@ -234,7 +234,7 @@ class ReplayEngine:
         return diffs
 
     def what_if(self, trace: Trace, overrides: dict[str, dict[str, Any]]) -> ReplayResult:
-        """Trace comparison — not available in Community Edition."""
+        """Trace comparison — not available in Public Preview."""
         raise NotImplementedError(
-            "Not available in Community Edition"
+            "Not available in Public Preview"
         )

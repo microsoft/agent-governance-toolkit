@@ -42,11 +42,38 @@ pip install -e "packages/agent-mesh[dev]"
 pip install -e "packages/agent-runtime[dev]"
 pip install -e "packages/agent-sre[dev]"
 pip install -e "packages/agent-compliance[dev]"
-pip install -e "packages/agent-marketplace[dev]"
+pip install -e "packages/agent-marketplace[dev]"  # installs agentmesh-marketplace
 pip install -e "packages/agent-lightning[dev]"
 
 # Run tests
 pytest
+```
+
+### Docker Quickstart
+
+If you prefer a containerized development environment, use the root Docker
+configuration. The image includes Python 3.11, Node.js 22, the core editable
+Python packages in this monorepo, and the TypeScript SDK dependencies.
+
+```bash
+# Build and start the development container
+docker compose up --build dev
+
+# Open a shell in the running container
+docker compose exec dev bash
+
+# Run the full test suite
+docker compose run --rm test
+```
+
+The repository is bind-mounted into `/workspace`, so Python source changes are
+available immediately without rebuilding the image. If you update package
+metadata or dependency definitions, rebuild with `docker compose build`.
+
+To launch the optional Agent Hypervisor dashboard:
+
+```bash
+docker compose --profile dashboard up --build dashboard
 ```
 
 ### Package Structure
@@ -57,11 +84,11 @@ This is a mono-repo with seven packages:
 |---------|-----------|-------------|
 | `agent-os-kernel` | `packages/agent-os/` | Kernel architecture for policy enforcement |
 | `agentmesh` | `packages/agent-mesh/` | Inter-agent trust and identity mesh |
-| `agent-runtime` | `packages/agent-runtime/` | Runtime sandboxing and capability isolation |
+| `agentmesh-runtime` | `packages/agent-runtime/` | Runtime sandboxing and capability isolation |
 | `agent-sre` | `packages/agent-sre/` | Observability, alerting, and reliability |
 | `agent-governance` | `packages/agent-compliance/` | Unified installer and runtime policy enforcement |
-| `agent-marketplace` | `packages/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
-| `agent-lightning` | `packages/agent-lightning/` | RL training governance with governed runners and policy rewards |
+| `agentmesh-marketplace` | `packages/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
+| `agentmesh-lightning` | `packages/agent-lightning/` | RL training governance with governed runners and policy rewards |
 
 ### Coding Guidelines
 
@@ -92,6 +119,8 @@ pytest tests/ -x -q
 ### Security
 
 - Review the [SECURITY.md](SECURITY.md) file for vulnerability reporting procedures.
+- **Security scanning runs automatically** on all PRs — see [docs/security-scanning.md](docs/security-scanning.md) for details
+- Use `.security-exemptions.json` to suppress false positives (requires justification)
 - Never commit secrets, credentials, or tokens.
 - Use `--no-cache-dir` for pip installs in Dockerfiles.
 - Pin dependencies to specific versions in `pyproject.toml`.
@@ -102,7 +131,7 @@ pytest tests/ -x -q
 > AI-only approvals and bot approvals do NOT satisfy this requirement.
 
 This policy is enforced by:
-1. **CODEOWNERS** — every file requires review from `@imran-siddique`
+1. **CODEOWNERS** — every file requires review from `@microsoft/agent-governance-toolkit`
 2. **`require-maintainer-approval.yml`** — CI check that blocks merge without human maintainer approval
 3. **Branch protection** — CODEOWNERS review required on `main`
 

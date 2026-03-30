@@ -151,5 +151,5 @@ Environment variables (TODO: not yet wired up - currently require programmatic i
 
 ## Related
 
-- [AgentMesh](https://github.com/imran-siddique/agent-mesh) - Trust mesh platform
-- [Agent-OS](https://github.com/imran-siddique/agent-os) - Governance kernel
+- [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) - Trust mesh platform
+- [Agent-OS](https://github.com/microsoft/agent-governance-toolkit) - Governance kernel

@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
-    { name = "Imran Siddique" },
+    { name = "Microsoft Corporation" },
 ]
 keywords = ["flowise", "agentmesh", "governance", "trust", "audit", "rate-limiting", "agents"]
 classifiers = [

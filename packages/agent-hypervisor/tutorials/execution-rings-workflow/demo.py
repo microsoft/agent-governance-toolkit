@@ -209,7 +209,7 @@ def run_scenario_2(enforcer: RingEnforcer, audit: AuditTrail) -> None:
 def run_scenario_3(enforcer: RingEnforcer, audit: AuditTrail) -> None:
     """Ring elevation — temporary sudo for emergency access.
 
-    Note: RingElevationManager.request_elevation() raises in community edition,
+    Note: RingElevationManager.request_elevation() raises in public preview,
     so we simulate elevation logic directly to illustrate the concept.
     """
     print_scenario(3, "Ring Elevation")

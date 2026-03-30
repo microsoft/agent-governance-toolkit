@@ -1,6 +1,6 @@
 <div align="center">
 
-# Agent OS — Community Edition
+# Agent OS — Public Preview
 
 **A kernel architecture for governing autonomous AI agents**
 
@@ -11,9 +11,8 @@
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 
 > [!IMPORTANT]
-> **Community Preview** — The `agent-os-kernel` package on PyPI is a community preview release
-> for testing and evaluation only. It is **not** an official Microsoft-signed release.
-> Official signed packages will be available in a future release.
+> **Public Preview** — The `agent-os-kernel` package on PyPI is a Microsoft-signed
+> public preview release. APIs may change before GA.
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent OS.
 
@@ -420,7 +419,7 @@ agent-os/
 | [`mute-agent`](modules/mute-agent/) | 4 | `mute-agent` | Decoupled reasoning/execution architecture | ⚠️ No tests |
 | [`nexus`](modules/nexus/) | — | *Not published* | Trust exchange network | 🔬 Prototype |
 | [`mcp-kernel-server`](modules/mcp-kernel-server/) | Int | `mcp-kernel-server` | MCP server for Claude Desktop | ⚠️ No tests |
-| [**`runtime`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agent-runtime` | **Execution supervisor — Execution Rings, Joint Liability, Saga Orchestrator** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
+| [**`runtime`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agentmesh-runtime` | **Execution supervisor — Execution Rings, Joint Liability, Saga Orchestrator** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
 
 ---
 
@@ -428,7 +427,7 @@ agent-os/
 
 > **Execution supervisor for multi-agent collaboration** — think "VMware for AI agents."
 > 
-> **Now its own repo: [`agent-runtime`](https://github.com/microsoft/agent-governance-toolkit)** — 184 tests, 268μs full pipeline, zero dependencies beyond pydantic.
+> **Now its own repo: [`agentmesh-runtime`](https://github.com/microsoft/agent-governance-toolkit)** — 184 tests, 268μs full pipeline, zero dependencies beyond pydantic.
 
 Just as OS runtimes isolate execution environments and enforce resource boundaries, the Agent Runtime isolates AI agent sessions and enforces **governance boundaries** at sub-millisecond latency.
 
@@ -462,7 +461,7 @@ Just as OS runtimes isolate execution environments and enforce resource boundari
 ### Quick Start
 
 ```bash
-pip install agent-runtime
+pip install agentmesh-runtime
 ```
 
 ```python
@@ -501,7 +500,7 @@ summary_hash = await rt.terminate_session(session.sso.session_id)
 | Extension | Description | Status |
 |-----------|-------------|--------|
 | [`mcp-server`](extensions/mcp-server/) | ⭐ **MCP Server** — Works with Claude, Copilot, Cursor (`npx agentos-mcp-server`) | ✅ Published (v1.0.1) |
-| [`vscode`](extensions/vscode/) | VS Code extension with real-time policy checks, enterprise features | ✅ Published (v1.0.1) |
+| [`vscode`](../../agent-os-vscode/) | VS Code extension with real-time policy checks, enterprise features | ✅ Published (v1.0.1) |
 | [`copilot`](extensions/copilot/) | GitHub Copilot extension (Vercel/Docker deployment) | ✅ Published (v1.0.0) |
 | [`jetbrains`](extensions/jetbrains/) | IntelliJ, PyCharm, WebStorm plugin (Kotlin) | ✅ Built (v1.0.0) |
 | [`cursor`](extensions/cursor/) | Cursor IDE extension (Composer integration) | ✅ Built (v0.1.0) |

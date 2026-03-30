@@ -29,19 +29,19 @@ class TestCircuitBreaker:
         assert not cb.is_available
 
     def test_half_open_after_timeout(self):
-        """Community Edition: no auto-transition to HALF_OPEN. Stays OPEN."""
+        """Public Preview: no auto-transition to HALF_OPEN. Stays OPEN."""
         config = CircuitBreakerConfig(failure_threshold=2, timeout_seconds=0.01)
         cb = CircuitBreaker("agent-1", config)
         cb.record_failure("err1")
         cb.record_failure("err2")
         assert cb.state == CircuitState.OPEN
         time.sleep(0.02)
-        # No auto-transition in Community Edition
+        # No auto-transition in Public Preview
         assert cb.state == CircuitState.OPEN
         assert not cb.is_available
 
     def test_half_open_to_closed_on_success(self):
-        """Community Edition: use force_close to recover from OPEN."""
+        """Public Preview: use force_close to recover from OPEN."""
         config = CircuitBreakerConfig(failure_threshold=2, timeout_seconds=0.01, success_threshold=2)
         cb = CircuitBreaker("agent-1", config)
         cb.record_failure("e1")
@@ -52,7 +52,7 @@ class TestCircuitBreaker:
         assert cb.state == CircuitState.CLOSED
 
     def test_half_open_to_open_on_failure(self):
-        """Community Edition: stays OPEN until manual close/reset."""
+        """Public Preview: stays OPEN until manual close/reset."""
         config = CircuitBreakerConfig(failure_threshold=2, timeout_seconds=0.01)
         cb = CircuitBreaker("agent-1", config)
         cb.record_failure("e1")

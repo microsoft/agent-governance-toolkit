@@ -10,7 +10,7 @@ readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.9"
 authors = [
-    { name = "Imran Siddique" }
+    { name = "Microsoft Corporation" }
 ]
 keywords = ["pydantic-ai", "governance", "agents", "trust", "policy", "guardrails"]
 classifiers = [
@@ -34,8 +34,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/imran-siddique/agentmesh-integrations"
-Repository = "https://github.com/imran-siddique/agentmesh-integrations"
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pydantic_ai_governance"]

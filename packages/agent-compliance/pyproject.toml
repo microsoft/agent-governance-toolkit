@@ -4,16 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-governance-toolkit"
-version = "2.2.0"
-description = "Community Edition — Unified installer and runtime policy enforcement for the Agent Governance Toolkit"
+version = "3.0.0"
+description = "Public Preview — Unified installer and runtime policy enforcement for the Agent Governance Toolkit"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.9"
 authors = [
-    {name = "Microsoft Corporation", email = "agt@microsoft.com"},
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
 maintainers = [
-    {name = "Agent Governance Toolkit Team", email = "agt@microsoft.com"},
+    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
 ]
 keywords = [
     "ai-agents", "governance", "multi-agent", "trust", "security",
@@ -21,9 +21,8 @@ keywords = [
     "runtime", "sre", "llm", "autonomous-agents", "enterprise-ai"
 ]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -40,12 +39,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-runtime = ["agent-runtime>=2.0.0"]
+runtime = ["agentmesh-runtime>=2.0.0"]
 sre = ["agent-sre>=1.0.0"]
 opa = []
 cedar = ["cedarpy>=4.0.0"]
 full = [
-    "agent-runtime>=2.0.0",
+    "agentmesh-runtime>=2.0.0",
     "agent-sre>=1.0.0",
 ]
 

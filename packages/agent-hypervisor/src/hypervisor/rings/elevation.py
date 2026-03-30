@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Ring Elevation — privilege escalation stubs.
 
-Community edition: elevation is not supported. All requests are denied.
+Public Preview: elevation is not supported. All requests are denied.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ _DOCS_URL = "https://github.com/microsoft/agent-governance-toolkit/blob/main/doc
 
 @dataclass
 class RingElevation:
-    """A ring elevation grant (stub in community edition)."""
+    """A ring elevation grant (stub in Public Preview)."""
 
     elevation_id: str = field(default_factory=lambda: f"elev:{uuid.uuid4().hex[:8]}")
     agent_did: str = ""
@@ -81,7 +81,7 @@ class RingElevation:
 
 
 class RingElevationManager:
-    """Manages ring elevations (community edition: always denies)."""
+    """Manages ring elevations (Public Preview: always denies)."""
 
     MAX_ELEVATION_TTL = 3600
     DEFAULT_TTL = 300
@@ -99,7 +99,7 @@ class RingElevationManager:
         attestation: str | None = None,
         reason: str = "",
     ) -> RingElevation:
-        """Request temporary ring elevation (community edition: always denied)."""
+        """Request temporary ring elevation (Public Preview: always denied)."""
         # Validate: target must be a higher privilege (lower numeric value)
         if target_ring.value >= current_ring.value:
             denial = ElevationDenialReason.INVALID_TARGET
@@ -132,7 +132,7 @@ class RingElevationManager:
                 agent_did=agent_did,
             )
 
-        # Community edition: all valid requests are denied
+        # Public Preview: all valid requests are denied
         denial = ElevationDenialReason.COMMUNITY_EDITION
         raise RingElevationError(
             _build_elevation_error_message(

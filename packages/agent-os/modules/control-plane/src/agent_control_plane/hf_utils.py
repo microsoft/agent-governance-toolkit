@@ -390,7 +390,7 @@ class ModelCardInfo:
     metrics: Dict[str, Any] = field(default_factory=dict)
     citation: str = ""
     license: str = "MIT"
-    authors: List[str] = field(default_factory=lambda: ["Imran Siddique"])
+    authors: List[str] = field(default_factory=lambda: ["Microsoft Corporation"])
 
 
 def create_model_card(info: Optional[ModelCardInfo] = None) -> str:

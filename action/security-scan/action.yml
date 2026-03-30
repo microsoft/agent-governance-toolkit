@@ -1,0 +1,146 @@
+name: 'Security Scan'
+description: 'Scan for secrets, CVEs, and dangerous code patterns using Agent Governance Toolkit'
+author: 'Microsoft'
+branding:
+  icon: 'shield'
+  color: 'red'
+
+inputs:
+  paths:
+    description: 'Paths to scan (space-separated, e.g., "plugins/ scripts/")'
+    required: true
+  plugin-name:
+    description: 'Plugin name for error messages'
+    required: false
+    default: ''
+  exemptions-file:
+    description: 'Path to .security-exemptions.json file'
+    required: false
+    default: '.security-exemptions.json'
+  min-severity:
+    description: 'Minimum severity to block merge (critical|high|medium|low)'
+    required: false
+    default: 'high'
+  verbose:
+    description: 'Enable verbose output'
+    required: false
+    default: 'false'
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.12'
+  toolkit-version:
+    description: 'Agent Governance Toolkit version to install (default: latest)'
+    required: false
+    default: ''
+
+outputs:
+  status:
+    description: 'Scan status: pass or fail'
+    value: ${{ steps.scan.outputs.status }}
+  findings-count:
+    description: 'Total number of security findings'
+    value: ${{ steps.scan.outputs.findings_count }}
+  blocking-count:
+    description: 'Number of blocking findings (critical/high)'
+    value: ${{ steps.scan.outputs.blocking_count }}
+  findings:
+    description: 'Security findings in JSON format'
+    value: ${{ steps.scan.outputs.findings }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Agent Governance Toolkit
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.toolkit-version }}" ]; then
+          pip install --quiet "agent-governance-toolkit[security]==${{ inputs.toolkit-version }}"
+        else
+          pip install --quiet "agent-governance-toolkit[security]"
+        fi
+
+    - name: Run security scan
+      id: scan
+      shell: bash
+      run: |
+        set +e
+        
+        # Run scanner for each path
+        PATHS="${{ inputs.paths }}"
+        PLUGIN_NAME="${{ inputs.plugin-name }}"
+        VERBOSE_FLAG=""
+        
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          VERBOSE_FLAG="--verbose"
+        fi
+        
+        # Use plugin name from first path if not provided
+        if [ -z "$PLUGIN_NAME" ]; then
+          PLUGIN_NAME=$(basename $(echo $PATHS | awk '{print $1}'))
+        fi
+        
+        # Run the security scanner
+        python -c "
+from pathlib import Path
+from agent_compliance.security import scan_plugin_security
+import json
+import sys
+
+paths = '$PATHS'.split()
+verbose = '${{ inputs.verbose }}' == 'true'
+
+# Scan first path (primary plugin directory)
+plugin_dir = Path(paths[0])
+plugin_name = '$PLUGIN_NAME'
+
+exit_code, error_msg = scan_plugin_security(
+    plugin_dir=plugin_dir,
+    plugin_name=plugin_name,
+    verbose=verbose
+)
+
+# Output for GitHub Actions
+print(f'exit_code={exit_code}', file=sys.stderr)
+if error_msg:
+    print(error_msg)
+
+sys.exit(exit_code)
+" 2>&1 | tee /tmp/security_scan_output.txt
+        
+        EXIT_CODE=$?
+        OUTPUT=$(cat /tmp/security_scan_output.txt)
+        
+        # Set outputs
+        if [ $EXIT_CODE -eq 0 ]; then
+          echo "status=pass" >> "$GITHUB_OUTPUT"
+        else
+          echo "status=fail" >> "$GITHUB_OUTPUT"
+        fi
+        
+        # Parse findings count from output
+        FINDINGS_COUNT=$(echo "$OUTPUT" | grep -oP 'Summary: \K\d+(?= critical)' | head -1 || echo "0")
+        BLOCKING_COUNT=$(echo "$OUTPUT" | grep -oP '(\d+) critical, (\d+) high' | awk '{print $1+$3}' || echo "0")
+        
+        echo "findings_count=$FINDINGS_COUNT" >> "$GITHUB_OUTPUT"
+        echo "blocking_count=$BLOCKING_COUNT" >> "$GITHUB_OUTPUT"
+        
+        # Store full output
+        {
+          echo "findings<<SCANEOF"
+          echo "$OUTPUT"
+          echo "SCANEOF"
+        } >> "$GITHUB_OUTPUT"
+        
+        # Fail if blocking issues found
+        if [ $EXIT_CODE -ne 0 ]; then
+          echo "::error::Security scan failed with $BLOCKING_COUNT blocking issue(s)"
+          exit 1
+        fi
+        
+        echo "::notice::Security scan passed - no blocking issues found"

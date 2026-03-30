@@ -351,7 +351,7 @@ except ImportError:
     _HF_AVAILABLE = False
 
 __version__ = "0.3.0"  # Bump for kernel architecture features
-__author__ = "Imran Siddique"
+__author__ = "Microsoft Corporation"
 
 __all__ = [
     # Main interface

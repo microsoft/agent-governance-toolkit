@@ -1,6 +1,6 @@
 # Understanding Joint Liability for AI Agents
 
-> **Edition:** Community Edition APIs only.
+> **Edition:** Public Preview APIs only.
 > Module path: `src/hypervisor/liability/`
 
 ## Table of Contents
@@ -83,7 +83,7 @@ The `VouchingEngine` enforces several safeguards (configurable via class constan
 - **Default bond percentage** (`DEFAULT_BOND_PCT = 0.20`): 20% of the voucher's σ is bonded by default.
 - **Maximum exposure** (`DEFAULT_MAX_EXPOSURE = 0.80`): A voucher cannot bond more than 80% of its σ across all active vouches.
 
-> **Community edition note:** The community edition approves all vouch requests
+> **Public Preview note:** The Public Preview approves all vouch requests
 > and does not enforce bonding. The API surface is identical — constraints are
 > enforced in the full edition.
 
@@ -122,7 +122,7 @@ eff = engine.compute_eff_score(
 )
 ```
 
-> **Community edition note:** `compute_eff_score` returns the vouchee's own
+> **Public Preview note:** `compute_eff_score` returns the vouchee's own
 > score (`vouchee_sigma`) without the voucher boost. The formula above is
 > applied in the full edition.
 
@@ -166,7 +166,7 @@ print(result.reason)                # "behavioral_drift"
 | `MAX_CASCADE_DEPTH` | 2 | Maximum depth for cascade penalties |
 | `SIGMA_FLOOR` | 0.05 | Minimum σ — an agent is never penalized below this |
 
-> **Community edition note:** `slash` logs the penalty event but does not
+> **Public Preview note:** `slash` logs the penalty event but does not
 > reduce any scores. `vouchee_sigma_after` equals `vouchee_sigma_before` and
 > `voucher_clips` is empty.
 
@@ -240,7 +240,7 @@ ledger.record(
 # Query history
 history = ledger.get_agent_history("did:mesh:agent-b")
 profile = ledger.compute_risk_profile("did:mesh:agent-b")
-print(profile.recommendation)  # "admit" (community edition always admits)
+print(profile.recommendation)  # "admit" (Public Preview always admits)
 ```
 
 Ledger entry types include:

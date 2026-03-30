@@ -20,7 +20,7 @@ dependencies {
 
 intellij {
     version.set("2024.1")
-    type.set("IC") // IntelliJ IDEA Community Edition
+    type.set("IC") // IntelliJ IDEA Public Preview
     
     plugins.set(listOf(
         // No additional plugins required for basic functionality

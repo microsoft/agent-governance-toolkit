@@ -1,9 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """Postmortem data models — basic incident summary.
 
-Postmortem template generation is not available in Community Edition.
+Postmortem template generation is not available in Public Preview.
 """
 
 from __future__ import annotations
@@ -187,9 +187,9 @@ class PostmortemGenerator:
         self._postmortems: list[Postmortem] = []
 
     def generate(self, incident: Incident) -> Postmortem:
-        """Generate postmortem — not available in Community Edition."""
+        """Generate postmortem — not available in Public Preview."""
         raise NotImplementedError(
-            "Not available in Community Edition"
+            "Not available in Public Preview"
         )
 
     def _build_summary(self, incident: Incident) -> str:

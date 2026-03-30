@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 JSON Schema validation for Saga DSL definitions.
 
@@ -112,7 +112,7 @@ SAGA_DEFINITION_SCHEMA: dict[str, Any] = {
                     },
                 },
             },
-            "description": "Fan-out groups (community edition: ignored)",
+            "description": "Fan-out groups (Public Preview: ignored)",
         },
         "metadata": {
             "type": "object",

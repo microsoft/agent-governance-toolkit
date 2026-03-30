@@ -2,7 +2,7 @@
 
 # AgentMesh Integrations
 
-> **📦 Migrated:** This package was moved from [imran-siddique/agentmesh-integrations](https://github.com/imran-siddique/agentmesh-integrations) into the monorepo at `packages/agentmesh-integrations/`.
+> **📦 Migrated:** This package was moved from its original repository into the monorepo at `packages/agentmesh-integrations/`.
 
 
 **Platform Plugins & Trust Providers for AgentMesh**
@@ -47,7 +47,7 @@ AgentMesh core is a lean, zero-external-dependency library. Platform integration
 | [Moltbook](moltbook/) | — | ✅ Stable | AgentMesh governance skill for [Moltbook](https://moltbook.com) agent registry |
 | [Nostr Web of Trust](nostr-wot/) | `agentmesh-nostr-wot` | 🚧 Scaffold | Trust scoring via [MaximumSats](https://github.com/joelklabo/maximumsats-mcp) NIP-85 WoT |
 | [OpenAI Agents](openai-agents-trust/) | [`openai-agents-trust`](https://pypi.org/project/openai-agents-trust/) | ✅ Published (PyPI) | Trust guardrails, policy enforcement, governance hooks, trust-gated handoffs for OpenAI Agents SDK |
-| [OpenClaw Skill](openclaw-skill/) | [`agentmesh-governance`](https://clawhub.ai/imran-siddique/agentmesh-governance) | ✅ Published (ClawHub) | Governance skill for [OpenClaw](https://openclaw.im) agents — policy enforcement, trust scoring, Ed25519 DIDs, hash-chain audit |
+| [OpenClaw Skill](openclaw-skill/) | [`agentmesh-governance`](https://clawhub.ai/microsoft/agentmesh-governance) | ✅ Published (ClawHub) | Governance skill for [OpenClaw](https://openclaw.im) agents — policy enforcement, trust scoring, Ed25519 DIDs, hash-chain audit |
 
 ## Quick Start
 

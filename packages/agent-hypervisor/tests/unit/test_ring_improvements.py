@@ -19,7 +19,7 @@ from hypervisor.rings.elevation import (
 
 
 class TestRingElevation:
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_request_elevation(self):
         mgr = RingElevationManager()
         elev = mgr.request_elevation(
@@ -36,7 +36,7 @@ class TestRingElevation:
         assert not elev.is_expired
         assert elev.remaining_seconds > 0
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_effective_ring_with_elevation(self):
         pass
 
@@ -54,27 +54,27 @@ class TestRingElevation:
                 target_ring=ExecutionRing.RING_3_SANDBOX,
             )
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_cannot_elevate_to_ring_0(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_duplicate_elevation_rejected(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_revoke_elevation(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_tick_expires_elevations(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_ttl_capped_at_max(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_active_elevations_property(self):
         pass
 
@@ -104,11 +104,11 @@ class TestRingInheritance:
         )
         assert child_ring == ExecutionRing.RING_3_SANDBOX
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_parent_child_tracking(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_max_child_ring(self):
         pass
 
@@ -127,11 +127,11 @@ class TestBreachDetector:
             )
         assert result is None
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_breach_detected_with_anomalous_calls(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_circuit_breaker_tripped(self):
         pass
 
@@ -156,19 +156,19 @@ class TestBreachDetector:
         detector.reset_breaker("a1", "s1")
         assert not detector.is_breaker_tripped("a1", "s1")
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_agent_stats(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_stats_for_unknown_agent(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_breach_history(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_mixed_call_pattern(self):
         pass
 

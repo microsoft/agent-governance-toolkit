@@ -1,0 +1,506 @@
+# ---------------------------------------------------------
+# Azure DevOps Pipeline: Unified ESRP Release Publishing
+#
+# Publishes Python (PyPI), npm, and NuGet packages via ESRP
+# Release — Microsoft's approved OSS publishing path.
+#
+# Usage:
+#   - Select target: pypi, npm, nuget, or all
+#   - Use dryRun=true for build-only validation
+#
+# Prerequisites:
+#   1. Complete ESRP Release onboarding (https://aka.ms/esrp-onboarding)
+#   2. Configure Azure Identity (Managed Identity recommended)
+#   3. Set up signing certificate in Azure Key Vault
+#   4. Install ESRP Release ADO Task extension (v11)
+#   5. Configure ADO pipeline variables (see below)
+#
+# See: PUBLISHING.md for full setup guide.
+# ---------------------------------------------------------
+
+trigger: none  # Manual or release-gated trigger only
+
+pr: none
+
+parameters:
+  - name: target
+    type: string
+    displayName: 'What to publish'
+    default: 'all'
+    values:
+      - pypi
+      - npm
+      - nuget
+      - rust
+      - go
+      - all
+
+  - name: dryRun
+    type: boolean
+    displayName: 'Dry run (build only, skip ESRP publish)'
+    default: false
+
+  - name: pythonVersion
+    type: string
+    displayName: 'Python version'
+    default: '3.11'
+
+  - name: nodeVersion
+    type: string
+    displayName: 'Node.js version'
+    default: '20'
+
+  - name: dotnetVersion
+    type: string
+    displayName: '.NET SDK version'
+    default: '8.0.x'
+
+  - name: rustVersion
+    type: string
+    displayName: 'Rust toolchain version'
+    default: 'stable'
+
+  - name: goVersion
+    type: string
+    displayName: 'Go version'
+    default: '1.21'
+
+  - name: pypiPackages
+    type: object
+    displayName: 'Python packages to publish'
+    default:
+      - name: agent-os
+        path: packages/agent-os
+      - name: agent-mesh
+        path: packages/agent-mesh
+      - name: agent-hypervisor
+        path: packages/agent-hypervisor
+      - name: agent-sre
+        path: packages/agent-sre
+      - name: agent-compliance
+        path: packages/agent-compliance
+      - name: agent-runtime
+        path: packages/agent-runtime
+      - name: agent-lightning
+        path: packages/agent-lightning
+
+  - name: npmPackages
+    type: object
+    displayName: 'npm packages to publish'
+    default:
+      - name: agentmesh-copilot-governance
+        path: packages/agentmesh-integrations/copilot-governance
+      - name: agentmesh-mastra
+        path: packages/agentmesh-integrations/mastra-agentmesh
+      - name: agentmesh-api
+        path: packages/agent-mesh/services/api
+      - name: agentmesh-mcp-proxy
+        path: packages/agent-mesh/packages/mcp-proxy
+      - name: agentmesh-sdk
+        path: packages/agent-mesh/sdks/typescript
+      - name: agent-os-copilot-extension
+        path: packages/agent-os/extensions/copilot
+      - name: agentos-mcp-server
+        path: packages/agent-os/extensions/mcp-server
+
+# -------------------------------------------------------
+# ESRP Configuration
+# Service connection name is hardcoded (required at compile time by ADO).
+# All other values sourced from ADO pipeline variables (mark as secret):
+#   ESRP_KEYVAULT_NAME, ESRP_CERT_IDENTIFIER,
+#   ESRP_CLIENT_ID, ESRP_DOMAIN_TENANT_ID, ESRP_OWNERS, ESRP_APPROVERS
+# -------------------------------------------------------
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  # =======================================================
+  # PYTHON (PyPI) — 7 packages
+  # =======================================================
+  - stage: Build_PyPI
+    displayName: 'Build Python Packages'
+    dependsOn: []
+    condition: or(eq('${{ parameters.target }}', 'pypi'), eq('${{ parameters.target }}', 'all'))
+    jobs:
+      - ${{ each pkg in parameters.pypiPackages }}:
+        - job: Build_PyPI_${{ replace(pkg.name, '-', '_') }}
+          displayName: 'Build ${{ pkg.name }}'
+          steps:
+            - checkout: self
+
+            - task: UsePythonVersion@0
+              inputs:
+                versionSpec: '${{ parameters.pythonVersion }}'
+              displayName: 'Use Python ${{ parameters.pythonVersion }}'
+
+            - script: |
+                python -m pip install --upgrade pip
+                pip install --no-cache-dir build==1.2.1 setuptools
+              displayName: 'Install build tools'
+
+            - script: |
+                python -m build
+              workingDirectory: '${{ pkg.path }}'
+              displayName: 'Build ${{ pkg.name }} (sdist + wheel)'
+
+            - script: |
+                echo "=== Built artifacts for ${{ pkg.name }} ==="
+                ls -la dist/
+                if ! ls dist/*.whl 1>/dev/null 2>&1; then
+                  echo "##[error]No wheel (.whl) found"
+                  exit 1
+                fi
+              workingDirectory: '${{ pkg.path }}'
+              displayName: 'Validate build artifacts'
+
+            - task: PublishPipelineArtifact@1
+              inputs:
+                targetPath: '${{ pkg.path }}/dist'
+                artifact: 'pypi-${{ pkg.name }}'
+                publishLocation: 'pipeline'
+              displayName: 'Publish ${{ pkg.name }} artifacts'
+
+  - stage: Publish_PyPI
+    displayName: 'Publish to PyPI via ESRP'
+    dependsOn: Build_PyPI
+    condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'pypi'), eq('${{ parameters.target }}', 'all')))
+    jobs:
+      - ${{ each pkg in parameters.pypiPackages }}:
+        - job: Publish_PyPI_${{ replace(pkg.name, '-', '_') }}
+          displayName: 'Publish ${{ pkg.name }} to PyPI'
+          steps:
+            - task: DownloadPipelineArtifact@2
+              inputs:
+                artifact: 'pypi-${{ pkg.name }}'
+                targetPath: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
+              displayName: 'Download ${{ pkg.name }} artifacts'
+
+            - task: EsrpRelease@11
+              displayName: 'ESRP Publish ${{ pkg.name }} to PyPI'
+              inputs:
+                connectedservicename: 'Agent Governance Toolkit'
+                usemanagedidentity: true
+                keyvaultname: '$(ESRP_KEYVAULT_NAME)'
+                signcertname: '$(ESRP_CERT_IDENTIFIER)'
+                clientid: '$(ESRP_CLIENT_ID)'
+                intent: 'PackageDistribution'
+                contenttype: 'PyPi'
+                contentsource: 'Folder'
+                folderlocation: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
+                waitforreleasecompletion: true
+                owners: '$(ESRP_OWNERS)'
+                approvers: '$(ESRP_APPROVERS)'
+                serviceendpointurl: 'https://api.esrp.microsoft.com'
+                mainpublisher: 'ESRPRELPACMAN'
+                domaintenantid: '$(ESRP_DOMAIN_TENANT_ID)'
+
+  # =======================================================
+  # NPM — 7 packages (@microsoft scope)
+  # =======================================================
+  - stage: Build_npm
+    displayName: 'Build & Pack npm Packages'
+    dependsOn: []
+    condition: or(eq('${{ parameters.target }}', 'npm'), eq('${{ parameters.target }}', 'all'))
+    jobs:
+      - ${{ each pkg in parameters.npmPackages }}:
+        - job: Build_npm_${{ replace(pkg.name, '-', '_') }}
+          displayName: 'Build ${{ pkg.name }}'
+          steps:
+            - checkout: self
+
+            - task: UseNode@1
+              inputs:
+                version: '${{ parameters.nodeVersion }}'
+
+            - script: npm ci --ignore-scripts 2>/dev/null || npm install
+              workingDirectory: '${{ pkg.path }}'
+              displayName: 'Install dependencies'
+
+            - script: npm run build
+              workingDirectory: '${{ pkg.path }}'
+              displayName: 'Build ${{ pkg.name }}'
+
+            - script: |
+                mkdir -p $(Pipeline.Workspace)/npm-out
+                npm pack --pack-destination $(Pipeline.Workspace)/npm-out
+                if ! ls $(Pipeline.Workspace)/npm-out/*.tgz 1>/dev/null 2>&1; then
+                  echo "##[error]No .tgz found for ${{ pkg.name }}"
+                  exit 1
+                fi
+                PRIVATE=$(node -e "console.log(require('./package.json').private || false)")
+                if [ "$PRIVATE" = "true" ]; then
+                  echo "##[error]${{ pkg.name }} is marked private"
+                  exit 1
+                fi
+              workingDirectory: '${{ pkg.path }}'
+              displayName: 'Pack & validate ${{ pkg.name }}'
+
+            - task: PublishPipelineArtifact@1
+              inputs:
+                targetPath: '$(Pipeline.Workspace)/npm-out'
+                artifact: 'npm-${{ pkg.name }}'
+                publishLocation: 'pipeline'
+              displayName: 'Publish ${{ pkg.name }} artifact'
+
+  - stage: Publish_npm
+    displayName: 'Publish to npm via ESRP'
+    dependsOn: Build_npm
+    condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'npm'), eq('${{ parameters.target }}', 'all')))
+    jobs:
+      - job: Publish_npm
+        displayName: 'Publish all packages to npm'
+        steps:
+          - ${{ each pkg in parameters.npmPackages }}:
+            - task: DownloadPipelineArtifact@2
+              inputs:
+                artifact: 'npm-${{ pkg.name }}'
+                targetPath: '$(Pipeline.Workspace)/npm-publish'
+              displayName: 'Download ${{ pkg.name }}'
+
+          - script: |
+              echo "=== All packages to publish ==="
+              find $(Pipeline.Workspace)/npm-publish -name "*.tgz" -type f
+              TOTAL=$(find $(Pipeline.Workspace)/npm-publish -name "*.tgz" -type f | wc -l)
+              echo "Total packages: $TOTAL"
+            displayName: 'List all .tgz packages'
+
+          - task: EsrpRelease@11
+            displayName: 'ESRP Publish to npm'
+            inputs:
+              connectedservicename: 'Agent Governance Toolkit'
+              usemanagedidentity: true
+              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
+              signcertname: '$(ESRP_CERT_IDENTIFIER)'
+              clientid: '$(ESRP_CLIENT_ID)'
+              intent: 'PackageDistribution'
+              contenttype: 'npm'
+              contentsource: 'Folder'
+              folderlocation: '$(Pipeline.Workspace)/npm-publish'
+              waitforreleasecompletion: true
+              owners: '$(ESRP_OWNERS)'
+              approvers: '$(ESRP_APPROVERS)'
+              serviceendpointurl: 'https://api.esrp.microsoft.com'
+              mainpublisher: 'ESRPRELPACMAN'
+              domaintenantid: '$(ESRP_DOMAIN_TENANT_ID)'
+
+  # =======================================================
+  # NUGET — Microsoft.AgentGovernance
+  # =======================================================
+  - stage: Build_NuGet
+    displayName: 'Build & Test .NET SDK'
+    dependsOn: []
+    condition: or(eq('${{ parameters.target }}', 'nuget'), eq('${{ parameters.target }}', 'all'))
+    jobs:
+      - job: BuildAndPack
+        displayName: 'Build, Test, Pack'
+        steps:
+          - checkout: self
+
+          - task: UseDotNet@2
+            inputs:
+              packageType: 'sdk'
+              version: '${{ parameters.dotnetVersion }}'
+            displayName: 'Use .NET SDK ${{ parameters.dotnetVersion }}'
+
+          - script: |
+              dotnet build --configuration Release
+            workingDirectory: 'packages/agent-governance-dotnet'
+            displayName: 'Build .NET SDK'
+
+          - script: |
+              dotnet test --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
+            workingDirectory: 'packages/agent-governance-dotnet'
+            displayName: 'Run .NET tests'
+
+          - task: PublishTestResults@2
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: 'packages/agent-governance-dotnet/**/test-results.trx'
+            displayName: 'Publish test results'
+            condition: always()
+
+          - script: |
+              dotnet pack src/AgentGovernance/AgentGovernance.csproj \
+                --configuration Release \
+                --no-build \
+                --output ./nupkg
+              echo "=== Packed NuGet artifacts ==="
+              ls -la ./nupkg/
+            workingDirectory: 'packages/agent-governance-dotnet'
+            displayName: 'Pack NuGet package'
+
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: 'packages/agent-governance-dotnet/nupkg'
+              artifact: 'nuget-unsigned'
+              publishLocation: 'pipeline'
+            displayName: 'Publish unsigned NuGet artifacts'
+
+  - stage: Publish_NuGet
+    displayName: 'Publish to NuGet.org'
+    dependsOn: Build_NuGet
+    condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'nuget'), eq('${{ parameters.target }}', 'all')))
+    jobs:
+      - job: PublishNuGet
+        displayName: 'Push to NuGet.org'
+        steps:
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifact: 'nuget-unsigned'
+              targetPath: '$(Pipeline.Workspace)/nuget-publish'
+            displayName: 'Download NuGet artifacts'
+
+          - script: |
+              echo "=== Packages to publish ==="
+              ls -la $(Pipeline.Workspace)/nuget-publish/
+            displayName: 'List packages'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Push to NuGet.org'
+            inputs:
+              command: 'push'
+              packagesToPush: '$(Pipeline.Workspace)/nuget-publish/**/*.nupkg;!$(Pipeline.Workspace)/nuget-publish/**/*.symbols.nupkg'
+              nuGetFeedType: 'external'
+              publishFeedCredentials: 'NuGet.org'
+
+  # =======================================================
+  # RUST (crates.io) — agentmesh crate
+  # =======================================================
+  - stage: Build_Rust
+    displayName: 'Build & Test Rust Crate'
+    dependsOn: []
+    condition: or(eq('${{ parameters.target }}', 'rust'), eq('${{ parameters.target }}', 'all'))
+    jobs:
+      - job: BuildAndTest
+        displayName: 'Build, Test, Package'
+        steps:
+          - checkout: self
+
+          - script: |
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${{ parameters.rustVersion }}
+              echo "##vso[task.prependpath]$HOME/.cargo/bin"
+            displayName: 'Install Rust ${{ parameters.rustVersion }}'
+
+          - script: |
+              cargo build --release
+            workingDirectory: 'packages/agent-mesh/sdks/rust/agentmesh'
+            displayName: 'Build agentmesh crate'
+
+          - script: |
+              cargo test --release
+            workingDirectory: 'packages/agent-mesh/sdks/rust/agentmesh'
+            displayName: 'Run tests'
+
+          - script: |
+              cargo package --list
+              cargo package --allow-dirty
+              echo "=== Packaged crate ==="
+              ls -la target/package/
+            workingDirectory: 'packages/agent-mesh/sdks/rust/agentmesh'
+            displayName: 'Package crate'
+
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: 'packages/agent-mesh/sdks/rust/agentmesh/target/package'
+              artifact: 'rust-agentmesh'
+              publishLocation: 'pipeline'
+            displayName: 'Publish crate artifact'
+
+  - stage: Publish_Rust
+    displayName: 'Publish to crates.io'
+    dependsOn: Build_Rust
+    condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'rust'), eq('${{ parameters.target }}', 'all')))
+    jobs:
+      - job: PublishCrate
+        displayName: 'Publish agentmesh to crates.io'
+        steps:
+          - checkout: self
+
+          - script: |
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${{ parameters.rustVersion }}
+              echo "##vso[task.prependpath]$HOME/.cargo/bin"
+            displayName: 'Install Rust ${{ parameters.rustVersion }}'
+
+          - script: |
+              cargo publish
+            workingDirectory: 'packages/agent-mesh/sdks/rust/agentmesh'
+            displayName: 'Publish to crates.io'
+            env:
+              CARGO_REGISTRY_TOKEN: $(CRATES_IO_TOKEN)
+
+  # =======================================================
+  # GO — github.com/microsoft/agent-governance-toolkit module
+  # =======================================================
+  - stage: Build_Go
+    displayName: 'Build & Test Go Module'
+    dependsOn: []
+    condition: or(eq('${{ parameters.target }}', 'go'), eq('${{ parameters.target }}', 'all'))
+    jobs:
+      - job: BuildAndTest
+        displayName: 'Build, Test, Vet'
+        steps:
+          - checkout: self
+
+          - task: GoTool@0
+            inputs:
+              version: '${{ parameters.goVersion }}'
+            displayName: 'Use Go ${{ parameters.goVersion }}'
+
+          - script: |
+              go build ./...
+            workingDirectory: 'packages/agent-mesh/sdks/go'
+            displayName: 'Build Go module'
+
+          - script: |
+              go vet ./...
+            workingDirectory: 'packages/agent-mesh/sdks/go'
+            displayName: 'Vet Go module'
+
+          - script: |
+              go test -v -race -coverprofile=coverage.out ./...
+            workingDirectory: 'packages/agent-mesh/sdks/go'
+            displayName: 'Run tests with coverage'
+
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: 'packages/agent-mesh/sdks/go/coverage.out'
+              artifact: 'go-coverage'
+              publishLocation: 'pipeline'
+            displayName: 'Publish coverage artifact'
+            condition: succeededOrFailed()
+
+  - stage: Publish_Go
+    displayName: 'Tag Go Module Release'
+    dependsOn: Build_Go
+    condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'go'), eq('${{ parameters.target }}', 'all')))
+    jobs:
+      - job: TagModule
+        displayName: 'Validate and tag Go module'
+        steps:
+          - checkout: self
+            persistCredentials: true
+
+          - task: GoTool@0
+            inputs:
+              version: '${{ parameters.goVersion }}'
+            displayName: 'Use Go ${{ parameters.goVersion }}'
+
+          - script: |
+              MODULE_PATH="packages/agent-mesh/sdks/go"
+              VERSION=$(grep '^// Version:' ${MODULE_PATH}/doc.go 2>/dev/null | awk '{print $3}' || echo "")
+              if [ -z "$VERSION" ]; then
+                echo "##[warning]No version found in doc.go — skipping tag"
+                echo "To publish, add '// Version: v0.1.0' to doc.go"
+                exit 0
+              fi
+              TAG="${MODULE_PATH}/${VERSION}"
+              echo "Module tag: ${TAG}"
+              if git rev-parse "${TAG}" >/dev/null 2>&1; then
+                echo "##[warning]Tag ${TAG} already exists — skipping"
+              else
+                git tag "${TAG}"
+                git push origin "${TAG}"
+                echo "Tagged ${TAG} — Go module proxy will index automatically"
+              fi
+            displayName: 'Tag Go module for proxy indexing'

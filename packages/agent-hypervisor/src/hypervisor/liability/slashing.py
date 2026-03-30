@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Collateral Penalty Engine — stub implementation.
 
-Community edition: penalty is not enforced. Penalty calls are logged only.
+Public Preview: penalty is not enforced. Penalty calls are logged only.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ class VoucherClip:
 
 class SlashingEngine:
     """
-    Penalty stub (community edition: logs penalty events, no penalties applied).
+    Penalty stub (Public Preview: logs penalty events, no penalties applied).
     """
 
     MAX_CASCADE_DEPTH = 2
@@ -61,7 +61,7 @@ class SlashingEngine:
         agent_scores: dict[str, float],
         cascade_depth: int = 0,
     ) -> SlashResult:
-        """Log a penalty event (community edition: no penalties applied)."""
+        """Log a penalty event (Public Preview: no penalties applied)."""
         result = SlashResult(
             slash_id=f"penalize:{uuid.uuid4()}",
             vouchee_did=vouchee_did,

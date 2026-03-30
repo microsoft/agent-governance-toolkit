@@ -1,7 +1,7 @@
 {
   "name": "@microsoft/agent-os-copilot-extension",
   "version": "1.0.0",
-  "description": "Community Edition — AgentOS GitHub Copilot Extension: Build safe AI agents with natural language and 0% policy violations",
+  "description": "Public Preview — AgentOS GitHub Copilot Extension: Build safe AI agents with natural language and 0% policy violations",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "repository": {
@@ -54,7 +54,7 @@
     "jest": "^30.3.0",
     "ts-jest": "^29.0.0",
     "ts-node": "^10.9.0",
-    "typescript": "^6.0.2"
+    "typescript": "^5.7.0"
   },
   "copilotExtension": {
     "name": "agentos",

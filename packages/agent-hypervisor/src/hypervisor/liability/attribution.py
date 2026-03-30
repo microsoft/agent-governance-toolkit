@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Fault Logging — stub implementation.
 
-Community edition: assigns full liability to the direct-cause agent.
+Public Preview: assigns full liability to the direct-cause agent.
 No causal chain analysis.
 """
 

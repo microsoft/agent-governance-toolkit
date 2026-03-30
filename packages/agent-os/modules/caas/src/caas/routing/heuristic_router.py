@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic context/memory management
+# Public Preview — basic context/memory management
 """
 Heuristic Router — routes all queries to the default retriever.
 

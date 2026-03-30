@@ -221,7 +221,7 @@ def slo_status_line(slo: SLO) -> None:
 # ── Canary rollout engine ────────────────────────────────────────────
 # CanaryRollout.start/advance/rollback are Enterprise-only.  This demo
 # drives the rollout loop directly using the data-classes that *are*
-# available in Community Edition (RolloutStep, RollbackCondition, etc.).
+# available in Public Preview (RolloutStep, RollbackCondition, etc.).
 
 
 def collect_canary_metrics(model: SimulatedModel, n: int) -> dict[str, float]:

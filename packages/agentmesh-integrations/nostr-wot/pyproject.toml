@@ -22,6 +22,6 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/imran-siddique/agentmesh-integrations/tree/main/nostr-wot"
-Repository = "https://github.com/imran-siddique/agentmesh-integrations"
-Issues = "https://github.com/imran-siddique/agentmesh-integrations/issues"
+Homepage = "https://github.com/microsoft/agent-governance-toolkit/tree/main/nostr-wot"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"

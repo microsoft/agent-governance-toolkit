@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Liability Ledger — simple append-only fault log.
 
-Community edition: records fault events as (agent, type, timestamp, details).
+Public Preview: records fault events as (agent, type, timestamp, details).
 No risk scoring, no admission decisions.
 """
 
@@ -46,7 +46,7 @@ class LedgerEntry:
 
 @dataclass
 class AgentRiskProfile:
-    """Risk profile for an agent (community edition: always admits)."""
+    """Risk profile for an agent (Public Preview: always admits)."""
 
     agent_did: str
     total_entries: int = 0
@@ -62,7 +62,7 @@ class LiabilityLedger:
     """
     Simple append-only fault log.
 
-    Community edition: records events for audit trail only.
+    Public Preview: records events for audit trail only.
     No risk scoring or admission logic.
     """
 
@@ -100,7 +100,7 @@ class LiabilityLedger:
         return list(self._by_agent.get(agent_did, []))
 
     def compute_risk_profile(self, agent_did: str) -> AgentRiskProfile:
-        """Return a basic risk profile (community edition: always admits)."""
+        """Return a basic risk profile (Public Preview: always admits)."""
         entries = self.get_agent_history(agent_did)
         return AgentRiskProfile(
             agent_did=agent_did,
@@ -109,7 +109,7 @@ class LiabilityLedger:
         )
 
     def should_admit(self, agent_did: str) -> tuple[bool, str]:
-        """Always admits in community edition."""
+        """Always admits in Public Preview."""
         return True, "admit"
 
     @property

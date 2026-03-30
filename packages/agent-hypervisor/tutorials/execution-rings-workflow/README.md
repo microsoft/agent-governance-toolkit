@@ -215,7 +215,7 @@ elevation = elevator.request_elevation(
 )
 ```
 
-> **Note:** Ring elevation is denied in the community edition. The demo
+> **Note:** Ring elevation is denied in the public preview. The demo
 > simulates elevation logic to illustrate the concept.
 
 ### 4. Kill a misbehaving agent

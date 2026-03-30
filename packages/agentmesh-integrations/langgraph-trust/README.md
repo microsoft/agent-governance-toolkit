@@ -2,7 +2,7 @@
 
 **Trust-gated checkpoint nodes for LangGraph** — cryptographic identity, governance policy enforcement, and trust-aware routing for multi-agent graphs.
 
-Built on [AgentMesh](https://github.com/imran-siddique/agent-mesh) trust primitives. Designed as an external package per [LangGraph maintainer guidance](https://github.com/langchain-ai/langgraph/issues/6824#issuecomment-3916188130).
+Built on [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) trust primitives. Designed as an external package per [LangGraph maintainer guidance](https://github.com/langchain-ai/langgraph/issues/6824#issuecomment-3916188130).
 
 ## Install
 
@@ -159,8 +159,8 @@ pip install langgraph-trust[agentmesh]
 
 ## Related
 
-- [AgentMesh](https://github.com/imran-siddique/agent-mesh) — Full trust scoring engine
-- [Agent OS](https://github.com/imran-siddique/agent-os) — Governance kernel for AI agents
+- [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — Full trust scoring engine
+- [Agent OS](https://github.com/microsoft/agent-governance-toolkit) — Governance kernel for AI agents
 - [Dify Trust Layer](https://github.com/langgenius/dify-plugins/pull/2060) — Similar integration for Dify (merged)
 - [LlamaIndex Integration](https://github.com/run-llama/llama_index/pull/20644) — Trust layer for LlamaIndex (merged)
 
