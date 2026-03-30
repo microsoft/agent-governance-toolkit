@@ -1,9 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
-"""Progressive delivery — basic blue/green deployment support.
+# Community Edition — basic implementation
+"""Progressive delivery — preview mode and staged rollouts.
 
-Preview mode and staged rollouts are not available in Public Preview.
+Includes shadow comparison, delivery preview, and staged canary rollouts
+with automatic rollback and analysis criteria.
 """
 
 from __future__ import annotations
@@ -286,8 +287,13 @@ class ShadowMode:
         self._active_session: str | None = None
 
     def set_similarity_function(self, fn: Callable[[Any, Any], float]) -> None:
-        """Set custom similarity function — not available in Public Preview."""
-        raise NotImplementedError("Not available in Public Preview")
+        """Set a custom similarity function for output comparison.
+
+        Args:
+            fn: Function taking (current_output, candidate_output) and
+                returning a similarity score between 0.0 and 1.0.
+        """
+        self._similarity_fn = fn
 
     def compare(
         self,
@@ -299,20 +305,70 @@ class ShadowMode:
         current_cost_usd: float = 0.0,
         candidate_cost_usd: float = 0.0,
     ) -> ShadowComparison:
-        """Record a comparison — not available in Public Preview."""
-        raise NotImplementedError("Not available in Public Preview")
+        """Record a comparison between current and candidate agent outputs.
+
+        Uses the custom similarity function if set, otherwise falls back
+        to exact equality (1.0 for equal, 0.0 otherwise).
+
+        Args:
+            request_id: Unique identifier for this comparison.
+            current_output: Output from the current (production) agent.
+            candidate_output: Output from the candidate agent.
+            current_latency_ms: Latency of the current agent in ms.
+            candidate_latency_ms: Latency of the candidate agent in ms.
+            current_cost_usd: Cost of the current agent invocation.
+            candidate_cost_usd: Cost of the candidate agent invocation.
+
+        Returns:
+            A ``ShadowComparison`` recording match status, similarity
+            score, and latency/cost deltas.
+        """
+        if self._similarity_fn is not None:
+            similarity = self._similarity_fn(current_output, candidate_output)
+        else:
+            similarity = 1.0 if current_output == candidate_output else 0.0
+
+        is_match = similarity >= self.similarity_threshold
+
+        comparison = ShadowComparison(
+            request_id=request_id,
+            current_output=current_output,
+            candidate_output=candidate_output,
+            match=is_match,
+            similarity_score=similarity,
+            current_latency_ms=current_latency_ms,
+            candidate_latency_ms=candidate_latency_ms,
+            current_cost_usd=current_cost_usd,
+            candidate_cost_usd=candidate_cost_usd,
+        )
+        self._result.comparisons.append(comparison)
+        return comparison
 
     @property
     def result(self) -> ShadowResult:
         return self._result
 
     def is_passing(self, min_confidence: float = 0.8) -> bool:
-        """Check delivery preview results — not available in Public Preview."""
-        raise NotImplementedError("Not available in Public Preview")
+        """Check if the shadow evaluation confidence meets the threshold.
+
+        Args:
+            min_confidence: Minimum required confidence score (0.0–1.0).
+
+        Returns:
+            True if the accumulated result's confidence score is at
+            or above *min_confidence*.
+        """
+        return self._result.confidence_score >= min_confidence
 
     def finish(self) -> ShadowResult:
-        """Complete a delivery preview session — not available in Public Preview."""
-        raise NotImplementedError("Not available in Public Preview")
+        """Complete the shadow evaluation session.
+
+        Returns:
+            The finalized ``ShadowResult`` with ``end_time`` set and
+            all accumulated comparisons.
+        """
+        self._result.finish()
+        return self._result
 
     def start_session(
         self,
@@ -469,9 +525,10 @@ class RolloutEvent:
 
 
 class CanaryRollout:
-    """Staged rollout — not available in Public Preview.
+    """Staged canary rollout with automatic rollback and analysis.
 
-    Class retained for API compatibility. Use blue/green deployment instead.
+    Manages a multi-step traffic shift from current to candidate agent,
+    with configurable rollback conditions and analysis criteria.
     """
 
     def __init__(
@@ -508,36 +565,128 @@ class CanaryRollout:
         return ((self.current_step_index + 1) / len(self.steps)) * 100
 
     def start(self) -> None:
-        """Begin the rollout — not available in Public Preview."""
-        raise NotImplementedError("Not available in Public Preview")
+        """Begin the rollout, moving to the first step.
+
+        Sets state to ``CANARY``, ``current_step_index`` to 0, and
+        records a ``step_start`` event. No-op if the rollout has no steps.
+        """
+        if not self.steps:
+            return
+        self.state = RolloutState.CANARY
+        self.current_step_index = 0
+        self.started_at = time.time()
+        self._record_event("step_start", details={"weight": self.steps[0].weight})
 
     def advance(self) -> bool:
-        """Move to the next step — not available in Public Preview."""
-        raise NotImplementedError("Not available in Public Preview")
+        """Move to the next step in the rollout.
+
+        Automatically promotes (completes) the rollout if advancing
+        past the last step.
+
+        Returns:
+            True if advanced to the next step. False if already at the
+            last step (rollout is promoted) or the rollout is not active.
+        """
+        if self.state not in (RolloutState.CANARY, RolloutState.SHADOW):
+            return False
+
+        next_index = self.current_step_index + 1
+        if next_index >= len(self.steps):
+            self.promote()
+            return False
+
+        self._record_event("step_complete", step_index=self.current_step_index)
+        self.current_step_index = next_index
+        self._record_event(
+            "step_start",
+            step_index=next_index,
+            details={"weight": self.steps[next_index].weight},
+        )
+        return True
 
     def check_rollback(self, metrics: dict[str, float]) -> bool:
-        """Check rollback conditions — not available in Public Preview."""
-        raise NotImplementedError("Not available in Public Preview")
+        """Evaluate rollback conditions against live metrics.
+
+        Args:
+            metrics: Dict mapping metric names to their current values
+                (e.g., ``{"error_rate": 0.10}``).
+
+        Returns:
+            True if any rollback condition was triggered (rollout is
+            now in ROLLED_BACK state). False if all conditions pass.
+        """
+        for condition in self.rollback_conditions:
+            value = metrics.get(condition.metric)
+            if value is not None and condition.should_rollback(value):
+                self.rollback(
+                    reason=f"{condition.metric} ({value}) breached threshold {condition.threshold}"
+                )
+                return True
+        return False
 
     def analyze_step(self, metrics: dict[str, float]) -> bool:
-        """Check step analysis criteria — not available in Public Preview."""
-        raise NotImplementedError("Not available in Public Preview")
+        """Evaluate the current step's analysis criteria against metrics.
+
+        Args:
+            metrics: Dict mapping metric names to their current values
+                (e.g., ``{"success_rate": 0.995}``).
+
+        Returns:
+            True if **all** criteria for the current step pass.
+            False if any criterion fails or no step is active.
+        """
+        step = self.current_step
+        if step is None:
+            return False
+
+        all_pass = True
+        for criterion in step.analysis:
+            value = metrics.get(criterion.metric)
+            if value is None or not criterion.evaluate(value):
+                all_pass = False
+                self._record_event(
+                    "analysis_fail",
+                    details={
+                        "metric": criterion.metric,
+                        "threshold": criterion.threshold,
+                        "actual": value,
+                    },
+                )
+
+        if all_pass and step.analysis:
+            self._record_event("analysis_pass")
+
+        return all_pass
 
     def rollback(self, reason: str = "") -> None:
-        """Roll back — not available in Public Preview."""
-        raise NotImplementedError("Not available in Public Preview")
+        """Roll back the rollout to the previous stable state.
+
+        Args:
+            reason: Human-readable explanation for the rollback,
+                recorded in the rollback event.
+        """
+        self.state = RolloutState.ROLLED_BACK
+        self.completed_at = time.time()
+        self._record_event("rollback", details={"reason": reason})
 
     def pause(self) -> None:
-        """Pause the rollout — not available in Public Preview."""
-        raise NotImplementedError("Not available in Public Preview")
+        """Pause the rollout at the current step."""
+        if self.state in (RolloutState.CANARY, RolloutState.SHADOW):
+            self.state = RolloutState.PAUSED
+            self._record_event("paused")
 
     def resume(self) -> None:
-        """Resume a paused rollout — not available in Public Preview."""
-        raise NotImplementedError("Not available in Public Preview")
+        """Resume a paused rollout."""
+        if self.state == RolloutState.PAUSED:
+            self.state = RolloutState.CANARY
+            self._record_event("resumed")
 
     def promote(self) -> None:
-        """Immediately promote — not available in Public Preview."""
-        raise NotImplementedError("Not available in Public Preview")
+        """Immediately promote the candidate to full traffic."""
+        self.state = RolloutState.COMPLETE
+        self.current_step_index = len(self.steps) - 1 if self.steps else 0
+        self.completed_at = time.time()
+        self._record_event("promote", details={"weight": 1.0})
 
     def _record_event(
         self,

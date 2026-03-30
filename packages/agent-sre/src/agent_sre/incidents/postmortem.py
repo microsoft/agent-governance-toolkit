@@ -1,9 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
+# Community Edition — basic implementation
 """Postmortem data models — basic incident summary.
 
-Postmortem template generation is not available in Public Preview.
+Postmortem template generation is not available in Community Edition.
 """
 
 from __future__ import annotations
@@ -187,10 +187,50 @@ class PostmortemGenerator:
         self._postmortems: list[Postmortem] = []
 
     def generate(self, incident: Incident) -> Postmortem:
-        """Generate postmortem — not available in Public Preview."""
-        raise NotImplementedError(
-            "Not available in Public Preview"
+        """Generate a postmortem document from incident data.
+
+        Assembles summary, impact, root cause analysis, detection details,
+        response actions, timeline, contributing factors, lessons learned,
+        and suggested action items into a structured Postmortem.
+
+        Args:
+            incident: The incident to generate a postmortem for.
+
+        Returns:
+            A populated Postmortem in DRAFT status.
+        """
+        postmortem = Postmortem(
+            incident_id=incident.incident_id,
+            title=incident.title,
+            severity=incident.severity,
+            summary=self._build_summary(incident),
+            impact=self._build_impact(incident),
+            root_cause=self._analyze_root_cause(incident),
+            detection=self._build_detection(incident),
+            response=self._build_response(incident),
+            lessons_learned=self._suggest_lessons(incident),
+            action_items=self._suggest_actions(incident),
+            contributing_factors=self._identify_factors(incident),
         )
+
+        # Build timeline from signals and actions
+        for signal in incident.signals:
+            postmortem.add_timeline_entry(
+                event=f"Signal: {signal.signal_type.value}",
+                actor="system",
+                details=signal.message or signal.source,
+                ts=signal.timestamp,
+            )
+        for action in incident.actions:
+            postmortem.add_timeline_entry(
+                event=f"Response: {action.action_type}",
+                actor="agent-sre",
+                details=action.result,
+                ts=action.timestamp,
+            )
+
+        self._postmortems.append(postmortem)
+        return postmortem
 
     def _build_summary(self, incident: Incident) -> str:
         signal_types = {s.signal_type.value for s in incident.signals}
