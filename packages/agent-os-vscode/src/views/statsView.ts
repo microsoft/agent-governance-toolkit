@@ -51,6 +51,10 @@ class StatsItem extends vscode.TreeItem {
         this.description = value;
         this.tooltip = `${label}: ${value}`;
         this.iconPath = this.getIcon(type);
+        this.accessibilityInformation = {
+            label: `${label}: ${value}`,
+            role: 'treeitem'
+        };
     }
 
     private getIcon(type: string): vscode.ThemeIcon {
