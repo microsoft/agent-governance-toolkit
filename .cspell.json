@@ -1,0 +1,44 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "useGitignore": true,
+  "dictionaries": ["repo-terms"],
+  "dictionaryDefinitions": [
+    {
+      "name": "repo-terms",
+      "path": "./.cspell-repo-terms.txt",
+      "addWords": true
+    }
+  ],
+  "words": [
+    "GitHub",
+    "Markdown",
+    "README",
+    "TypeScript",
+    "JavaScript",
+    "Python",
+    "PyPI",
+    "NuGet",
+    "OpenSSF",
+    "CodeQL",
+    "CORS",
+    "CSP",
+    "CLI",
+    "CI",
+    "CD",
+    "PR",
+    "MCP",
+    "A2A"
+  ],
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.venv/**",
+    "**/.git/**",
+    "**/*.png",
+    "**/*.svg",
+    "**/*.json",
+    "**/*.lock"
+  ]
+}

@@ -78,6 +78,9 @@ from .reward import (
     RewardSignal,
 )
 
+# Unified Client
+from .client import AgentMeshClient, GovernanceResult
+
 __all__ = [
     # Version
     "__version__",
@@ -136,4 +139,8 @@ __all__ = [
     "TrustScore",
     "RewardDimension",
     "RewardSignal",
+
+    # Unified Client
+    "AgentMeshClient",
+    "GovernanceResult",
 ]
