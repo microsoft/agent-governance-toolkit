@@ -214,6 +214,7 @@ app.get('/auth/callback', async (req: Request, res: Response) => {
     // In production, exchange code for token and complete setup
     logger.info('OAuth callback received', { hasCode: !!code, hasState: !!state });
     
+    res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'unsafe-inline'");
     res.send(`
         <html>
         <head><title>AgentOS Setup Complete</title></head>
@@ -232,6 +233,7 @@ app.get('/auth/callback', async (req: Request, res: Response) => {
  * GET /setup
  */
 app.get('/setup', (req: Request, res: Response) => {
+    res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'unsafe-inline'");
     res.send(`
         <html>
         <head>
@@ -318,7 +320,8 @@ app.get('/api/templates', (req: Request, res: Response) => {
  * GET /api/templates/:id
  */
 app.get('/api/templates/:id', (req: Request, res: Response) => {
-    const template = templateGallery.getById(req.params.id);
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const template = templateGallery.getById(id);
     if (template) {
         res.json(template);
     } else {

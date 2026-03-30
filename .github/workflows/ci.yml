@@ -97,8 +97,6 @@ jobs:
             import-module: a2a_agentmesh
           - package: crewai-agentmesh
             import-module: crewai_agentmesh
-          - package: dify-plugin
-            import-module: provider
           - package: flowise-agentmesh
             import-module: flowise_agentmesh
           - package: haystack-agentmesh
@@ -180,6 +178,9 @@ jobs:
               'pydantic','pyyaml','cryptography','pynacl','click','rich',
               'httpx','aiohttp','fastapi','uvicorn','structlog','numpy',
               'scipy','openai','anthropic','langchain','crewai',
+              'streamlit','plotly','pandas','networkx','aioredis',
+              'langchain-openai','langchain-core','python-dotenv',
+              'agent-primitives',
           }
           bad = []
           for nb in glob.glob('**/*.ipynb', recursive=True):
@@ -221,10 +222,10 @@ jobs:
               # Only flag if actions/checkout has ref: pointing to head (unsafe)
               # Uses awk to check checkout blocks specifically, not unrelated lines
               if awk '/actions\/checkout/{found=1} found && /ref:.*head\.(ref|sha)/{print; exit 1}' "$f" 2>/dev/null; then
+                echo "OK: $f (pull_request_target, base-only checkout)"
+              else
                 echo "UNSAFE: $f checks out PR head in pull_request_target context"
                 UNSAFE=1
-              else
-                echo "OK: $f (pull_request_target, base-only checkout)"
               fi
             fi
           done

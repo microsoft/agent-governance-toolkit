@@ -1,8 +1,13 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 package agentmesh
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -19,8 +24,9 @@ type AuditEntry struct {
 
 // AuditLogger maintains an append-only hash-chained audit log.
 type AuditLogger struct {
-	mu      sync.Mutex
-	entries []*AuditEntry
+	mu         sync.Mutex
+	entries    []*AuditEntry
+	MaxEntries int
 }
 
 // NewAuditLogger creates an empty AuditLogger.
@@ -29,9 +35,14 @@ func NewAuditLogger() *AuditLogger {
 }
 
 // Log appends a new entry to the audit chain.
+// When MaxEntries is set and exceeded, the oldest entries are evicted.
 func (al *AuditLogger) Log(agentID, action string, decision PolicyDecision) *AuditEntry {
 	al.mu.Lock()
 	defer al.mu.Unlock()
+
+	if al.MaxEntries > 0 && len(al.entries) >= al.MaxEntries {
+		al.entries = al.entries[len(al.entries)-al.MaxEntries+1:]
+	}
 
 	prevHash := ""
 	if len(al.entries) > 0 {
@@ -61,7 +72,8 @@ func (al *AuditLogger) Verify() bool {
 			return false
 		}
 		if i == 0 {
-			if entry.PreviousHash != "" {
+			// Allow non-empty PreviousHash when retention eviction is active
+			if al.MaxEntries == 0 && entry.PreviousHash != "" {
 				return false
 			}
 		} else {
@@ -108,4 +120,16 @@ func computeHash(e *AuditEntry) string {
 		e.PreviousHash
 	h := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(h[:])
+}
+
+// ExportJSON serialises all audit entries to a JSON string.
+func (al *AuditLogger) ExportJSON() (string, error) {
+	al.mu.Lock()
+	defer al.mu.Unlock()
+
+	data, err := json.Marshal(al.entries)
+	if err != nil {
+		return "", fmt.Errorf("marshalling audit entries: %w", err)
+	}
+	return string(data), nil
 }
