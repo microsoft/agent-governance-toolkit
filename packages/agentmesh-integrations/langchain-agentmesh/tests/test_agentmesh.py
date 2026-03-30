@@ -1,19 +1,19 @@
 """Tests for AgentMesh LangChain integration."""
 
-import pytest
+import json
 from datetime import datetime, timedelta, timezone
+from threading import Thread
+
 from langchain_agentmesh import (
-    VerificationIdentity,
-    VerificationSignature,
-    TrustedAgentCard,
+    AgentDirectory,
+    DelegationChain,
+    TrustCallbackHandler,
+    TrustGatedTool,
     TrustHandshake,
     TrustPolicy,
-    TrustGatedTool,
-    TrustedToolExecutor,
-    TrustCallbackHandler,
-    DelegationChain,
+    TrustedAgentCard,
     UserContext,
-    AgentDirectory,
+    VerificationIdentity,
 )
 
 
@@ -163,6 +163,654 @@ class TestTrustHandshake:
         result2 = handshake.verify_peer(peer_card)
         
         assert result1.trusted == result2.trusted
+
+    def test_verify_valid_peer_scope_chain(self):
+        """Valid cryptographic scope chain should be trusted."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+        )
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(my_identity)
+        result = handshake.verify_peer(
+            peer_card,
+            required_capabilities=["required_cap"],
+        )
+
+        assert result.trusted
+        assert result.reason == "Verification successful"
+
+    def test_verify_peer_scope_chain_tampered_signature(self):
+        """Tampering delegation payload should invalidate signature."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+        )
+
+        # Mutate signed content after signature generation.
+        chain.delegations[0].capabilities.append("admin")
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(my_identity)
+        result = handshake.verify_peer(peer_card)
+
+        assert not result.trusted
+        assert result.reason == "Scope chain verification failed"
+
+    def test_verify_peer_scope_chain_tampered_linkage(self):
+        """Broken delegation linkage should fail verification."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        mid_identity = VerificationIdentity.generate("mid-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        mid_card = TrustedAgentCard(
+            name="Mid Agent",
+            description="Delegation intermediary",
+            capabilities=["delegator"],
+        )
+        mid_card.sign(mid_identity)
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="Final peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=mid_card,
+            capabilities=["delegate"],
+            expires_in_hours=24,
+        )
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+            delegator_identity=mid_identity,
+        )
+
+        # Break did->did linkage between first delegatee and second delegator.
+        chain.delegations[1].delegator = "did:verification:maliciousdelegator"
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(my_identity)
+        result = handshake.verify_peer(peer_card)
+
+        assert not result.trusted
+        assert result.reason == "Scope chain verification failed"
+
+    def test_verify_peer_scope_chain_expired(self):
+        """Expired delegations should fail verification."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+        )
+
+        chain.delegations[0].expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(my_identity)
+        result = handshake.verify_peer(peer_card)
+
+        assert not result.trusted
+        assert result.reason == "Scope chain verification failed"
+
+    def test_verify_peer_scope_chain_replay_detected(self):
+        """Reusing the exact same scope chain inside replay window is rejected."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+        )
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(
+            my_identity,
+            policy=TrustPolicy(cache_ttl_seconds=0),
+        )
+        result1 = handshake.verify_peer(peer_card)
+        assert result1.trusted
+
+        result2 = handshake.verify_peer(peer_card)
+        assert not result2.trusted
+        assert result2.reason == "Scope chain verification failed"
+
+    def test_verify_peer_scope_chain_replay_window_expired(self):
+        """Reusing chain after replay window should be allowed."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+        )
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(
+            my_identity,
+            policy=TrustPolicy(cache_ttl_seconds=0, replay_window_seconds=1),
+        )
+        result1 = handshake.verify_peer(peer_card)
+        assert result1.trusted
+
+        for fingerprint in list(handshake._seen_scope_chains.keys()):
+            handshake._seen_scope_chains[fingerprint] = datetime.now(timezone.utc) - timedelta(seconds=2)
+
+        result2 = handshake.verify_peer(peer_card)
+        assert result2.trusted
+
+    def test_verify_peer_scope_chain_unsupported_algorithm(self):
+        """Delegation signatures must use verification-Ed25519."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+        )
+
+        chain.delegations[0].signature.algorithm = "rsa-sha1"
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(my_identity)
+        result = handshake.verify_peer(peer_card)
+
+        assert not result.trusted
+        assert result.reason == "Scope chain verification failed"
+
+    def test_verify_peer_scope_chain_stale_signature(self):
+        """Old delegation signatures are rejected as replay-hardening."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+        )
+
+        chain.delegations[0].signature.timestamp = datetime.now(timezone.utc) - timedelta(hours=2)
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(
+            my_identity,
+            policy=TrustPolicy(max_delegation_signature_age_seconds=60),
+        )
+        result = handshake.verify_peer(peer_card)
+
+        assert not result.trusted
+        assert result.reason == "Scope chain verification failed"
+
+    def test_verify_peer_scope_chain_invalid_delegator_did(self):
+        """Malformed DIDs in chain are rejected."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        mid_identity = VerificationIdentity.generate("mid-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        mid_card = TrustedAgentCard(
+            name="Mid Agent",
+            description="Delegation intermediary",
+            capabilities=["delegate"],
+        )
+        mid_card.sign(mid_identity)
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=mid_card,
+            capabilities=["delegate"],
+            expires_in_hours=24,
+        )
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+            delegator_identity=mid_identity,
+        )
+
+        chain.delegations[1].delegator = "invalid-did"
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(my_identity)
+        result = handshake.verify_peer(peer_card)
+
+        assert not result.trusted
+        assert result.reason == "Scope chain verification failed"
+
+    def test_verify_peer_scope_chain_exposed_error_details(self):
+        """Detailed errors can be exposed explicitly by policy."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+        )
+        chain.delegations[0].signature.algorithm = "rsa-sha1"
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(
+            my_identity,
+            policy=TrustPolicy(expose_scope_chain_errors=True),
+        )
+        result = handshake.verify_peer(peer_card)
+
+        assert not result.trusted
+        assert "unsupported signature algorithm" in result.reason
+
+    def test_verify_peer_scope_chain_non_strict_mode(self):
+        """Transitional non-strict mode keeps peer trusted and emits warning."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+        )
+        chain.delegations[0].signature.algorithm = "rsa-sha1"
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(
+            my_identity,
+            policy=TrustPolicy(strict_scope_chain_verification=False),
+        )
+        result = handshake.verify_peer(peer_card)
+
+        assert result.trusted
+        assert result.warnings == ["Scope chain verification failed"]
+
+    def test_verify_peer_scope_chain_policy_cannot_enable_unsupported_algorithm(self):
+        """Policy cannot enable algorithms unsupported by verifier implementation."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+        )
+        chain.delegations[0].signature.algorithm = "future-ed25519-v2"
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(
+            my_identity,
+            policy=TrustPolicy(allowed_signature_algorithms=["future-ed25519-v2"]),
+        )
+        result = handshake.verify_peer(peer_card)
+
+        assert not result.trusted
+        assert result.reason == "Scope chain verification failed"
+
+    def test_verify_peer_scope_chain_expiry_skew_tolerance(self):
+        """Delegation expiry allows bounded clock skew tolerance."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        delegation = chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=1,
+        )
+
+        delegation.expires_at = datetime.now(timezone.utc) - timedelta(seconds=20)
+        delegation_data = json.dumps(
+            {
+                "delegator": delegation.delegator,
+                "delegatee": delegation.delegatee,
+                "capabilities": sorted(delegation.capabilities),
+                "expires_at": delegation.expires_at.isoformat(),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        delegation.signature = my_identity.sign(delegation_data)
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(
+            my_identity,
+            policy=TrustPolicy(max_delegation_expiry_clock_skew_seconds=60),
+        )
+        result = handshake.verify_peer(peer_card)
+
+        assert result.trusted
+
+    def test_verify_peer_scope_chain_replay_cache_bounded(self):
+        """Replay fingerprint map stays bounded under unique chains."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        handshake = TrustHandshake(
+            my_identity,
+            policy=TrustPolicy(
+                cache_ttl_seconds=0,
+                replay_window_seconds=3600,
+                max_seen_scope_chain_fingerprints=2,
+            ),
+        )
+
+        for i in range(3):
+            peer_identity = VerificationIdentity.generate(f"peer-agent-{i}", ["required_cap"])
+            peer_card = TrustedAgentCard(
+                name=f"Peer Agent {i}",
+                description="A peer",
+                capabilities=["required_cap"],
+            )
+            peer_card.sign(peer_identity)
+
+            chain = DelegationChain(my_identity)
+            chain.add_delegation(
+                delegatee=peer_card,
+                capabilities=["required_cap"],
+                expires_in_hours=24,
+            )
+            peer_card.scope_chain = chain.delegations
+
+            result = handshake.verify_peer(peer_card)
+            assert result.trusted
+
+        assert len(handshake._seen_scope_chains) <= 2
+
+    def test_verify_peer_scope_chain_rate_limited(self):
+        """Scope-chain verification enforces per-peer request limits."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+        )
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(
+            my_identity,
+            policy=TrustPolicy(
+                cache_ttl_seconds=0,
+                replay_detection_enabled=False,
+                max_scope_chain_attempts_per_window=1,
+                scope_chain_rate_limit_window_seconds=60,
+            ),
+        )
+
+        first = handshake.verify_peer(peer_card)
+        second = handshake.verify_peer(peer_card)
+
+        assert first.trusted
+        assert not second.trusted
+        assert second.reason == "Scope chain verification failed"
+
+    def test_verify_peer_scope_chain_mixed_valid_invalid_delegations(self):
+        """Mixed chains fail when any delegation is invalid."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        mid_identity = VerificationIdentity.generate("mid-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        mid_card = TrustedAgentCard(
+            name="Mid Agent",
+            description="Delegation intermediary",
+            capabilities=["delegate"],
+        )
+        mid_card.sign(mid_identity)
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=mid_card,
+            capabilities=["delegate"],
+            expires_in_hours=24,
+        )
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+            delegator_identity=mid_identity,
+        )
+
+        # Corrupt only one delegation in the middle of an otherwise valid chain.
+        chain.delegations[1].capabilities.append("tampered")
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(my_identity)
+        result = handshake.verify_peer(peer_card)
+
+        assert not result.trusted
+        assert result.reason == "Scope chain verification failed"
+
+    def test_verify_peer_scope_chain_overlapping_expirations(self):
+        """Overlapping expiration times are accepted when signatures are valid."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        mid_identity = VerificationIdentity.generate("mid-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        mid_card = TrustedAgentCard(
+            name="Mid Agent",
+            description="Delegation intermediary",
+            capabilities=["delegate"],
+        )
+        mid_card.sign(mid_identity)
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        d1 = chain.add_delegation(
+            delegatee=mid_card,
+            capabilities=["delegate"],
+            expires_in_hours=24,
+        )
+        d2 = chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+            delegator_identity=mid_identity,
+        )
+
+        # Force overlapping expirations and re-sign both payloads.
+        overlap_expiry = datetime.now(timezone.utc) + timedelta(hours=2)
+        d1.expires_at = overlap_expiry
+        d2.expires_at = overlap_expiry
+
+        d1_payload = json.dumps(
+            {
+                "delegator": d1.delegator,
+                "delegatee": d1.delegatee,
+                "capabilities": sorted(d1.capabilities),
+                "expires_at": d1.expires_at.isoformat(),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        d2_payload = json.dumps(
+            {
+                "delegator": d2.delegator,
+                "delegatee": d2.delegatee,
+                "capabilities": sorted(d2.capabilities),
+                "expires_at": d2.expires_at.isoformat(),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        d1.signature = my_identity.sign(d1_payload)
+        d2.signature = mid_identity.sign(d2_payload)
+
+        peer_card.scope_chain = chain.delegations
+        handshake = TrustHandshake(my_identity)
+        result = handshake.verify_peer(peer_card)
+
+        assert result.trusted
+
+    def test_verify_peer_scope_chain_thread_safety_smoke(self):
+        """Concurrent verification should not raise or corrupt state."""
+        my_identity = VerificationIdentity.generate("my-agent")
+        peer_identity = VerificationIdentity.generate("peer-agent", ["required_cap"])
+
+        peer_card = TrustedAgentCard(
+            name="Peer Agent",
+            description="A peer",
+            capabilities=["required_cap"],
+        )
+        peer_card.sign(peer_identity)
+
+        chain = DelegationChain(my_identity)
+        chain.add_delegation(
+            delegatee=peer_card,
+            capabilities=["required_cap"],
+            expires_in_hours=24,
+        )
+        peer_card.scope_chain = chain.delegations
+
+        handshake = TrustHandshake(
+            my_identity,
+            policy=TrustPolicy(cache_ttl_seconds=0, replay_detection_enabled=False),
+        )
+
+        outcomes = []
+
+        def worker() -> None:
+            outcomes.append(handshake.verify_peer(peer_card).trusted)
+
+        threads = [Thread(target=worker) for _ in range(20)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert len(outcomes) == 20
+        assert all(outcomes)
 
 
 class TestDelegationChain:

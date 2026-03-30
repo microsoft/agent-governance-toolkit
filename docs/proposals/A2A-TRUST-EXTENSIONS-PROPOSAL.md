@@ -1,7 +1,7 @@
 # Proposal: A2A Protocol Trust & Payment Extensions
 
 **Status:** ✅ Adapter Shipped — Trust extensions proposed for AAIF contribution  
-**Author:** Imran Siddique (Microsoft)  
+**Author:** Agent Governance Toolkit Team (Microsoft)  
 **Created:** 2026-03-21  
 **Target:** AAIF / Linux Foundation (A2A Protocol)
 

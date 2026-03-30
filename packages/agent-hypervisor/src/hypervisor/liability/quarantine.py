@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Quarantine Manager — stub implementation.
 
-Community edition: quarantine is not enforced. Calls return safe defaults.
+Public Preview: quarantine is not enforced. Calls return safe defaults.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ class QuarantineRecord:
 
 class QuarantineManager:
     """
-    Quarantine stub (community edition: no quarantine enforcement).
+    Quarantine stub (Public Preview: no quarantine enforcement).
     """
 
     DEFAULT_QUARANTINE_SECONDS = 300
@@ -72,7 +72,7 @@ class QuarantineManager:
         duration_seconds: int | None = None,
         forensic_data: dict | None = None,
     ) -> QuarantineRecord:
-        """Log a quarantine request (community edition: no enforcement)."""
+        """Log a quarantine request (Public Preview: no enforcement)."""
         record = QuarantineRecord(
             agent_did=agent_did,
             session_id=session_id,
@@ -84,11 +84,11 @@ class QuarantineManager:
         return record
 
     def release(self, agent_did: str, session_id: str) -> QuarantineRecord | None:
-        """No-op in community edition."""
+        """No-op in Public Preview."""
         return None
 
     def is_quarantined(self, agent_did: str, session_id: str) -> bool:
-        """Always False in community edition."""
+        """Always False in Public Preview."""
         return False
 
     def get_active_quarantine(

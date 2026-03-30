@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Kill Switch — simple hard kill.
 
-Community edition: immediate agent termination, no task transfer.
+Public Preview: immediate agent termination, no task transfer.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ class HandoffStatus(str, Enum):
 
 @dataclass
 class StepHandoff:
-    """A saga step being handed off (community edition: always COMPENSATED)."""
+    """A saga step being handed off (Public Preview: always COMPENSATED)."""
 
     step_id: str
     saga_id: str
@@ -63,7 +63,7 @@ class KillResult:
 
 class KillSwitch:
     """
-    Simple hard kill (community edition: no handoff, immediate termination).
+    Simple hard kill (Public Preview: no handoff, immediate termination).
     """
 
     def __init__(self) -> None:
@@ -73,7 +73,7 @@ class KillSwitch:
     def register_substitute(
         self, session_id: str, agent_did: str
     ) -> None:
-        """Register a substitute (community edition: no-op, handoff not supported)."""
+        """Register a substitute (Public Preview: no-op, handoff not supported)."""
         self._substitutes.setdefault(session_id, []).append(agent_did)
 
     def unregister_substitute(
@@ -91,7 +91,7 @@ class KillSwitch:
         in_flight_steps: list[dict] | None = None,
         details: str = "",
     ) -> KillResult:
-        """Kill an agent immediately (community edition: no handoff)."""
+        """Kill an agent immediately (Public Preview: no handoff)."""
         in_flight = in_flight_steps or []
 
         handoffs = [

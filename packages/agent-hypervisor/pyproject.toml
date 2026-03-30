@@ -4,16 +4,16 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-hypervisor"
-version = "2.2.0"
-description = "Community Edition — Agent Hypervisor: Runtime supervisor for multi-agent Shared Sessions with Execution Rings, Joint Liability, Saga Orchestration, and hash-chained audit trails"
+version = "3.0.0"
+description = "Public Preview — Agent Hypervisor: Runtime supervisor for multi-agent Shared Sessions with Execution Rings, Joint Liability, Saga Orchestration, and hash-chained audit trails"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [
-    {name = "Microsoft Corporation", email = "agt@microsoft.com"},
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
 maintainers = [
-    {name = "Agent Governance Toolkit Team", email = "agt@microsoft.com"},
+    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
 ]
 keywords = [
     "ai", "agents", "hypervisor", "trust", "multi-agent",
@@ -90,6 +90,10 @@ packages = ["src/hypervisor"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-v --tb=short"
+markers = [
+    "slow: long-running tests (skip with -m 'not slow')",
+    "integration: end-to-end integration tests",
+]
 
 [tool.ruff]
 target-version = "py311"

@@ -1,0 +1,3 @@
+agentmesh-platform>=2.2.0
+cryptography>=45.0.3
+rich>=13.0.0

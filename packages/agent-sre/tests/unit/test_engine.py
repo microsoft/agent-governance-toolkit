@@ -188,7 +188,7 @@ class TestReplayEngine:
         assert any(d.diff_type == DiffType.OUTPUT_MISMATCH for d in diffs)
 
     def test_diff_cost_change(self) -> None:
-        """Cost change detection not available in Community Edition — only checks output."""
+        """Cost change detection not available in Public Preview — only checks output."""
         engine = ReplayEngine()
 
         trace_a = Trace(agent_id="test")
@@ -202,11 +202,11 @@ class TestReplayEngine:
         trace_b.add_span(span_b)
 
         diffs = engine.diff(trace_a, trace_b)
-        # Same output, different cost — no diff in Community Edition
+        # Same output, different cost — no diff in Public Preview
         assert not any(d.diff_type == DiffType.COST_CHANGE for d in diffs)
 
     def test_diff_tool_sequence(self) -> None:
-        """Tool sequence diff not available in Community Edition."""
+        """Tool sequence diff not available in Public Preview."""
         engine = ReplayEngine()
 
         trace_a = Trace(agent_id="test")
@@ -218,5 +218,5 @@ class TestReplayEngine:
         trace_b.add_span(Span(name="search", kind=SpanKind.TOOL_CALL))
 
         diffs = engine.diff(trace_a, trace_b)
-        # Different order — no TOOL_SEQUENCE_DIFF in Community Edition
+        # Different order — no TOOL_SEQUENCE_DIFF in Public Preview
         assert not any(d.diff_type == DiffType.TOOL_SEQUENCE_DIFF for d in diffs)

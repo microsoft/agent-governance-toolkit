@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """Incident detection — simple alerting with severity levels."""
 
 from __future__ import annotations
@@ -164,7 +164,7 @@ class IncidentDetector:
     """Detects incidents from reliability signals.
 
     Creates incidents for P1/P2 severity signals with deduplication.
-    Alert grouping is not available in Community Edition.
+    Alert grouping is not available in Public Preview.
     """
 
     def __init__(
@@ -218,9 +218,9 @@ class IncidentDetector:
         return incident
 
     def _create_correlated_incident(self, signals: list[Signal]) -> Incident:
-        """Alert grouping — not available in Community Edition."""
+        """Alert grouping — not available in Public Preview."""
         raise NotImplementedError(
-            "Not available in Community Edition"
+            "Not available in Public Preview"
         )
 
     def _is_duplicate(self, signal: Signal) -> bool:
@@ -235,9 +235,9 @@ class IncidentDetector:
         return False
 
     def _find_correlated(self, signal: Signal) -> list[Signal]:
-        """Alert grouping — not available in Community Edition."""
+        """Alert grouping — not available in Public Preview."""
         raise NotImplementedError(
-            "Not available in Community Edition"
+            "Not available in Public Preview"
         )
 
     def _prune_old_signals(self) -> None:

@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Ring Enforcer — simple 2-tier access control.
 
-Community edition: agents get RING_1 (trust > 0.7) or RING_2 (default).
+Public Preview: agents get RING_1 (trust > 0.7) or RING_2 (default).
 Ring 0 is reserved for kernel-only operations and always denied.
 """
 
@@ -55,14 +55,14 @@ class RingEnforcer:
         """Check if an agent can perform an action given their ring level."""
         required = action.required_ring
 
-        # Ring 0: always denied in community edition
+        # Ring 0: always denied in Public Preview
         if required == ExecutionRing.RING_0_ROOT:
             return RingCheckResult(
                 allowed=False,
                 required_ring=required,
                 agent_ring=agent_ring,
                 eff_score=eff_score,
-                reason="Ring 0 actions are not available in community edition",
+                reason="Ring 0 actions are not available in Public Preview",
                 requires_sre_witness=True,
             )
 

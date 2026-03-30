@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
-"""Trace replay — not available in Community Edition.
+# Public Preview — basic implementation
+"""Trace replay — not available in Public Preview.
 
 Classes are retained for API compatibility. Use the local ReplayEngine instead.
 """
@@ -138,21 +138,21 @@ class DistributedReplayEngine:
         ))
 
     def discover_links(self) -> list[DelegationLink]:
-        """Auto-discover delegation links — not available in Community Edition."""
+        """Auto-discover delegation links — not available in Public Preview."""
         raise NotImplementedError(
-            "Not available in Community Edition"
+            "Not available in Public Preview"
         )
 
     def replay(self) -> DistributedReplayResult:
-        """Replay all agent traces — not available in Community Edition."""
+        """Replay all agent traces — not available in Public Preview."""
         raise NotImplementedError(
-            "Not available in Community Edition"
+            "Not available in Public Preview"
         )
 
     def _check_cross_agent(self, result: DistributedReplayResult) -> list[TraceDiff]:
-        """Check consistency across delegation boundaries — not available in Community Edition."""
+        """Check consistency across delegation boundaries — not available in Public Preview."""
         raise NotImplementedError(
-            "Not available in Community Edition"
+            "Not available in Public Preview"
         )
 
     def execution_order(self) -> list[str]:

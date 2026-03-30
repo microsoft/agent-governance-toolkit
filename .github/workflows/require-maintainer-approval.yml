@@ -1,0 +1,55 @@
+# Blocks merge of external contributor PRs unless a maintainer has approved.
+# AI-only approvals do NOT count. Bot approvals do NOT count.
+# This is a safety net — branch protection rules should also enforce this.
+#
+# Context: PRs #357 and #362 were auto-merged without maintainer review,
+# reintroducing shell=True (CWE-78) that was previously fixed.
+
+name: Require Maintainer Approval
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+# SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
+jobs:
+  check-approval:
+    name: Maintainer approval gate
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.pull_request.author_association != 'MEMBER' &&
+      github.event.pull_request.author_association != 'OWNER'
+    steps:
+      - name: Check for maintainer approval
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const MAINTAINERS = ['imran-siddique', 'microsoft-github-policy-service'];
+
+            const reviews = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+
+            const maintainerApproval = reviews.data.find(
+              (r) =>
+                r.state === 'APPROVED' &&
+                MAINTAINERS.includes(r.user.login) &&
+                r.user.type === 'User'  // Exclude bot approvals
+            );
+
+            if (!maintainerApproval) {
+              core.setFailed(
+                `❌ This PR requires approval from a maintainer (${MAINTAINERS.join(', ')}) before merge.\n` +
+                `AI and bot approvals do not satisfy this requirement.\n` +
+                `This policy exists because PRs #357/#362 reintroduced security vulnerabilities when auto-merged without human review.`
+              );
+            } else {
+              core.info(`✅ Maintainer @${maintainerApproval.user.login} approved this PR.`);
+            }

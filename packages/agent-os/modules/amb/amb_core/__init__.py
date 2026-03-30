@@ -62,7 +62,7 @@ For more information, see: https://github.com/microsoft/agent-governance-toolkit
 from __future__ import annotations
 
 __version__ = "0.3.0"
-__author__ = "Imran Siddique"
+__author__ = "Microsoft Corporation"
 __license__ = "MIT"
 
 # Core models

@@ -83,8 +83,8 @@ from __future__ import annotations
 from typing import Any
 
 __version__ = "0.3.0"
-__author__ = "Imran Siddique"
-__email__ = "imran.siddique@example.com"
+__author__ = "Microsoft Corporation"
+__email__ = "agentgovtoolkit@microsoft.com"
 __license__ = "MIT"
 
 # Audit trail

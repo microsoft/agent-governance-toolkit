@@ -59,6 +59,7 @@ class TestHandshakeTimeoutBehavior:
     """Tests for timeout behavior during handshake."""
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_timeout_raises_handshake_timeout_error(self):
         """Slow handshake raises HandshakeTimeoutError."""
         agent_a = _make_identity("timeout-a")

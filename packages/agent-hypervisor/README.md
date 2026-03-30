@@ -1,35 +1,21 @@
 <div align="center">
 
-# ⚠️ This package has been renamed to Agent Runtime
-
-> **`agent-hypervisor` is now `agent-runtime`.** This package is maintained for backward compatibility.
-> New projects should use [`agent-runtime`](../agent-runtime/) instead.
-> All imports (`from hypervisor import ...`) continue to work unchanged.
-
----
-
-# Agent Hypervisor → Agent Runtime — Community Edition
+# Agent Hypervisor — Public Preview
 
 **Execution supervisor for AI agents — runtime isolation, execution rings, and governance for autonomous agents**
 
-*Just as a supervisor isolates processes, Agent Runtime isolates AI agent sessions<br/>and enforces governance boundaries with a kill switch, blast radius containment, and accountability.*
+*Just as a supervisor isolates processes, Agent Hypervisor isolates AI agent sessions<br/>and enforces governance boundaries with a kill switch, blast radius containment, and accountability.*
 
-[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
-[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4%EF%B8%8F-ff69b4)](https://github.com/microsoft/agent-governance-toolkit)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agent-hypervisor)](https://pypi.org/project/agent-hypervisor/)
-[![Downloads](https://img.shields.io/pypi/dm/agent-hypervisor)](https://pypi.org/project/agent-hypervisor/)
-[![OWASP](https://img.shields.io/badge/OWASP_Agentic_Top_10-ASI--05,_10-brightgreen)](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
-[![Tests](https://img.shields.io/badge/tests-644%20passing-brightgreen)](https://github.com/microsoft/agent-governance-toolkit)
 [![Benchmark](https://img.shields.io/badge/latency-268%CE%BCs%20pipeline-orange)](benchmarks/)
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 
 > [!IMPORTANT]
-> **Community Preview** — The `agent-hypervisor` package on PyPI is a community preview release
-> for testing and evaluation only. It is **not** an official Microsoft-signed release.
-> Official signed packages will be available in a future release.
+> **Public Preview** — The `agent-hypervisor` package on PyPI is a Microsoft-signed
+> public preview release. APIs may change before GA.
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent Hypervisor.
 
@@ -166,7 +152,7 @@ ring = await hv.join_session(
 
 Agents can request temporary privilege escalation with a TTL:
 
-> **Note:** Ring elevation is available in the Enterprise Edition. Community Edition includes the API surface but returns a denial response. See the architecture for how it works.
+> **Note:** Ring elevation is available in the Enterprise Edition. Public Preview includes the API surface but returns a denial response. See the architecture for how it works.
 
 ```python
 from hypervisor import RingElevationManager

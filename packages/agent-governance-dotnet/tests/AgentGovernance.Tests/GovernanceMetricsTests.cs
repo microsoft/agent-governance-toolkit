@@ -6,6 +6,9 @@ using Xunit;
 
 namespace AgentGovernance.Tests;
 
+// Serialize metrics tests to avoid .NET Meter global state interference
+// when multiple test classes create GovernanceMetrics instances in parallel.
+[Collection("MetricsTests")]
 public class GovernanceMetricsTests : IDisposable
 {
     private readonly GovernanceMetrics _metrics = new();
@@ -66,8 +69,9 @@ public class GovernanceMetricsTests : IDisposable
             if (instrument.Name == "agent_governance.tool_calls_blocked") blockedAfter += measurement;
         });
         listener.Start();
+        listener.RecordObservableInstruments();
 
-        // Capture baseline (measurements from other test instances)
+        // Capture baseline AFTER listener processes any existing measurements
         blockedBefore = blockedAfter;
 
         _metrics.RecordDecision(allowed: false, "did:mesh:test", "shell_exec", 0.02);

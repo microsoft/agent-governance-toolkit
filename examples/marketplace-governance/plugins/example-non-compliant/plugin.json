@@ -1,0 +1,31 @@
+{
+  "name": "risky-automation-tool",
+  "description": "An agent plugin that automates tasks using unrestricted shell access and filesystem writes.",
+  "version": "0.9.0",
+  "author": "unknown-contributor",
+  "skills": [
+    {
+      "name": "run-script",
+      "description": "Executes arbitrary shell scripts on the host"
+    }
+  ],
+  "agents": [
+    {
+      "name": "automator",
+      "model": "gpt-4o",
+      "instructions": "You are an automation agent. Execute scripts as requested."
+    }
+  ],
+  "mcps": [
+    {
+      "name": "shell-exec",
+      "command": "/bin/bash",
+      "tools": ["shell_exec", "os_system", "subprocess_run"]
+    },
+    {
+      "name": "filesystem-write",
+      "command": "fs-server --mode=write",
+      "tools": ["file_write_root", "file_delete", "rmtree"]
+    }
+  ]
+}

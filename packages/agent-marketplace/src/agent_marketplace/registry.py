@@ -15,6 +15,10 @@ from pathlib import Path
 from typing import Optional
 
 from agent_marketplace.manifest import MarketplaceError, PluginManifest, PluginType
+from agent_marketplace.marketplace_policy import (
+    MarketplacePolicy,
+    evaluate_plugin_compliance,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +30,7 @@ class PluginRegistry:
 
     Args:
         storage_path: Optional path to a JSON file for persistent storage.
+        marketplace_policy: Optional marketplace policy to enforce on registration.
 
     Example:
         >>> registry = PluginRegistry()
@@ -33,9 +38,14 @@ class PluginRegistry:
         >>> results = registry.search("governance")
     """
 
-    def __init__(self, storage_path: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        storage_path: Optional[Path] = None,
+        marketplace_policy: Optional[MarketplacePolicy] = None,
+    ) -> None:
         self._plugins: dict[str, dict[str, PluginManifest]] = {}
         self._storage_path = storage_path
+        self._marketplace_policy = marketplace_policy
         if storage_path and storage_path.exists():
             self._load_from_file()
 
@@ -43,15 +53,31 @@ class PluginRegistry:
     # CRUD operations
     # ------------------------------------------------------------------
 
-    def register(self, manifest: PluginManifest) -> None:
+    def register(
+        self,
+        manifest: PluginManifest,
+        mcp_servers: list[str] | None = None,
+    ) -> None:
         """Register a plugin manifest.
 
         Args:
             manifest: The manifest to register.
+            mcp_servers: Optional list of MCP server names declared by the plugin.
 
         Raises:
-            MarketplaceError: If the exact name+version already exists.
+            MarketplaceError: If the exact name+version already exists or the
+                plugin does not comply with the marketplace policy.
         """
+        if self._marketplace_policy is not None:
+            result = evaluate_plugin_compliance(
+                manifest, self._marketplace_policy, mcp_servers
+            )
+            if not result.compliant:
+                raise MarketplaceError(
+                    f"Plugin '{manifest.name}' violates marketplace policy: "
+                    + "; ".join(result.violations)
+                )
+
         versions = self._plugins.setdefault(manifest.name, {})
         if manifest.version in versions:
             raise MarketplaceError(

@@ -7,6 +7,7 @@ on:
 permissions:
   pull-requests: write
 
+# SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
 jobs:
   copilot-review:
     if: github.event.pull_request.draft == false

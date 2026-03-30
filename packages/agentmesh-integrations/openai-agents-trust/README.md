@@ -2,7 +2,7 @@
 
 Trust & governance layer for the [OpenAI Agents SDK](https://github.com/openai/openai-agents-python). Adds policy enforcement, trust-gated handoffs, and tamper-evident audit trails using native SDK guardrails and hooks.
 
-> Built by [AgentMesh](https://github.com/imran-siddique/agent-mesh) — the open-source trust layer for multi-agent systems. Similar integrations merged into [Dify](https://github.com/langgenius/dify-plugins/pull/2060) (65K ⭐), [LlamaIndex](https://github.com/run-llama/llama_index/pull/20644) (47K ⭐), and [Microsoft Agent-Lightning](https://github.com/microsoft/agent-lightning/pull/478) (15K ⭐).
+> Built by [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — the open-source trust layer for multi-agent systems. Similar integrations merged into [Dify](https://github.com/langgenius/dify-plugins/pull/2060) (65K ⭐), [LlamaIndex](https://github.com/run-llama/llama_index/pull/20644) (47K ⭐), and [Microsoft Agent-Lightning](https://github.com/microsoft/agent-lightning/pull/478) (15K ⭐).
 
 ## Install
 

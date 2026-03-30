@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
-"""Chaos scheduler — manual trigger only in Community Edition.
+# Public Preview — basic implementation
+"""Chaos scheduler — manual trigger only in Public Preview.
 
 Cron-based scheduling is not available. Use manual triggering instead.
 """
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 class ChaosScheduler:
-    """Manages chaos experiment schedules (manual trigger only in Community Edition)."""
+    """Manages chaos experiment schedules (manual trigger only in Public Preview)."""
 
     def __init__(self, schedules: list[ChaosSchedule] | None = None) -> None:
         self._schedules: dict[str, ChaosSchedule] = {
@@ -29,23 +29,23 @@ class ChaosScheduler:
         self._executions: dict[str, list[ScheduleExecution]] = {}
 
     def should_run(self, schedule_id: str, now: datetime | None = None) -> bool:
-        """Check if a schedule should fire — not available in Community Edition."""
+        """Check if a schedule should fire — not available in Public Preview."""
         raise NotImplementedError(
-            "Cron-based scheduling is not available in Community Edition. "
+            "Cron-based scheduling is not available in Public Preview. "
             "Use manual triggering instead."
         )
 
     def get_due_schedules(self, now: datetime | None = None) -> list[ChaosSchedule]:
-        """Return all schedules that are due — not available in Community Edition."""
+        """Return all schedules that are due — not available in Public Preview."""
         raise NotImplementedError(
-            "Cron-based scheduling is not available in Community Edition. "
+            "Cron-based scheduling is not available in Public Preview. "
             "Use manual triggering instead."
         )
 
     def is_in_blackout(self, schedule: ChaosSchedule, now: datetime | None = None) -> bool:
-        """Check if in blackout window — not available in Community Edition."""
+        """Check if in blackout window — not available in Public Preview."""
         raise NotImplementedError(
-            "Cron-based scheduling is not available in Community Edition."
+            "Cron-based scheduling is not available in Public Preview."
         )
 
     def get_current_severity(self, schedule_id: str) -> float:

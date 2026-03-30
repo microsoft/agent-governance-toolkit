@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Execution Checkpoints — stub implementation.
 
-Community edition: checkpoints are recorded but replay/skip logic is removed.
+Public Preview: checkpoints are recorded but replay/skip logic is removed.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from typing import Any
 
 @dataclass
 class SemanticCheckpoint:
-    """A checkpoint record (community edition: stored but not used for replay)."""
+    """A checkpoint record (Public Preview: stored but not used for replay)."""
 
     checkpoint_id: str = field(default_factory=lambda: f"ckpt:{uuid.uuid4().hex[:8]}")
     saga_id: str = ""
@@ -39,7 +39,7 @@ class SemanticCheckpoint:
 
 class CheckpointManager:
     """
-    Checkpoint stub (community edition: saves checkpoints but no replay logic).
+    Checkpoint stub (Public Preview: saves checkpoints but no replay logic).
     """
 
     def __init__(self) -> None:
@@ -72,7 +72,7 @@ class CheckpointManager:
         goal_description: str,
         step_id: str,
     ) -> bool:
-        """Always returns False (community edition: no skip-on-replay)."""
+        """Always returns False (Public Preview: no skip-on-replay)."""
         return False
 
     def get_checkpoint(
@@ -81,7 +81,7 @@ class CheckpointManager:
         goal_description: str,
         step_id: str,
     ) -> SemanticCheckpoint | None:
-        """Returns None (community edition: no replay support)."""
+        """Returns None (Public Preview: no replay support)."""
         return None
 
     def invalidate(
@@ -90,7 +90,7 @@ class CheckpointManager:
         step_id: str,
         reason: str = "",
     ) -> int:
-        """No-op in community edition."""
+        """No-op in Public Preview."""
         return 0
 
     def get_saga_checkpoints(self, saga_id: str) -> list[SemanticCheckpoint]:
@@ -98,7 +98,7 @@ class CheckpointManager:
         return list(self._checkpoints.get(saga_id, []))
 
     def get_replay_plan(self, saga_id: str, steps: list[str]) -> list[str]:
-        """All steps need execution (community edition: no skip logic)."""
+        """All steps need execution (Public Preview: no skip logic)."""
         return list(steps)
 
     @property

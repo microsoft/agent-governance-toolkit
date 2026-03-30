@@ -72,11 +72,11 @@ class TestFanOut:
         assert result.failure_count == 1
         assert len(result.compensation_needed) > 0
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     async def test_majority_policy_succeeds(self, steps):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     async def test_any_policy_succeeds(self, steps):
         pass
 
@@ -99,7 +99,7 @@ class TestFanOut:
         # With 0 branches, 0 == 0 is True for ALL_MUST_SUCCEED (vacuously true)
         assert group.check_policy()
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_group_check_policy_any_empty(self):
         pass
 
@@ -115,7 +115,7 @@ class TestFanOut:
 
 
 class TestCheckpoints:
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_save_and_check(self):
         mgr = CheckpointManager()
         ckpt = mgr.save("saga-1", "s1", "Database migrated", {"version": 5})
@@ -126,7 +126,7 @@ class TestCheckpoints:
         mgr = CheckpointManager()
         assert not mgr.is_achieved("saga-1", "Database migrated", "s1")
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_invalidate_checkpoint(self):
         mgr = CheckpointManager()
         mgr.save("saga-1", "s1", "Schema created")
@@ -134,7 +134,7 @@ class TestCheckpoints:
         assert count == 1
         assert not mgr.is_achieved("saga-1", "Schema created", "s1")
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_get_checkpoint(self):
         pass
 
@@ -147,11 +147,11 @@ class TestCheckpoints:
         ckpts = mgr.get_saga_checkpoints("saga-1")
         assert len(ckpts) == 2
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_replay_plan(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_total_and_valid_counts(self):
         pass
 
@@ -195,7 +195,7 @@ class TestSagaDSL:
         assert defn.steps[1].timeout == 600
         assert defn.steps[1].retries == 2
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_parse_with_fan_out(self):
         pass
 
@@ -226,15 +226,15 @@ class TestSagaDSL:
                 ],
             })
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_parse_invalid_fan_out_policy(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_parse_fan_out_invalid_branch(self):
         pass
 
-    @pytest.mark.skip("Feature not available in Community Edition")
+    @pytest.mark.skip("Feature not available in Public Preview")
     def test_parse_fan_out_too_few_branches(self):
         pass
 
@@ -280,5 +280,5 @@ class TestSagaDSL:
             ],
             "fan_out": [{"policy": "all_must_succeed", "branches": ["par1", "par2"]}],
         })
-        # Community edition: all steps are sequential (fan_out ignored)
+        # Public Preview: all steps are sequential (fan_out ignored)
         assert len(defn.sequential_steps) == 3

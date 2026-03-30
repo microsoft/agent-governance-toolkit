@@ -115,6 +115,7 @@ def test_langchain_kernel_default_timeout():
     assert kernel.timeout_seconds == 300.0
 
 
+@pytest.mark.slow
 async def test_langchain_ainvoke_timeout():
     """ainvoke should raise TimeoutError when the operation exceeds timeout."""
     chain = MagicMock()

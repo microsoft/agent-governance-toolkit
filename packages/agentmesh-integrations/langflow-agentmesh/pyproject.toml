@@ -10,7 +10,7 @@ readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.9"
 authors = [
-    { name = "Imran Siddique" }
+    { name = "Microsoft Corporation" }
 ]
 keywords = ["langflow", "governance", "agents", "trust", "compliance", "audit", "guardrails"]
 classifiers = [
@@ -34,9 +34,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/imran-siddique/agentmesh-integrations"
-Repository = "https://github.com/imran-siddique/agentmesh-integrations"
-Issues = "https://github.com/imran-siddique/agentmesh-integrations/issues"
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/langflow_agentmesh"]

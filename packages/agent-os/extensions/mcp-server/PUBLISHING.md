@@ -53,7 +53,7 @@ Edit `claude_desktop_config.json`:
   "mcpServers": {
     "agentos-dev": {
       "command": "node",
-      "args": ["C:/Users/mosiddi/source/repos/microsoft/agent-governance-toolkit/packages/mcp-server/dist/cli.js", "--stdio"],
+      "args": ["<your-path>", "--stdio"],
       "env": {
         "AGENTOS_POLICY_MODE": "strict",
         "AGENTOS_LOG_LEVEL": "debug"

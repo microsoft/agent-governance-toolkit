@@ -1,13 +1,17 @@
 # Agent Lightning — RL Training Governance
 
 > [!IMPORTANT]
-> **Community Preview** — The `agent-lightning` package on PyPI is a community preview release
-> for testing and evaluation only. It is **not** an official Microsoft-signed release.
-> Official signed packages will be available in a future release.
+> **Public Preview** — The `agentmesh-lightning` package on PyPI is a Microsoft-signed
+> public preview release. APIs may change before GA.
 
 Train AI agents with RL while maintaining **0% policy violations**.
 
 *Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)*
+
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
+[![PyPI](https://img.shields.io/pypi/v/agentmesh-lightning)](https://pypi.org/project/agentmesh-lightning/)
 
 ## 🎯 Overview
 
@@ -24,7 +28,7 @@ This package provides governed RL training integration:
 ## 🚀 Quick Start
 
 ```bash
-pip install agent-lightning
+pip install agentmesh-lightning
 # Optional: pip install agent-os-kernel  # for kernel integration
 ```
 

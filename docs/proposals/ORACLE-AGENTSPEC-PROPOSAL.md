@@ -1,7 +1,7 @@
 # Proposal: Oracle Agent Spec Governance Controls Mapping
 
 **Status:** 🔄 Active — Oracle team reviewing, discussion ongoing  
-**Author:** Imran Siddique (Microsoft)  
+**Author:** Agent Governance Toolkit Team (Microsoft)  
 **Created:** 2026-03-08  
 **Target:** oracle/agent-spec
 

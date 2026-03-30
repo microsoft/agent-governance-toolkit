@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """Runbook executor — basic step execution.
 
 Automated execution with approval gates and rollback is not available
-in Community Edition.
+in Public Preview.
 """
 
 from __future__ import annotations
@@ -46,9 +46,9 @@ class RunbookExecutor:
         incident: Incident,
         approve_callback: Callable[[RunbookStep, Incident], bool] | None = None,
     ) -> RunbookExecution:
-        """Execute a runbook — not available in Community Edition."""
+        """Execute a runbook — not available in Public Preview."""
         raise NotImplementedError(
-            "Automated runbook execution is not available in Community Edition"
+            "Automated runbook execution is not available in Public Preview"
         )
 
     def _rollback(

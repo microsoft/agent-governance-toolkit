@@ -20,10 +20,10 @@ keywords = [
     "anthropic",
 ]
 authors = [
-    {name = "Imran Siddique", email = "agt@microsoft.com"}
+    { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
 ]
 maintainers = [
-    {name = "Imran Siddique", email = "agt@microsoft.com"}
+    { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

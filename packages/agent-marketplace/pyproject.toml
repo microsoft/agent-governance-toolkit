@@ -3,14 +3,14 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent-marketplace"
-version = "2.1.0"
+name = "agentmesh-marketplace"
+version = "3.0.0"
 description = "Plugin marketplace for the Agent Governance Toolkit — discover, install, verify, and manage plugins"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
-    {name = "Imran Siddique", email = "agt@microsoft.com"}
+    { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
 ]
 keywords = [
     "ai-agents", "governance", "plugins", "marketplace",

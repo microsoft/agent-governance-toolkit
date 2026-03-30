@@ -1,7 +1,7 @@
 # Proposal: Stripe Machine Payments Protocol Integration
 
 **Status:** 📋 Planned — Research complete, implementation not started  
-**Author:** Imran Siddique (Microsoft)  
+**Author:** Agent Governance Toolkit Team (Microsoft)  
 **Created:** 2026-03-21  
 
 ## Summary

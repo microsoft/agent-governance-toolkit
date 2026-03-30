@@ -8,6 +8,7 @@ on:
 permissions:
   issues: write
   pull-requests: write
+# SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
 jobs:
   welcome:
     runs-on: ubuntu-latest

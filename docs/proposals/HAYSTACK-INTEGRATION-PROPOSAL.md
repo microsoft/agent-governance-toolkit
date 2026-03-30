@@ -1,7 +1,7 @@
 # Proposal: Haystack Integration
 
 **Status:** ✅ Shipped — Integration package implemented, upstream collaboration active  
-**Author:** Imran Siddique (Microsoft)  
+**Author:** Agent Governance Toolkit Team (Microsoft)  
 **Created:** 2026-03-08  
 **Target:** deepset-ai/haystack
 

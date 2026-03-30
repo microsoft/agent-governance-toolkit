@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 """
-MCP Security Gateway — Community Edition
+MCP Security Gateway — Public Preview
 
 A governance layer that sits between MCP clients and MCP servers,
 enforcing policy-based controls on all tool calls passing through.

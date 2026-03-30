@@ -247,7 +247,7 @@ class ContextExtractor:
         """
         self.store = store
         self.enrich_metadata = enrich_metadata
-        self.enricher = None  # enrichment module removed in Community Edition
+        self.enricher = None  # enrichment module removed in Public Preview
         self.enable_time_decay = enable_time_decay
         self.decay_rate = decay_rate
         self.enable_citations = False  # citations disabled

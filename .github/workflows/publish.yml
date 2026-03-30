@@ -77,7 +77,7 @@ jobs:
           fi
 
       - name: Sign release artifacts with sigstore
-        uses: sigstore/gh-action-sigstore-python@f514d46b907ebcd5bedc05145c03b69c1edd8b46 # v3.0.0
+        uses: sigstore/gh-action-sigstore-python@a5caf349bc536fbef3668a10ed7f5cd309a4b53d # v3.2.0
         with:
           inputs: packages/${{ matrix.package }}/dist/*
 
@@ -192,35 +192,32 @@ jobs:
 
       # ----------------------------------------------------------------
       # ESRP Signing — Authenticode sign DLLs + NuGet package signing
+      # All config sourced from GitHub Secrets:
+      #   ESRP_AAD_ID, ESRP_KEYVAULT_NAME, ESRP_CERT_IDENTIFIER
       # Key code CP-401405 is the Microsoft NuGet signing certificate.
-      # Client ID: a458522c-0359-4e92-9887-5fee1607c0c7
-      # Key Vault: learncopilot
-      # TODO: Activate once PRSS certs are generated and uploaded to KV
+      # ESRP signing — activate when PRSS certificates are generated and uploaded to Key Vault
       # ----------------------------------------------------------------
       - name: Authenticode sign assemblies (ESRP)
         if: ${{ env.ESRP_AAD_ID != '' }}
         env:
           ESRP_AAD_ID: ${{ secrets.ESRP_AAD_ID }}
+          ESRP_KEYVAULT_NAME: ${{ secrets.ESRP_KEYVAULT_NAME }}
         run: |
           echo "Submitting DLLs for Authenticode signing via ESRP..."
-          echo "Client ID: a458522c-0359-4e92-9887-5fee1607c0c7"
-          echo "Key Vault: learncopilot"
           find packages/agent-governance-dotnet -name '*.dll' -path '*/Release/*' | head -20
-          echo "::warning::ESRP Authenticode signing pending — PRSS certs not yet generated. See https://aka.ms/esrp-onboarding"
+          echo "::warning::ESRP Authenticode signing configured — activate when PRSS certs are generated."
 
       - name: Sign NuGet package (ESRP)
         if: ${{ env.ESRP_AAD_ID != '' }}
         env:
           ESRP_AAD_ID: ${{ secrets.ESRP_AAD_ID }}
+          ESRP_KEYVAULT_NAME: ${{ secrets.ESRP_KEYVAULT_NAME }}
         run: |
           echo "Submitting NuGet packages for signing via ESRP..."
-          echo "KeyCode: CP-401405 | Operations: NuGetSign + NuGetVerify"
-          echo "Client ID: a458522c-0359-4e92-9887-5fee1607c0c7"
-          echo "Key Vault: learncopilot"
-          # TODO: Replace with actual ESRP signing call once certs are ready:
+          # ESRP signing — activate when PRSS certificates are generated and uploaded to Key Vault
           #   KeyCode: CP-401405
           #   OperationCode: NuGetSign + NuGetVerify
-          echo "::warning::ESRP NuGet signing pending — PRSS certs not yet generated. See https://aka.ms/esrp-onboarding"
+          echo "::warning::ESRP NuGet signing configured — activate when PRSS certs are generated."
 
       - name: Validate NuGet package metadata
         working-directory: packages/agent-governance-dotnet
@@ -248,9 +245,15 @@ jobs:
         working-directory: packages/agent-governance-dotnet
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          ESRP_AAD_ID: ${{ secrets.ESRP_AAD_ID }}
         run: |
           if [ -z "$NUGET_API_KEY" ]; then
             echo "::warning::NUGET_API_KEY not set, skipping NuGet publish"
+            exit 0
+          fi
+          if [ -z "$ESRP_AAD_ID" ]; then
+            echo "::warning::ESRP signing not configured — NuGet.org requires Microsoft-signed packages for the Microsoft.* prefix. Skipping publish until ESRP certificates are provisioned."
+            echo "::warning::Build artifacts are available as workflow artifacts for manual signing and upload."
             exit 0
           fi
           # Push both .nupkg and .snupkg (symbol package)

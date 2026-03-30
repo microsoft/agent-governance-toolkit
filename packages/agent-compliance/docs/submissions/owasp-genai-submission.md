@@ -127,7 +127,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 
 ## Maintainers
 
-- Imran Siddique (Microsoft)
+- Microsoft Corporation (Microsoft)
 
 ## License
 

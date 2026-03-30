@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Liability Matrix — simple event log for sponsor→sponsored agent relationships.
 
-Community edition: graph operations are retained for API compatibility
+Public Preview: graph operations are retained for API compatibility
 but sponsorship/penalty/quarantine are stubs.
 """
 

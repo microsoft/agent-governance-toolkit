@@ -55,4 +55,4 @@ See the [MaximumSats API docs](https://maximumsats.com/api/dvm) for endpoint det
 ## Credits
 
 - [MaximumSats MCP](https://github.com/joelklabo/maximumsats-mcp) by @joelklabo
-- [AgentMesh](https://github.com/imran-siddique/agent-mesh) trust framework
+- [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) trust framework

@@ -1,10 +1,9 @@
 # Publishing Guide
 
 > [!IMPORTANT]
-> **Community Preview Releases** — All packages currently published from this repository
-> are community preview releases for testing and evaluation only. They are **not** official
-> Microsoft-signed releases. The ESRP Release pipelines described below have been set up
-> proactively and will be activated when official publishing approval is obtained.
+> **Public Preview Releases** — All packages published from this repository
+> are Microsoft-signed public preview releases. Publishing is done exclusively
+> through ESRP Release ADO pipelines.
 
 This document describes the requirements for publishing packages from the
 Agent Governance Toolkit to public registries.
@@ -18,15 +17,15 @@ Agent Governance Toolkit to public registries.
 | Agent OS Kernel | `agent-os-kernel` | `packages/agent-os` |
 | AgentMesh Platform | `agentmesh-platform` | `packages/agent-mesh` |
 | Agent Hypervisor | `agent-hypervisor` | `packages/agent-hypervisor` |
-| Agent Runtime | `agent-runtime` | `packages/agent-runtime` |
+| Agent Runtime | `agentmesh-runtime` | `packages/agent-runtime` |
 | Agent SRE | `agent-sre` | `packages/agent-sre` |
 | Agent Governance Toolkit | `agent-governance-toolkit` | `packages/agent-compliance` |
-| Agent Lightning | `agent-lightning` | `packages/agent-lightning` |
+| Agent Lightning | `agentmesh-lightning` | `packages/agent-lightning` |
 
 ### Publishing Method
 
 All Python packages are published to PyPI via **ESRP Release** using an Azure
-DevOps pipeline (`pipelines/pypi-publish.yml`).
+DevOps pipeline (`pipelines/esrp-publish.yml` with target `pypi`).
 
 > **⚠️ GitHub Actions Trusted Publishers are not used for PyPI publishing.**
 > The GitHub Actions workflow (`.github/workflows/publish.yml`) builds and
@@ -89,7 +88,7 @@ not npm.
 ### Publishing Method
 
 All npm packages are published via **ESRP Release** using an Azure DevOps
-pipeline (`pipelines/npm-publish.yml`).
+pipeline (`pipelines/esrp-publish.yml` with target `npm`).
 
 > **⚠️ GitHub Actions is not used for npm publishing.**
 > The GitHub Actions workflow builds and packs `.tgz` files but does **not**
@@ -120,8 +119,16 @@ All packages must include:
 
 ## .NET Packages (NuGet)
 
-The .NET SDK (`packages/agent-governance-dotnet`) is published to NuGet with
-ESRP Authenticode and NuGet signing.
+The .NET SDK (`packages/agent-governance-dotnet`) is published to NuGet via **ESRP Release**
+using an Azure DevOps pipeline (`pipelines/esrp-publish.yml` with target `nuget`).
+
+| Package | NuGet Name | Directory |
+|---------|------------|-----------|
+| Agent Governance .NET SDK | `Microsoft.AgentGovernance` | `packages/agent-governance-dotnet` |
+
+> **⚠️ GitHub Actions is not used for NuGet publishing.**
+> The GitHub Actions workflow builds and attests packages but does **not**
+> publish them. Actual publishing goes through the ADO pipeline.
 
 ## Contact
 

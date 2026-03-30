@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """Blue-green deployment strategy for AI agents.
 
 Manages dual-environment deployments with deploy, validate, switch, and rollback

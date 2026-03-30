@@ -1,4 +1,4 @@
-# Agent Control Plane — Community Edition
+# Agent Control Plane — Public Preview
 
 > **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
 

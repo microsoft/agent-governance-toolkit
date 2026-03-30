@@ -1,7 +1,9 @@
 # Microsoft.AgentGovernance — .NET SDK
 
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-8.0-blueviolet)](https://dotnet.microsoft.com/)
 [![NuGet](https://img.shields.io/nuget/v/Microsoft.AgentGovernance)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Runtime security governance for autonomous AI agents. Policy enforcement, execution rings, circuit breakers, prompt injection detection, SLO tracking, saga orchestration, rate limiting, zero-trust identity, OpenTelemetry metrics, and tamper-proof audit logging — all in a single .NET 8.0 package.
 

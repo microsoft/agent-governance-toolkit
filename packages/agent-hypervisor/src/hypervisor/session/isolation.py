@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Session Isolation Levels — stub implementation.
 
-Community edition: all access is serialized via a single lock.
+Public Preview: all access is serialized via a single lock.
 Isolation levels are retained for API compatibility but not enforced.
 """
 
@@ -14,7 +14,7 @@ from enum import Enum
 
 
 class IsolationLevel(str, Enum):
-    """Session isolation levels (community edition: not enforced)."""
+    """Session isolation levels (Public Preview: not enforced)."""
 
     SNAPSHOT = "snapshot"
     READ_COMMITTED = "read_committed"

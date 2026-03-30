@@ -2,17 +2,17 @@
 
 # AgentMesh Integrations
 
-> **📦 Migrated:** This package was moved from [imran-siddique/agentmesh-integrations](https://github.com/imran-siddique/agentmesh-integrations) into the monorepo at `packages/agentmesh-integrations/`.
+> **📦 Migrated:** This package was moved from its original repository into the monorepo at `packages/agentmesh-integrations/`.
 
 
 **Platform Plugins & Trust Providers for AgentMesh**
 
 *Dify · LangChain · LangGraph · LlamaIndex · OpenAI Agents · OpenClaw · Nostr WoT · Moltbook*
 
-[![GitHub Stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=social)](https://github.com/microsoft/agent-governance-toolkit/stargazers)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![AgentMesh](https://img.shields.io/badge/agentmesh-compatible-green.svg)](https://github.com/microsoft/agent-governance-toolkit)
+[![PyPI](https://img.shields.io/badge/PyPI-multiple%20packages-lightgrey)](https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agentmesh-integrations)
 
 > ⭐ **If this project helps you, please star it!** It helps others discover AgentMesh integrations.
 
@@ -47,7 +47,7 @@ AgentMesh core is a lean, zero-external-dependency library. Platform integration
 | [Moltbook](moltbook/) | — | ✅ Stable | AgentMesh governance skill for [Moltbook](https://moltbook.com) agent registry |
 | [Nostr Web of Trust](nostr-wot/) | `agentmesh-nostr-wot` | 🚧 Scaffold | Trust scoring via [MaximumSats](https://github.com/joelklabo/maximumsats-mcp) NIP-85 WoT |
 | [OpenAI Agents](openai-agents-trust/) | [`openai-agents-trust`](https://pypi.org/project/openai-agents-trust/) | ✅ Published (PyPI) | Trust guardrails, policy enforcement, governance hooks, trust-gated handoffs for OpenAI Agents SDK |
-| [OpenClaw Skill](openclaw-skill/) | [`agentmesh-governance`](https://clawhub.ai/imran-siddique/agentmesh-governance) | ✅ Published (ClawHub) | Governance skill for [OpenClaw](https://openclaw.im) agents — policy enforcement, trust scoring, Ed25519 DIDs, hash-chain audit |
+| [OpenClaw Skill](openclaw-skill/) | [`agentmesh-governance`](https://clawhub.ai/microsoft/agentmesh-governance) | ✅ Published (ClawHub) | Governance skill for [OpenClaw](https://openclaw.im) agents — policy enforcement, trust scoring, Ed25519 DIDs, hash-chain audit |
 
 ## Quick Start
 

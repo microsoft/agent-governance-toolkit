@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """
 Delta Audit Engine — simple append-only log.
 
-Community edition: records (timestamp, action, data) tuples.
+Public Preview: records (timestamp, action, data) tuples.
 No audit loging or tamper-evidence.
 """
 
@@ -60,7 +60,7 @@ class DeltaEngine:
     """
     Simple append-only audit log.
 
-    Community edition: captures deltas as timestamped records.
+    Public Preview: captures deltas as timestamped records.
     No audit log verification.
     """
 
@@ -91,13 +91,13 @@ class DeltaEngine:
         return delta
 
     def compute_hash_chain_root(self) -> str | None:
-        """Return hash of last delta (community edition: no Merkle tree)."""
+        """Return hash of last delta (Public Preview: no Merkle tree)."""
         if not self._deltas:
             return None
         return self._deltas[-1].delta_hash
 
     def verify_chain(self) -> bool:
-        """Always returns True (community edition: no chain verification)."""
+        """Always returns True (Public Preview: no chain verification)."""
         return True
 
     @property

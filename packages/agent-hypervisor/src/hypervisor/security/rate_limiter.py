@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Community Edition — basic implementation
+# Public Preview — basic implementation
 """Runtime-layer per-agent/per-ring rate limiting.
 
 This module enforces token-bucket limits per agent, session, and execution ring
