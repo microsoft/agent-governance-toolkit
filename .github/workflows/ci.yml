@@ -10,7 +10,50 @@ permissions:
   contents: read
 
 jobs:
+  # ── Path detection — determines which jobs to run ─────────────────────
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      dotnet: ${{ steps.filter.outputs.dotnet }}
+      typescript: ${{ steps.filter.outputs.typescript }}
+      integrations: ${{ steps.filter.outputs.integrations }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+      docs-only: ${{ steps.filter.outputs.docs-only }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            python:
+              - 'packages/agent-os/**'
+              - 'packages/agent-mesh/**'
+              - 'packages/agent-hypervisor/**'
+              - 'packages/agent-sre/**'
+              - 'packages/agent-compliance/**'
+              - 'scripts/**'
+              - 'requirements/**'
+            dotnet:
+              - 'packages/agent-governance-dotnet/**'
+            typescript:
+              - 'packages/agent-mesh/sdks/typescript/**'
+              - 'packages/agent-os/extensions/**'
+              - 'packages/agentmesh-integrations/mastra-agentmesh/**'
+              - 'packages/agentmesh-integrations/copilot-governance/**'
+            integrations:
+              - 'packages/agentmesh-integrations/**'
+            workflows:
+              - '.github/workflows/**'
+            docs-only:
+              - '**/*.md'
+              - 'notebooks/**'
+              - 'docs/**'
+
+  # ── Python lint + test (only when Python files change) ────────────────
   lint:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -25,7 +68,10 @@ jobs:
       - name: Lint ${{ matrix.package }}
         run: ruff check packages/${{ matrix.package }}/src/ --select E,F,W --ignore E501
 
+  # ── Python test (only when Python files change) ───────────────────────
   test:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -46,7 +92,10 @@ jobs:
         working-directory: packages/${{ matrix.package }}
         run: pytest tests/ -q --tb=short
 
+  # ── Python dependency safety (only when Python files change) ──────────
   security:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -68,7 +117,10 @@ jobs:
           done
           safety check 2>/dev/null || echo "Safety check completed with warnings"
 
+  # ── .NET build + test (only when C# files change) ────────────────────
   test-dotnet:
+    needs: changes
+    if: needs.changes.outputs.dotnet == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -82,7 +134,10 @@ jobs:
         working-directory: packages/agent-governance-dotnet
         run: dotnet test --configuration Release --verbosity normal --no-build
 
+  # ── Integration tests (only when integration packages change) ────────
   test-integrations:
+    needs: changes
+    if: needs.changes.outputs.integrations == 'true' || needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -153,6 +208,7 @@ jobs:
             echo "No tests/ directory — smoke import passed"
           fi
 
+  # ── Dependency confusion scan (always runs — security gate) ──────────
   dependency-scan:
     runs-on: ubuntu-latest
     steps:
@@ -204,7 +260,10 @@ jobs:
           print(f'OK: All notebook pip install packages are registered')
           "
 
+  # ── Workflow security audit (only when workflows change) ─────────────
   workflow-security:
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -226,7 +285,10 @@ jobs:
           done
           if [ $UNSAFE -eq 1 ]; then exit 1; fi
 
+  # ── TypeScript integration tests (only when TS files change) ─────────
   test-integrations-ts:
+    needs: changes
+    if: needs.changes.outputs.typescript == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -251,3 +313,23 @@ jobs:
       - name: Test copilot-governance
         working-directory: packages/agentmesh-integrations/copilot-governance
         run: npm test
+
+  # ── CI Gate — required status check that handles skipped jobs ────────
+  # When path-filters skip jobs (e.g. docs-only PRs skip tests), those
+  # jobs report "skipped" which doesn't satisfy required status checks.
+  # This gate job always runs, checks that no jobs FAILED, and reports
+  # success. Configure this as the single required status check.
+  ci-complete:
+    if: always()
+    needs: [changes, lint, test, security, test-dotnet, test-integrations, dependency-scan, workflow-security, test-integrations-ts]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check job results
+        run: |
+          results='${{ toJSON(needs.*.result) }}'
+          echo "Job results: $results"
+          if echo "$results" | grep -qE '"failure"|"cancelled"'; then
+            echo "One or more required jobs failed or were cancelled"
+            exit 1
+          fi
+          echo "All jobs passed or were correctly skipped"
