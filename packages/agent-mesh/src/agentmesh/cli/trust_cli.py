@@ -597,11 +597,6 @@ def report_agents(fmt: str, json_flag: bool):
         for p in filtered:
             history = _get_demo_history(p.peer_did)
             successful_tasks, failure_tasks = _categorize_tasks(history);
-            for h in history:
-                if h["delta"] >= 0:
-                    successful_tasks.append(h["event"])
-                elif h["delta"] < 0:
-                    failure_tasks.append(h["event"])
             
             data.append({
                 "agent_id": p.peer_did,
@@ -627,11 +622,6 @@ def report_agents(fmt: str, json_flag: bool):
     for p in filtered:
         history = _get_demo_history(p.peer_did)
         successful_tasks, failure_tasks = _categorize_tasks(history);
-        for h in history:
-            if h["delta"] >= 0:
-                successful_tasks.append(h["event"])
-            elif h["delta"] < 0:
-                failure_tasks.append(h["event"])
         
         level = _trust_level_label(p.trust_score)
         style = _trust_level_style(level)
