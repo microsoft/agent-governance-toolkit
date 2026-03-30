@@ -591,13 +591,12 @@ def report_agents(fmt: str, json_flag: bool):
 
     peers = _get_demo_peers()
     filtered: list[PeerInfo] = list(peers.values())
-    
+
     if fmt == "json":
         data = []
         for p in filtered:
             history = _get_demo_history(p.peer_did)
-            successful_tasks, failure_tasks = _categorize_tasks(history);
-            
+            successful_tasks, failure_tasks = _categorize_tasks(history)
             data.append({
                 "agent_id": p.peer_did,
                 "trust_score": p.trust_score,
@@ -621,8 +620,7 @@ def report_agents(fmt: str, json_flag: bool):
 
     for p in filtered:
         history = _get_demo_history(p.peer_did)
-        successful_tasks, failure_tasks = _categorize_tasks(history);
-        
+        successful_tasks, failure_tasks = _categorize_tasks(history)
         level = _trust_level_label(p.trust_score)
         style = _trust_level_style(level)
         table.add_row(
