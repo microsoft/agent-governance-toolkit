@@ -58,11 +58,12 @@ def verify(manifest_path: str, verbose: bool, output_json: bool):
         try:
             manifest = CapabilityManifest(**manifest_data)
         except (ValueError, KeyError, PermissionError) as e:
+            err_msg = "Manifest validation failed due to invalid schema or format."
             if output_json:
-                print(json.dumps({"status": "fail", "error": f"Manifest validation failed: {str(e)}", "type": e.__class__.__name__}, indent=2))
+                print(json.dumps({"status": "fail", "error": err_msg, "type": "ValidationError"}, indent=2))
             else:
                 click.echo("\n❌ Validation failed:", err=True)
-                click.echo(f"   {str(e)}", err=True)
+                click.echo(f"   {err_msg}", err=True)
             sys.exit(1)
         except Exception:
             err_msg = "An internal error occurred while validating the manifest."
@@ -153,21 +154,22 @@ def verify(manifest_path: str, verbose: bool, output_json: bool):
             click.echo(f"❌ File not found: {manifest_path}", err=True)
         sys.exit(1)
     except json.JSONDecodeError as e:
+        err_msg = "Invalid JSON structure provided."
         if output_json:
-            print(json.dumps({"status": "fail", "error": f"Invalid JSON: {str(e)}"}, indent=2))
+            print(json.dumps({"status": "fail", "error": err_msg}, indent=2))
         else:
-            click.echo(f"❌ Invalid JSON: {str(e)}", err=True)
+            click.echo(f"❌ {err_msg}", err=True)
         sys.exit(1)
     except Exception as e:
         # Sanitize exception message to avoid leaking internal details
         is_known = isinstance(e, (FileNotFoundError, json.JSONDecodeError, ValueError, PermissionError))
-        error_msg = str(e) if is_known else "An internal error occurred during verification."
+        error_msg = "A validation or file access error occurred." if is_known else "An internal error occurred during verification."
         
         if output_json:
             print(json.dumps({
                 "status": "fail",
                 "error": error_msg,
-                "type": e.__class__.__name__ if is_known else "InternalError"
+                "type": "DataValidationError" if is_known else "InternalError"
             }, indent=2))
         else:
             click.echo(f"❌ Error: {error_msg}", err=True)
@@ -278,13 +280,13 @@ def scan(agent_url: str, timeout: int, verbose: bool, output_json: bool):
     except Exception as e:
         # Sanitize error message based on exception type to prevent info leakage
         is_known = isinstance(e, (httpx.RequestError, json.JSONDecodeError, ValueError, PermissionError))
-        err_msg = str(e) if is_known else "An internal error occurred during agent scan"
+        err_msg = "An error occurred fetching or validating the agent manifest." if is_known else "An internal error occurred during agent scan"
         
         if output_json:
             print(json.dumps({
                 "status": "fail",
                 "error": err_msg,
-                "type": e.__class__.__name__ if is_known else "InternalError"
+                "type": "ScanDataError" if is_known else "InternalError"
             }, indent=2))
         else:
             click.echo(f"\n❌ Scan error: {err_msg}", err=True)

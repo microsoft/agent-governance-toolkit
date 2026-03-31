@@ -254,14 +254,14 @@ def main():
     except Exception as e:
         # Sanitize startup errors for JSON mode to prevent info leakage
         is_known = isinstance(e, (ValueError, PermissionError, OSError))
-        msg = str(e) if is_known else "An internal error occurred during server startup"
+        msg = "A validation or system error occurred." if is_known else "An internal error occurred during server startup"
         
         if getattr(args, "json", False):
             import json
             print(json.dumps({
                 "status": "error",
                 "message": msg,
-                "type": e.__class__.__name__ if is_known else "InternalError"
+                "type": "StartupError" if is_known else "InternalError"
             }, indent=2))
         else:
             logger.exception(f"Server error: {msg}")

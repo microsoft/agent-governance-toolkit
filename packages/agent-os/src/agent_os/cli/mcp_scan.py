@@ -253,9 +253,9 @@ def main(argv: List[str] | None = None) -> int:
         return 0
     except Exception as e:
         is_known = isinstance(e, (FileNotFoundError, ValueError, yaml.YAMLError))
-        msg = str(e) if is_known else "An error occurred during scanning"
+        msg = "A file access or syntax error occurred." if is_known else "An error occurred during scanning"
         if output_format == "json":
-            print(json.dumps({"status": "error", "message": msg, "type": e.__class__.__name__ if is_known else "InternalError"}, indent=2))
+            print(json.dumps({"status": "error", "message": msg, "type": "ScanError" if is_known else "InternalError"}, indent=2))
         else:
             print(f"Error: {msg}")
         return 1

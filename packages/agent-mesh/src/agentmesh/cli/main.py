@@ -294,10 +294,12 @@ def register(agent_dir: str, name: str = None, output_json: bool = False):
         return
     except (ValueError, KeyError, PermissionError) as e:
         # Catch safe, expected exceptions
+        err_msg = "A validation or permission error occurred."
+        logger.error(f"Registration failed: {e}")
         if output_json:
-            print(json.dumps({"status": "error", "message": str(e), "type": e.__class__.__name__}, indent=2))
+            print(json.dumps({"status": "error", "message": err_msg, "type": e.__class__.__name__}, indent=2))
         else:
-            console.print(f"[red]Error: {e}[/red]")
+            console.print(f"[red]Error: {err_msg}[/red]")
         return
     except Exception:
         # Catch-all for unexpected errors
@@ -447,10 +449,12 @@ def policy(policy_file: str, validate: bool, output_json: bool):
             console.print(f"\n[green]Successfully loaded {len(policies)} policies[/green]")
 
     except (yaml.YAMLError, ValueError, json.JSONDecodeError) as e:
+        err_msg = "Failed to parse or validate the policy file."
+        logger.error(f"Policy load failed: {e}")
         if output_json:
-            print(json.dumps({"status": "error", "message": str(e), "type": e.__class__.__name__}, indent=2))
+            print(json.dumps({"status": "error", "message": err_msg, "type": e.__class__.__name__}, indent=2))
         else:
-            console.print(f"[red]Error: {e}[/red]")
+            console.print(f"[red]Error: {err_msg}[/red]")
     except Exception:
         err_msg = "An unexpected error occurred while loading the policy. Access AGENTOS_DEBUG for details."
         if output_json:
@@ -477,7 +481,7 @@ def audit(agent: str, limit: int, fmt: str, output_json: bool):
 
     if agent:
         # Validate agent DID format to prevent injection or invalid lookups
-        if not re.match(r"^agent-[a-zA-Z0-9_-]+$|^did:agentmesh:[a-zA-Z0-9._-]+$", agent):
+        if not re.fullmatch(r"^(?:agent-[a-zA-Z0-9-]+|did:agentmesh:[a-zA-Z0-9-]+)$", agent) or len(agent) > 128:
             err_msg = f"Invalid agent identifier format: {agent}"
             if output_json:
                 print(json.dumps({"status": "error", "message": err_msg, "type": "ValidationError"}, indent=2))
@@ -524,14 +528,14 @@ def audit(agent: str, limit: int, fmt: str, output_json: bool):
 try:
     from .proxy import proxy
     app.add_command(proxy)
-except:
+except ImportError:
     pass
 
 # Import trust subcommand group
 try:
     from .trust_cli import trust
     app.add_command(trust)
-except:
+except ImportError:
     pass
 
 

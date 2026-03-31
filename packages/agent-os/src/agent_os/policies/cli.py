@@ -216,9 +216,9 @@ def main(argv: List[str] | None = None) -> int:
         return 0
     except Exception as e:
         is_known = isinstance(e, (FileNotFoundError, ValueError, yaml.YAMLError))
-        msg = str(e) if is_known else "An internal error occurred during policy management"
+        msg = "A validation or file access error occurred." if is_known else "An internal error occurred during policy management"
         if output_format == "json":
-            print(json.dumps({"status": "error", "message": msg, "type": e.__class__.__name__ if is_known else "InternalError"}, indent=2))
+            print(json.dumps({"status": "error", "message": msg, "type": "PolicyDataError" if is_known else "InternalError"}, indent=2))
         else:
             print(f"Error: {msg}")
         return 1
