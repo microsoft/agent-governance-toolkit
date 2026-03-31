@@ -55,7 +55,7 @@
     "jest": "^30.3.0",
     "ts-jest": "^29.0.0",
     "ts-node": "^10.9.0",
-    "typescript": "^5.7.0"
+    "typescript": "^6.0.2"
   },
   "copilotExtension": {
     "name": "agentos",
