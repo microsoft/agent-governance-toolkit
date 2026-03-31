@@ -16,7 +16,7 @@
   },
   "icon": "images/icon.png",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "1.85.0"
   },
   "categories": [
     "Machine Learning",
