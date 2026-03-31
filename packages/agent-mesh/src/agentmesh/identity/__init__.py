@@ -24,6 +24,12 @@ from .namespace_manager import NamespaceManager
 from .revocation import RevocationList, RevocationEntry
 from .rotation import KeyRotationManager
 from .jwk import to_jwk, from_jwk, to_jwks, from_jwks
+from .managed_identity import (
+    ManagedIdentityAdapter,
+    EntraManagedIdentity,
+    AWSIAMIdentity,
+    GCPWorkloadIdentity,
+)
 from .mtls import MTLSConfig, MTLSIdentityVerifier
 from .keystore import KeyStore, SoftwareKeyStore, PKCS11KeyStore
 
@@ -59,4 +65,8 @@ __all__ = [
     "EntraAgentRegistry",
     "EntraAgentBlueprint",
     "EntraAgentID",
+    "ManagedIdentityAdapter",
+    "EntraManagedIdentity",
+    "AWSIAMIdentity",
+    "GCPWorkloadIdentity",
 ]

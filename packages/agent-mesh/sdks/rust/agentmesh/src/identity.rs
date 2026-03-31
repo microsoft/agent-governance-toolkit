@@ -7,6 +7,9 @@ use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 
+/// Maximum delegation depth to prevent Sybil attacks via infinite chains.
+pub const MAX_DELEGATION_DEPTH: u32 = 10;
+
 /// An agent's cryptographic identity (Ed25519 key pair + DID).
 pub struct AgentIdentity {
     /// Decentralised identifier, e.g. `did:agentmesh:my-agent`.
@@ -15,6 +18,10 @@ pub struct AgentIdentity {
     pub public_key: VerifyingKey,
     /// Capabilities declared by this agent.
     pub capabilities: Vec<String>,
+    /// Parent agent DID if this identity was created via delegation.
+    pub parent_did: Option<String>,
+    /// Depth in the delegation chain (0 = root).
+    pub delegation_depth: u32,
     signing_key: SigningKey,
 }
 
@@ -27,6 +34,8 @@ impl AgentIdentity {
             did: format!("did:agentmesh:{}", agent_id),
             public_key,
             capabilities,
+            parent_did: None,
+            delegation_depth: 0,
             signing_key,
         })
     }
@@ -44,6 +53,45 @@ impl AgentIdentity {
         let sig_bytes: [u8; 64] = signature.try_into().unwrap();
         let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
         self.public_key.verify(data, &sig).is_ok()
+    }
+
+    /// Delegate to a child agent with narrowed capabilities.
+    ///
+    /// The child's capabilities **must** be a subset of the parent's.
+    /// Delegation depth is incremented; exceeding [`MAX_DELEGATION_DEPTH`]
+    /// returns an error.
+    pub fn delegate(
+        &self,
+        name: &str,
+        capabilities: Vec<String>,
+    ) -> Result<Self, IdentityError> {
+        if self.delegation_depth >= MAX_DELEGATION_DEPTH {
+            return Err(IdentityError::DelegationDepthExceeded {
+                current: self.delegation_depth,
+                max: MAX_DELEGATION_DEPTH,
+            });
+        }
+
+        // Capabilities must be a subset of parent's
+        for cap in &capabilities {
+            if !self.capabilities.contains(cap) {
+                return Err(IdentityError::CapabilityNotInParent {
+                    capability: cap.clone(),
+                });
+            }
+        }
+
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let public_key = signing_key.verifying_key();
+
+        Ok(Self {
+            did: format!("did:agentmesh:{}", name),
+            public_key,
+            capabilities,
+            parent_did: Some(self.did.clone()),
+            delegation_depth: self.delegation_depth + 1,
+            signing_key,
+        })
     }
 
     /// Serialise the public portion of the identity to JSON.
@@ -95,6 +143,14 @@ impl PublicIdentity {
 pub enum IdentityError {
     #[error("serialization error: {0}")]
     Serialization(serde_json::Error),
+
+    #[error(
+        "maximum delegation depth ({max}) exceeded (current depth: {current})"
+    )]
+    DelegationDepthExceeded { current: u32, max: u32 },
+
+    #[error("cannot delegate capability '{capability}' — not in parent's capabilities")]
+    CapabilityNotInParent { capability: String },
 }
 
 #[cfg(test)]
@@ -218,5 +274,94 @@ mod tests {
         let id = AgentIdentity::generate("my-agent", vec![]).unwrap();
         assert!(id.did.starts_with("did:agentmesh:"));
         assert_eq!(id.did, "did:agentmesh:my-agent");
+    }
+
+    // ------------------------------------------------------------------
+    // Delegation tests (Issue #607)
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn test_delegate_creates_child_with_parent_did() {
+        let parent = AgentIdentity::generate("parent", vec!["read".into(), "write".into()]).unwrap();
+        let child = parent.delegate("child", vec!["read".into()]).unwrap();
+        assert_eq!(child.parent_did, Some("did:agentmesh:parent".to_string()));
+        assert_eq!(child.delegation_depth, 1);
+        assert_eq!(child.capabilities, vec!["read"]);
+    }
+
+    #[test]
+    fn test_delegate_narrows_capabilities() {
+        let parent = AgentIdentity::generate("parent", vec!["read".into(), "write".into()]).unwrap();
+        let child = parent.delegate("child", vec!["read".into()]).unwrap();
+        assert!(!child.capabilities.contains(&"write".to_string()));
+    }
+
+    #[test]
+    fn test_delegate_rejects_superset() {
+        let parent = AgentIdentity::generate("parent", vec!["read".into()]).unwrap();
+        let result = parent.delegate("child", vec!["read".into(), "admin".into()]);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            IdentityError::CapabilityNotInParent { capability } => {
+                assert_eq!(capability, "admin");
+            }
+            other => panic!("expected CapabilityNotInParent, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_delegate_depth_increments() {
+        let root = AgentIdentity::generate("root", vec!["read".into()]).unwrap();
+        let d1 = root.delegate("d1", vec!["read".into()]).unwrap();
+        let d2 = d1.delegate("d2", vec!["read".into()]).unwrap();
+        assert_eq!(d2.delegation_depth, 2);
+        assert_eq!(d2.parent_did, Some("did:agentmesh:d1".to_string()));
+    }
+
+    #[test]
+    fn test_delegate_max_depth_enforced() {
+        let mut current = AgentIdentity::generate("root", vec!["read".into()]).unwrap();
+        for i in 0..MAX_DELEGATION_DEPTH {
+            current = current.delegate(&format!("child-{}", i), vec!["read".into()]).unwrap();
+        }
+        let result = current.delegate("one-too-many", vec!["read".into()]);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            IdentityError::DelegationDepthExceeded { .. }
+        ));
+    }
+
+    #[test]
+    fn test_delegate_child_has_own_keypair() {
+        let parent = AgentIdentity::generate("parent", vec!["read".into()]).unwrap();
+        let child = parent.delegate("child", vec!["read".into()]).unwrap();
+        assert_ne!(parent.public_key.to_bytes(), child.public_key.to_bytes());
+    }
+
+    #[test]
+    fn test_delegate_child_can_sign_and_verify() {
+        let parent = AgentIdentity::generate("parent", vec!["read".into()]).unwrap();
+        let child = parent.delegate("child", vec!["read".into()]).unwrap();
+        let data = b"delegation payload";
+        let sig = child.sign(data);
+        assert!(child.verify(data, &sig));
+        // Parent should NOT verify child's signature
+        assert!(!parent.verify(data, &sig));
+    }
+
+    #[test]
+    fn test_root_identity_has_no_parent() {
+        let root = AgentIdentity::generate("root", vec![]).unwrap();
+        assert!(root.parent_did.is_none());
+        assert_eq!(root.delegation_depth, 0);
+    }
+
+    #[test]
+    fn test_delegate_empty_capabilities_allowed() {
+        let parent = AgentIdentity::generate("parent", vec!["read".into()]).unwrap();
+        let child = parent.delegate("child", vec![]).unwrap();
+        assert!(child.capabilities.is_empty());
+        assert_eq!(child.delegation_depth, 1);
     }
 }

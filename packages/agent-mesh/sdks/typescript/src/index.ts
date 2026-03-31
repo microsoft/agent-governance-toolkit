@@ -6,6 +6,7 @@ export { PolicyEngine, PolicyConflictResolver } from './policy';
 export type { PolicyDecision } from './policy';
 export { AuditLogger } from './audit';
 export { AgentMeshClient } from './client';
+export { GovernanceMetrics } from './metrics';
 
 export {
   ConflictResolutionStrategy,
