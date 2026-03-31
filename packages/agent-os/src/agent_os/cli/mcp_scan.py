@@ -96,7 +96,7 @@ def get_fingerprints(config_path: Path) -> Dict[str, str]:
                 config = yaml.safe_load(f)
             else:
                 config = json.load(f)
-    except:
+    except (json.JSONDecodeError, yaml.YAMLError, OSError, ValueError):
         return {}
 
     fingerprints = {}

@@ -544,8 +544,123 @@ except ImportError:
 @click.option("--config-path", type=click.Path(), help="Path to config file")
 @click.option("--backup/--no-backup", default=True, help="Backup existing config")
 def init_integration(claude: bool, config_path: str, backup: bool):
-    """Initialize integration with tools like Claude."""
-    pass
+    """
+    Initialize AgentMesh integration with existing tools.
+    
+    Examples:
+    
+        # Setup Claude Desktop to use AgentMesh proxy
+        agentmesh init-integration --claude
+        
+        # Specify custom config path
+        agentmesh init-integration --claude --config-path ~/custom/config.json
+    """
+    if claude:
+        _init_claude_integration(config_path, backup)
+    else:
+        console.print("[yellow]Please specify an integration type (e.g., --claude)[/yellow]")
+
+
+def _init_claude_integration(config_path: Optional[str], backup: bool):
+    """Initialize Claude Desktop integration."""
+    console.print("\n[bold blue]🔧 Setting up Claude Desktop Integration[/bold blue]\n")
+    
+    # Determine config path
+    if not config_path:
+        # Default Claude Desktop config locations
+        import platform
+        system = platform.system()
+        
+        if system == "Darwin":  # macOS
+            default_path = Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
+        elif system == "Windows":
+            default_path = Path.home() / "AppData" / "Roaming" / "Claude" / "claude_desktop_config.json"
+        else:  # Linux
+            default_path = Path.home() / ".config" / "claude" / "claude_desktop_config.json"
+        
+        config_path = default_path
+    else:
+        config_path = Path(config_path)
+    
+    logger.info("Config path: %s", config_path)
+    
+    # Check if config exists
+    if not config_path.exists():
+        logger.warning("Config file not found at %s", config_path)
+        logger.info("Creating new config file...")
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config = {"mcpServers": {}}
+    else:
+        # Backup existing config
+        if backup:
+            backup_path = config_path.with_suffix(".json.backup")
+            import shutil
+            shutil.copy(config_path, backup_path)
+            logger.debug("Backed up existing config to %s", backup_path)
+        
+        # Load existing config
+        with open(config_path) as f:
+            config = json.load(f)
+    
+    # Ensure mcpServers exists
+    if "mcpServers" not in config:
+        config["mcpServers"] = {}
+    
+    # Add example AgentMesh proxy configuration
+    example_server = {
+        "filesystem-protected": {
+            "command": "agentmesh",
+            "args": [
+                "proxy",
+                "--target", "npx",
+                "--target", "-y",
+                "--target", "@modelcontextprotocol/server-filesystem",
+                "--target", str(Path.home())
+            ],
+            "env": {},
+        }
+    }
+    
+    # Check if already configured
+    has_agentmesh = any(
+        "agentmesh" in str(server.get("command", ""))
+        for server in config["mcpServers"].values()
+    )
+    
+    if not has_agentmesh:
+        config["mcpServers"].update(example_server)
+        console.print("\n[green]✓ Added AgentMesh-protected filesystem server example[/green]")
+    else:
+        logger.warning("AgentMesh proxy already configured")
+    
+    # Save updated config
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
+    
+    console.print(f"\n[green]✓ Updated {config_path}[/green]")
+    
+    # Show instructions
+    console.print()
+    console.print(Panel(
+        """[bold]Next Steps:[/bold]
+
+1. Restart Claude Desktop
+2. AgentMesh will now intercept all tool calls to the protected server
+3. View logs in the terminal where Claude Desktop was launched
+
+[bold]Customization:[/bold]
+Edit {path} to:
+- Add more protected servers
+- Change policy level (--policy strict|moderate|permissive)
+- Disable verification footers (--no-footer)
+
+[bold]Example Usage:[/bold]
+In Claude Desktop, try: "Read the contents of my home directory"
+AgentMesh will enforce policies and add trust verification to outputs.
+        """.format(path=config_path),
+        title="🎉 Claude Desktop Integration Ready",
+        border_style="green",
+    ))
 
 
 def main():
