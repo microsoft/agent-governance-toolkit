@@ -45,6 +45,24 @@ Before approving or merging ANY PR, verify ALL of the following:
 - No `unwrap()` in non-test Rust code paths (use `?` or explicit error handling)
 - Docker images must use pinned version tags or SHA digests (never `:latest`)
 
+## Supply Chain Security (Anti-Poisoning)
+
+### Version Selection
+- **7-Day Rule:** Never install a package version released less than 7 days ago. Prefer versions with at least one week of stability and consistent download metrics.
+- **Fallback:** If the latest version is < 7 days old, pin to the previous stable release.
+- **Verification:** Check release timestamps via `npm view <package> time` or `pip index versions <package>`.
+
+### Version Locking
+- **Exact versions only:** Use exact versioning in `package.json` (e.g., `"axios": "1.14.0"`). Prohibit `^` or `~` ranges.
+- **Python pinning:** Use `==` in `requirements.txt` and pin in `pyproject.toml` with `>=x.y.z,<x.y+1.0`.
+- **Rust pinning:** Use exact versions in `Cargo.toml` (e.g., `serde = "=1.0.228"`).
+- **Lockfile integrity:** Ensure `package-lock.json`, `Cargo.lock`, or equivalent is committed to the repository.
+
+### Anomaly Detection
+- **Pre-install audit:** Before adding any new dependency, check for red flags: unusual release spikes, sudden maintainer changes, new suspicious transitive dependencies.
+- **Alert:** If any anomaly is detected, halt the installation and flag for human review.
+- **Dependabot PRs:** Review Dependabot version bumps for major version jumps, new transitive deps, or maintainer changes before merging.
+
 ## Code Style
 
 - Use conventional commits (feat:, fix:, docs:, etc.)

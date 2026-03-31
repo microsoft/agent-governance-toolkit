@@ -37,9 +37,9 @@
   },
   "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agentmesh-integrations/copilot-governance",
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "tsup": "^8.0.0",
-    "typescript": "^5.4.0",
-    "vitest": "^3.0.0"
+    "@types/node": "20.0.0",
+    "tsup": "8.0.0",
+    "typescript": "5.4.0",
+    "vitest": "3.0.0"
   }
 }

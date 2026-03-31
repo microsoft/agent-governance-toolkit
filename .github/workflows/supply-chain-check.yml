@@ -1,0 +1,50 @@
+name: Supply Chain Check
+
+on:
+  pull_request:
+    paths:
+      - '**/package.json'
+      - '**/Cargo.toml'
+      - '**/pyproject.toml'
+      - '**/requirements*.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  check-version-pinning:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check for unpinned npm versions
+        run: |
+          echo "Checking for ^ or ~ version ranges in package.json files..."
+          VIOLATIONS=0
+          for f in $(find packages -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*'); do
+            if grep -P '": "[\^~]' "$f" 2>/dev/null; then
+              echo "VIOLATION: $f has unpinned version ranges"
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          done
+          if [ $VIOLATIONS -gt 0 ]; then
+            echo ""
+            echo "Found $VIOLATIONS package.json files with ^ or ~ version ranges."
+            echo "Pin to exact versions (e.g., \"1.2.3\" not \"^1.2.3\")."
+            exit 1
+          fi
+          echo "OK: All package.json files use exact versions"
+
+      - name: Check lockfile presence
+        run: |
+          echo "Checking for lockfiles..."
+          MISSING=0
+          for f in $(find packages -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*'); do
+            DIR=$(dirname "$f")
+            if [ ! -f "$DIR/package-lock.json" ] && [ ! -f "$DIR/pnpm-lock.yaml" ] && [ ! -f "$DIR/yarn.lock" ]; then
+              # Only flag if there are actual dependencies (not just name+version)
+              if grep -q '"dependencies"' "$f" 2>/dev/null; then
+                echo "WARNING: $DIR has dependencies but no lockfile"
+              fi
+            fi
+          done
+          echo "Lockfile check complete"

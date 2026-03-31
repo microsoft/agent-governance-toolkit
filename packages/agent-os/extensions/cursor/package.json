@@ -248,15 +248,15 @@
     "publish": "vsce publish"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
-    "@types/node": "^20.0.0",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "eslint": "^8.0.0",
-    "typescript": "^5.3.0",
-    "@vscode/vsce": "^2.22.0"
+    "@types/vscode": "1.85.0",
+    "@types/node": "20.0.0",
+    "@typescript-eslint/eslint-plugin": "6.0.0",
+    "@typescript-eslint/parser": "6.0.0",
+    "eslint": "8.0.0",
+    "typescript": "5.3.0",
+    "@vscode/vsce": "2.22.0"
   },
   "dependencies": {
-    "axios": "^1.6.0"
+    "axios": "1.6.0"
   }
 }
