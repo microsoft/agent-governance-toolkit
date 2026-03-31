@@ -39,7 +39,7 @@
     "@mastra/core": "0.10.0",
     "tsup": "8.0.0",
     "typescript": "5.7.3",
-    "vitest": "3.0.0",
+    "vitest": "3.0.5",
     "zod": "3.22.0"
   }
 }
