@@ -42,7 +42,7 @@
     "axios": "^1.6.0",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
-    "path-to-regexp": "8.4.0",
+    "path-to-regexp": "8.4.1",
     "winston": "^3.11.0"
   },
   "devDependencies": {
