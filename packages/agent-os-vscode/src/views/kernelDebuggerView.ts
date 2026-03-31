@@ -297,6 +297,10 @@ export class DebuggerItem extends vscode.TreeItem {
         public readonly data?: Record<string, any>
     ) {
         super(label, collapsibleState);
+        this.accessibilityInformation = {
+            label: DebuggerItem.getAccessibilityLabel(label, data),
+            role: 'treeitem'
+        };
 
         // Set icon based on context
         if (data?.icon) {
@@ -329,6 +333,19 @@ export class DebuggerItem extends vscode.TreeItem {
                 arguments: data.agent ? [data.agent] : []
             };
         }
+    }
+
+    private static getAccessibilityLabel(label: string, data?: Record<string, any>): string {
+        const sanitizedLabel = label
+            .replace(/[^\x20-\x7E]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        if (data?.type === 'agent' && data.agent) {
+            return `${data.agent.name}. Status ${data.agent.status}. ${data.agent.currentTask ? `Current task ${data.agent.currentTask}.` : ''}`.trim();
+        }
+
+        return sanitizedLabel || 'Debugger item';
     }
 }
 
@@ -419,7 +436,9 @@ export class MemoryBrowserProvider implements vscode.TreeDataProvider<MemoryItem
 
         for (const part of parts) {
             const child = current.children?.find(c => c.name === part);
-            if (!child) return null;
+            if (!child) {
+                return null;
+            }
             current = child;
         }
 
@@ -477,6 +496,12 @@ export class MemoryItem extends vscode.TreeItem {
 
         this.contextValue = nodeType;
         this.tooltip = path;
+        this.accessibilityInformation = {
+            label: nodeType === 'directory'
+                ? `Directory ${label}. Path ${path}`
+                : `File ${label}. Path ${path}`,
+            role: 'treeitem'
+        };
 
         if (nodeType === 'file') {
             this.command = {

@@ -166,20 +166,25 @@ class TestParetoFrontier:
     def test_no_dominated_models(
         self, optimizer: CostOptimizer, summarization_task: TaskProfile
     ) -> None:
-        with pytest.raises(NotImplementedError):
-            optimizer.pareto_frontier(summarization_task)
+        frontier = optimizer.pareto_frontier(summarization_task)
+        # Frontier should only contain non-dominated models
+        assert len(frontier) >= 1
+        assert all(hasattr(r, 'model_name') for r in frontier)
 
     def test_frontier_sorted_by_cost(
         self, optimizer: CostOptimizer, summarization_task: TaskProfile
     ) -> None:
-        with pytest.raises(NotImplementedError):
-            optimizer.pareto_frontier(summarization_task)
+        frontier = optimizer.pareto_frontier(summarization_task)
+        costs = [r.estimated_cost for r in frontier]
+        assert costs == sorted(costs)
 
     def test_frontier_includes_extremes(
         self, optimizer: CostOptimizer, summarization_task: TaskProfile
     ) -> None:
-        with pytest.raises(NotImplementedError):
-            optimizer.pareto_frontier(summarization_task)
+        frontier = optimizer.pareto_frontier(summarization_task)
+        names = [r.model_name for r in frontier]
+        # Cheapest model should be on the frontier
+        assert "gpt-4o-mini" in names
 
 
 # ---------------------------------------------------------------------------
@@ -191,13 +196,15 @@ class TestSimulation:
     def test_simulation_correct_totals(
         self, optimizer: CostOptimizer, summarization_task: TaskProfile
     ) -> None:
-        with pytest.raises(NotImplementedError):
-            optimizer.simulate(summarization_task, "gpt-4o-mini", volume=1000)
+        sim = optimizer.simulate(summarization_task, "gpt-4o-mini", volume=1000)
+        assert sim["volume"] == 1000
+        assert sim["total_cost"] > 0
+        assert sim["model_name"] == "gpt-4o-mini"
 
     def test_simulation_unknown_model(
         self, optimizer: CostOptimizer, summarization_task: TaskProfile
     ) -> None:
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(KeyError):
             optimizer.simulate(summarization_task, "nonexistent-model", volume=100)
 
 
@@ -247,8 +254,9 @@ class TestEdgeCases:
 
     def test_pareto_single_model(self, summarization_task: TaskProfile) -> None:
         opt = CostOptimizer([MID_MODEL])
-        with pytest.raises(NotImplementedError):
-            opt.pareto_frontier(summarization_task)
+        frontier = opt.pareto_frontier(summarization_task)
+        assert len(frontier) == 1
+        assert frontier[0].model_name == "gpt-4o"
 
     def test_routing_empty_when_no_models_qualify(self) -> None:
         task = TaskProfile(

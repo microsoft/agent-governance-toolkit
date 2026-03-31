@@ -1,0 +1,31 @@
+name: Markdown Link Check
+
+on:
+  pull_request:
+    paths:
+      - '**/*.md'
+  workflow_dispatch:
+
+jobs:
+  link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Get Changed Markdown Files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            **/*.md
+
+      - name: Run Link Checker
+        if: steps.changed-files.outputs.any_changed == 'true'
+        uses: lycheeverse/lychee-action@v1.9.0
+        with:
+          # Configuration is defined here directly in YAML (no JSON file needed)
+          # --exclude-loopback: ignores localhost/127.0.0.1
+          # --verbose: shows details in the logs
+          args: --verbose --no-progress --exclude-loopback ${{ steps.changed-files.outputs.all_changed_files }}
+          fail: true

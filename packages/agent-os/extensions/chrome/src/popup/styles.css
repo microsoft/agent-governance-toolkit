@@ -13,6 +13,49 @@
   --gray-500: #6b7280;
   --gray-700: #374151;
   --gray-900: #111827;
+  --text-primary: var(--gray-900);
+  --text-secondary: var(--gray-500);
+  --surface-app: var(--gray-50);
+  --surface-panel: #ffffff;
+  --surface-subtle: var(--gray-100);
+  --surface-elevated: #ffffff;
+  --border-color: var(--gray-200);
+  --border-strong: var(--gray-300);
+  --shadow-color: rgba(99, 102, 241, 0.1);
+  --header-icon-bg: rgba(255, 255, 255, 0.2);
+  --header-icon-bg-hover: rgba(255, 255, 255, 0.3);
+  --status-enabled-bg: #ecfdf5;
+  --status-enabled-border: #a7f3d0;
+  --status-disabled-bg: #fef2f2;
+  --status-disabled-border: #fecaca;
+  --suggested-bg: #fef3c7;
+  --suggested-border: #fcd34d;
+  --suggested-title: #92400e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #818cf8;
+    --primary-dark: #6366f1;
+    --text-primary: #f9fafb;
+    --text-secondary: #cbd5e1;
+    --surface-app: #0f172a;
+    --surface-panel: #111827;
+    --surface-subtle: #1f2937;
+    --surface-elevated: #1f2937;
+    --border-color: #334155;
+    --border-strong: #475569;
+    --shadow-color: rgba(15, 23, 42, 0.45);
+    --header-icon-bg: rgba(15, 23, 42, 0.32);
+    --header-icon-bg-hover: rgba(15, 23, 42, 0.48);
+    --status-enabled-bg: rgba(34, 197, 94, 0.16);
+    --status-enabled-border: rgba(74, 222, 128, 0.35);
+    --status-disabled-bg: rgba(239, 68, 68, 0.14);
+    --status-disabled-border: rgba(248, 113, 113, 0.35);
+    --suggested-bg: rgba(245, 158, 11, 0.16);
+    --suggested-border: rgba(251, 191, 36, 0.36);
+    --suggested-title: #fde68a;
+  }
 }
 
 * {
@@ -22,10 +65,11 @@
 }
 
 body {
+  color-scheme: light dark;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
   font-size: 14px;
-  color: var(--gray-900);
-  background: var(--gray-50);
+  color: var(--text-primary);
+  background: var(--surface-app);
 }
 
 .popup-container {
@@ -66,7 +110,7 @@ body {
 }
 
 .icon-btn {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--header-icon-bg);
   border: none;
   border-radius: 8px;
   padding: 8px;
@@ -76,7 +120,7 @@ body {
 }
 
 .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--header-icon-bg-hover);
 }
 
 /* Status Banner */
@@ -85,18 +129,18 @@ body {
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: white;
-  border-bottom: 1px solid var(--gray-200);
+  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .status-banner.enabled {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
+  background: var(--status-enabled-bg);
+  border-color: var(--status-enabled-border);
 }
 
 .status-banner.disabled {
-  background: #fef2f2;
-  border-color: #fecaca;
+  background: var(--status-disabled-bg);
+  border-color: var(--status-disabled-border);
 }
 
 .status-dot {
@@ -116,13 +160,13 @@ body {
 /* Current Page Section */
 .current-page {
   padding: 16px;
-  background: white;
-  border-bottom: 1px solid var(--gray-200);
+  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .current-page-title {
   font-size: 12px;
-  color: var(--gray-500);
+  color: var(--text-secondary);
   margin-bottom: 4px;
 }
 
@@ -159,12 +203,12 @@ body {
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--gray-700);
+  color: var(--text-primary);
 }
 
 .agent-count {
   font-size: 12px;
-  color: var(--gray-500);
+  color: var(--text-secondary);
 }
 
 .agents-list {
@@ -174,8 +218,8 @@ body {
 }
 
 .agent-card {
-  background: white;
-  border: 1px solid var(--gray-200);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 12px;
   cursor: pointer;
@@ -184,7 +228,7 @@ body {
 
 .agent-card:hover {
   border-color: var(--primary);
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 2px 8px var(--shadow-color);
 }
 
 .agent-header {
@@ -207,7 +251,7 @@ body {
 
 .agent-description {
   font-size: 12px;
-  color: var(--gray-500);
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
@@ -215,7 +259,7 @@ body {
   display: flex;
   gap: 12px;
   font-size: 11px;
-  color: var(--gray-500);
+  color: var(--text-secondary);
 }
 
 .agent-actions {
@@ -224,17 +268,18 @@ body {
 }
 
 .action-btn {
-  background: var(--gray-100);
+  background: var(--surface-subtle);
   border: none;
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 11px;
+  color: var(--text-primary);
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .action-btn:hover {
-  background: var(--gray-200);
+  background: var(--border-color);
 }
 
 .action-btn.primary {
@@ -250,7 +295,7 @@ body {
 .empty-state {
   text-align: center;
   padding: 32px 16px;
-  color: var(--gray-500);
+  color: var(--text-secondary);
 }
 
 .empty-state-icon {
@@ -265,18 +310,19 @@ body {
 /* Footer */
 .footer {
   padding: 12px 16px;
-  background: white;
-  border-top: 1px solid var(--gray-200);
+  background: var(--surface-panel);
+  border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
 }
 
 .footer-btn {
   background: none;
-  border: 1px solid var(--gray-300);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 8px 16px;
   font-size: 13px;
+  color: var(--text-primary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -285,7 +331,7 @@ body {
 }
 
 .footer-btn:hover {
-  background: var(--gray-100);
+  background: var(--surface-subtle);
 }
 
 .footer-btn.primary {
@@ -301,13 +347,13 @@ body {
 /* Suggested Agent */
 .suggested-section {
   padding: 16px;
-  background: #fef3c7;
-  border-bottom: 1px solid #fcd34d;
+  background: var(--suggested-bg);
+  border-bottom: 1px solid var(--suggested-border);
 }
 
 .suggested-title {
   font-size: 12px;
-  color: #92400e;
+  color: var(--suggested-title);
   margin-bottom: 8px;
   display: flex;
   align-items: center;
@@ -315,7 +361,7 @@ body {
 }
 
 .suggested-card {
-  background: white;
+  background: var(--surface-elevated);
   border-radius: 8px;
   padding: 12px;
   display: flex;
@@ -330,5 +376,5 @@ body {
 
 .suggested-info p {
   font-size: 12px;
-  color: var(--gray-500);
+  color: var(--text-secondary);
 }

@@ -137,6 +137,13 @@ def _get_demo_history(agent_id: str) -> list[dict]:
     return history
 
 
+def _categorize_tasks(history: list[dict]) -> tuple[list[str], list[str]]:
+    """Split history into successful (positive delta) and failed (negative delta) task lists."""
+    successful = [h["event"] for h in history if h["delta"] > 0]
+    failed = [h["event"] for h in history if h["delta"] < 0]
+    return successful, failed
+
+
 def _output_json(data: object) -> None:
     """Print data as JSON to stdout."""
     click.echo(json.dumps(data, indent=2, default=str))
@@ -569,3 +576,62 @@ def attest(agent_id: str, note: str, score_boost: int, fmt: str, json_flag: bool
     console.print(f"  New Level:      [{style}]{level}[/{style}]")
     console.print(f"  Attested At:    {attestation_info['attested_at']}")
     console.print()
+
+
+@trust.command("report")
+@click.option(
+    "--format", "fmt",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format (table or json).",
+)
+@click.option("--json", "json_flag", is_flag=True, help="Output as JSON (shorthand for --format json).")
+def report_agents(fmt: str, json_flag: bool):
+    """Report trust score summary for all registered agents."""
+    if json_flag:
+        fmt = "json"
+
+    peers = _get_demo_peers()
+    agents: list[PeerInfo] = list(peers.values())
+
+    if fmt == "json":
+        data = []
+        for p in agents:
+            history = _get_demo_history(p.peer_did)
+            successful, failed = _categorize_tasks(history)
+            data.append({
+                "agent_id": p.peer_did,
+                "trust_score": p.trust_score,
+                "trust_level": _trust_level_label(p.trust_score),
+                "successful_tasks": len(successful),
+                "failed_tasks": len(failed),
+                "last_activity": history[-1]["timestamp"] if history else "N/A",
+            })
+        _output_json(data)
+        return
+
+    console.print("\n[bold blue]🛡️  Trust Network — Agent Report[/bold blue]\n")
+    table = Table(box=box.ROUNDED)
+    table.add_column("Agent ID", style="cyan", no_wrap=True)
+    table.add_column("Score", justify="right")
+    table.add_column("Level")
+    table.add_column("Successes", justify="right")
+    table.add_column("Failures", justify="right")
+    table.add_column("Last Activity", style="dim")
+
+    for p in agents:
+        history = _get_demo_history(p.peer_did)
+        successful, failed = _categorize_tasks(history)
+        level = _trust_level_label(p.trust_score)
+        style = _trust_level_style(level)
+        table.add_row(
+            p.peer_did,
+            str(p.trust_score),
+            f"[{style}]{level}[/{style}]",
+            str(len(successful)),
+            str(len(failed)),
+            history[-1]["timestamp"] if history else "N/A",
+        )
+
+    console.print(table)
+    console.print(f"\n  Total agents: {len(peers)}\n")

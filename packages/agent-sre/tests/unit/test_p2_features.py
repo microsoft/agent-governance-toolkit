@@ -27,8 +27,9 @@ class TestDistributedReplay:
         engine = DistributedReplayEngine()
         engine.add_agent_trace("agent-a", self._make_trace("agent-a", "t1"), role="initiator")
         engine.add_agent_trace("agent-b", self._make_trace("agent-b", "t2"), role="responder")
-        with pytest.raises(NotImplementedError):
-            engine.replay()
+        result = engine.replay()
+        assert result.agents_completed == 2
+        assert result.state.value == "completed"
 
     def test_execution_order(self):
         engine = DistributedReplayEngine()
@@ -52,13 +53,14 @@ class TestDistributedReplay:
             span_id="d1", trace_id="t1", kind=SpanKind.DELEGATION, name="delegate",
             attributes={"target_agent": "agent-b", "target_trace_id": "t2"},
         )
-        span.finish(output={"result": "ok"})
+        span.finish(output={"delegated_trace_id": "t2"})
         trace.add_span(span)
         trace.finish()
         engine.add_agent_trace("agent-a", trace)
         engine.add_agent_trace("agent-b", self._make_trace("agent-b", "t2"))
-        with pytest.raises(NotImplementedError):
-            engine.discover_links()
+        links = engine.discover_links()
+        assert len(links) >= 1
+        assert any(l.from_agent == "agent-a" and l.to_agent == "agent-b" for l in links)
 
 
 # --- GitOps Rollout Spec ---
@@ -257,23 +259,25 @@ class TestPostmortem:
 
     def test_generate_postmortem(self):
         gen = PostmortemGenerator()
-        with pytest.raises(NotImplementedError):
-            gen.generate(self._make_incident())
+        pm = gen.generate(self._make_incident())
+        assert pm is not None
+        assert pm.title != ""
 
     def test_postmortem_summary(self):
         gen = PostmortemGenerator()
-        with pytest.raises(NotImplementedError):
-            gen.generate(self._make_incident())
+        pm = gen.generate(self._make_incident())
+        assert pm.summary != ""
 
     def test_postmortem_has_action_items(self):
         gen = PostmortemGenerator()
-        with pytest.raises(NotImplementedError):
-            gen.generate(self._make_incident())
+        pm = gen.generate(self._make_incident())
+        assert len(pm.action_items) > 0
 
     def test_postmortem_to_markdown(self):
         gen = PostmortemGenerator()
-        with pytest.raises(NotImplementedError):
-            gen.generate(self._make_incident())
+        pm = gen.generate(self._make_incident())
+        md = pm.to_markdown()
+        assert "# Postmortem" in md or pm.title in md
 
     def test_postmortem_publish(self):
         pm = Postmortem(title="test")
@@ -294,21 +298,23 @@ class TestPostmortem:
 
     def test_to_dict(self):
         gen = PostmortemGenerator()
-        with pytest.raises(NotImplementedError):
-            gen.generate(self._make_incident())
+        pm = gen.generate(self._make_incident())
+        d = pm.to_dict()
+        assert "title" in d
+        assert "timeline" in d
 
     def test_generator_summary(self):
         gen = PostmortemGenerator()
-        # No postmortems generated in Public Preview
+        gen.generate(self._make_incident())
         s = gen.summary()
-        assert s["total"] == 0
+        assert s["total"] >= 1
 
     def test_lessons_learned(self):
         gen = PostmortemGenerator()
-        with pytest.raises(NotImplementedError):
-            gen.generate(self._make_incident())
+        pm = gen.generate(self._make_incident())
+        assert pm.lessons_learned is not None
 
     def test_contributing_factors(self):
         gen = PostmortemGenerator()
-        with pytest.raises(NotImplementedError):
-            gen.generate(self._make_incident())
+        pm = gen.generate(self._make_incident())
+        assert pm.contributing_factors is not None

@@ -1,10 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
-"""Runbook executor — basic step execution.
+# Community Edition — basic implementation
+"""Runbook executor — step execution with approval gates and rollback.
 
-Automated execution with approval gates and rollback is not available
-in Public Preview.
+Executes runbook steps sequentially with human-in-the-loop approval,
+automatic rollback on failure, and audit-trail logging.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from agent_sre.incidents.runbook import (
     RunbookExecution,
     RunbookStep,
     StepResult,
+    StepStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,10 +47,97 @@ class RunbookExecutor:
         incident: Incident,
         approve_callback: Callable[[RunbookStep, Incident], bool] | None = None,
     ) -> RunbookExecution:
-        """Execute a runbook — not available in Public Preview."""
-        raise NotImplementedError(
-            "Automated runbook execution is not available in Public Preview"
+        """Execute a runbook's steps sequentially against an incident.
+
+        Args:
+            runbook: The runbook to execute.
+            incident: The incident context.
+            approve_callback: Optional callback for approval gates.
+                If a step requires approval and no callback is provided,
+                the execution pauses with WAITING_APPROVAL status.
+
+        Returns:
+            RunbookExecution with results for each step.
+        """
+        execution = RunbookExecution(
+            runbook_id=runbook.id,
+            incident_id=incident.incident_id,
         )
+        execution.started_at = time.time()
+        execution.status = ExecutionStatus.RUNNING
+        self._emit_event("execution_started", runbook=runbook, incident=incident)
+
+        completed_steps: list[tuple[RunbookStep, StepResult]] = []
+
+        for step in runbook.steps:
+            # Check approval gate
+            if step.requires_approval:
+                if approve_callback is None:
+                    # No callback — pause execution
+                    step_result = StepResult(
+                        step_name=step.name,
+                        status=StepStatus.WAITING_APPROVAL,
+                    )
+                    execution.step_results.append(step_result)
+                    execution.status = ExecutionStatus.WAITING_APPROVAL
+                    self._emit_event("approval_waiting", step=step, incident=incident)
+                    execution.completed_at = time.time()
+                    self._executions.append(execution)
+                    return execution
+                elif not approve_callback(step, incident):
+                    # Denied — skip step
+                    step_result = StepResult(
+                        step_name=step.name,
+                        status=StepStatus.SKIPPED,
+                        output="Approval denied",
+                    )
+                    execution.step_results.append(step_result)
+                    self._emit_event("approval_denied", step=step, incident=incident)
+                    continue
+
+            # Execute the step
+            step_result = StepResult(step_name=step.name)
+            step_result.started_at = time.time()
+            step_result.status = StepStatus.RUNNING
+            self._emit_event("step_started", step=step, incident=incident)
+
+            try:
+                if callable(step.action):
+                    output = step.action(incident)
+                else:
+                    # String actions are logged but treated as descriptive
+                    output = f"[command] {step.action}"
+
+                step_result.output = str(output) if output else ""
+                step_result.status = StepStatus.SUCCESS
+                step_result.completed_at = time.time()
+                self._emit_event(
+                    "step_completed", step=step, incident=incident, output=output
+                )
+                completed_steps.append((step, step_result))
+            except Exception as exc:
+                step_result.status = StepStatus.FAILED
+                step_result.error = str(exc)
+                step_result.completed_at = time.time()
+                self._emit_event(
+                    "step_failed", step=step, incident=incident, error=str(exc)
+                )
+                execution.step_results.append(step_result)
+                execution.status = ExecutionStatus.FAILED
+
+                # Trigger rollback for completed steps
+                self._rollback(completed_steps, execution, incident)
+                execution.completed_at = time.time()
+                self._executions.append(execution)
+                return execution
+
+            execution.step_results.append(step_result)
+
+        execution.status = ExecutionStatus.COMPLETED
+        execution.completed_at = time.time()
+        self._emit_event("execution_completed", runbook=runbook, incident=incident)
+        self._executions.append(execution)
+        return execution
 
     def _rollback(
         self,

@@ -419,29 +419,43 @@ export class OnboardingPanel {
         .tip strong {
             color: var(--vscode-foreground);
         }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="hero">
+    <main class="container" aria-labelledby="onboarding-title">
+        <div class="hero" role="banner">
             <div class="logo">🛡️</div>
-            <h1>Welcome to Agent OS</h1>
+            <h1 id="onboarding-title">Welcome to Agent OS</h1>
             <p>Kernel-level safety for autonomous AI agents</p>
         </div>
 
-        <div class="progress-container">
+        <section class="progress-container" aria-labelledby="progress-heading">
             <div class="progress-header">
-                <span class="progress-label">Getting Started</span>
-                <span class="progress-count">${completedCount} of ${totalSteps} completed</span>
+                <span class="progress-label" id="progress-heading">Getting Started</span>
+                <span class="progress-count" id="progress-count" aria-live="polite">${completedCount} of ${totalSteps} completed</span>
             </div>
-            <div class="progress-bar">
+            <div class="progress-bar" role="progressbar" aria-label="Onboarding progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}" aria-valuetext="${completedCount} of ${totalSteps} steps completed">
                 <div class="progress-fill" style="width: ${progress}%"></div>
             </div>
-        </div>
+        </section>
 
-        <div class="steps" id="steps"></div>
+        <section aria-labelledby="steps-heading">
+            <h2 id="steps-heading" class="sr-only">Onboarding steps</h2>
+            <div class="steps" id="steps" role="list"></div>
+        </section>
 
-        <div class="footer">
+        <footer class="footer">
             <div class="footer-links">
                 <a href="https://github.com/microsoft/agent-governance-toolkit" target="_blank">📚 Documentation</a>
                 <a href="https://github.com/microsoft/agent-governance-toolkit/issues" target="_blank">💬 Get Help</a>
@@ -451,8 +465,8 @@ export class OnboardingPanel {
                 <button class="secondary" onclick="resetProgress()">Reset Progress</button>
                 <button class="secondary" onclick="skipOnboarding()">Skip Onboarding</button>
             </div>
-        </div>
-    </div>
+        </footer>
+    </main>
 
     <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
@@ -469,18 +483,18 @@ export class OnboardingPanel {
                             <p class="step-description">\${step.description}</p>
                             <div class="step-actions">
                                 \${step.action ? \`
-                                    <button onclick="executeAction('\${step.action.command}')" \${step.completed ? 'disabled' : ''}>
+                                    <button onclick="executeAction('\${step.action.command}')" aria-label="\${step.action.label}: \${step.title}" \${step.completed ? 'disabled' : ''}>
                                         \${step.action.label}
                                     </button>
                                 \` : ''}
                                 \${!step.completed ? \`
-                                    <button class="secondary" onclick="completeStep('\${step.id}')">
+                                    <button class="secondary" onclick="completeStep('\${step.id}')" aria-label="Mark \${step.title} complete">
                                         Mark Complete
                                     </button>
                                 \` : ''}
                             </div>
                             \${index === 0 ? \`
-                                <div class="tip">
+                                <div class="tip" role="note">
                                     <strong>💡 Tip:</strong> Agent OS works with existing AI tools like GitHub Copilot, 
                                     Cursor, and LangChain. It adds a safety layer without changing your workflow.
                                 </div>
@@ -522,6 +536,9 @@ export class OnboardingPanel {
             const progress = Math.round((completed / total) * 100);
             document.querySelector('.progress-fill').style.width = progress + '%';
             document.querySelector('.progress-count').textContent = completed + ' of ' + total + ' completed';
+            const progressBar = document.querySelector('.progress-bar');
+            progressBar.setAttribute('aria-valuenow', String(progress));
+            progressBar.setAttribute('aria-valuetext', completed + ' of ' + total + ' steps completed');
         }
 
         window.addEventListener('message', event => {

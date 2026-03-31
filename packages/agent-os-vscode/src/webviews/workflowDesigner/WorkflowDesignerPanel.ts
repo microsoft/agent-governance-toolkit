@@ -566,7 +566,9 @@ ${functionDefs}
             const actionNodes = this._workflow.nodes.filter(n => n.type === 'action');
             
             for (let i = 0; i < actionNodes.length; i++) {
-                if (token.isCancellationRequested) break;
+                if (token.isCancellationRequested) {
+                    break;
+                }
                 
                 const node = actionNodes[i];
                 progress.report({
@@ -665,6 +667,11 @@ ${functionDefs}
             border-radius: 6px;
             cursor: grab;
             transition: all 0.2s;
+        }
+        .palette-item:focus-visible,
+        .workflow-node:focus-visible {
+            outline: 2px solid var(--vscode-focusBorder);
+            outline-offset: 2px;
         }
         .palette-item:hover {
             border-color: var(--vscode-focusBorder);
@@ -874,40 +881,54 @@ ${functionDefs}
             font-size: 48px;
             margin-bottom: 15px;
         }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="sidebar">
+    <main class="container" aria-label="Workflow designer">
+        <aside class="sidebar" aria-label="Workflow components">
             <h3>Components</h3>
-            <div class="node-palette" id="palette"></div>
-        </div>
+            <p class="sr-only">Press Enter on a component to add it to the canvas. Use arrow keys to move a selected node.</p>
+            <div class="node-palette" id="palette" role="list"></div>
+        </aside>
         
-        <div class="canvas-container">
-            <div class="toolbar">
+        <section class="canvas-container" aria-labelledby="workflow-canvas-heading">
+            <h2 id="workflow-canvas-heading" class="sr-only">Workflow canvas</h2>
+            <div class="toolbar" role="toolbar" aria-label="Workflow actions">
                 <button onclick="simulate()">▶️ Simulate</button>
                 <button onclick="saveWorkflow()">💾 Save</button>
                 <button class="secondary" onclick="loadWorkflow()">📂 Load</button>
                 <div style="flex:1"></div>
-                <select id="exportLang">
+                <label class="sr-only" for="exportLang">Export language</label>
+                <select id="exportLang" aria-label="Export language">
                     <option value="python">Python</option>
                     <option value="typescript">TypeScript</option>
                     <option value="go">Go</option>
                 </select>
                 <button onclick="exportCode()">📤 Export Code</button>
             </div>
-            <div class="canvas" id="canvas">
+            <div class="canvas" id="canvas" tabindex="0" role="region" aria-label="Workflow canvas">
                 <svg class="connections" id="connections"></svg>
             </div>
-        </div>
+        </section>
         
-        <div class="properties-panel" id="properties">
+        <aside class="properties-panel" id="properties" aria-label="Selected node properties">
             <div class="empty-state">
                 <div class="icon">📝</div>
                 <p>Select a node to edit its properties</p>
             </div>
-        </div>
-    </div>
+        </aside>
+    </main>
 
     <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
@@ -916,14 +937,18 @@ ${functionDefs}
         let selectedNode = null;
         let draggingNode = null;
         let connectingFrom = null;
+        const KEYBOARD_MOVE_STEP = 20;
 
         // Render palette
         const palette = document.getElementById('palette');
         nodeTypes.forEach(nt => {
-            const item = document.createElement('div');
+            const item = document.createElement('button');
+            item.type = 'button';
             item.className = 'palette-item';
             item.draggable = true;
             item.dataset.type = nt.type;
+            item.setAttribute('role', 'listitem');
+            item.setAttribute('aria-label', 'Add ' + nt.label + ' node. ' + nt.description);
             item.innerHTML = \`
                 <span class="palette-icon">\${nt.icon}</span>
                 <div class="palette-info">
@@ -933,6 +958,13 @@ ${functionDefs}
             \`;
             item.addEventListener('dragstart', e => {
                 e.dataTransfer.setData('nodeType', nt.type);
+            });
+            item.addEventListener('click', () => addNode(nt.type, getCanvasCenterPosition()));
+            item.addEventListener('keydown', e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    addNode(nt.type, getCanvasCenterPosition());
+                }
             });
             palette.appendChild(item);
         });
@@ -949,8 +981,16 @@ ${functionDefs}
                 div.style.left = node.position.x + 'px';
                 div.style.top = node.position.y + 'px';
                 div.dataset.id = node.id;
+                div.tabIndex = 0;
+                div.setAttribute('role', 'button');
                 
                 const nodeType = nodeTypes.find(t => t.type === node.type);
+                div.setAttribute(
+                    'aria-label',
+                    node.label + '. Type ' + node.type + '. ' +
+                    (node.policy ? 'Policy ' + node.policy + '. ' : '') +
+                    'Press Enter to edit or arrow keys to move.'
+                );
                 const icon = nodeType?.icon || (node.type === 'start' ? '▶️' : node.type === 'end' ? '🏁' : '⚡');
                 
                 div.innerHTML = \`
@@ -971,6 +1011,8 @@ ${functionDefs}
                     draggingNode = node;
                     selectNode(node);
                 });
+                div.addEventListener('click', () => selectNode(node));
+                div.addEventListener('keydown', e => handleNodeKeydown(e, node));
                 
                 // Handle connector clicks for edges
                 div.querySelectorAll('.connector').forEach(conn => {
@@ -992,6 +1034,7 @@ ${functionDefs}
             });
             
             renderEdges();
+            focusSelectedNode();
         }
 
         function renderEdges() {
@@ -1023,6 +1066,54 @@ ${functionDefs}
             selectedNode = node;
             renderNodes();
             renderProperties(node);
+        }
+
+        function focusSelectedNode() {
+            if (!selectedNode) return;
+            const selectedElement = document.querySelector(\`[data-id="\${selectedNode.id}"]\`);
+            if (selectedElement && document.activeElement !== selectedElement) {
+                selectedElement.focus();
+            }
+        }
+
+        function moveNode(node, deltaX, deltaY) {
+            node.position.x = Math.max(0, node.position.x + deltaX);
+            node.position.y = Math.max(0, node.position.y + deltaY);
+            vscode.postMessage({ type: 'updateWorkflow', workflow });
+            renderNodes();
+        }
+
+        function handleNodeKeydown(event, node) {
+            switch (event.key) {
+                case 'Enter':
+                case ' ':
+                    event.preventDefault();
+                    selectNode(node);
+                    break;
+                case 'ArrowLeft':
+                    event.preventDefault();
+                    moveNode(node, -KEYBOARD_MOVE_STEP, 0);
+                    break;
+                case 'ArrowRight':
+                    event.preventDefault();
+                    moveNode(node, KEYBOARD_MOVE_STEP, 0);
+                    break;
+                case 'ArrowUp':
+                    event.preventDefault();
+                    moveNode(node, 0, -KEYBOARD_MOVE_STEP);
+                    break;
+                case 'ArrowDown':
+                    event.preventDefault();
+                    moveNode(node, 0, KEYBOARD_MOVE_STEP);
+                    break;
+                case 'Delete':
+                case 'Backspace':
+                    if (node.type !== 'start' && node.type !== 'end') {
+                        event.preventDefault();
+                        deleteNode(node.id);
+                    }
+                    break;
+            }
         }
 
         function renderProperties(node) {
@@ -1122,6 +1213,14 @@ ${functionDefs}
             vscode.postMessage({ type: 'removeNode', nodeId });
             renderNodes();
             renderProperties(null);
+        }
+
+        function getCanvasCenterPosition() {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: Math.max(20, rect.width / 2 - 60),
+                y: Math.max(20, rect.height / 2 - 20)
+            };
         }
 
         // Canvas drop handling

@@ -1,6 +1,14 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Tests for Microsoft Entra Agent ID adapter."""
+"""Tests for Microsoft Entra Agent ID adapter and native Entra Agent ID integration."""
+
+import base64
+import io
+import json
+import os
+import time
+from unittest.mock import MagicMock, patch
+from urllib.error import URLError
 
 import pytest
 from agentmesh.identity.entra import (
@@ -9,6 +17,7 @@ from agentmesh.identity.entra import (
     EntraAgentRegistry,
     EntraAgentStatus,
 )
+from agentmesh.identity.entra_agent_id import EntraAgentID
 
 
 TENANT_ID = "contoso-tenant-001"
@@ -288,3 +297,244 @@ class TestEntraAgentRegistry:
         assert log[1]["event_type"] == "suspend"
         assert log[1]["reason"] == "testing"
         assert log[2]["event_type"] == "reactivate"
+
+
+# ---------------------------------------------------------------------------
+# Tests for EntraAgentID (native Entra Agent ID integration)
+# ---------------------------------------------------------------------------
+
+def _make_jwt(payload: dict, header: dict | None = None) -> str:
+    """Build a fake JWT with the given payload (no real signature)."""
+    if header is None:
+        header = {"alg": "RS256", "typ": "JWT"}
+
+    def _b64url(data: dict) -> str:
+        return base64.urlsafe_b64encode(
+            json.dumps(data).encode()
+        ).rstrip(b"=").decode()
+
+    return f"{_b64url(header)}.{_b64url(payload)}.fake-signature"
+
+
+AGENT_DID = "did:mesh:entra-test-agent"
+TEST_TENANT = "test-tenant-id-123"
+TEST_CLIENT = "test-client-id-456"
+
+
+class TestEntraAgentIDInit:
+    """Constructor validation."""
+
+    def test_valid_construction(self):
+        agent = EntraAgentID(AGENT_DID, TEST_TENANT, TEST_CLIENT)
+        assert agent.agent_did == AGENT_DID
+        assert agent.tenant_id == TEST_TENANT
+        assert agent.client_id == TEST_CLIENT
+
+    @pytest.mark.parametrize("did,tid,cid", [
+        ("", TEST_TENANT, TEST_CLIENT),
+        (AGENT_DID, "", TEST_CLIENT),
+        (AGENT_DID, TEST_TENANT, ""),
+    ])
+    def test_rejects_empty_values(self, did, tid, cid):
+        with pytest.raises(ValueError):
+            EntraAgentID(did, tid, cid)
+
+
+class TestEntraAgentIDFromEnvironment:
+    """from_environment factory with mocked env vars."""
+
+    def test_success(self):
+        with patch.dict(os.environ, {
+            "AZURE_TENANT_ID": TEST_TENANT,
+            "AZURE_CLIENT_ID": TEST_CLIENT,
+        }):
+            agent = EntraAgentID.from_environment(AGENT_DID)
+            assert agent.agent_did == AGENT_DID
+            assert agent.tenant_id == TEST_TENANT
+            assert agent.client_id == TEST_CLIENT
+
+    def test_missing_tenant_id(self):
+        with patch.dict(os.environ, {"AZURE_CLIENT_ID": TEST_CLIENT}, clear=True):
+            with pytest.raises(EnvironmentError, match="AZURE_TENANT_ID"):
+                EntraAgentID.from_environment(AGENT_DID)
+
+    def test_missing_client_id(self):
+        with patch.dict(os.environ, {"AZURE_TENANT_ID": TEST_TENANT}, clear=True):
+            with pytest.raises(EnvironmentError, match="AZURE_CLIENT_ID"):
+                EntraAgentID.from_environment(AGENT_DID)
+
+
+class TestEntraAgentIDValidateToken:
+    """validate_token with mock JWTs — no real Azure calls."""
+
+    def _agent(self) -> EntraAgentID:
+        return EntraAgentID(AGENT_DID, TEST_TENANT, TEST_CLIENT)
+
+    def test_valid_token_v2_issuer(self):
+        token = _make_jwt({
+            "iss": f"https://login.microsoftonline.com/{TEST_TENANT}/v2.0",
+            "aud": TEST_CLIENT,
+            "exp": time.time() + 3600,
+            "sub": "user-001",
+        })
+        claims = self._agent().validate_token(token)
+        assert claims["sub"] == "user-001"
+        assert claims["aud"] == TEST_CLIENT
+
+    def test_valid_token_v1_issuer(self):
+        token = _make_jwt({
+            "iss": f"https://sts.windows.net/{TEST_TENANT}/",
+            "aud": TEST_CLIENT,
+            "exp": time.time() + 3600,
+        })
+        claims = self._agent().validate_token(token)
+        assert claims["aud"] == TEST_CLIENT
+
+    def test_expired_token(self):
+        token = _make_jwt({
+            "iss": f"https://login.microsoftonline.com/{TEST_TENANT}/v2.0",
+            "aud": TEST_CLIENT,
+            "exp": time.time() - 100,
+        })
+        with pytest.raises(ValueError, match="expired"):
+            self._agent().validate_token(token)
+
+    def test_not_yet_valid_token(self):
+        token = _make_jwt({
+            "iss": f"https://login.microsoftonline.com/{TEST_TENANT}/v2.0",
+            "aud": TEST_CLIENT,
+            "exp": time.time() + 7200,
+            "nbf": time.time() + 3600,
+        })
+        with pytest.raises(ValueError, match="not yet valid"):
+            self._agent().validate_token(token)
+
+    def test_wrong_issuer(self):
+        token = _make_jwt({
+            "iss": "https://login.microsoftonline.com/other-tenant/v2.0",
+            "aud": TEST_CLIENT,
+            "exp": time.time() + 3600,
+        })
+        with pytest.raises(ValueError, match="issuer"):
+            self._agent().validate_token(token)
+
+    def test_wrong_audience_string(self):
+        token = _make_jwt({
+            "iss": f"https://login.microsoftonline.com/{TEST_TENANT}/v2.0",
+            "aud": "wrong-client",
+            "exp": time.time() + 3600,
+        })
+        with pytest.raises(ValueError, match="audience"):
+            self._agent().validate_token(token)
+
+    def test_wrong_audience_list(self):
+        token = _make_jwt({
+            "iss": f"https://login.microsoftonline.com/{TEST_TENANT}/v2.0",
+            "aud": ["other-app-1", "other-app-2"],
+            "exp": time.time() + 3600,
+        })
+        with pytest.raises(ValueError, match="audience"):
+            self._agent().validate_token(token)
+
+    def test_audience_list_match(self):
+        token = _make_jwt({
+            "iss": f"https://login.microsoftonline.com/{TEST_TENANT}/v2.0",
+            "aud": ["other-app", TEST_CLIENT],
+            "exp": time.time() + 3600,
+        })
+        claims = self._agent().validate_token(token)
+        assert TEST_CLIENT in claims["aud"]
+
+    def test_invalid_jwt_format(self):
+        with pytest.raises(ValueError, match="Invalid JWT"):
+            self._agent().validate_token("not.a-jwt")
+
+
+class TestEntraAgentIDMapping:
+    """to_did_mapping returns the correct structure."""
+
+    def test_structure(self):
+        agent = EntraAgentID(AGENT_DID, TEST_TENANT, TEST_CLIENT)
+        mapping = agent.to_did_mapping()
+        assert mapping["agent_did"] == AGENT_DID
+        assert mapping["entra"]["tenant_id"] == TEST_TENANT
+        assert mapping["entra"]["client_id"] == TEST_CLIENT
+        assert mapping["mapping_version"] == "1.0"
+
+    def test_all_keys_present(self):
+        mapping = EntraAgentID(AGENT_DID, TEST_TENANT, TEST_CLIENT).to_did_mapping()
+        assert set(mapping.keys()) == {"agent_did", "entra", "mapping_version"}
+        assert set(mapping["entra"].keys()) == {"tenant_id", "client_id"}
+
+
+class TestEntraAgentIDFromManagedIdentity:
+    """from_managed_identity with fully mocked IMDS."""
+
+    def test_success(self):
+        compute_resp = json.dumps({"tenantId": TEST_TENANT}).encode()
+        bootstrap_token = _make_jwt({"appid": TEST_CLIENT})
+        token_resp = json.dumps({"access_token": bootstrap_token}).encode()
+
+        mock_responses = iter([
+            _ctx_mock(compute_resp),
+            _ctx_mock(token_resp),
+        ])
+
+        with patch(
+            "agentmesh.identity.entra_agent_id.urlopen",
+            side_effect=lambda *a, **kw: next(mock_responses),
+        ):
+            agent = EntraAgentID.from_managed_identity(AGENT_DID)
+            assert agent.tenant_id == TEST_TENANT
+            assert agent.client_id == TEST_CLIENT
+
+    def test_imds_unreachable(self):
+        with patch(
+            "agentmesh.identity.entra_agent_id.urlopen",
+            side_effect=URLError("unreachable"),
+        ):
+            with pytest.raises(RuntimeError, match="IMDS"):
+                EntraAgentID.from_managed_identity(AGENT_DID)
+
+
+class TestEntraAgentIDGetToken:
+    """get_agent_token with mocked IMDS token endpoint."""
+
+    def test_success(self):
+        expected_token = "mocked-access-token-xyz"
+        resp_bytes = json.dumps({"access_token": expected_token}).encode()
+
+        with patch(
+            "agentmesh.identity.entra_agent_id.urlopen",
+            return_value=_ctx_mock(resp_bytes),
+        ):
+            agent = EntraAgentID(AGENT_DID, TEST_TENANT, TEST_CLIENT)
+            token = agent.get_agent_token()
+            assert token == expected_token
+
+    def test_failure(self):
+        with patch(
+            "agentmesh.identity.entra_agent_id.urlopen",
+            side_effect=URLError("timeout"),
+        ):
+            agent = EntraAgentID(AGENT_DID, TEST_TENANT, TEST_CLIENT)
+            with pytest.raises(RuntimeError, match="Failed to acquire token"):
+                agent.get_agent_token()
+
+
+class TestEntraAgentIDRepr:
+    def test_repr(self):
+        agent = EntraAgentID(AGENT_DID, TEST_TENANT, TEST_CLIENT)
+        r = repr(agent)
+        assert AGENT_DID in r
+        assert TEST_TENANT in r
+        assert TEST_CLIENT in r
+
+
+def _ctx_mock(data: bytes) -> MagicMock:
+    """Create a mock that works as a context manager returning *data* on read()."""
+    mock = MagicMock()
+    mock.read.return_value = data
+    mock.__enter__ = MagicMock(return_value=mock)
+    mock.__exit__ = MagicMock(return_value=False)
+    return mock
