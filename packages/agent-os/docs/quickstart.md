@@ -214,8 +214,10 @@ else:
 |---------|-------------|
 | `agentos init <name>` | Initialize new agent project |
 | `agentos run` | Run agent with kernel governance |
-| `agentos audit` | Query flight recorder audit logs |
-| `agentos status` | Show kernel metrics |
+| `agentos audit [--json]` | Query flight recorder audit logs |
+| `agentos status [--json]` | Show kernel metrics |
+
+> **Tip**: All monitoring and audit commands now support the `--json` flag for easy integration with CI/CD pipelines.
 
 ---
 

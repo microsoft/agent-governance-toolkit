@@ -27,15 +27,15 @@ result = await kernel.execute(my_agent, "analyze data")
 
 ## CLI Commands
 
-| Command | Description |
-|---------|-------------|
-| `agentos init <name>` | Create new project |
-| `agentos run` | Run with kernel |
-| `agentos check <path>` | Check for violations |
-| `agentos check --staged` | Check staged git files |
-| `agentos audit` | Audit policies |
-| `agentos review <path> --cmvk` | Multi-model review |
-| `agentos install-hooks` | Install git hooks |
+| Command | Description | Options |
+|---------|-------------|---------|
+| `agentos init <name>` | Create new project | `--template`, `--json` |
+| `agentos run` | Run with kernel | `--config` |
+| `agentos check <path>` | Check for violations | `--staged`, `--json` |
+| `agentos audit` | Audit logs & policies | `--json`, `--format` |
+| `agentos status` | Kernel metrics | `--json` |
+| `agentos review <path>` | Multi-model review | `--cmvk`, `--json` |
+| `agentos install-hooks` | Install git hooks | `--force`, `--append` |
 
 ## Policy Modes
 
