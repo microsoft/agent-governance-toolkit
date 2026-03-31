@@ -170,6 +170,59 @@ class TestSQLiteMeasurementStore:
     def test_memory_path_accepted(self) -> None:
         assert _validate_db_path(":memory:") == ":memory:"
 
+    def test_file_uri_etc_passwd_raises(self) -> None:
+        """file:///etc/passwd should be rejected as outside safe directories."""
+        with pytest.raises(ValueError, match="Invalid db_path|outside allowed"):
+            _validate_db_path("file:///etc/passwd")
+
+    def test_file_uri_inside_home_accepted(self, tmp_path: object) -> None:
+        """file:// URI resolving inside home dir should be accepted."""
+        import pathlib
+        home = pathlib.Path.home()
+        # Construct a path under home that looks like a file:// URI
+        target = str(home / "sli_test.db")
+        result = _validate_db_path(f"file://{target}")
+        assert result == str(pathlib.Path(target).resolve())
+
+    def test_remote_file_uri_raises(self) -> None:
+        """file://hostname/path (remote) should be rejected."""
+        with pytest.raises(ValueError, match="Invalid db_path|remote"):
+            _validate_db_path("file://remotehost/path/to/db")
+
+    def test_path_outside_safe_dirs_raises(self) -> None:
+        """/var/log/syslog is outside home/tmp/cwd — should be rejected."""
+        with pytest.raises(ValueError, match="Invalid db_path|outside allowed"):
+            _validate_db_path("/var/log/syslog")
+
+    def test_excessively_long_path_raises(self) -> None:
+        """Paths > 4096 chars should be rejected."""
+        long_path = "a" * 4097
+        with pytest.raises(ValueError, match="exceeds"):
+            _validate_db_path(long_path)
+
+    def test_thread_safety_in_memory_store(self) -> None:
+        """Concurrent appends to SQLiteMeasurementStore(:memory:) must not race."""
+        import threading as _threading
+        store = SQLiteMeasurementStore(db_path=":memory:")
+        errors: list[Exception] = []
+
+        def worker() -> None:
+            try:
+                for i in range(50):
+                    store.append("sli", float(i), float(i), {})
+            except Exception as exc:  # pragma: no cover
+                errors.append(exc)
+
+        threads = [_threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors, f"Thread-safety errors: {errors}"
+        rows = store.query("sli", 0)
+        assert len(rows) == 8 * 50
+
 
 # ---------------------------------------------------------------------------
 # SLI integration: SQLite store survives "restart" (re-open)

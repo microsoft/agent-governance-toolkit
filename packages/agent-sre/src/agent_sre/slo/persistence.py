@@ -96,6 +96,9 @@ class InMemoryMeasurementStore(MeasurementStore):
 
 _VALID_DB_SCHEMES = frozenset(("", ":memory:"))
 
+# Maximum accepted path length (guards against resource-exhaustion attacks).
+_MAX_DB_PATH_LEN = 4096
+
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS sli_measurements (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,22 +119,66 @@ _CLEAR_NAME = "DELETE FROM sli_measurements WHERE name=?"
 def _validate_db_path(raw: str) -> str:
     """Resolve and validate *raw* database path.
 
-    Raises ``ValueError`` for paths that look like URI schemes other than
-    ``file:`` (e.g., ``http://``, ``ftp://``) or absolute Unix paths that
-    point outside the current user's writable space (heuristic only — the
-    real enforcement is OS-level permissions).
+    Accepts only:
+    - the special literal ``:memory:``
+    - ``file://`` URIs whose path resolves inside the current user's home
+      directory or the system's standard temporary directory
+    - Plain filesystem paths (absolute or relative)
 
-    Returns the normalised path string.
+    Raises ``ValueError`` for:
+    - Non-``file://`` URI schemes (``http://``, ``ftp://``, etc.)
+    - ``file://`` URIs that point outside safe directories (e.g.
+      ``file:///etc/passwd``)
+    - Paths that are excessively long (> 4 096 chars)
+
+    Returns the normalised, resolved path string.
     """
+    import os, tempfile as _tempfile
+
     if raw == ":memory:":
         return raw
-    # Reject URIs with non-file schemes (e.g. "file:///etc/passwd" is allowed,
-    # "http://..." is not).
-    if "://" in raw and not raw.startswith("file://"):
+
+    if len(raw) > _MAX_DB_PATH_LEN:
         raise ValueError(
-            f"Invalid db_path {raw!r}: only file paths or ':memory:' are supported."
+            f"Invalid db_path: path exceeds {_MAX_DB_PATH_LEN} characters."
         )
-    return str(Path(raw).expanduser().resolve())
+
+    # Handle file:// URIs — extract the path component and validate it.
+    if raw.startswith("file://"):
+        # Strip the scheme; handle both file:///abs/path and file://host/path
+        path_part = raw[len("file://"):]
+        # If it starts with a third slash it's the canonical file:///abs form
+        if path_part.startswith("/"):
+            raw = path_part  # e.g. "/etc/passwd"
+        else:
+            # file://hostname/path — reject (remote paths not supported)
+            raise ValueError(
+                f"Invalid db_path {raw!r}: remote file:// URIs are not supported."
+            )
+
+    # Reject any remaining URI scheme (http://, ftp://, etc.)
+    if "://" in raw:
+        raise ValueError(
+            f"Invalid db_path {raw!r}: only plain file paths or ':memory:' are supported."
+        )
+
+    resolved = Path(raw).expanduser().resolve()
+
+    # Confine to safe root directories: user home and system temp.
+    safe_roots = [Path.home().resolve(), Path(_tempfile.gettempdir()).resolve()]
+    # Also allow paths that are *inside* the current working directory.
+    safe_roots.append(Path.cwd().resolve())
+
+    if not any(
+        str(resolved).startswith(str(root)) for root in safe_roots
+    ):
+        raise ValueError(
+            f"Invalid db_path {raw!r}: resolved path {resolved} is outside "
+            f"allowed directories (home, temp, cwd). Move the database file "
+            f"to one of these locations."
+        )
+
+    return str(resolved)
 
 
 class SQLiteMeasurementStore(MeasurementStore):
@@ -155,7 +202,9 @@ class SQLiteMeasurementStore(MeasurementStore):
         self._db_path = _validate_db_path(str(db_path))
         self._in_memory = self._db_path == ":memory:"
         # For :memory: databases keep one connection alive for the lifetime of this object.
+        # A dedicated lock serialises concurrent access to this shared connection.
         self._mem_conn: sqlite3.Connection | None = None
+        self._mem_lock = threading.Lock()
         if self._in_memory:
             self._mem_conn = sqlite3.connect(":memory:", check_same_thread=False)
             self._mem_conn.row_factory = sqlite3.Row
@@ -172,8 +221,9 @@ class SQLiteMeasurementStore(MeasurementStore):
     def _connect(self) -> Generator[sqlite3.Connection, None, None]:
         if self._in_memory:
             assert self._mem_conn is not None
-            yield self._mem_conn
-            self._mem_conn.commit()
+            with self._mem_lock:
+                yield self._mem_conn
+                self._mem_conn.commit()
             return
         conn = sqlite3.connect(self._db_path, timeout=30, check_same_thread=False)
         conn.row_factory = sqlite3.Row
