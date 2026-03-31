@@ -11,6 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — agent-sre
+
+- **Chaos Scheduler** — Implemented `should_run()`, `get_due_schedules()`, and
+  `is_in_blackout()` with `croniter.match()` cron evaluation and blackout window
+  enforcement (`chaos/chaos_scheduler.py`).
+- **Cost Optimizer** — Implemented `pareto_frontier()` (non-dominated model set)
+  and `simulate()` (volume-based cost projection) (`cost/optimizer.py`).
+- **Delivery / Progressive Rollout** — Implemented full `CanaryRollout` lifecycle
+  (`start`, `advance`, `check_rollback`, `analyze_step`, `rollback`, `pause`,
+  `resume`, `promote`) and `ShadowMode` evaluation (`set_similarity_function`,
+  `compare`, `is_passing`, `finish`) (`delivery/rollout.py`).
+- **Incident Detector** — Implemented signal correlation (`_find_correlated`)
+  and correlated incident creation (`_create_correlated_incident`) with
+  severity aggregation (`incidents/detector.py`).
+- **Postmortem Generator** — Implemented `generate()` to assemble summary,
+  timeline, root cause, contributing factors, lessons, and action items
+  (`incidents/postmortem.py`).
+- **Runbook Executor** — Implemented `execute()` with sequential step execution,
+  human-in-the-loop approval gates, automatic rollback on failure, and
+  audit-trail event logging (`incidents/runbook_executor.py`).
+- **Replay Engine** — Implemented `what_if()` for what-if trace comparison
+  (`replay/engine.py`).
+- **Distributed Replay** — Implemented `discover_links()` (auto-discover
+  delegation chains), `replay()` (per-agent replay with cross-boundary checks),
+  and `_check_cross_agent()` (`replay/distributed.py`).
+
+### Changed — agent-sre
+
+- **Test suite** — Updated 69 test assertions across 7 test files from
+  `pytest.raises(NotImplementedError)` to functional behavior validation.
+
+
+
 ### Security
 - Copilot extension CORS policy changed from wildcard (`Access-Control-Allow-Origin: *`) to explicit origin allowlist via `ALLOWED_ORIGINS`, with secure GitHub defaults.
 

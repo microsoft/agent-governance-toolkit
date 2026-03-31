@@ -193,6 +193,7 @@ policies:
                 reward: 20,
                 penalty: 100,
                 persist_path: None,
+                decay_rate: 0.95,
             }),
             ..Default::default()
         };
@@ -223,7 +224,10 @@ policies:
         };
         let result = AgentMeshClient::with_options("bad-yaml", opts);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), ClientError::Policy(_)));
+        match result {
+            Err(ClientError::Policy(_)) => {}
+            other => panic!("expected ClientError::Policy, got {:?}", other.err()),
+        }
     }
 
     #[test]

@@ -372,8 +372,6 @@ policies:
             if (format === 'yaml') {
                 // Basic YAML validation
                 const lines = content.split('\n');
-                let inBlock = false;
-                let blockIndent = 0;
 
                 lines.forEach((line, index) => {
                     // Check for tabs (should use spaces)
@@ -559,7 +557,9 @@ policies:
         const stack: { obj: any; indent: number }[] = [{ obj: result, indent: -1 }];
 
         for (const line of lines) {
-            if (line.trim() === '' || line.trim().startsWith('#')) continue;
+            if (line.trim() === '' || line.trim().startsWith('#')) {
+                continue;
+            }
 
             const indent = line.search(/\S/);
             const content = line.trim();
@@ -587,12 +587,24 @@ policies:
     }
 
     private _parseYamlValue(value: string): any {
-        if (value === 'true') return true;
-        if (value === 'false') return false;
-        if (value === 'null') return null;
-        if (/^\d+$/.test(value)) return parseInt(value, 10);
-        if (/^\d+\.\d+$/.test(value)) return parseFloat(value);
-        if (/^["'].*["']$/.test(value)) return value.slice(1, -1);
+        if (value === 'true') {
+            return true;
+        }
+        if (value === 'false') {
+            return false;
+        }
+        if (value === 'null') {
+            return null;
+        }
+        if (/^\d+$/.test(value)) {
+            return parseInt(value, 10);
+        }
+        if (/^\d+\.\d+$/.test(value)) {
+            return parseFloat(value);
+        }
+        if (/^["'].*["']$/.test(value)) {
+            return value.slice(1, -1);
+        }
         return value;
     }
 
@@ -692,6 +704,8 @@ policies:
             padding-bottom: 10px;
         }
         .template-card {
+            width: 100%;
+            text-align: left;
             background: var(--vscode-editor-background);
             border: 1px solid var(--vscode-panel-border);
             border-radius: 6px;
@@ -703,6 +717,10 @@ policies:
         .template-card:hover {
             border-color: var(--vscode-focusBorder);
             background: var(--vscode-list-hoverBackground);
+        }
+        .template-card:focus-visible {
+            outline: 2px solid var(--vscode-focusBorder);
+            outline-offset: 2px;
         }
         .template-card h3 {
             margin: 0 0 5px 0;
@@ -811,18 +829,31 @@ policies:
             flex: 1;
             overflow: auto;
         }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="sidebar">
+    <main class="container" aria-label="Policy editor">
+        <aside class="sidebar" aria-label="Policy templates">
             <h2>📋 Policy Templates</h2>
             <div id="templates"></div>
-        </div>
-        
-        <div class="editor-container">
-            <div class="toolbar">
-                <select id="format">
+        </aside>
+
+        <section class="editor-container" aria-labelledby="editor-heading">
+            <h2 id="editor-heading" class="sr-only">Policy source editor</h2>
+            <div class="toolbar" role="toolbar" aria-label="Policy editor actions">
+                <label class="sr-only" for="format">Policy format</label>
+                <select id="format" aria-label="Policy format">
                     <option value="yaml">YAML</option>
                     <option value="json">JSON</option>
                     <option value="rego">Rego</option>
@@ -834,27 +865,28 @@ policies:
                 <button class="secondary" onclick="exportPolicy()">📤 Export</button>
             </div>
             <div class="editor-wrapper">
-                <div class="line-numbers" id="lineNumbers">1</div>
-                <textarea class="editor" id="editor" spellcheck="false" placeholder="Enter your policy here or select a template..."></textarea>
+                <div class="line-numbers" id="lineNumbers" aria-hidden="true">1</div>
+                <label class="sr-only" for="editor">Policy editor</label>
+                <textarea class="editor" id="editor" spellcheck="false" aria-label="Policy editor" placeholder="Enter your policy here or select a template..."></textarea>
             </div>
-        </div>
+        </section>
         
-        <div class="validation-panel">
+        <aside class="validation-panel" aria-label="Validation and test results">
             <h2>🔍 Validation</h2>
-            <div id="validationResults">
+            <div id="validationResults" aria-live="polite">
                 <p style="color: var(--vscode-descriptionForeground); font-size: 12px;">
                     Edit your policy and click Validate to check for errors.
                 </p>
             </div>
             
             <h2 style="margin-top: 20px;">🧪 Test Results</h2>
-            <div id="testResults">
+            <div id="testResults" aria-live="polite">
                 <p style="color: var(--vscode-descriptionForeground); font-size: 12px;">
                     Click Test to see how your policy handles common scenarios.
                 </p>
             </div>
-        </div>
-    </div>
+        </aside>
+    </main>
 
     <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
@@ -865,14 +897,16 @@ policies:
         // Render templates
         const templatesContainer = document.getElementById('templates');
         templates.forEach(template => {
-            const card = document.createElement('div');
+            const card = document.createElement('button');
+            card.type = 'button';
             card.className = 'template-card';
+            card.setAttribute('aria-label', 'Load template ' + template.name + '. ' + template.description);
             card.innerHTML = \`
                 <h3>\${template.name}</h3>
                 <p>\${template.description}</p>
                 <span class="category category-\${template.category}">\${template.category}</span>
             \`;
-            card.onclick = () => loadTemplate(template.id);
+            card.addEventListener('click', () => loadTemplate(template.id));
             templatesContainer.appendChild(card);
         });
 

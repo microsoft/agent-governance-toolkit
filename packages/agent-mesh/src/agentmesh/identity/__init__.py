@@ -13,6 +13,7 @@ First-class agent identity with:
 
 from .agent_id import AgentIdentity, AgentDID
 from .entra import EntraAgentIdentity, EntraAgentRegistry, EntraAgentBlueprint
+from .entra_agent_id import EntraAgentID
 from .credentials import Credential, CredentialManager
 from .delegation import ScopeChain, DelegationLink, UserContext
 from .sponsor import HumanSponsor
@@ -57,4 +58,5 @@ __all__ = [
     "EntraAgentIdentity",
     "EntraAgentRegistry",
     "EntraAgentBlueprint",
+    "EntraAgentID",
 ]

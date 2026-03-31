@@ -7,10 +7,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 import yaml
 
-from agent_os.policies.cli import cmd_diff, cmd_test, cmd_validate, main
+from agent_os.policies.cli import main
 from agent_os.policies.schema import (
     PolicyAction,
     PolicyCondition,
@@ -146,7 +145,7 @@ class TestValidateCommand:
         policy_file = _write_yaml(tmp_path / "bad.yaml", data)
         rc = main(["validate", str(policy_file)])
         assert rc == 1
-        assert "FAIL" in capsys.readouterr().out
+        assert "FAIL" in capsys.readouterr().err
 
     def test_validate_missing_required_field(self, tmp_path, capsys):
         data = _valid_policy_dict()
@@ -228,9 +227,10 @@ class TestTestCommand:
         scenarios_file = _write_yaml(tmp_path / "scenarios.yaml", scenarios)
         rc = main(["test", str(policy_file), str(scenarios_file)])
         assert rc == 1
-        out = capsys.readouterr().out
-        assert "FAIL" in out
-        assert "0/1 scenarios passed" in out
+        captured = capsys.readouterr()
+        assert "FAIL" in captured.err
+        assert "0/1 scenarios passed" in captured.out
+
 
     def test_missing_policy_file(self, tmp_path, capsys):
         scenarios_file = _write_yaml(tmp_path / "scenarios.yaml", {"scenarios": [{"name": "x"}]})
