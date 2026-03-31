@@ -19,7 +19,7 @@
   },
   "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agent-mesh/services/api",
   "dependencies": {
-    "express": "4.18.2",
+    "express": "4.22.0",
     "uuid": "9.0.0"
   },
   "devDependencies": {
