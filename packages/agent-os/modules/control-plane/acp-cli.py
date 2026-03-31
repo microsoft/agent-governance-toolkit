@@ -123,15 +123,17 @@ def cmd_agent_create(args, control_plane):
         }
     
     try:
-        if not re.match(r"^[a-zA-Z0-9_-]+$", args.agent_id):
-            raise ValueError(f"Invalid agent_id format: {args.agent_id}")
+        # Standardize and strictly validate agent_id
+        agent_id = args.agent_id.lower().strip()
+        if not re.fullmatch(r"^[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*$", agent_id) or len(agent_id) > 64:
+            raise ValueError(f"Invalid agent_id format: {agent_id}")
             
-        agent = control_plane.create_agent(args.agent_id, permissions)
+        agent = control_plane.create_agent(agent_id, permissions)
         
         if getattr(args, "json", False):
             print(json.dumps({
                 "status": "success",
-                "agent_id": str(args.agent_id),
+                "agent_id": str(agent_id),
                 "session_id": str(agent.session_id),
                 "permissions_count": int(len(permissions))
             }, indent=2))

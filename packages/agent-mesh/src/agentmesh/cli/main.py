@@ -30,6 +30,32 @@ console = Console()
 logger = logging.getLogger(__name__)
 
 
+def handle_error(e: Exception, output_json: bool = False, custom_msg: Optional[str] = None):
+    """Centralized error handler for CLI commands."""
+    is_known = isinstance(e, (ImportError, ValueError, KeyError, PermissionError, FileNotFoundError, yaml.YAMLError, json.JSONDecodeError))
+    
+    # Sanitize message: use custom msg if provided, else generic for unknown errors
+    if custom_msg:
+        err_msg = custom_msg
+    elif is_known:
+        # Avoid leaking internal paths even for known errors in production output
+        err_msg = "A validation, permission, or configuration error occurred."
+    else:
+        err_msg = "An unexpected internal error occurred."
+    
+    # Log the full details for debugging (not shown to user unless DEBUG is on)
+    logger.error(f"CLI Error: {e}", exc_info=True)
+    
+    if output_json:
+        status = "error"
+        type_field = "ValidationError" if is_known else "InternalError"
+        print(json.dumps({"status": status, "message": err_msg, "type": type_field}, indent=2))
+    else:
+        console.print(f"[red]Error: {err_msg}[/red]")
+        if os.environ.get("AGENTOS_DEBUG"):
+             console.print(f"[dim]{e}[/dim]")
+
+
 @click.group()
 @click.version_option(version="1.0.0-alpha")
 def app():
@@ -285,29 +311,8 @@ def register(agent_dir: str, name: str = None, output_json: bool = False):
     try:
         from agentmesh.identity import AgentIdentity
         identity = AgentIdentity.create(agent_name)
-    except ImportError:
-        err_msg = "Required dependency is missing. Please install 'agentmesh-platform'."
-        if output_json:
-            print(json.dumps({"status": "error", "message": err_msg, "type": "MissingDependency"}, indent=2))
-        else:
-            console.print(f"[red]Error: {err_msg}[/red]")
-        return
-    except (ValueError, KeyError, PermissionError) as e:
-        # Catch safe, expected exceptions
-        err_msg = "A validation or permission error occurred."
-        logger.error(f"Registration failed: {e}")
-        if output_json:
-            print(json.dumps({"status": "error", "message": err_msg, "type": "ValidationError"}, indent=2))
-        else:
-            console.print(f"[red]Error: {err_msg}[/red]")
-        return
-    except Exception:
-        # Catch-all for unexpected errors
-        err_msg = "An internal error occurred during registration. Check logs for details."
-        if output_json:
-            print(json.dumps({"status": "error", "message": err_msg, "type": "InternalError"}, indent=2))
-        else:
-            console.print(f"[red]Error: {err_msg}[/red]")
+    except Exception as e:
+        handle_error(e, output_json)
         return
 
     if not output_json:
@@ -448,19 +453,8 @@ def policy(policy_file: str, validate: bool, output_json: bool):
         else:
             console.print(f"\n[green]Successfully loaded {len(policies)} policies[/green]")
 
-    except (yaml.YAMLError, ValueError, json.JSONDecodeError) as e:
-        err_msg = "Failed to parse or validate the policy file."
-        logger.error(f"Policy load failed: {e}")
-        if output_json:
-            print(json.dumps({"status": "error", "message": err_msg, "type": "ValidationError"}, indent=2))
-        else:
-            console.print(f"[red]Error: {err_msg}[/red]")
-    except Exception:
-        err_msg = "An unexpected error occurred while loading the policy. Access AGENTOS_DEBUG for details."
-        if output_json:
-            print(json.dumps({"status": "error", "message": err_msg, "type": "InternalError"}, indent=2))
-        else:
-            console.print(f"[red]Error: {err_msg}[/red]")
+    except Exception as e:
+        handle_error(e, output_json)
 
 
 @app.command()
@@ -480,15 +474,13 @@ def audit(agent: str, limit: int, fmt: str, output_json: bool):
     ]
 
     if agent:
-        # Validate agent DID format to prevent injection or invalid lookups
-        if not re.fullmatch(r"^(?:agent-[a-zA-Z0-9-]+|did:agentmesh:[a-zA-Z0-9-]+)$", agent) or len(agent) > 128:
-            err_msg = f"Invalid agent identifier format: {agent}"
-            if output_json:
-                print(json.dumps({"status": "error", "message": err_msg, "type": "ValidationError"}, indent=2))
-            else:
-                console.print(f"[red]Error: {err_msg}[/red]")
+        # Normalization and strict validation of agent identifier
+        agent = agent.lower().strip()
+        # Stricter pattern only allows alphanumeric, hyphen, and colon in expected segments
+        if not re.fullmatch(r"^(?:agent-[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*|did:agentmesh:[a-zA-Z0-9]+(?:[-:][a-zA-Z0-9]+)*)$", agent) or len(agent) > 128:
+            handle_error(ValueError(f"Invalid agent identifier format"), output_json, custom_msg=f"Invalid agent identifier format")
             return
-        entries = [e for e in entries if e["agent"] == agent]
+        entries = [e for e in entries if e["agent"].lower() == agent]
 
     entries = entries[:limit]
     

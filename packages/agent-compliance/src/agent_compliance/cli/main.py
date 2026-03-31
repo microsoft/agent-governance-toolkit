@@ -15,6 +15,24 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import json
+
+
+def handle_error(e: Exception, output_json: bool = False, custom_msg: Optional[str] = None):
+    """Centralized error handler for compliance CLI."""
+    is_known = isinstance(e, (IOError, ValueError, KeyError, PermissionError, FileNotFoundError))
+    
+    if custom_msg:
+        err_msg = custom_msg
+    elif is_known:
+        err_msg = "A validation or file access error occurred."
+    else:
+        err_msg = "A governance processing error occurred."
+        
+    if output_json:
+        print(json.dumps({"status": "fail" if not is_known else "error", "message": err_msg, "type": "ValidationError" if is_known else "InternalError"}, indent=2))
+    else:
+        print(f"Error: {err_msg}", file=sys.stderr)
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
@@ -34,11 +52,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
         return 0 if attestation.passed else 1
     except Exception as e:
-        if args.json:
-            import json
-            print(json.dumps({"status": "fail", "error": "Governance verification failed", "type": "InternalError"}, indent=2))
-        else:
-            print(f"Error: {e}", file=sys.stderr)
+        handle_error(e, args.json)
         return 1
 
 
@@ -81,11 +95,7 @@ def cmd_integrity(args: argparse.Namespace) -> int:
 
         return 0 if report.passed else 1
     except Exception as e:
-        if args.json:
-            import json
-            print(json.dumps({"status": "error", "message": "Integrity manifest processing failed", "type": "InternalError"}, indent=2))
-        else:
-            print(f"Error: {e}", file=sys.stderr)
+        handle_error(e, args.json)
         return 1
 
 
@@ -111,11 +121,7 @@ def cmd_lint_policy(args: argparse.Namespace) -> int:
             return 1
         return 0 if result.passed else 1
     except Exception as e:
-        if args.json:
-            import json
-            print(json.dumps({"status": "error", "message": "Policy linting failed", "type": "InternalError"}, indent=2))
-        else:
-            print(f"Error: {e}", file=sys.stderr)
+        handle_error(e, args.json)
         return 1
 
 

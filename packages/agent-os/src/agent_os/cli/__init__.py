@@ -184,6 +184,26 @@ def format_error(message: str, suggestion: str | None = None,
     return "\n".join(parts)
 
 
+def handle_cli_error(e: Exception, args: argparse.Namespace) -> int:
+    """Centralized error handler for Agent OS CLI."""
+    # Sanitize exception message to avoid leaking internal details
+    is_known_error = isinstance(e, (FileNotFoundError, ValueError, PermissionError))
+    error_msg = "A file, value, or permission error occurred." if is_known_error else "An internal error occurred."
+    
+    if getattr(args, "json", False) or (hasattr(args, "format") and args.format == "json"):
+        print(json.dumps({
+            "status": "error",
+            "message": error_msg,
+            "error_type": "ValidationError" if is_known_error else "InternalError"
+        }, indent=2))
+    else:
+        print(format_error(error_msg))
+        if os.environ.get("AGENTOS_DEBUG"):
+            import traceback
+            traceback.print_exc()
+    return 1
+
+
 def handle_missing_config(path: str = ".") -> str:
     """Error message for a missing ``.agents/`` config directory."""
     return format_error(
@@ -1220,23 +1240,7 @@ def main() -> int:
     except KeyboardInterrupt:
         return 130
     except Exception as e:
-        # Sanitize exception message to avoid leaking internal details
-        # For public output, we prefer generic messages for unexpected exceptions
-        is_known_error = isinstance(e, (FileNotFoundError, ValueError, PermissionError))
-        error_msg = "A file, value, or permission error occurred." if is_known_error else "An internal error occurred."
-        
-        if getattr(args, "json", False) or (hasattr(args, "format") and args.format == "json"):
-            print(json.dumps({
-                "status": "error",
-                "message": error_msg,
-                "error_type": "ValidationError" if is_known_error else "InternalError"
-            }, indent=2))
-        else:
-            print(format_error(error_msg))
-            if os.environ.get("AGENTOS_DEBUG"):
-                import traceback
-                traceback.print_exc()
-        return 1
+        return handle_cli_error(e, args)
 
 
 if __name__ == "__main__":
