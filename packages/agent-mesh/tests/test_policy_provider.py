@@ -40,6 +40,12 @@ class _StubDecision:
         self.action = action
         self.reason = reason
 
+    def label(self) -> str:
+        return self.action
+
+    def __str__(self) -> str:
+        return self.reason if self.reason else self.action
+
 
 def _make_engine(
     decision: _StubDecision | None = None,
@@ -161,7 +167,7 @@ class TestHandleCheck:
             {"agent_id": "agent-5", "action": "write", "context": {"key": "val"}}
         )
         call_args = engine.evaluate.call_args
-        assert call_args[0][0] == "agent-5"
+        assert call_args[0][0] == "write"
 
     def test_audit_logger_called(self):
         handler = _make_handler(with_audit=True)
