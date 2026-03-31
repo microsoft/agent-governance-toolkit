@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """TrustGate: Conditional checkpoint node that gates graph transitions on trust score."""
 
 from __future__ import annotations

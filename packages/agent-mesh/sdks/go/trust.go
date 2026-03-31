@@ -1,7 +1,13 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 package agentmesh
 
 import (
+	"encoding/json"
+	"fmt"
 	"math"
+	"os"
 	"sync"
 )
 
@@ -13,8 +19,17 @@ type TrustScore struct {
 }
 
 type scoreState struct {
-	score       float64
+	score        float64
 	interactions int
+}
+
+type persistedScores struct {
+	Scores map[string]*persistedState `json:"scores"`
+}
+
+type persistedState struct {
+	Score        float64 `json:"score"`
+	Interactions int     `json:"interactions"`
 }
 
 // TrustManager tracks and updates per-agent trust scores.
@@ -26,10 +41,14 @@ type TrustManager struct {
 
 // NewTrustManager creates a TrustManager with the given config.
 func NewTrustManager(config TrustConfig) *TrustManager {
-	return &TrustManager{
+	tm := &TrustManager{
 		config: config,
 		scores: make(map[string]*scoreState),
 	}
+	if config.PersistPath != "" {
+		_ = tm.loadFromDisk()
+	}
+	return tm
 }
 
 // VerifyPeer verifies a peer's identity and returns the current trust score.
@@ -73,6 +92,7 @@ func (tm *TrustManager) RecordSuccess(agentID string, reward float64) {
 	s.interactions++
 	decayed := tm.applyDecay(s.score)
 	s.score = math.Min(1.0, decayed+reward*tm.config.RewardFactor)
+	_ = tm.saveToDisk()
 }
 
 // RecordFailure decreases an agent's trust score with asymmetric penalty.
@@ -84,6 +104,7 @@ func (tm *TrustManager) RecordFailure(agentID string, penalty float64) {
 	s.interactions++
 	decayed := tm.applyDecay(s.score)
 	s.score = math.Max(0.0, decayed-penalty*tm.config.PenaltyFactor)
+	_ = tm.saveToDisk()
 }
 
 func (tm *TrustManager) getOrCreate(agentID string) *scoreState {
@@ -108,4 +129,48 @@ func (tm *TrustManager) tierFor(score float64) string {
 	default:
 		return "low"
 	}
+}
+
+func (tm *TrustManager) loadFromDisk() error {
+	if tm.config.PersistPath == "" {
+		return nil
+	}
+	data, err := os.ReadFile(tm.config.PersistPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("reading trust state: %w", err)
+	}
+	var persisted persistedScores
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		return fmt.Errorf("unmarshalling trust state: %w", err)
+	}
+	for id, ps := range persisted.Scores {
+		tm.scores[id] = &scoreState{
+			score:        ps.Score,
+			interactions: ps.Interactions,
+		}
+	}
+	return nil
+}
+
+func (tm *TrustManager) saveToDisk() error {
+	if tm.config.PersistPath == "" {
+		return nil
+	}
+	persisted := persistedScores{
+		Scores: make(map[string]*persistedState),
+	}
+	for id, s := range tm.scores {
+		persisted.Scores[id] = &persistedState{
+			Score:        s.score,
+			Interactions: s.interactions,
+		}
+	}
+	data, err := json.MarshalIndent(persisted, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshalling trust state: %w", err)
+	}
+	return os.WriteFile(tm.config.PersistPath, data, 0644)
 }

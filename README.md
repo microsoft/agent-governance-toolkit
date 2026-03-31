@@ -7,6 +7,8 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-npm_%40agentmesh%2Fsdk-blue?logo=typescript)](packages/agent-mesh/sdks/typescript/)
 [![.NET 8.0+](https://img.shields.io/badge/.NET_8.0+-NuGet-blue?logo=dotnet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
+[![Rust](https://img.shields.io/badge/Rust-crates.io-orange?logo=rust)](packages/agent-mesh/sdks/rust/agentmesh/)
+[![Go](https://img.shields.io/badge/Go-module-00ADD8?logo=go)](packages/agent-mesh/sdks/go/)
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/OWASP-COMPLIANCE.md)
 [![OpenSSF Best Practices](https://img.shields.io/cii/percentage/12085?label=OpenSSF%20Best%20Practices&logo=opensourcesecurity)](https://www.bestpractices.dev/projects/12085)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
@@ -28,7 +30,7 @@
 > application layer. For model-level safety, see
 > [Azure AI Content Safety](https://learn.microsoft.com/azure/ai-services/content-safety/).
 
-Runtimegovernance for AI agents — the only toolkit covering all **10 OWASP Agentic risks** with **9,500+ tests**. Governs what agents *do*, not just what they say — deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE — **Python · TypeScript · .NET**
+Runtimegovernance for AI agents — the only toolkit covering all **10 OWASP Agentic risks** with **9,500+ tests**. Governs what agents *do*, not just what they say — deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE — **Python · TypeScript · .NET · Rust · Go**
 
 > **Works with any stack** — AWS Bedrock, Google ADK, Azure AI, LangChain, CrewAI, AutoGen, OpenAI Agents, LlamaIndex, and more. Pure `pip install` with zero vendor lock-in.
 
@@ -67,9 +69,11 @@ pip install agentmesh-lightning        # RL training governance
 
 ### 📚 Documentation
 
-- **[Quick Start](QUICKSTART.md)** — Get from zero to governed agents in 10 minutes (Python · TypeScript · .NET)
+- **[Quick Start](QUICKSTART.md)** — Get from zero to governed agents in 10 minutes (Python · TypeScript · .NET · Rust · Go)
 - **[TypeScript SDK](packages/agent-mesh/sdks/typescript/README.md)** — npm package with identity, trust, policy, and audit
 - **[.NET SDK](packages/agent-governance-dotnet/README.md)** — NuGet package with full OWASP coverage
+- **[Rust SDK](packages/agent-mesh/sdks/rust/agentmesh/README.md)** — crates.io crate with policy, trust, audit, and Ed25519 identity
+- **[Go SDK](packages/agent-mesh/sdks/go/README.md)** — Go module with policy, trust, audit, and identity
 - **[Tutorials](docs/tutorials/)** — Step-by-step guides for policy, identity, integrations, compliance, SRE, and sandboxing
 - **[Azure Deployment](docs/deployment/README.md)** — AKS, Azure AI Foundry, Container Apps, OpenClaw sidecar
 - **[NVIDIA OpenShell Integration](docs/integrations/openshell.md)** — Combine sandbox isolation with governance intelligence
@@ -91,6 +95,12 @@ Still have questions? File a [GitHub issue](https://github.com/microsoft/agent-g
   - [Agent Runtime](packages/agent-runtime/) | [Agent Hypervisor](packages/agent-hypervisor/)
 - **Agent SRE**: SLOs, error budgets, replay debugging, chaos engineering, circuit breakers, progressive delivery
   - [Agent SRE](packages/agent-sre/) | [Observability integrations](packages/agent-hypervisor/src/hypervisor/observability/)
+- **MCP Security Scanner**: Detect tool poisoning, typosquatting, hidden instructions, and rug-pull attacks in MCP tool definitions
+  - [MCP Scanner](packages/agent-os/src/agentos/mcp_security.py) | [CLI](packages/agent-os/src/agentos/cli/mcp_scan.py)
+- **Trust Report CLI**: `agentmesh trust report` — visualize trust scores, task success/failure, and agent activity
+  - [Trust CLI](packages/agent-mesh/src/agentmesh/cli/trust_cli.py)
+- **Secret Scanning & Fuzzing**: Gitleaks workflow, 7 fuzz targets covering policy, injection, sandbox, trust, and MCP
+  - [Security workflows](.github/workflows/)
 - **12+ Framework Integrations**: Microsoft Agent Framework, LangChain, CrewAI, AutoGen, Dify, LlamaIndex, OpenAI Agents, Google ADK, and more
   - [Framework quickstarts](examples/quickstart/) | [Integration proposals](docs/proposals/)
 - **Full OWASP Coverage**: 10/10 Agentic Top 10 risks addressed with dedicated controls for each ASI category
@@ -156,6 +166,31 @@ var result = kernel.EvaluateToolCall(
 );
 
 if (result.Allowed) { /* proceed */ }
+```
+
+### Enforce a policy — Rust
+
+```rust
+use agentmesh::{AgentMeshClient, ClientOptions};
+
+let client = AgentMeshClient::new("my-agent").unwrap();
+let result = client.execute_with_governance("data.read", None);
+assert!(result.allowed);
+```
+
+### Enforce a policy — Go
+
+```go
+import agentmesh "github.com/microsoft/agent-governance-toolkit/sdks/go"
+
+client, _ := agentmesh.NewClient("my-agent",
+    agentmesh.WithPolicyRules([]agentmesh.PolicyRule{
+        {Action: "data.read", Effect: agentmesh.Allow},
+        {Action: "*", Effect: agentmesh.Deny},
+    }),
+)
+result := client.ExecuteWithGovernance("data.read", nil)
+// result.Allowed == true
 ```
 
 ### Run the governance demo
@@ -237,6 +272,8 @@ Three evaluation modes per backend: **embedded engine** (cedarpy/opa CLI), **rem
 | **Python** | [`agent-governance-toolkit[full]`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
 | **TypeScript** | [`@agentmesh/sdk`](packages/agent-mesh/sdks/typescript/) | `npm install @agentmesh/sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
+| **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
+| **Go** | [`agentmesh`](packages/agent-mesh/sdks/go/) | `go get github.com/microsoft/agent-governance-toolkit/sdks/go` |
 
 ### Python Packages (PyPI)
 
@@ -252,7 +289,7 @@ Three evaluation modes per backend: **embedded engine** (cedarpy/opa CLI), **rem
 
 ## Framework Integrations
 
-Works with **12+ agent frameworks** including:
+Works with **20+ agent frameworks** including:
 
 | Framework | Stars | Integration |
 |-----------|-------|-------------|
@@ -325,6 +362,18 @@ This toolkit provides **application-level (Python middleware) governance**, not 
 - All security policy rules ship as **configurable sample configurations** — review and customize for your environment (see `examples/policies/`)
 - No built-in rule set should be considered exhaustive
 - For details see [Architecture — Security Model & Boundaries](docs/ARCHITECTURE.md)
+
+### Security Tooling
+
+| Tool | Coverage |
+|------|----------|
+| CodeQL | Python + TypeScript SAST |
+| Gitleaks | Secret scanning on PR/push/weekly |
+| ClusterFuzzLite | 7 fuzz targets (policy, injection, MCP, sandbox, trust) |
+| Dependabot | 13 ecosystems (pip, npm, nuget, cargo, gomod, docker, actions) |
+| OpenSSF Scorecard | Weekly scoring + SARIF upload |
+| SBOM | SPDX + CycloneDX generation and attestation |
+| Dependency Review | PR-time CVE and license check |
 
 ## Contributor Resources
 

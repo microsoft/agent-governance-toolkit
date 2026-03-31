@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Governance policy definition with pattern matching and YAML serialization."""
 
 from __future__ import annotations

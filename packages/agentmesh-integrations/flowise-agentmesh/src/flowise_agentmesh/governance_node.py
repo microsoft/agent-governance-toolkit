@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Governance policy check node for Flowise flows."""
 
 from __future__ import annotations

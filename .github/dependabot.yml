@@ -1,5 +1,6 @@
 version: 2
 updates:
+  # Python packages
   - package-ecosystem: "pip"
     directory: "/packages/agent-os"
     schedule:
@@ -40,6 +41,7 @@ updates:
     labels:
       - "dependencies"
 
+  # npm packages
   - package-ecosystem: "npm"
     directory: "/packages/agent-os/extensions/mcp-server"
     schedule:
@@ -56,6 +58,51 @@ updates:
     labels:
       - "dependencies"
 
+  - package-ecosystem: "npm"
+    directory: "/packages/agent-mesh/sdks/typescript"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+
+  # .NET
+  - package-ecosystem: "nuget"
+    directory: "/packages/agent-governance-dotnet"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+
+  # Rust
+  - package-ecosystem: "cargo"
+    directory: "/packages/agent-mesh/sdks/rust/agentmesh"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+
+  # Go
+  - package-ecosystem: "gomod"
+    directory: "/packages/agent-mesh/sdks/go"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+
+  # Docker
+  - package-ecosystem: "docker"
+    directory: "/packages/agent-os"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+
+  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

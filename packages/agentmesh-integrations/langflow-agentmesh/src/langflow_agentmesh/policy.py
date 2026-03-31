@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Governance policy engine with pattern matching and YAML serialization.
 
 Shared policy engine reusable across Langflow governance components.

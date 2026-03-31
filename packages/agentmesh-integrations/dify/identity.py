@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """verification Identity for Dify agents."""
 
 from __future__ import annotations

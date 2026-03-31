@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Audit logging node with hash chain tamper evidence for Flowise flows."""
 
 from __future__ import annotations

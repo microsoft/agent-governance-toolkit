@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Trust Gate — policy enforcement for A2A task negotiations.
 

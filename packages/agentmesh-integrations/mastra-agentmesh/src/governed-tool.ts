@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 /**
  * createGovernedTool — wraps a Mastra tool with governance, trust, and audit.
  *

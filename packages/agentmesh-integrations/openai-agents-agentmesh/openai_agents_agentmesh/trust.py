@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Trust layer for OpenAI Agents SDK — function call gating and handoff verification.
 

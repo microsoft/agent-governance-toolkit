@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """PolicyCheckpoint: Governance policy enforcement node for LangGraph."""
 
 from __future__ import annotations

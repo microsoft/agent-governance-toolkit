@@ -72,11 +72,16 @@ function injectPRIntegration() {
   const agentOSTab = document.createElement('a');
   agentOSTab.className = `tabnav-tab ${AGENTOS_CLASS}`;
   agentOSTab.href = '#agentos';
-  agentOSTab.innerHTML = `
-    <span style="margin-right: 4px;">🛡️</span>
-    AgentOS
-    <span class="Counter" style="margin-left: 4px; background: #22c55e; color: white;">✓</span>
-  `;
+  const tabIcon = document.createElement('span');
+  tabIcon.style.marginRight = '4px';
+  tabIcon.textContent = '🛡️';
+  agentOSTab.appendChild(tabIcon);
+  agentOSTab.appendChild(document.createTextNode(' AgentOS '));
+  const tabCounter = document.createElement('span');
+  tabCounter.className = 'Counter';
+  tabCounter.style.cssText = 'margin-left: 4px; background: #22c55e; color: white;';
+  tabCounter.textContent = '✓';
+  agentOSTab.appendChild(tabCounter);
   agentOSTab.onclick = (e) => {
     e.preventDefault();
     showAgentOSPanel();
@@ -103,25 +108,30 @@ function injectIssueIntegration() {
     border-radius: 6px;
     background: #f6f8fa;
   `;
-  agentOSSection.innerHTML = `
-    <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-      🛡️ AgentOS
-    </h3>
-    <div style="font-size: 13px; color: #57606a; margin-bottom: 12px;">
-      Available automations:
-    </div>
-    <div style="display: flex; flex-direction: column; gap: 8px;">
-      <button class="btn btn-sm" onclick="window.agentOS?.runAgent('issue-labeler')">
-        🏷️ Auto-label this issue
-      </button>
-      <button class="btn btn-sm" onclick="window.agentOS?.runAgent('issue-breakdown')">
-        📝 Break into subtasks
-      </button>
-      <button class="btn btn-sm" onclick="window.agentOS?.runAgent('estimate')">
-        ⏱️ Estimate effort
-      </button>
-    </div>
-  `;
+  const sectionHeading = document.createElement('h3');
+  sectionHeading.style.cssText = 'font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;';
+  sectionHeading.textContent = '🛡️ AgentOS';
+  agentOSSection.appendChild(sectionHeading);
+
+  const sectionDesc = document.createElement('div');
+  sectionDesc.style.cssText = 'font-size: 13px; color: #57606a; margin-bottom: 12px;';
+  sectionDesc.textContent = 'Available automations:';
+  agentOSSection.appendChild(sectionDesc);
+
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
+  for (const { agentId, label } of [
+    { agentId: 'issue-labeler', label: '🏷️ Auto-label this issue' },
+    { agentId: 'issue-breakdown', label: '📝 Break into subtasks' },
+    { agentId: 'estimate', label: '⏱️ Estimate effort' },
+  ]) {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-sm';
+    btn.textContent = label;
+    btn.addEventListener('click', () => (window as any).agentOS?.runAgent(agentId));
+    buttonContainer.appendChild(btn);
+  }
+  agentOSSection.appendChild(buttonContainer);
 
   sidebar.insertBefore(agentOSSection, sidebar.firstChild);
   injectFAB();
@@ -136,22 +146,27 @@ function injectFAB() {
 
   const fab = document.createElement('div');
   fab.className = 'agentos-fab';
-  fab.innerHTML = `
-    <button class="agentos-fab-button" title="AgentOS">
-      🤖
-    </button>
-    <div class="agentos-fab-menu" style="display: none;">
-      <div class="agentos-fab-menu-item" data-action="create">
-        ➕ Create Agent
-      </div>
-      <div class="agentos-fab-menu-item" data-action="view">
-        👀 View Agents
-      </div>
-      <div class="agentos-fab-menu-item" data-action="logs">
-        📋 Audit Log
-      </div>
-    </div>
-  `;
+  const fabButton = document.createElement('button');
+  fabButton.className = 'agentos-fab-button';
+  fabButton.title = 'AgentOS';
+  fabButton.textContent = '🤖';
+  fab.appendChild(fabButton);
+
+  const fabMenu = document.createElement('div');
+  fabMenu.className = 'agentos-fab-menu';
+  fabMenu.style.display = 'none';
+  for (const { action, label } of [
+    { action: 'create', label: '➕ Create Agent' },
+    { action: 'view', label: '👀 View Agents' },
+    { action: 'logs', label: '📋 Audit Log' },
+  ]) {
+    const item = document.createElement('div');
+    item.className = 'agentos-fab-menu-item';
+    item.dataset.action = action;
+    item.textContent = label;
+    fabMenu.appendChild(item);
+  }
+  fab.appendChild(fabMenu);
 
   const style = document.createElement('style');
   style.textContent = `
@@ -238,6 +253,7 @@ function showAgentOSPanel() {
 
   const panel = document.createElement('div');
   panel.className = 'agentos-panel';
+  // SECURITY: innerHTML with trusted content only — static extension UI, no user data interpolated
   panel.innerHTML = `
     <div class="agentos-panel-header">
       <h2>🛡️ AgentOS Policy Check</h2>

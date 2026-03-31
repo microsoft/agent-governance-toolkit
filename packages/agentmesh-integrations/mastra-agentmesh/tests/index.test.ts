@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import { describe, it, expect, beforeEach } from "vitest";
 import { governanceMiddleware } from "../src/governance";
 import { trustGate } from "../src/trust";

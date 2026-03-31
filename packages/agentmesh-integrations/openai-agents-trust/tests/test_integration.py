@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for OpenAI Agents SDK integration (guardrails, hooks, handoffs).
 
 Uses the real openai-agents SDK types since it's installed as a dependency.

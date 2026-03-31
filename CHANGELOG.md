@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 - Updated `QUICKSTART.md` and `Tutorial 04 — Audit & Compliance` with secure JSON error handling examples and schema details.
 - Added "Secure Error Handling" sections to primary documentation to guide users on interpreting sanitized machine-readable outputs.
-
+
+
 ## [3.0.0] - 2026-03-26
 
 ### Changed

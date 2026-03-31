@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Trust scoring for PydanticAI agents.
 
 Basic trust score tracking with overall score and threshold validation.

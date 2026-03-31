@@ -13,6 +13,7 @@ First-class agent identity with:
 
 from .agent_id import AgentIdentity, AgentDID
 from .entra import EntraAgentIdentity, EntraAgentRegistry, EntraAgentBlueprint
+from .entra_agent_id import EntraAgentID
 from .credentials import Credential, CredentialManager
 from .delegation import ScopeChain, DelegationLink, UserContext
 from .sponsor import HumanSponsor
@@ -23,6 +24,12 @@ from .namespace_manager import NamespaceManager
 from .revocation import RevocationList, RevocationEntry
 from .rotation import KeyRotationManager
 from .jwk import to_jwk, from_jwk, to_jwks, from_jwks
+from .managed_identity import (
+    ManagedIdentityAdapter,
+    EntraManagedIdentity,
+    AWSIAMIdentity,
+    GCPWorkloadIdentity,
+)
 from .mtls import MTLSConfig, MTLSIdentityVerifier
 from .keystore import KeyStore, SoftwareKeyStore, PKCS11KeyStore
 
@@ -57,4 +64,9 @@ __all__ = [
     "EntraAgentIdentity",
     "EntraAgentRegistry",
     "EntraAgentBlueprint",
+    "EntraAgentID",
+    "ManagedIdentityAdapter",
+    "EntraManagedIdentity",
+    "AWSIAMIdentity",
+    "GCPWorkloadIdentity",
 ]

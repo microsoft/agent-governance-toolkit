@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Agent OS Demo Runner
 # Usage: ./run-demo.sh <demo-name> [options]
 

@@ -113,8 +113,12 @@ class TestRunbookExecutor:
             ],
         )
         executor = RunbookExecutor()
-        with pytest.raises(NotImplementedError):
-            executor.execute(rb, _make_incident())
+        execution = executor.execute(rb, _make_incident())
+        assert execution.status == ExecutionStatus.COMPLETED
+        assert len(execution.step_results) == 2
+        assert execution.step_results[0].step_name == "step-a"
+        assert execution.step_results[1].step_name == "step-b"
+        assert all(r.status == StepStatus.SUCCESS for r in execution.step_results)
 
     def test_string_actions(self) -> None:
         rb = Runbook(
@@ -123,8 +127,9 @@ class TestRunbookExecutor:
             steps=[RunbookStep(name="cmd", action="echo hello")],
         )
         executor = RunbookExecutor()
-        with pytest.raises(NotImplementedError):
-            executor.execute(rb, _make_incident())
+        execution = executor.execute(rb, _make_incident())
+        assert execution.status == ExecutionStatus.COMPLETED
+        assert "[command]" in execution.step_results[0].output
 
     def test_step_failure_marks_failed(self) -> None:
         rb = Runbook(
@@ -136,8 +141,11 @@ class TestRunbookExecutor:
             ],
         )
         executor = RunbookExecutor()
-        with pytest.raises(NotImplementedError):
-            executor.execute(rb, _make_incident())
+        execution = executor.execute(rb, _make_incident())
+        assert execution.status == ExecutionStatus.FAILED
+        failed_step = [r for r in execution.step_results if r.status == StepStatus.FAILED]
+        assert len(failed_step) == 1
+        assert "step failed" in failed_step[0].error
 
     def test_rollback_on_failure(self) -> None:
         rb = Runbook(
@@ -149,8 +157,11 @@ class TestRunbookExecutor:
             ],
         )
         executor = RunbookExecutor()
-        with pytest.raises(NotImplementedError):
-            executor.execute(rb, _make_incident())
+        execution = executor.execute(rb, _make_incident())
+        # When rollback actions exist and run, status is ROLLED_BACK
+        assert execution.status in (ExecutionStatus.FAILED, ExecutionStatus.ROLLED_BACK)
+        # Should have step results including rolled-back ones
+        assert len(execution.step_results) >= 2
 
     def test_approval_callback_approved(self) -> None:
         rb = Runbook(
@@ -161,8 +172,9 @@ class TestRunbookExecutor:
             ],
         )
         executor = RunbookExecutor()
-        with pytest.raises(NotImplementedError):
-            executor.execute(rb, _make_incident(), approve_callback=lambda s, i: True)
+        execution = executor.execute(rb, _make_incident(), approve_callback=lambda s, i: True)
+        assert execution.status == ExecutionStatus.COMPLETED
+        assert execution.step_results[0].status == StepStatus.SUCCESS
 
     def test_approval_callback_denied(self) -> None:
         rb = Runbook(
@@ -173,8 +185,9 @@ class TestRunbookExecutor:
             ],
         )
         executor = RunbookExecutor()
-        with pytest.raises(NotImplementedError):
-            executor.execute(rb, _make_incident(), approve_callback=lambda s, i: False)
+        execution = executor.execute(rb, _make_incident(), approve_callback=lambda s, i: False)
+        assert execution.status == ExecutionStatus.COMPLETED
+        assert execution.step_results[0].status == StepStatus.SKIPPED
 
     def test_no_callback_pauses_with_waiting(self) -> None:
         rb = Runbook(
@@ -185,8 +198,9 @@ class TestRunbookExecutor:
             ],
         )
         executor = RunbookExecutor()
-        with pytest.raises(NotImplementedError):
-            executor.execute(rb, _make_incident())
+        execution = executor.execute(rb, _make_incident())
+        assert execution.status == ExecutionStatus.WAITING_APPROVAL
+        assert execution.step_results[0].status == StepStatus.WAITING_APPROVAL
 
     def test_timing_recorded(self) -> None:
         rb = Runbook(
@@ -195,8 +209,11 @@ class TestRunbookExecutor:
             steps=[RunbookStep(name="s1", action=_ok_action)],
         )
         executor = RunbookExecutor()
-        with pytest.raises(NotImplementedError):
-            executor.execute(rb, _make_incident())
+        execution = executor.execute(rb, _make_incident())
+        assert execution.started_at is not None
+        assert execution.completed_at is not None
+        assert execution.step_results[0].started_at is not None
+        assert execution.step_results[0].completed_at is not None
 
     def test_event_log_audit_trail(self) -> None:
         rb = Runbook(
@@ -205,8 +222,10 @@ class TestRunbookExecutor:
             steps=[RunbookStep(name="s1", action=_ok_action)],
         )
         executor = RunbookExecutor()
-        with pytest.raises(NotImplementedError):
-            executor.execute(rb, _make_incident())
+        execution = executor.execute(rb, _make_incident())
+        assert execution.status == ExecutionStatus.COMPLETED
+        # Event log should have entries for start + step events + completion
+        assert len(executor._event_log) > 0
 
 
 # ---------------------------------------------------------------------------

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Comprehensive tests for Flowise AgentMesh governance nodes."""
 
 import json

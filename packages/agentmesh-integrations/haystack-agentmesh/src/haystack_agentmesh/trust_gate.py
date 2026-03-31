@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """TrustGate component for Haystack pipelines.
 
 Trust scoring with decay, success/failure tracking, and routing

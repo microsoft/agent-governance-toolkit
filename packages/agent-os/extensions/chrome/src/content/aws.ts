@@ -93,27 +93,37 @@ function injectAlertBanner() {
     gap: 16px;
     max-width: 600px;
   `;
-  banner.innerHTML = `
-    <div style="display: flex; align-items: center; gap: 8px;">
-      <span style="font-size: 20px;">🛡️</span>
-      <span style="font-weight: 500;">AgentOS Monitoring Active</span>
-    </div>
-    <div style="display: flex; gap: 8px;">
-      <button class="agentos-aws-btn" data-action="cost-check">
-        💰 Cost Check
-      </button>
-      <button class="agentos-aws-btn" data-action="security-scan">
-        🔒 Security Scan
-      </button>
-    </div>
-    <button class="agentos-banner-close" style="
-      background: none;
-      border: none;
-      font-size: 18px;
-      cursor: pointer;
-      color: #6b7280;
-    ">&times;</button>
-  `;
+  const bannerLeft = document.createElement('div');
+  bannerLeft.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+  const bannerIcon = document.createElement('span');
+  bannerIcon.style.fontSize = '20px';
+  bannerIcon.textContent = '🛡️';
+  bannerLeft.appendChild(bannerIcon);
+  const bannerLabel = document.createElement('span');
+  bannerLabel.style.fontWeight = '500';
+  bannerLabel.textContent = 'AgentOS Monitoring Active';
+  bannerLeft.appendChild(bannerLabel);
+  banner.appendChild(bannerLeft);
+
+  const bannerActions = document.createElement('div');
+  bannerActions.style.cssText = 'display: flex; gap: 8px;';
+  for (const { action, label } of [
+    { action: 'cost-check', label: '💰 Cost Check' },
+    { action: 'security-scan', label: '🔒 Security Scan' },
+  ]) {
+    const btn = document.createElement('button');
+    btn.className = 'agentos-aws-btn';
+    btn.dataset.action = action;
+    btn.textContent = label;
+    bannerActions.appendChild(btn);
+  }
+  banner.appendChild(bannerActions);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'agentos-banner-close';
+  closeBtn.style.cssText = 'background: none; border: none; font-size: 18px; cursor: pointer; color: #6b7280;';
+  closeBtn.textContent = '\u00d7';
+  banner.appendChild(closeBtn);
 
   const style = document.createElement('style');
   style.textContent = `
@@ -164,6 +174,7 @@ function injectEC2Integration() {
       border: 1px solid #fcd34d;
       border-radius: 8px;
     `;
+    // SECURITY: innerHTML with trusted content only — static extension UI, no user data interpolated
     section.innerHTML = `
       <div style="display: flex; align-items: flex-start; gap: 12px;">
         <span style="font-size: 24px;">⚠️</span>
@@ -231,16 +242,28 @@ function injectS3Integration() {
       align-items: center;
       gap: 12px;
     `;
-    notice.innerHTML = `
-      <span style="font-size: 20px;">🛡️</span>
-      <div style="flex: 1;">
-        <span style="font-size: 13px; color: #065f46;">
-          AgentOS is monitoring bucket permissions. 
-          <strong>All buckets compliant</strong> with security policies.
-        </span>
-      </div>
-      <button class="agentos-aws-btn" data-action="s3-audit">Run Full Audit</button>
-    `;
+    const noticeIcon = document.createElement('span');
+    noticeIcon.style.fontSize = '20px';
+    noticeIcon.textContent = '🛡️';
+    notice.appendChild(noticeIcon);
+
+    const noticeBody = document.createElement('div');
+    noticeBody.style.flex = '1';
+    const noticeText = document.createElement('span');
+    noticeText.style.cssText = 'font-size: 13px; color: #065f46;';
+    noticeText.appendChild(document.createTextNode('AgentOS is monitoring bucket permissions. '));
+    const noticeStrong = document.createElement('strong');
+    noticeStrong.textContent = 'All buckets compliant';
+    noticeText.appendChild(noticeStrong);
+    noticeText.appendChild(document.createTextNode(' with security policies.'));
+    noticeBody.appendChild(noticeText);
+    notice.appendChild(noticeBody);
+
+    const auditBtn = document.createElement('button');
+    auditBtn.className = 'agentos-aws-btn';
+    auditBtn.dataset.action = 's3-audit';
+    auditBtn.textContent = 'Run Full Audit';
+    notice.appendChild(auditBtn);
 
     list.insertBefore(notice, list.firstChild);
 
@@ -271,6 +294,7 @@ function injectBillingIntegration() {
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     `;
+    // SECURITY: innerHTML with trusted content only — static extension UI, no user data interpolated
     insights.innerHTML = `
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
         <span style="font-size: 24px;">🛡️</span>
@@ -311,25 +335,28 @@ function injectFAB() {
 
   const fab = document.createElement('div');
   fab.className = 'agentos-fab';
-  fab.innerHTML = `
-    <button class="agentos-fab-button" title="AgentOS">
-      🤖
-    </button>
-    <div class="agentos-fab-menu" style="display: none;">
-      <div class="agentos-fab-menu-item" data-action="cost-analysis">
-        💰 Cost Analysis
-      </div>
-      <div class="agentos-fab-menu-item" data-action="security-audit">
-        🔒 Security Audit
-      </div>
-      <div class="agentos-fab-menu-item" data-action="resource-optimizer">
-        ⚡ Optimize Resources
-      </div>
-      <div class="agentos-fab-menu-item" data-action="compliance-check">
-        ✅ Compliance Check
-      </div>
-    </div>
-  `;
+  const fabButton = document.createElement('button');
+  fabButton.className = 'agentos-fab-button';
+  fabButton.title = 'AgentOS';
+  fabButton.textContent = '🤖';
+  fab.appendChild(fabButton);
+
+  const fabMenu = document.createElement('div');
+  fabMenu.className = 'agentos-fab-menu';
+  fabMenu.style.display = 'none';
+  for (const { action, label } of [
+    { action: 'cost-analysis', label: '💰 Cost Analysis' },
+    { action: 'security-audit', label: '🔒 Security Audit' },
+    { action: 'resource-optimizer', label: '⚡ Optimize Resources' },
+    { action: 'compliance-check', label: '✅ Compliance Check' },
+  ]) {
+    const item = document.createElement('div');
+    item.className = 'agentos-fab-menu-item';
+    item.dataset.action = action;
+    item.textContent = label;
+    fabMenu.appendChild(item);
+  }
+  fab.appendChild(fabMenu);
 
   const style = document.createElement('style');
   style.textContent = `

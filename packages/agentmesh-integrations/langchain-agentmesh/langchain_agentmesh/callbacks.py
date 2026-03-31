@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Trust callback handlers for LangChain.
 
 This module provides callback handlers that monitor and enforce

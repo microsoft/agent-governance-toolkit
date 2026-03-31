@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Integration test for Feature 2: Lateral Thinking implementation.
 Tests the new ExecutionTrace, NodeState classes and generator's forbidden strategies.

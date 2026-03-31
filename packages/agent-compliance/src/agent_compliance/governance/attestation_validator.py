@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Governance attestation validation.
 
 Validates that PR descriptions contain properly filled out governance
