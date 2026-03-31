@@ -341,6 +341,54 @@ class TestTrustHelp:
         assert "trust" in result.output.lower()
 
     def test_subcommand_help(self, runner):
-        for cmd in ("list", "inspect", "history", "graph", "revoke", "attest"):
+        for cmd in ("list", "inspect", "history", "graph", "revoke", "attest", "report"):
             result = runner.invoke(app, ["trust", cmd, "--help"])
             assert result.exit_code == 0, f"Help for 'trust {cmd}' failed"
+
+
+# ---------------------------------------------------------------------------
+# trust report
+# ---------------------------------------------------------------------------
+
+class TestTrustReport:
+    def test_report_table(self, runner):
+        result = runner.invoke(app, ["trust", "report"])
+        assert result.exit_code == 0
+        assert "Trust Network" in result.output or "Agent" in result.output
+        assert "Total agents" in result.output
+
+    def test_report_json(self, runner):
+        result = runner.invoke(app, ["trust", "report", "--format", "json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert isinstance(data, list)
+        assert len(data) >= 3
+        for agent in data:
+            assert "agent_id" in agent
+            assert "trust_score" in agent
+            assert "trust_level" in agent
+            assert "successful_tasks" in agent
+            assert "failed_tasks" in agent
+            assert "last_activity" in agent
+            assert isinstance(agent["successful_tasks"], int)
+            assert isinstance(agent["failed_tasks"], int)
+
+    def test_report_json_flag(self, runner):
+        result = runner.invoke(app, ["trust", "report", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert isinstance(data, list)
+
+    def test_report_scores_in_range(self, runner):
+        result = runner.invoke(app, ["trust", "report", "--json"])
+        data = json.loads(result.output)
+        for agent in data:
+            assert 0 <= agent["trust_score"] <= 1000
+
+    def test_report_levels_valid(self, runner):
+        result = runner.invoke(app, ["trust", "report", "--json"])
+        data = json.loads(result.output)
+        valid_levels = {"Verified Partner", "Trusted", "Standard", "Probationary", "Untrusted",
+                        "verified_partner", "trusted", "standard", "probationary", "untrusted"}
+        for agent in data:
+            assert agent["trust_level"] in valid_levels
