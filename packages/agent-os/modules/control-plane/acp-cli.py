@@ -142,7 +142,7 @@ def cmd_agent_create(args, control_plane):
     except (ValueError, KeyError, PermissionError) as e:
         err_msg = "An error occurred during agent creation due to invalid input or permissions."
         if getattr(args, "json", False):
-            print(json.dumps({"status": "error", "message": err_msg, "type": e.__class__.__name__}, indent=2))
+            print(json.dumps({"status": "error", "message": err_msg, "type": "ValidationError"}, indent=2))
         else:
             print(f"Error: {err_msg}")
     except Exception:
@@ -204,7 +204,7 @@ def cmd_audit_show(args, control_plane):
         is_known = isinstance(e, (ValueError, PermissionError))
         msg = "A validation or permission error occurred." if is_known else "Failed to retrieve audit logs"
         if getattr(args, "json", False):
-            print(json.dumps({"error": msg, "type": e.__class__.__name__ if is_known else "InternalError"}, indent=2))
+            print(json.dumps({"error": msg, "type": "ValidationError" if is_known else "InternalError"}, indent=2))
         else:
             print(f"Error: {msg}")
 
@@ -274,7 +274,7 @@ def main():
         is_known = isinstance(e, (ValueError, PermissionError, FileNotFoundError))
         msg = "An error occurred matching input validation or file permission." if is_known else "An internal error occurred"
         if getattr(args, "json", False):
-            print(json.dumps({"error": msg, "type": e.__class__.__name__ if is_known else "InternalError"}, indent=2))
+            print(json.dumps({"error": msg, "type": "ValidationError" if is_known else "InternalError"}, indent=2))
         else:
             print(f"Error: {msg}")
         return 1

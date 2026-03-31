@@ -1223,13 +1223,13 @@ def main() -> int:
         # Sanitize exception message to avoid leaking internal details
         # For public output, we prefer generic messages for unexpected exceptions
         is_known_error = isinstance(e, (FileNotFoundError, ValueError, PermissionError))
-        error_msg = str(e) if is_known_error else "An internal error occurred. Use AGENTOS_DEBUG=1 for details."
+        error_msg = "A file, value, or permission error occurred." if is_known_error else "An internal error occurred."
         
         if getattr(args, "json", False) or (hasattr(args, "format") and args.format == "json"):
             print(json.dumps({
                 "status": "error",
                 "message": error_msg,
-                "error_type": e.__class__.__name__ if is_known_error else "InternalError"
+                "error_type": "ValidationError" if is_known_error else "InternalError"
             }, indent=2))
         else:
             print(format_error(error_msg))

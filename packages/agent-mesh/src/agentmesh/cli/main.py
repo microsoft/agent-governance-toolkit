@@ -297,7 +297,7 @@ def register(agent_dir: str, name: str = None, output_json: bool = False):
         err_msg = "A validation or permission error occurred."
         logger.error(f"Registration failed: {e}")
         if output_json:
-            print(json.dumps({"status": "error", "message": err_msg, "type": e.__class__.__name__}, indent=2))
+            print(json.dumps({"status": "error", "message": err_msg, "type": "ValidationError"}, indent=2))
         else:
             console.print(f"[red]Error: {err_msg}[/red]")
         return
@@ -452,7 +452,7 @@ def policy(policy_file: str, validate: bool, output_json: bool):
         err_msg = "Failed to parse or validate the policy file."
         logger.error(f"Policy load failed: {e}")
         if output_json:
-            print(json.dumps({"status": "error", "message": err_msg, "type": e.__class__.__name__}, indent=2))
+            print(json.dumps({"status": "error", "message": err_msg, "type": "ValidationError"}, indent=2))
         else:
             console.print(f"[red]Error: {err_msg}[/red]")
     except Exception:
