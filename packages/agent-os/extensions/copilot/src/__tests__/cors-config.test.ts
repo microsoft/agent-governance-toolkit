@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 describe('CORS allowlist configuration', () => {
   const originalEnv = process.env;
 

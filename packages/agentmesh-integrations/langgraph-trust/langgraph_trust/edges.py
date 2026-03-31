@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Trust-aware edge conditions for LangGraph add_conditional_edges."""
 
 from __future__ import annotations

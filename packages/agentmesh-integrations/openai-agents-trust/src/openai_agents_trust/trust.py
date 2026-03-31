@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Multi-dimensional trust scoring for agents."""
 
 from __future__ import annotations

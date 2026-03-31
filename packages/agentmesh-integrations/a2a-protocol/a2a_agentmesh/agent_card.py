@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 A2A-compliant Agent Card — maps AgentMesh identity to A2A discovery format.
 

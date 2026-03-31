@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """GovernancePolicyChecker component for Haystack pipelines.
 
 Loads policies from YAML and enforces tool allowlists/blocklists,

@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 

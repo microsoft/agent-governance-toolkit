@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Trust-scored routing node for Flowise flows."""
 
 from __future__ import annotations

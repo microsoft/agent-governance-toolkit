@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for langgraph_trust.policy — PolicyCheckpoint and GovernancePolicy."""
 
 from langgraph_trust.policy import GovernancePolicy, PolicyCheckpoint

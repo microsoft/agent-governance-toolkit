@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Compliance validation component for Langflow flows.
 
 Validates agent actions against compliance frameworks:

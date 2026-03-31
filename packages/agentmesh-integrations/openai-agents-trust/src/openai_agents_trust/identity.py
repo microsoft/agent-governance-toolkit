@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Lightweight agent identity using Ed25519 signatures."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """AuditLogger component for Haystack pipelines.
 
 Append-only audit log with SHA-256 hash chain hashing and JSONL export.

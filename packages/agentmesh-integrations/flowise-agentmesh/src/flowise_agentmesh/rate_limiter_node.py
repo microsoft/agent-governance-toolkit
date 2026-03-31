@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Token bucket rate limiter node for Flowise flows."""
 
 from __future__ import annotations

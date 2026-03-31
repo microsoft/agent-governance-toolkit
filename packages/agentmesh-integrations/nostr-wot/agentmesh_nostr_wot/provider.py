@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 Nostr Web of Trust provider for AgentMesh trust engine.
 

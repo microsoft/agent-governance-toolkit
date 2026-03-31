@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """GovernanceToolset — apply governance to all tools in a PydanticAI agent.
 
 Wraps PydanticAI's toolset pattern to intercept every tool call

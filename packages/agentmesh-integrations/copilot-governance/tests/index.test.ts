@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 import { describe, it, expect } from "vitest";
 import { reviewCode, formatReviewResult } from "../src/reviewer";
 import { validatePolicy, formatPolicyValidation } from "../src/policy-validator";

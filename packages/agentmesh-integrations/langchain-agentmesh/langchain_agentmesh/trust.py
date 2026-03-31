@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Trust verification and handshake protocols for AgentMesh.
 
 This module provides trust verification between agents, including

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for langflow-agentmesh package.
 
 Tests governance policy, governance component, trust router,

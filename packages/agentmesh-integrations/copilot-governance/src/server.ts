@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 /**
  * Lightweight HTTP server for the GitHub Copilot governance extension.
  *

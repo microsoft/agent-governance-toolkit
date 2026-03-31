@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """govern() decorator for PydanticAI tool functions.
 
 Wraps tool functions with governance policy checks, semantic intent

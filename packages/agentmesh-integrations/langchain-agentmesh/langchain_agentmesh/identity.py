@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Cryptographic identity management for AgentMesh.
 
 This module provides verification (Cryptographic Multi-Vector Keys) based identity

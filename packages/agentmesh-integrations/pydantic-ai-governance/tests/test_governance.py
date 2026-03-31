@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for pydantic-ai-governance package.
 
 Tests the governance policy, semantic intent classification,

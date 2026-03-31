@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Semantic intent classification for tool calls.
 
 Basic classifier that categorizes tool call intent into threat categories.

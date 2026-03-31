@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for langgraph_trust.edges — trust_edge and trust_router."""
 
 from langgraph_trust.edges import trust_edge, trust_router

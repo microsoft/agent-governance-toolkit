@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Trust management for Dify agents and workflows."""
 
 from __future__ import annotations
