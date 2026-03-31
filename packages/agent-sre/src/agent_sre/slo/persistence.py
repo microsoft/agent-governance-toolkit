@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-import time
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from pathlib import Path
@@ -133,7 +132,7 @@ def _validate_db_path(raw: str) -> str:
 
     Returns the normalised, resolved path string.
     """
-    import os, tempfile as _tempfile
+    import tempfile as _tempfile
 
     if raw == ":memory:":
         return raw
