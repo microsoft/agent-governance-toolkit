@@ -31,14 +31,14 @@
     "directory": "packages/agent-mesh/sdks/typescript"
   },
   "devDependencies": {
-    "typescript": "^6.0.2",
+    "typescript": "^5.7.0",
     "@types/node": "^25.5.0",
     "jest": "^30.3.0",
     "ts-jest": "^29.1.0",
     "@types/jest": "^30.0.0",
-    "eslint": "^10.1.0",
+    "eslint": "^9.0.0",
     "@typescript-eslint/parser": "^8.58.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.58.0",
     "rimraf": "^6.1.3"
   },
   "dependencies": {
