@@ -338,6 +338,17 @@ class ComplianceEngine:
             evidence_required=["human_review"] if ComplianceFramework.GDPR in self.frameworks else [],
         )
 
+        # Supply chain audit
+        self._mappings["supply_chain_audit"] = ComplianceMapping(
+            action_type="supply_chain_audit",
+            controls=["SOC2-CC7.2", "EUAI-ART9"],
+            evidence_generated=[
+                "Package version pinning",
+                "Dependency freshness validation",
+                "SBOM generation",
+            ],
+        )
+
     def _add_control(self, control: ComplianceControl) -> None:
         """Add a control to the registry."""
         self._controls[control.control_id] = control

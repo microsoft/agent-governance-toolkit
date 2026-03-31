@@ -30,3 +30,5 @@ try:
     from agentmesh import TrustManager  # noqa: F401
 except ImportError:
     pass
+
+from agent_compliance.supply_chain import SupplyChainGuard, SupplyChainFinding, SupplyChainConfig  # noqa: F401
