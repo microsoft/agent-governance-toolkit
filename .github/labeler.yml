@@ -34,3 +34,54 @@
 "tests":
   - changed-files:
       - any-glob-to-any-file: "**/tests/**"
+
+integration/flowise-agentmesh:
+  - "packages/agentmesh-integrations/flowise-agentmesh/**"
+
+integration/haystack-agentmesh:
+  - "packages/agentmesh-integrations/haystack-agentmesh/**"
+
+integration/langchain-agentmesh:
+  - "packages/agentmesh-integrations/langchain-agentmesh/**"
+
+integration/langflow-agentmesh:
+  - "packages/agentmesh-integrations/langflow-agentmesh/**"
+
+integration/langgraph-trust:
+  - "packages/agentmesh-integrations/langgraph-trust/**"
+
+integration/llamaindex-agentmesh:
+  - "packages/agentmesh-integrations/llamaindex-agentmesh/**"
+
+integration/mastra-agentmesh:
+  - "packages/agentmesh-integrations/mastra-agentmesh/**"
+
+integration/mcp-trust-proxy:
+  - "packages/agentmesh-integrations/mcp-trust-proxy/**"
+
+integration/nostr-wot:
+  - "packages/agentmesh-integrations/nostr-wot/**"
+
+integration/openai-agents-agentmesh:
+  - "packages/agentmesh-integrations/openai-agents-agentmesh/**"
+
+integration/openai-agents-trust:
+  - "packages/agentmesh-integrations/openai-agents-trust/**"
+
+integration/pydantic-ai-governance:
+  - "packages/agentmesh-integrations/pydantic-ai-governance/**"
+
+integration/a2a-protocol:
+  - "packages/agentmesh-integrations/a2a-protocol/**"
+
+integration/adk-agentmesh:
+  - "packages/agentmesh-integrations/adk-agentmesh/**"
+
+integration/copilot-governance:
+  - "packages/agentmesh-integrations/copilot-governance/**"
+
+integration/crewai-agentmesh:
+  - "packages/agentmesh-integrations/crewai-agentmesh/**"
+
+integration/dify:
+  - "packages/agentmesh-integrations/dify/**"
