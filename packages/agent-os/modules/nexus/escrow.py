@@ -7,11 +7,10 @@ Implements the "Reward" mechanism where agents bet on task outcomes.
 Credits are escrowed and released based on SCAK validation.
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Literal
+from datetime import datetime, timezone
+from typing import Optional, Literal, Any
 import hashlib
 import uuid
-import asyncio
 from . import crypto
 
 from .schemas.escrow import (
@@ -332,7 +331,7 @@ class ProofOfOutcome:
     def __init__(
         self,
         escrow_manager: Optional[EscrowManager] = None,
-        scak_validator: Optional[any] = None,  # Would be SCAK validator
+        scak_validator: Optional[Any] = None,  # Would be SCAK validator
     ):
         self.escrow_manager = escrow_manager or EscrowManager()
         self.scak_validator = scak_validator
@@ -346,7 +345,7 @@ class ProofOfOutcome:
         timeout_seconds: int = 3600,
         require_scak: bool = True,
         drift_threshold: float = 0.15,
-        private_key: Optional[any] = None,
+        private_key: Optional[Any] = None,
     ) -> EscrowReceipt:
         """Create an escrow for a task."""
         request = EscrowRequest(

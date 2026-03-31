@@ -7,11 +7,10 @@ Manages agent registration, discovery, and manifest storage for the Nexus networ
 """
 
 from datetime import datetime, timezone
-from typing import Optional, AsyncIterator
+from typing import Optional
 from dataclasses import dataclass, field
 import hashlib
 import json
-import asyncio
 from . import crypto
 
 from .schemas.manifest import AgentManifest, AgentIdentity
@@ -108,14 +107,14 @@ class AgentRegistry:
         if validation_errors:
             raise InvalidManifestError(agent_did, validation_errors)
         
+        # Set registration timestamp first to prevent legacy bypass
+        manifest.registered_at = datetime.now(timezone.utc)
+        manifest.last_seen = datetime.now(timezone.utc)
+        
         # Verify signature against verification key
         agent_key = manifest.identity.verification_key
         if not self._is_unsigned_legacy_entry(manifest):
             crypto.verify_signature(agent_key, signature, manifest)
-        
-        # Set registration timestamp
-        manifest.registered_at = datetime.now(timezone.utc)
-        manifest.last_seen = datetime.now(timezone.utc)
         
         # Calculate manifest hash
         manifest_hash = self._compute_manifest_hash(manifest)

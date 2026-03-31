@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
@@ -43,7 +43,7 @@ def canonical_payload(data: Any) -> bytes:
     if isinstance(data, BaseModel):
         # Convert Pydantic model to dict, excluding fields that shouldn't be signed
         # These fields are usually added AFTER signing or are metadata
-        raw_data = data.model_dump(exclude={"nexus_signature", "last_seen", "trust_score"})
+        raw_data = data.model_dump(exclude={"nexus_signature", "last_seen", "trust_score", "registered_at"})
     elif isinstance(data, dict):
         raw_data = data.copy()
     else:
