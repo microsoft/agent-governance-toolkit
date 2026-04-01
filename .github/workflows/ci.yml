@@ -34,6 +34,8 @@ jobs:
               - 'packages/agent-hypervisor/**'
               - 'packages/agent-sre/**'
               - 'packages/agent-compliance/**'
+              - 'packages/agent-runtime/**'
+              - 'packages/agent-lightning/**'
               - 'scripts/**'
               - 'requirements/**'
             dotnet:
@@ -63,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [agent-os, agent-mesh, agent-hypervisor, agent-sre, agent-compliance]
+        package: [agent-os, agent-mesh, agent-hypervisor, agent-sre, agent-compliance, agent-runtime, agent-lightning]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -82,7 +84,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [agent-os, agent-mesh, agent-hypervisor, agent-sre, agent-compliance]
+        package: [agent-os, agent-mesh, agent-hypervisor, agent-sre, agent-compliance, agent-runtime, agent-lightning]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
         exclude:
           - package: agent-mesh
@@ -90,6 +92,10 @@ jobs:
           - package: agent-hypervisor
             python-version: "3.10"
           - package: agent-compliance
+            python-version: "3.10"
+          - package: agent-runtime
+            python-version: "3.10"
+          - package: agent-lightning
             python-version: "3.10"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -104,6 +110,29 @@ jobs:
       - name: Test ${{ matrix.package }}
         working-directory: packages/${{ matrix.package }}
         run: pytest tests/ -q --tb=short
+
+  # ── PyPI package build (only when Python files change) ────────────────
+  build-pypi:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [agent-os, agent-mesh, agent-hypervisor, agent-sre, agent-compliance, agent-runtime, agent-lightning]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Install build tools
+        run: pip install --no-cache-dir build==1.2.1 setuptools
+      - name: Build ${{ matrix.package }}
+        working-directory: packages/${{ matrix.package }}
+        run: python -m build
+      - name: Verify wheel
+        working-directory: packages/${{ matrix.package }}
+        run: ls -la dist/*.whl
 
   # ── Python dependency safety (only when Python files change) ──────────
   security:
@@ -122,7 +151,7 @@ jobs:
         env:
           GIT_TERMINAL_PROMPT: "0"
         run: |
-          for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance; do
+          for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance agent-runtime agent-lightning; do
             echo "=== $pkg ==="
             cd packages/$pkg
             pip install --no-cache-dir -e . 2>/dev/null || true
@@ -146,6 +175,12 @@ jobs:
       - name: Test .NET SDK
         working-directory: packages/agent-governance-dotnet
         run: dotnet test --configuration Release --verbosity normal --no-build
+      - name: Pack NuGet
+        working-directory: packages/agent-governance-dotnet
+        run: dotnet pack src/AgentGovernance/AgentGovernance.csproj --configuration Release --no-build --output ./nupkg
+      - name: Verify NuGet package
+        working-directory: packages/agent-governance-dotnet
+        run: ls -la ./nupkg/*.nupkg
 
   # ── Integration tests (only when integration packages change) ────────
   test-integrations:
@@ -403,7 +438,7 @@ jobs:
   # success. Configure this as the single required status check.
   ci-complete:
     if: always()
-    needs: [changes, lint, test, security, test-dotnet, test-integrations, dependency-scan, workflow-security, test-integrations-ts, build-npm, build-rust, build-go]
+    needs: [changes, lint, test, build-pypi, security, test-dotnet, test-integrations, dependency-scan, workflow-security, test-integrations-ts, build-npm, build-rust, build-go]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
