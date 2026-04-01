@@ -356,13 +356,16 @@ stages:
               ls -la $(Pipeline.Workspace)/nuget-publish/
             displayName: 'List packages'
 
-          - task: NuGetCommand@2
-            displayName: 'Push to NuGet.org'
+          - task: NuGetAuthenticate@1
+            displayName: 'Authenticate to NuGet.org'
             inputs:
-              command: 'push'
-              packagesToPush: '$(Pipeline.Workspace)/nuget-publish/**/*.nupkg;!$(Pipeline.Workspace)/nuget-publish/**/*.symbols.nupkg'
-              nuGetFeedType: 'external'
-              publishFeedCredentials: 'NuGet.org'
+              nuGetServiceConnections: 'NuGet.org'
+
+          - script: |
+              dotnet nuget push "$(Pipeline.Workspace)/nuget-publish/**/*.nupkg" \
+                --source https://api.nuget.org/v3/index.json \
+                --skip-duplicate
+            displayName: 'Push to NuGet.org'
 
   # =======================================================
   # RUST (crates.io) — agentmesh crate
