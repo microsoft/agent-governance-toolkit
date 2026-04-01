@@ -13,6 +13,7 @@ Commands:
 from __future__ import annotations
 
 import argparse
+from typing import Optional
 import os
 import sys
 import json
