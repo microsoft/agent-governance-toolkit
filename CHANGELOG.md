@@ -21,6 +21,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added "Secure Error Handling" sections to primary documentation to guide users on interpreting sanitized machine-readable outputs.
 
 
+## [3.0.1] - 2026-04-01
+
+### Added
+- Rust SDK (`agentmesh` crate) for native governance integration
+- Go SDK module for policy, trust, audit, and identity
+- Trust report CLI command (`agentmesh trust report`)
+- Secret scanning workflow (Gitleaks)
+- 4 new fuzz targets (prompt injection, MCP scanner, sandbox, trust scoring)
+- Dependabot coverage expanded to 13 ecosystems (+ cargo, gomod, nuget, docker)
+- 7 new tutorials (Rust SDK, Go SDK, delegation chains, budgets, security, SBOM, MCP scan)
+- ESRP Release publishing for Rust crates (crates.io)
+- Entra Agent ID adapter for managed identity integration
+- Secure code generation templates with AST validation
+- SBOM generation (SPDX/CycloneDX) with Ed25519 artifact signing
+- Tenant isolation checklist and private endpoint deployment examples
+
+### Fixed
+- ADO build failures: shebang position (TS18026), Express 5 type narrowing (TS2345)
+- NuGetCommand@2 → DotNetCoreCLI@2 for Ubuntu 24.04 compatibility
+- path-to-regexp ReDoS vulnerability (8.3.0 → 8.4.0)
+- Python 3.10 CI matrix exclusions for packages requiring >=3.11
+- TypeScript eslint peer dependency conflicts resolved
+- Rust crate dependency pins (rand 0.8, sha2 0.10, thiserror 1)
+- Ruff lint errors in agent-sre (E741, F401, E401)
+- Policy provider test mock contract alignment
+- Dify integration removed from CI (archived package)
+- Notebook dependency scanner regex hardened
+
+### Changed
+- PUBLISHING.md rewritten with full Microsoft compliance policies (MCR, ESRP, Conda, PMC)
+- Branch protection: 13 required status checks, dismiss stale reviews, squash-only merges
+- README updated with 5 SDK languages, 20+ framework integrations, security tooling table
+
+
 ## [3.0.0] - 2026-03-26
 
 ### Changed

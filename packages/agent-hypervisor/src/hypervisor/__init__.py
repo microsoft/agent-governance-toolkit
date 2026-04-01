@@ -16,7 +16,7 @@ Usage:
 Version: 2.0.0
 """
 
-__version__ = "2.0.2"
+__version__ = "3.0.1"
 
 # Centralized constants
 from hypervisor import constants  # noqa: F401

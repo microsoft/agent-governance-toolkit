@@ -1,6 +1,6 @@
 {
   "name": "@microsoft/agent-os-copilot-extension",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Public Preview — AgentOS GitHub Copilot Extension: Build safe AI agents with natural language and 0% policy violations",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -62,7 +62,7 @@
     "displayName": "AgentOS",
     "description": "Build safe AI agents with natural language and 0% policy violations",
     "publisher": "agent-os",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "capabilities": {
       "filter": true,
       "chat": true,

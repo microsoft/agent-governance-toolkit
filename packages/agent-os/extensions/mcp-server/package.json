@@ -1,6 +1,6 @@
 {
   "name": "@microsoft/agentos-mcp-server",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Public Preview — AgentOS MCP Server for Claude Desktop: Build, deploy, and manage policy-compliant autonomous agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

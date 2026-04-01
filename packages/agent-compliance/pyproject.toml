@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-governance-toolkit"
-version = "3.0.0"
+version = "3.0.1"
 description = "Public Preview — Unified installer and runtime policy enforcement for the Agent Governance Toolkit"
 readme = "README.md"
 license = "MIT"

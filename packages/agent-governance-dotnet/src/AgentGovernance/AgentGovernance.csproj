@@ -4,7 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>AgentGovernance</RootNamespace>
     <AssemblyName>AgentGovernance</AssemblyName>
-    <Version>2.1.0</Version>
+    <Version>3.0.1</Version>
     <Description>Agent Governance Toolkit — .NET SDK for policy enforcement, rate limiting, zero-trust identity, OpenTelemetry metrics, and audit logging for autonomous AI agents. Compatible with Microsoft Agent Framework and Semantic Kernel.</Description>
     <PackageId>Microsoft.AgentGovernance</PackageId>
     <Authors>Microsoft</Authors>
