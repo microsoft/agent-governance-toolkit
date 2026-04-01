@@ -394,7 +394,7 @@ stages:
 
           - script: |
               cargo package --list
-              cargo package
+              cargo package --allow-dirty
               echo "=== Packaged crate ==="
               ls -la target/package/*.crate
               # ESRP requires a zip containing the .crate file(s)
