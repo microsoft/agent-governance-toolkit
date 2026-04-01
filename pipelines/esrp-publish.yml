@@ -356,14 +356,10 @@ stages:
               ls -la $(Pipeline.Workspace)/nuget-publish/
             displayName: 'List packages'
 
-          - task: NuGetAuthenticate@1
-            displayName: 'Authenticate to NuGet.org'
-            inputs:
-              nuGetServiceConnections: 'NuGet.org'
-
           - script: |
               dotnet nuget push "$(Pipeline.Workspace)/nuget-publish/**/*.nupkg" \
                 --source https://api.nuget.org/v3/index.json \
+                --api-key $(NUGET_API_KEY) \
                 --skip-duplicate
             displayName: 'Push to NuGet.org'
 
