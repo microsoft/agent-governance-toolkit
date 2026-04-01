@@ -15,6 +15,7 @@ Commands:
 
 import logging
 import json
+import os
 import yaml
 import re
 from pathlib import Path
@@ -478,7 +479,7 @@ def audit(agent: str, limit: int, fmt: str, output_json: bool):
         agent = agent.lower().strip()
         # Stricter pattern only allows alphanumeric, hyphen, and colon in expected segments
         if not re.fullmatch(r"^(?:agent-[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*|did:agentmesh:[a-zA-Z0-9]+(?:[-:][a-zA-Z0-9]+)*)$", agent) or len(agent) > 128:
-            handle_error(ValueError(f"Invalid agent identifier format"), output_json, custom_msg=f"Invalid agent identifier format")
+            handle_error(ValueError("Invalid agent identifier format"), output_json, custom_msg="Invalid agent identifier format")
             return
         entries = [e for e in entries if e["agent"].lower() == agent]
 
