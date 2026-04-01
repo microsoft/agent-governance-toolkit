@@ -558,9 +558,9 @@ export class MetricsDashboardPanel {
                 <div class="violation-item" role="listitem">
                     <span class="violation-name">
                         <span style="color: #dc3545;">⚠️</span>
-                        \${v.name.replace(/_/g, ' ')}
+                        \${(v.name || '').replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c] || c)).replace(/_/g, ' ')}
                     </span>
-                    <span class="violation-count">\${v.count}</span>
+                    <span class="violation-count">\${Number(v.count) || 0}</span>
                 </div>
             \`).join('');
         }

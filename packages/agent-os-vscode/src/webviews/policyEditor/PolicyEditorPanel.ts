@@ -901,11 +901,16 @@ policies:
             card.type = 'button';
             card.className = 'template-card';
             card.setAttribute('aria-label', 'Load template ' + template.name + '. ' + template.description);
-            card.innerHTML = \`
-                <h3>\${template.name}</h3>
-                <p>\${template.description}</p>
-                <span class="category category-\${template.category}">\${template.category}</span>
-            \`;
+            const h3 = document.createElement('h3');
+            h3.textContent = template.name;
+            const p = document.createElement('p');
+            p.textContent = template.description;
+            const span = document.createElement('span');
+            span.className = 'category category-' + template.category;
+            span.textContent = template.category;
+            card.appendChild(h3);
+            card.appendChild(p);
+            card.appendChild(span);
             card.addEventListener('click', () => loadTemplate(template.id));
             templatesContainer.appendChild(card);
         });
@@ -987,16 +992,26 @@ policies:
             result.errors.forEach(error => {
                 const div = document.createElement('div');
                 div.className = 'error';
-                div.innerHTML = \`<strong>Line \${error.line}:</strong> \${error.message}\`;
+                const strong = document.createElement('strong');
+                strong.textContent = 'Line ' + error.line + ':';
+                div.appendChild(strong);
+                div.appendChild(document.createTextNode(' ' + error.message));
                 container.appendChild(div);
             });
 
             result.warnings.forEach(warning => {
                 const div = document.createElement('div');
                 div.className = 'warning';
-                div.innerHTML = \`<strong>Line \${warning.line}:</strong> \${warning.message}\`;
+                const strong = document.createElement('strong');
+                strong.textContent = 'Line ' + warning.line + ':';
+                div.appendChild(strong);
+                div.appendChild(document.createTextNode(' ' + warning.message));
                 if (warning.suggestion) {
-                    div.innerHTML += \`<br><small>💡 \${warning.suggestion}</small>\`;
+                    const br = document.createElement('br');
+                    const small = document.createElement('small');
+                    small.textContent = '💡 ' + warning.suggestion;
+                    div.appendChild(br);
+                    div.appendChild(small);
                 }
                 container.appendChild(div);
             });
