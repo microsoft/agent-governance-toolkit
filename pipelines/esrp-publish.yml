@@ -394,40 +394,59 @@ stages:
 
           - script: |
               cargo package --list
-              cargo package --allow-dirty
+              cargo package
               echo "=== Packaged crate ==="
-              ls -la target/package/
+              ls -la target/package/*.crate
+              # ESRP requires a zip containing the .crate file(s)
+              mkdir -p $(Pipeline.Workspace)/rust-packages
+              cp target/package/*.crate $(Pipeline.Workspace)/rust-packages/
             workingDirectory: 'packages/agent-mesh/sdks/rust/agentmesh'
             displayName: 'Package crate'
 
           - task: PublishPipelineArtifact@1
             inputs:
-              targetPath: 'packages/agent-mesh/sdks/rust/agentmesh/target/package'
+              targetPath: '$(Pipeline.Workspace)/rust-packages'
               artifact: 'rust-agentmesh'
               publishLocation: 'pipeline'
             displayName: 'Publish crate artifact'
 
   - stage: Publish_Rust
-    displayName: 'Publish to crates.io'
+    displayName: 'Publish to crates.io via ESRP'
     dependsOn: Build_Rust
     condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'rust'), eq('${{ parameters.target }}', 'all')))
     jobs:
       - job: PublishCrate
-        displayName: 'Publish agentmesh to crates.io'
+        displayName: 'ESRP Publish agentmesh to crates.io'
         steps:
-          - checkout: self
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifact: 'rust-agentmesh'
+              targetPath: '$(Pipeline.Workspace)/rust-publish'
+            displayName: 'Download crate artifact'
 
           - script: |
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${{ parameters.rustVersion }}
-              echo "##vso[task.prependpath]$HOME/.cargo/bin"
-            displayName: 'Install Rust ${{ parameters.rustVersion }}'
+              echo "=== Crates to publish ==="
+              ls -la $(Pipeline.Workspace)/rust-publish/
+            displayName: 'List crate packages'
 
-          - script: |
-              cargo publish
-            workingDirectory: 'packages/agent-mesh/sdks/rust/agentmesh'
-            displayName: 'Publish to crates.io'
-            env:
-              CARGO_REGISTRY_TOKEN: $(CRATES_IO_TOKEN)
+          - task: EsrpRelease@11
+            displayName: 'ESRP Publish to crates.io'
+            inputs:
+              connectedservicename: 'Agent Governance Toolkit'
+              usemanagedidentity: true
+              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
+              signcertname: '$(ESRP_CERT_IDENTIFIER)'
+              clientid: '$(ESRP_CLIENT_ID)'
+              intent: 'PackageDistribution'
+              contenttype: 'Rust'
+              contentsource: 'Folder'
+              folderlocation: '$(Pipeline.Workspace)/rust-publish'
+              waitforreleasecompletion: true
+              owners: '$(ESRP_OWNERS)'
+              approvers: '$(ESRP_APPROVERS)'
+              serviceendpointurl: 'https://api.esrp.microsoft.com'
+              mainpublisher: 'ESRPRELPACMAN'
+              domaintenantid: '$(ESRP_DOMAIN_TENANT_ID)'
 
   # =======================================================
   # GO — github.com/microsoft/agent-governance-toolkit module
