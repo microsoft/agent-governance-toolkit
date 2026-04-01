@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 pub const MAX_DELEGATION_DEPTH: u32 = 10;
 
 /// An agent's cryptographic identity (Ed25519 key pair + DID).
+#[derive(Debug)]
 pub struct AgentIdentity {
     /// Decentralised identifier, e.g. `did:agentmesh:my-agent`.
     pub did: String,
