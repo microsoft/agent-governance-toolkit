@@ -3,7 +3,7 @@ name = "agentmesh"
 version = "3.0.2"
 edition = "2021"
 description = "Public Preview — Rust SDK for the AgentMesh governance framework (policy, trust, audit, identity)"
-license = "MIT"
+license = {text = "MIT"}
 repository = "https://github.com/microsoft/agent-governance-toolkit"
 documentation = "https://docs.rs/agentmesh"
 readme = "README.md"
@@ -17,7 +17,7 @@ serde_json = "=1.0.149"
 serde_yaml = "=0.9.34"
 sha2 = "=0.10.9"
 ed25519-dalek = { version = "=2.2.0", features = ["rand_core"] }
-rand = "=0.10.0"
+rand = "=0.8.5"
 thiserror = "=2.0.18"
 
 [dev-dependencies]

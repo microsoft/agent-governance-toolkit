@@ -7,7 +7,7 @@ name = "crewai-agentmesh"
 version = "3.0.2"
 description = "AgentMesh trust layer for CrewAI — trust-verified crew member selection and capability-gated task assignment"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
     { name = "Microsoft Corporation" }

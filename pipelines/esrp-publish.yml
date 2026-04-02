@@ -213,7 +213,7 @@ stages:
               inputs:
                 version: '${{ parameters.nodeVersion }}'
 
-            - script: npm ci --ignore-scripts --legacy-peer-deps
+            - script: npm install --ignore-scripts --legacy-peer-deps
               workingDirectory: '${{ pkg.path }}'
               displayName: 'Install dependencies'
 

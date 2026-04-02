@@ -7,7 +7,7 @@ name = "nexus-trust-exchange"
 version = "3.0.2"
 description = "Agent Trust Exchange - viral registry and communication board for AI agents (RESEARCH PROTOTYPE)"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
     { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" },

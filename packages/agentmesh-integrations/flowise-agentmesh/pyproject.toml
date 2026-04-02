@@ -7,7 +7,7 @@ name = "flowise-agentmesh"
 version = "3.0.2"
 description = "AgentMesh governance nodes for Flowise — policy enforcement, trust gating, audit logging, and rate limiting for visual AI flows"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
     { name = "Microsoft Corporation" },

@@ -7,7 +7,7 @@ name = "mcp-trust-server"
 version = "3.0.2"
 description = "MCP server exposing AgentMesh trust management tools for Claude, GPT, and other AI agents"
 readme = "README.md"
-license = "Apache-2.0"
+license = {text = "Apache-2.0"}
 requires-python = ">=3.11"
 authors = [
     { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }

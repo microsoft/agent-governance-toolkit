@@ -7,7 +7,7 @@ name = "openai-agents-agentmesh"
 version = "3.0.2"
 description = "AgentMesh trust layer for OpenAI Agents SDK — trust-gated function calling and handoff verification"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [{ name = "Microsoft Corporation" }]
 keywords = ["openai", "agents", "trust", "multi-agent", "agentmesh", "handoff"]

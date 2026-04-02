@@ -7,7 +7,7 @@ name = "agentmesh-runtime"
 version = "3.0.2"
 description = "Public Preview — AgentMesh Runtime: Execution supervisor for multi-agent sessions with privilege rings, saga orchestration, and audit trails"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},

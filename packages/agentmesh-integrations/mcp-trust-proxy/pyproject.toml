@@ -7,7 +7,7 @@ name = "mcp-trust-proxy"
 version = "3.0.2"
 description = "MCP proxy that wraps any MCP tool with AgentMesh trust verification"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [{ name = "Microsoft Corporation" }]
 keywords = ["mcp", "agents", "trust", "proxy", "agentmesh"]

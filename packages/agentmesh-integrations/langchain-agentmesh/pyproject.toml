@@ -7,7 +7,7 @@ name = "langchain-agentmesh"
 version = "3.0.2"
 description = "AgentMesh trust layer integration for LangChain - cryptographic identity and trust-gated tool execution"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
     { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
