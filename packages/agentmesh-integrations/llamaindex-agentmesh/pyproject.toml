@@ -10,7 +10,7 @@ dev = [
 ]
 
 [project]
-name = "llama-index-agent-agentmesh"
+name = "llama_index_agent_agentmesh"
 version = "3.0.2"
 description = "AgentMesh trust layer integration for LlamaIndex agents"
 authors = [{name = "AgentMesh Contributors"}]

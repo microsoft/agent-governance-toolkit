@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0,<62.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "defi-sentinel-demo"
+name = "defi_sentinel_demo"
 version = "3.0.2"
 description = "DeFi Risk Sentinel demo using Agent OS"
 requires-python = ">=3.10"

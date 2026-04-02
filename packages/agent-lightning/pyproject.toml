@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0,<69.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agentmesh-lightning"
+name = "agentmesh_lightning"
 version = "3.0.2"
 description = "Public Preview — Agent-Lightning RL integration for the Agent Governance Toolkit: governed training with policy enforcement"
 readme = "README.md"
