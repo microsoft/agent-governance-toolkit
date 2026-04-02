@@ -13,28 +13,27 @@ Commands:
 - policy: Manage policies
 """
 
-import logging
 import json
+import logging
 import os
-import yaml
 import re
 from pathlib import Path
-from typing import Optional
 
 import click
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
+import yaml
 from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 console = Console()
 logger = logging.getLogger(__name__)
 
 
-def handle_error(e: Exception, output_json: bool = False, custom_msg: Optional[str] = None):
+def handle_error(e: Exception, output_json: bool = False, custom_msg: str | None = None):
     """Centralized error handler for CLI commands."""
     is_known = isinstance(e, (ImportError, ValueError, KeyError, PermissionError, FileNotFoundError, yaml.YAMLError, json.JSONDecodeError))
-    
+
     # Sanitize message: use custom msg if provided, else generic for unknown errors
     if custom_msg:
         err_msg = custom_msg
@@ -43,10 +42,10 @@ def handle_error(e: Exception, output_json: bool = False, custom_msg: Optional[s
         err_msg = "A validation, permission, or configuration error occurred."
     else:
         err_msg = "An unexpected internal error occurred."
-    
+
     # Log the full details for debugging (not shown to user unless DEBUG is on)
     logger.error(f"CLI Error: {e}", exc_info=True)
-    
+
     if output_json:
         status = "error"
         type_field = "ValidationError" if is_known else "InternalError"
@@ -434,7 +433,7 @@ def policy(policy_file: str, validate: bool, output_json: bool):
             else:
                 policy_data = json.load(f)
 
-        from agentmesh.governance import PolicyEngine, Policy
+        from agentmesh.governance import Policy, PolicyEngine
         engine = PolicyEngine()
 
         policies = policy_data.get("policies", [])
@@ -484,7 +483,7 @@ def audit(agent: str, limit: int, fmt: str, output_json: bool):
         entries = [e for e in entries if e["agent"].lower() == agent]
 
     entries = entries[:limit]
-    
+
     # Sanitize entries for JSON output with strict key whitelisting and value validation
     allowed_keys = {"timestamp", "agent", "action", "status"}
     sanitized_entries = []
@@ -539,12 +538,12 @@ except ImportError:
 def init_integration(claude: bool, config_path: str, backup: bool):
     """
     Initialize AgentMesh integration with existing tools.
-    
+
     Examples:
-    
+
         # Setup Claude Desktop to use AgentMesh proxy
         agentmesh init-integration --claude
-        
+
         # Specify custom config path
         agentmesh init-integration --claude --config-path ~/custom/config.json
     """
@@ -554,29 +553,29 @@ def init_integration(claude: bool, config_path: str, backup: bool):
         console.print("[yellow]Please specify an integration type (e.g., --claude)[/yellow]")
 
 
-def _init_claude_integration(config_path: Optional[str], backup: bool):
+def _init_claude_integration(config_path: str | None, backup: bool):
     """Initialize Claude Desktop integration."""
     console.print("\n[bold blue]🔧 Setting up Claude Desktop Integration[/bold blue]\n")
-    
+
     # Determine config path
     if not config_path:
         # Default Claude Desktop config locations
         import platform
         system = platform.system()
-        
+
         if system == "Darwin":  # macOS
             default_path = Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
         elif system == "Windows":
             default_path = Path.home() / "AppData" / "Roaming" / "Claude" / "claude_desktop_config.json"
         else:  # Linux
             default_path = Path.home() / ".config" / "claude" / "claude_desktop_config.json"
-        
+
         config_path = default_path
     else:
         config_path = Path(config_path)
-    
+
     logger.info("Config path: %s", config_path)
-    
+
     # Check if config exists
     if not config_path.exists():
         logger.warning("Config file not found at %s", config_path)
@@ -590,15 +589,15 @@ def _init_claude_integration(config_path: Optional[str], backup: bool):
             import shutil
             shutil.copy(config_path, backup_path)
             logger.debug("Backed up existing config to %s", backup_path)
-        
+
         # Load existing config
         with open(config_path) as f:
             config = json.load(f)
-    
+
     # Ensure mcpServers exists
     if "mcpServers" not in config:
         config["mcpServers"] = {}
-    
+
     # Add example AgentMesh proxy configuration
     example_server = {
         "filesystem-protected": {
@@ -613,36 +612,36 @@ def _init_claude_integration(config_path: Optional[str], backup: bool):
             "env": {},
         }
     }
-    
+
     # Check if already configured
     has_agentmesh = any(
         "agentmesh" in str(server.get("command", ""))
         for server in config["mcpServers"].values()
     )
-    
+
     if not has_agentmesh:
         config["mcpServers"].update(example_server)
         console.print("\n[green]✓ Added AgentMesh-protected filesystem server example[/green]")
     else:
         logger.warning("AgentMesh proxy already configured")
-    
+
     # Save updated config
     with open(config_path, "w") as f:
         json.dump(config, f, indent=2)
-    
+
     console.print(f"\n[green]✓ Updated {config_path}[/green]")
-    
+
     # Show instructions
     console.print()
     console.print(Panel(
-        """[bold]Next Steps:[/bold]
+        f"""[bold]Next Steps:[/bold]
 
 1. Restart Claude Desktop
 2. AgentMesh will now intercept all tool calls to the protected server
 3. View logs in the terminal where Claude Desktop was launched
 
 [bold]Customization:[/bold]
-Edit {path} to:
+Edit {config_path} to:
 - Add more protected servers
 - Change policy level (--policy strict|moderate|permissive)
 - Disable verification footers (--no-footer)
@@ -650,7 +649,7 @@ Edit {path} to:
 [bold]Example Usage:[/bold]
 In Claude Desktop, try: "Read the contents of my home directory"
 AgentMesh will enforce policies and add trust verification to outputs.
-        """.format(path=config_path),
+        """,
         title="🎉 Claude Desktop Integration Ready",
         border_style="green",
     ))

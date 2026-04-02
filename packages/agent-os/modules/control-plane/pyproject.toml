@@ -3,7 +3,7 @@ requires = ["setuptools>=45,<46.0", "wheel", "setuptools_scm[toml]>=6.2,<7.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent-control-plane"
+name = "agent_control_plane"
 version = "3.0.2"
 description = "Layer 3: The Framework - A deterministic kernel for zero-violation governance in agentic AI systems with POSIX-style signals, VFS, and kernel/user space separation"
 readme = "README.md"
