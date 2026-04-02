@@ -36,7 +36,7 @@
     "zod": ">=3.22.0"
   },
   "devDependencies": {
-    "@mastra/core": "0.10.0",
+    "@mastra/core": "1.21.0",
     "tsup": "8.0.0",
     "typescript": "5.7.3",
     "vitest": "3.0.5",
