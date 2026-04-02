@@ -3,7 +3,7 @@ name = "agentmesh"
 version = "3.0.2"
 edition = "2021"
 description = "Public Preview — Rust SDK for the AgentMesh governance framework (policy, trust, audit, identity)"
-license = {text = "MIT"}
+license = "MIT"
 repository = "https://github.com/microsoft/agent-governance-toolkit"
 documentation = "https://docs.rs/agentmesh"
 readme = "README.md"
