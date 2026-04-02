@@ -39,20 +39,20 @@ classifiers = [
 
 # Layer 1: The Primitive - Only scipy/numpy allowed
 dependencies = [
-    "numpy>=1.24.0",
+    "numpy>=1.24.0,<2.0",
 ]
 
 [project.optional-dependencies]
 # Optional scipy for enhanced statistical functions
 scipy = [
-    "scipy>=1.11.0",
+    "scipy>=1.11.0,<2.0",
 ]
 dev = [
-    "pytest>=8.3.0",
-    "pytest-cov>=6.0.0",
-    "black>=25.1.0",
-    "mypy>=1.14.0",
-    "ruff>=0.9.0",
+    "pytest>=8.3.0,<9.0",
+    "pytest-cov>=6.0.0,<7.0",
+    "black>=25.1.0,<26.0",
+    "mypy>=1.14.0,<2.0",
+    "ruff>=0.9.0,<1.0",
 ]
 all = [
     "cmvk[scipy,dev]",

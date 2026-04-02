@@ -34,7 +34,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "agent-hypervisor>=2.1.0",
+    "agent-hypervisor>=2.1.0,<3.0",
 ]
 
 [project.urls]

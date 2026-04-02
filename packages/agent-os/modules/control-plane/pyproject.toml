@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=45,<46.0", "wheel", "setuptools_scm[toml]>=6.2,<7.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -62,23 +62,23 @@ Repository = "https://github.com/microsoft/agent-governance-toolkit"
 [project.optional-dependencies]
 # Development dependencies
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "black>=25.1.0",
-    "flake8>=6.0.0",
-    "mypy>=1.0.0",
-    "pre-commit>=3.0.0",
+    "pytest>=7.0.0,<8.0",
+    "pytest-cov>=4.0.0,<5.0",
+    "black>=25.1.0,<26.0",
+    "flake8>=6.0.0,<7.0",
+    "mypy>=1.0.0,<2.0",
+    "pre-commit>=3.0.0,<4.0",
 ]
 
 # SQL AST parsing for robust policy enforcement (recommended)
 sql = [
-    "sqlglot>=23.0.0",
+    "sqlglot>=23.0.0,<24.0",
 ]
 
 # Hugging Face Hub integration (for datasets and model cards)
 hf = [
-    "huggingface_hub>=0.20.0",
-    "datasets>=2.14.0",
+    "huggingface_hub>=0.20.0,<1.0",
+    "datasets>=2.14.0,<3.0",
 ]
 
 # Allowed Layer 2 protocol dependencies (optional integrations)

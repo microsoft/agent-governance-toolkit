@@ -43,8 +43,8 @@ classifiers = [
 
 # Core dependencies (minimal - just what's needed for kernel)
 dependencies = [
-    "pydantic>=2.4.0",
-    "rich>=13.0.0"
+    "pydantic>=2.4.0,<3.0",
+    "rich>=13.0.0,<14.0"
 ]
 
 [project.urls]
@@ -56,37 +56,37 @@ Repository = "https://github.com/microsoft/agent-governance-toolkit"
 [project.optional-dependencies]
 # Individual components
 cmvk = [
-    "numpy>=1.20.0",
+    "numpy>=1.20.0,<2.0",
 ]
 
 iatp = [
-    "fastapi>=0.115.0",
-    "uvicorn>=0.27.0",
-    "httpx>=0.27.0",
-    "cryptography>=46.0.5",
-    "pynacl>=1.5.0",
+    "fastapi>=0.115.0,<1.0",
+    "uvicorn>=0.27.0,<1.0",
+    "httpx>=0.27.0,<1.0",
+    "cryptography>=46.0.5,<47.0",
+    "pynacl>=1.5.0,<2.0",
 ]
 
 amb = [
-    "anyio>=3.0.0",
-    "aiofiles>=23.0.0",
+    "anyio>=3.0.0,<4.0",
+    "aiofiles>=23.0.0,<24.0",
 ]
 
 observability = [
-    "prometheus-client>=0.17.0",
-    "opentelemetry-api>=1.20.0",
-    "opentelemetry-sdk>=1.20.0",
+    "prometheus-client>=0.17.0,<1.0",
+    "opentelemetry-api>=1.20.0,<2.0",
+    "opentelemetry-sdk>=1.20.0,<2.0",
 ]
 
 mcp = [
-    "mcp>=1.0.0",
+    "mcp>=1.0.0,<2.0",
 ]
 
 nexus = [
     "agent-os-kernel[iatp]",
-    "pyyaml>=6.0.0",
-    "structlog>=24.1.0",
-    "aiohttp>=3.13.3",
+    "pyyaml>=6.0.0,<7.0",
+    "structlog>=24.1.0,<25.0",
+    "aiohttp>=3.13.3,<4.0",
 ]
 
 # Bundles
@@ -94,29 +94,29 @@ full = [
     "agent-os-kernel[cmvk,iatp,amb,observability,mcp,nexus]",
 ]
 hypervisor = [
-    "agentmesh-runtime>=1.0.0",
+    "agentmesh-runtime>=1.0.0,<2.0",
 ]
 
 # Development (includes all optional deps for full testing)
 dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0.0",
-    "mypy>=1.0.0",
-    "ruff>=0.1.0",
-    "import-linter>=2.0",
-    "pyyaml>=6.0.0",
-    "typer>=0.9.0",
-    "rich>=13.0.0",
-    "numpy>=1.20.0",
-    "httpx>=0.27.0",
-    "fastapi>=0.115.0",
-    "uvicorn>=0.27.0",
-    "anyio>=3.0.0",
-    "aiohttp>=3.13.3",
-    "structlog>=24.1.0",
-    "redis>=4.0.0",
-    "cryptography>=45.0.3",
+    "pytest>=7.0.0,<8.0",
+    "pytest-asyncio>=0.21.0,<1.0",
+    "pytest-cov>=4.0.0,<5.0",
+    "mypy>=1.0.0,<2.0",
+    "ruff>=0.1.0,<1.0",
+    "import-linter>=2.0,<3.0",
+    "pyyaml>=6.0.0,<7.0",
+    "typer>=0.9.0,<1.0",
+    "rich>=13.0.0,<14.0",
+    "numpy>=1.20.0,<2.0",
+    "httpx>=0.27.0,<1.0",
+    "fastapi>=0.115.0,<1.0",
+    "uvicorn>=0.27.0,<1.0",
+    "anyio>=3.0.0,<4.0",
+    "aiohttp>=3.13.3,<4.0",
+    "structlog>=24.1.0,<25.0",
+    "redis>=4.0.0,<5.0",
+    "cryptography>=45.0.3,<46.0",
     "eval_type_backport>=0.2.0; python_version < '3.10'",
 ]
 

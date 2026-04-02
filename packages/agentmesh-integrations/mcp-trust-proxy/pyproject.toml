@@ -20,7 +20,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0"]
+dev = ["pytest>=7.0,<8.0"]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"

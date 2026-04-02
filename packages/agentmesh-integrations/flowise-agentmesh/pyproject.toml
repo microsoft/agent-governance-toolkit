@@ -24,14 +24,14 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "pyyaml>=6.0",
+    "pyyaml>=6.0,<7.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.21",
-    "ruff>=0.1.0",
+    "pytest>=7.0,<8.0",
+    "pytest-asyncio>=0.21,<1.0",
+    "ruff>=0.1.0,<1.0",
 ]
 
 [tool.hatch.build.targets.wheel]

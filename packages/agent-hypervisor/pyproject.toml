@@ -37,38 +37,38 @@ classifiers = [
 # Core: only pydantic required. Integration adapters use Protocol-based
 # interfaces (duck typing), so external backends are optional.
 dependencies = [
-    "pydantic>=2.4.0",
+    "pydantic>=2.4.0,<3.0",
 ]
 
 [project.optional-dependencies]
 # Integration adapters (optional — hypervisor works standalone)
 nexus = [
-    "structlog>=24.1.0",
+    "structlog>=24.1.0,<25.0",
 ]
 api = [
-    "fastapi>=0.115.0",
-    "uvicorn>=0.27.0",
+    "fastapi>=0.115.0,<1.0",
+    "uvicorn>=0.27.0,<1.0",
 ]
 full = [
     "agent-hypervisor[nexus]",
 ]
 dev = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
-    "pytest-cov>=4.0.0",
-    "hypothesis>=6.0.0",
-    "ruff>=0.4.0",
-    "mypy>=1.8.0",
-    "jsonschema>=4.0.0",
+    "pytest>=8.0.0,<9.0",
+    "pytest-asyncio>=0.23.0,<1.0",
+    "pytest-cov>=4.0.0,<5.0",
+    "hypothesis>=6.0.0,<7.0",
+    "ruff>=0.4.0,<1.0",
+    "mypy>=1.8.0,<2.0",
+    "jsonschema>=4.0.0,<5.0",
 ]
 blockchain = [
-    "web3>=6.0.0",  # Reserved for future blockchain anchoring — not yet used
+    "web3>=6.0.0,<7.0",  # Reserved for future blockchain anchoring — not yet used
 ]
 observability = [
-    "agent-sre>=1.1.0",  # PrometheusExporter bridge for RingMetricsCollector
+    "agent-sre>=1.1.0,<2.0",  # PrometheusExporter bridge for RingMetricsCollector
 ]
 otel = [
-    "opentelemetry-api>=1.20",  # OTel span creation for SagaSpanExporter
+    "opentelemetry-api>=1.20,<2.0",  # OTel span creation for SagaSpanExporter
 ]
 
 [project.urls]

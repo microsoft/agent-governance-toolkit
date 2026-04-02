@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=68.0,<69.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -29,14 +29,14 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "pydantic>=2.0",
-    "pyyaml>=6.0",
+    "pydantic>=2.0,<3.0",
+    "pyyaml>=6.0,<7.0",
     "cryptography>=45.0.3,<47.0",
 ]
 
 [project.optional-dependencies]
-cli = ["click>=8.0", "rich>=13.0"]
-dev = ["pytest>=7.0", "pytest-cov"]
+cli = ["click>=8.0,<9.0", "rich>=13.0,<14.0"]
+dev = ["pytest>=7.0,<8.0", "pytest-cov"]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"

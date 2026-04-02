@@ -42,15 +42,15 @@ dependencies = [
 
 [project.optional-dependencies]
 langgraph = [
-    "langgraph>=0.2.0",
+    "langgraph>=0.2.0,<1.0",
 ]
 agentmesh = [
-    "agentmesh-platform>=0.1.0",
+    "agentmesh-platform>=0.1.0,<1.0",
 ]
 dev = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.21",
-    "ruff>=0.1.0",
+    "pytest>=7.0,<8.0",
+    "pytest-asyncio>=0.21,<1.0",
+    "ruff>=0.1.0,<1.0",
 ]
 
 [project.urls]

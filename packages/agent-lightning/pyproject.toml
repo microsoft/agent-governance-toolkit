@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=68.0,<69.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -32,8 +32,8 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-agent-os = ["agent-os-kernel>=1.0.0"]
-dev = ["pytest>=7.0", "pytest-cov"]
+agent-os = ["agent-os-kernel>=1.0.0,<2.0"]
+dev = ["pytest>=7.0,<8.0", "pytest-cov"]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"

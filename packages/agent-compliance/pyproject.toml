@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=68.0,<69.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -33,19 +33,19 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "agent-os-kernel>=1.0.0",
-    "agentmesh-platform>=1.0.0",
-    "pydantic>=2.4.0",
+    "agent-os-kernel>=1.0.0,<2.0",
+    "agentmesh-platform>=1.0.0,<2.0",
+    "pydantic>=2.4.0,<3.0",
 ]
 
 [project.optional-dependencies]
-runtime = ["agentmesh-runtime>=2.0.0"]
-sre = ["agent-sre>=1.0.0"]
+runtime = ["agentmesh-runtime>=2.0.0,<3.0"]
+sre = ["agent-sre>=1.0.0,<2.0"]
 opa = []
-cedar = ["cedarpy>=4.0.0"]
+cedar = ["cedarpy>=4.0.0,<5.0"]
 full = [
-    "agentmesh-runtime>=2.0.0",
-    "agent-sre>=1.0.0",
+    "agentmesh-runtime>=2.0.0,<3.0",
+    "agent-sre>=1.0.0,<2.0",
 ]
 
 [project.urls]

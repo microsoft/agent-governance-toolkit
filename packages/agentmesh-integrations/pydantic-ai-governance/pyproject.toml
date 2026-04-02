@@ -26,11 +26,11 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-pydantic-ai = ["pydantic-ai>=0.1.0"]
+pydantic-ai = ["pydantic-ai>=0.1.0,<1.0"]
 
 dev = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.21.0",
+    "pytest>=7.0,<8.0",
+    "pytest-asyncio>=0.21.0,<1.0",
 ]
 
 [project.urls]

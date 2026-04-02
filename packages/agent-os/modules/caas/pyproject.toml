@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0,<62.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -38,36 +38,36 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.24.0",
-    "pydantic>=2.5.0",
-    "pypdf>=6.0.0",
-    "beautifulsoup4>=4.12.2",
-    "lxml>=4.9.3",
-    "python-multipart>=0.0.22",
-    "tiktoken>=0.5.1",
-    "numpy>=1.26.2",
-    "scikit-learn>=1.6.1",
-    "aiofiles>=23.2.1",
+    "fastapi>=0.115.0,<1.0",
+    "uvicorn[standard]>=0.24.0,<1.0",
+    "pydantic>=2.5.0,<3.0",
+    "pypdf>=6.0.0,<7.0",
+    "beautifulsoup4>=4.12.2,<5.0",
+    "lxml>=4.9.3,<5.0",
+    "python-multipart>=0.0.22,<1.0",
+    "tiktoken>=0.5.1,<1.0",
+    "numpy>=1.26.2,<2.0",
+    "scikit-learn>=1.6.1,<2.0",
+    "aiofiles>=23.2.1,<24.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.4.0",
-    "pytest-cov>=4.1.0",
-    "pytest-asyncio>=0.21.0",
-    "black>=25.1.0",
-    "ruff>=0.1.0",
-    "mypy>=1.5.0",
+    "pytest>=7.4.0,<8.0",
+    "pytest-cov>=4.1.0,<5.0",
+    "pytest-asyncio>=0.21.0,<1.0",
+    "black>=25.1.0,<26.0",
+    "ruff>=0.1.0,<1.0",
+    "mypy>=1.5.0,<2.0",
 ]
 test = [
-    "pytest>=7.4.0",
-    "pytest-cov>=4.1.0",
-    "pytest-asyncio>=0.21.0",
+    "pytest>=7.4.0,<8.0",
+    "pytest-cov>=4.1.0,<5.0",
+    "pytest-asyncio>=0.21.0,<1.0",
 ]
 hf = [
-    "huggingface_hub>=0.20.0",
-    "datasets>=2.16.0",
+    "huggingface_hub>=0.20.0,<1.0",
+    "datasets>=2.16.0,<3.0",
 ]
 all = [
     "caas-core[dev,test,hf]",

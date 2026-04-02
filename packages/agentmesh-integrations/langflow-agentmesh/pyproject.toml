@@ -26,11 +26,11 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-langflow = ["langflow>=1.0.0"]
+langflow = ["langflow>=1.0.0,<2.0"]
 
 dev = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.21.0",
+    "pytest>=7.0,<8.0",
+    "pytest-asyncio>=0.21.0,<1.0",
 ]
 
 [project.urls]
