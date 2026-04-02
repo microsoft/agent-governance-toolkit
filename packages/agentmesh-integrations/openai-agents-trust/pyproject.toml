@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "openai-agents-trust"
+name = "openai_agents_trust"
 version = "3.0.2"
 description = "Trust & governance layer for OpenAI Agents SDK — policy enforcement, trust-gated handoffs, and hash-chained audit trails"
 readme = "README.md"
