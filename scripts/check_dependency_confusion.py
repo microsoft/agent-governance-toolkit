@@ -57,7 +57,28 @@ REGISTERED_PACKAGES = {
     # Slack / messaging
     "slack-sdk", "slack-bolt",
     # Telemetry
-    "opentelemetry-instrumentation-fastapi",
+    "opentelemetry-instrumentation-fastapi", "opentelemetry-exporter-otlp",
+    "opentelemetry-instrumentation-httpx", "opentelemetry-instrumentation-asyncio",
+    # pyproject.toml optional-dependency group names (not real packages)
+    "dev", "cli", "all", "server", "storage", "observability",
+    "django", "websocket", "websockets", "grpc", "grpcio", "grpcio-tools",
+    "agent-os", "test", "docs", "full", "api", "otel", "protocols",
+    "runtime", "sandbox", "sre", "hypervisor", "iatp", "keywords",
+    "llm", "mcp", "hf", "huggingface", "blockchain", "web3",
+    "multi-agent", "broker-agnostic", "pubsub", "kafka", "rabbitmq",
+    "sql", "async", "nexus", "caas-core", "message-bus",
+    "ai-agents", "amb", "eval_type_backport",
+    # Integration packages / real PyPI packages used as deps
+    "hypothesis", "fakeredis", "langflow", "langgraph",
+    "agentmesh", "pydantic-ai", "haystack", "respx",
+    "langfuse", "arize", "llamaindex", "braintrust", "helicone",
+    "datadog", "langsmith", "wandb", "mlflow", "agentops",
+    "typer", "jsonschema", "anyio", "pre-commit", "import-linter",
+    "mkdocs", "mkdocs-material", "mkdocstrings", "datasets", "sqlglot",
+    "aio-pika", "aiokafka",
+    # Internal module references
+    "inter-agent-trust-protocol", "agent-control-plane", "cmvk",
+    "agent-tool-registry", "cedar", "opa", "huggingface_hub",
     # Internal cross-package references (local-only, NOT on PyPI)
     # These are flagged as HIGH RISK if found in requirements.txt with version pins
     # instead of path references. See dependency confusion attack vector.
@@ -73,7 +94,9 @@ LOCAL_ONLY_PACKAGES = {"agent-primitives", "emk"}
 REGISTERED_NPM_PACKAGES = {
     "@microsoft/agent-os-kernel", "@microsoft/agentmesh-mcp-proxy",
     "@microsoft/agentmesh-api", "@microsoft/agent-os-cursor",
-    "@microsoft/agentmesh-mastra",
+    "@microsoft/agentmesh-mastra", "@microsoft/agentmesh-copilot-governance",
+    "@microsoft/agent-os-copilot-extension", "@microsoft/agentos-mcp-server",
+    "@microsoft/agent-os-vscode",
     # Common deps
     "typescript", "tsup", "vitest", "express", "zod", "@mastra/core",
     "@modelcontextprotocol/sdk", "ws", "commander", "chalk",
@@ -84,6 +107,20 @@ REGISTERED_NPM_PACKAGES = {
     "axios", "@types/vscode", "@vscode/vsce", "webpack", "webpack-cli",
     "ts-node", "nodemon", "concurrently", "dotenv",
     "esbuild", "@esbuild/linux-x64", "@esbuild/darwin-arm64",
+    # npm deps from extensions/copilot
+    "@octokit/webhooks", "path-to-regexp", "winston",
+    # npm deps from extensions/chrome
+    "react", "react-dom", "webextension-polyfill",
+    "@types/chrome", "@types/react", "@types/react-dom",
+    "copy-webpack-plugin", "css-loader", "eslint-plugin-react",
+    "eslint-plugin-react-hooks", "html-webpack-plugin", "style-loader",
+    "ts-loader",
+    # npm deps from extensions/mcp-server
+    "uuid", "yaml", "zod", "@types/uuid", "@vitest/coverage-v8",
+    # npm deps from mcp-proxy
+    "crypto-js",
+    # npm deps from sdks/typescript
+    "js-yaml", "@noble/ed25519",
 }
 
 # Known Cargo crate names

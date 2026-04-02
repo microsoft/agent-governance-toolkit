@@ -22,14 +22,14 @@ import json
 def handle_error(e: Exception, output_json: bool = False, custom_msg: Optional[str] = None):
     """Centralized error handler for compliance CLI."""
     is_known = isinstance(e, (IOError, ValueError, KeyError, PermissionError, FileNotFoundError))
-    
+
     if custom_msg:
         err_msg = custom_msg
     elif is_known:
         err_msg = "A validation or file access error occurred."
     else:
         err_msg = "A governance processing error occurred."
-        
+
     if output_json:
         print(json.dumps({"status": "fail" if not is_known else "error", "message": err_msg, "type": "ValidationError" if is_known else "InternalError"}, indent=2))
     else:

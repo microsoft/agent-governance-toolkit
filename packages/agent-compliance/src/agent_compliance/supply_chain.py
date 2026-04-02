@@ -13,9 +13,8 @@ Detects supply chain poisoning attempts including:
 from __future__ import annotations
 
 import json
-import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
