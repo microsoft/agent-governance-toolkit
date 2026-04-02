@@ -11,6 +11,12 @@ guides.
 
 ---
 
+## Getting Started
+
+| # | Tutorial | What You'll Learn | Package |
+|---|----------|-------------------|---------| 
+| – | [Retrofit Governance onto an Existing Agent](retrofit-governance.md) | Add policy enforcement to any existing agent in 3 steps | `agent-os-kernel` |
+
 ## Core Governance
 
 | # | Tutorial | What You'll Learn | Package |
