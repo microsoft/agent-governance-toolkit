@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0,<69.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent-governance-toolkit"
+name = "agent_governance_toolkit"
 version = "3.0.2"
 description = "Public Preview — Unified installer and runtime policy enforcement for the Agent Governance Toolkit"
 readme = "README.md"

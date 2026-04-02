@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0,<69.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "adk-agentmesh"
+name = "adk_agentmesh"
 version = "3.0.2"
 description = "Public Preview — Agent Governance Toolkit integration for Google ADK: policy enforcement, trust verification, and audit trails for ADK agents"
 readme = "README.md"
