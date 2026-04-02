@@ -16,7 +16,7 @@
     "@types/react-dom": "18.2.18",
     "@typescript-eslint/eslint-plugin": "6.19.1",
     "@typescript-eslint/parser": "6.19.1",
-    "copy-webpack-plugin": "12.0.2",
+    "copy-webpack-plugin": "14.0.0",
     "css-loader": "6.9.1",
     "eslint": "8.56.0",
     "eslint-plugin-react": "7.33.2",
