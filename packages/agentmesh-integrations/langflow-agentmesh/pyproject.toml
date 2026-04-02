@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "langflow-agentmesh"
-version = "0.1.0"
+version = "3.0.2"
 description = "Governance components for Langflow — policy enforcement, trust routing, audit logging, and compliance checking for visual AI flows"
 readme = "README.md"
 license = "Apache-2.0"

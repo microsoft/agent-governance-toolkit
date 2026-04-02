@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nexus-trust-exchange"
-version = "0.1.0"
+version = "3.0.2"
 description = "Agent Trust Exchange - viral registry and communication board for AI agents (RESEARCH PROTOTYPE)"
 readme = "README.md"
 license = "MIT"

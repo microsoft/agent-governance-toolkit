@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "a2a-agentmesh"
-version = "0.1.0"
+version = "3.0.2"
 description = "A2A protocol bridge for AgentMesh — trust-verified agent-to-agent communication via the A2A standard"
 readme = "README.md"
 license = "MIT"

@@ -21,7 +21,7 @@ Example:
 
 from typing import TYPE_CHECKING, List
 
-__version__ = "0.2.0"
+__version__ = "3.0.2"
 __author__ = "Microsoft Corporation"
 __license__ = "MIT"
 

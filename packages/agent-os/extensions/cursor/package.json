@@ -2,7 +2,7 @@
   "name": "@microsoft/agent-os-cursor",
   "displayName": "Agent OS for Cursor - The AI IDE with a Safety Kernel",
   "description": "Kernel-level safety for Cursor AI. Block destructive operations, verify AI suggestions with multi-model review, and audit all Composer actions. The safest AI IDE experience.",
-  "version": "0.1.0",
+  "version": "3.0.2",
   "publisher": "agent-os",
   "author": "Microsoft Corporation",
   "license": "MIT",
@@ -120,7 +120,11 @@
         },
         "agentOS.mode": {
           "type": "string",
-          "enum": ["basic", "enhanced", "enterprise"],
+          "enum": [
+            "basic",
+            "enhanced",
+            "enterprise"
+          ],
           "default": "basic",
           "description": "Safety mode: basic (local only), enhanced (+ CMVK), enterprise (custom)"
         },
@@ -156,7 +160,11 @@
         },
         "agentOS.cmvk.models": {
           "type": "array",
-          "default": ["gpt-4", "claude-sonnet-4", "gemini-pro"],
+          "default": [
+            "gpt-4",
+            "claude-sonnet-4",
+            "gemini-pro"
+          ],
           "description": "Models to use for CMVK verification"
         },
         "agentOS.cmvk.consensusThreshold": {

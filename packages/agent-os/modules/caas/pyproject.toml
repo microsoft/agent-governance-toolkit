@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "caas-core"
-version = "0.3.0"
+version = "3.0.2"
 description = "A pure, logic-only library for routing context, handling RAG fallacies, and managing context windows. Layer 1 Primitive - no agent dependencies."
 readme = "README.md"
 requires-python = ">=3.8"

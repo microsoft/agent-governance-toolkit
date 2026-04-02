@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "langgraph-trust"
-version = "0.1.0"
+version = "3.0.2"
 description = "Trust-gated checkpoint nodes for LangGraph — cryptographic identity, policy enforcement, and trust-aware routing for multi-agent graphs"
 readme = "README.md"
 license = "MIT"

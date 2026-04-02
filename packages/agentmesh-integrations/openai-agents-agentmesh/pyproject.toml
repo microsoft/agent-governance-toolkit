@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openai-agents-agentmesh"
-version = "0.1.0"
+version = "3.0.2"
 description = "AgentMesh trust layer for OpenAI Agents SDK — trust-gated function calling and handoff verification"
 readme = "README.md"
 license = "MIT"

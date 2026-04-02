@@ -1,7 +1,7 @@
 {
   "name": "@microsoft/agentmesh-api",
-  "version": "0.1.0",
-  "description": "Public Preview — AgentMesh Public API for trust verification and agent registration",
+  "version": "3.0.2",
+  "description": "Public Preview \u2014 AgentMesh Public API for trust verification and agent registration",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

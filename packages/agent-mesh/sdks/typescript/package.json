@@ -1,7 +1,7 @@
 {
   "name": "@microsoft/agentmesh-sdk",
-  "version": "1.0.1",
-  "description": "Public Preview — TypeScript SDK for AgentMesh: agent identity, trust scoring, policy evaluation, and audit logging",
+  "version": "3.0.2",
+  "description": "Public Preview \u2014 TypeScript SDK for AgentMesh: agent identity, trust scoring, policy evaluation, and audit logging",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

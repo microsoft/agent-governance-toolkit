@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "amb-core"
-version = "0.3.0"
+version = "3.0.2"
 description = "A lightweight, broker-agnostic message bus designed specifically for AI Agents"
 readme = "README.md"
 authors = [

@@ -18,7 +18,7 @@ Components:
     - agent-lightning: RL training governance
 """
 
-__version__ = "3.0.1"
+__version__ = "3.0.2"
 
 # Re-export core components for convenience
 try:

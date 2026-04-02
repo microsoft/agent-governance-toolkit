@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-trust-proxy"
-version = "0.1.0"
+version = "3.0.2"
 description = "MCP proxy that wraps any MCP tool with AgentMesh trust verification"
 readme = "README.md"
 license = "MIT"

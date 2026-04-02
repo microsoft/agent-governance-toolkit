@@ -21,6 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added "Secure Error Handling" sections to primary documentation to guide users on interpreting sanitized machine-readable outputs.
 
 
+## [3.0.2] - 2026-04-02
+
+### Security
+- Comprehensive security audit remediation (29 findings fixed)
+- CI injection prevention: moved all github.event expressions to env blocks
+- Supply chain hardening: dependency confusion fixes, npm lockfiles, Dockerfile pinning
+- Docker/infra: removed hardcoded passwords, wildcard CORS, added .dockerignore exclusions
+- Code quality: XSS prevention in VS Code webviews, Rust panic safety
+- Version pinning compliance across all pyproject.toml and Cargo.toml files
+- Extended dependency confusion detection script coverage
+
 ## [3.0.1] - 2026-04-01
 
 ### Added

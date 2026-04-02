@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flowise-agentmesh"
-version = "0.1.0"
+version = "3.0.2"
 description = "AgentMesh governance nodes for Flowise — policy enforcement, trust gating, audit logging, and rate limiting for visual AI flows"
 readme = "README.md"
 license = "MIT"

@@ -156,7 +156,7 @@ from atr.schema import (
 if TYPE_CHECKING:
     from typing import Any
 
-__version__ = "0.2.0"
+__version__ = "3.0.2"
 __author__ = "Microsoft Corporation"
 
 __all__ = [

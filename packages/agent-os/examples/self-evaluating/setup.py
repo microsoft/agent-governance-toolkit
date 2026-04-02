@@ -16,7 +16,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 
 setup(
     name="self-evolving-agent",
-    version="1.0.0",
+    version="3.0.2",
     author="Microsoft Corporation",
     description="A comprehensive framework for building self-improving AI agents",
     long_description=long_description,

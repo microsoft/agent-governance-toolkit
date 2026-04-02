@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "inter-agent-trust-protocol"
-version = "0.5.0"
+version = "3.0.2"
 description = "Inter-Agent Trust Protocol (IATP) - The Envoy for AI Agents. A sidecar architecture with typed IPC pipes for preventing cascading hallucinations in autonomous agent networks."
 readme = "README.md"
 license = {text = "MIT"}

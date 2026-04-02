@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-control-plane"
-version = "0.5.0"
+version = "3.0.2"
 description = "Layer 3: The Framework - A deterministic kernel for zero-violation governance in agentic AI systems with POSIX-style signals, VFS, and kernel/user space separation"
 readme = "README.md"
 requires-python = ">=3.8"

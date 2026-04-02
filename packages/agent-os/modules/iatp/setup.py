@@ -8,7 +8,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="inter-agent-trust-protocol",
-    version="0.4.0",
+    version="3.0.2",
     author="Microsoft Corporation",
     author_email="agentgovtoolkit@microsoft.com",
     description="Inter-Agent Trust Protocol - Envoy for Agents with Typed IPC Pipes",

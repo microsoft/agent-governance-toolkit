@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pydantic-ai-governance"
-version = "0.1.0"
+version = "3.0.2"
 description = "Governance middleware for PydanticAI — semantic policy enforcement, trust scoring, and audit trails for agent tool execution"
 readme = "README.md"
 license = "Apache-2.0"

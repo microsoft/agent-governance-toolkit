@@ -1,10 +1,12 @@
 {
   "name": "@microsoft/agentmesh-copilot-governance",
-  "version": "0.1.0",
-  "description": "Public Preview — GitHub Copilot Extension for agent governance code review: detects missing policy checks, unguarded tool calls, and audit logging gaps",
+  "version": "3.0.2",
+  "description": "Public Preview \u2014 GitHub Copilot Extension for agent governance code review: detects missing policy checks, unguarded tool calls, and audit logging gaps",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "bin": {
     "copilot-governance": "dist/server.js"
   },

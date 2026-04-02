@@ -1,7 +1,7 @@
 {
   "name": "@microsoft/agentmesh-mcp-proxy",
-  "version": "1.0.0",
-  "description": "Public Preview — Security proxy for MCP servers: The Firewall for Model Context Protocol",
+  "version": "3.0.2",
+  "description": "Public Preview \u2014 Security proxy for MCP servers: The Firewall for Model Context Protocol",
   "keywords": [
     "mcp",
     "model-context-protocol",

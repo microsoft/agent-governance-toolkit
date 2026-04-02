@@ -2,7 +2,7 @@
   "name": "@microsoft/agent-os-vscode",
   "displayName": "Agent OS - AI Safety for Code",
   "description": "Kernel-level safety for AI coding assistants. Block destructive operations, verify with multi-model review, and audit all AI suggestions.",
-  "version": "1.0.1",
+  "version": "3.0.2",
   "publisher": "agent-os",
   "author": "Microsoft Corporation",
   "license": "MIT",

@@ -1,6 +1,6 @@
 [package]
 name = "agentmesh"
-version = "0.1.1"
+version = "3.0.2"
 edition = "2021"
 description = "Public Preview — Rust SDK for the AgentMesh governance framework (policy, trust, audit, identity)"
 license = "MIT"

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cmvk"
-version = "0.3.0"
+version = "3.0.2"
 description = "Mathematical drift detection library for calculating drift/hallucination scores between outputs"
 readme = "README.md"
 license = { text = "MIT" }

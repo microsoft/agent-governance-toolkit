@@ -1,6 +1,6 @@
 [project]
 name = "carbon-auditor-swarm"
-version = "0.2.0"
+version = "3.0.2"
 description = "Autonomous auditing system for the Voluntary Carbon Market (VCM)"
 readme = "README.md"
 requires-python = ">=3.10"

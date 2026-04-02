@@ -61,7 +61,7 @@ For more information, see: https://github.com/microsoft/agent-governance-toolkit
 
 from __future__ import annotations
 
-__version__ = "0.3.0"
+__version__ = "3.0.2"
 __author__ = "Microsoft Corporation"
 __license__ = "MIT"
 
