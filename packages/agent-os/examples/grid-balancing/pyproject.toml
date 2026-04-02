@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0,<62.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "grid-balancing-demo"
+name = "grid_balancing_demo"
 version = "3.0.2"
 description = "Autonomous energy trading demo using Agent OS"
 requires-python = ">=3.10"

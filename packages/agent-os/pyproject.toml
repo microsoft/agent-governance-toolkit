@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent-os-kernel"
+name = "agent_os_kernel"
 version = "3.0.2"
 description = "Public Preview — A kernel architecture for governing autonomous AI agents with Nexus Trust Exchange"
 readme = "README.md"
