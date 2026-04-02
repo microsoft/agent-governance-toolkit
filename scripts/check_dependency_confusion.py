@@ -58,9 +58,32 @@ REGISTERED_PACKAGES = {
     "slack-sdk", "slack-bolt",
     # Telemetry
     "opentelemetry-instrumentation-fastapi",
-    # Internal cross-package references (not on PyPI)
+    # Internal cross-package references (local-only, NOT on PyPI)
+    # These are flagged as HIGH RISK if found in requirements.txt with version pins
+    # instead of path references. See dependency confusion attack vector.
     "agent-primitives", "emk",
     # With extras (base name is what matters)
+}
+
+# Local-only packages that should NEVER appear with version pins in
+# requirements.txt (they must use path references like -e ../primitives)
+LOCAL_ONLY_PACKAGES = {"agent-primitives", "emk"}
+
+# Known npm packages for this project
+REGISTERED_NPM_PACKAGES = {
+    "@microsoft/agent-os-kernel", "@microsoft/agentmesh-mcp-proxy",
+    "@microsoft/agentmesh-api", "@microsoft/agent-os-cursor",
+    "@microsoft/agentmesh-mastra",
+    # Common deps
+    "typescript", "tsup", "vitest", "express", "zod", "@mastra/core",
+    "@modelcontextprotocol/sdk", "ws", "commander", "chalk",
+    "@anthropic-ai/sdk", "@types/node", "@types/ws", "@types/express",
+}
+
+# Known Cargo crate names
+REGISTERED_CARGO_PACKAGES = {
+    "serde", "serde_json", "serde_yaml", "sha2", "ed25519-dalek",
+    "rand", "thiserror", "tempfile", "agentmesh",
 }
 
 # Patterns that are always safe (not package names)
@@ -170,6 +193,100 @@ def check_notebook(filepath: str) -> list[str]:
     return findings
 
 
+def check_pyproject_toml(filepath: str) -> list[str]:
+    """Check a pyproject.toml for unregistered package dependencies."""
+    findings = []
+    try:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+    except (OSError, UnicodeDecodeError):
+        return findings
+
+    registered_lower = {p.lower() for p in REGISTERED_PACKAGES}
+    # Match dependency lines like: "package>=1.0" or "package[extra]>=1.0,<2.0"
+    dep_re = re.compile(r'^[\s"]*([a-zA-Z0-9_-]+)', re.MULTILINE)
+    in_deps = False
+    for line_num, line in enumerate(content.splitlines(), 1):
+        stripped = line.strip()
+        if stripped.startswith("[project.dependencies]") or \
+           stripped.startswith("[project.optional-dependencies"):
+            in_deps = True
+            continue
+        if stripped.startswith("[") and in_deps:
+            in_deps = False
+            continue
+        if not in_deps:
+            continue
+        if not stripped or stripped.startswith("#"):
+            continue
+        m = dep_re.match(stripped.strip('"').strip("'").strip(","))
+        if m:
+            pkg = m.group(1)
+            if pkg.lower() not in registered_lower and pkg.lower() not in {
+                "python", "requires-python",
+            }:
+                severity = "HIGH RISK" if pkg.lower() in {
+                    p.lower() for p in LOCAL_ONLY_PACKAGES
+                } else ""
+                msg = f"  {filepath}:{line_num}: '{pkg}' may not be registered on PyPI"
+                if severity:
+                    msg += f" [{severity}: local-only package]"
+                findings.append(msg)
+    return findings
+
+
+def check_package_json(filepath: str) -> list[str]:
+    """Check a package.json for unregistered npm package dependencies."""
+    findings = []
+    try:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return findings
+
+    registered_lower = {p.lower() for p in REGISTERED_NPM_PACKAGES}
+    for section in ("dependencies", "devDependencies", "peerDependencies"):
+        for pkg in data.get(section, {}):
+            if pkg.lower() not in registered_lower:
+                findings.append(
+                    f"  {filepath}: npm '{pkg}' ({section}) may not be registered"
+                )
+    return findings
+
+
+def check_cargo_toml(filepath: str) -> list[str]:
+    """Check a Cargo.toml for unregistered crate dependencies."""
+    findings = []
+    try:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+    except (OSError, UnicodeDecodeError):
+        return findings
+
+    registered_lower = {p.lower() for p in REGISTERED_CARGO_PACKAGES}
+    in_deps = False
+    for line_num, line in enumerate(content.splitlines(), 1):
+        stripped = line.strip()
+        if stripped in ("[dependencies]", "[dev-dependencies]",
+                        "[build-dependencies]"):
+            in_deps = True
+            continue
+        if stripped.startswith("[") and in_deps:
+            in_deps = False
+            continue
+        if not in_deps or not stripped or stripped.startswith("#"):
+            continue
+        m = re.match(r'^([a-zA-Z0-9_-]+)\s*=', stripped)
+        if m:
+            crate = m.group(1)
+            if crate.lower() not in registered_lower:
+                findings.append(
+                    f"  {filepath}:{line_num}: crate '{crate}' "
+                    f"may not be registered on crates.io"
+                )
+    return findings
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Detect unregistered PyPI package names in pip install commands.",
@@ -199,7 +316,7 @@ def main() -> int:
     for f in files:
         all_findings.extend(check_file(f))
 
-    # --strict: additionally scan all notebooks and requirements files in the repo
+    # --strict: additionally scan all notebooks, requirements, and manifest files
     if args.strict:
         for nb in glob.glob("**/*.ipynb", recursive=True):
             if "node_modules" in nb or ".ipynb_checkpoints" in nb:
@@ -210,6 +327,21 @@ def main() -> int:
             if "node_modules" in req:
                 continue
             all_findings.extend(check_requirements_file(req))
+
+        for pyproj in glob.glob("**/pyproject.toml", recursive=True):
+            if "node_modules" in pyproj:
+                continue
+            all_findings.extend(check_pyproject_toml(pyproj))
+
+        for pkgjson in glob.glob("**/package.json", recursive=True):
+            if "node_modules" in pkgjson:
+                continue
+            all_findings.extend(check_package_json(pkgjson))
+
+        for cargo in glob.glob("**/Cargo.toml", recursive=True):
+            if "node_modules" in cargo:
+                continue
+            all_findings.extend(check_cargo_toml(cargo))
 
     if all_findings:
         print("⚠️  Potential dependency confusion detected:")

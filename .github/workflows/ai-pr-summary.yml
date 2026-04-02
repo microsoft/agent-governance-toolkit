@@ -28,8 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     # Only run when the triggering workflow was for a PR
     if: >-
-      github.event.workflow_run.event == 'pull_request' ||
-      github.event.workflow_run.event == 'pull_request_target'
+      github.event.workflow_run.conclusion == 'success' &&
+      (github.event.workflow_run.event == 'pull_request' ||
+       github.event.workflow_run.event == 'pull_request_target')
     steps:
       - name: Get PR number from triggering workflow
         id: pr

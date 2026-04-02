@@ -359,8 +359,10 @@ stages:
           - script: |
               dotnet nuget push "$(Pipeline.Workspace)/nuget-publish/**/*.nupkg" \
                 --source https://api.nuget.org/v3/index.json \
-                --api-key $(NUGET_API_KEY) \
+                --api-key "$NUGET_API_KEY" \
                 --skip-duplicate
+            env:
+              NUGET_API_KEY: $(NUGET_API_KEY)
             displayName: 'Push to NuGet.org'
 
   # =======================================================
