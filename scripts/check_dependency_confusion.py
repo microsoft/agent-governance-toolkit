@@ -78,6 +78,12 @@ REGISTERED_NPM_PACKAGES = {
     "typescript", "tsup", "vitest", "express", "zod", "@mastra/core",
     "@modelcontextprotocol/sdk", "ws", "commander", "chalk",
     "@anthropic-ai/sdk", "@types/node", "@types/ws", "@types/express",
+    # Common npm dev dependencies
+    "eslint", "@typescript-eslint/parser", "@typescript-eslint/eslint-plugin",
+    "ts-jest", "@types/jest", "jest", "rimraf", "prettier",
+    "axios", "@types/vscode", "@vscode/vsce", "webpack", "webpack-cli",
+    "ts-node", "nodemon", "concurrently", "dotenv",
+    "esbuild", "@esbuild/linux-x64", "@esbuild/darwin-arm64",
 }
 
 # Known Cargo crate names
