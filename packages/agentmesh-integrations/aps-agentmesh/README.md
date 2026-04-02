@@ -94,10 +94,7 @@ if not ok:
     print(f"Denied: {reason}")
 ```
 
-## APS Resources
+## Links
 
-- SDK: [npm](https://www.npmjs.com/package/agent-passport-system) (v1.29.1, 1,919 tests)
-- Python SDK: [PyPI](https://pypi.org/project/agent-passport-system/) (v0.7.0)
-- MCP Server: [npm](https://www.npmjs.com/package/agent-passport-system-mcp) (v2.19.0, 125 tools)
-- Docs: [aeoess.com](https://aeoess.com)
-- Paper: [Zenodo DOI 10.5281/zenodo.19260073](https://doi.org/10.5281/zenodo.19260073)
+- [Agent Passport System](https://github.com/aeoess/agent-passport-system) — APS SDK
+- [APS Python SDK](https://pypi.org/project/agent-passport-system/) — Python bindings

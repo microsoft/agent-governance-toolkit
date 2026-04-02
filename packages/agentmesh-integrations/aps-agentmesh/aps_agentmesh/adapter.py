@@ -17,9 +17,7 @@ Usage for trust bridging:
 
 from __future__ import annotations
 
-import hashlib
 import json
-import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -119,7 +117,8 @@ def verify_aps_signature(payload: str, signature: str, public_key: str) -> bool:
     """
     Verify an Ed25519 signature from APS.
 
-    Returns True if signature is valid. Uses nacl or fallback hash check.
+    Returns True if signature is valid. Requires PyNaCl.
+    Install with: pip install PyNaCl
     In production, use the agent-passport-system Python SDK for full verification.
     """
     try:
@@ -129,8 +128,8 @@ def verify_aps_signature(payload: str, signature: str, public_key: str) -> bool:
         vk.verify(payload.encode(), bytes.fromhex(signature))
         return True
     except ImportError:
-        # Without nacl, verify structurally (signature length + hex format)
-        return len(signature) == 128 and all(c in "0123456789abcdef" for c in signature)
+        # Fail closed: cannot verify without nacl
+        return False
     except (BadSignatureError, Exception):
         return False
 
@@ -154,6 +153,10 @@ def aps_context(
             - 'deploy.*'
     """
     dec = decision if isinstance(decision, APSDecision) else APSDecision.from_json(decision)
+
+    if not isinstance(passport_grade, int) or passport_grade not in GRADE_TO_TRUST_SCORE:
+        raise ValueError(f"Invalid passport_grade: {passport_grade}. Must be 0, 1, 2, or 3.")
+
     ctx: Dict[str, Any] = {
         "aps_decision": {
             "verdict": dec.verdict,

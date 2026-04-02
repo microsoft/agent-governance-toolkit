@@ -11,7 +11,7 @@ from aps_agentmesh import (
     aps_context,
     GRADE_TO_TRUST_SCORE,
 )
-from aps_agentmesh.adapter import APSDecision, APSScopeChain
+from aps_agentmesh.adapter import APSDecision, APSScopeChain, verify_aps_signature
 
 
 # ── APSDecision parsing ──
@@ -196,3 +196,52 @@ def test_agt_context_shape():
     assert ctx["aps_trust_score"] == 900
     # No scope chain = no aps_scope_chain key
     assert "aps_scope_chain" not in ctx
+
+
+# ── verify_aps_signature ──
+
+def test_verify_signature_fails_closed_without_nacl(monkeypatch):
+    """Without PyNaCl, verify_aps_signature must return False (fail closed)."""
+    import builtins
+    original_import = builtins.__import__
+    def mock_import(name, *args, **kwargs):
+        if name == "nacl.signing" or name.startswith("nacl"):
+            raise ImportError("No nacl")
+        return original_import(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, "__import__", mock_import)
+    # Even a plausible-looking signature must be rejected
+    fake_sig = "a" * 128
+    fake_key = "b" * 64
+    assert verify_aps_signature("payload", fake_sig, fake_key) is False
+
+
+def test_verify_signature_rejects_bad_signature():
+    """Bad signature format is rejected regardless of nacl availability."""
+    assert verify_aps_signature("payload", "not-hex", "not-a-key") is False
+
+
+def test_verify_signature_rejects_empty():
+    """Empty inputs are rejected."""
+    assert verify_aps_signature("", "", "") is False
+
+
+# ── passport_grade validation ──
+
+def test_invalid_passport_grade_raises():
+    """Invalid passport_grade must raise ValueError."""
+    import pytest
+    with pytest.raises(ValueError, match="Invalid passport_grade"):
+        aps_context(
+            {"verdict": "permit", "scopeUsed": "x", "agentId": "a"},
+            passport_grade=99,
+        )
+
+
+def test_invalid_passport_grade_negative():
+    """Negative passport_grade must raise ValueError."""
+    import pytest
+    with pytest.raises(ValueError, match="Invalid passport_grade"):
+        aps_context(
+            {"verdict": "permit", "scopeUsed": "x", "agentId": "a"},
+            passport_grade=-1,
+        )
