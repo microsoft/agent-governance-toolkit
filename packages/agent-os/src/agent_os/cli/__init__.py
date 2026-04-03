@@ -34,7 +34,6 @@ import subprocess
 import sys
 import time
 import warnings
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -1378,6 +1377,7 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--json", action="store_true", help="Output in JSON format")
+    parser.add_argument("--version", action="store_true", help="Show version")
 
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
 
@@ -1470,7 +1470,7 @@ def main() -> int:
         "--port", type=int, default=8080, help="Port to listen on (default: 8080)"
     )
     serve_parser.add_argument(
-        "--host", default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)"
+        "--host", default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)"
     )
 
     # health
@@ -1516,29 +1516,7 @@ def main() -> int:
 
     # Command routing
     try:
-        if args.command == "init":
-            return cmd_init(args)
-        elif args.command == "secure":
-            return cmd_secure(args)
-        elif args.command == "audit":
-            return cmd_audit(args)
-        elif args.command == "status":
-            return cmd_status(args)
-        elif args.command == "check":
-            return cmd_check(args)
-        elif args.command == "review":
-            return cmd_review(args)
-        elif args.command == "install-hooks":
-            return cmd_install_hooks(args)
-        elif args.command == "validate":
-            return cmd_validate(args)
-        elif args.command == "metrics":
-            return cmd_metrics(args)
-        elif args.command == "health":
-            return cmd_health(args)
-        else:
-            print(f"Unknown command: {args.command}")
-            return 1
+        return handler(args)
     except KeyboardInterrupt:
         return 130
     except Exception as e:

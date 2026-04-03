@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for the template AgentMesh trust integration.
 
 These tests run without any target framework SDK installed. They validate

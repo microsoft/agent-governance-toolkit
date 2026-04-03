@@ -1040,7 +1040,7 @@ async function exportAuditLog(): Promise<void> {
 }
 
 /** Escape HTML entities for safe rendering. */
-function escHtml(s: string): string { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function escHtml(s: string): string { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
 /** Apply inline Markdown formatting (bold, code). */
 function inlineMdFormat(s: string): string {

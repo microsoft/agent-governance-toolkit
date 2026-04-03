@@ -136,7 +136,7 @@ class DetectionConfig:
     allowlist: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        """Validate allowlist entries to prevent overly broad suppression."""
+        """Validate allowlist and blocklist entries to prevent overly broad suppression."""
         for entry in self.allowlist:
             stripped = entry.strip()
             if not stripped:
@@ -149,6 +149,21 @@ class DetectionConfig:
                     f"(minimum {_MIN_ALLOWLIST_ENTRY_LENGTH} characters). "
                     "Short entries risk disabling detection for broad input ranges."
                 )
+        for entry in self.blocklist:
+            stripped = entry.strip()
+            if not stripped:
+                raise ValueError(
+                    "Blocklist entries must not be empty or whitespace-only"
+                )
+            if len(stripped) < _MIN_ALLOWLIST_ENTRY_LENGTH:
+                raise ValueError(
+                    f"Blocklist entry '{entry}' is too short "
+                    f"(minimum {_MIN_ALLOWLIST_ENTRY_LENGTH} characters). "
+                    f"Short entries cause excessive false positives with substring matching."
+                )
+        # After validation, freeze the lists to prevent post-construction mutation
+        self.allowlist = tuple(self.allowlist)
+        self.blocklist = tuple(self.blocklist)
 
 
 @dataclass

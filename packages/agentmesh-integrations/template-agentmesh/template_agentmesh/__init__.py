@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 template-agentmesh: Starter template for AgentMesh trust integrations.
 
