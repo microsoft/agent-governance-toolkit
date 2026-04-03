@@ -668,6 +668,16 @@ kernel.on(GovernanceEventType.TOOL_CALL_BLOCKED, lambda data: (
     log_blocked_tool(data["tool_name"], data["reason"])
 ))
 
+# Make drift detection blocking — post_execute() emits DRIFT_DETECTED
+# but does not raise. Register a listener to enforce drift limits:
+def on_drift(data):
+    if data["drift_score"] > data["threshold"]:
+        raise PolicyViolationError(
+            f"Drift {data['drift_score']:.2f} exceeds {data['threshold']}"
+        )
+
+kernel.on(GovernanceEventType.DRIFT_DETECTED, on_drift)
+
 governed = kernel.wrap(my_agent)
 ```
 
