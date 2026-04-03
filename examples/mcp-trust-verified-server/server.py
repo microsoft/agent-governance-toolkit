@@ -3,6 +3,11 @@
 """
 MCP Trust-Verified Server — demonstrates trust-gated tool access.
 
+DEMO ONLY: This example accepts agent_did and trust_score as client-supplied
+tool arguments. In production, agent identity and trust scores must come from
+a verified source (identity registry, trust server) — never from the calling
+agent itself.
+
 Three tools with escalating trust requirements:
   - read_file:       low trust (300), no special capabilities
   - write_file:      medium trust (600), requires "fs_write" capability

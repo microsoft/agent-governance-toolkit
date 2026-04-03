@@ -1,4 +1,11 @@
+<!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
+
 # MCP Trust-Verified Server
+
+> **DEMO ONLY.** This example accepts `agent_did` and `trust_score` as
+> client-supplied tool arguments. In production, agent identity and trust
+> scores must come from a verified source (identity registry, trust server)
+> — never from the calling agent itself.
 
 A standalone MCP server where every tool call is gated by AgentMesh trust verification. Demonstrates how to use `TrustProxy` and `MCPSecurityScanner` to enforce per-tool trust thresholds, capability requirements, and rate limits.
 

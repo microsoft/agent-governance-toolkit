@@ -1,3 +1,5 @@
+<!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
+
 # Adding Governance and Trust to MCP Servers
 
 This guide shows how to add identity verification, trust scoring, tool
@@ -25,7 +27,10 @@ an LLM silently follows (OWASP ASI01 -- Prompt Injection via tools).  Third,
 a tool definition can change silently between sessions -- a "rug pull" -- to
 alter agent behavior without anyone noticing.
 
-The toolkit addresses all three with a four-layer architecture:
+The toolkit addresses all three with four composable governance layers.
+Each layer covers a distinct concern (authorization, identity, integrity,
+enforcement) and can be adopted independently or combined for
+defense-in-depth:
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
@@ -699,12 +704,13 @@ gateway = MCPGateway(policy, denied_tools=["shell"])
 
 # --- Per-request pipeline ---
 
-def governed_tool_call(agent_did, trust_score, tool_name, tool_desc, params):
+def governed_tool_call(agent_did, trust_score, capabilities, tool_name, tool_desc, params):
     # Step 1: Authorization
     auth = proxy.authorize(
         agent_did=agent_did,
         agent_trust_score=trust_score,
         tool_name=tool_name,
+        agent_capabilities=capabilities,
     )
     if not auth.allowed:
         return {"error": auth.reason}
