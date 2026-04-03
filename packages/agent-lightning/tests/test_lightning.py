@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 
 def test_top_level_imports():
     """All public symbols are importable from agent_lightning_gov."""
@@ -23,6 +25,7 @@ def test_top_level_imports():
 
 def test_backward_compat_shim():
     """Importing from agent_os.integrations.agent_lightning still works."""
+    pytest.importorskip("agent_os", reason="agent-os-kernel not installed")
     from agent_os.integrations.agent_lightning import (
         GovernedRunner,
         PolicyReward,
