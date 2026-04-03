@@ -151,18 +151,18 @@ class CrewAIKernel(BaseIntegration):
 
                 def governed_run(*args, **kwargs):
                     """Governed wrapper around a CrewAI tool's run method.
-                    
+
                     Intercepts the tool call, runs pre-execution policy checks,
                     records the invocation in the audit log, and delegates
                     to the original _run implementation.
-                    
+
                     Args:
                         *args: Positional arguments forwarded to the original tool.
                         **kwargs: Keyword arguments forwarded to the original tool.
-                    
+
                     Returns:
                         The result from the original tool's run method.
-                    
+
                     Raises:
                         PolicyViolationError: If the tool call violates the active policy.
                     """
@@ -211,18 +211,18 @@ class CrewAIKernel(BaseIntegration):
 
                     def governed_execute(task, *args, **kwargs):
                         """Governed wrapper around a CrewAI agent's task execution.
-                        
+
                         Intercepts each task execution call, applies pre-execution
                         policy checks, and delegates to the original execute method.
-                        
+
                         Args:
                             task: The CrewAI Task object to execute.
                             *args: Additional positional arguments.
                             **kwargs: Additional keyword arguments.
-                        
+
                         Returns:
                             The task execution result from the underlying agent.
-                        
+
                         Raises:
                             PolicyViolationError: If the execution violates the active policy.
                         """
@@ -286,18 +286,18 @@ class CrewAIKernel(BaseIntegration):
             @functools.wraps(original_step)
             def governed_step(*args: Any, _orig=original_step, _attr=step_attr, **kwargs: Any) -> Any:
                 """Governed wrapper around a CrewAI task step.
-                
+
                 Intercepts individual step calls within a task, validates
                 inputs against the active policy, and records each step
                 in the audit trail before delegating to the original method.
-                
+
                 Args:
                     *args: Positional arguments forwarded to the original step.
                     **kwargs: Keyword arguments forwarded to the original step.
-                
+
                 Returns:
                     The result from the original step method.
-                
+
                 Raises:
                     PolicyViolationError: If the step input violates the active policy.
                 """
@@ -355,18 +355,18 @@ class CrewAIKernel(BaseIntegration):
                 @functools.wraps(save_fn)
                 def governed_save(*args: Any, _orig=save_fn, _mname=save_method_name, **kwargs: Any) -> Any:
                     """Governed wrapper around CrewAI memory save operations.
-                    
+
                     Validates content before it is written to crew memory,
                     checking for PII patterns and policy-blocked content.
                     Records every save attempt in the memory audit log.
-                    
+
                     Args:
                         *args: Positional arguments forwarded to the original save.
                         **kwargs: Keyword arguments forwarded to the original save.
-                    
+
                     Returns:
                         The result from the original memory save method.
-                    
+
                     Raises:
                         PolicyViolationError: If the content contains PII or blocked patterns.
                     """
@@ -422,18 +422,18 @@ class CrewAIKernel(BaseIntegration):
         @functools.wraps(delegate_fn)
         def governed_delegate(*args: Any, **kwargs: Any) -> Any:
             """Governed wrapper around CrewAI agent delegation.
-            
+
             Intercepts delegation calls between agents, tracks delegation
             depth, and enforces the maximum delegation limit defined in
             the active policy.
-            
+
             Args:
                 *args: Positional arguments forwarded to the original delegate.
                 **kwargs: Keyword arguments forwarded to the original delegate.
-            
+
             Returns:
                 The result from the delegated agent.
-            
+
             Raises:
                 PolicyViolationError: If the delegation depth exceeds the policy limit.
             """

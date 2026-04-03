@@ -20,8 +20,16 @@ from agent_marketplace.marketplace_policy import (
     ComplianceResult,
     MCPServerPolicy,
     MarketplacePolicy,
+    OrgMarketplacePolicy,
     evaluate_plugin_compliance,
     load_marketplace_policy,
+)
+from agent_marketplace.quality_scoring import (
+    PluginQualityProfile,
+    QualityBadge,
+    QualityDimension,
+    QualityScore,
+    QualityStore,
 )
 from agent_marketplace.registry import PluginRegistry
 from agent_marketplace.schema_adapters import (
@@ -53,13 +61,19 @@ __all__ = [
     "MCPServerPolicy",
     "MarketplaceError",
     "MarketplacePolicy",
+    "OrgMarketplacePolicy",
     "PluginInstaller",
     "PluginManifest",
+    "PluginQualityProfile",
     "PluginRegistry",
     "PluginSigner",
     "PluginTrustConfig",
     "PluginTrustStore",
     "PluginType",
+    "QualityBadge",
+    "QualityDimension",
+    "QualityScore",
+    "QualityStore",
     "TRUST_TIERS",
     "adapt_to_canonical",
     "compute_initial_score",

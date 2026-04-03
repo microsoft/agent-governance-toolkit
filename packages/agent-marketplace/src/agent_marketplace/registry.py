@@ -17,6 +17,7 @@ from typing import Optional
 from agent_marketplace.manifest import MarketplaceError, PluginManifest, PluginType
 from agent_marketplace.marketplace_policy import (
     MarketplacePolicy,
+    OrgMarketplacePolicy,
     evaluate_plugin_compliance,
 )
 
@@ -57,12 +58,14 @@ class PluginRegistry:
         self,
         manifest: PluginManifest,
         mcp_servers: list[str] | None = None,
+        organization: str | None = None,
     ) -> None:
         """Register a plugin manifest.
 
         Args:
             manifest: The manifest to register.
             mcp_servers: Optional list of MCP server names declared by the plugin.
+            organization: Optional organization context for org-scoped policy checks.
 
         Raises:
             MarketplaceError: If the exact name+version already exists or the
@@ -70,7 +73,8 @@ class PluginRegistry:
         """
         if self._marketplace_policy is not None:
             result = evaluate_plugin_compliance(
-                manifest, self._marketplace_policy, mcp_servers
+                manifest, self._marketplace_policy, mcp_servers,
+                organization=organization,
             )
             if not result.compliant:
                 raise MarketplaceError(
@@ -171,6 +175,26 @@ class PluginRegistry:
             latest = max(versions.values(), key=lambda m: _semver_tuple(m.version))
             if type_filter is None or latest.plugin_type == type_filter:
                 results.append(latest)
+        return results
+
+    def list_for_organization(self, organization: str) -> list[PluginManifest]:
+        """List plugins visible to an organization (org-specific + global).
+
+        A plugin is visible to an organization when its ``organization``
+        field is ``None`` (global) or matches the given *organization*.
+
+        Args:
+            organization: Organization name to filter by.
+
+        Returns:
+            List of matching manifests (all versions).
+        """
+        results: list[PluginManifest] = []
+        for name in self._plugins:
+            for version in self._plugins[name]:
+                manifest = self._plugins[name][version]
+                if manifest.organization is None or manifest.organization == organization:
+                    results.append(manifest)
         return results
 
     # ------------------------------------------------------------------

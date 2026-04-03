@@ -15,7 +15,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import yaml
 from rich.console import Console
@@ -28,11 +28,11 @@ logger = logging.getLogger("policy-cli")
 def validate_policy(policy_path: Path) -> List[Dict[str, str]]:
     """Validate a policy YAML file."""
     errors = []
-    
+
     try:
         with open(policy_path) as f:
             data = yaml.safe_load(f)
-            
+
         if not data:
             errors.append({"severity": "critical", "message": "Policy file is empty"})
             return errors
@@ -85,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="policies-cli",
         description="Agent OS Policy Management Tools"
     )
-    
+
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # -- validate -----------------------------------------------------------
@@ -130,7 +130,7 @@ def main(argv: List[str] | None = None) -> int:
                     all_results[path_str] = [{"severity": "critical", "message": "File not found"}]
                     overall_passed = False
                     continue
-                    
+
                 errors = validate_policy(path)
                 all_results[path_str] = errors
                 if any(e["severity"] in ["critical", "error"] for e in errors):
@@ -149,7 +149,7 @@ def main(argv: List[str] | None = None) -> int:
                         print(f"❌ {path}: Found {len(errors)} issues")
                         for e in errors:
                             print(f"  [{e['severity'].upper()}] {e['message']}")
-                
+
             return 0 if overall_passed else 1
 
         elif args.command == "test":
@@ -157,7 +157,7 @@ def main(argv: List[str] | None = None) -> int:
             if not path.exists():
                 print(f"Error: Policy file not found: {args.policy}")
                 return 1
-                
+
             results = test_policies(path)
             passed_count = len([r for r in results if r["passed"]])
             total_count = len(results)
@@ -181,13 +181,13 @@ def main(argv: List[str] | None = None) -> int:
 
                 console.print(table)
                 print(f"\nSummary: {passed_count}/{total_count} tests passed")
-                
+
             return 0 if passed_count == total_count else 1
 
         elif args.command == "diff":
             base_path = Path(args.base)
             target_path = Path(args.target)
-            
+
             if not base_path.exists() or not target_path.exists():
                 print("Error: One or both files not found")
                 return 1

@@ -78,7 +78,7 @@ class ValidationOutcome:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise this outcome to a plain dictionary.
-        
+
         Returns:
             A dict with validator, passed, and optionally error
             and fixed_value keys.
@@ -108,7 +108,7 @@ class ValidationResult:
     @property
     def failed_validators(self) -> list[str]:
         """Return the names of all validators that did not pass.
-        
+
         Returns:
             List of validator name strings where passed is False.
         """
@@ -116,7 +116,7 @@ class ValidationResult:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise this aggregated result to a plain dictionary.
-        
+
         Returns:
             A dict with passed, action, outcomes, and failed_validators keys.
         """
@@ -145,7 +145,7 @@ class RegexValidator:
     @property
     def name(self) -> str:
         """Return the human-readable name of this regex validator.
-        
+
         Returns:
             The validator name string used in audit logs and outcomes.
         """
@@ -153,11 +153,11 @@ class RegexValidator:
 
     def validate(self, value: str, metadata: dict[str, Any] | None = None) -> ValidationOutcome:
         """Validate a string by checking it against blocked regex patterns.
-        
+
         Args:
             value: The text to scan.
             metadata: Optional dict of additional context (unused).
-        
+
         Returns:
             ValidationOutcome indicating pass or fail.
         """
@@ -183,7 +183,7 @@ class LengthValidator:
     @property
     def name(self) -> str:
         """Return the human-readable name of this length validator.
-        
+
         Returns:
             The validator name string used in audit logs and outcomes.
         """
@@ -191,11 +191,11 @@ class LengthValidator:
 
     def validate(self, value: str, metadata: dict[str, Any] | None = None) -> ValidationOutcome:
         """Validate that a string does not exceed the configured max length.
-        
+
         Args:
             value: The text to check.
             metadata: Optional dict of additional context (unused).
-        
+
         Returns:
             ValidationOutcome with a fixed_value truncated to max_length on fail.
         """
@@ -219,7 +219,7 @@ class KeywordValidator:
     @property
     def name(self) -> str:
         """Return the human-readable name of this keyword validator.
-        
+
         Returns:
             The validator name string used in audit logs and outcomes.
         """
@@ -227,11 +227,11 @@ class KeywordValidator:
 
     def validate(self, value: str, metadata: dict[str, Any] | None = None) -> ValidationOutcome:
         """Validate that a string contains none of the blocked keywords.
-        
+
         Args:
             value: The text to scan (case-insensitive).
             metadata: Optional dict of additional context (unused).
-        
+
         Returns:
             ValidationOutcome indicating pass or fail.
         """
@@ -272,10 +272,10 @@ class GuardrailsKernel:
 
     def _default_violation_handler(self, result: ValidationResult) -> None:
         """Default handler called when one or more validators fail.
-        
+
         Logs a warning for each failed validator name. Override by
         passing a custom on_violation callable to GuardrailsKernel.
-        
+
         Args:
             result: The aggregated ValidationResult.
         """

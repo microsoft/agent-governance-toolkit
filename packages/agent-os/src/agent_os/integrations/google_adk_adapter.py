@@ -234,10 +234,10 @@ class GoogleADKKernel(BaseIntegration):
 
     def _default_violation_handler(self, error: PolicyViolationError) -> None:
         """Default handler called when a policy violation occurs.
-        
+
         Logs the violation at ERROR level. Override by passing a custom
         on_violation callable to the kernel constructor.
-        
+
         Args:
             error: The PolicyViolationError that was raised.
         """
@@ -245,9 +245,9 @@ class GoogleADKKernel(BaseIntegration):
 
     def _record(self, event_type: str, agent_name: str, details: dict[str, Any]) -> None:
         """Append an audit event to the internal audit log.
-        
+
         Records the event only when log_all_calls is enabled.
-        
+
         Args:
             event_type: Short string label for the event.
             agent_name: Name of the ADK agent generating the event.
@@ -265,10 +265,10 @@ class GoogleADKKernel(BaseIntegration):
 
     def _check_tool_allowed(self, tool_name: str) -> tuple[bool, str]:
         """Check whether a tool is permitted by the active ADK policy.
-        
+
         Args:
             tool_name: Name of the ADK tool to check.
-        
+
         Returns:
             Tuple of (allowed: bool, reason: str).
         """
@@ -280,10 +280,10 @@ class GoogleADKKernel(BaseIntegration):
 
     def _check_content(self, content: str) -> tuple[bool, str]:
         """Scan a string for policy-blocked patterns.
-        
+
         Args:
             content: The text to scan.
-        
+
         Returns:
             Tuple of (allowed: bool, reason: str).
         """
@@ -295,7 +295,7 @@ class GoogleADKKernel(BaseIntegration):
 
     def _check_timeout(self) -> tuple[bool, str]:
         """Check whether the kernel has exceeded its configured timeout.
-        
+
         Returns:
             Tuple of (within_limit: bool, reason: str).
         """
@@ -306,10 +306,10 @@ class GoogleADKKernel(BaseIntegration):
 
     def _check_budget(self, cost: float = 1.0) -> tuple[bool, str]:
         """Check whether a tool call would exceed the configured cost budget.
-        
+
         Args:
             cost: Cost units to add for this call (default 1.0).
-        
+
         Returns:
             Tuple of (within_budget: bool, reason: str).
         """
@@ -333,13 +333,13 @@ class GoogleADKKernel(BaseIntegration):
 
     def _raise_violation(self, policy_name: str, description: str) -> PolicyViolationError:
         """Create, record, and surface a PolicyViolationError.
-        
+
         Appends the error to the violations list and calls on_violation.
-        
+
         Args:
             policy_name: Short identifier for the violated policy rule.
             description: Human-readable description of the violation.
-        
+
         Returns:
             The constructed PolicyViolationError (caller may raise it).
         """

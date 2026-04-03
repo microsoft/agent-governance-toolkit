@@ -189,7 +189,7 @@ def handle_cli_error(e: Exception, args: argparse.Namespace) -> int:
     # Sanitize exception message to avoid leaking internal details
     is_known_error = isinstance(e, (FileNotFoundError, ValueError, PermissionError))
     error_msg = "A file, value, or permission error occurred." if is_known_error else "An internal error occurred."
-    
+
     if getattr(args, "json", False) or (hasattr(args, "format") and args.format == "json"):
         print(json.dumps({
             "status": "error",

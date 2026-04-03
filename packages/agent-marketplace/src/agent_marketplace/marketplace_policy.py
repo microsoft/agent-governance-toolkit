@@ -6,11 +6,13 @@ Marketplace Policy Enforcement
 Defines marketplace-level policies for MCP server allowlist/blocklist
 enforcement, plugin type restrictions, and signature requirements.
 Operators can declare which MCP servers are permitted for plugins.
+Supports organization-scoped policy overrides (Issues #733, #737).
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -58,6 +60,16 @@ class MCPServerPolicy(BaseModel):
         return v
 
 
+@dataclass
+class OrgMarketplacePolicy:
+    """Organization-scoped marketplace policy that inherits from enterprise base."""
+
+    organization: str
+    additional_allowed_plugin_types: list[str] = field(default_factory=list)
+    additional_blocked_plugins: list[str] = field(default_factory=list)
+    mcp_server_overrides: MCPServerPolicy | None = None
+
+
 class MarketplacePolicy(BaseModel):
     """Top-level marketplace policy controlling plugin admission."""
 
@@ -73,6 +85,73 @@ class MarketplacePolicy(BaseModel):
         False,
         description="Require Ed25519 signatures on all plugins",
     )
+    org_policies: dict[str, OrgMarketplacePolicy] = Field(
+        default_factory=dict,
+        description="Organization-scoped policy overrides keyed by org name",
+    )
+    org_mcp_policies: dict[str, MCPServerPolicy] = Field(
+        default_factory=dict,
+        description="Per-organization MCP server policy overrides",
+    )
+
+    def get_effective_policy(self, organization: str | None = None) -> MarketplacePolicy:
+        """Resolve effective policy for an organization (base + org overrides).
+
+        When *organization* is ``None`` or the org has no overrides, the base
+        enterprise policy is returned unchanged.  Otherwise the base policy is
+        merged with the org-specific additions.
+        """
+        if organization is None or organization not in self.org_policies:
+            return self
+
+        org = self.org_policies[organization]
+
+        # Merge allowed plugin types: base + org additions
+        merged_types = self.allowed_plugin_types
+        if merged_types is not None and org.additional_allowed_plugin_types:
+            merged_types = list(set(merged_types + org.additional_allowed_plugin_types))
+
+        # Merge MCP server policy if org has overrides
+        merged_mcp = org.mcp_server_overrides if org.mcp_server_overrides else self.mcp_servers
+
+        return MarketplacePolicy(
+            mcp_servers=merged_mcp,
+            allowed_plugin_types=merged_types,
+            require_signature=self.require_signature,
+        )
+
+    def get_effective_mcp_policy(self, organization: str | None = None) -> MCPServerPolicy:
+        """Get effective MCP server policy for an organization.
+
+        Org policies inherit from the base (enterprise) MCP policy.
+        Org can add to allowlist but cannot remove base restrictions.
+        """
+        base = self.mcp_servers
+        if organization is None or organization not in self.org_mcp_policies:
+            return base
+        org = self.org_mcp_policies[organization]
+        # Merge: org inherits base restrictions, can add more allowed servers
+        if base.mode == "blocklist":
+            # Org cannot un-block servers blocked at enterprise level
+            merged_blocked = list(set(base.blocked + org.blocked))
+            merged_allowed = [s for s in org.allowed if s not in base.blocked]
+            return MCPServerPolicy(
+                mode=base.mode,
+                blocked=merged_blocked,
+                allowed=merged_allowed,
+                require_declaration=base.require_declaration or org.require_declaration,
+            )
+        else:  # allowlist
+            # Org can only allow servers already in the enterprise allowlist
+            merged_allowed = (
+                [s for s in org.allowed if s in base.allowed] if base.allowed else org.allowed
+            )
+            return MCPServerPolicy(
+                mode=base.mode,
+                allowed=merged_allowed or base.allowed,
+                blocked=list(set(base.blocked + org.blocked)),
+                require_declaration=base.require_declaration or org.require_declaration,
+            )
 
 
 class ComplianceResult(BaseModel):
@@ -125,6 +204,7 @@ def evaluate_plugin_compliance(
     manifest: PluginManifest,
     policy: MarketplacePolicy,
     mcp_servers: list[str] | None = None,
+    organization: str | None = None,
 ) -> ComplianceResult:
     """Check whether a plugin manifest complies with a marketplace policy.
 
@@ -134,6 +214,9 @@ def evaluate_plugin_compliance(
         mcp_servers: Optional list of MCP server names declared by the plugin.
             When ``None``, MCP declaration checks that require a server list
             will flag a violation if ``require_declaration`` is enabled.
+        organization: Optional organization name.  When provided the
+            effective MCP policy is resolved via
+            :meth:`MarketplacePolicy.get_effective_mcp_policy`.
 
     Returns:
         A :class:`ComplianceResult` indicating compliance status and any
@@ -155,8 +238,8 @@ def evaluate_plugin_compliance(
                 f"(allowed: {', '.join(policy.allowed_plugin_types)})"
             )
 
-    # -- MCP server policy ----------------------------------------------------
-    mcp_policy = policy.mcp_servers
+    # -- MCP server policy (org-aware) ----------------------------------------
+    mcp_policy = policy.get_effective_mcp_policy(organization)
 
     if mcp_policy.require_declaration and mcp_servers is None:
         violations.append(
