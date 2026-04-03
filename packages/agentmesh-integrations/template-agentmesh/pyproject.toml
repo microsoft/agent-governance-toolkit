@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "template_agentmesh"
+version = "0.1.0"
+description = "AgentMesh trust layer template — copy and rename for your framework"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    { name = "Microsoft Corporation" }
+]
+keywords = ["agents", "trust", "multi-agent", "agentmesh", "governance", "template"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/tutorials/build-custom-integration.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["template_agentmesh"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
