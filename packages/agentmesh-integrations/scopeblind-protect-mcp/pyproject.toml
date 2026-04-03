@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scopeblind-protect-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "AgentMesh integration for ScopeBlind protect-mcp — Cedar policy enforcement and verifiable decision receipts for MCP tool calls"
 readme = "README.md"
 license = "MIT"

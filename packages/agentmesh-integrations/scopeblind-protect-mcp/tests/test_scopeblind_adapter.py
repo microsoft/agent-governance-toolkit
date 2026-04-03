@@ -27,20 +27,24 @@ from scopeblind_protect_mcp import (
 # ---- Fixtures ----
 
 
+_receipt_counter = 0
+
 def make_receipt(
     effect="allow",
     tool="web_search",
     receipt_type="scopeblind:decision",
     **extra_payload,
 ):
-    """Build a minimal valid receipt for testing."""
-    payload = {"effect": effect, "tool": tool, "timestamp": time.time()}
+    """Build a minimal valid receipt for testing. Each call produces a unique receipt."""
+    global _receipt_counter
+    _receipt_counter += 1
+    payload = {"effect": effect, "tool": tool, "timestamp": time.time(), "nonce": _receipt_counter}
     payload.update(extra_payload)
     return {
         "type": receipt_type,
         "payload": payload,
-        "signature": "ed25519_test_sig_placeholder",
-        "publicKey": "ed25519_test_pk_placeholder",
+        "signature": "a" * 128,
+        "publicKey": "b" * 64,
     }
 
 
@@ -464,21 +468,22 @@ class TestEdgeCases:
         assert len(bridge.get_history()) == n_threads * n_per_thread
 
     def test_concurrent_receipt_verification(self):
-        """Multiple threads validating receipts should not lose entries."""
+        """Multiple threads validating unique receipts should not lose entries."""
         import threading
 
-        verifier = ReceiptVerifier()
-        receipt = make_receipt()
+        verifier = ReceiptVerifier(replay_protection=False)
         n_threads = 10
         n_per_thread = 50
+        # Each thread gets its own unique receipts
+        all_receipts = [[make_receipt(tool=f"t{t}_{i}") for i in range(n_per_thread)] for t in range(n_threads)]
         barrier = threading.Barrier(n_threads)
 
-        def worker():
+        def worker(thread_receipts):
             barrier.wait()
-            for _ in range(n_per_thread):
-                verifier.validate_structure_only(receipt)
+            for r in thread_receipts:
+                verifier.validate_structure_only(r)
 
-        threads = [threading.Thread(target=worker) for _ in range(n_threads)]
+        threads = [threading.Thread(target=worker, args=(all_receipts[t],)) for t in range(n_threads)]
         for t in threads:
             t.start()
         for t in threads:
@@ -544,3 +549,90 @@ class TestEdgeCases:
         result = bridge.evaluate(decision, agent_trust_score=500, receipt=receipt)
         assert "receipt_ref" in result
         assert len(result["receipt_ref"]) == 64  # full SHA-256 hex
+
+    # -- Ed25519 public key format validation --
+
+    def test_invalid_public_key_too_short(self):
+        """Public key with wrong length should be rejected."""
+        verifier = ReceiptVerifier()
+        receipt = {
+            "type": "scopeblind:decision",
+            "payload": {"effect": "allow", "tool": "test"},
+            "signature": "a" * 128,
+            "publicKey": "abcd1234",  # 8 chars, not 64
+        }
+        result = verifier.validate_structure_only(receipt)
+        assert result["valid"] is False
+        assert "Invalid publicKey format" in result["reason"]
+
+    def test_invalid_public_key_non_hex(self):
+        """Public key with non-hex characters should be rejected."""
+        verifier = ReceiptVerifier()
+        receipt = {
+            "type": "scopeblind:decision",
+            "payload": {"effect": "allow", "tool": "test"},
+            "signature": "a" * 128,
+            "publicKey": "g" * 64,  # 'g' is not hex
+        }
+        result = verifier.validate_structure_only(receipt)
+        assert result["valid"] is False
+        assert "Invalid publicKey format" in result["reason"]
+
+    def test_valid_public_key_hex(self):
+        """Valid 64-char hex public key should pass."""
+        verifier = ReceiptVerifier()
+        receipt = make_receipt()
+        result = verifier.validate_structure_only(receipt)
+        assert result["valid"] is True
+
+    def test_valid_public_key_base64url(self):
+        """Valid base64url-encoded public key should pass."""
+        verifier = ReceiptVerifier()
+        receipt = {
+            "type": "scopeblind:decision",
+            "payload": {"effect": "allow", "tool": "test", "nonce": 99999},
+            "signature": "a" * 128,
+            "publicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",  # 44 chars base64
+        }
+        result = verifier.validate_structure_only(receipt)
+        assert result["valid"] is True
+
+    # -- Replay protection --
+
+    def test_replay_detected(self):
+        """Same receipt submitted twice should be rejected the second time."""
+        verifier = ReceiptVerifier(replay_protection=True)
+        receipt = make_receipt(tool="replay_test")
+        result1 = verifier.validate_structure_only(receipt)
+        assert result1["valid"] is True
+        result2 = verifier.validate_structure_only(receipt)
+        assert result2["valid"] is False
+        assert result2.get("replay") is True
+        assert "Replay detected" in result2["reason"]
+
+    def test_replay_protection_disabled(self):
+        """With replay_protection=False, same receipt should pass twice."""
+        verifier = ReceiptVerifier(replay_protection=False)
+        receipt = make_receipt(tool="no_replay_check")
+        result1 = verifier.validate_structure_only(receipt)
+        assert result1["valid"] is True
+        result2 = verifier.validate_structure_only(receipt)
+        assert result2["valid"] is True
+
+    def test_replay_window_bounded(self):
+        """Replay window should evict old entries when full."""
+        verifier = ReceiptVerifier(replay_protection=True, max_seen_receipts=5)
+        receipts = [make_receipt(tool=f"tool_{i}") for i in range(10)]
+        for r in receipts:
+            verifier.validate_structure_only(r)
+        # First receipt should have been evicted from the window
+        result = verifier.validate_structure_only(receipts[0])
+        assert result["valid"] is True  # Not in window anymore
+
+    def test_different_receipts_not_replay(self):
+        """Two different receipts should both pass."""
+        verifier = ReceiptVerifier(replay_protection=True)
+        r1 = make_receipt(tool="tool_a")
+        r2 = make_receipt(tool="tool_b")
+        assert verifier.validate_structure_only(r1)["valid"] is True
+        assert verifier.validate_structure_only(r2)["valid"] is True

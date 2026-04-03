@@ -23,10 +23,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import threading
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 
 # ---------------------------------------------------------------------------
@@ -245,12 +247,29 @@ class ReceiptVerifier:
     }
 
     MAX_LOG = 10000  # Prevent unbounded memory growth
+    MAX_SEEN_RECEIPTS = 50000  # Replay protection window
 
-    def __init__(self, strict: bool = True, max_log: int = MAX_LOG):
+    # Ed25519 public key: 64 hex chars (32 bytes)
+    _ED25519_PK_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
+    # Also accept base64url-encoded keys (43-44 chars)
+    _ED25519_PK_B64_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43,44}=?$")
+
+    def __init__(
+        self,
+        strict: bool = True,
+        max_log: int = MAX_LOG,
+        replay_protection: bool = True,
+        max_seen_receipts: int = MAX_SEEN_RECEIPTS,
+    ):
         self.strict = strict
+        self.replay_protection = replay_protection
         self._max_log = max_log
+        self._max_seen = max_seen_receipts
         self._verified: List[Dict[str, Any]] = []
         self._verified_lock = threading.Lock()
+        # Replay protection: bounded ordered set of seen receipt hashes
+        self._seen_receipts: OrderedDict[str, None] = OrderedDict()
+        self._seen_lock = threading.Lock()
 
     def validate_structure_only(self, receipt: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -299,6 +318,37 @@ class ReceiptVerifier:
                 "has_signature": bool(sig),
                 "has_public_key": bool(pk),
             }
+
+        # Validate Ed25519 public key format (32 bytes = 64 hex chars, or base64url)
+        if not (self._ED25519_PK_PATTERN.match(pk) or self._ED25519_PK_B64_PATTERN.match(pk)):
+            return {
+                "valid": False,
+                "reason": (
+                    f"Invalid publicKey format: expected 64 hex chars (Ed25519) "
+                    f"or base64url, got {len(pk)} chars"
+                ),
+                "receipt_type": receipt_type,
+                "has_signature": True,
+                "has_public_key": True,
+            }
+
+        # Replay protection: reject previously seen receipts
+        if self.replay_protection:
+            receipt_hash = hashlib.sha256(
+                json.dumps(receipt, sort_keys=True).encode()
+            ).hexdigest()
+            with self._seen_lock:
+                if receipt_hash in self._seen_receipts:
+                    return {
+                        "valid": False,
+                        "reason": "Replay detected: this receipt has already been validated",
+                        "receipt_type": receipt_type,
+                        "replay": True,
+                    }
+                self._seen_receipts[receipt_hash] = None
+                # Evict oldest entries when the window is full
+                while len(self._seen_receipts) > self._max_seen:
+                    self._seen_receipts.popitem(last=False)
 
         result = {
             "valid": True,
