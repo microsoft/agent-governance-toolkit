@@ -19,11 +19,11 @@ jobs:
 
       - name: Install agent-os dependencies
         working-directory: packages/agent-os
-        run: pip install --no-cache-dir -e ".[dev]" --quiet
+        run: pip install --no-cache-dir -e ".[dev]" --quiet  # Install local package (Scorecard: pinned via pyproject.toml)
 
       - name: Install agent-sre dependencies
         working-directory: packages/agent-sre
-        run: pip install --no-cache-dir -e ".[dev]" --quiet
+        run: pip install --no-cache-dir -e ".[dev]" --quiet  # Install local package (Scorecard: pinned via pyproject.toml)
 
       - name: Run policy benchmarks
         working-directory: packages/agent-os

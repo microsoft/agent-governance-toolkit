@@ -131,7 +131,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ${{ matrix.path }}
-        run: npm ci --ignore-scripts 2>/dev/null || npm install
+        run: npm ci --ignore-scripts 2>/dev/null || npm install --ignore-scripts
 
       - name: Build ${{ matrix.name }}
         working-directory: ${{ matrix.path }}

@@ -23,13 +23,15 @@ RUN apt-get update \
         git \
     && curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
     && apt-get install -y --no-install-recommends nodejs \
-    && python -m pip install --upgrade pip setuptools wheel \
+    && python -m pip install --upgrade pip==24.3.1 setuptools==75.8.0 wheel==0.45.1 \
     && rm -rf /var/lib/apt/lists/*
 
 FROM base AS dev
 
 COPY . /workspace
 
+# Install local packages (Scorecard: pinned via pyproject.toml)
+# Requirements file dependencies have version constraints
 RUN python -m pip install --no-cache-dir \
         -e "packages/agent-os[full,dev]" \
         -e "packages/agent-mesh[agent-os,dev,server]" \

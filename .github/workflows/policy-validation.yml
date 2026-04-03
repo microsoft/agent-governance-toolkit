@@ -30,7 +30,7 @@ jobs:
       - name: Install agent-os-kernel
         working-directory: packages/agent-os
         run: |
-          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .
+          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
           pip install --no-cache-dir --require-hashes \
             pyyaml==6.0.2 --hash=sha256:8388ee1976c416731879ac16da0aff3f63b286ffdd57cdeb95f3f2e085687563 \
             2>/dev/null || pip install --no-cache-dir pyyaml==6.0.2
@@ -63,7 +63,7 @@ jobs:
       - name: Install agent-os-kernel
         working-directory: packages/agent-os
         run: |
-          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .
+          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
           pip install --no-cache-dir --require-hashes \
             pyyaml==6.0.2 --hash=sha256:8388ee1976c416731879ac16da0aff3f63b286ffdd57cdeb95f3f2e085687563 \
             pytest==8.4.1 --hash=sha256:539c70ba6fcead8e78eebbf1115e8b589e7565830d7d006a8723f19ac8a0afb7 \
