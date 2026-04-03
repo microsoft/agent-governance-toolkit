@@ -121,6 +121,9 @@ REGISTERED_NPM_PACKAGES = {
     "crypto-js",
     # npm deps from sdks/typescript
     "js-yaml", "@noble/ed25519",
+    # npm deps from agent-os-vscode
+    "@types/glob", "@types/mocha", "@vscode/test-electron",
+    "autoprefixer", "glob", "mocha", "postcss", "tailwindcss",
 }
 
 # Known Cargo crate names

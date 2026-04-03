@@ -894,7 +894,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     if output_format == "json":
         print(json.dumps(status_data, indent=2))
     else:
-        print(f"{Colors.BOLD}Agent OS Status{Colors.RESET}")
+        print(f"{Colors.BOLD}Agent OS Kernel Status{Colors.RESET}")
         print(f"Version: {__version__}")
         print(f"Root:    {project_root}")
         print(f"Config:  {Colors.GREEN if is_configured else Colors.RED}{'Found' if is_configured else 'Not initialised'}{Colors.RESET}")
@@ -909,39 +909,68 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    """Check a file for policy violations."""
+    """Check files for policy violations."""
     output_format = get_output_format(args)
     checker = PolicyChecker()
 
-    try:
-        violations = checker.check_file(args.file)
+    # Resolve file list -- accept both args.files (list) and args.file (str)
+    files = getattr(args, "files", None) or []
+    if not files:
+        file_val = getattr(args, "file", None)
+        if file_val:
+            files = [file_val]
+    staged = getattr(args, "staged", False)
 
-        if output_format == "json":
-            print(json.dumps({
-                "file": args.file,
-                "violations_count": len(violations),
-                "violations": [v.to_dict() for v in violations]
-            }, indent=2))
-        else:
-            if not violations:
-                print(f"{Colors.GREEN}\u2713 No policy violations found in {args.file}{Colors.RESET}")
-                return 0
-
-            print(f"{Colors.RED}\u2717 Found {len(violations)} violations in {args.file}:{Colors.RESET}")
-            for v in violations:
-                print(f"\n  [{v.severity.upper()}] Line {v.line}: {v.violation}")
-                print(f"    {Colors.DIM}Code: {v.code}{Colors.RESET}")
-                if v.suggestion:
-                    print(f"    {Colors.GREEN}Suggestion: {v.suggestion}{Colors.RESET}")
-
-        return 1 if violations else 0
-
-    except Exception as e:
-        if output_format == "json":
-            print(json.dumps({"error": str(e)}, indent=2))
-        else:
-            print(format_error(str(e)))
+    if not files and not staged:
+        print("Usage: agentos check <file> [<file> ...] | --staged")
         return 1
+
+    # If staged, get files from git
+    if staged and not files:
+        import subprocess as _sp
+        result = _sp.run(
+            ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+            capture_output=True, text=True,
+        )
+        files = [f for f in result.stdout.strip().split("\n") if f]
+
+    all_violations = []
+    had_error = False
+    for filepath in files:
+        if not Path(filepath).exists():
+            if output_format != "json":
+                print(format_error(f"File not found: {filepath}"))
+            had_error = True
+            continue
+
+        try:
+            violations = checker.check_file(filepath)
+            all_violations.extend(violations)
+
+            if output_format != "json":
+                if not violations:
+                    print(f"{Colors.GREEN}No policy violations found in {filepath}{Colors.RESET}")
+                else:
+                    print(f"{Colors.RED}Found {len(violations)} violations in {filepath}:{Colors.RESET}")
+                    for v in violations:
+                        print(f"\n  [{v.severity.upper()}] Line {v.line}: {v.violation}")
+                        print(f"    {Colors.DIM}Code: {v.code}{Colors.RESET}")
+                        if v.suggestion:
+                            print(f"    {Colors.GREEN}Suggestion: {v.suggestion}{Colors.RESET}")
+        except Exception as e:
+            if output_format != "json":
+                print(format_error(str(e)))
+            had_error = True
+
+    if output_format == "json":
+        print(json.dumps({
+            "violations": [v.to_dict() for v in all_violations],
+            "summary": {"total": len(all_violations)},
+        }, indent=2))
+
+    if had_error and not all_violations:
+        return 1
+    return 1 if all_violations else 0
 
 
 def cmd_review(args: argparse.Namespace) -> int:
@@ -953,7 +982,14 @@ def cmd_review(args: argparse.Namespace) -> int:
         print(f"Performing security review of {args.file}...")
 
     checker = PolicyChecker()
-    violations = checker.check_file(args.file)
+    try:
+        violations = checker.check_file(args.file)
+    except FileNotFoundError as e:
+        if output_format == "json":
+            print(json.dumps({"error": str(e)}, indent=2))
+        else:
+            print(format_error(str(e)))
+        return 1
 
     review_data = {
         "file": args.file,
@@ -968,10 +1004,13 @@ def cmd_review(args: argparse.Namespace) -> int:
         if print_log:
             print("Running multi-model CMVK analysis...")
         # Simulated CMVK analysis
+        models = ["gpt-4", "claude-3-opus", "gemini-1.5-pro"]
         review_data["cmvk_check"] = {
             "consensus": "safe",
-            "models": ["gpt-4", "claude-3-opus", "gemini-1.5-pro"]
+            "models": models
         }
+        review_data["model_results"] = models
+        review_data["consensus"] = "safe"
 
     if output_format == "json":
         print(json.dumps(review_data, indent=2))
@@ -999,33 +1038,44 @@ def cmd_install_hooks(args: argparse.Namespace) -> int:
             print(format_error("Not a git repository", suggestion="Run git init first"))
         return 1
 
-    hook_content = """#!/bin/bash
-# Agent OS Pre-commit Hook
-# Standardizes security checks before any code is committed.
+    hook_content = "#!/bin/bash\n# Agent OS Pre-commit Hook\nagentos check --staged\n"
 
-echo "🛡️  Agent OS: Running pre-commit security checks..."
-
-# Check staged files
-agentos check staged
-RESULT=$?
-
-if [ $RESULT -ne 0 ]; then
-  echo "❌ Agent OS found policy violations. Commit blocked."
-  exit 1
-fi
-
-echo "✅ Agent OS checks passed."
-exit 0
-"""
+    append_mode = getattr(args, "append", False)
+    force_mode = getattr(args, "force", False)
 
     try:
-        hook_path.write_text(hook_content)
-        hook_path.chmod(0o755)
+        hook_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if append_mode and hook_path.exists():
+            existing = hook_path.read_text(encoding="utf-8")
+            if "agentos check" in existing:
+                # Already installed -- idempotent
+                if output_format == "json":
+                    print(json.dumps({"status": "success", "message": "already present"}, indent=2))
+                else:
+                    print(f"{Colors.GREEN}Agent OS check already present in {hook_path}{Colors.RESET}")
+                return 0
+            # Append the agentos check to the existing hook
+            appended = existing.rstrip("\n") + "\n\n# Agent OS Pre-commit Check\nagentos check --staged\n"
+            hook_path.write_text(appended, encoding="utf-8")
+        elif hook_path.exists() and not force_mode and not append_mode:
+            if output_format == "json":
+                print(json.dumps({"status": "error", "message": "Hook already exists"}, indent=2))
+            else:
+                print(format_error("Hook already exists", suggestion="Use --force or --append"))
+            return 1
+        else:
+            hook_path.write_text(hook_content, encoding="utf-8")
+
+        try:
+            hook_path.chmod(0o755)
+        except OSError:
+            pass  # chmod may not be supported on Windows
 
         if output_format == "json":
             print(json.dumps({"status": "success", "file": str(hook_path)}, indent=2))
         else:
-            print(f"{Colors.GREEN}\u2713 Installed Agent OS pre-commit hook to {hook_path}{Colors.RESET}")
+            print(f"{Colors.GREEN}Installed Agent OS pre-commit hook to {hook_path}{Colors.RESET}")
         return 0
     except Exception as e:
         if output_format == "json":
@@ -1073,7 +1123,19 @@ def _validate_yaml_with_line_numbers(filepath: Path, content: dict, strict: bool
             for ve in sorted(validator.iter_errors(content), key=lambda e: list(e.absolute_path)):
                 # Build a human-readable location string from the JSON path
                 location = " -> ".join(str(p) for p in ve.absolute_path) or "<root>"
-                errors.append(f"{filepath}: [{location}] {ve.message}")
+                error_msg = f"{filepath}: [{location}] {ve.message}"
+                # Downgrade rule-level schema errors to warnings for legacy rules with 'type'
+                path_parts = list(ve.absolute_path)
+                rules_list = content.get('rules')
+                if (len(path_parts) >= 2 and path_parts[0] == 'rules'
+                        and isinstance(path_parts[1], int)
+                        and isinstance(rules_list, list)
+                        and path_parts[1] < len(rules_list)
+                        and isinstance(rules_list[path_parts[1]], dict)
+                        and 'type' in rules_list[path_parts[1]]):
+                    warnings.append(error_msg)
+                else:
+                    errors.append(error_msg)
         except ImportError:
             pass  # jsonschema not installed — fall through to manual checks
 
@@ -1105,9 +1167,6 @@ def _validate_yaml_with_line_numbers(filepath: Path, content: dict, strict: bool
                 if not isinstance(rule, dict):
                     errors.append(f"{filepath}: {rule_ref} must be a mapping, got {type(rule).__name__}")
                     continue
-                # name is required per schema
-                if "name" not in rule:
-                    errors.append(f"{filepath}: {rule_ref} missing required field 'name'")
                 # action must be a valid value
                 if "action" in rule and rule["action"] not in VALID_ACTIONS:
                     errors.append(
@@ -1151,7 +1210,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     """
     import yaml
 
-    print(f"\n{Colors.BOLD}🔍 Validating Policy Files{Colors.RESET}\n")
+    print(f"\n{Colors.BOLD}Validating Policy Files{Colors.RESET}\n")
 
     # ── Discover files ────────────────────────────────────────────────────
     files_to_check: list[Path] = []
@@ -1239,13 +1298,13 @@ def cmd_validate(args: argparse.Namespace) -> int:
     if all_warnings:
         print(f"{Colors.YELLOW}Warnings:{Colors.RESET}")
         for w in all_warnings:
-            print(f"  ⚠️  {w}")
+            print(f"  [!] {w}")
         print()
 
     if all_errors:
         print(f"{Colors.RED}Errors:{Colors.RESET}")
         for e in all_errors:
-            print(f"  ❌ {e}")
+            print(f"  [x] {e}")
         print()
         print(
             f"{Colors.RED}Validation failed.{Colors.RESET} "
@@ -1254,7 +1313,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
         return 1
 
 
-    print(f"{Colors.GREEN}✓ All {valid_count} policy file(s) valid.{Colors.RESET}")
+    print(f"{Colors.GREEN}All {valid_count} policy file(s) valid.{Colors.RESET}")
     return 0
 
 
@@ -1327,12 +1386,35 @@ def cmd_metrics(args: argparse.Namespace) -> int:
     if output_format == "json":
         print(json.dumps(metrics, indent=2))
     else:
-        # Prometheus format
-        print(f'agent_os_info{{version="{__version__}"}} 1')
-        print(f"agent_os_uptime_seconds {metrics['uptime_seconds']}")
-        print(f"agent_os_active_agents {metrics['active_agents']}")
-        print(f"agent_os_policy_violations_total {metrics['policy_violations']}")
-        print(f"agent_os_policy_checks_total {metrics['policy_checks']}")
+        # Prometheus exposition format with HELP and TYPE annotations
+        print('# HELP agentos_info Agent OS version info')
+        print('# TYPE agentos_info gauge')
+        print(f'agentos_info{{version="{__version__}"}} 1')
+        print()
+        print('# HELP agentos_uptime_seconds Agent OS uptime in seconds')
+        print('# TYPE agentos_uptime_seconds gauge')
+        print(f"agentos_uptime_seconds {metrics['uptime_seconds']}")
+        print()
+        print('# HELP agentos_active_agents Number of active agents')
+        print('# TYPE agentos_active_agents gauge')
+        print(f"agentos_active_agents {metrics['active_agents']}")
+        print()
+        print('# HELP agentos_policy_violations_total Total policy violations')
+        print('# TYPE agentos_policy_violations_total counter')
+        print(f"agentos_policy_violations_total {metrics['policy_violations']}")
+        print()
+        print('# HELP agentos_policy_checks_total Total policy checks')
+        print('# TYPE agentos_policy_checks_total counter')
+        print(f"agentos_policy_checks_total {metrics['policy_checks']}")
+        print()
+        print('# HELP agentos_kernel_operations_total Total kernel operations by type')
+        print('# TYPE agentos_kernel_operations_total counter')
+        for op, count in metrics['kernel_operations'].items():
+            print(f'agentos_kernel_operations_total{{operation="{op}"}} {count}')
+        print()
+        print('# HELP agentos_audit_log_entries Number of audit log entries')
+        print('# TYPE agentos_audit_log_entries gauge')
+        print(f"agentos_audit_log_entries {metrics['audit_log_entries']}")
 
     return 0
 
@@ -1343,6 +1425,7 @@ def cmd_health(args: argparse.Namespace) -> int:
 
     health_data = {
         "status": "healthy",
+        "uptime_seconds": 0.0,
         "components": {
             "kernel": "up",
             "state_backend": "connected",
@@ -1383,7 +1466,7 @@ def main() -> int:
 
     # init
     init_parser = subparsers.add_parser("init", help="Initialize .agents/ directory")
-    init_parser.add_argument("path", nargs="?", help="Project path (default: .)")
+    init_parser.add_argument("--path", default=None, help="Project path (default: .)")
     init_parser.add_argument("--template", choices=AVAILABLE_POLICIES, help="Initial policy template")
     init_parser.add_argument("--force", action="store_true", help="Overwrite existing .agents/ directory")
     init_parser.add_argument("--json", action="store_true", help="Output in JSON format")
@@ -1409,8 +1492,11 @@ def main() -> int:
 
     # check
     check_parser = subparsers.add_parser("check", help="Check file for safety violations")
-    check_parser.add_argument("file", help="File to check (or 'staged' for git changes)")
+    check_parser.add_argument("files", nargs="*", help="Files to check")
+    check_parser.add_argument("--staged", action="store_true", help="Check staged git changes")
+    check_parser.add_argument("--ci", action="store_true", help="CI mode (no colours)")
     check_parser.add_argument("--json", action="store_true", help="Output in JSON format")
+    check_parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
 
     # review
     review_parser = subparsers.add_parser("review", help="Multi-model code review")
@@ -1420,6 +1506,8 @@ def main() -> int:
 
     # install-hooks
     hooks_parser = subparsers.add_parser("install-hooks", help="Install git pre-commit hooks")
+    hooks_parser.add_argument("--force", action="store_true", help="Overwrite existing hook")
+    hooks_parser.add_argument("--append", action="store_true", help="Append to existing hook")
     hooks_parser.add_argument("--json", action="store_true", help="Output in JSON format")
 
     # validate
