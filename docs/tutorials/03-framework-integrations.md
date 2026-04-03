@@ -594,10 +594,11 @@ class GovernedMyAgent:
         # Execute the real framework call
         result = self._original.run(prompt, **kwargs)
 
-        # Post-execution validation (drift detection, output scanning)
-        valid, reason = self._kernel.post_execute(self._ctx, result)
-        if not valid:
-            raise PolicyViolationError(reason)
+        # Post-execution: drift detection and checkpointing.
+        # Note: post_execute() always returns (True, None). Drift detection
+        # is event-based — register a DRIFT_DETECTED listener to block on
+        # excessive drift (see "Adding event hooks" below).
+        self._kernel.post_execute(self._ctx, result)
 
         return result
 
@@ -744,8 +745,8 @@ violations route to the same handler, and the audit trail is unified.
 
 ## Next Steps
 
-- [Tutorial 01 — Getting Started](./01-getting-started.md)
-- [Tutorial 02 — Policy Configuration](./02-policy-configuration.md)
+- [Tutorial 01 — Policy Engine](./01-policy-engine.md)
+- [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md)
 - [OWASP Compliance Mapping](../OWASP-COMPLIANCE.md)
 - [API Reference — `BaseIntegration`](../../packages/agent-os/src/agent_os/integrations/base.py)
 - [All 22+ adapters](../../packages/agent-os/src/agent_os/integrations/)
