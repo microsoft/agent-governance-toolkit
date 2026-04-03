@@ -18,11 +18,11 @@ const PROMOTE_COMMANDS: Record<PanelId, string> = {
     'slo-dashboard': 'agent-os.showSLOWebview',
     'agent-topology': 'agent-os.showTopologyGraph',
     'governance-hub': 'agent-os.showGovernanceHub',
-    'audit-log': 'agent-os.showGovernanceHub',
+    'audit-log': 'agent-os.showAuditDetail',
     'active-policies': 'agent-os.openPolicyEditor',
-    'safety-stats': 'agent-os.showGovernanceHub',
-    'kernel-debugger': 'agent-os.showGovernanceHub',
-    'memory-browser': 'agent-os.showGovernanceHub',
+    'safety-stats': 'agent-os.showSafetyStats',
+    'kernel-debugger': 'agent-os.showKernelDebugger',
+    'memory-browser': 'agent-os.showMemoryBrowser',
 };
 
 /**
@@ -122,6 +122,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
                 break;
             case 'setAttentionMode':
                 this._store.setAttentionMode(message.mode);
+                break;
+            case 'openInBrowser':
+                vscode.commands.executeCommand('agent-os.openGovernanceInBrowser');
                 break;
         }
     }

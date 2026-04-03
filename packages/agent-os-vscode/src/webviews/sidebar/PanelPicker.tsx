@@ -197,7 +197,7 @@ export function PanelPicker(props: PanelPickerProps): React.ReactElement {
             aria-label="Configure panel layout"
             tabIndex={-1}
             onKeyDown={handleKeyDown}
-            className="fixed inset-0 z-50 bg-ml-bg/95 flex flex-col outline-none">
+            className="fixed inset-0 z-50 bg-ml-bg flex flex-col outline-none">
             <PickerHeader
                 canApply={hasChanges(current, draft)}
                 onApply={() => onApply(draft)}

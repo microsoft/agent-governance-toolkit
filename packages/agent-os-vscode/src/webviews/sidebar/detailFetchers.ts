@@ -16,6 +16,9 @@ import type {
     AuditDetailData,
     PolicyDetailData,
     HubDetailData,
+    KernelDetailData,
+    MemoryDetailData,
+    StatsDetailData,
 } from '../shared/types';
 
 /** Generate 24-point burn rate series from current value with slight variance. */
@@ -124,6 +127,49 @@ export async function fetchPolicyDetail(p: DataProviders): Promise<PolicyDetailD
             totalEvaluations: snap.totalEvaluationsToday,
             totalViolations: snap.totalViolationsToday,
             fetchedAt: snap.fetchedAt ?? new Date().toISOString(),
+        };
+    } catch { return null; }
+}
+
+/** Fetch kernel debugger detail data. */
+export function fetchKernelDetail(p: DataProviders): KernelDetailData | null {
+    try {
+        const k = p.kernel.getKernelSummary();
+        return {
+            activeAgents: [],
+            policyViolations: k.policyViolations,
+            totalCheckpoints: k.totalCheckpoints,
+            uptimeSeconds: k.uptime,
+            fetchedAt: new Date().toISOString(),
+        };
+    } catch { return null; }
+}
+
+/** Fetch memory browser detail data. */
+export function fetchMemoryDetail(p: DataProviders): MemoryDetailData | null {
+    try {
+        const m = p.memory.getVfsSummary();
+        return {
+            directoryCount: m.directoryCount,
+            fileCount: m.fileCount,
+            rootPaths: m.rootPaths,
+            tree: m.rootPaths.map(rp => ({ name: rp, type: 'directory' as const, path: rp })),
+            fetchedAt: new Date().toISOString(),
+        };
+    } catch { return null; }
+}
+
+/** Fetch safety stats detail data. */
+export function fetchStatsDetail(p: DataProviders): StatsDetailData | null {
+    try {
+        const s = p.audit.getStats();
+        return {
+            blockedToday: s.blockedToday,
+            blockedThisWeek: s.blockedThisWeek,
+            warningsToday: s.warningsToday,
+            cmvkReviews: s.cmvkReviewsToday,
+            totalLogs: s.totalLogs,
+            fetchedAt: new Date().toISOString(),
         };
     } catch { return null; }
 }

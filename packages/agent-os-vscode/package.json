@@ -165,6 +165,31 @@
         "icon": "$(dashboard)"
       },
       {
+        "command": "agent-os.showKernelDebugger",
+        "title": "Agent OS: Open Kernel Debugger",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "agent-os.showMemoryBrowser",
+        "title": "Agent OS: Open Memory Browser",
+        "icon": "$(database)"
+      },
+      {
+        "command": "agent-os.showSafetyStats",
+        "title": "Agent OS: Open Safety Stats",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "agent-os.showAuditDetail",
+        "title": "Agent OS: Open Audit Log Detail",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "agent-os.showPolicyDetail",
+        "title": "Agent OS: Open Active Policies Detail",
+        "icon": "$(law)"
+      },
+      {
         "command": "agent-os.openSLOInBrowser",
         "title": "Agent OS: Open SLO Dashboard in Browser",
         "icon": "$(link-external)"

@@ -146,7 +146,7 @@ export interface SidebarState {
 export type AttentionMode = 'manual' | 'auto';
 
 /** Valid panel types for detail subscriptions (rich data pushed to full panels). */
-export type DetailPanelType = 'slo' | 'topology' | 'audit' | 'policy' | 'hub';
+export type DetailPanelType = 'slo' | 'topology' | 'audit' | 'policy' | 'hub' | 'kernel' | 'memory' | 'stats';
 
 /** Slot position keys for scan rotation. */
 export type SlotKey = 'slotA' | 'slotB' | 'slotC';
@@ -173,4 +173,5 @@ export type WebviewMessage =
     | { type: 'setSlots'; slots: SlotConfig }
     | { type: 'promotePanelToWebview'; panelId: PanelId }
     | { type: 'refresh' }
-    | { type: 'setAttentionMode'; mode: AttentionMode };
+    | { type: 'setAttentionMode'; mode: AttentionMode }
+    | { type: 'openInBrowser' };

@@ -12,6 +12,7 @@ import * as http from 'http';
 import * as path from 'path';
 import { SLODataProvider } from '../views/sloTypes';
 import { AgentTopologyDataProvider } from '../views/topologyTypes';
+import { PolicyDataProvider } from '../views/policyTypes';
 import { AuditLogger } from '../auditLogger';
 import { ServerState, ClientConnection, ServerMessage, ServerMessageType } from './serverTypes';
 import { renderBrowserDashboard } from './browserTemplate';
@@ -51,20 +52,23 @@ export class GovernanceServer {
     private constructor(
         private readonly _sloProvider: SLODataProvider,
         private readonly _topologyProvider: AgentTopologyDataProvider,
-        private readonly _auditLogger: AuditLogger
+        private readonly _auditLogger: AuditLogger,
+        private readonly _policyProvider?: PolicyDataProvider,
     ) {}
 
     /** Get or create the singleton server instance. */
     public static getInstance(
         sloProvider: SLODataProvider,
         topologyProvider: AgentTopologyDataProvider,
-        auditLogger: AuditLogger
+        auditLogger: AuditLogger,
+        policyProvider?: PolicyDataProvider,
     ): GovernanceServer {
         if (!GovernanceServer._instance) {
             GovernanceServer._instance = new GovernanceServer(
                 sloProvider,
                 topologyProvider,
-                auditLogger
+                auditLogger,
+                policyProvider,
             );
         }
         return GovernanceServer._instance;
@@ -178,7 +182,7 @@ export class GovernanceServer {
     /** Apply security headers to all HTTP responses. */
     private _setSecurityHeaders(res: http.ServerResponse, nonce: string): void {
         res.setHeader('Content-Security-Policy',
-            "default-src 'self'; " +
+            "default-src 'self' blob:; " +
             `script-src 'nonce-${nonce}'; ` +
             "style-src 'self' 'unsafe-inline'; " +
             "connect-src 'self' ws://127.0.0.1:*");
@@ -237,6 +241,10 @@ export class GovernanceServer {
             ws.send(JSON.stringify({ type: 'sloUpdate', data: slo }));
             ws.send(JSON.stringify({ type: 'topologyUpdate', data: topology }));
             ws.send(JSON.stringify({ type: 'auditUpdate', data: audit }));
+            if (this._policyProvider) {
+                const policy = await this._policyProvider.getSnapshot();
+                ws.send(JSON.stringify({ type: 'policyUpdate', data: policy }));
+            }
         } catch {
             // Provider may not be ready yet; client will receive data on next broadcast cycle
         }
@@ -247,6 +255,17 @@ export class GovernanceServer {
         try {
             const slo = await this._sloProvider.getSnapshot();
             this.broadcast('sloUpdate', slo);
+            const topology = {
+                agents: this._topologyProvider.getAgents(),
+                bridges: this._topologyProvider.getBridges(),
+                delegations: this._topologyProvider.getDelegations(),
+            };
+            this.broadcast('topologyUpdate', topology);
+            this.broadcast('auditUpdate', this._auditLogger.getRecent(50));
+            if (this._policyProvider) {
+                const policy = await this._policyProvider.getSnapshot();
+                this.broadcast('policyUpdate', policy);
+            }
         } catch {
             // Non-critical: broadcast failure retries automatically on next 10s interval
         }

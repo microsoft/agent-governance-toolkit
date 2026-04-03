@@ -107,6 +107,61 @@ export interface PolicyDetailData {
 }
 
 // ---------------------------------------------------------------------------
+// Kernel Debugger Detail
+// ---------------------------------------------------------------------------
+
+export interface KernelAgent {
+    id: string;
+    name: string;
+    status: 'running' | 'paused' | 'stopped' | 'error';
+    currentTask: string | null;
+    memoryUsage: number;
+    checkpointCount: number;
+    signalCount: number;
+}
+
+export interface KernelDetailData {
+    activeAgents: KernelAgent[];
+    policyViolations: number;
+    totalCheckpoints: number;
+    uptimeSeconds: number;
+    fetchedAt: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Memory Browser Detail
+// ---------------------------------------------------------------------------
+
+export interface MemoryNode {
+    name: string;
+    type: 'file' | 'directory';
+    path: string;
+    children?: MemoryNode[];
+    size?: number;
+}
+
+export interface MemoryDetailData {
+    directoryCount: number;
+    fileCount: number;
+    rootPaths: string[];
+    tree: MemoryNode[];
+    fetchedAt: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Safety Stats Detail
+// ---------------------------------------------------------------------------
+
+export interface StatsDetailData {
+    blockedToday: number;
+    blockedThisWeek: number;
+    warningsToday: number;
+    cmvkReviews: number;
+    totalLogs: number;
+    fetchedAt: string | null;
+}
+
+// ---------------------------------------------------------------------------
 // Hub Composite (Phase 3)
 // ---------------------------------------------------------------------------
 

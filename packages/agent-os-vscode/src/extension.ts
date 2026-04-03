@@ -38,6 +38,11 @@ import { GovernanceStatusBar } from './governanceStatusBar';
 import { showSLODetail } from './webviews/sloDetail/SLODetailPanel';
 import { showTopologyDetail } from './webviews/topologyDetail/TopologyDetailPanel';
 import { showHubDetail } from './webviews/hubDetail/HubDetailPanel';
+import { showKernelDetail } from './webviews/kernelDetail/KernelDetailPanel';
+import { showMemoryDetail } from './webviews/memoryDetail/MemoryDetailPanel';
+import { showStatsDetail } from './webviews/statsDetail/StatsDetailPanel';
+import { showAuditDetail } from './webviews/auditDetail/AuditDetailPanel';
+import { showPolicyDetail } from './webviews/policyDetail/PolicyDetailPanel';
 
 // 3-Slot Sidebar (Sidebar Redesign)
 import { SidebarProvider } from './webviews/sidebar/SidebarProvider';
@@ -438,6 +443,26 @@ safe_query = "SELECT * FROM users WHERE id = ?"
         showHubDetail(context.extensionUri, governanceStore);
     });
 
+    const showKernelDebuggerCmd = vscode.commands.registerCommand('agent-os.showKernelDebugger', () => {
+        showKernelDetail(context.extensionUri, governanceStore);
+    });
+
+    const showMemoryBrowserCmd = vscode.commands.registerCommand('agent-os.showMemoryBrowser', () => {
+        showMemoryDetail(context.extensionUri, governanceStore);
+    });
+
+    const showSafetyStatsCmd = vscode.commands.registerCommand('agent-os.showSafetyStats', () => {
+        showStatsDetail(context.extensionUri, governanceStore);
+    });
+
+    const showAuditDetailCmd = vscode.commands.registerCommand('agent-os.showAuditDetail', () => {
+        showAuditDetail(context.extensionUri, governanceStore);
+    });
+
+    const showPolicyDetailCmd = vscode.commands.registerCommand('agent-os.showPolicyDetail', () => {
+        showPolicyDetail(context.extensionUri, governanceStore);
+    });
+
     // Agent Drill-Down Command (Dashboard Feature Completeness - Phase 2)
     const showAgentDetailsCmd = vscode.commands.registerCommand(
         'agent-os.showAgentDetails',
@@ -516,7 +541,8 @@ safe_query = "SELECT * FROM users WHERE id = ?"
             governanceServer = GovernanceServer.getInstance(
                 sloDataProvider,
                 agentTopologyDataProvider,
-                auditLogger
+                auditLogger,
+                policyDataProvider,
             );
             const port = await governanceServer.start();
             const url = `http://localhost:${port}`;
@@ -530,7 +556,8 @@ safe_query = "SELECT * FROM users WHERE id = ?"
             governanceServer = GovernanceServer.getInstance(
                 sloDataProvider,
                 agentTopologyDataProvider,
-                auditLogger
+                auditLogger,
+                policyDataProvider,
             );
             const port = await governanceServer.start();
             const url = `http://localhost:${port}/#slo`;
@@ -544,7 +571,8 @@ safe_query = "SELECT * FROM users WHERE id = ?"
             governanceServer = GovernanceServer.getInstance(
                 sloDataProvider,
                 agentTopologyDataProvider,
-                auditLogger
+                auditLogger,
+                policyDataProvider,
             );
             const port = await governanceServer.start();
             const url = `http://localhost:${port}/#topology`;
@@ -699,6 +727,11 @@ safe_query = "SELECT * FROM users WHERE id = ?"
         governanceStatusBar,
         // Governance Hub & Browser Experience
         showGovernanceHubCmd,
+        showKernelDebuggerCmd,
+        showMemoryBrowserCmd,
+        showSafetyStatsCmd,
+        showAuditDetailCmd,
+        showPolicyDetailCmd,
         showAgentDetailsCmd,
         exportAuditCSVCmd,
         openGovernanceInBrowserCmd,
@@ -891,13 +924,13 @@ function generateCMVKResultsHTML(result: any, webview: vscode.Webview): string {
     const modelRows = result.modelResults.map((m: any) => `
         <tr>
             <td>${m.passed ? '✅' : '⚠️'}</td>
-            <td><strong>${m.model}</strong></td>
-            <td>${m.summary}</td>
+            <td><strong>${escHtml(String(m.model))}</strong></td>
+            <td>${escHtml(String(m.summary))}</td>
         </tr>
     `).join('');
 
-    const issuesList = result.issues.length > 0 
-        ? `<ul>${result.issues.map((i: string) => `<li>${i}</li>`).join('')}</ul>`
+    const issuesList = result.issues.length > 0
+        ? `<ul>${result.issues.map((i: string) => `<li>${escHtml(i)}</li>`).join('')}</ul>`
         : '<p>No issues detected</p>';
 
     return `
@@ -942,7 +975,7 @@ function generateCMVKResultsHTML(result: any, webview: vscode.Webview): string {
         <div class="section">
             <h2>Recommendations</h2>
             <div class="recommendation">
-                ${result.recommendations}
+                ${escHtml(String(result.recommendations))}
             </div>
         </div>
         ` : ''}

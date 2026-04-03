@@ -103,6 +103,7 @@ export function Sidebar(): React.ReactElement {
                 attentionMode={state.attentionMode}
                 onToggleMode={handleToggleMode}
                 onOpenPicker={() => setPickerOpen(true)}
+                onOpenBrowser={() => getVSCodeAPI().postMessage({ type: 'openInBrowser' })}
             />
             <SlotStack
                 state={state}
@@ -123,11 +124,12 @@ export function Sidebar(): React.ReactElement {
     );
 }
 
-/** Header bar with title, attention toggle, and gear button. */
+/** Header bar with title, browser button, attention toggle, and gear button. */
 function SidebarHeader(props: {
     attentionMode: AttentionMode;
     onToggleMode: () => void;
     onOpenPicker: () => void;
+    onOpenBrowser: () => void;
 }): React.ReactElement {
     const isAuto = props.attentionMode === 'auto';
     return (
@@ -136,6 +138,14 @@ function SidebarHeader(props: {
                 Governance
             </span>
             <div className="flex items-center gap-1">
+                <button
+                    className="p-1 rounded hover:bg-ml-surface-hover text-ml-text-muted hover:text-ml-text"
+                    onClick={props.onOpenBrowser}
+                    aria-label="Open in browser"
+                    title="Open in browser"
+                >
+                    <LinkExternalIcon />
+                </button>
                 <button
                     className="px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider hover:bg-ml-surface-hover text-ml-text-muted hover:text-ml-text"
                     onClick={props.onToggleMode}
@@ -168,6 +178,16 @@ function GearIcon(): React.ReactElement {
                 9.1L14 8.6V7.4L11.6 6.9L11.3 6.2L12.6 4.2L11.8
                 3.4L9.8 4.7L9.1 4.4ZM8 10C6.9 10 6 9.1 6 8C6 6.9
                 6.9 6 8 6C9.1 6 10 6.9 10 8C10 9.1 9.1 10 8 10Z" />
+        </svg>
+    );
+}
+
+/** Inline 14x14 link-external SVG. */
+function LinkExternalIcon(): React.ReactElement {
+    return (
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M1.5 1H6V2.5H2.5V13.5H13.5V10H15V14.5H1V1.5L1.5 1Z" />
+            <path d="M15 1.5V8H13.5V3.56L7.53 9.53L6.47 8.47L12.44 2.5H8V1H14.5L15 1.5Z" />
         </svg>
     );
 }

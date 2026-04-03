@@ -25,6 +25,7 @@ import type {
 export {
     fetchSLODetail, fetchTopologyDetail, fetchAuditDetail,
     fetchPolicyDetail, fetchHubDetail,
+    fetchKernelDetail, fetchMemoryDetail, fetchStatsDetail,
 } from './detailFetchers';
 
 /** Providers bundle passed to the aggregator. */

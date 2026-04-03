@@ -15,6 +15,7 @@ import {
 import {
     fetchSLODetail, fetchTopologyDetail, fetchAuditDetail,
     fetchPolicyDetail, fetchHubDetail,
+    fetchKernelDetail, fetchMemoryDetail, fetchStatsDetail,
 } from './detailFetchers';
 import {
     type PanelTiming, createTiming, recordDuration,
@@ -162,6 +163,9 @@ export class GovernanceStore {
             audit: async () => fetchAuditDetail(this._providers),
             policy: () => fetchPolicyDetail(this._providers),
             hub: () => fetchHubDetail(this._providers),
+            kernel: async () => fetchKernelDetail(this._providers),
+            memory: async () => fetchMemoryDetail(this._providers),
+            stats: async () => fetchStatsDetail(this._providers),
         };
         const data = await (fetchers[panelType]?.() ?? Promise.resolve(null));
         for (const cb of subs) { cb(data); }
