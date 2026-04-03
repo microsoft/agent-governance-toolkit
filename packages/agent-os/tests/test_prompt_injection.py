@@ -292,11 +292,11 @@ class TestAllowlistValidation:
 
     def test_accepts_valid_entry(self):
         config = DetectionConfig(allowlist=["quarterly report"])
-        assert config.allowlist == ["quarterly report"]
+        assert config.allowlist == ("quarterly report",)
 
     def test_accepts_minimum_length_entry(self):
         config = DetectionConfig(allowlist=["abc"])
-        assert config.allowlist == ["abc"]
+        assert config.allowlist == ("abc",)
 
     def test_rejects_mixed_valid_and_invalid(self):
         with pytest.raises(ValueError, match="too short"):
@@ -304,7 +304,7 @@ class TestAllowlistValidation:
 
     def test_empty_allowlist_is_valid(self):
         config = DetectionConfig(allowlist=[])
-        assert config.allowlist == []
+        assert config.allowlist == ()
 
 
 # ---------------------------------------------------------------------------
