@@ -1254,13 +1254,10 @@ def cmd_validate(args: argparse.Namespace) -> int:
         )
         return 1
 
-    results = []
-    all_valid = True
 
-    for f in files:
-        # Simple simulated validation
-        is_valid = True
-        results.append({"file": str(f), "valid": is_valid})
+    print(f"{Colors.GREEN}✓ All {valid_count} policy file(s) valid.{Colors.RESET}")
+    return 0
+
 
 def cmd_policy(args: argparse.Namespace) -> int:
     """Dispatch 'agentos policy <subcommand>' to the policies CLI.
@@ -1300,7 +1297,6 @@ def cmd_policy(args: argparse.Namespace) -> int:
 # HTTP API Server (agentos serve)
 # ============================================================================
 
-    return 0 if all_valid else 1
 
 
 def cmd_metrics(args: argparse.Namespace) -> int:
@@ -1430,6 +1426,7 @@ def main() -> int:
     validate_parser = subparsers.add_parser("validate", help="Validate policy YAML files")
     validate_parser.add_argument("files", nargs="*", help="Files to validate")
     validate_parser.add_argument("--json", action="store_true", help="Output in JSON format")
+    validate_parser.add_argument("--strict", action="store_true", help="Strict mode: treat warnings as errors")
 
 
     # policy command — 'agentos policy validate <file>' with full JSON-Schema support
@@ -1480,9 +1477,9 @@ def main() -> int:
     health_parser = subparsers.add_parser("health", help="Check system health")
     health_parser.add_argument("--json", action="store_true", help="Output in JSON format")
 
-    # serve (not updated for JSON as it is a server)
-    serve_parser = subparsers.add_parser("serve", help="Start HTTP API server")
-    serve_parser.add_argument("--port", type=int, default=8000, help="Port to listen on")
+    # metrics
+    metrics_parser = subparsers.add_parser("metrics", help="Output Prometheus metrics")
+    metrics_parser.add_argument("--json", action="store_true", help="Output in JSON format")
 
     args = parser.parse_args()
 
@@ -1508,7 +1505,6 @@ def main() -> int:
         "install-hooks": cmd_install_hooks,
         "validate": cmd_validate,
         "policy": cmd_policy,
-        "serve": cmd_serve,
         "metrics": cmd_metrics,
         "health": cmd_health,
     }
