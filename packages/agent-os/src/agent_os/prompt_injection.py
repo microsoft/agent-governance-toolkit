@@ -107,6 +107,9 @@ class DetectionResult:
     explanation: str = ""
 
 
+_MIN_ALLOWLIST_ENTRY_LENGTH = 3
+
+
 @dataclass
 class DetectionConfig:
     """Configuration for the prompt injection detector.
@@ -116,12 +119,36 @@ class DetectionConfig:
             ``"permissive"``.
         custom_patterns: Additional compiled regex patterns to check.
         blocklist: Exact strings that always trigger detection.
-        allowlist: Exact strings that suppress detection.
+        allowlist: Substrings that suppress detection.  Uses substring
+            matching (``allowed.lower() in text_lower``).  Entries must be
+            at least 3 characters after stripping whitespace.
+
+    .. note::
+
+        An exact-match mode for the allowlist was considered but not
+        implemented to avoid expanding the configuration surface.  If
+        exact matching is needed, use a custom regex pattern with
+        anchors in *custom_patterns* instead.
     """
     sensitivity: str = "balanced"
     custom_patterns: list[re.Pattern[str]] = field(default_factory=list)
     blocklist: list[str] = field(default_factory=list)
     allowlist: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        """Validate allowlist entries to prevent overly broad suppression."""
+        for entry in self.allowlist:
+            stripped = entry.strip()
+            if not stripped:
+                raise ValueError(
+                    "Allowlist entries must not be empty or whitespace-only"
+                )
+            if len(stripped) < _MIN_ALLOWLIST_ENTRY_LENGTH:
+                raise ValueError(
+                    f"Allowlist entry {entry!r} is too short "
+                    f"(minimum {_MIN_ALLOWLIST_ENTRY_LENGTH} characters). "
+                    "Short entries risk disabling detection for broad input ranges."
+                )
 
 
 @dataclass

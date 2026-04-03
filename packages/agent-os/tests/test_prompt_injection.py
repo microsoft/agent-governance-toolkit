@@ -267,6 +267,47 @@ class TestSensitivityLevels:
 
 
 # ---------------------------------------------------------------------------
+# Allowlist validation
+# ---------------------------------------------------------------------------
+
+
+class TestAllowlistValidation:
+    """Verify DetectionConfig rejects overly broad allowlist entries."""
+
+    def test_rejects_empty_string(self):
+        with pytest.raises(ValueError, match="empty or whitespace-only"):
+            DetectionConfig(allowlist=[""])
+
+    def test_rejects_whitespace_only(self):
+        with pytest.raises(ValueError, match="empty or whitespace-only"):
+            DetectionConfig(allowlist=["   "])
+
+    def test_rejects_short_entry(self):
+        with pytest.raises(ValueError, match="too short"):
+            DetectionConfig(allowlist=["ab"])
+
+    def test_rejects_single_space(self):
+        with pytest.raises(ValueError, match="empty or whitespace-only"):
+            DetectionConfig(allowlist=[" "])
+
+    def test_accepts_valid_entry(self):
+        config = DetectionConfig(allowlist=["quarterly report"])
+        assert config.allowlist == ["quarterly report"]
+
+    def test_accepts_minimum_length_entry(self):
+        config = DetectionConfig(allowlist=["abc"])
+        assert config.allowlist == ["abc"]
+
+    def test_rejects_mixed_valid_and_invalid(self):
+        with pytest.raises(ValueError, match="too short"):
+            DetectionConfig(allowlist=["valid phrase", "no"])
+
+    def test_empty_allowlist_is_valid(self):
+        config = DetectionConfig(allowlist=[])
+        assert config.allowlist == []
+
+
+# ---------------------------------------------------------------------------
 # Canary token detection
 # ---------------------------------------------------------------------------
 
