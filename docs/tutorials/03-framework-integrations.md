@@ -595,10 +595,17 @@ class GovernedMyAgent:
         result = self._original.run(prompt, **kwargs)
 
         # Post-execution: drift detection and checkpointing.
-        # Note: post_execute() always returns (True, None). Drift detection
-        # is event-based — register a DRIFT_DETECTED listener to block on
-        # excessive drift (see "Adding event hooks" below).
+        # post_execute() always returns (True, None) — it records drift
+        # scores on ctx but does not block.  Check scores explicitly:
         self._kernel.post_execute(self._ctx, result)
+
+        if self._ctx._drift_scores:
+            latest = self._ctx._drift_scores[-1]
+            if latest > self._kernel.policy.drift_threshold:
+                raise PolicyViolationError(
+                    f"Drift {latest:.2f} exceeds threshold "
+                    f"{self._kernel.policy.drift_threshold}"
+                )
 
         return result
 
@@ -668,15 +675,9 @@ kernel.on(GovernanceEventType.TOOL_CALL_BLOCKED, lambda data: (
     log_blocked_tool(data["tool_name"], data["reason"])
 ))
 
-# Make drift detection blocking — post_execute() emits DRIFT_DETECTED
-# but does not raise. Register a listener to enforce drift limits:
-def on_drift(data):
-    if data["drift_score"] > data["threshold"]:
-        raise PolicyViolationError(
-            f"Drift {data['drift_score']:.2f} exceeds {data['threshold']}"
-        )
-
-kernel.on(GovernanceEventType.DRIFT_DETECTED, on_drift)
+# Note: event listeners are observational only (logging, alerting,
+# metrics).  emit() wraps callbacks in try/except, so exceptions
+# raised inside a listener are silently swallowed.
 
 governed = kernel.wrap(my_agent)
 ```
