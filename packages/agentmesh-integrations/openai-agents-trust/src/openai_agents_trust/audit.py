@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tamper-evident audit logging with hash chain."""
 
 from __future__ import annotations

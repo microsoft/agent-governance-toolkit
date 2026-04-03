@@ -44,7 +44,7 @@ Reliability layer across **170K+ combined GitHub stars** of integrated projects 
 
 <table>
 <tr>
-<td align="center"><h3>1,240+</h3><sub>Tests Passing</sub></td>
+<td align="center"><h3>1,257+</h3><sub>Tests Passing</sub></td>
 <td align="center"><h3>12+</h3><sub>Framework Adapters<br/><sub>LangChain · CrewAI · AutoGen<br/>LangGraph · Dify · more</sub></sub></td>
 <td align="center"><h3>13</h3><sub>Observability Platforms<br/><sub>Langfuse · LangSmith · Arize<br/>Datadog · Prometheus · PagerDuty<br/>Grafana · OTel · more</sub></sub></td>
 <td align="center"><h3>OpenTelemetry</h3><sub>Native OTLP Export</sub></td>
@@ -270,7 +270,7 @@ store = TraceStore()
 store.save(capture.trace)
 ```
 
-Features: deterministic replay, trace diffing, trace comparison, multi-agent distributed traces, automatic PII redaction.
+Features: deterministic replay, trace diffing, what-if analysis, multi-agent distributed traces, automatic PII redaction.
 
 ### 3. Progressive Delivery — Ship Agent Changes Safely
 
@@ -392,7 +392,7 @@ if incident:
     print(f"🚨 {incident.severity.value}: {incident.title}")
 ```
 
-Features: signal correlation, deduplication, circuit breaker per agent, postmortem template generation with timeline and action items.
+Features: signal correlation, deduplication, circuit breaker per agent, automated runbook execution, postmortem generation with timeline and action items.
 
 ---
 
@@ -473,7 +473,7 @@ agent-sre/
 ├── operator/              # Kubernetes CRDs (AgentSLO, CostBudget)
 ├── .github/actions/       # GitHub Actions (canary deployment)
 ├── examples/              # 4 runnable demos
-├── tests/                 # 1,240 tests
+├── tests/                 # 1,257 tests
 ├── docs/                  # Getting started, concepts, integration guide
 └── specs/                 # SLO templates (coming soon)
 ```
@@ -506,16 +506,16 @@ Agent SRE tells you *if it was within budget* and *what to do about it*.
 
 ## Status & Maturity
 
-### ✅ Fully Implemented (20,000+ lines, 1,240 tests)
+### ✅ Fully Implemented (20,000+ lines, 1,257 tests)
 
 | Component | Status | Description |
 |---|---|---|
 | **SLO Engine** | ✅ Stable | 7 SLI types, error budgets, burn rate alerts, auto-fire to AlertManager |
 | **Replay Engine** | ✅ Stable | Capture, replay, diff, trace comparison, distributed traces |
-| **Progressive Delivery** | ✅ Stable | Preview mode, staged rollouts, analysis gates, manual rollback |
+| **Progressive Delivery** | ✅ Stable | Shadow mode evaluation, canary rollout lifecycle, analysis gates, automatic rollback |
 | **Chaos Engine** | ✅ Stable | 9 fault templates, fault impact scoring, abort conditions |
 | **Cost Guard** | ✅ Stable | Hierarchical budgets, anomaly detection, auto-throttle |
-| **Incident Manager** | ✅ Stable | Signal correlation, circuit breaker, postmortem template |
+| **Incident Manager** | ✅ Stable | Signal correlation, circuit breaker, postmortem generation, runbook execution |
 | **Agent OS Bridge** | ✅ Stable | Policy violations → SLI, audit entries → signals |
 | **AgentMesh Bridge** | ✅ Stable | Trust scores → SLI, mesh events → signals |
 | **OpenTelemetry** | ✅ Stable | Full span/metric export with OTEL SDK |

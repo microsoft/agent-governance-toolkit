@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Trust state types for LangGraph graphs."""
 
 from __future__ import annotations

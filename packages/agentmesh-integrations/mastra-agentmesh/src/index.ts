@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 /**
  * @agentmesh/mastra — Governance, trust, and audit middleware for Mastra agents.
  *

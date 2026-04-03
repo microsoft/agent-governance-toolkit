@@ -179,6 +179,20 @@ agent-governance verify --json
 agent-governance verify --badge
 ```
 
+### Secure Error Handling
+
+All CLI tools in the toolkit are hardened to prevent internal information disclosure. If a command fails in JSON mode, it returns a sanitized schema:
+
+```json
+{
+  "status": "error",
+  "message": "An internal error occurred during verification",
+  "type": "InternalError"
+}
+```
+
+Known errors (e.g., "File not found") will include the specific error message, while unexpected system errors are masked to ensure security integrity.
+
 ## 6. Verify Module Integrity
 
 Ensure no governance modules have been tampered with:

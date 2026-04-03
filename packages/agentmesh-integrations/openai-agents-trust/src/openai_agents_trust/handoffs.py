@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Trust-gated handoffs for OpenAI Agents SDK."""
 
 from __future__ import annotations

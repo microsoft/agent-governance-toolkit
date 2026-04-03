@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Trust-gated query engine for LlamaIndex."""
 
 from __future__ import annotations

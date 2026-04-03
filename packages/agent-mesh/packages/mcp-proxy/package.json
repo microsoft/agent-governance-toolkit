@@ -1,7 +1,7 @@
 {
   "name": "@microsoft/agentmesh-mcp-proxy",
-  "version": "1.0.0",
-  "description": "Public Preview — Security proxy for MCP servers: The Firewall for Model Context Protocol",
+  "version": "3.0.2",
+  "description": "Public Preview \u2014 Security proxy for MCP servers: The Firewall for Model Context Protocol",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -44,18 +44,18 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "commander": "^12.0.0",
-    "chalk": "^5.3.0",
-    "yaml": "^2.4.0",
-    "winston": "^3.11.0",
-    "crypto-js": "^4.2.0"
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "commander": "12.0.0",
+    "chalk": "4.1.2",
+    "yaml": "2.8.3",
+    "winston": "3.11.0",
+    "crypto-js": "4.2.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "typescript": "^5.4.0",
-    "vitest": "^1.4.0",
-    "eslint": "^8.57.0"
+    "@types/node": "20.0.0",
+    "typescript": "5.7.3",
+    "vitest": "1.6.1",
+    "eslint": "8.57.1"
   },
   "engines": {
     "node": ">=18.0.0"

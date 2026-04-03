@@ -399,6 +399,104 @@ class AgentIdentity(BaseModel):
 
         return from_jwks(jwks, kid=kid)
 
+    # ------------------------------------------------------------------
+    # Delegation chain verification (Issue #607)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def verify_delegation_chain(
+        identity: "AgentIdentity",
+        registry: "IdentityRegistry | None" = None,
+        _visited: set[str] | None = None,
+    ) -> bool:
+        """Verify the entire delegation chain from *identity* to the root.
+
+        Walks ``parent_did`` links, checking at each level that:
+        1. The parent exists in *registry* (if supplied) or has no parent.
+        2. The child's capabilities are a subset of the parent's.
+        3. The delegation depth is consistent.
+        4. No circular references exist.
+
+        When *registry* is ``None`` only the leaf identity is validated
+        (parent lookup is not possible without a registry).
+
+        Returns ``True`` when the chain is valid, ``False`` otherwise.
+        """
+        if _visited is None:
+            _visited = set()
+
+        did_str = str(identity.did)
+        if did_str in _visited:
+            # Circular reference detected
+            return False
+        _visited.add(did_str)
+
+        # Leaf-only validation (no parent → root)
+        if identity.parent_did is None:
+            return identity.delegation_depth == 0
+
+        # Depth must be > 0 for delegated identities
+        if identity.delegation_depth <= 0:
+            return False
+
+        if registry is None:
+            # Without a registry we can only validate structural consistency
+            return identity.delegation_depth > 0
+
+        parent = registry.get(identity.parent_did)
+        if parent is None:
+            return False
+
+        # Parent must be active
+        if not parent.is_active():
+            return False
+
+        # Child capabilities must be subset of parent's
+        for cap in identity.capabilities:
+            if not parent.has_capability(cap):
+                return False
+
+        # Depth must be exactly parent + 1
+        if identity.delegation_depth != parent.delegation_depth + 1:
+            return False
+
+        # Recurse up the chain
+        return AgentIdentity.verify_delegation_chain(
+            parent, registry, _visited
+        )
+
+    def get_effective_capabilities(
+        self,
+        registry: "IdentityRegistry | None" = None,
+    ) -> list[str]:
+        """Return the intersection of capabilities across the full chain.
+
+        Walks the delegation chain from this identity to the root,
+        returning only capabilities present at *every* level.  If the
+        registry is ``None`` or a parent cannot be found, returns this
+        identity's own capabilities (the narrowest known set).
+        """
+        current_caps = set(self.capabilities)
+
+        if self.parent_did is None or registry is None:
+            return sorted(current_caps)
+
+        visited: set[str] = {str(self.did)}
+        identity: AgentIdentity | None = self
+
+        while identity is not None and identity.parent_did is not None:
+            if identity.parent_did in visited:
+                break  # circular guard
+            visited.add(identity.parent_did)
+
+            parent = registry.get(identity.parent_did)
+            if parent is None:
+                break
+            current_caps &= set(parent.capabilities)
+            identity = parent
+
+        return sorted(current_caps)
+
     def to_did_document(self) -> dict:
         """Export as a DID Document (W3C format)."""
         return {

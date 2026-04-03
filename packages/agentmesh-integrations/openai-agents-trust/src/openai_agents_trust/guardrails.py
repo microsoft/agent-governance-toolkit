@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Guardrails for OpenAI Agents SDK — trust, policy, and content enforcement."""
 
 from __future__ import annotations

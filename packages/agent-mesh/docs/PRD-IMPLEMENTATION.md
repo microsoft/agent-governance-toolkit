@@ -223,6 +223,7 @@ Shows agent status:
 - `agentmesh policy`: Load and validate policies
 - `agentmesh audit`: View audit logs
 - All commands use Rich for beautiful terminal output
+- All commands support `--json` for standardized machine-readable output
 
 ## Roadmap
 

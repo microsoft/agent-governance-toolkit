@@ -8,7 +8,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="scak",  # Short, memorable PyPI name
-    version="2.1.0",  # Minor version bump for Agent OS monorepo
+    version="3.0.2",  # Minor version bump for Agent OS monorepo
     description="Self-Correcting Agent Kernel: A specialized extension for Control Plane that implements Laziness Detection and Self-Correction loops using CMVK",
     long_description=long_description,
     long_description_content_type="text/markdown",

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Audit trail component with SHA-256 hash chain.
 
 Captures agent actions, governance decisions, and context in a

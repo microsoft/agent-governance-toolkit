@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Audit trail for governance decisions."""
 
 from __future__ import annotations

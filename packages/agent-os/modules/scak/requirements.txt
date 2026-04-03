@@ -5,7 +5,7 @@
 # Core Dependencies (required)
 pydantic==2.10.3
 pyyaml==6.0.2
-agent-primitives==0.1.0  # Layer 1: Shared failure models
+agent-primitives @ file:../../../packages/agent-os/modules/primitives  # Layer 1: local-only, not on PyPI
 
 # =============================================================================
 # Layer 4 Integration Dependencies (optional)

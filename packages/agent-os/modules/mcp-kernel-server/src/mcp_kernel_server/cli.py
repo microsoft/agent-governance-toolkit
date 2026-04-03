@@ -117,6 +117,11 @@ Claude Desktop Setup:
         action="store_true",
         help="List available prompts and exit"
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output in JSON format (for listing tools/prompts)"
+    )
     
     return parser.parse_args()
 
@@ -169,16 +174,44 @@ def main():
     
     if args.version:
         from mcp_kernel_server import __version__
-        print(f"mcp-kernel-server {__version__}")
-        print(f"Agent OS MCP Server for kernel-level AI agent governance")
+        if args.json:
+            import json
+            print(json.dumps({
+                "name": "mcp-kernel-server",
+                "version": __version__,
+                "description": "Agent OS MCP Server for kernel-level AI agent governance"
+            }, indent=2))
+        else:
+            print(f"mcp-kernel-server {__version__}")
+            print(f"Agent OS MCP Server for kernel-level AI agent governance")
         return 0
     
     if args.list_tools:
-        print_tools()
+        if args.json:
+            import json
+            tools = [
+                {"name": "cmvk_verify", "description": "Verify claims across multiple AI models to detect hallucinations"},
+                {"name": "kernel_execute", "description": "Execute actions through the Agent OS kernel with policy enforcement"},
+                {"name": "iatp_sign", "description": "Create a trust attestation for inter-agent communication"},
+                {"name": "iatp_verify", "description": "Verify trust relationship before agent-to-agent communication"},
+                {"name": "iatp_reputation", "description": "Query or modify agent reputation across the trust network"}
+            ]
+            print(json.dumps(tools, indent=2))
+        else:
+            print_tools()
         return 0
     
     if args.list_prompts:
-        print_prompts()
+        if args.json:
+            import json
+            prompts = [
+                {"name": "governed_agent", "description": "Instructions for operating as a governed agent under Agent OS"},
+                {"name": "verify_claim", "description": "Instructions for verifying a claim using CMVK"},
+                {"name": "safe_execution", "description": "Template for executing actions safely through the kernel"}
+            ]
+            print(json.dumps(prompts, indent=2))
+        else:
+            print_prompts()
         return 0
     
     # Default to stdio if neither specified
@@ -197,32 +230,42 @@ def main():
     server = KernelMCPServer(config)
     
     # Run
-    if args.stdio:
-        logger.info("Starting MCP Kernel Server with stdio transport")
-        logger.info(f"Policy mode: {args.policy_mode}")
-        logger.info("Tools: cmvk_verify, kernel_execute, iatp_sign, iatp_verify, iatp_reputation")
-        logger.info("Prompts: governed_agent, verify_claim, safe_execution")
-        
-        try:
+    try:
+        if args.stdio:
+            logger.info("Starting MCP Kernel Server with stdio transport")
+            logger.info(f"Policy mode: {args.policy_mode}")
+            logger.info("Tools: cmvk_verify, kernel_execute, iatp_sign, iatp_verify, iatp_reputation")
+            logger.info("Prompts: governed_agent, verify_claim, safe_execution")
+            
             asyncio.run(server.run_stdio())
-        except KeyboardInterrupt:
-            logger.info("Shutting down...")
-        except Exception as e:
-            logger.exception("Server error")
-            return 1
-    else:
-        # HTTP transport
-        logger.info(f"Starting MCP Kernel Server on http://{args.host}:{args.port}")
-        logger.info(f"Policy mode: {args.policy_mode}")
-        logger.info("Tools: cmvk_verify, kernel_execute, iatp_sign, iatp_verify, iatp_reputation")
-        logger.info("Prompts: governed_agent, verify_claim, safe_execution")
-        logger.info("Press Ctrl+C to stop")
-        
-        try:
+        else:
+            # HTTP transport
+            logger.info(f"Starting MCP Kernel Server on http://{args.host}:{args.port}")
+            logger.info(f"Policy mode: {args.policy_mode}")
+            logger.info("Tools: cmvk_verify, kernel_execute, iatp_sign, iatp_verify, iatp_reputation")
+            logger.info("Prompts: governed_agent, verify_claim, safe_execution")
+            logger.info("Press Ctrl+C to stop")
+            
             asyncio.run(server.start())
             asyncio.get_event_loop().run_forever()
-        except KeyboardInterrupt:
-            logger.info("Shutting down...")
+            
+    except KeyboardInterrupt:
+        logger.info("Shutting down...")
+    except Exception as e:
+        # Sanitize startup errors for JSON mode to prevent info leakage
+        is_known = isinstance(e, (ValueError, PermissionError, OSError))
+        msg = "A validation or system error occurred." if is_known else "An internal error occurred during server startup"
+        
+        if getattr(args, "json", False):
+            import json
+            print(json.dumps({
+                "status": "error",
+                "message": msg,
+                "type": "StartupError" if is_known else "InternalError"
+            }, indent=2))
+        else:
+            logger.exception(f"Server error: {msg}")
+        return 1
     
     return 0
 

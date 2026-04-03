@@ -77,6 +77,12 @@ class ValidationOutcome:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialise this outcome to a plain dictionary.
+        
+        Returns:
+            A dict with validator, passed, and optionally error
+            and fixed_value keys.
+        """
         d: dict[str, Any] = {
             "validator": self.validator_name,
             "passed": self.passed,
@@ -101,9 +107,19 @@ class ValidationResult:
 
     @property
     def failed_validators(self) -> list[str]:
+        """Return the names of all validators that did not pass.
+        
+        Returns:
+            List of validator name strings where passed is False.
+        """
         return [o.validator_name for o in self.outcomes if not o.passed]
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialise this aggregated result to a plain dictionary.
+        
+        Returns:
+            A dict with passed, action, outcomes, and failed_validators keys.
+        """
         return {
             "passed": self.passed,
             "action": self.action_taken.value,
@@ -128,9 +144,23 @@ class RegexValidator:
 
     @property
     def name(self) -> str:
+        """Return the human-readable name of this regex validator.
+        
+        Returns:
+            The validator name string used in audit logs and outcomes.
+        """
         return self._name
 
     def validate(self, value: str, metadata: dict[str, Any] | None = None) -> ValidationOutcome:
+        """Validate a string by checking it against blocked regex patterns.
+        
+        Args:
+            value: The text to scan.
+            metadata: Optional dict of additional context (unused).
+        
+        Returns:
+            ValidationOutcome indicating pass or fail.
+        """
 
         for pattern in self._patterns:
             match = pattern.search(value)
@@ -152,9 +182,23 @@ class LengthValidator:
 
     @property
     def name(self) -> str:
+        """Return the human-readable name of this length validator.
+        
+        Returns:
+            The validator name string used in audit logs and outcomes.
+        """
         return self._name
 
     def validate(self, value: str, metadata: dict[str, Any] | None = None) -> ValidationOutcome:
+        """Validate that a string does not exceed the configured max length.
+        
+        Args:
+            value: The text to check.
+            metadata: Optional dict of additional context (unused).
+        
+        Returns:
+            ValidationOutcome with a fixed_value truncated to max_length on fail.
+        """
         if len(value) > self._max_length:
             return ValidationOutcome(
                 validator_name=self._name,
@@ -174,9 +218,23 @@ class KeywordValidator:
 
     @property
     def name(self) -> str:
+        """Return the human-readable name of this keyword validator.
+        
+        Returns:
+            The validator name string used in audit logs and outcomes.
+        """
         return self._name
 
     def validate(self, value: str, metadata: dict[str, Any] | None = None) -> ValidationOutcome:
+        """Validate that a string contains none of the blocked keywords.
+        
+        Args:
+            value: The text to scan (case-insensitive).
+            metadata: Optional dict of additional context (unused).
+        
+        Returns:
+            ValidationOutcome indicating pass or fail.
+        """
         value_lower = value.lower()
         for kw in self._keywords:
             if kw in value_lower:
@@ -213,6 +271,14 @@ class GuardrailsKernel:
         self._history: list[ValidationResult] = []
 
     def _default_violation_handler(self, result: ValidationResult) -> None:
+        """Default handler called when one or more validators fail.
+        
+        Logs a warning for each failed validator name. Override by
+        passing a custom on_violation callable to GuardrailsKernel.
+        
+        Args:
+            result: The aggregated ValidationResult.
+        """
         for name in result.failed_validators:
             logger.warning(f"Guardrail violation: {name}")
 

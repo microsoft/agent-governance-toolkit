@@ -57,7 +57,7 @@ services:
 
   # Vector DB (Qdrant) for Tier 3 Archive
   vectordb:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.14.1
     container_name: scak-vectordb
     ports:
       - "6333:6333"

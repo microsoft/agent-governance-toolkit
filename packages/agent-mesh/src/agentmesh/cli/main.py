@@ -13,20 +13,47 @@ Commands:
 - policy: Manage policies
 """
 
+import json
 import logging
+import os
+import re
+from pathlib import Path
 
 import click
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich import box
-from pathlib import Path
-from typing import Optional
-import json
 import yaml
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 console = Console()
 logger = logging.getLogger(__name__)
+
+
+def handle_error(e: Exception, output_json: bool = False, custom_msg: str | None = None):
+    """Centralized error handler for CLI commands."""
+    is_known = isinstance(e, (ImportError, ValueError, KeyError, PermissionError, FileNotFoundError, yaml.YAMLError, json.JSONDecodeError))
+
+    # Sanitize message: use custom msg if provided, else generic for unknown errors
+    if custom_msg:
+        err_msg = custom_msg
+    elif is_known:
+        # Avoid leaking internal paths even for known errors in production output
+        err_msg = "A validation, permission, or configuration error occurred."
+    else:
+        err_msg = "An unexpected internal error occurred."
+
+    # Log the full details for debugging (not shown to user unless DEBUG is on)
+    logger.error(f"CLI Error: {e}", exc_info=True)
+
+    if output_json:
+        status = "error"
+        type_field = "ValidationError" if is_known else "InternalError"
+        print(json.dumps({"status": status, "message": err_msg, "type": type_field}, indent=2))
+    else:
+        console.print(f"[red]Error: {err_msg}[/red]")
+        if os.environ.get("AGENTOS_DEBUG"):
+             console.print(f"[dim]{e}[/dim]")
 
 
 @click.group()
@@ -44,7 +71,8 @@ def app():
 @click.option("--name", "-n", prompt="Agent name", help="Name of the agent")
 @click.option("--sponsor", "-s", prompt="Sponsor email", help="Human sponsor email")
 @click.option("--output", "-o", default=".", help="Output directory")
-def init(name: str, sponsor: str, output: str):
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format")
+def init(name: str, sponsor: str, output: str, output_json: bool):
     """
     Initialize a new governed agent in 30 seconds.
 
@@ -53,7 +81,8 @@ def init(name: str, sponsor: str, output: str):
     output_path = Path(output)
     agent_dir = output_path / name
 
-    console.print(f"\n[bold blue]🚀 Initializing governed agent: {name}[/bold blue]\n")
+    if not output_json:
+        console.print(f"\n[bold blue]🚀 Initializing governed agent: {name}[/bold blue]\n")
 
     # Create directory structure
     dirs = [
@@ -65,7 +94,8 @@ def init(name: str, sponsor: str, output: str):
 
     for d in dirs:
         d.mkdir(parents=True, exist_ok=True)
-        console.print(f"  [green]✓[/green] Created {d}")
+        if not output_json:
+            console.print(f"  [green]✓[/green] Created {d}")
 
     # Create agent manifest
     manifest = {
@@ -103,7 +133,8 @@ def init(name: str, sponsor: str, output: str):
     manifest_path = agent_dir / "agentmesh.yaml"
     with open(manifest_path, "w") as f:
         yaml.dump(manifest, f, default_flow_style=False)
-    console.print(f"  [green]✓[/green] Created {manifest_path}")
+    if not output_json:
+        console.print(f"  [green]✓[/green] Created {manifest_path}")
 
     # Create default policy
     default_policy = {
@@ -137,7 +168,8 @@ def init(name: str, sponsor: str, output: str):
     policy_path = agent_dir / "policies" / "default.yaml"
     with open(policy_path, "w") as f:
         yaml.dump(default_policy, f, default_flow_style=False)
-    console.print(f"  [green]✓[/green] Created {policy_path}")
+    if not output_json:
+        console.print(f"  [green]✓[/green] Created {policy_path}")
 
     # Create main agent file
     agent_code = f'''"""
@@ -192,7 +224,8 @@ if __name__ == "__main__":
     main_path = agent_dir / "src" / "main.py"
     with open(main_path, "w") as f:
         f.write(agent_code)
-    console.print(f"  [green]✓[/green] Created {main_path}")
+    if not output_json:
+        console.print(f"  [green]✓[/green] Created {main_path}")
 
     # Create pyproject.toml
     pyproject = f'''[project]
@@ -212,9 +245,21 @@ build-backend = "hatchling.build"
     pyproject_path = agent_dir / "pyproject.toml"
     with open(pyproject_path, "w") as f:
         f.write(pyproject)
-    console.print(f"  [green]✓[/green] Created {pyproject_path}")
+    if not output_json:
+        console.print(f"  [green]✓[/green] Created {pyproject_path}")
 
     # Summary
+    if output_json:
+        print(json.dumps({
+            "status": "success",
+            "agent_name": name,
+            "output_dir": str(agent_dir),
+            "manifest": str(manifest_path),
+            "policy": str(policy_path),
+            "main": str(main_path)
+        }, indent=2))
+        return
+
     console.print()
     console.print(Panel(
         f"""[bold green]Agent initialized successfully![/bold green]
@@ -241,13 +286,17 @@ build-backend = "hatchling.build"
 @app.command()
 @click.argument("agent_dir", type=click.Path(exists=True))
 @click.option("--name", "-n", help="Override agent name")
-def register(agent_dir: str, name: str = None):
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format")
+def register(agent_dir: str, name: str = None, output_json: bool = False):
     """Register an agent with AgentMesh."""
     agent_path = Path(agent_dir)
     manifest_path = agent_path / "agentmesh.yaml"
 
     if not manifest_path.exists():
-        console.print("[red]Error: agentmesh.yaml not found. Run 'agentmesh init' first.[/red]")
+        if output_json:
+            print(json.dumps({"status": "error", "message": "agentmesh.yaml not found"}, indent=2))
+        else:
+            console.print("[red]Error: agentmesh.yaml not found. Run 'agentmesh init' first.[/red]")
         return
 
     with open(manifest_path) as f:
@@ -255,20 +304,22 @@ def register(agent_dir: str, name: str = None):
 
     agent_name = name or manifest["agent"]["name"]
 
-    console.print(f"\n[bold blue]📝 Registering agent: {agent_name}[/bold blue]\n")
+    if not output_json:
+        console.print(f"\n[bold blue]📝 Registering agent: {agent_name}[/bold blue]\n")
 
     # Simulate registration
     try:
         from agentmesh.identity import AgentIdentity
-    except ImportError:
-        console.print("[red]Error: agentmesh is not installed. Run: pip install agentmesh-platform[/red]")
+        identity = AgentIdentity.create(agent_name)
+    except Exception as e:
+        handle_error(e, output_json)
         return
-    identity = AgentIdentity.create(agent_name)
 
-    console.print(f"  [green]✓[/green] Generated identity: {identity.did}")
-    console.print(f"  [green]✓[/green] Public key: {identity.public_key[:32]}...")
-    console.print("  [green]✓[/green] Registered with AgentMesh CA")
-    console.print()
+    if not output_json:
+        console.print(f"  [green]✓[/green] Generated identity: {identity.did}")
+        console.print(f"  [green]✓[/green] Public key: {identity.public_key[:32]}...")
+        console.print("  [green]✓[/green] Registered with AgentMesh CA")
+        console.print()
 
     # Save identity
     identity_file = agent_path / ".agentmesh" / "identity.json"
@@ -281,66 +332,99 @@ def register(agent_dir: str, name: str = None):
             "created_at": identity.created_at.isoformat(),
         }, f, indent=2)
 
-    console.print(f"[green]Identity saved to {identity_file}[/green]")
+    if output_json:
+        print(json.dumps({
+            "status": "success",
+            "agent_name": agent_name,
+            "did": identity.did,
+            "identity_file": str(identity_file)
+        }, indent=2))
+    else:
+        console.print(f"[green]Identity saved to {identity_file}[/green]")
 
 
 @app.command()
 @click.argument("agent_dir", type=click.Path(exists=True), default=".")
-def status(agent_dir: str):
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format")
+def status(agent_dir: str, output_json: bool):
     """Check agent status and trust score."""
     agent_path = Path(agent_dir)
     manifest_path = agent_path / "agentmesh.yaml"
     identity_path = agent_path / ".agentmesh" / "identity.json"
 
-    console.print("\n[bold blue]📊 Agent Status[/bold blue]\n")
+    if not output_json:
+        console.print("\n[bold blue]📊 Agent Status[/bold blue]\n")
 
     # Load manifest
+    manifest = None
     if manifest_path.exists():
         with open(manifest_path) as f:
             manifest = yaml.safe_load(f)
-
-        console.print(f"  Agent: [bold]{manifest['agent']['name']}[/bold]")
-        console.print(f"  Version: {manifest['agent']['version']}")
-        console.print(f"  Sponsor: {manifest['sponsor']['email']}")
+        if not output_json:
+            console.print(f"  Agent: [bold]{manifest['agent']['name']}[/bold]")
+            console.print(f"  Version: {manifest['agent']['version']}")
+            console.print(f"  Sponsor: {manifest['sponsor']['email']}")
     else:
-        console.print("  [yellow]No manifest found[/yellow]")
+        if not output_json:
+            console.print("  [yellow]No manifest found[/yellow]")
 
-    console.print()
+    if not output_json:
+        console.print()
 
     # Load identity
+    identity = None
     if identity_path.exists():
         with open(identity_path) as f:
             identity = json.load(f)
-
-        console.print("  [green]✓[/green] Identity: Registered")
-        console.print(f"    DID: {identity['did']}")
+        if not output_json:
+            console.print("  [green]✓[/green] Identity: Registered")
+            console.print(f"    DID: {identity['did']}")
     else:
-        console.print("  [yellow]○[/yellow] Identity: Not registered")
+        if not output_json:
+            console.print("  [yellow]○[/yellow] Identity: Not registered")
 
-    console.print()
+    if not output_json:
+        console.print()
 
     # Trust score (simulated)
-    table = Table(title="Trust Score", box=box.ROUNDED)
-    table.add_column("Dimension", style="cyan")
-    table.add_column("Score", justify="right")
-    table.add_column("Trend")
+    if output_json:
+        print(json.dumps({
+            "agent_name": manifest['agent']['name'] if manifest else None,
+            "did": identity['did'] if identity else None,
+            "trust_score": 820,
+            "max_score": 1000,
+            "dimensions": {
+                "policy_compliance": 85,
+                "resource_efficiency": 72,
+                "output_quality": 91,
+                "security_posture": 88,
+                "collaboration_health": 79
+            }
+        }, indent=2))
+    else:
+        table = Table(title="Trust Score", box=box.ROUNDED)
+        table.add_column("Dimension", style="cyan")
+        table.add_column("Score", justify="right")
+        table.add_column("Trend")
 
-    table.add_row("Policy Compliance", "85/100", "[green]↑[/green]")
-    table.add_row("Resource Efficiency", "72/100", "[white]→[/white]")
-    table.add_row("Output Quality", "91/100", "[green]↑[/green]")
-    table.add_row("Security Posture", "88/100", "[white]→[/white]")
-    table.add_row("Collaboration Health", "79/100", "[green]↑[/green]")
-    table.add_row("[bold]Total", "[bold]820/1000", "[bold green]Trusted")
+        table.add_row("Policy Compliance", "85/100", "[green]↑[/green]")
+        table.add_row("Resource Efficiency", "72/100", "[white]→[/white]")
+        table.add_row("Output Quality", "91/100", "[green]↑[/green]")
+        table.add_row("Security Posture", "88/100", "[white]→[/white]")
+        table.add_row("Collaboration Health", "79/100", "[green]↑[/green]")
+        table.add_row("[bold]Total", "[bold]820/1000", "[bold green]Trusted")
 
-    console.print(table)
+        console.print(table)
 
 
 @app.command()
 @click.argument("policy_file", type=click.Path(exists=True))
 @click.option("--validate", is_flag=True, help="Validate policy only")
-def policy(policy_file: str, validate: bool):
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format")
+def policy(policy_file: str, validate: bool, output_json: bool):
     """Load and validate a policy file."""
-    console.print(f"\n[bold blue]📜 Policy: {policy_file}[/bold blue]\n")
+    if not output_json:
+        console.print(f"\n[bold blue]📜 Policy: {policy_file}[/bold blue]\n")
 
     try:
         with open(policy_file) as f:
@@ -349,30 +433,36 @@ def policy(policy_file: str, validate: bool):
             else:
                 policy_data = json.load(f)
 
-        from agentmesh.governance import PolicyEngine, Policy
+        from agentmesh.governance import Policy, PolicyEngine
         engine = PolicyEngine()
 
         policies = policy_data.get("policies", [])
+        loaded_policies = []
         for p in policies:
             policy_obj = Policy(**p)
             engine.load_policy(policy_obj)
-            console.print(f"  [green]✓[/green] Loaded: {policy_obj.name} ({len(policy_obj.rules)} rules)")
+            loaded_policies.append({"name": policy_obj.name, "rules_count": len(policy_obj.rules)})
+            if not output_json:
+                console.print(f"  [green]✓[/green] Loaded: {policy_obj.name} ({len(policy_obj.rules)} rules)")
 
-        console.print(f"\n[green]Successfully loaded {len(policies)} policies[/green]")
+        if output_json:
+            print(json.dumps({
+                "status": "success",
+                "policies": loaded_policies
+            }, indent=2))
+        else:
+            console.print(f"\n[green]Successfully loaded {len(policies)} policies[/green]")
 
-    except FileNotFoundError:
-        console.print(f"[red]Error: Policy file not found: {policy_file}[/red]")
-    except (json.JSONDecodeError, yaml.YAMLError) as e:
-        console.print(f"[red]Error: Failed to parse {policy_file} — {e}[/red]")
     except Exception as e:
-        console.print(f"[red]Error loading policy: {e}[/red]")
+        handle_error(e, output_json)
 
 
 @app.command()
 @click.option("--agent", "-a", help="Filter by agent DID")
 @click.option("--limit", "-l", default=20, help="Number of entries")
 @click.option("--format", "fmt", type=click.Choice(["table", "json"]), default="table")
-def audit(agent: str, limit: int, fmt: str):
+@click.option("--json", "output_json", is_flag=True, help="Output in JSON format")
+def audit(agent: str, limit: int, fmt: str, output_json: bool):
     """View audit logs."""
     # Simulated audit entries
     entries = [
@@ -384,12 +474,28 @@ def audit(agent: str, limit: int, fmt: str):
     ]
 
     if agent:
-        entries = [e for e in entries if e["agent"] == agent]
+        # Normalization and strict validation of agent identifier
+        agent = agent.lower().strip()
+        # Stricter pattern only allows alphanumeric, hyphen, and colon in expected segments
+        if not re.fullmatch(r"^(?:agent-[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*|did:agentmesh:[a-zA-Z0-9]+(?:[-:][a-zA-Z0-9]+)*)$", agent) or len(agent) > 128:
+            handle_error(ValueError("Invalid agent identifier format"), output_json, custom_msg="Invalid agent identifier format")
+            return
+        entries = [e for e in entries if e["agent"].lower() == agent]
 
     entries = entries[:limit]
 
-    if fmt == "json":
-        click.echo(json.dumps(entries, indent=2))
+    # Sanitize entries for JSON output with strict key whitelisting and value validation
+    allowed_keys = {"timestamp", "agent", "action", "status"}
+    sanitized_entries = []
+    for e in entries:
+        # Only include whitelisted keys and ensure they are strings
+        item = {k: str(v) for k, v in e.items() if k in allowed_keys}
+        # Final safety check: ensure all required keys are present
+        if all(k in item for k in allowed_keys):
+            sanitized_entries.append(item)
+
+    if output_json or fmt == "json":
+        click.echo(json.dumps(sanitized_entries, indent=2))
     else:
         console.print("\n[bold blue]📋 Audit Log[/bold blue]\n")
         table = Table(box=box.SIMPLE)
@@ -411,17 +517,23 @@ def audit(agent: str, limit: int, fmt: str):
 
 
 # Import proxy command from proxy module
-from .proxy import proxy  # noqa: E402
-app.add_command(proxy)
+try:
+    from .proxy import proxy
+    app.add_command(proxy)
+except ImportError:
+    pass
 
 # Import trust subcommand group
-from .trust_cli import trust  # noqa: E402
-app.add_command(trust)
+try:
+    from .trust_cli import trust
+    app.add_command(trust)
+except ImportError:
+    pass
 
 
 @app.command()
 @click.option("--claude", is_flag=True, help="Generate Claude Desktop config")
-@click.option("--config-path", type=click.Path(), help="Path to claude_desktop_config.json")
+@click.option("--config-path", type=click.Path(), help="Path to config file")
 @click.option("--backup/--no-backup", default=True, help="Backup existing config")
 def init_integration(claude: bool, config_path: str, backup: bool):
     """
@@ -441,7 +553,7 @@ def init_integration(claude: bool, config_path: str, backup: bool):
         console.print("[yellow]Please specify an integration type (e.g., --claude)[/yellow]")
 
 
-def _init_claude_integration(config_path: Optional[str], backup: bool):
+def _init_claude_integration(config_path: str | None, backup: bool):
     """Initialize Claude Desktop integration."""
     console.print("\n[bold blue]🔧 Setting up Claude Desktop Integration[/bold blue]\n")
 
@@ -522,14 +634,14 @@ def _init_claude_integration(config_path: Optional[str], backup: bool):
     # Show instructions
     console.print()
     console.print(Panel(
-        """[bold]Next Steps:[/bold]
+        f"""[bold]Next Steps:[/bold]
 
 1. Restart Claude Desktop
 2. AgentMesh will now intercept all tool calls to the protected server
 3. View logs in the terminal where Claude Desktop was launched
 
 [bold]Customization:[/bold]
-Edit {path} to:
+Edit {config_path} to:
 - Add more protected servers
 - Change policy level (--policy strict|moderate|permissive)
 - Disable verification footers (--no-footer)
@@ -537,7 +649,7 @@ Edit {path} to:
 [bold]Example Usage:[/bold]
 In Claude Desktop, try: "Read the contents of my home directory"
 AgentMesh will enforce policies and add trust verification to outputs.
-        """.format(path=config_path),
+        """,
         title="🎉 Claude Desktop Integration Ready",
         border_style="green",
     ))

@@ -18,7 +18,7 @@ Components:
     - agent-lightning: RL training governance
 """
 
-__version__ = "1.1.0"
+__version__ = "3.0.2"
 
 # Re-export core components for convenience
 try:
@@ -30,3 +30,5 @@ try:
     from agentmesh import TrustManager  # noqa: F401
 except ImportError:
     pass
+
+from agent_compliance.supply_chain import SupplyChainGuard, SupplyChainFinding, SupplyChainConfig  # noqa: F401

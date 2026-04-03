@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Copyright (c) Agent-Mesh Contributors. All rights reserved.
 # Licensed under the MIT License.
 """Tests for LangChain trust callback handler and tool wrappers."""

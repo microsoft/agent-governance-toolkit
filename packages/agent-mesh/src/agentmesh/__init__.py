@@ -11,7 +11,7 @@ multi-vendor network of AI agents that will define enterprise operations.
 Version: 1.0.0-alpha
 """
 
-__version__ = "2.0.2"
+__version__ = "3.0.2"
 
 # Layer 1: Identity & Zero-Trust Core
 from .identity import (
@@ -78,6 +78,9 @@ from .reward import (
     RewardSignal,
 )
 
+# Unified Client
+from .client import AgentMeshClient, GovernanceResult
+
 __all__ = [
     # Version
     "__version__",
@@ -136,4 +139,8 @@ __all__ = [
     "TrustScore",
     "RewardDimension",
     "RewardSignal",
+
+    # Unified Client
+    "AgentMeshClient",
+    "GovernanceResult",
 ]

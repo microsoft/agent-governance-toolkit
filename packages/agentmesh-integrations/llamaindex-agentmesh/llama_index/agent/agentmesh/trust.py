@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Trust verification protocols for AgentMesh."""
 
 from __future__ import annotations

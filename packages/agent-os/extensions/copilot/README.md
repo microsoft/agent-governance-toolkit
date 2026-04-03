@@ -152,7 +152,32 @@ npm start
 PORT=3000
 LOG_LEVEL=info
 CMVK_API_ENDPOINT=https://api.agent-os.dev/cmvk
+ALLOWED_ORIGINS=https://github.com,https://api.github.com,https://copilot.github.com
 ```
+
+`ALLOWED_ORIGINS` is a comma-separated CORS allowlist. If not set, the extension
+defaults to GitHub production origins.
+
+Do not use wildcard or overly broad origins in production. Keep this list
+restricted to trusted GitHub domains used by your deployment.
+
+Examples:
+- Valid: `ALLOWED_ORIGINS=https://github.com,https://copilot.github.com`
+- Invalid: `ALLOWED_ORIGINS=*` or `ALLOWED_ORIGINS=ftp://example.com`
+
+If `ALLOWED_ORIGINS` is set but contains no valid `http/https` origins, the
+service fails fast at startup with a configuration error.
+
+### CORS Migration Notes
+
+This extension no longer uses wildcard CORS (`*`). Requests to protected API
+routes must include an allowed `Origin` header.
+
+Migration steps:
+- Set `ALLOWED_ORIGINS` explicitly for your deployment.
+- Update clients and browser integrations to send an `Origin` header.
+- Expect `403` responses for disallowed origins and missing-origin requests on
+  protected routes.
 
 ### Repository Policy
 

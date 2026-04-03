@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Cryptographic identity management for AgentMesh.
 
 Uses Ed25519 for cryptographic operations.

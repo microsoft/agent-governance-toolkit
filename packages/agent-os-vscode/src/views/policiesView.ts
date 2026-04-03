@@ -42,6 +42,10 @@ class PolicyItem extends vscode.TreeItem {
 
         this.description = enabled ? `${severity}` : 'disabled';
         this.tooltip = `${name}\nSeverity: ${severity}\nStatus: ${enabled ? 'Enabled' : 'Disabled'}`;
+        this.accessibilityInformation = {
+            label: `${name}. Severity ${severity}. ${enabled ? 'Enabled' : 'Disabled'}.`,
+            role: 'treeitem'
+        };
         
         if (enabled) {
             this.iconPath = this.getSeverityIcon(severity);

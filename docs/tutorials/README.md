@@ -60,6 +60,23 @@ guides.
 |---|----------|-------------------|---------|
 | 19 | [.NET SDK](19-dotnet-sdk.md) | GovernanceKernel, policy, rings, saga, SLO, OpenTelemetry in C# | `Microsoft.AgentGovernance` |
 | 20 | [TypeScript SDK](20-typescript-sdk.md) | Identity, trust, policy, audit in TypeScript/Node.js | `@agentmesh/sdk` |
+| 21 | [Rust SDK](21-rust-sdk.md) | Policy, trust, audit, identity with `agentmesh` crate | `agentmesh` |
+| 22 | [Go SDK](22-go-sdk.md) | Policy, trust, audit, identity with Go module | `agentmesh` |
+
+## Delegation & Cost Control
+
+| # | Tutorial | What You'll Learn | Package |
+|---|----------|-------------------|---------|
+| 23 | [Delegation Chains](23-delegation-chains.md) | Monotonic scope narrowing, multi-agent delegation, cascade revocation | `@agentmesh/sdk` |
+| 24 | [Cost & Token Budgets](24-cost-and-token-budgets.md) | Per-session token limits, context scheduling, budget signals | `agent-os-kernel` |
+
+## Supply Chain Security
+
+| # | Tutorial | What You'll Learn | Package |
+|---|----------|-------------------|---------|
+| 25 | [Security Hardening](25-security-hardening.md) | Gitleaks, Dependabot, CodeQL, fuzzing, Scorecard, branch protection | `agent-governance-toolkit` |
+| 26 | [SBOM & Signing](26-sbom-and-signing.md) | SPDX/CycloneDX SBOMs, Ed25519 artifact signing, attestation | `agent-compliance` |
+| 27 | [MCP Scan CLI](27-mcp-scan-cli.md) | MCP tool scanning, rug-pull detection, CI integration | `agent-os-kernel` |
 
 ---
 
@@ -78,6 +95,8 @@ guides.
 3. [07 — MCP Security Gateway](07-mcp-security-gateway.md) → tool call security
 4. [06 — Execution Sandboxing](06-execution-sandboxing.md) → privilege rings
 5. [14 — Kill Switch & Rate Limiting](14-kill-switch-and-rate-limiting.md) → emergency controls
+6. [25 — Security Hardening](25-security-hardening.md) → CI/CD security gates
+7. [27 — MCP Scan CLI](27-mcp-scan-cli.md) → scan tool definitions for threats
 
 ### 🏢 "I need enterprise compliance"
 
@@ -85,22 +104,27 @@ guides.
 2. [04 — Audit & Compliance](04-audit-and-compliance.md) → tamper-proof audit trails
 3. [18 — Compliance Verification](18-compliance-verification.md) → regulatory grading
 4. [13 — Observability & Tracing](13-observability-and-tracing.md) → distributed tracing
+5. [26 — SBOM & Signing](26-sbom-and-signing.md) → supply chain security
 
 ### 🤖 "I'm building multi-agent systems"
 
 1. [02 — Trust & Identity](02-trust-and-identity.md) → agent credentials
-2. [16 — Protocol Bridges](16-protocol-bridges.md) → cross-protocol communication
-3. [11 — Saga Orchestration](11-saga-orchestration.md) → multi-step workflows
-4. [12 — Liability & Attribution](12-liability-and-attribution.md) → who's responsible
-5. [17 — Advanced Trust & Behavior](17-advanced-trust-and-behavior.md) → dynamic trust
+2. [23 — Delegation Chains](23-delegation-chains.md) → scope narrowing and delegation
+3. [16 — Protocol Bridges](16-protocol-bridges.md) → cross-protocol communication
+4. [11 — Saga Orchestration](11-saga-orchestration.md) → multi-step workflows
+5. [12 — Liability & Attribution](12-liability-and-attribution.md) → who's responsible
+6. [17 — Advanced Trust & Behavior](17-advanced-trust-and-behavior.md) → dynamic trust
+7. [24 — Cost & Token Budgets](24-cost-and-token-budgets.md) → control agent spend
 
 ---
 
 ## Prerequisites
 
-- **Python 3.10+** for Python tutorials (01–18)
+- **Python 3.10+** for Python tutorials (01–18, 24–27)
 - **.NET 8.0+** for the .NET tutorial (19)
-- **Node.js 18+** for the TypeScript tutorial (20)
+- **Node.js 18+** for the TypeScript tutorials (20, 23)
+- **Rust 1.75+** for the Rust tutorial (21)
+- **Go 1.21+** for the Go tutorial (22)
 
 Install the full toolkit:
 
@@ -108,6 +132,8 @@ Install the full toolkit:
 pip install agent-governance-toolkit[full]    # Python
 dotnet add package Microsoft.AgentGovernance  # .NET
 npm install @agentmesh/sdk                    # TypeScript
+cargo add agentmesh                           # Rust
+go get github.com/microsoft/agent-governance-toolkit/sdks/go  # Go
 ```
 
 ## More Resources

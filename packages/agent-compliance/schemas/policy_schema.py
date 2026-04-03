@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 

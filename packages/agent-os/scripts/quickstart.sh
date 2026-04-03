@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 # Agent OS Quickstart Script
 # Run with: curl -sSL https://get.agent-os.dev | bash
 

@@ -27,6 +27,13 @@
 /packages/*/src/**/identity* @microsoft/agent-governance-toolkit
 /packages/*/src/**/crypto*   @microsoft/agent-governance-toolkit
 
+# Infrastructure & container security — require maintainer review
+/scripts/                    @microsoft/agent-governance-toolkit
+**/Dockerfile                @microsoft/agent-governance-toolkit
+**/docker-compose*           @microsoft/agent-governance-toolkit
+/.dockerignore               @microsoft/agent-governance-toolkit
+/.clusterfuzzlite/           @microsoft/agent-governance-toolkit
+
 # Documentation
 /docs/                       @microsoft/agent-governance-toolkit
 *.md                         @microsoft/agent-governance-toolkit

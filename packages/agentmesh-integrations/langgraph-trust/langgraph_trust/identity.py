@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Lightweight Ed25519 identity manager (zero external dependencies beyond cryptography)."""
 
 from __future__ import annotations

@@ -210,6 +210,7 @@ public class FileTrustStoreAdvancedTests
     }
 }
 
+[Collection("MetricsTests")]
 public class GovernanceMetricsAdvancedTests
 {
     [Fact]

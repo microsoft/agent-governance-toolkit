@@ -87,31 +87,31 @@ runs:
         
         # Run the security scanner
         python -c "
-from pathlib import Path
-from agent_compliance.security import scan_plugin_security
-import json
-import sys
+        from pathlib import Path
+        from agent_compliance.security import scan_plugin_security
+        import json
+        import sys
 
-paths = '$PATHS'.split()
-verbose = '${{ inputs.verbose }}' == 'true'
+        paths = '$PATHS'.split()
+        verbose = '${{ inputs.verbose }}' == 'true'
 
-# Scan first path (primary plugin directory)
-plugin_dir = Path(paths[0])
-plugin_name = '$PLUGIN_NAME'
+        # Scan first path (primary plugin directory)
+        plugin_dir = Path(paths[0])
+        plugin_name = '$PLUGIN_NAME'
 
-exit_code, error_msg = scan_plugin_security(
-    plugin_dir=plugin_dir,
-    plugin_name=plugin_name,
-    verbose=verbose
-)
+        exit_code, error_msg = scan_plugin_security(
+            plugin_dir=plugin_dir,
+            plugin_name=plugin_name,
+            verbose=verbose
+        )
 
-# Output for GitHub Actions
-print(f'exit_code={exit_code}', file=sys.stderr)
-if error_msg:
-    print(error_msg)
+        # Output for GitHub Actions
+        print(f'exit_code={exit_code}', file=sys.stderr)
+        if error_msg:
+            print(error_msg)
 
-sys.exit(exit_code)
-" 2>&1 | tee /tmp/security_scan_output.txt
+        sys.exit(exit_code)
+        " 2>&1 | tee /tmp/security_scan_output.txt
         
         EXIT_CODE=$?
         OUTPUT=$(cat /tmp/security_scan_output.txt)

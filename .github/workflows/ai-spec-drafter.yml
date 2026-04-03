@@ -125,7 +125,8 @@ jobs:
       - name: Comment on issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          gh issue comment ${{ github.event.issue.number }} \
+          gh issue comment "$ISSUE_NUMBER" \
             --body "🤖 An engineering spec has been drafted and a PR created. Please review the PR for the full specification." \
             || true

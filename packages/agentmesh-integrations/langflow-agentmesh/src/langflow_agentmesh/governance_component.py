@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Langflow custom component for governance policy enforcement.
 
 Provides a visual node that checks agent actions against YAML-based

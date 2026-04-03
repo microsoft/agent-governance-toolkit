@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
+# Community Edition — basic implementation
 """Replay engine for deterministic re-execution of agent traces."""
 
 from __future__ import annotations
@@ -234,7 +234,16 @@ class ReplayEngine:
         return diffs
 
     def what_if(self, trace: Trace, overrides: dict[str, dict[str, Any]]) -> ReplayResult:
-        """Trace comparison — not available in Public Preview."""
-        raise NotImplementedError(
-            "Not available in Public Preview"
-        )
+        """Run a what-if trace comparison with modified span outputs.
+
+        Replays the trace with the given overrides applied, returning
+        a ReplayResult that highlights divergences from the original.
+
+        Args:
+            trace: The original trace to replay.
+            overrides: Dict mapping span names to replacement output_data.
+
+        Returns:
+            ReplayResult with divergences caused by the overrides.
+        """
+        return self.replay(trace, overrides=overrides)

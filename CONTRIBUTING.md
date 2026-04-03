@@ -4,8 +4,8 @@ This project welcomes contributions and suggestions. Most contributions require 
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
 the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
 
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
+When you submit a pull request, a CLA bot will automatically determine whether you need to provide a
+CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
 provided by the bot. You will only need to do this once across all repos using our CLA.
 
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
@@ -44,14 +44,44 @@ pip install -e "packages/agent-sre[dev]"
 pip install -e "packages/agent-compliance[dev]"
 pip install -e "packages/agent-marketplace[dev]"  # installs agentmesh-marketplace
 pip install -e "packages/agent-lightning[dev]"
+pip install -e "packages/agent-hypervisor[dev]"
+pip install -e "packages/agent-governance-dotnet[dev]"
+pip install -e "packages/agentmesh-integrations[dev]"
 
 # Run tests
 pytest
 ```
 
+### Docker Quickstart
+
+If you prefer a containerized development environment, use the root Docker
+configuration. The image includes Python 3.11, Node.js 22, the core editable
+Python packages in this monorepo, and the TypeScript SDK dependencies.
+
+```bash
+# Build and start the development container
+docker compose up --build dev
+
+# Open a shell in the running container
+docker compose exec dev bash
+
+# Run the full test suite
+docker compose run --rm test
+```
+
+The repository is bind-mounted into `/workspace`, so Python source changes are
+available immediately without rebuilding the image. If you update package
+metadata or dependency definitions, rebuild with `docker compose build`.
+
+To launch the optional Agent Hypervisor dashboard:
+
+```bash
+docker compose --profile dashboard up --build dashboard
+```
+
 ### Package Structure
 
-This is a mono-repo with seven packages:
+This is a mono-repo with ten packages:
 
 | Package | Directory | Description |
 |---------|-----------|-------------|
@@ -62,6 +92,9 @@ This is a mono-repo with seven packages:
 | `agent-governance` | `packages/agent-compliance/` | Unified installer and runtime policy enforcement |
 | `agentmesh-marketplace` | `packages/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
 | `agentmesh-lightning` | `packages/agent-lightning/` | RL training governance with governed runners and policy rewards |
+| `agent-hypervisor` | `packages/agent-hypervisor/` | Runtime infrastructure and capability management |
+| `agent-governance-dotnet` | `packages/agent-governance-dotnet/` | .NET framework integration for agent governance |
+| `agentmesh-integrations` | `packages/agentmesh-integrations/` | Framework integrations and extension library |
 
 ### Coding Guidelines
 
@@ -197,7 +230,7 @@ Before submitting your integration PR:
 - [ ] All public APIs have docstrings
 - [ ] Tests pass: `pytest packages/your-integration/tests/`
 - [ ] Code follows PEP 8 and uses type hints
-- [ ] No *s or credentials committed
+- [ ] No secrets or credentials committed
 - [ ] Dependencies are pinned to specific versions
 
 ### Questions?

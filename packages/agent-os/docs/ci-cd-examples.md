@@ -84,7 +84,7 @@ jobs:
 
       # Validate governance policies before merging
       - name: Validate policies
-        run: agentos validate
+        run: agentos validate --json > policy-validation.json
 
   security-check:
     runs-on: ubuntu-latest
@@ -110,7 +110,7 @@ jobs:
 
       # Run security checks against known vulnerability databases
       - name: Security check
-        run: agentos check
+        run: agentos check --json > security-report.json
 
   audit:
     runs-on: ubuntu-latest

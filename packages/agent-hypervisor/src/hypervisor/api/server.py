@@ -12,6 +12,7 @@ Run with: uvicorn hypervisor.api.server:app
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -126,7 +127,7 @@ def create_app() -> FastAPI:
 
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8080").split(","),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

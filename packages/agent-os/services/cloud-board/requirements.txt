@@ -6,7 +6,7 @@ fastapi==0.115.0
 uvicorn[standard]==0.27.1
 
 # Async HTTP
-aiohttp==3.13.3
+aiohttp==3.13.4
 httpx==0.27.0
 
 # Data Validation

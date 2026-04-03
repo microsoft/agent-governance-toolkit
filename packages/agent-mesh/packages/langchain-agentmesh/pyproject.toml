@@ -3,11 +3,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "langchain-agentmesh"
-version = "0.1.0"
+name = "langchain_agentmesh"
+version = "3.0.2"
 description = "AgentMesh trust layer integration for LangChain - cryptographic identity and trust verification for AI agents"
 readme = "README.md"
-license = "Apache-2.0"
+license = {text = "Apache-2.0"}
 requires-python = ">=3.9"
 authors = [
     { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
@@ -35,14 +35,14 @@ classifiers = [
     "Topic :: Security :: Cryptography",
 ]
 dependencies = [
-    "langchain-core>=1.2.11",
-    "cryptography>=46.0.5",
+    "langchain-core>=1.2.11,<2.0",
+    "cryptography>=46.0.5,<47.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
+    "pytest>=7.0.0,<8.0",
+    "pytest-asyncio>=0.21.0,<1.0",
 ]
 
 [project.urls]

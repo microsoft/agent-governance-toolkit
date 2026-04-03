@@ -1,0 +1,47 @@
+services:
+  dev:
+    build:
+      context: .
+      target: dev
+    command: ["sleep", "infinity"]
+    init: true
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - typescript_node_modules:/workspace/packages/agent-mesh/sdks/typescript/node_modules
+
+  test:
+    build:
+      context: .
+      target: test
+    command: ["bash", "/workspace/scripts/docker/run-tests.sh"]
+    init: true
+    user: "1000:1000"
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - typescript_node_modules:/workspace/packages/agent-mesh/sdks/typescript/node_modules
+
+  dashboard:
+    profiles: ["dashboard"]
+    build:
+      context: .
+      target: dev
+    command:
+      - streamlit
+      - run
+      - packages/agent-hypervisor/examples/dashboard/app.py
+      - --server.address=0.0.0.0
+      - --server.port=8501
+    init: true
+    ports:
+      - "8501:8501"
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - typescript_node_modules:/workspace/packages/agent-mesh/sdks/typescript/node_modules
+
+volumes:
+  typescript_node_modules:

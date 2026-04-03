@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """YAML policy loading with deny-by-default semantics and wildcard support."""
 
 from __future__ import annotations

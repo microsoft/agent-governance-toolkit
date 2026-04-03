@@ -237,10 +237,12 @@ class PydanticAIKernel(BaseIntegration):
 
             @property
             def original(self_inner) -> Any:
+                """Return the original unwrapped agent before governance wrapping."""
                 return self_inner._original
 
             @property
             def context(self_inner) -> ExecutionContext:
+                """Return the ExecutionContext tracking call counts and session state."""
                 return self_inner._ctx
 
             def __getattr__(self_inner, name: str) -> Any:
@@ -364,6 +366,7 @@ def _wrap_single_tool(
 
     @wraps(original_fn)
     def governed_fn(*args: Any, **kwargs: Any) -> Any:
+        """Governed wrapper that validates and delegates PydanticAI tool calls."""
         # Build arguments dict for policy check
         call_args: dict[str, Any] = kwargs.copy()
         if args:

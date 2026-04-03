@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Lifecycle hooks for governance tracking in OpenAI Agents SDK."""
 
 from __future__ import annotations

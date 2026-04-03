@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Pre-commit hooks for plugin manifest validation.
 
 Entry points for ``.pre-commit-hooks.yaml``:

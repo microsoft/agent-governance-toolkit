@@ -1,9 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
-"""Cost optimization — basic model cost estimation and recommendation.
+# Community Edition — basic implementation
+"""Cost optimization — model cost estimation, recommendation, and analysis.
 
-Cost optimization analysis is not available in Public Preview.
+Includes Pareto frontier analysis and volume-based cost simulation.
 """
 
 from __future__ import annotations
@@ -107,16 +107,74 @@ class CostOptimizer:
         )
 
     def pareto_frontier(self, task: TaskProfile) -> list[CostEstimate]:
-        """Cost optimization — not available in Public Preview."""
-        raise NotImplementedError(
-            "Not available in Public Preview"
-        )
+        """Compute the Pareto-optimal set of models for a task.
+
+        A model is Pareto-optimal if no other model is both cheaper
+        AND higher quality while meeting the task constraints.
+
+        Args:
+            task: Task profile specifying quality and latency constraints.
+
+        Returns:
+            List of Pareto-optimal ``CostEstimate`` objects sorted by
+            ascending cost. Empty if no model meets the constraints.
+        """
+        # Get all feasible estimates
+        feasible: list[CostEstimate] = []
+        for model in self._models.values():
+            if model.quality_score < task.min_quality:
+                continue
+            if task.max_latency_ms is not None and model.avg_latency_ms > task.max_latency_ms:
+                continue
+            feasible.append(self.estimate_cost(model, task))
+
+        if not feasible:
+            return []
+
+        # Sort by cost ascending
+        feasible.sort(key=lambda e: e.estimated_cost)
+
+        # Build Pareto frontier: walk cost-sorted list, keep only those
+        # that improve quality over the best quality seen so far.
+        frontier: list[CostEstimate] = []
+        best_quality = -1.0
+        for est in feasible:
+            if est.estimated_quality > best_quality:
+                frontier.append(est)
+                best_quality = est.estimated_quality
+
+        return frontier
 
     def simulate(self, task: TaskProfile, model_name: str, volume: int) -> dict[str, object]:
-        """Cost simulation — not available in Public Preview."""
-        raise NotImplementedError(
-            "Cost simulation is not available in Public Preview"
-        )
+        """Project costs for running a model at a given request volume.
+
+        Args:
+            task: The task profile to simulate.
+            model_name: Name of the model to simulate.
+            volume: Number of requests to project.
+
+        Returns:
+            Dict with per-request cost, total cost, and model metadata.
+
+        Raises:
+            KeyError: If model_name is not registered.
+        """
+        if model_name not in self._models:
+            raise KeyError(f"Unknown model: {model_name}")
+
+        model = self._models[model_name]
+        per_request = self.estimate_cost(model, task)
+        total_cost = round(per_request.estimated_cost * volume, 6)
+
+        return {
+            "model_name": model_name,
+            "task_type": task.task_type,
+            "volume": volume,
+            "cost_per_request": per_request.estimated_cost,
+            "total_cost": total_cost,
+            "estimated_quality": per_request.estimated_quality,
+            "estimated_latency_ms": per_request.estimated_latency_ms,
+        }
 
     def suggest_routing(self, tasks: list[TaskProfile]) -> dict[str, str]:
         """For each task type, suggest the cheapest model meeting constraints."""

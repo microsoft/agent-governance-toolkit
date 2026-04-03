@@ -77,27 +77,33 @@ function injectIssueIntegration() {
       border-radius: 8px;
       background: linear-gradient(to bottom, #f4f5f7, #ffffff);
     `;
-    agentOSSection.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-        <span style="font-size: 20px;">🛡️</span>
-        <h4 style="font-size: 14px; font-weight: 600; margin: 0;">AgentOS Automation</h4>
-      </div>
-      
-      <div style="display: flex; flex-direction: column; gap: 8px;">
-        <button class="agentos-jira-btn" data-action="breakdown">
-          📝 Break into subtasks
-        </button>
-        <button class="agentos-jira-btn" data-action="estimate">
-          ⏱️ Estimate story points
-        </button>
-        <button class="agentos-jira-btn" data-action="find-prs">
-          🔗 Find related PRs
-        </button>
-        <button class="agentos-jira-btn" data-action="test-plan">
-          🧪 Generate test plan
-        </button>
-      </div>
-    `;
+    const sectionHeader = document.createElement('div');
+    sectionHeader.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 12px;';
+    const sectionIcon = document.createElement('span');
+    sectionIcon.style.fontSize = '20px';
+    sectionIcon.textContent = '🛡️';
+    sectionHeader.appendChild(sectionIcon);
+    const sectionTitle = document.createElement('h4');
+    sectionTitle.style.cssText = 'font-size: 14px; font-weight: 600; margin: 0;';
+    sectionTitle.textContent = 'AgentOS Automation';
+    sectionHeader.appendChild(sectionTitle);
+    agentOSSection.appendChild(sectionHeader);
+
+    const buttonGroup = document.createElement('div');
+    buttonGroup.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
+    for (const { action, label } of [
+      { action: 'breakdown', label: '📝 Break into subtasks' },
+      { action: 'estimate', label: '⏱️ Estimate story points' },
+      { action: 'find-prs', label: '🔗 Find related PRs' },
+      { action: 'test-plan', label: '🧪 Generate test plan' },
+    ]) {
+      const btn = document.createElement('button');
+      btn.className = 'agentos-jira-btn';
+      btn.dataset.action = action;
+      btn.textContent = label;
+      buttonGroup.appendChild(btn);
+    }
+    agentOSSection.appendChild(buttonGroup);
 
     const style = document.createElement('style');
     style.textContent = `
@@ -160,22 +166,27 @@ function injectBoardIntegration() {
       align-items: center;
       gap: 12px;
     `;
-    banner.innerHTML = `
-      <span style="font-size: 20px;">🛡️</span>
-      <div>
-        <div style="font-size: 13px; font-weight: 500;">AgentOS Active</div>
-        <div style="font-size: 11px; color: #5e6c84;">Monitoring board activity</div>
-      </div>
-      <button class="agentos-banner-btn" style="
-        background: #6366f1;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        padding: 6px 12px;
-        cursor: pointer;
-        font-size: 12px;
-      ">Optimize Sprint</button>
-    `;
+    const bannerIcon = document.createElement('span');
+    bannerIcon.style.fontSize = '20px';
+    bannerIcon.textContent = '🛡️';
+    banner.appendChild(bannerIcon);
+
+    const bannerInfo = document.createElement('div');
+    const bannerTitle = document.createElement('div');
+    bannerTitle.style.cssText = 'font-size: 13px; font-weight: 500;';
+    bannerTitle.textContent = 'AgentOS Active';
+    bannerInfo.appendChild(bannerTitle);
+    const bannerSubtitle = document.createElement('div');
+    bannerSubtitle.style.cssText = 'font-size: 11px; color: #5e6c84;';
+    bannerSubtitle.textContent = 'Monitoring board activity';
+    bannerInfo.appendChild(bannerSubtitle);
+    banner.appendChild(bannerInfo);
+
+    const optimizeBtn = document.createElement('button');
+    optimizeBtn.className = 'agentos-banner-btn';
+    optimizeBtn.style.cssText = 'background: #6366f1; color: white; border: none; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px;';
+    optimizeBtn.textContent = 'Optimize Sprint';
+    banner.appendChild(optimizeBtn);
 
     document.body.appendChild(banner);
 
@@ -204,12 +215,21 @@ function injectBacklogIntegration() {
       align-items: center;
       gap: 12px;
     `;
-    toolbar.innerHTML = `
-      <span style="font-size: 14px;">🛡️ AgentOS:</span>
-      <button class="agentos-tool-btn" data-action="auto-prioritize">Auto-prioritize</button>
-      <button class="agentos-tool-btn" data-action="estimate-all">Estimate all</button>
-      <button class="agentos-tool-btn" data-action="find-duplicates">Find duplicates</button>
-    `;
+    const toolbarLabel = document.createElement('span');
+    toolbarLabel.style.fontSize = '14px';
+    toolbarLabel.textContent = '🛡️ AgentOS:';
+    toolbar.appendChild(toolbarLabel);
+    for (const { action, label } of [
+      { action: 'auto-prioritize', label: 'Auto-prioritize' },
+      { action: 'estimate-all', label: 'Estimate all' },
+      { action: 'find-duplicates', label: 'Find duplicates' },
+    ]) {
+      const btn = document.createElement('button');
+      btn.className = 'agentos-tool-btn';
+      btn.dataset.action = action;
+      btn.textContent = label;
+      toolbar.appendChild(btn);
+    }
 
     const style = document.createElement('style');
     style.textContent = `
@@ -246,22 +266,27 @@ function injectFAB() {
 
   const fab = document.createElement('div');
   fab.className = 'agentos-fab';
-  fab.innerHTML = `
-    <button class="agentos-fab-button" title="AgentOS">
-      🤖
-    </button>
-    <div class="agentos-fab-menu" style="display: none;">
-      <div class="agentos-fab-menu-item" data-action="create">
-        ➕ Create Agent
-      </div>
-      <div class="agentos-fab-menu-item" data-action="sprint-report">
-        📊 Sprint Report
-      </div>
-      <div class="agentos-fab-menu-item" data-action="velocity">
-        📈 Velocity Analysis
-      </div>
-    </div>
-  `;
+  const fabButton = document.createElement('button');
+  fabButton.className = 'agentos-fab-button';
+  fabButton.title = 'AgentOS';
+  fabButton.textContent = '🤖';
+  fab.appendChild(fabButton);
+
+  const fabMenu = document.createElement('div');
+  fabMenu.className = 'agentos-fab-menu';
+  fabMenu.style.display = 'none';
+  for (const { action, label } of [
+    { action: 'create', label: '➕ Create Agent' },
+    { action: 'sprint-report', label: '📊 Sprint Report' },
+    { action: 'velocity', label: '📈 Velocity Analysis' },
+  ]) {
+    const item = document.createElement('div');
+    item.className = 'agentos-fab-menu-item';
+    item.dataset.action = action;
+    item.textContent = label;
+    fabMenu.appendChild(item);
+  }
+  fab.appendChild(fabMenu);
 
   const style = document.createElement('style');
   style.textContent = `

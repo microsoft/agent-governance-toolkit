@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Trust-based routing component for Langflow flows.
 
 Routes agent actions to one of three outputs based on trust score:
