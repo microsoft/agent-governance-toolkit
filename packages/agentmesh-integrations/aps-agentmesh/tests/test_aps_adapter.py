@@ -215,6 +215,48 @@ def test_verify_signature_fails_closed_without_nacl(monkeypatch):
     assert verify_aps_signature("payload", fake_sig, fake_key) is False
 
 
+def test_verify_signature_valid():
+    """Valid Ed25519 signature passes verification."""
+    try:
+        from nacl.signing import SigningKey
+    except ImportError:
+        import pytest
+        pytest.skip("PyNaCl not installed")
+    sk = SigningKey.generate()
+    payload = "test-payload"
+    sig = sk.sign(payload.encode()).signature.hex()
+    pk = sk.verify_key.encode().hex()
+    assert verify_aps_signature(payload, sig, pk) is True
+
+
+def test_verify_signature_wrong_key():
+    """Signature verified against wrong public key fails."""
+    try:
+        from nacl.signing import SigningKey
+    except ImportError:
+        import pytest
+        pytest.skip("PyNaCl not installed")
+    sk1 = SigningKey.generate()
+    sk2 = SigningKey.generate()
+    payload = "test-payload"
+    sig = sk1.sign(payload.encode()).signature.hex()
+    wrong_pk = sk2.verify_key.encode().hex()
+    assert verify_aps_signature(payload, sig, wrong_pk) is False
+
+
+def test_verify_signature_tampered_data():
+    """Signature against tampered data fails."""
+    try:
+        from nacl.signing import SigningKey
+    except ImportError:
+        import pytest
+        pytest.skip("PyNaCl not installed")
+    sk = SigningKey.generate()
+    sig = sk.sign(b"original").signature.hex()
+    pk = sk.verify_key.encode().hex()
+    assert verify_aps_signature("tampered", sig, pk) is False
+
+
 def test_verify_signature_rejects_bad_signature():
     """Bad signature format is rejected regardless of nacl availability."""
     assert verify_aps_signature("payload", "not-hex", "not-a-key") is False
