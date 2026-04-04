@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
 using System.Collections.Concurrent;
+using AgentGovernance.Mcp.Abstractions;
 using Microsoft.Extensions.Logging;
 
 namespace AgentGovernance.Mcp;
@@ -18,7 +19,29 @@ namespace AgentGovernance.Mcp;
 /// </remarks>
 public sealed class McpSlidingRateLimiter
 {
-    private readonly ConcurrentDictionary<string, AgentBucket> _buckets = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IMcpRateLimitStore _rateLimitStore;
+    private readonly ConcurrentDictionary<string, object> _bucketLocks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _trackedAgents = new(StringComparer.OrdinalIgnoreCase);
+    private readonly TimeProvider _timeProvider;
+
+    /// <summary>
+    /// Initializes a new limiter with in-memory persistence and the system clock.
+    /// </summary>
+    public McpSlidingRateLimiter()
+        : this(new InMemoryMcpRateLimitStore(), TimeProvider.System)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new limiter with explicit persistence and clock dependencies.
+    /// </summary>
+    /// <param name="rateLimitStore">The store used to persist bucket state.</param>
+    /// <param name="timeProvider">The clock used for sliding-window calculations.</param>
+    public McpSlidingRateLimiter(IMcpRateLimitStore rateLimitStore, TimeProvider? timeProvider = null)
+    {
+        _rateLimitStore = rateLimitStore ?? throw new ArgumentNullException(nameof(rateLimitStore));
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     /// <summary>
     /// Maximum number of calls an agent may make within a single sliding window.
@@ -49,21 +72,25 @@ public sealed class McpSlidingRateLimiter
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
 
-        var bucket = _buckets.GetOrAdd(agentId, _ => new AgentBucket());
-        var now = DateTimeOffset.UtcNow;
+        var bucketLock = _bucketLocks.GetOrAdd(agentId, _ => new object());
+        _trackedAgents[agentId] = 0;
+
+        var now = _timeProvider.GetUtcNow();
         var cutoff = now - WindowSize;
 
-        lock (bucket.Lock)
+        lock (bucketLock)
         {
-            PruneExpired(bucket.Timestamps, cutoff);
+            var timestamps = GetBucketTimestamps(agentId);
+            PruneExpired(timestamps, cutoff);
 
-            if (bucket.Timestamps.Count >= MaxCallsPerWindow)
+            if (timestamps.Count >= MaxCallsPerWindow)
             {
-                Logger?.LogWarning("MCP rate limit exceeded for {AgentId}: {Used}/{Max} in window", agentId, bucket.Timestamps.Count, MaxCallsPerWindow);
+                Logger?.LogWarning("MCP rate limit exceeded for {AgentId}: {Used}/{Max} in window", agentId, timestamps.Count, MaxCallsPerWindow);
                 return false;
             }
 
-            bucket.Timestamps.Enqueue(now);
+            timestamps.Add(now);
+            SaveBucket(agentId, timestamps);
             return true;
         }
     }
@@ -78,17 +105,18 @@ public sealed class McpSlidingRateLimiter
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
 
-        if (!_buckets.TryGetValue(agentId, out var bucket))
+        var bucketLock = _bucketLocks.GetOrAdd(agentId, _ => new object());
+        lock (bucketLock)
         {
-            return MaxCallsPerWindow;
-        }
+            var timestamps = GetBucketTimestamps(agentId);
+            if (timestamps.Count == 0)
+            {
+                return MaxCallsPerWindow;
+            }
 
-        var cutoff = DateTimeOffset.UtcNow - WindowSize;
-
-        lock (bucket.Lock)
-        {
-            PruneExpired(bucket.Timestamps, cutoff);
-            return Math.Max(0, MaxCallsPerWindow - bucket.Timestamps.Count);
+            PruneExpired(timestamps, _timeProvider.GetUtcNow() - WindowSize);
+            SaveBucket(agentId, timestamps);
+            return Math.Max(0, MaxCallsPerWindow - timestamps.Count);
         }
     }
 
@@ -102,17 +130,18 @@ public sealed class McpSlidingRateLimiter
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
 
-        if (!_buckets.TryGetValue(agentId, out var bucket))
+        var bucketLock = _bucketLocks.GetOrAdd(agentId, _ => new object());
+        lock (bucketLock)
         {
-            return 0;
-        }
+            var timestamps = GetBucketTimestamps(agentId);
+            if (timestamps.Count == 0)
+            {
+                return 0;
+            }
 
-        var cutoff = DateTimeOffset.UtcNow - WindowSize;
-
-        lock (bucket.Lock)
-        {
-            PruneExpired(bucket.Timestamps, cutoff);
-            return bucket.Timestamps.Count;
+            PruneExpired(timestamps, _timeProvider.GetUtcNow() - WindowSize);
+            SaveBucket(agentId, timestamps);
+            return timestamps.Count;
         }
     }
 
@@ -125,12 +154,11 @@ public sealed class McpSlidingRateLimiter
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
 
-        if (_buckets.TryGetValue(agentId, out var bucket))
+        var bucketLock = _bucketLocks.GetOrAdd(agentId, _ => new object());
+        lock (bucketLock)
         {
-            lock (bucket.Lock)
-            {
-                bucket.Timestamps.Clear();
-            }
+            SaveBucket(agentId, []);
+            _trackedAgents.TryRemove(agentId, out _);
         }
     }
 
@@ -139,17 +167,10 @@ public sealed class McpSlidingRateLimiter
     /// </summary>
     public void ResetAll()
     {
-        // Snapshot keys to avoid mutation during iteration.
-        var keys = _buckets.Keys.ToArray();
+        var keys = _trackedAgents.Keys.ToArray();
         foreach (var key in keys)
         {
-            if (_buckets.TryGetValue(key, out var bucket))
-            {
-                lock (bucket.Lock)
-                {
-                    bucket.Timestamps.Clear();
-                }
-            }
+            Reset(key);
         }
     }
 
@@ -160,41 +181,56 @@ public sealed class McpSlidingRateLimiter
     /// <returns>The total number of expired entries removed across all agents.</returns>
     public int CleanupExpired()
     {
-        var cutoff = DateTimeOffset.UtcNow - WindowSize;
+        var cutoff = _timeProvider.GetUtcNow() - WindowSize;
         int totalRemoved = 0;
 
-        foreach (var kvp in _buckets)
+        foreach (var agentId in _trackedAgents.Keys.ToArray())
         {
-            var bucket = kvp.Value;
-            lock (bucket.Lock)
+            var bucketLock = _bucketLocks.GetOrAdd(agentId, _ => new object());
+            lock (bucketLock)
             {
-                int before = bucket.Timestamps.Count;
-                PruneExpired(bucket.Timestamps, cutoff);
-                totalRemoved += before - bucket.Timestamps.Count;
+                var timestamps = GetBucketTimestamps(agentId);
+                int before = timestamps.Count;
+                PruneExpired(timestamps, cutoff);
+                SaveBucket(agentId, timestamps);
+                totalRemoved += before - timestamps.Count;
+
+                if (timestamps.Count == 0)
+                {
+                    _trackedAgents.TryRemove(agentId, out _);
+                }
             }
         }
 
         return totalRemoved;
     }
 
-    /// <summary>
-    /// Dequeues all timestamps that are older than <paramref name="cutoff"/>.
-    /// Because timestamps are enqueued in order, we only need to dequeue from the front.
-    /// </summary>
-    private static void PruneExpired(Queue<DateTimeOffset> timestamps, DateTimeOffset cutoff)
+    private List<DateTimeOffset> GetBucketTimestamps(string agentId)
     {
-        while (timestamps.Count > 0 && timestamps.Peek() <= cutoff)
-        {
-            timestamps.Dequeue();
-        }
+        return _rateLimitStore.GetBucketAsync(agentId).GetAwaiter().GetResult()?.Timestamps.ToList()
+            ?? [];
+    }
+
+    private void SaveBucket(string agentId, List<DateTimeOffset> timestamps)
+    {
+        _rateLimitStore.SetBucketAsync(agentId, new McpRateLimitBucket(timestamps)).GetAwaiter().GetResult();
     }
 
     /// <summary>
-    /// Per-agent bucket holding the call timestamps and a dedicated lock object.
+    /// Removes timestamps that are older than <paramref name="cutoff"/>.
+    /// Because timestamps are recorded in chronological order, only the oldest prefix can expire.
     /// </summary>
-    private sealed class AgentBucket
+    private static void PruneExpired(List<DateTimeOffset> timestamps, DateTimeOffset cutoff)
     {
-        public readonly object Lock = new();
-        public readonly Queue<DateTimeOffset> Timestamps = new();
+        int removeCount = 0;
+        while (removeCount < timestamps.Count && timestamps[removeCount] <= cutoff)
+        {
+            removeCount++;
+        }
+
+        if (removeCount > 0)
+        {
+            timestamps.RemoveRange(0, removeCount);
+        }
     }
 }

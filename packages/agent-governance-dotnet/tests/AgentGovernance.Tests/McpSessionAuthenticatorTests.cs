@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
 using AgentGovernance.Mcp;
+using AgentGovernance.Mcp.Abstractions;
 using Xunit;
 
 namespace AgentGovernance.Tests;
@@ -13,12 +14,17 @@ public class McpSessionAuthenticatorTests
 
     private static McpSessionAuthenticator CreateAuthenticator(
         TimeSpan? ttl = null,
-        int maxSessions = 10)
+        int maxSessions = 10,
+        ManualTimeProvider? timeProvider = null)
     {
-        var auth = new McpSessionAuthenticator { MaxSessionsPerAgent = maxSessions };
+        var clock = timeProvider ?? new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z"));
+        var auth = new McpSessionAuthenticator(new InMemoryMcpSessionStore(), clock)
+        {
+            MaxSessionsPerAgent = maxSessions
+        };
         if (ttl is not null)
         {
-            auth = new McpSessionAuthenticator
+            auth = new McpSessionAuthenticator(new InMemoryMcpSessionStore(), clock)
             {
                 SessionTtl = ttl.Value,
                 MaxSessionsPerAgent = maxSessions
@@ -34,7 +40,7 @@ public class McpSessionAuthenticatorTests
     {
         var auth = CreateAuthenticator();
 
-        var token = auth.CreateSession(AgentId);
+        var token = auth.CreateSession(AgentId)!;
 
         Assert.False(string.IsNullOrWhiteSpace(token));
         // Token should be valid base64 (32 bytes → 44 chars with padding)
@@ -70,7 +76,7 @@ public class McpSessionAuthenticatorTests
     {
         var auth = CreateAuthenticator();
 
-        var token = auth.CreateSession(AgentId, userId: UserId);
+        var token = auth.CreateSession(AgentId, userId: UserId)!;
         var session = auth.ValidateRequest(AgentId, token);
 
         Assert.NotNull(session);
@@ -83,7 +89,7 @@ public class McpSessionAuthenticatorTests
     {
         var auth = CreateAuthenticator();
 
-        var token = auth.CreateSession(AgentId);
+        var token = auth.CreateSession(AgentId)!;
         var session = auth.ValidateRequest(AgentId, token);
 
         Assert.NotNull(session);
@@ -96,8 +102,8 @@ public class McpSessionAuthenticatorTests
     {
         var auth = CreateAuthenticator();
 
-        var token1 = auth.CreateSession(AgentId);
-        var token2 = auth.CreateSession(AgentId);
+        var token1 = auth.CreateSession(AgentId)!;
+        var token2 = auth.CreateSession(AgentId)!;
 
         Assert.NotEqual(token1, token2);
     }
@@ -108,7 +114,7 @@ public class McpSessionAuthenticatorTests
     public void ValidateRequest_ValidToken_ReturnsSession()
     {
         var auth = CreateAuthenticator();
-        var token = auth.CreateSession(AgentId);
+        var token = auth.CreateSession(AgentId)!;
 
         var session = auth.ValidateRequest(AgentId, token);
 
@@ -121,7 +127,7 @@ public class McpSessionAuthenticatorTests
     public void ValidateRequest_WrongAgentId_ReturnsNull()
     {
         var auth = CreateAuthenticator();
-        var token = auth.CreateSession(AgentId);
+        var token = auth.CreateSession(AgentId)!;
 
         // A different agent tries to use the same token → null (prevents token theft)
         var session = auth.ValidateRequest(OtherAgentId, token);
@@ -132,12 +138,11 @@ public class McpSessionAuthenticatorTests
     [Fact]
     public void ValidateRequest_ExpiredSession_ReturnsNull()
     {
-        // Use a very short TTL so the session expires immediately
-        var auth = CreateAuthenticator(ttl: TimeSpan.FromMilliseconds(1));
-        var token = auth.CreateSession(AgentId);
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z"));
+        var auth = CreateAuthenticator(ttl: TimeSpan.FromMilliseconds(1), timeProvider: timeProvider);
+        var token = auth.CreateSession(AgentId)!;
 
-        // Wait for expiry
-        Thread.Sleep(50);
+        timeProvider.Advance(TimeSpan.FromMilliseconds(50));
 
         var session = auth.ValidateRequest(AgentId, token);
         Assert.Null(session);
@@ -175,7 +180,7 @@ public class McpSessionAuthenticatorTests
     public void RevokeSession_ExistingToken_ReturnsTrue()
     {
         var auth = CreateAuthenticator();
-        var token = auth.CreateSession(AgentId);
+        var token = auth.CreateSession(AgentId)!;
 
         Assert.True(auth.RevokeSession(token));
         // Subsequent validation fails
@@ -196,9 +201,9 @@ public class McpSessionAuthenticatorTests
     public void RevokeAllSessions_RemovesAllForAgent()
     {
         var auth = CreateAuthenticator();
-        var token1 = auth.CreateSession(AgentId);
-        var token2 = auth.CreateSession(AgentId);
-        var otherToken = auth.CreateSession(OtherAgentId);
+        var token1 = auth.CreateSession(AgentId)!;
+        var token2 = auth.CreateSession(AgentId)!;
+        var otherToken = auth.CreateSession(OtherAgentId)!;
 
         var revoked = auth.RevokeAllSessions(AgentId);
 
@@ -215,15 +220,17 @@ public class McpSessionAuthenticatorTests
     [Fact]
     public void CleanupExpiredSessions_RemovesExpiredOnly()
     {
-        var auth = CreateAuthenticator(ttl: TimeSpan.FromMilliseconds(1));
+        var expiredClock = new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z"));
+        var auth = CreateAuthenticator(ttl: TimeSpan.FromMilliseconds(1), timeProvider: expiredClock);
         auth.CreateSession(AgentId);
         auth.CreateSession(AgentId);
 
-        // Wait for those to expire
-        Thread.Sleep(50);
+        expiredClock.Advance(TimeSpan.FromMilliseconds(50));
 
         // Create a fresh session with a long TTL authenticator
-        var freshAuth = CreateAuthenticator(ttl: TimeSpan.FromHours(1));
+        var freshAuth = CreateAuthenticator(
+            ttl: TimeSpan.FromHours(1),
+            timeProvider: new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z")));
         var freshToken = freshAuth.CreateSession(AgentId);
 
         // On the short-TTL authenticator, both sessions should be expired
@@ -231,7 +238,7 @@ public class McpSessionAuthenticatorTests
         Assert.Equal(2, removed);
 
         // The fresh authenticator's session should remain valid
-        Assert.NotNull(freshAuth.ValidateRequest(AgentId, freshToken));
+        Assert.NotNull(freshAuth.ValidateRequest(AgentId, freshToken!));
     }
 
     // ── ActiveSessionCount ───────────────────────────────────────────────
@@ -239,12 +246,12 @@ public class McpSessionAuthenticatorTests
     [Fact]
     public void ActiveSessionCount_ExcludesExpired()
     {
-        var auth = CreateAuthenticator(ttl: TimeSpan.FromMilliseconds(1));
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z"));
+        var auth = CreateAuthenticator(ttl: TimeSpan.FromMilliseconds(1), timeProvider: timeProvider);
         auth.CreateSession(AgentId);
         auth.CreateSession(AgentId);
 
-        // Wait for expiry
-        Thread.Sleep(50);
+        timeProvider.Advance(TimeSpan.FromMilliseconds(50));
 
         // Create one more with a long TTL — need a new authenticator for that
         // Instead, verify active count reflects the expired ones
@@ -290,5 +297,85 @@ public class McpSessionAuthenticatorTests
         Task.WaitAll(tasks);
         Assert.Equal(3, successCount);
         Assert.Equal(17, failCount);
+    }
+
+    [Fact]
+    public void CreateSession_SessionStoreWriteThrows_ReturnsNull()
+    {
+        var store = new ThrowingSessionStore { ThrowOnSet = true };
+        var auth = new McpSessionAuthenticator(store, new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z")));
+
+        var token = auth.CreateSession(AgentId);
+
+        Assert.Null(token);
+    }
+
+    [Fact]
+    public void ValidateRequest_SessionStoreReadThrows_ReturnsNull()
+    {
+        var store = new ThrowingSessionStore();
+        var auth = new McpSessionAuthenticator(store, new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z")));
+        var token = auth.CreateSession(AgentId);
+
+        Assert.NotNull(token);
+        store.ThrowOnGet = true;
+
+        var session = auth.ValidateRequest(AgentId, token!);
+
+        Assert.Null(session);
+    }
+
+    [Fact]
+    public void RevokeSession_SessionStoreDeleteThrows_ReturnsFalse()
+    {
+        var store = new ThrowingSessionStore();
+        var auth = new McpSessionAuthenticator(store, new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z")));
+        var token = auth.CreateSession(AgentId);
+
+        Assert.NotNull(token);
+        store.ThrowOnDelete = true;
+
+        Assert.False(auth.RevokeSession(token!));
+    }
+
+    private sealed class ThrowingSessionStore : IMcpSessionStore
+    {
+        private readonly InMemoryMcpSessionStore _inner = new();
+
+        public bool ThrowOnGet { get; set; }
+
+        public bool ThrowOnSet { get; set; }
+
+        public bool ThrowOnDelete { get; set; }
+
+        public Task<McpSession?> GetAsync(string sessionToken, CancellationToken cancellationToken = default)
+        {
+            if (ThrowOnGet)
+            {
+                throw new InvalidOperationException("session store unavailable");
+            }
+
+            return _inner.GetAsync(sessionToken, cancellationToken);
+        }
+
+        public Task SetAsync(string sessionToken, McpSession session, CancellationToken cancellationToken = default)
+        {
+            if (ThrowOnSet)
+            {
+                throw new InvalidOperationException("session store unavailable");
+            }
+
+            return _inner.SetAsync(sessionToken, session, cancellationToken);
+        }
+
+        public Task<bool> DeleteAsync(string sessionToken, CancellationToken cancellationToken = default)
+        {
+            if (ThrowOnDelete)
+            {
+                throw new InvalidOperationException("session store unavailable");
+            }
+
+            return _inner.DeleteAsync(sessionToken, cancellationToken);
+        }
     }
 }

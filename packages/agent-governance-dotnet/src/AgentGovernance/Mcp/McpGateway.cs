@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using AgentGovernance.Audit;
 using AgentGovernance.Integration;
+using AgentGovernance.Mcp.Abstractions;
 using AgentGovernance.Policy;
 using AgentGovernance.RateLimiting;
 using AgentGovernance.Telemetry;
@@ -38,9 +39,9 @@ public sealed class McpGateway
     private readonly bool _enableBuiltinSanitization;
     private readonly Func<string, string, Dictionary<string, object>, ApprovalStatus>? _approvalCallback;
     private readonly bool _requireHumanApproval;
-
-    private readonly object _lock = new();
-    private readonly List<McpAuditEntry> _auditLog = new();
+    private readonly bool _enableCredentialRedaction;
+    private readonly IMcpAuditSink _auditSink;
+    private readonly TimeProvider _timeProvider;
 
     /// <summary>
     /// Maximum tool calls per agent before rate-limiting kicks in.
@@ -93,6 +94,12 @@ public sealed class McpGateway
     /// When <c>true</c>, ALL tool calls require human approval (not just sensitive tools).
     /// Defaults to <c>false</c>.
     /// </param>
+    /// <param name="enableCredentialRedaction">
+    /// Whether to redact credentials before audit entries are stored.
+    /// Defaults to <c>true</c>.
+    /// </param>
+    /// <param name="auditSink">The sink used to persist audit entries.</param>
+    /// <param name="timeProvider">The clock used for audit timestamps.</param>
     public McpGateway(
         GovernanceKernel kernel,
         IEnumerable<string>? deniedTools = null,
@@ -100,7 +107,10 @@ public sealed class McpGateway
         IEnumerable<string>? sensitiveTools = null,
         Func<string, string, Dictionary<string, object>, ApprovalStatus>? approvalCallback = null,
         bool enableBuiltinSanitization = true,
-        bool requireHumanApproval = false)
+        bool requireHumanApproval = false,
+        bool enableCredentialRedaction = true,
+        IMcpAuditSink? auditSink = null,
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(kernel);
 
@@ -117,6 +127,9 @@ public sealed class McpGateway
         _approvalCallback = approvalCallback;
         _enableBuiltinSanitization = enableBuiltinSanitization;
         _requireHumanApproval = requireHumanApproval;
+        _enableCredentialRedaction = enableCredentialRedaction;
+        _auditSink = auditSink ?? new InMemoryMcpAuditSink();
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     /// <summary>
@@ -160,20 +173,7 @@ public sealed class McpGateway
                 Logger?.LogWarning("MCP tool call denied: {ToolName} for {AgentId} - {Reason}", toolName, agentId, reason);
             }
 
-            // Record audit entry
-            lock (_lock)
-            {
-                _auditLog.Add(new McpAuditEntry
-                {
-                    Timestamp = DateTimeOffset.UtcNow,
-                    AgentId = agentId,
-                    ToolName = toolName,
-                    Parameters = new Dictionary<string, object>(parameters),
-                    Allowed = allowed,
-                    Reason = reason,
-                    ApprovalStatus = approvalStatus
-                });
-            }
+            RecordAuditEntry(agentId, toolName, parameters, allowed, reason, approvalStatus);
 
             return (allowed, reason);
         }
@@ -187,17 +187,13 @@ public sealed class McpGateway
 
             Metrics?.RecordMcpDecision(false, agentId, toolName, sw.Elapsed.TotalMilliseconds, "error");
 
-            lock (_lock)
+            try
             {
-                _auditLog.Add(new McpAuditEntry
-                {
-                    Timestamp = DateTimeOffset.UtcNow,
-                    AgentId = agentId,
-                    ToolName = toolName,
-                    Parameters = new Dictionary<string, object>(parameters),
-                    Allowed = false,
-                    Reason = failReason
-                });
+                RecordAuditEntry(agentId, toolName, parameters, false, failReason, null);
+            }
+            catch (Exception auditEx)
+            {
+                Logger?.LogError(auditEx, "MCP audit sink failure while recording a fail-closed decision");
             }
 
             return (false, failReason);
@@ -211,10 +207,9 @@ public sealed class McpGateway
     {
         get
         {
-            lock (_lock)
-            {
-                return _auditLog.ToList().AsReadOnly();
-            }
+            return _auditSink is InMemoryMcpAuditSink inMemoryAuditSink
+                ? inMemoryAuditSink.GetSnapshot()
+                : Array.Empty<McpAuditEntry>();
         }
     }
 
@@ -407,6 +402,30 @@ public sealed class McpGateway
         }
 
         return (true, null);
+    }
+
+    private void RecordAuditEntry(
+        string agentId,
+        string toolName,
+        Dictionary<string, object> parameters,
+        bool allowed,
+        string reason,
+        ApprovalStatus? approvalStatus)
+    {
+        var auditParameters = _enableCredentialRedaction
+            ? CredentialRedactor.RedactDictionary(parameters)
+            : new Dictionary<string, object>(parameters);
+
+        _auditSink.RecordAsync(new McpAuditEntry
+        {
+            Timestamp = _timeProvider.GetUtcNow(),
+            AgentId = agentId,
+            ToolName = toolName,
+            Parameters = auditParameters,
+            Allowed = allowed,
+            Reason = reason,
+            ApprovalStatus = approvalStatus
+        }).GetAwaiter().GetResult();
     }
 }
 

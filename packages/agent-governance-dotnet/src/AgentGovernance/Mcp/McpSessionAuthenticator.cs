@@ -2,6 +2,7 @@
 
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using AgentGovernance.Mcp.Abstractions;
 using Microsoft.Extensions.Logging;
 
 namespace AgentGovernance.Mcp;
@@ -17,9 +18,29 @@ namespace AgentGovernance.Mcp;
 /// </summary>
 public sealed class McpSessionAuthenticator
 {
-    // Session storage: token → session info
-    private readonly ConcurrentDictionary<string, McpSession> _sessions = new();
+    private readonly IMcpSessionStore _sessionStore;
+    private readonly ConcurrentDictionary<string, string> _trackedSessions = new(StringComparer.Ordinal);
     private readonly object _sessionLock = new();
+    private readonly TimeProvider _timeProvider;
+
+    /// <summary>
+    /// Initializes a new authenticator with in-memory storage and the system clock.
+    /// </summary>
+    public McpSessionAuthenticator()
+        : this(new InMemoryMcpSessionStore(), TimeProvider.System)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new authenticator with explicit persistence and clock dependencies.
+    /// </summary>
+    /// <param name="sessionStore">The session store used for token persistence.</param>
+    /// <param name="timeProvider">The clock used for session timestamps and expiry checks.</param>
+    public McpSessionAuthenticator(IMcpSessionStore sessionStore, TimeProvider? timeProvider = null)
+    {
+        _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     /// <summary>Session TTL. Defaults to 1 hour.</summary>
     public TimeSpan SessionTtl { get; init; } = TimeSpan.FromHours(1);
@@ -38,18 +59,28 @@ public sealed class McpSessionAuthenticator
     /// </summary>
     /// <param name="agentId">The agent's DID (e.g., "did:mesh:agent-001").</param>
     /// <param name="userId">Optional user context to bind the session to.</param>
-    /// <returns>A session token that must be presented with each request.</returns>
+    /// <returns>
+    /// A session token that must be presented with each request,
+    /// or <c>null</c> when session persistence fails and the authenticator fails closed.
+    /// </returns>
     /// <exception cref="ArgumentException">If agentId is null or whitespace.</exception>
     /// <exception cref="InvalidOperationException">If agent has exceeded max concurrent sessions.</exception>
-    public string CreateSession(string agentId, string? userId = null)
+    public string? CreateSession(string agentId, string? userId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
 
         // Lock to prevent TOCTOU race between count check and add
         lock (_sessionLock)
         {
+            var now = _timeProvider.GetUtcNow();
+            var activeSessions = GetTrackedSessions(now, removeExpired: true);
+            if (activeSessions is null)
+            {
+                return null;
+            }
+
             // Check max sessions per agent
-            var agentSessionCount = _sessions.Count(kv => kv.Value.AgentId == agentId && !kv.Value.IsExpired);
+            var agentSessionCount = activeSessions.Count(session => string.Equals(session.Session.AgentId, agentId, StringComparison.Ordinal));
             if (agentSessionCount >= MaxSessionsPerAgent)
                 throw new InvalidOperationException($"Agent '{agentId}' has exceeded maximum concurrent sessions ({MaxSessionsPerAgent}).");
 
@@ -62,14 +93,19 @@ public sealed class McpSessionAuthenticator
                 Token = token,
                 AgentId = agentId,
                 UserId = userId,
-                CreatedAt = DateTimeOffset.UtcNow,
-                ExpiresAt = DateTimeOffset.UtcNow.Add(SessionTtl),
+                CreatedAt = now,
+                ExpiresAt = now.Add(SessionTtl),
                 // Composite key for rate limiting: userId:agentId or just agentId
                 RateLimitKey = userId is not null ? $"{userId}:{agentId}" : agentId
             };
 
-            _sessions.TryAdd(token, session);
-            Logger?.LogInformation("MCP session created for {AgentId}, token: {TokenPrefix}...", agentId, token[..8]);
+            if (!TrySetSession(session))
+            {
+                return null;
+            }
+
+            _trackedSessions[token] = agentId;
+            Logger?.LogInformation("MCP session created for {AgentId}", agentId);
             return token;
         }
     }
@@ -88,11 +124,20 @@ public sealed class McpSessionAuthenticator
             return null;
         }
 
-        if (!_sessions.TryGetValue(sessionToken, out var session))
+        if (!TryGetSession(sessionToken, "validating request", out var session))
         {
+            Logger?.LogWarning("MCP session validation failed for {AgentId}: {Reason}", agentId, "session store unavailable");
+            return null;
+        }
+
+        if (session is null)
+        {
+            _trackedSessions.TryRemove(sessionToken, out _);
             Logger?.LogWarning("MCP session validation failed for {AgentId}: {Reason}", agentId, "session token not found");
             return null;
         }
+
+        _trackedSessions[sessionToken] = session.AgentId;
 
         // Check agent ID matches (prevent token theft)
         if (!string.Equals(session.AgentId, agentId, StringComparison.Ordinal))
@@ -102,10 +147,14 @@ public sealed class McpSessionAuthenticator
         }
 
         // Check expiry
-        if (session.IsExpired)
+        if (session.IsExpiredAt(_timeProvider.GetUtcNow()))
         {
             Logger?.LogWarning("MCP session validation failed for {AgentId}: {Reason}", agentId, "session expired");
-            _sessions.TryRemove(sessionToken, out _);
+            if (TryDeleteSession(sessionToken, "removing expired session", out _))
+            {
+                _trackedSessions.TryRemove(sessionToken, out _);
+            }
+
             return null;
         }
 
@@ -119,7 +168,17 @@ public sealed class McpSessionAuthenticator
     /// <returns><c>true</c> if the session was found and removed; otherwise <c>false</c>.</returns>
     public bool RevokeSession(string sessionToken)
     {
-        return _sessions.TryRemove(sessionToken, out _);
+        if (!TryDeleteSession(sessionToken, "revoking session", out var removed))
+        {
+            return false;
+        }
+
+        if (removed)
+        {
+            _trackedSessions.TryRemove(sessionToken, out _);
+        }
+
+        return removed;
     }
 
     /// <summary>
@@ -129,10 +188,30 @@ public sealed class McpSessionAuthenticator
     /// <returns>The number of sessions revoked.</returns>
     public int RevokeAllSessions(string agentId)
     {
-        var toRemove = _sessions.Where(kv => kv.Value.AgentId == agentId).Select(kv => kv.Key).ToList();
-        foreach (var token in toRemove)
-            _sessions.TryRemove(token, out _);
-        return toRemove.Count;
+        lock (_sessionLock)
+        {
+            var now = _timeProvider.GetUtcNow();
+            var trackedSessions = GetTrackedSessions(now, removeExpired: false);
+            if (trackedSessions is null)
+            {
+                return 0;
+            }
+
+            var toRemove = trackedSessions
+                .Where(session => string.Equals(session.Session.AgentId, agentId, StringComparison.Ordinal))
+                .Select(session => session.Token)
+                .ToList();
+
+            foreach (var token in toRemove)
+            {
+                if (TryDeleteSession(token, "revoking all sessions", out var removed) && removed)
+                {
+                    _trackedSessions.TryRemove(token, out _);
+                }
+            }
+
+            return toRemove.Count;
+        }
     }
 
     /// <summary>
@@ -141,21 +220,125 @@ public sealed class McpSessionAuthenticator
     /// <returns>The number of expired sessions removed.</returns>
     public int CleanupExpiredSessions()
     {
-        var expired = _sessions.Where(kv => kv.Value.IsExpired).Select(kv => kv.Key).ToList();
-        foreach (var token in expired)
+        lock (_sessionLock)
         {
-            if (_sessions.TryRemove(token, out var session))
+            var now = _timeProvider.GetUtcNow();
+            var trackedSessions = GetTrackedSessions(now, removeExpired: false);
+            if (trackedSessions is null)
             {
-                Logger?.LogDebug("MCP session expired for {AgentId}", session.AgentId);
+                return 0;
             }
+
+            var expired = trackedSessions
+                .Where(session => session.Session.IsExpiredAt(now))
+                .ToList();
+
+            var removedCount = 0;
+            foreach (var sessionEntry in expired)
+            {
+                if (TryDeleteSession(sessionEntry.Token, "cleaning up expired sessions", out var removed) && removed)
+                {
+                    _trackedSessions.TryRemove(sessionEntry.Token, out _);
+                    Logger?.LogDebug("MCP session expired for {AgentId}", sessionEntry.Session.AgentId);
+                    removedCount++;
+                }
+            }
+
+            return removedCount;
         }
-        return expired.Count;
     }
 
     /// <summary>
     /// Gets the count of active (non-expired) sessions.
     /// </summary>
-    public int ActiveSessionCount => _sessions.Count(kv => !kv.Value.IsExpired);
+    public int ActiveSessionCount
+    {
+        get
+        {
+            lock (_sessionLock)
+            {
+                return GetTrackedSessions(_timeProvider.GetUtcNow(), removeExpired: true)?.Count ?? 0;
+            }
+        }
+    }
+
+    private bool TrySetSession(McpSession session)
+    {
+        try
+        {
+            _sessionStore.SetAsync(session.Token, session).GetAwaiter().GetResult();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "MCP session store write failed for {AgentId}", session.AgentId);
+            return false;
+        }
+    }
+
+    private bool TryGetSession(string token, string operation, out McpSession? session)
+    {
+        try
+        {
+            session = _sessionStore.GetAsync(token).GetAwaiter().GetResult();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "MCP session store read failed while {Operation}", operation);
+            session = null;
+            return false;
+        }
+    }
+
+    private bool TryDeleteSession(string token, string operation, out bool removed)
+    {
+        try
+        {
+            removed = _sessionStore.DeleteAsync(token).GetAwaiter().GetResult();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "MCP session store delete failed while {Operation}", operation);
+            removed = false;
+            return false;
+        }
+    }
+
+    private List<(string Token, McpSession Session)>? GetTrackedSessions(DateTimeOffset now, bool removeExpired)
+    {
+        var sessions = new List<(string Token, McpSession Session)>();
+        foreach (var token in _trackedSessions.Keys.ToList())
+        {
+            if (!TryGetSession(token, "enumerating tracked sessions", out var session))
+            {
+                return null;
+            }
+
+            if (session is null)
+            {
+                _trackedSessions.TryRemove(token, out _);
+                continue;
+            }
+
+            if (removeExpired && session.IsExpiredAt(now))
+            {
+                if (!TryDeleteSession(token, "removing expired tracked session", out _))
+                {
+                    return null;
+                }
+
+                _trackedSessions.TryRemove(token, out _);
+                continue;
+            }
+
+            _trackedSessions[token] = session.AgentId;
+            sessions.Add((token, session));
+        }
+
+        return sessions;
+    }
 }
 
 /// <summary>
@@ -184,5 +367,12 @@ public sealed class McpSession
     public required string RateLimitKey { get; init; }
 
     /// <summary>Whether this session has expired.</summary>
-    public bool IsExpired => DateTimeOffset.UtcNow >= ExpiresAt;
+    public bool IsExpired => IsExpiredAt(TimeProvider.System.GetUtcNow());
+
+    /// <summary>
+    /// Determines whether the session is expired at the supplied time.
+    /// </summary>
+    /// <param name="currentTime">The time to compare against <see cref="ExpiresAt"/>.</param>
+    /// <returns><c>true</c> when the session has expired; otherwise <c>false</c>.</returns>
+    public bool IsExpiredAt(DateTimeOffset currentTime) => currentTime >= ExpiresAt;
 }

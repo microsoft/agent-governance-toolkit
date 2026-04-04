@@ -3,6 +3,7 @@
 using System.Reflection;
 using System.Security.Cryptography;
 using AgentGovernance.Mcp;
+using AgentGovernance.Mcp.Abstractions;
 using Xunit;
 
 namespace AgentGovernance.Tests;
@@ -12,15 +13,16 @@ public class McpMessageSignerTests
     private static byte[] CreateTestKey(int length = 32) =>
         RandomNumberGenerator.GetBytes(length);
 
-    private static McpMessageSigner CreateSigner(byte[]? key = null) =>
-        new(key ?? CreateTestKey());
+    private static McpMessageSigner CreateSigner(byte[]? key = null, ManualTimeProvider? timeProvider = null) =>
+        new(key ?? CreateTestKey(), new InMemoryMcpNonceStore(), timeProvider);
 
     // ── Signing ─────────────────────────────────────────────────────────
 
     [Fact]
     public void SignMessage_ValidPayload_ReturnsEnvelope()
     {
-        var signer = CreateSigner();
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z"));
+        var signer = CreateSigner(timeProvider: timeProvider);
         var payload = """{"jsonrpc":"2.0","method":"tools/call","id":1}""";
 
         var envelope = signer.SignMessage(payload);
@@ -31,8 +33,7 @@ public class McpMessageSignerTests
         Assert.NotEmpty(envelope.Nonce);
         Assert.NotNull(envelope.Signature);
         Assert.NotEmpty(envelope.Signature);
-        Assert.True(envelope.Timestamp <= DateTimeOffset.UtcNow);
-        Assert.True(envelope.Timestamp > DateTimeOffset.UtcNow.AddSeconds(-5));
+        Assert.Equal(timeProvider.GetUtcNow(), envelope.Timestamp);
     }
 
     [Fact]
@@ -184,30 +185,15 @@ public class McpMessageSignerTests
     public void VerifyMessage_ExpiredTimestamp_Fails()
     {
         var key = CreateTestKey();
-        var signer = new McpMessageSigner(key)
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z"));
+        var signer = new McpMessageSigner(key, new InMemoryMcpNonceStore(), timeProvider)
         {
             ReplayWindow = TimeSpan.FromSeconds(5)
         };
 
-        // Create an envelope with an old timestamp
         var payload = """{"method":"old"}""";
-        var envelope = signer.SignMessage(payload);
-
-        // Manually create an expired envelope by rebuilding with old timestamp
-        var oldTimestamp = DateTimeOffset.UtcNow.AddMinutes(-10);
-        var nonce = Guid.NewGuid().ToString("N");
-        var canonicalString = $"{nonce}|{oldTimestamp.ToUnixTimeMilliseconds()}||{payload}";
-        using var hmac = new HMACSHA256(key);
-        var hash = hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(canonicalString));
-        var signature = Convert.ToBase64String(hash);
-
-        var expiredEnvelope = new McpSignedEnvelope
-        {
-            Payload = payload,
-            Nonce = nonce,
-            Timestamp = oldTimestamp,
-            Signature = signature
-        };
+        var expiredEnvelope = signer.SignMessage(payload);
+        timeProvider.Advance(TimeSpan.FromMinutes(10));
 
         var result = signer.VerifyMessage(expiredEnvelope);
 
@@ -322,7 +308,8 @@ public class McpMessageSignerTests
     [Fact]
     public void CleanupNonceCache_RemovesExpired()
     {
-        var signer = new McpMessageSigner(CreateTestKey())
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z"));
+        var signer = new McpMessageSigner(CreateTestKey(), new InMemoryMcpNonceStore(), timeProvider)
         {
             // Tiny replay window so entries expire immediately for testing
             ReplayWindow = TimeSpan.FromMilliseconds(1)
@@ -337,8 +324,7 @@ public class McpMessageSignerTests
 
         Assert.Equal(5, signer.CachedNonceCount);
 
-        // Wait for entries to expire
-        Thread.Sleep(50);
+        timeProvider.Advance(TimeSpan.FromMilliseconds(50));
 
         var removed = signer.CleanupNonceCache();
 

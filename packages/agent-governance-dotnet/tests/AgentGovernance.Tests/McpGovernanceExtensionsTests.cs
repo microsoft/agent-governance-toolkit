@@ -2,6 +2,7 @@
 
 using AgentGovernance.Extensions;
 using AgentGovernance.Mcp;
+using AgentGovernance.Mcp.Abstractions;
 using Xunit;
 
 namespace AgentGovernance.Tests;
@@ -24,12 +25,6 @@ public class McpGovernanceExtensionsTests
     [Fact]
     public void AddMcpGovernance_WithPolicies_KernelHasPolicies()
     {
-        var yaml = @"
-apiVersion: governance.toolkit/v1
-name: test-policy
-default_action: allow
-rules: []
-";
         var (kernel, _, _, _) = McpGovernanceExtensions.AddMcpGovernance(
             kernelOptions: new GovernanceOptions
             {
@@ -253,6 +248,70 @@ rules: []
         Assert.Equal(TimeSpan.FromMinutes(10), stack.MessageSigner!.ReplayWindow);
     }
 
+    [Fact]
+    public void AddMcpGovernance_CustomInfrastructure_UsesInjectedDependencies()
+    {
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T12:00:00Z"));
+        var sessionStore = new TrackingSessionStore();
+        var nonceStore = new TrackingNonceStore();
+        var rateLimitStore = new TrackingRateLimitStore();
+        var auditSink = new TrackingAuditSink();
+        var key = McpMessageSigner.GenerateKey();
+
+        var stack = McpGovernanceExtensions.AddMcpGovernance(
+            mcpOptions: new McpGovernanceOptions
+            {
+                MessageSigningKey = key,
+                MaxToolCallsPerAgent = 1
+            },
+            timeProvider: timeProvider,
+            sessionStore: sessionStore,
+            nonceStore: nonceStore,
+            rateLimitStore: rateLimitStore,
+            auditSink: auditSink);
+
+        var token = stack.SessionAuthenticator!.CreateSession("did:mesh:a1");
+        Assert.NotNull(token);
+        Assert.True(sessionStore.SetCalls > 0);
+
+        stack.Gateway.InterceptToolCall("did:mesh:a1", "tool", new());
+        Assert.Single(auditSink.Entries);
+        Assert.Equal(timeProvider.GetUtcNow(), auditSink.Entries[0].Timestamp);
+        Assert.True(rateLimitStore.GetCalls > 0);
+        Assert.True(rateLimitStore.SetCalls > 0);
+
+        var envelope = stack.MessageSigner!.SignMessage("""{"ok":true}""");
+        var verification = stack.MessageSigner.VerifyMessage(envelope);
+        Assert.True(verification.IsValid);
+        Assert.True(nonceStore.AddCalls > 0);
+    }
+
+    [Fact]
+    public void UseMcpGovernance_CustomInfrastructure_UsesInjectedDependencies()
+    {
+        var kernel = new GovernanceKernel();
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T12:00:00Z"));
+        var rateLimitStore = new TrackingRateLimitStore();
+        var auditSink = new TrackingAuditSink();
+
+        var gateway = McpGovernanceExtensions.UseMcpGovernance(
+            kernel,
+            new McpGovernanceOptions
+            {
+                MaxToolCallsPerAgent = 1
+            },
+            timeProvider: timeProvider,
+            rateLimitStore: rateLimitStore,
+            auditSink: auditSink);
+
+        gateway.InterceptToolCall("did:mesh:a1", "tool", new());
+
+        Assert.Single(auditSink.Entries);
+        Assert.Equal(timeProvider.GetUtcNow(), auditSink.Entries[0].Timestamp);
+        Assert.True(rateLimitStore.GetCalls > 0);
+        Assert.True(rateLimitStore.SetCalls > 0);
+    }
+
     // ── McpGovernanceDefaults ────────────────────────────────────────────
 
     [Fact]
@@ -299,5 +358,95 @@ rules: []
             .Intersect(McpGovernanceDefaults.SensitiveTools)
             .ToList();
         Assert.Empty(overlap);
+    }
+
+    private sealed class TrackingSessionStore : IMcpSessionStore
+    {
+        private readonly InMemoryMcpSessionStore _inner = new();
+
+        public int GetCalls { get; private set; }
+
+        public int SetCalls { get; private set; }
+
+        public int DeleteCalls { get; private set; }
+
+        public Task<McpSession?> GetAsync(string sessionToken, CancellationToken cancellationToken = default)
+        {
+            GetCalls++;
+            return _inner.GetAsync(sessionToken, cancellationToken);
+        }
+
+        public Task SetAsync(string sessionToken, McpSession session, CancellationToken cancellationToken = default)
+        {
+            SetCalls++;
+            return _inner.SetAsync(sessionToken, session, cancellationToken);
+        }
+
+        public Task<bool> DeleteAsync(string sessionToken, CancellationToken cancellationToken = default)
+        {
+            DeleteCalls++;
+            return _inner.DeleteAsync(sessionToken, cancellationToken);
+        }
+    }
+
+    private sealed class TrackingNonceStore : IMcpNonceStore
+    {
+        private readonly InMemoryMcpNonceStore _inner = new();
+
+        public int ContainsCalls { get; private set; }
+
+        public int AddCalls { get; private set; }
+
+        public int CleanupCalls { get; private set; }
+
+        public Task<bool> ContainsAsync(string nonce, CancellationToken cancellationToken = default)
+        {
+            ContainsCalls++;
+            return _inner.ContainsAsync(nonce, cancellationToken);
+        }
+
+        public Task<bool> AddAsync(string nonce, DateTimeOffset observedAt, CancellationToken cancellationToken = default)
+        {
+            AddCalls++;
+            return _inner.AddAsync(nonce, observedAt, cancellationToken);
+        }
+
+        public Task<int> CleanupAsync(DateTimeOffset cutoff, CancellationToken cancellationToken = default)
+        {
+            CleanupCalls++;
+            return _inner.CleanupAsync(cutoff, cancellationToken);
+        }
+    }
+
+    private sealed class TrackingRateLimitStore : IMcpRateLimitStore
+    {
+        private readonly InMemoryMcpRateLimitStore _inner = new();
+
+        public int GetCalls { get; private set; }
+
+        public int SetCalls { get; private set; }
+
+        public Task<McpRateLimitBucket?> GetBucketAsync(string agentId, CancellationToken cancellationToken = default)
+        {
+            GetCalls++;
+            return _inner.GetBucketAsync(agentId, cancellationToken);
+        }
+
+        public Task SetBucketAsync(string agentId, McpRateLimitBucket bucket, CancellationToken cancellationToken = default)
+        {
+            SetCalls++;
+            return _inner.SetBucketAsync(agentId, bucket, cancellationToken);
+        }
+    }
+
+    private sealed class TrackingAuditSink : IMcpAuditSink
+    {
+        public List<McpAuditEntry> Entries { get; } = new();
+
+        public Task RecordAsync(McpAuditEntry entry, CancellationToken cancellationToken = default)
+        {
+            Entries.Add(entry);
+            return Task.CompletedTask;
+        }
     }
 }

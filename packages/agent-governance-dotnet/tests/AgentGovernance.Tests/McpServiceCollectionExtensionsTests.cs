@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using AgentGovernance.Extensions;
 using AgentGovernance.Mcp;
+using AgentGovernance.Mcp.Abstractions;
 using AgentGovernance.Telemetry;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,6 +30,11 @@ public class McpServiceCollectionExtensionsTests
         Assert.NotNull(provider.GetService<GovernanceMetrics>());
         Assert.NotNull(provider.GetService<GovernanceKernel>());
         Assert.NotNull(provider.GetService<McpGovernanceOptions>());
+        Assert.NotNull(provider.GetService<IMcpSessionStore>());
+        Assert.NotNull(provider.GetService<IMcpNonceStore>());
+        Assert.NotNull(provider.GetService<IMcpRateLimitStore>());
+        Assert.NotNull(provider.GetService<IMcpAuditSink>());
+        Assert.NotNull(provider.GetService<TimeProvider>());
     }
 
     [Fact]
@@ -150,6 +156,26 @@ public class McpServiceCollectionExtensionsTests
         // Default options enable response scanning and session auth (TTL = 1h)
         Assert.NotNull(provider.GetService<McpResponseScanner>());
         Assert.NotNull(provider.GetService<McpSessionAuthenticator>());
+    }
+
+    [Fact]
+    public void AddMcpGovernance_EnableCredentialRedactionFalse_PreservesAuditParameters()
+    {
+        var services = new ServiceCollection();
+        services.AddMcpGovernance(new McpGovernanceOptions
+        {
+            EnableCredentialRedaction = false
+        });
+        var provider = services.BuildServiceProvider();
+        var gateway = provider.GetRequiredService<McpGateway>();
+
+        gateway.InterceptToolCall("did:mesh:a1", "read_file", new Dictionary<string, object>
+        {
+            ["apiKey"] = "sk-live_abc123def456ghi789"
+        });
+
+        Assert.Single(gateway.AuditLog);
+        Assert.Equal("sk-live_abc123def456ghi789", gateway.AuditLog[0].Parameters["apiKey"]);
     }
 
     [Fact]

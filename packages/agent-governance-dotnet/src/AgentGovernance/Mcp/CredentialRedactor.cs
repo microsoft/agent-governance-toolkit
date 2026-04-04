@@ -16,6 +16,23 @@ namespace AgentGovernance.Mcp;
 public static class CredentialRedactor
 {
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(200);
+    private static readonly string[] SensitiveKeyTokens =
+    {
+        "apikey",
+        "accesstoken",
+        "refreshtoken",
+        "bearertoken",
+        "authtoken",
+        "accesskey",
+        "secretkey",
+        "clientsecret",
+        "privatekey",
+        "connectionstring",
+        "password",
+        "credential",
+        "token",
+        "secret",
+    };
 
     /// <summary>Replacement string for redacted values.</summary>
     public const string RedactedPlaceholder = "[REDACTED]";
@@ -125,7 +142,9 @@ public static class CredentialRedactor
     /// <summary>
     /// Redacts credentials in all string values of a dictionary.
     /// Nested dictionaries are serialized to JSON before redaction
-    /// to ensure embedded credentials are detected.
+    /// to ensure embedded credentials are detected. Values under
+    /// obviously sensitive key names are redacted even when they do
+    /// not match a specific credential regex.
     /// Returns a new dictionary with redacted values.
     /// </summary>
     public static Dictionary<string, object> RedactDictionary(Dictionary<string, object>? parameters)
@@ -145,10 +164,42 @@ public static class CredentialRedactor
                 System.Collections.IEnumerable => System.Text.Json.JsonSerializer.Serialize(kv.Value),
                 _ => kv.Value.ToString() ?? string.Empty
             };
-            result[kv.Key] = Redact(valueStr);
+
+            result[kv.Key] = IsSensitiveKeyName(kv.Key) && valueStr.Length > 0
+                ? RedactedPlaceholder
+                : Redact(valueStr);
         }
 
         return result;
+    }
+
+    private static bool IsSensitiveKeyName(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return false;
+        }
+
+        Span<char> normalizedBuffer = stackalloc char[key.Length];
+        var count = 0;
+
+        foreach (var character in key)
+        {
+            if (!char.IsLetterOrDigit(character))
+            {
+                continue;
+            }
+
+            normalizedBuffer[count++] = char.ToLowerInvariant(character);
+        }
+
+        if (count == 0)
+        {
+            return false;
+        }
+
+        var normalizedKey = normalizedBuffer[..count].ToString();
+        return SensitiveKeyTokens.Any(token => normalizedKey.Contains(token, StringComparison.Ordinal));
     }
 
     /// <summary>

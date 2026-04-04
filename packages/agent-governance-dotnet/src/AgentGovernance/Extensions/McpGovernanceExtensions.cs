@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
 using AgentGovernance.Mcp;
+using AgentGovernance.Mcp.Abstractions;
 using AgentGovernance.Telemetry;
 using Microsoft.Extensions.Logging;
 
@@ -155,15 +156,30 @@ public static class McpGovernanceExtensions
     /// <param name="agentId">
     /// The DID of the agent that will use the message handler.
     /// </param>
+    /// <param name="timeProvider">Optional clock used for MCP timestamps and expiry checks.</param>
+    /// <param name="sessionStore">Optional session store for session authentication state.</param>
+    /// <param name="nonceStore">Optional nonce store for replay protection state.</param>
+    /// <param name="rateLimitStore">Optional rate-limit store for per-agent budget state.</param>
+    /// <param name="auditSink">Optional audit sink for gateway audit entries.</param>
     /// <returns>
     /// A governance stack with all configured components.
     /// </returns>
     public static McpGovernanceStack AddMcpGovernance(
             GovernanceOptions? kernelOptions = null,
             McpGovernanceOptions? mcpOptions = null,
-            string agentId = "did:mesh:default")
+            string agentId = "did:mesh:default",
+            TimeProvider? timeProvider = null,
+            IMcpSessionStore? sessionStore = null,
+            IMcpNonceStore? nonceStore = null,
+            IMcpRateLimitStore? rateLimitStore = null,
+            IMcpAuditSink? auditSink = null)
     {
         var opts = mcpOptions ?? new McpGovernanceOptions();
+        var resolvedTimeProvider = timeProvider ?? TimeProvider.System;
+        var resolvedSessionStore = sessionStore ?? new InMemoryMcpSessionStore();
+        var resolvedNonceStore = nonceStore ?? new InMemoryMcpNonceStore();
+        var resolvedRateLimitStore = rateLimitStore ?? new InMemoryMcpRateLimitStore();
+        var resolvedAuditSink = auditSink ?? new InMemoryMcpAuditSink();
 
         var kernel = new GovernanceKernel(kernelOptions);
 
@@ -173,12 +189,15 @@ public static class McpGovernanceExtensions
             allowedTools: opts.AllowedTools,
             sensitiveTools: opts.SensitiveTools,
             approvalCallback: opts.ApprovalCallback,
+            enableCredentialRedaction: opts.EnableCredentialRedaction,
             enableBuiltinSanitization: opts.EnableBuiltinSanitization,
-            requireHumanApproval: opts.RequireHumanApproval)
+            requireHumanApproval: opts.RequireHumanApproval,
+            auditSink: resolvedAuditSink,
+            timeProvider: resolvedTimeProvider)
         {
             MaxToolCallsPerAgent = opts.MaxToolCallsPerAgent,
             RateLimiter = opts.MaxToolCallsPerAgent > 0
-                ? new McpSlidingRateLimiter
+                ? new McpSlidingRateLimiter(resolvedRateLimitStore, resolvedTimeProvider)
                 {
                     MaxCallsPerWindow = opts.MaxToolCallsPerAgent,
                     WindowSize = opts.RateLimitWindow
@@ -201,7 +220,7 @@ public static class McpGovernanceExtensions
         McpSessionAuthenticator? sessionAuth = null;
         if (opts.SessionTtl.HasValue)
         {
-            sessionAuth = new McpSessionAuthenticator
+            sessionAuth = new McpSessionAuthenticator(resolvedSessionStore, resolvedTimeProvider)
             {
                 SessionTtl = opts.SessionTtl.Value,
                 MaxSessionsPerAgent = opts.MaxSessionsPerAgent
@@ -211,7 +230,7 @@ public static class McpGovernanceExtensions
         McpMessageSigner? messageSigner = null;
         if (opts.MessageSigningKey is not null)
         {
-            messageSigner = new McpMessageSigner(opts.MessageSigningKey)
+            messageSigner = new McpMessageSigner(opts.MessageSigningKey, resolvedNonceStore, resolvedTimeProvider)
             {
                 ReplayWindow = opts.MessageReplayWindow
             };
@@ -239,13 +258,22 @@ public static class McpGovernanceExtensions
     /// <param name="mcpOptions">
     /// Options for MCP-specific governance. When <c>null</c>, uses defaults.
     /// </param>
+    /// <param name="timeProvider">Optional clock used for MCP timestamps and expiry checks.</param>
+    /// <param name="rateLimitStore">Optional rate-limit store for per-agent budget state.</param>
+    /// <param name="auditSink">Optional audit sink for gateway audit entries.</param>
     /// <returns>A configured <see cref="McpGateway"/>.</returns>
     public static McpGateway UseMcpGovernance(
         GovernanceKernel kernel,
-        McpGovernanceOptions? mcpOptions = null)
+        McpGovernanceOptions? mcpOptions = null,
+        TimeProvider? timeProvider = null,
+        IMcpRateLimitStore? rateLimitStore = null,
+        IMcpAuditSink? auditSink = null)
     {
         ArgumentNullException.ThrowIfNull(kernel);
         var opts = mcpOptions ?? new McpGovernanceOptions();
+        var resolvedTimeProvider = timeProvider ?? TimeProvider.System;
+        var resolvedRateLimitStore = rateLimitStore ?? new InMemoryMcpRateLimitStore();
+        var resolvedAuditSink = auditSink ?? new InMemoryMcpAuditSink();
 
         return new McpGateway(
             kernel,
@@ -253,12 +281,15 @@ public static class McpGovernanceExtensions
             allowedTools: opts.AllowedTools,
             sensitiveTools: opts.SensitiveTools,
             approvalCallback: opts.ApprovalCallback,
+            enableCredentialRedaction: opts.EnableCredentialRedaction,
             enableBuiltinSanitization: opts.EnableBuiltinSanitization,
-            requireHumanApproval: opts.RequireHumanApproval)
+            requireHumanApproval: opts.RequireHumanApproval,
+            auditSink: resolvedAuditSink,
+            timeProvider: resolvedTimeProvider)
         {
             MaxToolCallsPerAgent = opts.MaxToolCallsPerAgent,
             RateLimiter = opts.MaxToolCallsPerAgent > 0
-                ? new McpSlidingRateLimiter
+                ? new McpSlidingRateLimiter(resolvedRateLimitStore, resolvedTimeProvider)
                 {
                     MaxCallsPerWindow = opts.MaxToolCallsPerAgent,
                     WindowSize = opts.RateLimitWindow

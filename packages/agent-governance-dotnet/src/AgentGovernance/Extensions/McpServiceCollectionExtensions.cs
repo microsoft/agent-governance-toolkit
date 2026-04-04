@@ -1,8 +1,10 @@
 // Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
 using AgentGovernance.Mcp;
+using AgentGovernance.Mcp.Abstractions;
 using AgentGovernance.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace AgentGovernance.Extensions;
 
@@ -29,26 +31,37 @@ public static class McpServiceCollectionExtensions
 
         // Register options and core singletons (thread-safe, meant to be shared)
         services.AddSingleton(options);
+        services.TryAddSingleton<TimeProvider>(TimeProvider.System);
+        services.TryAddSingleton<IMcpSessionStore, InMemoryMcpSessionStore>();
+        services.TryAddSingleton<IMcpNonceStore, InMemoryMcpNonceStore>();
+        services.TryAddSingleton<IMcpRateLimitStore, InMemoryMcpRateLimitStore>();
+        services.TryAddSingleton<IMcpAuditSink, InMemoryMcpAuditSink>();
         services.AddSingleton<GovernanceMetrics>();
         services.AddSingleton<GovernanceKernel>();
         services.AddSingleton(sp =>
         {
             var kernel = sp.GetRequiredService<GovernanceKernel>();
             var metrics = sp.GetRequiredService<GovernanceMetrics>();
+            var timeProvider = sp.GetRequiredService<TimeProvider>();
             var gateway = new McpGateway(
                 kernel,
                 deniedTools: options.DeniedTools,
                 allowedTools: options.AllowedTools,
                 sensitiveTools: options.SensitiveTools,
                 approvalCallback: options.ApprovalCallback,
+                enableCredentialRedaction: options.EnableCredentialRedaction,
                 enableBuiltinSanitization: options.EnableBuiltinSanitization,
-                requireHumanApproval: options.RequireHumanApproval);
+                requireHumanApproval: options.RequireHumanApproval,
+                auditSink: sp.GetRequiredService<IMcpAuditSink>(),
+                timeProvider: timeProvider);
 
             // Wire metrics and rate limiter if configured
             gateway.Metrics = metrics;
             if (options.MaxToolCallsPerAgent > 0)
             {
-                gateway.RateLimiter = new McpSlidingRateLimiter
+                gateway.RateLimiter = new McpSlidingRateLimiter(
+                    sp.GetRequiredService<IMcpRateLimitStore>(),
+                    timeProvider)
                 {
                     MaxCallsPerWindow = options.MaxToolCallsPerAgent,
                     WindowSize = options.RateLimitWindow
@@ -73,14 +86,19 @@ public static class McpServiceCollectionExtensions
             services.AddSingleton<McpResponseScanner>();
 
         if (options.SessionTtl.HasValue)
-            services.AddSingleton(new McpSessionAuthenticator
+            services.AddSingleton(sp => new McpSessionAuthenticator(
+                sp.GetRequiredService<IMcpSessionStore>(),
+                sp.GetRequiredService<TimeProvider>())
             {
                 SessionTtl = options.SessionTtl.Value,
                 MaxSessionsPerAgent = options.MaxSessionsPerAgent
             });
 
         if (options.MessageSigningKey is not null)
-            services.AddSingleton(new McpMessageSigner(options.MessageSigningKey)
+            services.AddSingleton(sp => new McpMessageSigner(
+                options.MessageSigningKey,
+                sp.GetRequiredService<IMcpNonceStore>(),
+                sp.GetRequiredService<TimeProvider>())
             {
                 ReplayWindow = options.MessageReplayWindow
             });

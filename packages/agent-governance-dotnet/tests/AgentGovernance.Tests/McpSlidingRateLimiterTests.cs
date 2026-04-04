@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
 using AgentGovernance.Mcp;
+using AgentGovernance.Mcp.Abstractions;
 using Xunit;
 
 namespace AgentGovernance.Tests;
@@ -47,7 +48,8 @@ public class McpSlidingRateLimiterTests
     [Fact]
     public void TryAcquire_AfterWindowExpires_AllowsAgain()
     {
-        var limiter = new McpSlidingRateLimiter
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z"));
+        var limiter = new McpSlidingRateLimiter(new InMemoryMcpRateLimitStore(), timeProvider)
         {
             MaxCallsPerWindow = 2,
             WindowSize = TimeSpan.FromMilliseconds(100)
@@ -57,8 +59,7 @@ public class McpSlidingRateLimiterTests
         Assert.True(limiter.TryAcquire("agent-1"));
         Assert.False(limiter.TryAcquire("agent-1"));
 
-        // Wait for window to expire
-        Thread.Sleep(150);
+        timeProvider.Advance(TimeSpan.FromMilliseconds(150));
 
         // Should be allowed again
         Assert.True(limiter.TryAcquire("agent-1"));
@@ -69,7 +70,8 @@ public class McpSlidingRateLimiterTests
     [Fact]
     public void TryAcquire_PartialWindowExpiry_SlidesCorrectly()
     {
-        var limiter = new McpSlidingRateLimiter
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z"));
+        var limiter = new McpSlidingRateLimiter(new InMemoryMcpRateLimitStore(), timeProvider)
         {
             MaxCallsPerWindow = 2,
             WindowSize = TimeSpan.FromMilliseconds(100)
@@ -80,8 +82,7 @@ public class McpSlidingRateLimiterTests
         Assert.True(limiter.TryAcquire("agent-1"));
         Assert.False(limiter.TryAcquire("agent-1"));
 
-        // Wait for first batch to expire
-        Thread.Sleep(150);
+        timeProvider.Advance(TimeSpan.FromMilliseconds(150));
 
         // Make one call
         Assert.True(limiter.TryAcquire("agent-1"));
@@ -151,7 +152,8 @@ public class McpSlidingRateLimiterTests
     [Fact]
     public void GetRemainingBudget_AfterExpiry_RestoresToMax()
     {
-        var limiter = new McpSlidingRateLimiter
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z"));
+        var limiter = new McpSlidingRateLimiter(new InMemoryMcpRateLimitStore(), timeProvider)
         {
             MaxCallsPerWindow = 3,
             WindowSize = TimeSpan.FromMilliseconds(80)
@@ -161,7 +163,7 @@ public class McpSlidingRateLimiterTests
         limiter.TryAcquire("agent-1");
         Assert.Equal(1, limiter.GetRemainingBudget("agent-1"));
 
-        Thread.Sleep(120);
+        timeProvider.Advance(TimeSpan.FromMilliseconds(120));
 
         Assert.Equal(3, limiter.GetRemainingBudget("agent-1"));
     }
@@ -243,7 +245,8 @@ public class McpSlidingRateLimiterTests
     [Fact]
     public void CleanupExpired_RemovesOldEntries()
     {
-        var limiter = new McpSlidingRateLimiter
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z"));
+        var limiter = new McpSlidingRateLimiter(new InMemoryMcpRateLimitStore(), timeProvider)
         {
             MaxCallsPerWindow = 100,
             WindowSize = TimeSpan.FromMilliseconds(80)
@@ -253,7 +256,7 @@ public class McpSlidingRateLimiterTests
         limiter.TryAcquire("agent-1");
         limiter.TryAcquire("agent-2");
 
-        Thread.Sleep(120);
+        timeProvider.Advance(TimeSpan.FromMilliseconds(120));
 
         int removed = limiter.CleanupExpired();
 

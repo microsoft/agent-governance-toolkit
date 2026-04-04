@@ -236,6 +236,19 @@ public class CredentialRedactorTests
     }
 
     [Fact]
+    public void RedactDictionary_SensitiveKeyName_RedactsShortSecrets()
+    {
+        var input = new Dictionary<string, object>
+        {
+            ["apiKey"] = "sk-live_abc123def456ghi789"
+        };
+
+        var result = CredentialRedactor.RedactDictionary(input);
+
+        Assert.Equal(CredentialRedactor.RedactedPlaceholder, result["apiKey"]);
+    }
+
+    [Fact]
     public void Redact_UppercaseHex_Redacted()
     {
         // 40+ char uppercase hex should match generic secret pattern

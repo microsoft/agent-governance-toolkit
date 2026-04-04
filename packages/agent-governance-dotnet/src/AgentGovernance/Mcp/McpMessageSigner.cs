@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using AgentGovernance.Mcp.Abstractions;
 using Microsoft.Extensions.Logging;
 
 namespace AgentGovernance.Mcp;
@@ -36,8 +37,10 @@ public enum SigningAlgorithm
 public sealed class McpMessageSigner : IDisposable
 {
     private readonly byte[] _signingKey;
-    private readonly ConcurrentDictionary<string, DateTimeOffset> _nonceCache = new();
+    private readonly IMcpNonceStore _nonceStore;
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _trackedNonces = new(StringComparer.Ordinal);
     private readonly SigningAlgorithm _algorithm;
+    private readonly TimeProvider _timeProvider;
 
 #if NET10_0_OR_GREATER
     private readonly MLDsa? _mlDsa;
@@ -61,19 +64,24 @@ public sealed class McpMessageSigner : IDisposable
     /// <summary>The signing algorithm in use.</summary>
     public SigningAlgorithm Algorithm => _algorithm;
 
-    private DateTimeOffset _lastCleanup = DateTimeOffset.UtcNow;
+    private DateTimeOffset _lastCleanup;
 
     /// <summary>
     /// Initializes a new message signer with the given shared secret (HMAC-SHA256).
     /// </summary>
     /// <param name="signingKey">Shared secret key (minimum 16 bytes, 32 recommended).</param>
-    public McpMessageSigner(byte[] signingKey)
+    /// <param name="nonceStore">The nonce store used for replay protection.</param>
+    /// <param name="timeProvider">The clock used for timestamps and replay-window checks.</param>
+    public McpMessageSigner(byte[] signingKey, IMcpNonceStore? nonceStore = null, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(signingKey);
         if (signingKey.Length < 16)
             throw new ArgumentException("Signing key must be at least 16 bytes.", nameof(signingKey));
         _signingKey = signingKey;
+        _nonceStore = nonceStore ?? new InMemoryMcpNonceStore();
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _algorithm = SigningAlgorithm.HmacSha256;
+        _lastCleanup = _timeProvider.GetUtcNow();
     }
 
 #if NET10_0_OR_GREATER
@@ -82,12 +90,17 @@ public sealed class McpMessageSigner : IDisposable
     /// The ML-DSA key instance is owned by this signer and will be disposed when the signer is disposed.
     /// </summary>
     /// <param name="mlDsaKey">An ML-DSA key (private key for signing, public-only for verification).</param>
-    public McpMessageSigner(MLDsa mlDsaKey)
+    /// <param name="nonceStore">The nonce store used for replay protection.</param>
+    /// <param name="timeProvider">The clock used for timestamps and replay-window checks.</param>
+    public McpMessageSigner(MLDsa mlDsaKey, IMcpNonceStore? nonceStore = null, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(mlDsaKey);
         _mlDsa = mlDsaKey;
         _signingKey = Array.Empty<byte>();
+        _nonceStore = nonceStore ?? new InMemoryMcpNonceStore();
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _algorithm = SigningAlgorithm.MLDsa65;
+        _lastCleanup = _timeProvider.GetUtcNow();
     }
 
     /// <summary>
@@ -151,7 +164,7 @@ public sealed class McpMessageSigner : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(payload);
 
         var nonce = Guid.NewGuid().ToString("N");
-        var timestamp = DateTimeOffset.UtcNow;
+        var timestamp = _timeProvider.GetUtcNow();
 
         // Canonical string to sign: nonce|timestamp_unix_ms|senderId|payload
         var canonicalString = BuildCanonicalString(nonce, timestamp, senderId, payload);
@@ -180,7 +193,7 @@ public sealed class McpMessageSigner : IDisposable
         try
         {
             // 1. Check timestamp within replay window
-            var age = DateTimeOffset.UtcNow - envelope.Timestamp;
+            var age = _timeProvider.GetUtcNow() - envelope.Timestamp;
             if (age > ReplayWindow || age < -ReplayWindow)
                 return McpVerificationResult.Failed("Message timestamp outside replay window.");
 
@@ -195,11 +208,13 @@ public sealed class McpMessageSigner : IDisposable
             }
 
             // 3. Check nonce not seen before (only after signature is valid)
-            if (!_nonceCache.TryAdd(envelope.Nonce, envelope.Timestamp))
+            if (!_nonceStore.AddAsync(envelope.Nonce, envelope.Timestamp).GetAwaiter().GetResult())
             {
                 Logger?.LogWarning("MCP replay attack detected: duplicate nonce {Nonce}", envelope.Nonce);
                 return McpVerificationResult.Failed("Duplicate nonce (replay detected).");
             }
+
+            _trackedNonces[envelope.Nonce] = envelope.Timestamp;
 
             // 3b. Evict oldest nonces if cache exceeds max size
             EnforceNonceCacheSize();
@@ -219,7 +234,7 @@ public sealed class McpMessageSigner : IDisposable
     /// <summary>
     /// Gets the number of cached nonces.
     /// </summary>
-    public int CachedNonceCount => _nonceCache.Count;
+    public int CachedNonceCount => _trackedNonces.Count;
 
     /// <summary>
     /// Manually triggers nonce cache cleanup (removes entries outside the replay window).
@@ -227,12 +242,16 @@ public sealed class McpMessageSigner : IDisposable
     /// <returns>The number of expired nonces removed.</returns>
     public int CleanupNonceCache()
     {
-        var cutoff = DateTimeOffset.UtcNow.Subtract(ReplayWindow);
-        var expired = _nonceCache.Where(kv => kv.Value < cutoff).Select(kv => kv.Key).ToList();
-        foreach (var nonce in expired)
-            _nonceCache.TryRemove(nonce, out _);
-        _lastCleanup = DateTimeOffset.UtcNow;
-        return expired.Count;
+        var cutoff = _timeProvider.GetUtcNow().Subtract(ReplayWindow);
+        var removed = _nonceStore.CleanupAsync(cutoff).GetAwaiter().GetResult();
+
+        foreach (var nonce in _trackedNonces.Where(kv => kv.Value <= cutoff).Select(kv => kv.Key).ToList())
+        {
+            _trackedNonces.TryRemove(nonce, out _);
+        }
+
+        _lastCleanup = _timeProvider.GetUtcNow();
+        return removed;
     }
 
     /// <inheritdoc />
@@ -288,21 +307,32 @@ public sealed class McpMessageSigner : IDisposable
 
     private void MaybeCleanupNonces()
     {
-        if (DateTimeOffset.UtcNow - _lastCleanup > NonceCacheCleanupInterval)
+        if (_timeProvider.GetUtcNow() - _lastCleanup > NonceCacheCleanupInterval)
             CleanupNonceCache();
     }
 
     private void EnforceNonceCacheSize()
     {
-        if (_nonceCache.Count > MaxNonceCacheSize)
+        if (_trackedNonces.Count > MaxNonceCacheSize)
         {
-            var toRemove = _nonceCache
+            var toRemove = _trackedNonces
                 .OrderBy(kv => kv.Value)
-                .Take(_nonceCache.Count - MaxNonceCacheSize)
-                .Select(kv => kv.Key)
+                .Take(_trackedNonces.Count - MaxNonceCacheSize)
                 .ToList();
-            foreach (var nonce in toRemove)
-                _nonceCache.TryRemove(nonce, out _);
+
+            if (toRemove.Count == 0)
+            {
+                return;
+            }
+
+            var cutoff = toRemove[^1].Value;
+            _nonceStore.CleanupAsync(cutoff).GetAwaiter().GetResult();
+
+            foreach (var nonce in _trackedNonces.Where(kv => kv.Value <= cutoff).Select(kv => kv.Key).ToList())
+            {
+                _trackedNonces.TryRemove(nonce, out _);
+            }
+
             Logger?.LogDebug("MCP nonce cache eviction: removed {Count} entries", toRemove.Count);
         }
     }

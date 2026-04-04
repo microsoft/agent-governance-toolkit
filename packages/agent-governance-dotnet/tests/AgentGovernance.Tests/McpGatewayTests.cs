@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
 using AgentGovernance.Mcp;
+using AgentGovernance.Mcp.Abstractions;
 using Xunit;
 
 namespace AgentGovernance.Tests;
@@ -29,7 +30,9 @@ public class McpGatewayTests
         IEnumerable<string>? sensitiveTools = null,
         Func<string, string, Dictionary<string, object>, ApprovalStatus>? approvalCallback = null,
         bool requireHumanApproval = false,
-        int maxCalls = 1000)
+        int maxCalls = 1000,
+        bool enableCredentialRedaction = true,
+        TimeProvider? timeProvider = null)
     {
         return new McpGateway(
             kernel ?? CreateKernel(),
@@ -37,7 +40,10 @@ public class McpGatewayTests
             allowedTools: allowedTools,
             sensitiveTools: sensitiveTools,
             approvalCallback: approvalCallback,
-            requireHumanApproval: requireHumanApproval)
+            requireHumanApproval: requireHumanApproval,
+            enableCredentialRedaction: enableCredentialRedaction,
+            auditSink: new InMemoryMcpAuditSink(),
+            timeProvider: timeProvider)
         {
             MaxToolCallsPerAgent = maxCalls,
             RateLimiter = maxCalls > 0
@@ -330,6 +336,31 @@ public class McpGatewayTests
 
         Assert.Single(gateway.AuditLog);
         Assert.False(gateway.AuditLog[0].Allowed);
+    }
+
+    [Fact]
+    public void InterceptToolCall_AuditParametersAreRedactedByDefault()
+    {
+        var gateway = CreateGateway();
+        gateway.InterceptToolCall("did:mesh:a1", "read_file", new Dictionary<string, object>
+        {
+            ["apiKey"] = "sk-live_abc123def456ghi789"
+        });
+
+        Assert.Single(gateway.AuditLog);
+        Assert.Contains(CredentialRedactor.RedactedPlaceholder, gateway.AuditLog[0].Parameters["apiKey"].ToString());
+    }
+
+    [Fact]
+    public void InterceptToolCall_UsesInjectedTimeProviderForAuditTimestamp()
+    {
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T12:00:00Z"));
+        var gateway = CreateGateway(timeProvider: timeProvider);
+
+        gateway.InterceptToolCall("did:mesh:a1", "read_file", new());
+
+        Assert.Single(gateway.AuditLog);
+        Assert.Equal(timeProvider.GetUtcNow(), gateway.AuditLog[0].Timestamp);
     }
 
     // ── Policy integration ───────────────────────────────────────────────
