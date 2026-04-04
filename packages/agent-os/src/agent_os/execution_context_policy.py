@@ -15,12 +15,16 @@ from typing import Any
 
 
 class ExecutionContext(str, Enum):
+    """Execution environment where policy is evaluated."""
+
     INNER_LOOP = "inner_loop"    # IDE, CLI, local dev
     CI_CD = "ci_cd"              # Pipeline, PR checks
     AUTONOMOUS = "autonomous"    # Agent runtime, production
 
 
 class EnforcementLevel(str, Enum):
+    """How strictly a policy violation is handled."""
+
     BLOCK = "block"
     WARN = "warn"
     AUDIT = "audit"        # log only, no user-visible output

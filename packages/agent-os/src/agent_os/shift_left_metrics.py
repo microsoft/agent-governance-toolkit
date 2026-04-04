@@ -15,6 +15,8 @@ from typing import Any
 
 
 class ViolationStage(str, Enum):
+    """Stage in the development lifecycle where a violation was caught."""
+
     PRE_COMMIT = "pre_commit"      # IDE / local hooks
     PR_CHECK = "pr_check"          # Pull-request checks
     CI_GATE = "ci_gate"            # CI/CD pipeline gates
