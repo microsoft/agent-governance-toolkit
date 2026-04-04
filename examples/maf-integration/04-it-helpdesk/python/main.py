@@ -230,7 +230,7 @@ class PolicyEngine:
     def __init__(self, policy_path: str | Path) -> None:
         import yaml
 
-        with open(policy_path) as f:
+        with open(policy_path, encoding="utf-8") as f:
             doc = yaml.safe_load(f)
         self.name = doc.get("name", "unknown")
         self.default_action = doc.get("defaults", {}).get("action", "allow")

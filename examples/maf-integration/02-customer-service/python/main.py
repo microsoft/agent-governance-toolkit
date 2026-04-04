@@ -253,7 +253,7 @@ class PolicyEngine:
         """Load policies from a YAML file."""
         import yaml
 
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         engine = cls(default_action=data.get("defaults", {}).get("action", "allow"))
