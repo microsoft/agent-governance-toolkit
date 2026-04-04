@@ -1,3 +1,5 @@
+🌍 [English](/README.md) | [简体中文](./docs/i18n/README.zh-CN.md)
+
 ![Agent Governance Toolkit](docs/assets/readme-banner.svg)
 
 # Welcome to Agent Governance Toolkit!
