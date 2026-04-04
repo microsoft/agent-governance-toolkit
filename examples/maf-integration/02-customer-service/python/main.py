@@ -211,7 +211,7 @@ def simulated_llm(prompt: str) -> str:
             "I found order #789: Wireless Headphones ($149.99), ordered "
             "2024-01-15, delivered 2024-01-18."
         )
-    return f"Thank you for contacting Contoso Support. How can I help you today?"
+    return "Thank you for contacting Contoso Support. How can I help you today?"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -692,7 +692,6 @@ def act2_capability_sandboxing(
             else:
                 stats["allowed"] += 1
                 audit.log("TOOL_ALLOWED", f"tool={tool_name} | {args_str[:60]}")
-                result_str = json.dumps(result, indent=2)
                 # Show compact result
                 compact = json.dumps(result)
                 if len(compact) > 100:
@@ -914,13 +913,13 @@ def main() -> None:
     audit = AuditTrail()
 
     # ── Act 1 ──
-    act1_stats = act1_policy_enforcement(policy_mw, audit, client, model)
+    act1_policy_enforcement(policy_mw, audit, client, model)
 
     # ── Act 2 ──
-    act2_stats = act2_capability_sandboxing(cap_guard, audit)
+    act2_capability_sandboxing(cap_guard, audit)
 
     # ── Act 3 ──
-    act3_stats = act3_rogue_detection(rogue, audit)
+    act3_rogue_detection(rogue, audit)
 
     # ── Act 4 ──
     act4_audit_trail(audit)
