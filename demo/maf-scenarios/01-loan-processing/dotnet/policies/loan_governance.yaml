@@ -1,0 +1,62 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+version: "1.0"
+name: "contoso-bank-loan-governance"
+description: >
+  Governance policy for the Contoso Bank AI Loan Officer agent.
+  Blocks PII access (SSN, tax records), enforces spending limits on
+  loan approvals, restricts internal API access, and permits standard
+  loan inquiry operations. All actions are audit-logged.
+
+rules:
+  - name: "block_pii_access"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "SSN,social security,tax records,tax returns,tax filing,personal identifier"
+    action: "deny"
+    priority: 100
+    message: "Access to SSN, tax records, and personal identifiers is prohibited by PII governance policy"
+
+  - name: "spending_limit"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "approve loan,loan approval,approve_loan"
+    action: "deny"
+    priority: 90
+    message: "Loan approvals over $50,000 require human review — agent cannot auto-approve"
+
+  - name: "block_internal_apis"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "internal transfer,admin tool,system tool,transfer_funds,internal_api"
+    action: "deny"
+    priority: 95
+    message: "Access to internal transfer, admin, and system tools is restricted by capability policy"
+
+  - name: "allow_loan_inquiries"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "credit check,credit score,rate lookup,loan rate,eligibility,loan inquiry,check_credit"
+    action: "allow"
+    priority: 50
+    message: "Standard loan inquiry operations are permitted"
+
+  - name: "audit_all_actions"
+    condition:
+      field: "message_count"
+      operator: "gte"
+      value: 0
+    action: "audit"
+    priority: 10
+    message: "All agent actions are audit-logged for compliance"
+
+defaults:
+  action: "allow"
+  max_tokens: 4096
+  max_tool_calls: 10
+  confidence_threshold: 0.8
