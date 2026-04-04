@@ -129,7 +129,28 @@ class EUAIActRiskClassifier:
     # ---- public API ----
 
     def classify(self, profile: AgentRiskProfile) -> ClassificationResult:
-        """Classify the risk level for an agent profile."""
+        """Classify the risk level for an AI system per EU AI Act Article 6.
+
+        Evaluates the profile through the following cascade:
+
+        1. **Article 5** -- prohibited practices (returns UNACCEPTABLE)
+        2. **Article 6(1)** -- safety component under Annex I legislation (returns HIGH)
+        3. **Article 6(2)** -- Annex III domain match (returns HIGH, unless exempted)
+        4. **Article 6(3)** -- exemptions for narrow procedural tasks (may downgrade)
+           - Exemptions are voided when ``profile.involves_profiling`` is ``True``
+             (GDPR Art. 4(4) profiling override).
+        5. **Capability escalation** -- high-risk capabilities (returns HIGH)
+        6. **Article 50** -- transparency obligations (returns LIMITED)
+        7. **Default** -- returns MINIMAL
+
+        Args:
+            profile: An ``AgentRiskProfile`` describing the AI system.
+
+        Returns:
+            A ``ClassificationResult`` containing the risk level, a list of
+            triggers that explain the classification, any exemptions applied,
+            and whether a profiling override was activated.
+        """
         domain = _normalize(profile.domain)
         caps = {_normalize(c) for c in profile.capabilities}
         exemption_tags = {_normalize(t) for t in profile.exemption_tags}
