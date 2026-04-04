@@ -13,6 +13,9 @@ and run. No shared code, no cross-folder imports.
 |---|----------|----------|----------------------|
 | 01 | [**Loan Processing**](./01-loan-processing/) | Banking | PII blocking, spending limits, API sandboxing, rogue detection |
 | 02 | [**Customer Service**](./02-customer-service/) | Retail | Refund fraud prevention, payment PII protection, escalation rules |
+| 03 | [**Healthcare**](./03-healthcare/) | Healthcare | HIPAA PHI blocking, prescription safety, cross-department isolation, data exfiltration detection |
+| 04 | [**IT Helpdesk**](./04-it-helpdesk/) | Enterprise IT | Privilege escalation prevention, credential access blocking, infrastructure protection |
+| 05 | [**DevOps Deploy**](./05-devops-deploy/) | DevOps | Production deployment gates, destructive operation blocking, deployment storm detection |
 
 Each scenario includes both **Python** and **.NET** implementations with identical
 governance behavior.
@@ -163,8 +166,17 @@ demo/maf-scenarios/
 │       ├── *.csproj              #   .NET 8 project file
 │       ├── README.md             #   Detailed guide
 │       └── sample_output.md      #   Expected output
-└── 02-customer-service/
-    ├── python/                   # Same structure as above
+├── 02-customer-service/
+│   ├── python/                   # Same structure as above
+│   └── dotnet/
+├── 03-healthcare/
+│   ├── python/                   # HIPAA patient data governance
+│   └── dotnet/
+├── 04-it-helpdesk/
+│   ├── python/                   # Privilege escalation prevention
+│   └── dotnet/
+└── 05-devops-deploy/
+    ├── python/                   # CI/CD pipeline safety
     └── dotnet/
 ```
 
