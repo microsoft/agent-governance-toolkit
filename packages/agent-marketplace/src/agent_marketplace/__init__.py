@@ -51,6 +51,24 @@ from agent_marketplace.trust_tiers import (
     get_tier_config,
     get_trust_tier,
 )
+from agent_marketplace.quality_assessment import (
+    AssessmentDimension,
+    AssessmentGrade,
+    DimensionResult,
+    QualityAssessmentReport,
+    QualityAssessor,
+)
+from agent_marketplace.usage_trust import (
+    UsageSignals,
+    UsageTrustAdjustment,
+    UsageTrustScorer,
+)
+from agent_marketplace.workflow_bundle import (
+    BundleComponent,
+    BundleRegistry,
+    ComponentType,
+    WorkflowBundle,
+)
 
 __all__ = [
     "ClaudePluginManifest",
@@ -88,4 +106,19 @@ __all__ = [
     "load_marketplace_policy",
     "save_manifest",
     "verify_signature",
+    # Quality Assessment (v3.0.2+)
+    "AssessmentDimension",
+    "AssessmentGrade",
+    "DimensionResult",
+    "QualityAssessmentReport",
+    "QualityAssessor",
+    # Usage Trust (v3.0.2+)
+    "UsageSignals",
+    "UsageTrustAdjustment",
+    "UsageTrustScorer",
+    # Workflow Bundles (v3.0.2+)
+    "BundleComponent",
+    "BundleRegistry",
+    "ComponentType",
+    "WorkflowBundle",
 ]

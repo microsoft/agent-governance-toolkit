@@ -326,4 +326,50 @@ __all__ = [
     "ContextWindow",
     "ContextPriority",
     "BudgetExceeded",
+
+    # Content Governance
+    "ContentQualityEvaluator",
+    "ContentDimension",
+    "QualityGate",
+    "ContentQualityReport",
+
+    # Execution Context Policy
+    "ContextualPolicyEngine",
+    "ExecutionContext",
+    "EnforcementLevel",
+
+    # GitHub Enterprise Integration
+    "EnterpriseGovernanceManager",
+    "GovernanceTier",
+
+    # Shift-Left Metrics
+    "ShiftLeftTracker",
+    "ViolationStage",
 ]
+
+# ============================================================================
+# Content Governance (v3.0.2+)
+# ============================================================================
+
+from agent_os.content_governance import (
+    ContentDimension,
+    ContentQualityEvaluator,
+    ContentQualityReport,
+    QualityGate,
+)
+
+from agent_os.execution_context_policy import (
+    ContextualPolicyEngine,
+    EnforcementLevel,
+    ExecutionContext,
+)
+
+from agent_os.github_enterprise import (
+    EnterpriseGovernanceManager,
+    GovernanceTier,
+)
+
+from agent_os.shift_left_metrics import (
+    ShiftLeftTracker,
+    ViolationStage,
+)
