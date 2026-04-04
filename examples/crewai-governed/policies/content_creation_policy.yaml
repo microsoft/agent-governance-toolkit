@@ -1,0 +1,176 @@
+# Content Creation Crew — Governance Policy
+#
+# IMPORTANT: This is a SAMPLE configuration provided as a starting point.
+# You MUST review, customize, and extend these rules for your specific
+# use case before deploying to production. Microsoft does not guarantee
+# that these rules are comprehensive or sufficient for your security
+# requirements.
+
+version: "1.0"
+name: "content-creation-governance"
+description: >
+  Governance policy for a CrewAI content creation crew.
+  Controls tool access per agent role, blocks PII leakage and access
+  to internal resources, and enforces token/call budgets.
+
+disclaimer: >
+  This is a sample configuration. It is NOT exhaustive and should be
+  customized for your specific security requirements.
+
+rules:
+  # ── PII Protection ──────────────────────────────────────────────────────
+  - name: "block-pii-email"
+    condition:
+      field: "message"
+      operator: "matches"
+      value: '[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'
+    action: "deny"
+    priority: 200
+    message: "PII detected — email address found in agent message"
+
+  - name: "block-pii-phone"
+    condition:
+      field: "message"
+      operator: "matches"
+      value: '(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
+    action: "deny"
+    priority: 200
+    message: "PII detected — phone number found in agent message"
+
+  - name: "block-pii-ssn"
+    condition:
+      field: "message"
+      operator: "matches"
+      value: '\b\d{3}-\d{2}-\d{4}\b'
+    action: "deny"
+    priority: 200
+    message: "PII detected — SSN pattern found in agent message"
+
+  # ── Internal Resource Protection ────────────────────────────────────────
+  - name: "block-internal-resources"
+    condition:
+      field: "message"
+      operator: "contains"
+      value: "internal"
+    action: "deny"
+    priority: 150
+    message: "Access to internal resources is restricted by governance policy"
+
+  - name: "block-secrets-access"
+    condition:
+      field: "message"
+      operator: "contains"
+      value: "secrets"
+    action: "deny"
+    priority: 150
+    message: "Access to secret resources is restricted by governance policy"
+
+  - name: "block-credentials"
+    condition:
+      field: "message"
+      operator: "contains"
+      value: "credentials"
+    action: "deny"
+    priority: 150
+    message: "Access to credentials is restricted by governance policy"
+
+  # ── Dangerous Content ───────────────────────────────────────────────────
+  - name: "block-destructive-sql"
+    condition:
+      field: "message"
+      operator: "matches"
+      value: '\bDROP\s+(TABLE|DATABASE)\b'
+    action: "deny"
+    priority: 180
+    message: "Destructive SQL statements are blocked"
+
+  - name: "block-shell-injection"
+    condition:
+      field: "message"
+      operator: "matches"
+      value: '\brm\s+-rf\b'
+    action: "deny"
+    priority: 180
+    message: "Dangerous shell commands are blocked"
+
+  # ── Prompt Injection Detection ──────────────────────────────────────────
+  - name: "block-ignore-instructions"
+    condition:
+      field: "message"
+      operator: "matches"
+      value: '(?i)(ignore|disregard|forget)\s+(all\s+)?(previous|above|prior|earlier)\s+(instructions?|rules?|policies?|constraints?)'
+    action: "deny"
+    priority: 250
+    message: "Prompt injection detected - attempt to override system instructions"
+
+  - name: "block-jailbreak-prefix"
+    condition:
+      field: "message"
+      operator: "matches"
+      value: '(?i)(you\s+are\s+now|act\s+as\s+if|pretend\s+(you\s+are|to\s+be)|from\s+now\s+on\s+you)'
+    action: "deny"
+    priority: 250
+    message: "Prompt injection detected - jailbreak attempt"
+
+  - name: "block-system-prompt-leak"
+    condition:
+      field: "message"
+      operator: "matches"
+      value: '(?i)(reveal|show|display|print|output)\s+(your\s+)?(system\s+prompt|instructions|rules|policy)'
+    action: "deny"
+    priority: 250
+    message: "Prompt injection detected - system prompt extraction attempt"
+
+  - name: "block-base64-encoded"
+    condition:
+      field: "message"
+      operator: "matches"
+      value: '(?i)(decode|execute|eval|run)\s+(this\s+)?base64'
+    action: "deny"
+    priority: 240
+    message: "Encoded payload injection detected - base64 execution attempt"
+
+  # ── Cross-Agent Delegation Control ──────────────────────────────────────
+  - name: "block-unauthorized-delegation"
+    condition:
+      field: "message"
+      operator: "matches"
+      value: '(?i)(skip|bypass|circumvent)\s+(the\s+)?(editor|review|approval)'
+    action: "deny"
+    priority: 220
+    message: "Unauthorized workflow bypass - all content must follow review pipeline"
+
+  - name: "block-direct-publish-request"
+    condition:
+      field: "message"
+      operator: "matches"
+      value: '(?i)publish\s+(directly|immediately|now)\s+(without|skipping)'
+    action: "deny"
+    priority: 220
+    message: "Direct publication without review is prohibited by governance policy"
+
+  # ── Research Tasks ──────────────────────────────────────────────────────
+  - name: "allow-web-search"
+    condition:
+      field: "message"
+      operator: "contains"
+      value: "search"
+    action: "allow"
+    priority: 50
+    message: "Web search is permitted for research agents"
+
+  # ── Audit Everything ────────────────────────────────────────────────────
+  - name: "audit-all-actions"
+    condition:
+      field: "message_count"
+      operator: "gte"
+      value: 0
+    action: "audit"
+    priority: 10
+    message: "All agent actions are audit-logged"
+
+defaults:
+  action: "allow"
+  max_tokens: 4096
+  max_tool_calls: 10
+  confidence_threshold: 0.8

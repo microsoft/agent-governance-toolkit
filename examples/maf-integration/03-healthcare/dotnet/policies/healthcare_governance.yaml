@@ -1,0 +1,72 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+version: "1.0"
+name: "medassist-healthcare-governance"
+description: >
+  Governance policy for the MedAssist AI Clinical Assistant agent.
+  Blocks PHI/PII access (SSN, insurance ID, full MRN, date of birth),
+  enforces prescription safety (controlled substances, dosage limits),
+  restricts cross-department record access, and permits standard
+  clinical query operations. All actions are audit-logged.
+
+rules:
+  - name: "block_phi_access"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "SSN,social security,insurance ID,insurance id,full medical record,full MRN,date of birth,DOB,birth date"
+    action: "deny"
+    priority: 100
+    message: "Access to SSN, insurance ID, full MRN, and date of birth is prohibited by HIPAA PHI/PII governance policy"
+
+  - name: "prescription_safety"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "oxycodone,fentanyl,morphine,hydrocodone,adderall,ritalin,xanax,valium,ambien,schedule II,schedule III,schedule IV,schedule V,controlled substance,80mg,100mg,200mg"
+    action: "deny"
+    priority: 95
+    message: "Prescribing controlled substances (Schedule II-V) or dosages above safety limits requires physician override"
+
+  - name: "block_cross_department"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "radiology records,billing records,HR records,human resources,payroll,financial records,radiology_records,billing_records"
+    action: "deny"
+    priority: 90
+    message: "Cross-department record access (radiology, billing, HR) requires departmental authorization"
+
+  - name: "allow_clinical_queries"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "symptom,drug interaction,treatment guideline,treatment option,diagnosis,clinical,medication guide,drug interactions"
+    action: "allow"
+    priority: 50
+    message: "Standard clinical query operations are permitted"
+
+  - name: "allow_patient_summary"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "patient summary,de-identified,anonymized,aggregate data,population health"
+    action: "allow"
+    priority: 50
+    message: "De-identified patient summaries and aggregate data access is permitted"
+
+  - name: "audit_all_actions"
+    condition:
+      field: "message_count"
+      operator: "gte"
+      value: 0
+    action: "audit"
+    priority: 10
+    message: "All agent actions are audit-logged for HIPAA compliance"
+
+defaults:
+  action: "allow"
+  max_tokens: 4096
+  max_tool_calls: 10
+  confidence_threshold: 0.8

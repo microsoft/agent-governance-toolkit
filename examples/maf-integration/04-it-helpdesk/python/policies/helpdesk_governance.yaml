@@ -1,0 +1,72 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+version: "1.0"
+name: "securedesk-helpdesk-governance"
+description: >
+  Governance policy for the SecureDesk AI IT support agent.
+  Blocks privilege escalation (sudo, admin commands), credential
+  access (passwords, API keys), and infrastructure changes (firewall,
+  DNS, Active Directory). Permits standard ticket operations and
+  knowledge base searches. All actions are audit-logged.
+
+rules:
+  - name: "block_credential_access"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "password for,admin password,api key,api keys,tokens,secrets vault,credential store,access credentials"
+    action: "deny"
+    priority: 100
+    message: "Access to passwords, API keys, tokens, and credential stores is prohibited by security policy"
+
+  - name: "block_privilege_escalation"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "sudo,elevated privileges,registry edit,runas,net user,chmod 777,chown root"
+    action: "deny"
+    priority: 95
+    message: "Privilege escalation commands are prohibited — agent cannot execute admin/root/sudo operations"
+
+  - name: "block_infrastructure_changes"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "firewall rule,dns modification,dns record,ad group,active directory,domain admins,modify firewall,change dns"
+    action: "deny"
+    priority: 90
+    message: "Infrastructure changes (firewall, DNS, Active Directory) require authorized personnel — agent access denied"
+
+  - name: "allow_knowledge_base"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "knowledge base,kb article,troubleshooting,search knowledge,how to,search the knowledge"
+    action: "allow"
+    priority: 55
+    message: "Knowledge base searches and troubleshooting guides are permitted"
+
+  - name: "allow_ticket_operations"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "create ticket,ticket status,check ticket,password reset,self-service,my password,reset my password,vpn,can you help,laptop"
+    action: "allow"
+    priority: 50
+    message: "Standard helpdesk ticket operations and self-service actions are permitted"
+
+  - name: "audit_all_actions"
+    condition:
+      field: "message_count"
+      operator: "gte"
+      value: 0
+    action: "audit"
+    priority: 10
+    message: "All agent actions are audit-logged for compliance"
+
+defaults:
+  action: "allow"
+  max_tokens: 4096
+  max_tool_calls: 10
+  confidence_threshold: 0.8

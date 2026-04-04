@@ -1,0 +1,75 @@
+# EU AI Act Risk Classification Defaults
+# Regulation (EU) 2024/1689
+#
+# This file is designed to be updated as the regulation evolves
+# (e.g., Annex III amendments by the European Commission).
+
+# Article 5 - Prohibited AI practices
+unacceptable_domains:
+  - social_scoring
+  - real_time_biometric_identification
+  - subliminal_manipulation
+  - exploitation_of_vulnerabilities
+  - predictive_policing_individual
+  - emotion_recognition_workplace
+  - emotion_recognition_education
+  - untargeted_facial_scraping
+
+# Annex III - High-risk AI systems
+high_risk_domains:
+  - biometric_identification
+  - critical_infrastructure
+  - education_training
+  - employment_recruitment
+  - essential_services
+  - law_enforcement
+  - migration_border
+  - justice_democracy
+  - medical_diagnosis
+  - credit_scoring
+  - insurance_pricing
+  - safety_components
+
+# Capabilities that escalate to HIGH risk
+high_risk_capabilities:
+  - autonomous_decision_making
+  - personal_data_processing
+  - safety_critical_control
+  - law_enforcement_support
+  - biometric_processing
+  - financial_decisioning
+
+# Article 6(1) - Safety components under EU harmonisation legislation (Annex I)
+annex_i_legislation:
+  - machinery_regulation
+  - toy_safety
+  - recreational_craft
+  - lifts
+  - pressure_equipment
+  - radio_equipment
+  - cableway_installations
+  - personal_protective_equipment
+  - medical_devices
+  - in_vitro_diagnostics
+  - civil_aviation
+  - motor_vehicles
+  - rail_systems
+  - marine_equipment
+
+# Article 50 - Transparency obligations (LIMITED risk)
+limited_risk_indicators:
+  - chatbot
+  - content_generation
+  - deepfake_generation
+  - emotion_detection
+  - text_generation
+  - image_generation
+
+# Article 6(3) - Exemptions for high-risk classification
+# These narrow procedural tasks do NOT qualify as high-risk even if
+# the domain is listed in Annex III, UNLESS profiling is involved.
+article_6_3_exemptions:
+  - narrow_procedural_task        # (a) performs a narrow procedural task
+  - improve_prior_human_activity  # (b) improves result of prior human activity
+  - pattern_detection_no_action   # (c) detects patterns without replacing human assessment
+  - preparatory_task              # (d) preparatory task for Annex III assessment
