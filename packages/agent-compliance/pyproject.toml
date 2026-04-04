@@ -33,8 +33,8 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "agent-os-kernel>=1.0.0,<2.0",
-    "agentmesh-platform>=1.0.0,<2.0",
+    "agent-os-kernel>=2.0.0,<4.0",
+    "agentmesh-platform>=2.0.0,<4.0",
     "pydantic>=2.4.0,<3.0",
 ]
 

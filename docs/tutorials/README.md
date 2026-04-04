@@ -86,6 +86,14 @@ guides.
 
 ---
 
+## Extending the Toolkit
+
+| # | Tutorial | What You'll Learn | Package |
+|---|----------|-------------------|---------|
+| 28 | [Building Custom Integrations](build-custom-integration.md) | Trust integrations, kernel adapters, publishing your own governance package | `agent-os-kernel` / standalone |
+
+---
+
 ## Learning Paths
 
 ### 🚀 "I want to govern my agent in 10 minutes"

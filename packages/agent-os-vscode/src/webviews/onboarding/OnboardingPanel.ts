@@ -9,6 +9,7 @@
 
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
+import { escapeHtml } from '../../utils/escapeHtml';
 
 interface OnboardingStep {
     id: string;
@@ -217,7 +218,9 @@ export class OnboardingPanel {
 
     private _getHtmlForWebview() {
         const nonce = crypto.randomBytes(16).toString('base64');
-        const cspSource = this._panel.webview.cspSource;
+        const webview = this._panel.webview;
+        const cspSource = webview.cspSource;
+
         const stepsJson = JSON.stringify(this._steps);
         const completedCount = this._steps.filter(s => s.completed).length;
         const totalSteps = this._steps.length;
@@ -227,6 +230,7 @@ export class OnboardingPanel {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- SECURITY: 'unsafe-inline' for styles required by VS Code theme CSS variable injection. Scripts nonce-gated. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${cspSource} https:; font-src ${cspSource};">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome to Agent OS</title>
@@ -419,43 +423,29 @@ export class OnboardingPanel {
         .tip strong {
             color: var(--vscode-foreground);
         }
-        .sr-only {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border: 0;
-        }
     </style>
 </head>
 <body>
-    <main class="container" aria-labelledby="onboarding-title">
-        <div class="hero" role="banner">
+    <div class="container">
+        <div class="hero">
             <div class="logo">🛡️</div>
-            <h1 id="onboarding-title">Welcome to Agent OS</h1>
+            <h1>Welcome to Agent OS</h1>
             <p>Kernel-level safety for autonomous AI agents</p>
         </div>
 
-        <section class="progress-container" aria-labelledby="progress-heading">
+        <div class="progress-container">
             <div class="progress-header">
-                <span class="progress-label" id="progress-heading">Getting Started</span>
-                <span class="progress-count" id="progress-count" aria-live="polite">${completedCount} of ${totalSteps} completed</span>
+                <span class="progress-label">Getting Started</span>
+                <span class="progress-count">${escapeHtml(completedCount)} of ${escapeHtml(totalSteps)} completed</span>
             </div>
-            <div class="progress-bar" role="progressbar" aria-label="Onboarding progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}" aria-valuetext="${completedCount} of ${totalSteps} steps completed">
-                <div class="progress-fill" style="width: ${progress}%"></div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: ${escapeHtml(progress)}%"></div>
             </div>
-        </section>
+        </div>
 
-        <section aria-labelledby="steps-heading">
-            <h2 id="steps-heading" class="sr-only">Onboarding steps</h2>
-            <div class="steps" id="steps" role="list"></div>
-        </section>
+        <div class="steps" id="steps"></div>
 
-        <footer class="footer">
+        <div class="footer">
             <div class="footer-links">
                 <a href="https://github.com/microsoft/agent-governance-toolkit" target="_blank">📚 Documentation</a>
                 <a href="https://github.com/microsoft/agent-governance-toolkit/issues" target="_blank">💬 Get Help</a>
@@ -465,36 +455,45 @@ export class OnboardingPanel {
                 <button class="secondary" onclick="resetProgress()">Reset Progress</button>
                 <button class="secondary" onclick="skipOnboarding()">Skip Onboarding</button>
             </div>
-        </footer>
-    </main>
+        </div>
+    </div>
 
     <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
         const steps = ${stepsJson};
-        
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function renderSteps() {
             const container = document.getElementById('steps');
             container.innerHTML = steps.map((step, index) => \`
-                <div class="step \${step.completed ? 'completed' : ''}" id="step-\${step.id}">
+                <div class="step \${step.completed ? 'completed' : ''}" id="step-\${escapeHtml(step.id)}">
                     <div class="step-header">
                         <div class="step-number">\${step.completed ? '✓' : index + 1}</div>
                         <div class="step-content">
-                            <h3 class="step-title">\${step.title}</h3>
-                            <p class="step-description">\${step.description}</p>
+                            <h3 class="step-title">\${escapeHtml(step.title)}</h3>
+                            <p class="step-description">\${escapeHtml(step.description)}</p>
                             <div class="step-actions">
                                 \${step.action ? \`
-                                    <button onclick="executeAction('\${step.action.command}')" aria-label="\${step.action.label}: \${step.title}" \${step.completed ? 'disabled' : ''}>
-                                        \${step.action.label}
+                                    <button onclick="executeAction('\${escapeHtml(step.action.command)}')" \${step.completed ? 'disabled' : ''}>
+                                        \${escapeHtml(step.action.label)}
                                     </button>
                                 \` : ''}
                                 \${!step.completed ? \`
-                                    <button class="secondary" onclick="completeStep('\${step.id}')" aria-label="Mark \${step.title} complete">
+                                    <button class="secondary" onclick="completeStep('\${escapeHtml(step.id)}')">
                                         Mark Complete
                                     </button>
                                 \` : ''}
                             </div>
                             \${index === 0 ? \`
-                                <div class="tip" role="note">
+                                <div class="tip">
                                     <strong>💡 Tip:</strong> Agent OS works with existing AI tools like GitHub Copilot, 
                                     Cursor, and LangChain. It adds a safety layer without changing your workflow.
                                 </div>
@@ -536,9 +535,6 @@ export class OnboardingPanel {
             const progress = Math.round((completed / total) * 100);
             document.querySelector('.progress-fill').style.width = progress + '%';
             document.querySelector('.progress-count').textContent = completed + ' of ' + total + ' completed';
-            const progressBar = document.querySelector('.progress-bar');
-            progressBar.setAttribute('aria-valuenow', String(progress));
-            progressBar.setAttribute('aria-valuetext', completed + ' of ' + total + ' steps completed');
         }
 
         window.addEventListener('message', event => {

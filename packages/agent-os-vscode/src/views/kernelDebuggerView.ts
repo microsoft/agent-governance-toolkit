@@ -42,9 +42,9 @@ interface KernelState {
 }
 
 export class KernelDebuggerProvider implements vscode.TreeDataProvider<DebuggerItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<DebuggerItem | undefined | null | void> = 
+    private _onDidChangeTreeData: vscode.EventEmitter<DebuggerItem | undefined | null | void> =
         new vscode.EventEmitter<DebuggerItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<DebuggerItem | undefined | null | void> = 
+    readonly onDidChangeTreeData: vscode.Event<DebuggerItem | undefined | null | void> =
         this._onDidChangeTreeData.event;
 
     private kernelState: KernelState = {
@@ -55,14 +55,24 @@ export class KernelDebuggerProvider implements vscode.TreeDataProvider<DebuggerI
     };
 
     private selectedCheckpoint: Checkpoint | null = null;
+    private _refreshInterval: ReturnType<typeof setInterval> | undefined;
 
     constructor() {
         // Start polling for kernel state updates
         this.startPolling();
     }
 
+    /** Release the polling timer and event emitter. */
+    dispose(): void {
+        if (this._refreshInterval) {
+            clearInterval(this._refreshInterval);
+            this._refreshInterval = undefined;
+        }
+        this._onDidChangeTreeData.dispose();
+    }
+
     private startPolling(): void {
-        setInterval(() => {
+        this._refreshInterval = setInterval(() => {
             this.updateKernelState();
             this._onDidChangeTreeData.fire();
         }, 1000);
@@ -287,6 +297,21 @@ export class KernelDebuggerProvider implements vscode.TreeDataProvider<DebuggerI
         this.kernelState.policyViolations++;
         this._onDidChangeTreeData.fire();
     }
+
+    /** Returns a compact kernel summary for the sidebar. */
+    getKernelSummary(): {
+        activeAgents: number;
+        policyViolations: number;
+        totalCheckpoints: number;
+        uptime: number;
+    } {
+        return {
+            activeAgents: this.kernelState.activeAgents.length,
+            policyViolations: this.kernelState.policyViolations,
+            totalCheckpoints: this.kernelState.totalCheckpoints,
+            uptime: this.kernelState.uptime,
+        };
+    }
 }
 
 export class DebuggerItem extends vscode.TreeItem {
@@ -470,6 +495,35 @@ export class MemoryBrowserProvider implements vscode.TreeDataProvider<MemoryItem
         }
 
         this._onDidChangeTreeData.fire();
+    }
+
+    /** Returns a compact VFS summary for the sidebar. */
+    getVfsSummary(): {
+        directoryCount: number;
+        fileCount: number;
+        rootPaths: string[];
+    } {
+        let dirs = 0;
+        let files = 0;
+        const rootPaths: string[] = [];
+
+        const walk = (node: VFSNode): void => {
+            if (node.type === 'directory') {
+                dirs++;
+                node.children?.forEach(walk);
+            } else {
+                files++;
+            }
+        };
+
+        if (this.vfsRoot.children) {
+            for (const child of this.vfsRoot.children) {
+                rootPaths.push('/' + child.name);
+                walk(child);
+            }
+        }
+
+        return { directoryCount: dirs, fileCount: files, rootPaths };
     }
 }
 

@@ -2,7 +2,7 @@
   "name": "@microsoft/agent-os-vscode",
   "displayName": "Agent OS - AI Safety for Code",
   "description": "Kernel-level safety for AI coding assistants. Block destructive operations, verify with multi-model review, and audit all AI suggestions.",
-  "version": "3.0.2",
+  "version": "3.1.0",
   "publisher": "agent-os",
   "author": "Microsoft Corporation",
   "license": "MIT",
@@ -16,7 +16,7 @@
   },
   "icon": "images/icon.png",
   "engines": {
-    "vscode": "1.85.0"
+    "vscode": "^1.85.0"
   },
   "categories": [
     "Machine Learning",
@@ -120,6 +120,26 @@
         "title": "Agent OS: Open Documentation"
       },
       {
+        "command": "agent-os.showSLOWebview",
+        "title": "Agent OS: SLO Dashboard (Visual)",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "agent-os.showTopologyGraph",
+        "title": "Agent OS: Agent Topology Graph",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "agent-os.refreshSLO",
+        "title": "Agent OS: Refresh SLO Data",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agent-os.refreshTopology",
+        "title": "Agent OS: Refresh Agent Topology",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "agent-os.signIn",
         "title": "Agent OS: Sign In (Enterprise)"
       },
@@ -138,6 +158,83 @@
       {
         "command": "agent-os.checkCompliance",
         "title": "Agent OS: Check Compliance"
+      },
+      {
+        "command": "agent-os.showGovernanceHub",
+        "title": "Agent OS: Open Governance Hub",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "agent-os.showKernelDebugger",
+        "title": "Agent OS: Open Kernel Debugger",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "agent-os.showMemoryBrowser",
+        "title": "Agent OS: Open Memory Browser",
+        "icon": "$(database)"
+      },
+      {
+        "command": "agent-os.showSafetyStats",
+        "title": "Agent OS: Open Safety Stats",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "agent-os.showAuditDetail",
+        "title": "Agent OS: Open Audit Log Detail",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "agent-os.showPolicyDetail",
+        "title": "Agent OS: Open Active Policies Detail",
+        "icon": "$(law)"
+      },
+      {
+        "command": "agent-os.openSLOInBrowser",
+        "title": "Agent OS: Open SLO Dashboard in Browser",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "agent-os.openTopologyInBrowser",
+        "title": "Agent OS: Open Topology Graph in Browser",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "agent-os.openGovernanceInBrowser",
+        "title": "Agent OS: Open Governance Hub in Browser",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "agent-os.exportReport",
+        "title": "Agent OS: Export Governance Report",
+        "icon": "$(export)"
+      },
+      {
+        "command": "agent-os.showHelp",
+        "title": "Agent OS: Help",
+        "icon": "$(question)"
+      },
+      {
+        "command": "agent-os.sidebar.focusNextSlot",
+        "title": "Focus Next Panel Slot",
+        "category": "Agent OS"
+      },
+      {
+        "command": "agent-os.sidebar.focusPrevSlot",
+        "title": "Focus Previous Panel Slot",
+        "category": "Agent OS"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "agent-os.sidebar.focusNextSlot",
+        "key": "ctrl+shift+down",
+        "when": "focusedView == 'agent-os.sidebar'"
+      },
+      {
+        "command": "agent-os.sidebar.focusPrevSlot",
+        "key": "ctrl+shift+up",
+        "when": "focusedView == 'agent-os.sidebar'"
       }
     ],
     "menus": {
@@ -148,6 +245,7 @@
           "when": "editorHasSelection"
         }
       ],
+      "view/title": [],
       "commandPalette": [
         {
           "command": "agent-os.reviewCode",
@@ -167,27 +265,14 @@
     "views": {
       "agent-os-sidebar": [
         {
-          "id": "agent-os.kernelDebugger",
-          "name": "Kernel Debugger"
-        },
-        {
-          "id": "agent-os.memoryBrowser",
-          "name": "Agent Memory (VFS)"
-        },
-        {
-          "id": "agent-os.auditLog",
-          "name": "Audit Log"
-        },
-        {
-          "id": "agent-os.policies",
-          "name": "Active Policies"
-        },
-        {
-          "id": "agent-os.stats",
-          "name": "Safety Stats"
+          "id": "agent-os.sidebar",
+          "name": "Agent OS",
+          "type": "webview",
+          "visibility": "visible"
         }
       ]
     },
+    "viewsWelcome": [],
     "configuration": {
       "title": "Agent OS",
       "properties": {
@@ -316,6 +401,38 @@
           ],
           "default": "warning",
           "description": "Minimum severity level for diagnostics"
+        },
+        "agentOS.export.localPath": {
+          "type": "string",
+          "default": "",
+          "description": "Local directory for exported reports (defaults to workspace)"
+        },
+        "agentOS.observability.endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "URL endpoint to push governance metrics (OpenTelemetry compatible)"
+        },
+        "agentOS.observability.pushIntervalMs": {
+          "type": "number",
+          "default": 60000,
+          "minimum": 10000,
+          "description": "Interval in milliseconds between metrics pushes"
+        },
+        "agentOS.governance.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "Python interpreter with agent-failsafe[server] installed."
+        },
+        "agentOS.governance.endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "Override: connect to an existing agent-failsafe server instead of auto-starting. Leave empty for auto-start."
+        },
+        "agentOS.governance.refreshIntervalMs": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 5000,
+          "description": "Polling interval for governance data in milliseconds (minimum 5000)."
         }
       }
     },
@@ -381,8 +498,11 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && npm run build:webviews",
+    "build:css": "npx tailwindcss -i src/webviews/shared/index.css -o out/webviews/index.css",
+    "build:webviews": "npm run build:css && node esbuild.webview.mjs",
     "watch": "tsc -watch -p ./",
+    "watch:webviews": "node esbuild.webview.mjs --watch",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
@@ -390,15 +510,30 @@
     "publish": "vsce publish"
   },
   "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.0",
     "@types/node": "20.0.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@types/vscode": "1.85.0",
+    "@types/ws": "^8.5.10",
     "@typescript-eslint/eslint-plugin": "6.0.0",
     "@typescript-eslint/parser": "6.0.0",
+    "@vscode/test-electron": "^2.3.0",
     "@vscode/vsce": "2.22.0",
+    "autoprefixer": "^10.4.27",
+    "esbuild": "^0.25.12",
     "eslint": "8.0.0",
+    "glob": "^10.3.0",
+    "mocha": "^10.0.0",
+    "postcss": "^8.5.8",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwindcss": "^3.4.19",
     "typescript": "5.3.0"
   },
   "dependencies": {
-    "axios": "1.13.5"
+    "axios": "1.13.6",
+    "ws": "8.20.0"
   }
 }

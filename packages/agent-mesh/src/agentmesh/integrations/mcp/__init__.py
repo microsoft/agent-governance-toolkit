@@ -407,7 +407,7 @@ class TrustGatedMCPClient:
     ):
         self.identity = identity
         self.trust_bridge = trust_bridge
-        self._connected_servers: Dict[str, datetime] = {}
+        self._connected_servers: set[str] = set()
 
     async def connect(self, server_url: str) -> bool:
         """Connect to MCP server with trust verification."""
@@ -435,7 +435,7 @@ class TrustGatedMCPClient:
                     logger.warning(f"Server {server_url} failed trust verification")
                     return False
 
-        self._connected_servers[server_url] = datetime.utcnow()
+        self._connected_servers.add(server_url)
         logger.info(f"Connected to MCP server: {server_url}")
         return True
 

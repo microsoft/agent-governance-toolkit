@@ -10,6 +10,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { escapeHtml } from '../../utils/escapeHtml';
 
 interface PolicyTemplate {
     id: string;
@@ -372,6 +373,8 @@ policies:
             if (format === 'yaml') {
                 // Basic YAML validation
                 const lines = content.split('\n');
+                let inBlock = false;
+                let blockIndent = 0;
 
                 lines.forEach((line, index) => {
                     // Check for tabs (should use spaces)
@@ -557,9 +560,7 @@ policies:
         const stack: { obj: any; indent: number }[] = [{ obj: result, indent: -1 }];
 
         for (const line of lines) {
-            if (line.trim() === '' || line.trim().startsWith('#')) {
-                continue;
-            }
+            if (line.trim() === '' || line.trim().startsWith('#')) continue;
 
             const indent = line.search(/\S/);
             const content = line.trim();
@@ -587,24 +588,12 @@ policies:
     }
 
     private _parseYamlValue(value: string): any {
-        if (value === 'true') {
-            return true;
-        }
-        if (value === 'false') {
-            return false;
-        }
-        if (value === 'null') {
-            return null;
-        }
-        if (/^\d+$/.test(value)) {
-            return parseInt(value, 10);
-        }
-        if (/^\d+\.\d+$/.test(value)) {
-            return parseFloat(value);
-        }
-        if (/^["'].*["']$/.test(value)) {
-            return value.slice(1, -1);
-        }
+        if (value === 'true') return true;
+        if (value === 'false') return false;
+        if (value === 'null') return null;
+        if (/^\d+$/.test(value)) return parseInt(value, 10);
+        if (/^\d+\.\d+$/.test(value)) return parseFloat(value);
+        if (/^["'].*["']$/.test(value)) return value.slice(1, -1);
         return value;
     }
 
@@ -628,12 +617,14 @@ policies:
     private _getHtmlForWebview(webview: vscode.Webview) {
         const nonce = crypto.randomBytes(16).toString('base64');
         const cspSource = webview.cspSource;
+
         const templatesJson = JSON.stringify(PolicyEditorPanel.templates);
 
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- SECURITY: 'unsafe-inline' for styles required by VS Code theme CSS variable injection. Scripts nonce-gated. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${cspSource} https:; font-src ${cspSource};">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Policy Editor</title>
@@ -704,8 +695,6 @@ policies:
             padding-bottom: 10px;
         }
         .template-card {
-            width: 100%;
-            text-align: left;
             background: var(--vscode-editor-background);
             border: 1px solid var(--vscode-panel-border);
             border-radius: 6px;
@@ -717,10 +706,6 @@ policies:
         .template-card:hover {
             border-color: var(--vscode-focusBorder);
             background: var(--vscode-list-hoverBackground);
-        }
-        .template-card:focus-visible {
-            outline: 2px solid var(--vscode-focusBorder);
-            outline-offset: 2px;
         }
         .template-card h3 {
             margin: 0 0 5px 0;
@@ -829,31 +814,18 @@ policies:
             flex: 1;
             overflow: auto;
         }
-        .sr-only {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border: 0;
-        }
     </style>
 </head>
 <body>
-    <main class="container" aria-label="Policy editor">
-        <aside class="sidebar" aria-label="Policy templates">
+    <div class="container">
+        <div class="sidebar">
             <h2>📋 Policy Templates</h2>
             <div id="templates"></div>
-        </aside>
-
-        <section class="editor-container" aria-labelledby="editor-heading">
-            <h2 id="editor-heading" class="sr-only">Policy source editor</h2>
-            <div class="toolbar" role="toolbar" aria-label="Policy editor actions">
-                <label class="sr-only" for="format">Policy format</label>
-                <select id="format" aria-label="Policy format">
+        </div>
+        
+        <div class="editor-container">
+            <div class="toolbar">
+                <select id="format">
                     <option value="yaml">YAML</option>
                     <option value="json">JSON</option>
                     <option value="rego">Rego</option>
@@ -865,30 +837,37 @@ policies:
                 <button class="secondary" onclick="exportPolicy()">📤 Export</button>
             </div>
             <div class="editor-wrapper">
-                <div class="line-numbers" id="lineNumbers" aria-hidden="true">1</div>
-                <label class="sr-only" for="editor">Policy editor</label>
-                <textarea class="editor" id="editor" spellcheck="false" aria-label="Policy editor" placeholder="Enter your policy here or select a template..."></textarea>
+                <div class="line-numbers" id="lineNumbers">1</div>
+                <textarea class="editor" id="editor" spellcheck="false" placeholder="Enter your policy here or select a template..."></textarea>
             </div>
-        </section>
+        </div>
         
-        <aside class="validation-panel" aria-label="Validation and test results">
+        <div class="validation-panel">
             <h2>🔍 Validation</h2>
-            <div id="validationResults" aria-live="polite">
+            <div id="validationResults">
                 <p style="color: var(--vscode-descriptionForeground); font-size: 12px;">
                     Edit your policy and click Validate to check for errors.
                 </p>
             </div>
             
             <h2 style="margin-top: 20px;">🧪 Test Results</h2>
-            <div id="testResults" aria-live="polite">
+            <div id="testResults">
                 <p style="color: var(--vscode-descriptionForeground); font-size: 12px;">
                     Click Test to see how your policy handles common scenarios.
                 </p>
             </div>
-        </aside>
-    </main>
+        </div>
+    </div>
 
     <script nonce="${nonce}">
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
         const vscode = acquireVsCodeApi();
         const templates = ${templatesJson};
         const editor = document.getElementById('editor');
@@ -897,21 +876,14 @@ policies:
         // Render templates
         const templatesContainer = document.getElementById('templates');
         templates.forEach(template => {
-            const card = document.createElement('button');
-            card.type = 'button';
+            const card = document.createElement('div');
             card.className = 'template-card';
-            card.setAttribute('aria-label', 'Load template ' + template.name + '. ' + template.description);
-            const h3 = document.createElement('h3');
-            h3.textContent = template.name;
-            const p = document.createElement('p');
-            p.textContent = template.description;
-            const span = document.createElement('span');
-            span.className = 'category category-' + template.category;
-            span.textContent = template.category;
-            card.appendChild(h3);
-            card.appendChild(p);
-            card.appendChild(span);
-            card.addEventListener('click', () => loadTemplate(template.id));
+            card.innerHTML = \`
+                <h3>\${escapeHtml(template.name)}</h3>
+                <p>\${escapeHtml(template.description)}</p>
+                <span class="category category-\${escapeHtml(template.category)}">\${escapeHtml(template.category)}</span>
+            \`;
+            card.onclick = () => loadTemplate(template.id);
             templatesContainer.appendChild(card);
         });
 
@@ -992,26 +964,16 @@ policies:
             result.errors.forEach(error => {
                 const div = document.createElement('div');
                 div.className = 'error';
-                const strong = document.createElement('strong');
-                strong.textContent = 'Line ' + error.line + ':';
-                div.appendChild(strong);
-                div.appendChild(document.createTextNode(' ' + error.message));
+                div.innerHTML = \`<strong>Line \${error.line}:</strong> \${escapeHtml(error.message)}\`;
                 container.appendChild(div);
             });
 
             result.warnings.forEach(warning => {
                 const div = document.createElement('div');
                 div.className = 'warning';
-                const strong = document.createElement('strong');
-                strong.textContent = 'Line ' + warning.line + ':';
-                div.appendChild(strong);
-                div.appendChild(document.createTextNode(' ' + warning.message));
+                div.innerHTML = \`<strong>Line \${warning.line}:</strong> \${escapeHtml(warning.message)}\`;
                 if (warning.suggestion) {
-                    const br = document.createElement('br');
-                    const small = document.createElement('small');
-                    small.textContent = '💡 ' + warning.suggestion;
-                    div.appendChild(br);
-                    div.appendChild(small);
+                    div.innerHTML += \`<br><small>💡 \${escapeHtml(warning.suggestion)}</small>\`;
                 }
                 container.appendChild(div);
             });
@@ -1026,7 +988,7 @@ policies:
                 div.className = \`test-result \${result.blocked ? 'blocked' : 'allowed'}\`;
                 div.innerHTML = \`
                     <span class="status-indicator \${result.blocked ? 'blocked' : 'allowed'}"></span>
-                    <span><strong>\${result.name}:</strong> \${result.blocked ? '🛡️ Blocked' : '⚠️ Allowed'}</span>
+                    <span><strong>\${escapeHtml(result.name)}:</strong> \${result.blocked ? '🛡️ Blocked' : '⚠️ Allowed'}</span>
                 \`;
                 container.appendChild(div);
             });

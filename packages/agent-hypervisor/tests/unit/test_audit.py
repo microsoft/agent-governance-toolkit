@@ -28,16 +28,17 @@ class TestDeltaEngine:
             self.engine.capture("did:a", changes)
 
         deltas = self.engine.deltas
-        # Public preview: no audit loging, parent_hash is always None
-        assert deltas[0].parent_hash is None
-        assert deltas[1].parent_hash is None
-        assert deltas[2].parent_hash is None
+        assert deltas[0].parent_hash is None  # first delta has no parent
+        assert deltas[1].parent_hash == deltas[0].delta_hash
+        assert deltas[2].parent_hash == deltas[1].delta_hash
 
     def test_verify_chain_integrity(self):
         for i in range(5):
             changes = [VFSChange(path=f"/f{i}.txt", operation="add")]
             self.engine.capture("did:a", changes)
-        assert self.engine.verify_chain()
+        valid, error = self.engine.verify_chain()
+        assert valid is True
+        assert error is None
 
     def test_hash_chain_root(self):
         for i in range(4):
@@ -50,6 +51,30 @@ class TestDeltaEngine:
 
     def test_empty_engine_no_root(self):
         assert self.engine.compute_hash_chain_root() is None
+
+    def test_tamper_content_detected(self):
+        for i in range(3):
+            changes = [VFSChange(path=f"/f{i}.txt", operation="add")]
+            self.engine.capture("did:a", changes)
+        # Tamper with content
+        self.engine._deltas[1].changes[0].path = "/hacked.txt"
+        valid, error = self.engine.verify_chain()
+        assert valid is False
+        assert "hash mismatch" in error
+
+    def test_tamper_chain_linkage_detected(self):
+        for i in range(3):
+            changes = [VFSChange(path=f"/f{i}.txt", operation="add")]
+            self.engine.capture("did:a", changes)
+        # Break chain linkage
+        self.engine._deltas[2].parent_hash = "forged"
+        valid, error = self.engine.verify_chain()
+        assert valid is False
+
+    def test_empty_chain_verifies(self):
+        valid, error = self.engine.verify_chain()
+        assert valid is True
+        assert error is None
 
 
 class TestCommitmentEngine:

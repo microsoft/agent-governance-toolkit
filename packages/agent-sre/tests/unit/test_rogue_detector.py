@@ -2,6 +2,8 @@
 # Licensed under the MIT License.
 """Tests for rogue-agent detection (OWASP ASI-10)."""
 
+import hashlib
+import json
 import math
 
 from agent_sre.anomaly.rogue_detector import (
@@ -12,6 +14,7 @@ from agent_sre.anomaly.rogue_detector import (
     RogueAssessment,
     RogueDetectorConfig,
     ToolCallFrequencyAnalyzer,
+    _GENESIS_HASH,
 )
 
 
@@ -386,3 +389,173 @@ class TestRogueDetectorConfig:
         assert cfg.frequency_window_seconds == 30.0
         assert cfg.entropy_low_threshold == 0.5
         assert cfg.quarantine_risk_level == RiskLevel.CRITICAL
+
+
+# ── Assessment hash chain (tamper evidence) ─────────────────────────
+
+
+class TestAssessmentHashChain:
+    """Tests for the SHA-256 tamper-evident audit chain on assessments."""
+
+    def _make_detector(self) -> RogueAgentDetector:
+        """Return a detector with frequency/entropy disabled for determinism."""
+        return RogueAgentDetector(
+            config=RogueDetectorConfig(
+                frequency_min_windows=100,
+                entropy_min_actions=100,
+            ),
+        )
+
+    def test_single_assessment_has_hash(self) -> None:
+        """A single assess() call should populate entry_hash and previous_hash."""
+        detector = self._make_detector()
+        a = detector.assess("agent-1", timestamp=1000.0)
+        assert a.entry_hash != ""
+        assert a.previous_hash == _GENESIS_HASH
+        assert len(a.entry_hash) == 64  # SHA-256 hex digest
+
+    def test_chain_links_across_assessments(self) -> None:
+        """Each assessment's previous_hash must equal the prior entry_hash."""
+        detector = self._make_detector()
+        a1 = detector.assess("agent-1", timestamp=1000.0)
+        a2 = detector.assess("agent-2", timestamp=1001.0)
+        a3 = detector.assess("agent-1", timestamp=1002.0)
+
+        assert a1.previous_hash == _GENESIS_HASH
+        assert a2.previous_hash == a1.entry_hash
+        assert a3.previous_hash == a2.entry_hash
+
+    def test_verify_chain_passes_on_intact_chain(self) -> None:
+        """verify_assessment_chain returns (True, None) for an untampered chain."""
+        detector = self._make_detector()
+        detector.assess("agent-1", timestamp=1000.0)
+        detector.assess("agent-2", timestamp=1001.0)
+        detector.assess("agent-3", timestamp=1002.0)
+
+        valid, msg = detector.verify_assessment_chain()
+        assert valid is True
+        assert msg is None
+
+    def test_verify_chain_empty_is_valid(self) -> None:
+        """An empty chain is trivially valid."""
+        detector = self._make_detector()
+        valid, msg = detector.verify_assessment_chain()
+        assert valid is True
+        assert msg is None
+
+    def test_tamper_score_breaks_chain(self) -> None:
+        """Modifying composite_score after assessment should be detected."""
+        detector = self._make_detector()
+        detector.assess("agent-1", timestamp=1000.0)
+        detector.assess("agent-2", timestamp=1001.0)
+
+        # Tamper with the first assessment's composite_score
+        detector._assessments[0].composite_score = 999.0
+
+        valid, msg = detector.verify_assessment_chain()
+        assert valid is False
+        assert "entry_hash mismatch" in msg
+        assert "agent-1" in msg
+
+    def test_tamper_agent_id_breaks_chain(self) -> None:
+        """Modifying agent_id after assessment should be detected."""
+        detector = self._make_detector()
+        detector.assess("agent-1", timestamp=1000.0)
+
+        detector._assessments[0].agent_id = "evil-agent"
+
+        valid, msg = detector.verify_assessment_chain()
+        assert valid is False
+
+    def test_tamper_entry_hash_breaks_chain(self) -> None:
+        """Directly overwriting entry_hash should be detected."""
+        detector = self._make_detector()
+        detector.assess("agent-1", timestamp=1000.0)
+        detector.assess("agent-2", timestamp=1001.0)
+
+        # Overwrite the first assessment's entry_hash
+        detector._assessments[0].entry_hash = "a" * 64
+
+        valid, msg = detector.verify_assessment_chain()
+        assert valid is False
+
+    def test_tamper_previous_hash_breaks_chain(self) -> None:
+        """Modifying previous_hash should be detected."""
+        detector = self._make_detector()
+        detector.assess("agent-1", timestamp=1000.0)
+
+        detector._assessments[0].previous_hash = "b" * 64
+
+        valid, msg = detector.verify_assessment_chain()
+        assert valid is False
+        assert "previous_hash mismatch" in msg
+
+    def test_delete_middle_assessment_breaks_chain(self) -> None:
+        """Removing an assessment from the middle of the chain breaks linkage."""
+        detector = self._make_detector()
+        detector.assess("agent-1", timestamp=1000.0)
+        detector.assess("agent-2", timestamp=1001.0)
+        detector.assess("agent-3", timestamp=1002.0)
+
+        # Remove the middle assessment
+        del detector._assessments[1]
+
+        valid, msg = detector.verify_assessment_chain()
+        assert valid is False
+
+    def test_insert_assessment_breaks_chain(self) -> None:
+        """Inserting a rogue assessment should be detected."""
+        detector = self._make_detector()
+        detector.assess("agent-1", timestamp=1000.0)
+        detector.assess("agent-2", timestamp=1001.0)
+
+        # Insert a forged assessment in the middle
+        forged = RogueAssessment(
+            agent_id="forged-agent",
+            risk_level=RiskLevel.LOW,
+            composite_score=0.0,
+            frequency_score=0.0,
+            entropy_score=0.0,
+            capability_score=0.0,
+            quarantine_recommended=False,
+            timestamp=1000.5,
+            previous_hash="fake",
+            entry_hash="fake",
+        )
+        detector._assessments.insert(1, forged)
+
+        valid, msg = detector.verify_assessment_chain()
+        assert valid is False
+
+    def test_hash_deterministic(self) -> None:
+        """Same inputs produce the same hash -- verify the algorithm manually."""
+        detector = self._make_detector()
+        a = detector.assess("agent-x", timestamp=42.0)
+
+        payload = json.dumps(
+            {
+                "agent_id": "agent-x",
+                "composite_score": a.composite_score,
+                "quarantine_recommended": a.quarantine_recommended,
+                "timestamp": 42.0,
+                "frequency_score": a.frequency_score,
+                "entropy_score": a.entropy_score,
+                "capability_score": a.capability_score,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        expected = hashlib.sha256(
+            f"{_GENESIS_HASH}:{payload}".encode("utf-8"),
+        ).hexdigest()
+        assert a.entry_hash == expected
+
+    def test_to_dict_includes_hash_fields(self) -> None:
+        """to_dict() should expose the hash chain fields."""
+        detector = self._make_detector()
+        a = detector.assess("agent-1", timestamp=1000.0)
+        d = a.to_dict()
+        assert "previous_hash" in d
+        assert "entry_hash" in d
+        assert d["previous_hash"] == _GENESIS_HASH
+        assert d["entry_hash"] == a.entry_hash

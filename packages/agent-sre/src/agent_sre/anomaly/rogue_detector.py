@@ -10,13 +10,15 @@ assessment with optional auto-quarantine recommendations.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import math
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 
 logger = logging.getLogger(__name__)
@@ -74,6 +76,28 @@ class RogueAssessment:
     quarantine_recommended: bool
     details: dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
+    previous_hash: str = ""
+    entry_hash: str = ""
+
+    def _hash_payload(self) -> str:
+        """Return a canonical JSON string of the fields covered by the hash."""
+        payload = {
+            "agent_id": self.agent_id,
+            "composite_score": self.composite_score,
+            "quarantine_recommended": self.quarantine_recommended,
+            "timestamp": self.timestamp,
+            "frequency_score": self.frequency_score,
+            "entropy_score": self.entropy_score,
+            "capability_score": self.capability_score,
+        }
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+    def compute_hash(self, previous_hash: str) -> str:
+        """Compute SHA-256 entry hash chained to *previous_hash*."""
+        canonical = self._hash_payload()
+        return hashlib.sha256(
+            f"{previous_hash}:{canonical}".encode("utf-8"),
+        ).hexdigest()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -86,6 +110,8 @@ class RogueAssessment:
             "quarantine_recommended": self.quarantine_recommended,
             "details": self.details,
             "timestamp": self.timestamp,
+            "previous_hash": self.previous_hash,
+            "entry_hash": self.entry_hash,
         }
 
 
@@ -272,6 +298,8 @@ class CapabilityProfileDeviation:
 
 _RISK_ORDER = [RiskLevel.LOW, RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL]
 
+_GENESIS_HASH = "0" * 64  # SHA-256-length zero string used as the chain seed
+
 
 class RogueAgentDetector:
     """Orchestrates frequency, entropy, and capability analyzers to
@@ -296,6 +324,7 @@ class RogueAgentDetector:
         )
 
         self._assessments: list[RogueAssessment] = []
+        self._last_hash: str = _GENESIS_HASH
 
     # -- data ingestion ---------------------------------------------------
 
@@ -362,6 +391,11 @@ class RogueAgentDetector:
             timestamp=timestamp if timestamp is not None else time.time(),
         )
 
+        # -- tamper-evident hash chain --
+        assessment.previous_hash = self._last_hash
+        assessment.entry_hash = assessment.compute_hash(self._last_hash)
+        self._last_hash = assessment.entry_hash
+
         self._assessments.append(assessment)
         if quarantine:
             logger.warning(
@@ -379,6 +413,30 @@ class RogueAgentDetector:
     def assessments(self) -> list[RogueAssessment]:
         """Return a copy of the assessment history."""
         return list(self._assessments)
+
+    def verify_assessment_chain(self) -> tuple[bool, Optional[str]]:
+        """Walk every assessment and verify hash linkage.
+
+        Returns ``(True, None)`` when the chain is intact, or
+        ``(False, description)`` on the first broken link.
+        """
+        prev_hash = _GENESIS_HASH
+        for idx, assessment in enumerate(self._assessments):
+            if assessment.previous_hash != prev_hash:
+                return (
+                    False,
+                    f"Assessment {idx} (agent={assessment.agent_id}): "
+                    f"previous_hash mismatch",
+                )
+            expected = assessment.compute_hash(prev_hash)
+            if assessment.entry_hash != expected:
+                return (
+                    False,
+                    f"Assessment {idx} (agent={assessment.agent_id}): "
+                    f"entry_hash mismatch",
+                )
+            prev_hash = assessment.entry_hash
+        return (True, None)
 
     # -- internals --------------------------------------------------------
 

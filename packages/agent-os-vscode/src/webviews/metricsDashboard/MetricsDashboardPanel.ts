@@ -9,7 +9,8 @@
 
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
-import { AuditLogger } from '../../auditLogger';
+import { AuditLogger, AuditEntry } from '../../auditLogger';
+import { escapeHtml } from '../../utils/escapeHtml';
 
 interface MetricsData {
     blockedToday: number;
@@ -153,7 +154,23 @@ export class MetricsDashboardPanel {
 
     private _sendMetricsUpdate(timeRange: string = 'today'): void {
         const metrics = this._getMetrics(timeRange);
-        this._panel.webview.postMessage({ type: 'metricsUpdate', metrics });
+
+        // Escape dynamic string values before sending to webview where
+        // they may be interpolated into innerHTML.
+        const safeMetrics = {
+            ...metrics,
+            topViolations: metrics.topViolations.map(v => ({
+                ...v,
+                name: escapeHtml(v.name)
+            })),
+            policyViolationsByType: Object.fromEntries(
+                Object.entries(metrics.policyViolationsByType).map(
+                    ([key, val]) => [escapeHtml(key), val]
+                )
+            )
+        };
+
+        this._panel.webview.postMessage({ type: 'metricsUpdate', metrics: safeMetrics });
     }
 
     private async _exportReport(format: 'json' | 'csv'): Promise<void> {
@@ -225,6 +242,7 @@ export class MetricsDashboardPanel {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- SECURITY: 'unsafe-inline' for styles required by VS Code theme CSS variable injection. Scripts nonce-gated. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${cspSource} https:; font-src ${cspSource};">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Metrics Dashboard</title>
@@ -420,29 +438,16 @@ export class MetricsDashboardPanel {
         @media (max-width: 800px) {
             .two-col { grid-template-columns: 1fr; }
         }
-        .sr-only {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border: 0;
-        }
     </style>
 </head>
 <body>
-    <main aria-labelledby="metrics-title">
     <div class="header">
         <h1>
             <span class="status-dot active"></span>
-            <span id="metrics-title">Agent OS Metrics Dashboard</span>
+            Agent OS Metrics Dashboard
         </h1>
-        <div class="controls" role="toolbar" aria-label="Metrics dashboard controls">
-            <label class="sr-only" for="timeRange">Time range</label>
-            <select id="timeRange" aria-label="Time range" onchange="setTimeRange(this.value)">
+        <div class="controls">
+            <select id="timeRange" onchange="setTimeRange(this.value)">
                 <option value="today">Today</option>
                 <option value="week">This Week</option>
                 <option value="month">This Month</option>
@@ -454,22 +459,22 @@ export class MetricsDashboardPanel {
     </div>
 
     <div class="grid">
-        <div class="card danger" role="group" aria-label="Blocked operations today">
+        <div class="card danger">
             <div class="card-title">Blocked Operations</div>
             <div class="card-value" id="blockedToday">0</div>
             <div class="card-subtitle">Today</div>
         </div>
-        <div class="card warning" role="group" aria-label="Warnings today">
+        <div class="card warning">
             <div class="card-title">Warnings</div>
             <div class="card-value" id="warningsToday">0</div>
             <div class="card-subtitle">Today</div>
         </div>
-        <div class="card success" role="group" aria-label="CMVK reviews today">
+        <div class="card success">
             <div class="card-title">CMVK Reviews</div>
             <div class="card-value" id="cmvkReviewsToday">0</div>
             <div class="card-subtitle">Today</div>
         </div>
-        <div class="card" role="group" aria-label="Total events">
+        <div class="card">
             <div class="card-title">Total Events</div>
             <div class="card-value" id="totalLogs">0</div>
             <div class="card-subtitle">All time</div>
@@ -477,9 +482,9 @@ export class MetricsDashboardPanel {
     </div>
 
     <div class="two-col">
-        <section class="chart-container" aria-label="Activity by hour">
+        <div class="chart-container">
             <div class="chart-title">📊 Activity by Hour</div>
-            <div class="bar-chart" id="activityChart" role="img" aria-label="Activity by hour chart"></div>
+            <div class="bar-chart" id="activityChart"></div>
             <div class="bar-labels">
                 <span>12 AM</span>
                 <span>6 AM</span>
@@ -487,17 +492,17 @@ export class MetricsDashboardPanel {
                 <span>6 PM</span>
                 <span>11 PM</span>
             </div>
-        </section>
+        </div>
 
-        <section class="chart-container" aria-label="Top policy violations">
+        <div class="chart-container">
             <div class="chart-title">🛡️ Top Policy Violations</div>
-            <div class="violations-list" id="topViolations" role="list" aria-live="polite">
+            <div class="violations-list" id="topViolations">
                 <p style="color: var(--vscode-descriptionForeground); text-align: center;">No violations recorded</p>
             </div>
-        </section>
+        </div>
     </div>
 
-    <section class="chart-container" aria-label="Policy check latency">
+    <div class="chart-container">
         <div class="chart-title">⚡ Policy Check Latency</div>
         <div class="latency-grid">
             <div class="latency-item">
@@ -519,7 +524,7 @@ export class MetricsDashboardPanel {
         <p style="text-align: center; font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 15px;">
             Target: &lt;50ms for P99 ✓
         </p>
-    </section>
+    </div>
 
     <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
@@ -539,10 +544,9 @@ export class MetricsDashboardPanel {
         function updateChart(data) {
             const chart = document.getElementById('activityChart');
             const max = Math.max(...data, 1);
-            chart.setAttribute('aria-label', 'Activity by hour. ' + data.map((value, hour) => hour + ':00 has ' + value + ' events').join('. '));
             
             chart.innerHTML = data.map((value, i) => 
-                \`<div class="bar" style="height: \${(value / max) * 100}%" data-value="\${value}" aria-hidden="true"></div>\`
+                \`<div class="bar" style="height: \${(value / max) * 100}%" data-value="\${value}"></div>\`
             ).join('');
         }
 
@@ -555,12 +559,12 @@ export class MetricsDashboardPanel {
             }
 
             container.innerHTML = violations.map(v => \`
-                <div class="violation-item" role="listitem">
+                <div class="violation-item">
                     <span class="violation-name">
                         <span style="color: #dc3545;">⚠️</span>
-                        \${(v.name || '').replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c] || c)).replace(/_/g, ' ')}
+                        \${v.name.replace(/_/g, ' ')}
                     </span>
-                    <span class="violation-count">\${Number(v.count) || 0}</span>
+                    <span class="violation-count">\${v.count}</span>
                 </div>
             \`).join('');
         }
@@ -581,15 +585,9 @@ export class MetricsDashboardPanel {
                 
                 updateChart(m.activityByHour);
                 updateViolations(m.topViolations);
-                document.getElementById('metricsAnnouncer').textContent =
-                    'Metrics updated. ' + m.blockedToday + ' blocked operations, ' +
-                    m.warningsToday + ' warnings, and ' +
-                    m.cmvkReviewsToday + ' CMVK reviews.';
             }
         });
     </script>
-    <div id="metricsAnnouncer" class="sr-only" aria-live="polite"></div>
-    </main>
 </body>
 </html>`;
     }

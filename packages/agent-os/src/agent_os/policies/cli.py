@@ -4,106 +4,269 @@
 Policy CLI - Manage and validate security policies.
 
 Commands:
-- validate: Check policy files for syntax and logical errors
+- validate: Check a policy file against the PolicyDocument schema
 - test: Run security scenarios against policy definitions
-- diff: Compare two policy versions
-- list: Show available policy templates
+- diff: Compare two policy versions structurally
 """
+
+from __future__ import annotations
 
 import argparse
 import json
-import logging
+import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, List
 
 import yaml
-from rich.console import Console
-from rich.table import Table
+from pydantic import ValidationError
 
-console = Console()
-logger = logging.getLogger("policy-cli")
+from agent_os.policies.schema import PolicyDocument
 
 
-def validate_policy(policy_path: Path) -> List[Dict[str, str]]:
-    """Validate a policy YAML file."""
-    errors = []
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _load_file(path: Path) -> dict:
+    """Load a YAML or JSON file and return the parsed dict."""
+    text = path.read_text(encoding="utf-8")
+    if path.suffix == ".json":
+        return json.loads(text)
+    return yaml.safe_load(text)
+
+
+def _evaluate_condition(condition: dict, context: dict) -> bool:
+    """Evaluate a single policy condition against a context dict."""
+    field = condition.get("field", "")
+    operator = condition.get("operator", "eq")
+    value = condition.get("value")
+
+    if field not in context:
+        return False
+
+    ctx_value = context[field]
+
+    if operator == "eq":
+        return ctx_value == value
+    if operator == "ne":
+        return ctx_value != value
+    if operator == "gt":
+        return ctx_value > value
+    if operator == "lt":
+        return ctx_value < value
+    if operator == "gte":
+        return ctx_value >= value
+    if operator == "lte":
+        return ctx_value <= value
+    if operator == "in":
+        return ctx_value in value
+    if operator == "contains":
+        return value in ctx_value
+    if operator == "matches":
+        return bool(re.match(str(value), str(ctx_value)))
+
+    return False
+
+
+def _resolve_action(rules: list[dict], defaults: dict | None, context: dict) -> str:
+    """Find the first matching rule (highest priority) and return its action."""
+    sorted_rules = sorted(rules, key=lambda r: r.get("priority", 0), reverse=True)
+
+    for rule in sorted_rules:
+        condition = rule.get("condition", {})
+        if _evaluate_condition(condition, context):
+            return rule.get("action", "allow")
+
+    if defaults:
+        return defaults.get("action", "allow")
+    return "allow"
+
+
+# ---------------------------------------------------------------------------
+# Sub-commands
+# ---------------------------------------------------------------------------
+
+
+def _cmd_validate(args: argparse.Namespace) -> int:
+    """Validate a policy file against the PolicyDocument Pydantic schema."""
+    path = Path(args.file)
+
+    if not path.exists():
+        print("ERROR: File not found: " + str(path), file=sys.stderr)
+        return 2
 
     try:
-        with open(policy_path) as f:
-            data = yaml.safe_load(f)
+        data = _load_file(path)
+    except Exception:
+        print("ERROR: Could not parse file: " + str(path), file=sys.stderr)
+        return 2
 
-        if not data:
-            errors.append({"severity": "critical", "message": "Policy file is empty"})
-            return errors
+    if data is None:
+        data = {}
 
-        # 1. Kernel Section
-        kernel = data.get("kernel", {})
-        if not kernel:
-            errors.append({"severity": "critical", "message": "Missing 'kernel' section"})
-        elif not kernel.get("mode"):
-            errors.append({"severity": "critical", "message": "'kernel.mode' is required"})
-        elif kernel.get("mode") not in ["strict", "permissive", "audit"]:
-            errors.append({"severity": "error", "message": f"Invalid mode: {kernel.get('mode')}"})
+    try:
+        PolicyDocument.model_validate(data)
+    except ValidationError as exc:
+        print("FAIL: " + str(exc), file=sys.stderr)
+        return 1
 
-        # 2. Signals Section
-        signals = data.get("signals", [])
-        if not isinstance(signals, list):
-            errors.append({"severity": "error", "message": "'signals' must be a list"})
+    print("OK")
+    return 0
 
-        # 3. Policies Section
-        policies = data.get("policies", [])
-        if not policies:
-            errors.append({"severity": "warning", "message": "No policies defined"})
-        elif not isinstance(policies, list):
-            errors.append({"severity": "error", "message": "'policies' must be a list"})
+
+def _cmd_test(args: argparse.Namespace) -> int:
+    """Run test scenarios against a policy."""
+    policy_path = Path(args.policy)
+    scenarios_path = Path(args.scenarios)
+
+    if not policy_path.exists():
+        print("ERROR: Policy file not found: " + str(policy_path), file=sys.stderr)
+        return 2
+
+    if not scenarios_path.exists():
+        print("ERROR: Scenarios file not found: " + str(scenarios_path), file=sys.stderr)
+        return 2
+
+    try:
+        policy_data = _load_file(policy_path)
+        scenarios_data = _load_file(scenarios_path)
+    except Exception:
+        print("ERROR: Could not parse files", file=sys.stderr)
+        return 2
+
+    rules = (policy_data or {}).get("rules", [])
+    defaults = (policy_data or {}).get("defaults", {})
+    scenarios: list[dict[str, Any]] = (scenarios_data or {}).get("scenarios", [])
+
+    if not scenarios:
+        print("ERROR: No scenarios provided", file=sys.stderr)
+        return 2
+
+    passed = 0
+    total = len(scenarios)
+
+    for scenario in scenarios:
+        context = scenario.get("context", {})
+        expected_action = scenario.get("expected_action")
+        expected_allowed = scenario.get("expected_allowed")
+
+        actual_action = _resolve_action(rules, defaults, context)
+        actual_allowed = actual_action == "allow"
+
+        ok = True
+        if expected_action is not None and actual_action != expected_action:
+            ok = False
+        if expected_allowed is not None and actual_allowed != expected_allowed:
+            ok = False
+
+        if ok:
+            passed += 1
         else:
-            for i, p in enumerate(policies):
-                if not p.get("action"):
-                    errors.append({"severity": "error", "message": f"Policy #{i} missing 'action'"})
+            print(
+                f"FAIL: {scenario.get('name', 'unnamed')}: "
+                f"expected {expected_action}, got {actual_action}",
+                file=sys.stderr,
+            )
 
-    except Exception as e:
-        errors.append({"severity": "critical", "message": f"Syntax error: {e}"})
-
-    return errors
+    print(f"{passed}/{total} scenarios passed")
+    return 0 if passed == total else 1
 
 
-def test_policies(policy_path: Path) -> List[Dict[str, Any]]:
-    """Run security test cases against the policy."""
-    # Simulated policy testing
-    results = [
-        {"test": "block_destructive_sql", "scenario": "DROP TABLE users;", "result": "blocked", "passed": True},
-        {"test": "allow_read_only", "scenario": "SELECT * FROM data;", "result": "allowed", "passed": True},
-        {"test": "require_approval", "scenario": "DELETE FROM users WHERE id=1;", "result": "pending", "passed": True},
-    ]
-    return results
+def _cmd_diff(args: argparse.Namespace) -> int:
+    """Compare two policy files structurally."""
+    base_path = Path(args.base)
+    target_path = Path(args.target)
+
+    if not base_path.exists():
+        print("ERROR: File not found: " + str(base_path), file=sys.stderr)
+        return 2
+    if not target_path.exists():
+        print("ERROR: File not found: " + str(target_path), file=sys.stderr)
+        return 2
+
+    try:
+        base_data = _load_file(base_path)
+        target_data = _load_file(target_path)
+    except Exception:
+        print("ERROR: Could not parse files", file=sys.stderr)
+        return 2
+
+    if base_data == target_data:
+        print("No differences")
+        return 0
+
+    diffs: list[str] = []
+
+    # --- rules ---
+    base_rules = {r["name"]: r for r in (base_data.get("rules") or [])}
+    target_rules = {r["name"]: r for r in (target_data.get("rules") or [])}
+
+    for name in target_rules:
+        if name not in base_rules:
+            diffs.append(f"rule added: {name}")
+
+    for name in base_rules:
+        if name not in target_rules:
+            diffs.append(f"rule removed: {name}")
+
+    for name in base_rules:
+        if name in target_rules:
+            br = base_rules[name]
+            tr = target_rules[name]
+            all_keys = set(br.keys()) | set(tr.keys())
+            for key in sorted(all_keys):
+                if br.get(key) != tr.get(key):
+                    diffs.append(f"rule {name}: {key}: {br.get(key)} -> {tr.get(key)}")
+
+    # --- defaults ---
+    base_defaults = (base_data.get("defaults") or {})
+    target_defaults = (target_data.get("defaults") or {})
+    all_def_keys = set(base_defaults.keys()) | set(target_defaults.keys())
+    for key in sorted(all_def_keys):
+        if base_defaults.get(key) != target_defaults.get(key):
+            diffs.append(f"defaults: {key}: {base_defaults.get(key)} -> {target_defaults.get(key)}")
+
+    # --- other top-level fields ---
+    for key in sorted(set(base_data.keys()) | set(target_data.keys())):
+        if key in ("rules", "defaults"):
+            continue
+        if base_data.get(key) != target_data.get(key):
+            diffs.append(f"{key}: {base_data.get(key)} -> {target_data.get(key)}")
+
+    for d in diffs:
+        print(d)
+
+    return 1 if diffs else 0
+
+
+# ---------------------------------------------------------------------------
+# Parser / entry-point
+# ---------------------------------------------------------------------------
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser."""
     parser = argparse.ArgumentParser(
         prog="policies-cli",
-        description="Agent OS Policy Management Tools"
+        description="Agent OS Policy Management Tools",
     )
-
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # -- validate -----------------------------------------------------------
-    val_parser = subparsers.add_parser("validate", help="Validate policy files")
-    val_parser.add_argument("files", nargs="+", help="Policy files to validate")
-    val_parser.add_argument("--json", action="store_true", help="Output in JSON format")
+    val_parser = subparsers.add_parser("validate", help="Validate a policy file")
+    val_parser.add_argument("file", help="Policy file to validate")
 
     # -- test ---------------------------------------------------------------
-    test_parser = subparsers.add_parser("test", help="Test policies against scenarios")
+    test_parser = subparsers.add_parser("test", help="Test policy against scenarios")
     test_parser.add_argument("policy", help="Policy file to test")
-    test_parser.add_argument("--scenarios", help="Scenarios file (JSON/YAML)")
-    test_parser.add_argument("--json", action="store_true", help="Output in JSON format")
+    test_parser.add_argument("scenarios", help="Scenarios file (YAML/JSON)")
 
     # -- diff ---------------------------------------------------------------
     diff_parser = subparsers.add_parser("diff", help="Compare two policy files")
     diff_parser.add_argument("base", help="Base policy file")
     diff_parser.add_argument("target", help="Target policy file")
-    diff_parser.add_argument("--json", action="store_true", help="Output in JSON format")
 
     return parser
 
@@ -115,115 +278,16 @@ def main(argv: List[str] | None = None) -> int:
 
     if not args.command:
         parser.print_help()
-        return 0
+        return 2
 
-    output_format = "json" if getattr(args, "json", False) else "text"
+    if args.command == "validate":
+        return _cmd_validate(args)
+    if args.command == "test":
+        return _cmd_test(args)
+    if args.command == "diff":
+        return _cmd_diff(args)
 
-    try:
-        if args.command == "validate":
-            all_results = {}
-            overall_passed = True
-
-            for path_str in args.files:
-                path = Path(path_str)
-                if not path.exists():
-                    all_results[path_str] = [{"severity": "critical", "message": "File not found"}]
-                    overall_passed = False
-                    continue
-
-                errors = validate_policy(path)
-                all_results[path_str] = errors
-                if any(e["severity"] in ["critical", "error"] for e in errors):
-                    overall_passed = False
-
-            if output_format == "json":
-                print(json.dumps({
-                    "status": "success" if overall_passed else "fail",
-                    "results": all_results
-                }, indent=2))
-            else:
-                for path, errors in all_results.items():
-                    if not errors:
-                        print(f"✅ {path}: Valid")
-                    else:
-                        print(f"❌ {path}: Found {len(errors)} issues")
-                        for e in errors:
-                            print(f"  [{e['severity'].upper()}] {e['message']}")
-
-            return 0 if overall_passed else 1
-
-        elif args.command == "test":
-            path = Path(args.policy)
-            if not path.exists():
-                print(f"Error: Policy file not found: {args.policy}")
-                return 1
-
-            results = test_policies(path)
-            passed_count = len([r for r in results if r["passed"]])
-            total_count = len(results)
-
-            if output_format == "json":
-                print(json.dumps({
-                    "policy": args.policy,
-                    "summary": {"passed": passed_count, "total": total_count},
-                    "tests": results
-                }, indent=2))
-            else:
-                table = Table(title=f"Policy Security Tests: {args.policy}")
-                table.add_column("Test", style="cyan")
-                table.add_column("Scenario", style="dim")
-                table.add_column("Expected/Result")
-                table.add_column("Status")
-
-                for r in results:
-                    status = "[green]PASS[/green]" if r["passed"] else "[red]FAIL[/red]"
-                    table.add_row(r["test"], r["scenario"], r["result"], status)
-
-                console.print(table)
-                print(f"\nSummary: {passed_count}/{total_count} tests passed")
-
-            return 0 if passed_count == total_count else 1
-
-        elif args.command == "diff":
-            base_path = Path(args.base)
-            target_path = Path(args.target)
-
-            if not base_path.exists() or not target_path.exists():
-                print("Error: One or both files not found")
-                return 1
-
-            # Simulated diff
-            diff_data = {
-                "added": ["rule.3", "signal.SIGQUIT"],
-                "removed": ["rule.1"],
-                "changed": ["kernel.mode"]
-            }
-
-            if output_format == "json":
-                print(json.dumps({
-                    "base": args.base,
-                    "target": args.target,
-                    "diff": diff_data
-                }, indent=2))
-            else:
-                print(f"Comparing {args.base} -> {args.target}")
-                print(f"\n[green]+ Added:[/green]   {', '.join(diff_data['added'])}")
-                print(f"[red]- Removed:[/red] {', '.join(diff_data['removed'])}")
-                print(f"[yellow]~ Changed:[/yellow] {', '.join(diff_data['changed'])}")
-
-            return 0
-
-        return 0
-    except Exception as e:
-        is_known = isinstance(e, (FileNotFoundError, ValueError, yaml.YAMLError))
-        msg = "A validation or file access error occurred." if is_known else "An internal error occurred during policy management"
-        if output_format == "json":
-            print(json.dumps({"status": "error", "message": msg, "type": "PolicyDataError" if is_known else "InternalError"}, indent=2))
-        else:
-            print(f"Error: {msg}")
-        return 1
-
-    return 0
+    return 2
 
 
 if __name__ == "__main__":

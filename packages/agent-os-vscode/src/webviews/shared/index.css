@@ -1,0 +1,60 @@
+/* Copyright (c) Microsoft Corporation. Licensed under the MIT License. */
+/* Monolith Ledger Design System — VS Code Theme Bridge */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    /* Surface colors — bridge VS Code tokens with Monolith Ledger fallbacks */
+    --ml-bg: var(--vscode-editor-background, #0a0a0f);
+    --ml-surface: var(--vscode-sideBar-background, #1a1a2e);
+    --ml-surface-hover: var(--vscode-list-hoverBackground, #1e1e3a);
+    --ml-border: var(--vscode-panel-border, #2a2a3e);
+
+    /* Accent — electric blue */
+    --ml-accent: #0066ff;
+    --ml-accent-muted: #0044aa;
+
+    /* Semantic colors */
+    --ml-success: var(--vscode-charts-green, #4ec9b0);
+    --ml-warning: var(--vscode-editorWarning-foreground, #cca700);
+    --ml-error: var(--vscode-errorForeground, #f14c4c);
+    --ml-info: var(--vscode-editorInfo-foreground, #75beff);
+
+    /* Text */
+    --ml-text: var(--vscode-foreground, #cccccc);
+    --ml-text-muted: var(--vscode-descriptionForeground, #858585);
+    --ml-text-bright: #ffffff;
+
+    /* Typography */
+    --ml-font: var(--vscode-font-family, 'Segoe UI', system-ui, sans-serif);
+    --ml-font-mono: var(--vscode-editor-font-family, 'Cascadia Code', monospace);
+    --ml-font-size: var(--vscode-font-size, 13px);
+
+    /* Spacing */
+    --ml-space-xs: 4px;
+    --ml-space-sm: 8px;
+    --ml-space-md: 12px;
+    --ml-space-lg: 16px;
+    --ml-space-xl: 24px;
+
+    /* Radius */
+    --ml-radius: 6px;
+    --ml-radius-lg: 10px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--ml-font);
+    font-size: var(--ml-font-size);
+    color: var(--ml-text);
+    background: var(--ml-bg);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}

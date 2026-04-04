@@ -214,9 +214,9 @@
             },
             "retention_days": {
               "type": "integer",
-              "description": "Days to retain conversation audit logs.",
-              "default": 90,
-              "minimum": 1
+              "description": "Days to retain conversation audit logs. EU AI Act Art. 26(6) requires minimum 180 days for high-risk systems.",
+              "default": 180,
+              "minimum": 30
             }
           },
           "additionalProperties": false
