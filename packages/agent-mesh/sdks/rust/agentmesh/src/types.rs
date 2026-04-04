@@ -95,7 +95,7 @@ pub struct AuditFilter {
 }
 
 /// Conflict resolution strategy when multiple policy rules produce different decisions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ConflictResolutionStrategy {
     /// Any deny decision overrides allows.
@@ -103,22 +103,18 @@ pub enum ConflictResolutionStrategy {
     /// Any allow decision overrides denies.
     AllowOverrides,
     /// The candidate with the highest priority wins.
+    #[default]
     PriorityFirstMatch,
     /// The most specific scope wins, with priority as tiebreaker.
     MostSpecificWins,
 }
 
-impl Default for ConflictResolutionStrategy {
-    fn default() -> Self {
-        ConflictResolutionStrategy::PriorityFirstMatch
-    }
-}
-
 /// The scope at which a policy rule applies.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicyScope {
     /// Applies to all tenants and agents.
+    #[default]
     Global,
     /// Applies to a specific tenant.
     Tenant,
@@ -134,12 +130,6 @@ impl PolicyScope {
             PolicyScope::Tenant => 1,
             PolicyScope::Agent => 2,
         }
-    }
-}
-
-impl Default for PolicyScope {
-    fn default() -> Self {
-        PolicyScope::Global
     }
 }
 
@@ -191,12 +181,10 @@ mod tests {
 
     #[test]
     fn test_policy_decision_is_allowed_rate_limited() {
-        assert!(
-            !PolicyDecision::RateLimited {
-                retry_after_secs: 10
-            }
-            .is_allowed()
-        );
+        assert!(!PolicyDecision::RateLimited {
+            retry_after_secs: 10
+        }
+        .is_allowed());
     }
 
     #[test]

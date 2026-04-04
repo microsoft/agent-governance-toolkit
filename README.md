@@ -55,6 +55,16 @@ npm install @agentmesh/sdk
 dotnet add package Microsoft.AgentGovernance
 ```
 
+**Rust** (full SDK)
+```bash
+cargo add agentmesh
+```
+
+**Rust** (standalone MCP surface)
+```bash
+cargo add agentmesh-mcp
+```
+
 <details>
 <summary>Install individual Python packages</summary>
 
@@ -74,7 +84,8 @@ pip install agentmesh-lightning        # RL training governance
 - **[Quick Start](QUICKSTART.md)** — Get from zero to governed agents in 10 minutes (Python · TypeScript · .NET · Rust · Go)
 - **[TypeScript SDK](packages/agent-mesh/sdks/typescript/README.md)** — npm package with identity, trust, policy, and audit
 - **[.NET SDK](packages/agent-governance-dotnet/README.md)** — NuGet package with full OWASP coverage
-- **[Rust SDK](packages/agent-mesh/sdks/rust/agentmesh/README.md)** — crates.io crate with policy, trust, audit, and Ed25519 identity
+- **[Rust SDK](packages/agent-mesh/sdks/rust/agentmesh/README.md)** — full crates.io crate with policy, trust, audit, identity, and MCP governance primitives
+- **[Rust MCP SDK](packages/agent-mesh/sdks/rust/agentmesh-mcp/README.md)** — standalone crates.io crate with MCP governance and security primitives
 - **[Go SDK](packages/agent-mesh/sdks/go/README.md)** — Go module with policy, trust, audit, and identity
 - **[Tutorials](docs/tutorials/)** — Step-by-step guides for policy, identity, integrations, compliance, SRE, and sandboxing
 - **[Azure Deployment](docs/deployment/README.md)** — AKS, Azure AI Foundry, Container Apps, OpenClaw sidecar
@@ -275,6 +286,7 @@ Three evaluation modes per backend: **embedded engine** (cedarpy/opa CLI), **rem
 | **TypeScript** | [`@agentmesh/sdk`](packages/agent-mesh/sdks/typescript/) | `npm install @agentmesh/sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 | **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
+| **Rust MCP** | [`agentmesh-mcp`](https://crates.io/crates/agentmesh-mcp) | `cargo add agentmesh-mcp` |
 | **Go** | [`agentmesh`](packages/agent-mesh/sdks/go/) | `go get github.com/microsoft/agent-governance-toolkit/sdks/go` |
 
 ### Python Packages (PyPI)

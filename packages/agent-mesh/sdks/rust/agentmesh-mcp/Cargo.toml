@@ -1,25 +1,23 @@
 [package]
-name = "agentmesh"
+name = "agentmesh-mcp"
 version.workspace = true
 edition.workspace = true
-description = "Public Preview — Rust SDK for the AgentMesh governance framework (policy, trust, audit, identity)"
+description = "Public Preview — standalone MCP governance and security primitives for AgentMesh"
 license.workspace = true
 repository.workspace = true
-documentation = "https://docs.rs/agentmesh"
+documentation = "https://docs.rs/agentmesh-mcp"
 readme = "README.md"
-keywords = ["agent", "governance", "trust", "policy", "audit"]
+keywords = ["agent", "mcp", "governance", "security", "agentmesh"]
 categories = ["authentication", "cryptography"]
 rust-version.workspace = true
 
 [dependencies]
 base64.workspace = true
-ed25519-dalek.workspace = true
 hmac.workspace = true
 rand.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde_yaml.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 
