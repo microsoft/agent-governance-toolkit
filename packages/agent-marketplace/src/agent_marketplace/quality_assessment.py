@@ -13,6 +13,8 @@ from typing import Any
 
 
 class AssessmentDimension(str, Enum):
+    """Dimensions for multi-faceted plugin quality evaluation."""
+
     SECURITY_POSTURE = "security_posture"
     DOCUMENTATION = "documentation"
     OPERATIONAL_READINESS = "operational_readiness"
@@ -22,6 +24,8 @@ class AssessmentDimension(str, Enum):
 
 
 class AssessmentGrade(str, Enum):
+    """Letter grades for quality assessment results."""
+
     A = "A"    # 90-100: Excellent
     B = "B"    # 75-89: Good
     C = "C"    # 60-74: Adequate
