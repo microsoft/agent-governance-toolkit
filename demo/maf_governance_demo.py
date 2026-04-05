@@ -323,7 +323,7 @@ def _gemini_call(genai_module: Any, model: str, messages: list[dict], **kwargs: 
             model, tools=gemini_tools, system_instruction=system_instruction
         )
 
-    max_tokens = kwargs.get("max_tokens", 200)
+    max_tokens = kwargs.get("max_tokens", 1024)
     response = gmodel.generate_content(
         contents,
         generation_config=genai.types.GenerationConfig(max_output_tokens=max_tokens),

@@ -15,14 +15,23 @@ rules:
     priority: 100
     message: "Access to internal resources is restricted by governance policy"
 
-  - name: "block-secrets-access"
+  - name: "block-system-paths"
+    condition:
+      field: "message"
+      operator: "matches"
+      value: "(/etc/|C:/Windows|system32|/root/)"
+    action: "deny"
+    priority: 150
+    message: "Access to system files is restricted by security governance"
+
+  - name: "block-env-access"
     condition:
       field: "message"
       operator: "contains"
-      value: "secrets"
+      value: ".env"
     action: "deny"
-    priority: 100
-    message: "Access to secret resources is restricted by governance policy"
+    priority: 150
+    message: "Environment variable files are strictly prohibited"
 
   - name: "allow-web-search"
     condition:
