@@ -361,7 +361,7 @@ from agent_os.content_governance import (
 from agent_os.execution_context_policy import (
     ContextualPolicyEngine,
     EnforcementLevel,
-    ExecutionContext,
+    ExecutionContext as ContextualExecutionContext,
 )
 
 from agent_os.github_enterprise import (
