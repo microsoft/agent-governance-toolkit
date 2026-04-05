@@ -36,6 +36,7 @@ print("=" * 60)
 print("\n--- Part 1: max_tool_calls (policy-level cap) ---\n")
 
 policy = PolicyDocument.from_yaml(EXAMPLES_DIR / "03_rate_limit_policy.yaml")
+# In Chapter 1 we created the evaluator first, then added the policy; here we do both in one step.
 evaluator = PolicyEvaluator(policies=[policy])
 max_calls = policy.defaults.max_tool_calls
 
