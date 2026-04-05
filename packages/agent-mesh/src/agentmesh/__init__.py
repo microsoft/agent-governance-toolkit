@@ -143,4 +143,16 @@ __all__ = [
     # Unified Client
     "AgentMeshClient",
     "GovernanceResult",
+
+    # Trust Types (shared across integrations)
+    "AgentProfile",
+    "TrustRecord",
+    "TrustTracker",
 ]
+
+# Trust types (shared across integrations)
+from agentmesh.trust_types import (
+    AgentProfile,
+    TrustRecord,
+    TrustTracker,
+)
