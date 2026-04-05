@@ -85,6 +85,13 @@ ALL_EXPORTS = [
     "RateLimitExceeded",
     "KillSwitch",
     "KillResult",
+    # Deployment Runtime
+    "DeploymentResult",
+    "DeploymentStatus",
+    "DeploymentTarget",
+    "DockerDeployer",
+    "GovernanceConfig",
+    "KubernetesDeployer",
 ]
 
 
