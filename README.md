@@ -1,4 +1,4 @@
-🌍 [English](/README.md) | [简体中文](./docs/i18n/README.zh-CN.md)
+🌍 [English](/README.md) | [日本語](./docs/i18n/README.ja.md) | [简体中文](./docs/i18n/README.zh-CN.md)
 
 ![Agent Governance Toolkit](docs/assets/readme-banner.svg)
 
@@ -32,7 +32,7 @@
 > application layer. For model-level safety, see
 > [Azure AI Content Safety](https://learn.microsoft.com/azure/ai-services/content-safety/).
 
-Runtimegovernance for AI agents — the only toolkit covering all **10 OWASP Agentic risks** with **9,500+ tests**. Governs what agents *do*, not just what they say — deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE — **Python · TypeScript · .NET · Rust · Go**
+Runtime governance for AI agents — the only toolkit covering all **10 OWASP Agentic risks** with **9,500+ tests**. Governs what agents *do*, not just what they say — deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE — **Python · TypeScript · .NET · Rust · Go**
 
 > **Works with any stack** — AWS Bedrock, Google ADK, Azure AI, LangChain, CrewAI, AutoGen, OpenAI Agents, LlamaIndex, and more. Pure `pip install` with zero vendor lock-in.
 
