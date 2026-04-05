@@ -144,10 +144,19 @@ class TestKillSwitch:
         ks.kill("agent-1", "sess-1", KillReason.MANUAL)
         assert "agent-1" not in ks._substitutes.get("sess-1", [])
 
-    def test_find_substitute_always_none(self):
-        """Public preview: no substitute finding."""
+    def test_find_substitute_returns_registered(self):
+        """Substitute lookup returns a registered agent."""
         ks = KillSwitch()
         ks.register_substitute("s1", "backup-agent")
+        assert ks._find_substitute("s1", "agent-1") == "backup-agent"
+
+    def test_find_substitute_excludes_killed_agent(self):
+        ks = KillSwitch()
+        ks.register_substitute("s1", "agent-1")
+        assert ks._find_substitute("s1", "agent-1") is None
+
+    def test_find_substitute_no_session(self):
+        ks = KillSwitch()
         assert ks._find_substitute("s1", "agent-1") is None
 
     def test_session_timeout_reason(self):
@@ -155,3 +164,73 @@ class TestKillSwitch:
         result = ks.kill("a1", "s1", KillReason.SESSION_TIMEOUT)
         assert result.reason == KillReason.SESSION_TIMEOUT
         assert ks.total_kills == 1
+
+    # ── Agent process registry ─────────────────────────────────────
+
+    def test_register_and_unregister_agent(self):
+        ks = KillSwitch()
+        ks.register_agent("agent-1", lambda: None)
+        assert "agent-1" in ks._agents
+        ks.unregister_agent("agent-1")
+        assert "agent-1" not in ks._agents
+
+    def test_unregister_nonexistent_agent(self):
+        ks = KillSwitch()
+        ks.unregister_agent("nonexistent")  # Should not raise
+
+    def test_kill_unregisters_agent(self):
+        ks = KillSwitch()
+        ks.register_agent("agent-1", lambda: None)
+        ks.kill("agent-1", "sess-1", KillReason.MANUAL)
+        assert "agent-1" not in ks._agents
+
+    # ── Termination callback ───────────────────────────────────────
+
+    def test_kill_with_registered_callback_terminates(self):
+        """Registered termination callback is called and terminated=True."""
+        ks = KillSwitch()
+        terminated_agents: list[str] = []
+        ks.register_agent("agent-1", lambda: terminated_agents.append("agent-1"))
+        result = ks.kill("agent-1", "sess-1", KillReason.MANUAL)
+        assert result.terminated is True
+        assert "agent-1" in terminated_agents
+
+    def test_kill_without_registered_callback(self):
+        """Kill without registered callback sets terminated=False."""
+        ks = KillSwitch()
+        result = ks.kill("agent-1", "sess-1", KillReason.MANUAL)
+        assert result.terminated is False
+
+    # ── Handoff vs compensation ────────────────────────────────────
+
+    def test_kill_with_substitute_hands_off_steps(self):
+        """Steps are handed off to substitute when available."""
+        ks = KillSwitch()
+        ks.register_substitute("sess-1", "backup-agent")
+        steps = [
+            {"step_id": "s1", "saga_id": "saga-1"},
+            {"step_id": "s2", "saga_id": "saga-1"},
+        ]
+        result = ks.kill(
+            "agent-1", "sess-1", KillReason.RING_BREACH, in_flight_steps=steps
+        )
+        assert result.handoff_success_count == 2
+        assert all(h.status == HandoffStatus.HANDED_OFF for h in result.handoffs)
+        assert all(h.to_agent == "backup-agent" for h in result.handoffs)
+        assert result.compensation_triggered is False
+
+    def test_kill_without_substitute_compensates_steps(self):
+        """Steps are compensated when no substitute is available."""
+        ks = KillSwitch()
+        steps = [{"step_id": "s1", "saga_id": "saga-1"}]
+        result = ks.kill("agent-1", "sess-1", KillReason.MANUAL, in_flight_steps=steps)
+        assert result.handoff_success_count == 0
+        assert all(h.status == HandoffStatus.COMPENSATED for h in result.handoffs)
+        assert result.compensation_triggered is True
+
+    def test_total_handoffs_counts_successes(self):
+        """total_handoffs sums handoff_success_count across kills."""
+        ks = KillSwitch()
+        ks.register_substitute("s1", "backup")
+        ks.kill("a1", "s1", KillReason.MANUAL, [{"step_id": "s1", "saga_id": "sg1"}])
+        assert ks.total_handoffs == 1

@@ -13,6 +13,8 @@ from typing import Any
 
 
 class ComponentType(str, Enum):
+    """Type of component within a workflow bundle."""
+
     AGENT = "agent"
     SKILL = "skill"
     TOOL = "tool"
