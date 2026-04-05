@@ -33,5 +33,5 @@ jobs:
         if: steps.changed-files.outputs.any_changed == 'true'
         uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
         with:
-          args: --verbose --no-progress --exclude-loopback --input "${{ runner.temp }}/changed-md-files.txt"
+          args: --verbose --no-progress --exclude-loopback ${{ steps.changed-files.outputs.all_changed_files }}
           fail: true
