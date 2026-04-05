@@ -136,7 +136,6 @@ class EUAIActRiskClassifier:
 
         triggers: List[str] = []
         exemptions_applied: List[str] = []
-        profiling_override = False
 
         # 1. Article 5 -- Prohibited practices (always checked first)
         if domain in self._unacceptable:
@@ -172,7 +171,6 @@ class EUAIActRiskClassifier:
             if valid_exemptions:
                 # 3b. Profiling override: exemptions do NOT apply when profiling
                 if profile.involves_profiling:
-                    profiling_override = True
                     triggers.append(
                         f"Domain '{profile.domain}' listed in Annex III"
                     )
@@ -218,7 +216,7 @@ class EUAIActRiskClassifier:
         # 5. Article 50 -- LIMITED transparency obligations
         if domain in self._limited or caps & self._limited:
             triggers.append(
-                f"Transparency obligations under Article 50"
+                "Transparency obligations under Article 50"
             )
             return ClassificationResult(
                 risk_level=RiskLevel.LIMITED,
