@@ -30,7 +30,7 @@ review, and version-control — not buried inside application logic.
 
 ## Step 1: Write the YAML policy
 
-Create a file called `my-first-policy.yaml`:
+Create a file called `01_first_policy.yaml`:
 
 ```yaml
 version: "1.0"

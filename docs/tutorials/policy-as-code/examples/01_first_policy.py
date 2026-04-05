@@ -20,12 +20,13 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "packages" / "agent-os" / "src"))
 
 from agent_os.policies import PolicyEvaluator
+from agent_os.policies.schema import PolicyDocument
 
 # ── 1. Load the policy ──────────────────────────────────────────────────
 
 evaluator = PolicyEvaluator()
 policy_path = Path(__file__).parent / "01_first_policy.yaml"
-evaluator.load_policies(policy_path.parent)
+evaluator.policies.append(PolicyDocument.from_yaml(policy_path))
 
 # ── 2. Simulate three agent actions ─────────────────────────────────────
 

@@ -3,7 +3,7 @@
 A step-by-step guide to governing AI agents with declarative policies, progressing
 from basic allow/deny rules to production-grade policy management.
 
-**Prerequisites:** Python 3.10+, basic YAML and Python familiarity.
+**Prerequisites:** Python 3.9+, basic YAML and Python familiarity.
 
 ## Installation
 

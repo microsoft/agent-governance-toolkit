@@ -178,5 +178,5 @@ a real deployment, you might want relaxed rules while testing and strict rules
 in production — that's **conditional policies**.
 
 **Previous:** [Chapter 2 — Capability Scoping](02-capability-scoping.md)
-**Next:** [Chapter 4 — Conditional Policies](04-conditional-policies.md) —
+**Next:** Chapter 4 — Conditional Policies (coming soon) —
 environment-aware rules that change between dev and production.
