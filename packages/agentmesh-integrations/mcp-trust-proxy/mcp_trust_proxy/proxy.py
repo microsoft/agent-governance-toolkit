@@ -16,9 +16,13 @@ Can be used as middleware in front of any MCP server.
 
 from __future__ import annotations
 
+import logging
+import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -61,6 +65,8 @@ class AuthResult:
         }
 
 
+# Note: This class is not thread-safe. For concurrent use, wrap
+# authorize() calls with a threading.Lock.
 class TrustProxy:
     """
     MCP trust proxy — intercepts tool calls and verifies agent identity.
@@ -80,19 +86,63 @@ class TrustProxy:
             return {"error": result.reason}
     """
 
+    INJECTION_PATTERNS = {
+        "direct_override": re.compile(
+            r"ignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions",
+            re.IGNORECASE,
+        ),
+        "roleplay_jailbreak": re.compile(
+            r"\b(?:you are now|act as|pretend to be)\s+(?:a\s+|an\s+|the\s+)?(?:system administrator|admin|administrator|root|system|superuser|sudo)\b(?!\s+\w)",
+            re.IGNORECASE,
+        ),
+        "system_prompt_exfiltration": re.compile(
+            r"(?:reveal|show|output|print)\s+(?:the\s+|your\s+)?(?:system prompt|system instructions|system rules|hidden (?:instructions|rules))\b",
+            re.IGNORECASE,
+        ),
+        "delimiter_attack": re.compile(
+            r"(?:^|\n)###(?:\s|$)|---END---|\[SYSTEM\]|<\|im_start\|>",
+            re.IGNORECASE,
+        ),
+    }
+
     def __init__(
         self,
         default_min_trust: int = 100,
         tool_policies: Optional[Dict[str, ToolPolicy]] = None,
         blocked_dids: Optional[List[str]] = None,
         require_did: bool = True,
+        scan_arguments: bool = True,
     ):
         self.default_min_trust = default_min_trust
         self._tool_policies: Dict[str, ToolPolicy] = dict(tool_policies or {})
-        self._blocked_dids: set = set(blocked_dids or [])
+        self._blocked_dids: set[str] = set(blocked_dids or [])
         self.require_did = require_did
+        self.scan_arguments = scan_arguments
         self._rate_tracker: Dict[str, Dict[str, List[float]]] = {}  # {tool: {did: [timestamps]}}
         self._audit_log: List[AuthResult] = []
+
+    @classmethod
+    def _iter_string_values(cls, value: Any) -> Iterator[str]:
+        if isinstance(value, str):
+            yield value
+            return
+
+        if isinstance(value, dict):
+            for nested_value in value.values():
+                yield from cls._iter_string_values(nested_value)
+            return
+
+        if isinstance(value, (list, tuple, set)):
+            for nested_value in value:
+                yield from cls._iter_string_values(nested_value)
+
+    @classmethod
+    def _scan_tool_args(cls, tool_args: Dict[str, Any]) -> Optional[str]:
+        for value in cls._iter_string_values(tool_args):
+            for pattern_name, pattern in cls.INJECTION_PATTERNS.items():
+                if pattern.search(value):
+                    return pattern_name
+        return None
 
     def set_tool_policy(self, tool_name: str, policy: ToolPolicy) -> None:
         """Set or update policy for a specific tool."""
@@ -123,6 +173,7 @@ class TrustProxy:
         3. Tool is not blocked
         4. Trust score meets threshold
         5. Agent has required capabilities
+        5.5. Tool arguments do not contain prompt injection patterns
         6. Rate limit not exceeded
         """
         caps = agent_capabilities or []
@@ -165,6 +216,16 @@ class TrustProxy:
             missing = [c for c in policy.required_capabilities if c not in caps]
             if missing:
                 return deny(f"Missing capabilities for '{tool_name}': {missing}")
+
+        # 5.5. Tool argument injection scanning
+        if self.scan_arguments and tool_args:
+            try:
+                pattern_name = self._scan_tool_args(tool_args)
+                if pattern_name:
+                    return deny(f"Injection pattern detected in tool arguments: {pattern_name}")
+            except Exception:
+                _logger.warning("Argument scan error", exc_info=True)
+                return deny("Argument scanning failed — denied by fail-closed policy")
 
         # 6. Rate limit
         if policy and policy.max_calls_per_minute > 0 and agent_did:
