@@ -85,10 +85,10 @@ Post-pilot analysis revealed: shared identity preventing accountability, unrestr
 ┌──────────────────────────────────────────────────────────────────────┐
 │                    CUSTOMER-FACING CHANNELS                          │
 │                                                                      │
-│  Website Chat    Email    Twitter/X    Instagram DM      │
-│  SMS Support    Phone → Transcription    TikTok Mentions    │
+│  Website Chat    Email    Twitter/X    Instagram DM                  │
+│  SMS Support    Phone → Transcription    TikTok Mentions             │
 │                                                                      │
-│  [Live customers typing, screenshotting, posting publicly]          │
+│  [Live customers typing, screenshotting, posting publicly]           │
 └──────────────────────────┬───────────────────────────────────────────┘
                            │ Real-time, high-volume, emotional
                            ▼
@@ -102,10 +102,10 @@ Post-pilot analysis revealed: shared identity preventing accountability, unrestr
         └──────────────────┬───────────────────────────┘
                            │
                            ▼
-        ┌──────────────────────────────────────────────────────┐
-        │            AGT GOVERNANCE LAYER                      │
-        │    (The firewall between agents and customer data)   │
-        │                                                      │
+        ┌─────────────────────────────────────────────────────┐
+        │            AGT GOVERNANCE LAYER                     │
+        │    (The firewall between agents and customer data)  │
+        │                                                     │
         │  ┌────────────────────┐  ┌─────────────────────┐    │
         │  │   Agent OS         │  │   AgentMesh         │    │
         │  │   Policy Engine    │  │   Identity & Trust  │    │
@@ -114,18 +114,18 @@ Post-pilot analysis revealed: shared identity preventing accountability, unrestr
         │  │   • GDPR controls  │  │   • Trust decay     │    │
         │  │   <0.06ms latency  │  │   • Viral risk flags│    │
         │  └────────────────────┘  └─────────────────────┘    │
-        │                                                      │
+        │                                                     │
         │  ┌─────────────────────────────────────────────┐    │
         │  │   Agent Runtime - Execution Sandboxes       │    │
         │  │   Ring 0: System    Ring 1: Trusted ($$)    │    │
         │  │   Ring 2: Standard  Ring 3: Untrusted       │    │
         │  │   [Containers isolated by privilege level]  │    │
         │  └─────────────────────────────────────────────┘    │
-        └────────────────────┬─────────────────────────────────┘
-                             │
-        ┌────────────────────┴─────────────────────────────┐
-        │                                                  │
-        ▼                  ▼                ▼              ▼
+        └─────────────────────┬───────────────────────────────┘
+                              │
+        ┌─────────────────┬───┴─────────────┬───────────────┐
+        │                 │                 │               │
+        ▼                 ▼                 ▼               ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
 │ Sentiment    │  │ Inquiry      │  │ Fraud        │  │ GDPR         │
 │ Analysis     │  │ Routing      │  │ Detection    │  │ Compliance   │
@@ -140,15 +140,15 @@ Post-pilot analysis revealed: shared identity preventing accountability, unrestr
 │ • Viral risk │  │ • Multi-lang │  │ • Fraud rings│  │   deletion   │
 │ • Social     │  │ • Confidence │  │ • Graph      │  │ • Multi-sys  │
 │   influence  │  │   scoring    │  │   analysis   │  │   tracking   │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │(monitors all)    │                 │(monitors all)    │
-       │                  │                 │                  │
-       └──────────────────┼─────────────────┘                  │
-                          │                                    │
-                          ▼                                    │
-        ┌─────────────────────────────────────────┐           │
-        │   SPECIALIST CUSTOMER SERVICE AGENTS    │           │
-        │                                         │           │
+└──────┬───────┘  └───────┬──────┘  └──────┬───────┘  └──────┬───────┘
+       │(monitors all)    │                │(monitors all)   │
+       │                  │                │                 │
+       └──────────────────┼────────────────┘                 │
+                          │                                  │
+                          ▼                                  │
+        ┌─────────────────────────────────────────┐          │
+        │   SPECIALIST CUSTOMER SERVICE AGENTS    │          │
+        │                                         │          │
         │  ┌──────────┐  ┌──────────┐  ┌────────┴┐           │
         │  │ Order    │  │ Returns &│  │ Product │           │
         │  │ Status   │  │ Refunds  │  │ Q&A     │           │
@@ -167,9 +167,9 @@ Post-pilot analysis revealed: shared identity preventing accountability, unrestr
                 │             │             │
                 └─────────────┼─────────────┘
                               ▼
-        ┌─────────────────────────────────────────────────────┐
-        │         E-COMMERCE PLATFORM INTEGRATIONS            │
-        │                                                     │
+        ┌────────────────────────────────────────────────────┐
+        │         E-COMMERCE PLATFORM INTEGRATIONS           │
+        │                                                    │
         │  ┌──────────────┐  ┌──────────────┐  ┌──────────┐  │
         │  │   Shopify    │  │    Stripe    │  │ Shipping │  │
         │  │              │  │              │  │ Carriers │  │
@@ -185,18 +185,18 @@ Post-pilot analysis revealed: shared identity preventing accountability, unrestr
         │  │  • Segment (events)  • Google Analytics      │  │
         │  │  [GDPR deletion must cover all these]        │  │
         │  └──────────────────────────────────────────────┘  │
-        └─────────────────────┬───────────────────────────────┘
+        └─────────────────────┬──────────────────────────────┘
                               │
                               ▼
         ┌─────────────────────────────────────────────────────┐
         │            AUDIT & SOCIAL LISTENING                 │
         │                                                     │
-        │  Merkle-chained append-only logs (GDPR Art. 30) │
-        │  GCP WORM storage (6-year retention)             │
-        │  Customer interaction transcripts                │
-        │  Social media monitoring (Twitter, TikTok, IG)   │
-        │  Viral risk alerts (follower count, sentiment)   │
-        │  CSAT tracking per agent (quality feedback loop) │
+        │  Merkle-chained append-only logs (GDPR Art. 30)     │
+        │  GCP WORM storage (6-year retention)                │
+        │  Customer interaction transcripts                   │
+        │  Social media monitoring (Twitter, TikTok, IG)      │
+        │  Viral risk alerts (follower count, sentiment)      │
+        │  CSAT tracking per agent (quality feedback loop)    │
         └─────────────────────────────────────────────────────┘
 ```
 
