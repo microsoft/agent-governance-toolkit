@@ -6,11 +6,12 @@ Licensed under the MIT License.
 # OWASP Agentic Top 10 (2026) — Reference Architecture for Agent Governance Toolkit
 
 **Mapping Version:** 1.0  
-**OWASP Reference:** [OWASP Agentic Security Initiative Top 10](https://genai.owasp.org/)  
+**Toolkit Version:** v3.0.0  
+**OWASP Reference:** [OWASP Agentic Security Initiative Top 10](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)  
 **Assessment Basis:** repository code in this checkout only  
 **Last Updated:** April 2026
 
-> **Scope note:** This document maps the 2026 **ASI01–ASI10** risks to concrete AGT implementation patterns that exist in code today. Where a package still exposes legacy `ATxx` identifiers instead of `ASIxx`, the mapping below translates the implementation by behavior rather than by symbol name (`packages\agentmesh-integrations\copilot-governance\src\owasp.ts:21-65`).
+> **Scope note:** This document maps the 2026 **ASI01–ASI10** risks to concrete AGT implementation patterns that exist in code today. Where a package still exposes LLM Top 10 `ATxx` identifiers rather than Agentic `ASIxx` IDs, the mapping below translates the implementation by behavioral overlap rather than by symbol name (`packages\agentmesh-integrations\copilot-governance\src\owasp.ts:21-65`).
 
 ---
 
@@ -21,11 +22,11 @@ AGT has concrete implementation patterns for every OWASP Agentic Top 10 risk, bu
 | Risk | Coverage | Primary AGT pattern | Why it is not full |
 |---|---|---|---|
 | ASI01 Agent Goal Hijack | Partial | Prompt-injection detection, MCP description scanning, proxy sanitization, memory-write screening (`packages\agent-os\src\agent_os\prompt_injection.py:189-258,382-415,546-681`; `packages\agent-os\src\agent_os\mcp_security.py:463-603`; `packages\agent-mesh\packages\mcp-proxy\src\proxy.ts:147-165`; `packages\agent-mesh\packages\mcp-proxy\src\sanitizer.ts:38-49,88-100,146-156`; `packages\agent-os\src\agent_os\memory_guard.py:143-151,186-242`) | `BaseIntegration.pre_execute()` does not automatically invoke the prompt-injection detector; outside MCP-specific paths, enforcement is still policy-pattern based (`packages\agent-os\src\agent_os\integrations\base.py:927-975`). |
-| ASI02 Tool Misuse & Exploitation | Partial | Proxy policy enforcement, tool allow/deny lists, trust-gated tool calls, human-approval flag (`packages\agent-mesh\packages\mcp-proxy\src\policy.ts:14-43,53-94,142-238`; `packages\agent-mesh\packages\mcp-proxy\src\proxy.ts:147-206`; `packages\agentmesh-integrations\mcp-trust-proxy\mcp_trust_proxy\proxy.py:109-189`; `packages\agent-os\src\agent_os\integrations\base.py:665-711,927-975`) | Controls are split across packages and runtimes; there is no single default tool-governance pipeline for every adapter (`packages\agent-mesh\packages\mcp-proxy\src\proxy.ts:147-206`; `packages\agentmesh-integrations\mcp-trust-proxy\mcp_trust_proxy\proxy.py:109-189`; `packages\agent-os\src\agent_os\integrations\base.py:665-711,927-975`). |
-| ASI03 Identity & Privilege Abuse | Partial | DID issuance, trust scores, capability checks, delegation checks, A2A allow/deny lists (`packages\agent-mesh\packages\mcp-trust-server\src\mcp_trust_server\server.py:128-150,175-289,323-333`; `packages\agentmesh-integrations\mcp-trust-proxy\mcp_trust_proxy\proxy.py:141-189`; `packages\agentmesh-integrations\a2a-protocol\a2a_agentmesh\trust_gate.py:67-149`) | Delegation validation is trust-threshold based, but the A2A envelope itself does not cryptographically bind the trust metadata end-to-end (`packages\agentmesh-integrations\a2a-protocol\a2a_agentmesh\task.py:196-205`). |
+| ASI02 Tool Misuse and Exploitation | Partial | Proxy policy enforcement, tool allow/deny lists, trust-gated tool calls, human-approval flag (`packages\agent-mesh\packages\mcp-proxy\src\policy.ts:14-43,53-94,142-238`; `packages\agent-mesh\packages\mcp-proxy\src\proxy.ts:147-206`; `packages\agentmesh-integrations\mcp-trust-proxy\mcp_trust_proxy\proxy.py:109-189`; `packages\agent-os\src\agent_os\integrations\base.py:665-711,927-975`) | Controls are split across packages and runtimes; there is no single default tool-governance pipeline for every adapter (`packages\agent-mesh\packages\mcp-proxy\src\proxy.ts:147-206`; `packages\agentmesh-integrations\mcp-trust-proxy\mcp_trust_proxy\proxy.py:109-189`; `packages\agent-os\src\agent_os\integrations\base.py:665-711,927-975`). |
+| ASI03 Identity and Privilege Abuse | Partial | DID issuance, trust scores, capability checks, delegation checks, A2A allow/deny lists (`packages\agent-mesh\packages\mcp-trust-server\src\mcp_trust_server\server.py:128-150,175-289,323-333`; `packages\agentmesh-integrations\mcp-trust-proxy\mcp_trust_proxy\proxy.py:141-189`; `packages\agentmesh-integrations\a2a-protocol\a2a_agentmesh\trust_gate.py:67-149`) | Delegation validation is trust-threshold based, but the A2A envelope itself does not cryptographically bind the trust metadata end-to-end (`packages\agentmesh-integrations\a2a-protocol\a2a_agentmesh\task.py:196-205`). |
 | ASI04 Agentic Supply Chain Vulnerabilities | Partial | Signed plugin manifests, trusted-key verification, TOCTOU re-verification, content hashing, rug-pull detection (`packages\agent-mesh\src\agentmesh\marketplace\manifest.py:36-125`; `packages\agent-mesh\src\agentmesh\marketplace\signing.py:22-85`; `packages\agent-mesh\src\agentmesh\marketplace\installer.py:69-141,210-221`; `packages\agent-os\src\agent_os\integrations\base.py:714-782`; `packages\agent-os\src\agent_os\mcp_security.py:367-454`) | Verification is strongest for plugin and tool paths; it is not a uniform verification pipeline for every model, dependency, or bundle in the agent stack (`packages\agent-mesh\src\agentmesh\marketplace\installer.py:69-141`; `packages\agent-os\src\agent_os\integrations\base.py:714-782`; `packages\agent-os\src\agent_os\mcp_security.py:367-454`). |
 | ASI05 Unexpected Code Execution (RCE) | Partial | Python sandboxing, AST inspection, blocked imports/builtins, plugin import sandbox, command-injection filtering (`packages\agent-os\src\agent_os\sandbox.py:32-47,68-97,121-175,177-260`; `packages\agent-mesh\src\agentmesh\marketplace\installer.py:28-37,210-221`; `packages\agent-mesh\packages\mcp-proxy\src\sanitizer.ts:30-36,74-85,133-143`) | The default sandbox is language/runtime-local; the code itself warns the built-in rules are sample starting points rather than a complete isolation boundary (`packages\agent-os\src\agent_os\sandbox.py:26-30`). |
-| ASI06 Memory & Context Poisoning | Partial | Memory-write validation, hash integrity, scan-on-read, audit trail (`packages\agent-os\src\agent_os\memory_guard.py:3-23,60-89,186-299`) | `MemoryGuard` is a strong standalone control, but it is not auto-wired into every framework adapter or external RAG store path (`packages\agent-os\src\agent_os\memory_guard.py:186-299`; `packages\agent-os\src\agent_os\integrations\base.py:927-1038`). |
+| ASI06 Memory and Context Poisoning | Partial | Memory-write validation, hash integrity, scan-on-read, audit trail (`packages\agent-os\src\agent_os\memory_guard.py:3-23,60-89,186-299`) | `MemoryGuard` is a strong standalone control, but it is not auto-wired into every framework adapter or external RAG store path (`packages\agent-os\src\agent_os\memory_guard.py:186-299`; `packages\agent-os\src\agent_os\integrations\base.py:927-1038`). |
 | ASI07 Insecure Inter-Agent Communication | Partial | Handshake signing, trust-gated A2A requests, DID/blocklist enforcement, trust metadata on task envelopes (`packages\agent-mesh\packages\mcp-trust-server\src\mcp_trust_server\server.py:128-150,218-289`; `packages\agentmesh-integrations\a2a-protocol\a2a_agentmesh\trust_gate.py:67-149`; `packages\agentmesh-integrations\a2a-protocol\a2a_agentmesh\task.py:57-78,184-205`) | Integrity and trust checks exist, but message confidentiality and signed envelope transport are not enforced in the A2A adapter itself (`packages\agentmesh-integrations\a2a-protocol\a2a_agentmesh\task.py:184-205`; `packages\agent-mesh\packages\mcp-trust-server\src\mcp_trust_server\server.py:218-253`). |
 | ASI08 Cascading Failures | Partial | Per-agent circuit breakers, cascade detector, backpressure, conversation loop breaking (`packages\agent-sre\src\agent_sre\cascade\circuit_breaker.py:22-37,90-220,223-256`; `packages\agent-os\src\agent_os\integrations\base.py:803-859`; `packages\agent-os\src\agent_os\integrations\conversation_guardian.py:713-860`) | The resilience primitives exist, but they are not automatically composed into every multi-agent path by default (`packages\agent-sre\src\agent_sre\cascade\circuit_breaker.py:90-256`; `packages\agent-os\src\agent_os\integrations\base.py:803-859`; `packages\agent-os\src\agent_os\integrations\maf_adapter.py:102-524`). |
 | ASI09 Human-Agent Trust Exploitation | Partial | Tamper-evident audit logs, approval gating, confidence threshold, trust-oriented review rules (`packages\agent-mesh\packages\mcp-proxy\src\audit.ts:27-123`; `packages\agent-os\src\agent_os\integrations\base.py:94-105,158-163,958-973`; `packages\agent-os\src\agent_os\integrations\maf_adapter.py:326-401`; `packages\agentmesh-integrations\copilot-governance\src\reviewer.ts:99-125`) | The implemented defenses in this checkout stop at approval, confidence, and audit, rather than a dedicated provenance or fact-verification stage (`packages\agent-os\src\agent_os\integrations\base.py:958-973`; `packages\agent-mesh\packages\mcp-proxy\src\audit.ts:27-123`; `packages\agentmesh-integrations\copilot-governance\src\reviewer.ts:99-125`). |
@@ -86,7 +87,7 @@ AGT has real preventive controls at the input, MCP metadata, and memory-ingest b
 
 ---
 
-### ASI02: Tool Misuse & Exploitation
+### ASI02: Tool Misuse and Exploitation
 
 **Risk description:** Agents are tricked into using tools in harmful or unintended ways.
 
@@ -121,7 +122,7 @@ The control set is substantial, but it is distributed across multiple packages a
 
 ---
 
-### ASI03: Identity & Privilege Abuse
+### ASI03: Identity and Privilege Abuse
 
 **Risk description:** Agents operate with excessive permissions or impersonate other agents/users.
 
@@ -226,7 +227,7 @@ AGT has meaningful RCE defenses, but they are not the same as a hardened VM/cont
 
 ---
 
-### ASI06: Memory & Context Poisoning
+### ASI06: Memory and Context Poisoning
 
 **Risk description:** Adversaries manipulate agent memory, RAG stores, or conversation context.
 
@@ -354,7 +355,7 @@ AGT helps humans mistrust blindly by requiring approval, capturing tamper-eviden
 
 **Implementation evidence**
 
-- `packages\agent-mesh\packages\mcp-proxy\src\audit.ts:64-98` chains each audit entry hash to the previous entry for tamper evidence.
+- `packages\agent-mesh\packages\mcp-proxy\src\audit.ts:64-98` chains each audit entry hash to the previous entry for tamper evidence. (Note: the hash computation is correctly chained, but a pre-existing serialization bug causes the output `previoushash` field to equal `entryhash`; a verifier must recompute hashes rather than relying on the serialized back-reference.)
 - `packages\agent-os\src\agent_os\integrations\base.py:958-973` can stop execution solely because human approval or confidence requirements are not satisfied.
 
 ---
