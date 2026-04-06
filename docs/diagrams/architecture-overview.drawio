@@ -1,0 +1,128 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="mT88pBVK_X0wyqwknzzQ">
+    <mxGraphModel dx="2164" dy="1328" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=none;fontColor=#333333;" value="" vertex="1">
+          <mxGeometry height="1169" width="1654" as="geometry" />
+        </mxCell>
+        <mxCell id="3" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=32;fontStyle=1;fontColor=#0078D4;" value="Agent Governance Toolkit" vertex="1">
+          <mxGeometry height="45" width="854" x="400" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="4" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontColor=#555555;" value="Architecture Overview - How All Components Fit Together" vertex="1">
+          <mxGeometry height="30" width="854" x="400" y="62" as="geometry" />
+        </mxCell>
+        <mxCell id="5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0078D4;fontColor=#0078D4;fontSize=13;fontStyle=1;" value="&lt; 0.1 ms policy overhead" vertex="1">
+          <mxGeometry height="40" width="240" x="1380" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="6" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontStyle=2;fontColor=#555555;" value="AI Frameworks" vertex="1">
+          <mxGeometry height="30" width="150" x="30" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="7" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#0078D4;fontColor=#0078D4;fontSize=12;" value="LangChain" vertex="1">
+          <mxGeometry height="36" width="130" x="190" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#0078D4;fontColor=#0078D4;fontSize=12;" value="CrewAI" vertex="1">
+          <mxGeometry height="36" width="130" x="335" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="9" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#0078D4;fontColor=#0078D4;fontSize=12;" value="AutoGen" vertex="1">
+          <mxGeometry height="36" width="130" x="480" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#0078D4;fontColor=#0078D4;fontSize=12;" value="OpenAI Agents" vertex="1">
+          <mxGeometry height="36" width="130" x="625" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="11" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#0078D4;fontColor=#0078D4;fontSize=12;" value="LangGraph" vertex="1">
+          <mxGeometry height="36" width="130" x="770" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="12" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#0078D4;fontColor=#0078D4;fontSize=12;" value="Semantic Kernel" vertex="1">
+          <mxGeometry height="36" width="130" x="915" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="13" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#0078D4;fontColor=#0078D4;fontSize=12;" value="Google ADK" vertex="1">
+          <mxGeometry height="36" width="130" x="1060" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="14" edge="1" parent="1" source="10" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#0078D4;fontColor=#0078D4;fontSize=11;" target="20" value="adapters / middleware">
+          <mxGeometry relative="1" x="-0.03" y="-3" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="15" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#7B00D4;strokeWidth=2;dashed=1;verticalAlign=top;fontSize=13;fontStyle=1;fontColor=#7B00D4;" value="Agent Compliance (agent-governance-toolkit)" vertex="1">
+          <mxGeometry height="220" width="1300" x="160" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="16" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=right;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=2;fontColor=#7B00D4;" value="Unified governance | OWASP ASI 2026 | Attestation" vertex="1">
+          <mxGeometry height="25" width="390" x="1050" y="205" as="geometry" />
+        </mxCell>
+        <mxCell id="20" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#0078D4;fontColor=#0078D4;fontSize=14;verticalAlign=middle;" value="&lt;b&gt;Agent OS&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;&quot; color=&quot;#555555&quot;&gt;Policy engine | Capability model | Audit logging | MCP gateway&lt;/font&gt;&lt;br&gt;&lt;i&gt;&lt;font style=&quot;font-size:10px;&quot; color=&quot;#888888&quot;&gt;agent-os-kernel&lt;/font&gt;&lt;/i&gt;" vertex="1">
+          <mxGeometry height="150" width="500" x="190" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#00A36C;fontColor=#00A36C;fontSize=14;verticalAlign=middle;" value="&lt;b&gt;AgentMesh&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;&quot; color=&quot;#555555&quot;&gt;Zero-trust identity | Ed25519 / SPIFFE | Trust scoring 0-1000 | A2A&lt;/font&gt;&lt;br&gt;&lt;i&gt;&lt;font style=&quot;font-size:10px;&quot; color=&quot;#888888&quot;&gt;agentmesh-platform&lt;/font&gt;&lt;/i&gt;" vertex="1">
+          <mxGeometry height="150" width="660" x="770" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="22" edge="1" parent="1" source="20" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#555555;fontColor=#555555;fontSize=11;startArrow=block;startFill=1;endArrow=block;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="21" value="Identity / Policy">
+          <mxGeometry relative="1" y="-20" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="23" edge="1" parent="1" source="20" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#E6821E;fontColor=#E6821E;fontSize=11;" target="30" value="sandboxed execution">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="30" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#E6821E;fontColor=#E6821E;fontSize=14;verticalAlign=middle;" value="&lt;b&gt;Agent Runtime&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;&quot; color=&quot;#555555&quot;&gt;Execution supervisor | JSON Schema validation | Public API&lt;/font&gt;&lt;br&gt;&lt;i&gt;&lt;font style=&quot;font-size:10px;&quot; color=&quot;#888888&quot;&gt;agentmesh-runtime&lt;/font&gt;&lt;/i&gt;" vertex="1">
+          <mxGeometry height="130" width="500" x="190" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="31" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#E65100;fontColor=#E65100;fontSize=14;verticalAlign=middle;" value="&lt;b&gt;Agent Hypervisor&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;&quot; color=&quot;#555555&quot;&gt;Execution rings | Saga orchestration | Joint liability | Hash-chain audit&lt;/font&gt;&lt;br&gt;&lt;i&gt;&lt;font style=&quot;font-size:10px;&quot; color=&quot;#888888&quot;&gt;agent-hypervisor&lt;/font&gt;&lt;/i&gt;" vertex="1">
+          <mxGeometry height="130" width="660" x="770" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="32" edge="1" parent="1" source="30" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#E65100;fontColor=#E65100;fontSize=11;" target="31" value="wraps">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="33" edge="1" parent="1" source="31" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#00897B;fontColor=#00897B;fontSize=11;" target="40" value="metrics / observability">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="40" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2F1;strokeColor=#00897B;fontColor=#00897B;fontSize=14;verticalAlign=middle;" value="&lt;b&gt;Agent SRE&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;&quot; color=&quot;#555555&quot;&gt;SLO engine | Error budgets | Circuit breakers | Chaos testing | Progressive delivery&lt;/font&gt;&lt;br&gt;&lt;i&gt;&lt;font style=&quot;font-size:10px;&quot; color=&quot;#888888&quot;&gt;agent-sre&lt;/font&gt;&lt;/i&gt;" vertex="1">
+          <mxGeometry height="110" width="1240" x="190" y="650" as="geometry" />
+        </mxCell>
+        <mxCell id="41" edge="1" parent="1" source="40" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#555555;fontColor=#555555;fontSize=11;" target="50" value="export">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="42" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontStyle=2;fontColor=#555555;" value="Optional" vertex="1">
+          <mxGeometry height="30" width="100" x="30" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="50" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#7B1FA2;fontColor=#7B1FA2;fontSize=14;verticalAlign=middle;" value="&lt;b&gt;Agent Marketplace&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;&quot; color=&quot;#555555&quot;&gt;Plugin lifecycle | Crypto verification&lt;/font&gt;&lt;br&gt;&lt;i&gt;&lt;font style=&quot;font-size:10px;&quot; color=&quot;#888888&quot;&gt;agentmesh-marketplace&lt;/font&gt;&lt;/i&gt;" vertex="1">
+          <mxGeometry height="110" width="580" x="190" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="51" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE4EC;strokeColor=#C2185B;fontColor=#C2185B;fontSize=14;verticalAlign=middle;" value="&lt;b&gt;Agent Lightning&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;&quot; color=&quot;#555555&quot;&gt;RL training governance | Policy rewards&lt;/font&gt;&lt;br&gt;&lt;i&gt;&lt;font style=&quot;font-size:10px;&quot; color=&quot;#888888&quot;&gt;agentmesh-lightning&lt;/font&gt;&lt;/i&gt;" vertex="1">
+          <mxGeometry height="110" width="580" x="850" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="60" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontStyle=2;fontColor=#555555;" value="Observability" vertex="1">
+          <mxGeometry height="30" width="140" x="30" y="935" as="geometry" />
+        </mxCell>
+        <mxCell id="61" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#555555;fontColor=#333333;fontSize=12;" value="Datadog" vertex="1">
+          <mxGeometry height="36" width="140" x="190" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="62" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#555555;fontColor=#333333;fontSize=12;" value="Langfuse" vertex="1">
+          <mxGeometry height="36" width="140" x="345" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="63" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#555555;fontColor=#333333;fontSize=12;" value="OpenTelemetry" vertex="1">
+          <mxGeometry height="36" width="140" x="500" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="64" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#555555;fontColor=#333333;fontSize=12;" value="W&amp;B" vertex="1">
+          <mxGeometry height="36" width="140" x="655" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="65" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#555555;fontColor=#333333;fontSize=12;" value="MLflow" vertex="1">
+          <mxGeometry height="36" width="140" x="810" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="66" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#555555;fontColor=#333333;fontSize=12;" value="Arize Phoenix" vertex="1">
+          <mxGeometry height="36" width="140" x="965" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="67" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#555555;fontColor=#333333;fontSize=12;" value="LangSmith" vertex="1">
+          <mxGeometry height="36" width="140" x="1120" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="70" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;fontSize=12;fontColor=#333333;verticalAlign=top;align=left;" value="&lt;b&gt;Data Flow&lt;/b&gt;&lt;br&gt;&#xa;→ Unidirectional&lt;br&gt;&#xa;↔ Bidirectional (peers)" vertex="1">
+          <mxGeometry height="80" width="200" x="1420" y="860" as="geometry" />
+        </mxCell>
+        <mxCell id="80" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontColor=#888888;" value="microsoft/agent-governance-toolkit | v3.0 | MIT License" vertex="1">
+          <mxGeometry height="25" width="500" x="30" y="1130" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

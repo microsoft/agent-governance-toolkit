@@ -83,6 +83,7 @@ pip install agentmesh-lightning        # RL training governance
 - **[Threat Model](docs/THREAT_MODEL.md)** — Trust boundaries, attack surfaces, and STRIDE analysis
 - **[Architecture](docs/ARCHITECTURE.md)** — System design, security model, trust scoring
 - **[Architecture Decisions](docs/adr/README.md)** — ADR log for key identity, runtime, and policy choices
+- **[Architecture Infographic](docs/diagrams/architecture-overview.png)** — Visual overview of all components and data flow ([SVG](docs/diagrams/architecture-overview.svg) · [draw.io source](docs/diagrams/architecture-overview.drawio))
 - **[NIST RFI Mapping](docs/nist-rfi-mapping.md)** — Mapping to NIST AI Agent Security RFI (2026-00206)
 
 Still have questions? File a [GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) or see our [Community page](COMMUNITY.md).
