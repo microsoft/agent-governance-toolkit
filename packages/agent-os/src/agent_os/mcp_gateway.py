@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -145,6 +146,7 @@ class MCPGateway:
 
         # Per-agent call counters for rate limiting
         self._tracked_agents: set[str] = set()
+        self._rate_limit_lock = threading.Lock()
         # Audit log
         self._audit_log: list[AuditEntry] = []
         # Pre-compile built-in patterns
@@ -264,18 +266,19 @@ class MCPGateway:
                     )
 
         # 4. Rate limiting
-        count = int(self._rate_limit_store.get_bucket(agent_id) or 0)
-        if count >= self.policy.max_tool_calls:
-            return (
-                False,
-                f"Agent '{agent_id}' exceeded call budget ({self.policy.max_tool_calls})",
-                None,
-                "rate_limit",
-            )
+        with self._rate_limit_lock:
+            count = int(self._rate_limit_store.get_bucket(agent_id) or 0)
+            if count >= self.policy.max_tool_calls:
+                return (
+                    False,
+                    f"Agent '{agent_id}' exceeded call budget ({self.policy.max_tool_calls})",
+                    None,
+                    "rate_limit",
+                )
 
-        # Increment call counter (only on successful evaluation past this point)
-        self._tracked_agents.add(agent_id)
-        self._rate_limit_store.set_bucket(agent_id, count + 1)
+            # Increment call counter (only on successful evaluation past this point)
+            self._tracked_agents.add(agent_id)
+            self._rate_limit_store.set_bucket(agent_id, count + 1)
 
         # 5. Human approval
         if self.policy.require_human_approval or tool_name in self.sensitive_tools:

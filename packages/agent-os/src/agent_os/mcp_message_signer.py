@@ -88,8 +88,8 @@ class MCPMessageSigner:
         """
         if signing_key is None:
             raise ValueError("signing_key must not be None")
-        if len(signing_key) < 16:
-            raise ValueError("signing_key must be at least 16 bytes")
+        if len(signing_key) < 32:
+            raise ValueError("signing_key must be at least 32 bytes")
         if replay_window <= timedelta(0):
             raise ValueError("replay_window must be positive")
         if nonce_cache_cleanup_interval <= timedelta(0):

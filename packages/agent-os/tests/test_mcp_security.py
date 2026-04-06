@@ -461,6 +461,20 @@ class TestMetrics:
         assert fingerprint.last_seen == 123.0
         assert audit_sink.entries()[0]["timestamp"].startswith("1970-01-01T00:02:03")
 
+    def test_scan_tool_fails_closed_on_unexpected_error(self, monkeypatch):
+        scanner = MCPSecurityScanner()
+
+        def broken(*_args, **_kwargs):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(scanner, "_check_hidden_instructions", broken)
+
+        threats = scanner.scan_tool("search", "Search the web", None, "server-a")
+
+        assert len(threats) == 1
+        assert threats[0].severity == MCPSeverity.CRITICAL
+        assert threats[0].message == "Scan error \u2014 fail closed"
+
 
 # ============================================================================
 # TestScanServer — batch scan returning ScanResult

@@ -6,6 +6,9 @@ from __future__ import annotations
 
 import pytest
 
+import threading
+import time
+
 from agent_os.integrations.base import GovernancePolicy, PatternType
 from agent_os.mcp_gateway import (
     ApprovalStatus,
@@ -49,6 +52,30 @@ class _FakeMetrics:
 
     def record_scan(self, *, operation: str, tool_name: str, server_name: str) -> None:
         return None
+
+
+class _ConcurrentProbeRateLimitStore:
+    def __init__(self) -> None:
+        self._value = 0
+        self._value_lock = threading.Lock()
+        self._active = 0
+        self._active_lock = threading.Lock()
+        self.max_concurrent_gets = 0
+
+    def get_bucket(self, _agent_id: str) -> int:
+        with self._active_lock:
+            self._active += 1
+            self.max_concurrent_gets = max(self.max_concurrent_gets, self._active)
+        time.sleep(0.01)
+        with self._value_lock:
+            value = self._value
+        with self._active_lock:
+            self._active -= 1
+        return value
+
+    def set_bucket(self, _agent_id: str, bucket: int) -> None:
+        with self._value_lock:
+            self._value = bucket
 
 
 # ── Tool allow / deny filtering ─────────────────────────────────────────────
@@ -184,6 +211,34 @@ class TestRateLimiting:
         assert gw.get_agent_call_count("x") == 0
         gw.intercept_tool_call("x", "t", {})
         assert gw.get_agent_call_count("x") == 1
+
+    def test_rate_limit_counting_is_serialized(self):
+        policy = _make_policy(max_tool_calls=1)
+        store = _ConcurrentProbeRateLimitStore()
+        gw = MCPGateway(
+            policy,
+            enable_builtin_sanitization=False,
+            rate_limit_store=store,
+        )
+        barrier = threading.Barrier(8)
+        results: list[bool] = []
+        result_lock = threading.Lock()
+
+        def worker() -> None:
+            barrier.wait()
+            allowed, _ = gw.intercept_tool_call("shared-agent", "read_file", {})
+            with result_lock:
+                results.append(allowed)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert results.count(True) == 1
+        assert results.count(False) == 7
+        assert store.max_concurrent_gets == 1
 
 
 # ── Audit log recording ────────────────────────────────────────────────────

@@ -104,7 +104,7 @@ def test_factory_and_validation():
 
     assert signer.verify_message(envelope).is_valid is True
 
-    with pytest.raises(ValueError, match="at least 16 bytes"):
+    with pytest.raises(ValueError, match="at least 32 bytes"):
         MCPMessageSigner(b"short")
 
 

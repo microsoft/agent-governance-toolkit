@@ -376,30 +376,47 @@ class MCPSecurityScanner:
         Returns:
             List of ``MCPThreat`` findings (empty if clean).
         """
-        threats: list[MCPThreat] = []
+        try:
+            threats: list[MCPThreat] = []
 
-        threats.extend(self._check_hidden_instructions(description, tool_name, server_name))
-        threats.extend(self._check_description_injection(description, tool_name, server_name))
-        if schema is not None:
-            threats.extend(self._check_schema_abuse(schema, tool_name, server_name))
-        threats.extend(self._check_cross_server(tool_name, server_name))
+            threats.extend(self._check_hidden_instructions(description, tool_name, server_name))
+            threats.extend(self._check_description_injection(description, tool_name, server_name))
+            if schema is not None:
+                threats.extend(self._check_schema_abuse(schema, tool_name, server_name))
+            threats.extend(self._check_cross_server(tool_name, server_name))
 
-        rug_pull = self.check_rug_pull(tool_name, description, schema, server_name)
-        if rug_pull is not None:
-            threats.append(rug_pull)
+            rug_pull = self.check_rug_pull(tool_name, description, schema, server_name)
+            if rug_pull is not None:
+                threats.append(rug_pull)
 
-        self._record_audit("scan_tool", tool_name, server_name, threats)
-        self._metrics.record_scan(
-            operation="scan_tool",
-            tool_name=tool_name,
-            server_name=server_name,
-        )
-        self._metrics.record_threats_detected(
-            len(threats),
-            tool_name=tool_name,
-            server_name=server_name,
-        )
-        return threats
+            self._record_audit("scan_tool", tool_name, server_name, threats)
+            self._metrics.record_scan(
+                operation="scan_tool",
+                tool_name=tool_name,
+                server_name=server_name,
+            )
+            self._metrics.record_threats_detected(
+                len(threats),
+                tool_name=tool_name,
+                server_name=server_name,
+            )
+            return threats
+        except Exception:
+            logger.error(
+                "MCP tool scan failed closed | tool=%s server=%s",
+                tool_name,
+                server_name,
+                exc_info=True,
+            )
+            return [
+                MCPThreat(
+                    threat_type=MCPThreatType.TOOL_POISONING,
+                    severity=MCPSeverity.CRITICAL,
+                    tool_name=tool_name,
+                    server_name=server_name,
+                    message="Scan error \u2014 fail closed",
+                )
+            ]
 
     def scan_server(
         self,
