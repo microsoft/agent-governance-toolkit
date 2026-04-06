@@ -1,0 +1,57 @@
+{
+  "name": "@microsoft/agentmesh-mcp-governance",
+  "version": "3.0.2",
+  "description": "Public Preview — Standalone MCP governance primitives for AgentMesh",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "jest --config jest.config.js",
+    "lint": "eslint src tests",
+    "clean": "rimraf dist",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "agentmesh",
+    "mcp",
+    "governance",
+    "security",
+    "rate-limiting",
+    "signing"
+  ],
+  "author": "Microsoft Corporation",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/agent-governance-toolkit.git",
+    "directory": "packages/agent-mesh/packages/mcp-governance"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3",
+    "@types/node": "25.5.0",
+    "jest": "29.7.0",
+    "ts-jest": "29.2.5",
+    "@types/jest": "29.5.14",
+    "eslint": "9.0.0",
+    "@typescript-eslint/parser": "8.58.0",
+    "@typescript-eslint/eslint-plugin": "8.58.0",
+    "rimraf": "6.1.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agent-mesh/packages/mcp-governance"
+}
