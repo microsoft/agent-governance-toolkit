@@ -262,6 +262,13 @@ with st.sidebar:
     selected_decisions = st.multiselect("Decision", DECISIONS, default=DECISIONS)
     selected_policies = st.multiselect("Policy", POLICIES, default=POLICIES)
 
+# Defensive checks in case values are programmatically mutated in session state.
+refresh_seconds = max(1, min(10, int(refresh_seconds)))
+events_per_tick = max(1, min(15, int(events_per_tick)))
+selected_agents = [a for a in selected_agents if a in AGENTS]
+selected_decisions = [d for d in selected_decisions if d in DECISIONS]
+selected_policies = [p for p in selected_policies if p in POLICIES]
+
 filtered = df[
     (df["agent_source"].isin(selected_agents) | df["agent_target"].isin(selected_agents))
     & df["decision"].isin(selected_decisions)

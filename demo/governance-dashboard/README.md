@@ -53,6 +53,16 @@ docker compose down
 3. Filter by source agents, policy, or decision.
 4. Inspect `Violation Alerts` and select an `audit_id` for drill-down details.
 
+## Architecture
+
+This dashboard is a standalone demo application.
+
+- UI layer: Streamlit app in `app.py`
+- Data layer: in-memory simulated event stream in `simulator.py`
+- Runtime state: session-scoped `st.session_state` (isolated per user session)
+
+The demo does not call external services and does not integrate with package runtime APIs under `packages/`.
+
 ![Dashboard Overview](screenshots/dashboard-overview.jpeg)
 ![Violation Drill-down](screenshots/violation_drilldown.jpeg)
 ![Trust Heatmap](screenshots/trustscore_heatmap.jpeg)
