@@ -38,6 +38,7 @@ REGISTERED_PACKAGES = {
     "fastapi", "uvicorn", "structlog", "click", "rich", "numpy", "scipy",
     "pytest", "pytest-asyncio", "pytest-cov", "ruff", "mypy", "build",
     "openai", "anthropic", "langchain", "langchain-core", "crewai",
+    "openai-agents", "smolagents",
     "redis", "sqlalchemy", "asyncpg", "chromadb", "pinecone-client",
     "sentence-transformers", "prometheus-client", "opentelemetry-api",
     "opentelemetry-sdk", "fhir.resources", "hl7apy", "zenpy", "freshdesk",
