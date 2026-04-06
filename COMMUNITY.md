@@ -6,6 +6,19 @@
 - **[GitHub Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)** — Questions, ideas, and general conversation
 - **[Stack Overflow](https://stackoverflow.com/questions/tagged/agent-governance-toolkit)** — Technical Q&A (tag: `agent-governance-toolkit`)
 
+## Blog Posts & Articles
+
+Community-written content about agent governance, security, and the toolkit.
+
+| Title | Author | Platform |
+|-------|--------|----------|
+| [Why AI Agent Governance Matters in 2026](https://dev.to/kanishtyagii/why-ai-agent-governance-matters-in-2026-4mnk) | [@kanish5](https://github.com/kanish5) | Dev.to |
+| [Policy-as-Code vs Prompt Engineering — When Guardrails Need Governance](https://dev.to/kanishtyagii/policy-as-code-vs-prompt-engineering-when-guardrails-need-governance-23pi) | [@kanish5](https://github.com/kanish5) | Dev.to |
+| [Decentralized Identity in Multi-Agent Systems — From Theory to Production](https://dev.to/moltycel/decentralized-identity-in-multi-agent-systems-from-theory-to-production-1oe3) | [@MoltyCel](https://github.com/MoltyCel) | Dev.to |
+| [Scaling AI Agents from 10 to 10,000 — Governance Lessons from the Trenches](https://github.com/microsoft/agent-governance-toolkit/issues/699) | [@lawcontinue](https://github.com/lawcontinue) | GitHub Issue |
+
+---
+
 ## Stay Updated
 
 - ⭐ **Star** the repository to get notified of new releases
@@ -17,7 +30,7 @@
 We welcome contributions of all kinds — code, documentation, bug reports, and feature ideas.
 
 - Read our [Contributing Guide](CONTRIBUTING.md) to get started
-- Look for issues labeled [`good first issue`](https://github.com/microsoft/agent-governance-toolkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) if you're new to the project
+- Look for issues labeled [`good first issue`](https://github.com/microsoft/agent-governance-toolkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) if you are new to the project
 - Check [`help wanted`](https://github.com/microsoft/agent-governance-toolkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) for issues where we'd especially appreciate contributions
 
 ## Related Projects
