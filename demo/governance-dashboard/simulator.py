@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import os
 import math
 import random
 from typing import Any
@@ -32,7 +33,7 @@ POLICIES = [
 ]
 
 DECISIONS = ["allow", "deny", "escalate"]
-DECISION_WEIGHTS = [0.78, 0.14, 0.08]
+DEFAULT_DECISION_WEIGHTS = [0.78, 0.14, 0.08]
 
 VIOLATION_CATEGORIES = [
     "PII",
@@ -48,6 +49,33 @@ class SimulationConfig:
     """Configuration values used by the in-app event simulator."""
 
     seed_events: int = 80
+
+
+def _load_decision_weights() -> list[float]:
+    """Load decision weights from env with strict validation and safe fallback."""
+
+    raw = os.getenv("AGD_DECISION_WEIGHTS", "")
+    if not raw:
+        return DEFAULT_DECISION_WEIGHTS
+
+    try:
+        weights = [float(v.strip()) for v in raw.split(",")]
+    except ValueError:
+        return DEFAULT_DECISION_WEIGHTS
+
+    if len(weights) != len(DECISIONS):
+        return DEFAULT_DECISION_WEIGHTS
+    if any(w <= 0 for w in weights):
+        return DEFAULT_DECISION_WEIGHTS
+
+    total = sum(weights)
+    if total <= 0:
+        return DEFAULT_DECISION_WEIGHTS
+
+    return [w / total for w in weights]
+
+
+DECISION_WEIGHTS = _load_decision_weights()
 
 
 def _clamp_trust_score(value: Any, fallback: float = 50.0) -> float:
@@ -104,15 +132,27 @@ def _compute_trust_drift(decision: str) -> float:
 
 
 def _ensure_trust_map() -> None:
-    if "trust_map" in st.session_state:
-        return
-
     trust_map: dict[tuple[str, str], float] = {}
+    raw_map = st.session_state.get("trust_map")
+
+    if isinstance(raw_map, dict):
+        for key, value in raw_map.items():
+            if (
+                isinstance(key, tuple)
+                and len(key) == 2
+                and key[0] in AGENTS
+                and key[1] in AGENTS
+                and key[0] != key[1]
+            ):
+                trust_map[(key[0], key[1])] = _clamp_trust_score(value)
+
     for src in AGENTS:
         for dst in AGENTS:
             if src == dst:
                 continue
-            trust_map[(src, dst)] = random.uniform(65.0, 95.0)
+            if (src, dst) not in trust_map:
+                trust_map[(src, dst)] = _clamp_trust_score(random.uniform(65.0, 95.0))
+
     st.session_state.trust_map = trust_map
 
 

@@ -2,3 +2,4 @@ streamlit==1.40.2
 pandas==2.2.3
 plotly==5.24.1
 numpy==2.1.2
+bleach==6.2.0

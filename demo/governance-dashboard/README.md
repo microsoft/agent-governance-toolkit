@@ -63,6 +63,17 @@ This dashboard is a standalone demo application.
 
 The demo does not call external services and does not integrate with package runtime APIs under `packages/`.
 
+## Simulation Logic
+
+The simulator creates synthetic governance events with deterministic constraints:
+
+- Decision generation: weighted random selection across `allow`, `deny`, `escalate`.
+- Trust evolution: each source-target pair has a bounded trust score updated per event.
+- Validation layer: generated payloads are normalized (agents, policy, decision, severity, trust bounds) before they enter UI state.
+- Event retention: a rolling in-memory window keeps recent events for responsive rendering.
+
+For demos that need tuned behavior, decision weights can be configured through `AGD_DECISION_WEIGHTS` (comma-separated floats) and are validated at startup.
+
 ![Dashboard Overview](screenshots/dashboard-overview.jpeg)
 ![Violation Drill-down](screenshots/violation_drilldown.jpeg)
 ![Trust Heatmap](screenshots/trustscore_heatmap.jpeg)

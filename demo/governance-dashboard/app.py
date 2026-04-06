@@ -6,6 +6,7 @@ from __future__ import annotations
 import html
 import time
 
+import bleach
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -159,6 +160,32 @@ def _decision_counts(data: pd.DataFrame) -> pd.Series:
     return data["decision"].value_counts().reindex(DECISIONS, fill_value=0)
 
 
+def _coerce_bounded_int(value: object, *, default: int, min_value: int, max_value: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(min_value, min(max_value, parsed))
+
+
+def _validated_selection(selected: object, allowed: list[str], fallback: list[str]) -> list[str]:
+    if not isinstance(selected, list):
+        return fallback
+    sanitized = [item for item in selected if item in allowed]
+    return sanitized or fallback
+
+
+def _sanitize_json_payload(payload: dict[str, object]) -> dict[str, object]:
+    sanitized: dict[str, object] = {}
+    for key, value in payload.items():
+        if isinstance(value, str):
+            # Strip any markup to ensure drill-down content is plain text.
+            sanitized[key] = bleach.clean(html.escape(value), tags=[], attributes={}, strip=True)
+        else:
+            sanitized[key] = value
+    return sanitized
+
+
 def _severity_badge(value: str) -> str:
     mapping = {
         "critical": "🔴 Critical",
@@ -263,11 +290,11 @@ with st.sidebar:
     selected_policies = st.multiselect("Policy", POLICIES, default=POLICIES)
 
 # Defensive checks in case values are programmatically mutated in session state.
-refresh_seconds = max(1, min(10, int(refresh_seconds)))
-events_per_tick = max(1, min(15, int(events_per_tick)))
-selected_agents = [a for a in selected_agents if a in AGENTS]
-selected_decisions = [d for d in selected_decisions if d in DECISIONS]
-selected_policies = [p for p in selected_policies if p in POLICIES]
+refresh_seconds = _coerce_bounded_int(refresh_seconds, default=2, min_value=1, max_value=10)
+events_per_tick = _coerce_bounded_int(events_per_tick, default=4, min_value=1, max_value=15)
+selected_agents = _validated_selection(selected_agents, AGENTS, AGENTS)
+selected_decisions = _validated_selection(selected_decisions, DECISIONS, DECISIONS)
+selected_policies = _validated_selection(selected_policies, POLICIES, POLICIES)
 
 filtered = df[
     (df["agent_source"].isin(selected_agents) | df["agent_target"].isin(selected_agents))
@@ -412,8 +439,7 @@ with row2_right:
             index=0,
         )
         chosen = alerts[alerts["audit_id"] == selected_audit_id].iloc[0]
-        safe_details = html.escape(str(chosen["details"]))
-        st.json(
+        safe_payload = _sanitize_json_payload(
             {
                 "audit_id": chosen["audit_id"],
                 "timestamp": str(chosen["timestamp"]),
@@ -424,9 +450,10 @@ with row2_right:
                 "severity": chosen["severity"],
                 "category": chosen["violation_category"],
                 "trust_score": float(chosen["trust_score"]),
-                "details": safe_details,
+                "details": str(chosen["details"]),
             }
         )
+        st.json(safe_payload)
 
 st.subheader("Agent Activity Timeline")
 if filtered.empty:
