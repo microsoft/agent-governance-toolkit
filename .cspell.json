@@ -28,7 +28,13 @@
     "CD",
     "PR",
     "MCP",
-    "A2A"
+    "A2A",
+    "HMAC",
+    "Merkle",
+    "backdoors",
+    "metacharacters",
+    "metacharacter",
+    "Blocklist"
   ],
   "ignorePaths": [
     "**/node_modules/**",

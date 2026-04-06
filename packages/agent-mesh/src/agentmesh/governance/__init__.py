@@ -46,6 +46,13 @@ from .trust_policy import (
 from .async_policy_evaluator import AsyncTrustPolicyEvaluator
 from .async_policy_evaluator import ConcurrencyStats as TrustConcurrencyStats
 from .policy_evaluator import PolicyEvaluator, TrustPolicyDecision
+from .annex_iv import (
+    AnnexIVDocument,
+    AnnexIVSection,
+    TechnicalDocumentationExporter,
+    to_json as annex_iv_to_json,
+    to_markdown as annex_iv_to_markdown,
+)
 from .eu_ai_act import (
     RiskLevel,
     AgentRiskProfile,
@@ -125,6 +132,12 @@ __all__ = [
     "InMemoryFederationStore",
     "FileFederationStore",
     "FederationEngine",
+    # Annex IV Technical Documentation (issue #757)
+    "AnnexIVDocument",
+    "AnnexIVSection",
+    "TechnicalDocumentationExporter",
+    "annex_iv_to_json",
+    "annex_iv_to_markdown",
     # EU AI Act risk classifier (issue #756)
     "RiskLevel",
     "AgentRiskProfile",

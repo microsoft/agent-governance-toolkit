@@ -13,7 +13,7 @@ import json
 import re
 from pathlib import Path
 
-from .output import Colors, get_output_format
+from .output import Colors
 
 
 # ============================================================================

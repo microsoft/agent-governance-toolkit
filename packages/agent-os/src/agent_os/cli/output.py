@@ -12,9 +12,9 @@ import argparse
 import json
 import logging
 import os
+import pathlib
 import sys
 import traceback
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ def get_output_format(args: argparse.Namespace) -> str:
     return getattr(args, "format", "text")
 
 
-def get_config_path(args_path: str | None = None) -> "Path":
+def get_config_path(args_path: str | None = None) -> "pathlib.Path":
     """Resolve the config path from args or AGENTOS_CONFIG env var."""
     from pathlib import Path as _Path
 

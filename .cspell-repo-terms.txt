@@ -6,6 +6,7 @@ caas
 CMVK
 contoso
 CrewAI
+CuriousHet
 Dify
 Dockerfiles
 eastus
@@ -17,12 +18,14 @@ HEALTHCHECK
 healthz
 IATP
 idweb
+kanish
 LangChain
 LangGraph
 LlamaIndex
 manylinux
 markdown
 Microsoft
+Molty
 Moltbook
 msinternal
 networkx

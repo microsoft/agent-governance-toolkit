@@ -6,6 +6,9 @@ from __future__ import annotations
 
 import pytest
 
+import threading
+import time
+
 from agent_os.integrations.base import GovernancePolicy, PatternType
 from agent_os.mcp_gateway import (
     ApprovalStatus,
@@ -13,9 +16,11 @@ from agent_os.mcp_gateway import (
     GatewayConfig,
     MCPGateway,
 )
+from agent_os.mcp_protocols import InMemoryAuditSink, InMemoryRateLimitStore
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_policy(**overrides) -> GovernancePolicy:
     """Create a GovernancePolicy with sensible test defaults."""
@@ -31,7 +36,50 @@ def _make_policy(**overrides) -> GovernancePolicy:
     return GovernancePolicy(**defaults)
 
 
+class _FakeMetrics:
+    def __init__(self) -> None:
+        self.decisions: list[dict[str, object]] = []
+        self.rate_limit_hits: list[dict[str, str]] = []
+
+    def record_decision(self, **kwargs) -> None:
+        self.decisions.append(kwargs)
+
+    def record_threats_detected(self, count: int, *, tool_name: str, server_name: str) -> None:
+        return None
+
+    def record_rate_limit_hit(self, *, agent_id: str, tool_name: str) -> None:
+        self.rate_limit_hits.append({"agent_id": agent_id, "tool_name": tool_name})
+
+    def record_scan(self, *, operation: str, tool_name: str, server_name: str) -> None:
+        return None
+
+
+class _ConcurrentProbeRateLimitStore:
+    def __init__(self) -> None:
+        self._value = 0
+        self._value_lock = threading.Lock()
+        self._active = 0
+        self._active_lock = threading.Lock()
+        self.max_concurrent_gets = 0
+
+    def get_bucket(self, _agent_id: str) -> int:
+        with self._active_lock:
+            self._active += 1
+            self.max_concurrent_gets = max(self.max_concurrent_gets, self._active)
+        time.sleep(0.01)
+        with self._value_lock:
+            value = self._value
+        with self._active_lock:
+            self._active -= 1
+        return value
+
+    def set_bucket(self, _agent_id: str, bucket: int) -> None:
+        with self._value_lock:
+            self._value = bucket
+
+
 # ── Tool allow / deny filtering ─────────────────────────────────────────────
+
 
 class TestToolFiltering:
     def test_allow_when_allowlist_empty(self):
@@ -61,12 +109,15 @@ class TestToolFiltering:
         assert "deny list" in reason
 
     def test_deny_list_blocks_even_without_allowlist(self):
-        gw = MCPGateway(_make_policy(), denied_tools=["evil_tool"], enable_builtin_sanitization=False)
+        gw = MCPGateway(
+            _make_policy(), denied_tools=["evil_tool"], enable_builtin_sanitization=False
+        )
         allowed, reason = gw.intercept_tool_call("a1", "evil_tool", {})
         assert allowed is False
 
 
 # ── Parameter pattern blocking ──────────────────────────────────────────────
+
 
 class TestParameterSanitization:
     def test_blocked_substring_pattern(self):
@@ -112,6 +163,7 @@ class TestParameterSanitization:
 
 
 # ── Rate limit enforcement ──────────────────────────────────────────────────
+
 
 class TestRateLimiting:
     def test_allows_up_to_budget(self):
@@ -160,8 +212,37 @@ class TestRateLimiting:
         gw.intercept_tool_call("x", "t", {})
         assert gw.get_agent_call_count("x") == 1
 
+    def test_rate_limit_counting_is_serialized(self):
+        policy = _make_policy(max_tool_calls=1)
+        store = _ConcurrentProbeRateLimitStore()
+        gw = MCPGateway(
+            policy,
+            enable_builtin_sanitization=False,
+            rate_limit_store=store,
+        )
+        barrier = threading.Barrier(8)
+        results: list[bool] = []
+        result_lock = threading.Lock()
+
+        def worker() -> None:
+            barrier.wait()
+            allowed, _ = gw.intercept_tool_call("shared-agent", "read_file", {})
+            with result_lock:
+                results.append(allowed)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert results.count(True) == 1
+        assert results.count(False) == 7
+        assert store.max_concurrent_gets == 1
+
 
 # ── Audit log recording ────────────────────────────────────────────────────
+
 
 class TestAuditLog:
     def test_records_allowed_call(self):
@@ -199,8 +280,32 @@ class TestAuditLog:
         assert len(log) == 3
         assert [e.tool_name for e in log] == ["t1", "t2", "t3"]
 
+    def test_audit_redaction_and_store_injection(self):
+        audit_sink = InMemoryAuditSink()
+        rate_limit_store = InMemoryRateLimitStore()
+        gw = MCPGateway(
+            _make_policy(),
+            enable_builtin_sanitization=False,
+            audit_sink=audit_sink,
+            rate_limit_store=rate_limit_store,
+            clock=lambda: 123.0,
+        )
+
+        allowed, _ = gw.intercept_tool_call(
+            "a1",
+            "read_file",
+            {"token": "sk-test_abcdefghijklmnopqrstuvwxyz"},
+        )
+
+        assert allowed is True
+        assert gw.audit_log[0].timestamp == 123.0
+        assert gw.audit_log[0].parameters == {"token": "[REDACTED]"}
+        assert audit_sink.entries()[0]["parameters"] == {"token": "[REDACTED]"}
+        assert rate_limit_store.get_bucket("a1") == 1
+
 
 # ── Human approval workflow ─────────────────────────────────────────────────
+
 
 class TestHumanApproval:
     def test_pending_when_no_callback(self):
@@ -273,6 +378,7 @@ class TestHumanApproval:
 
 # ── wrap_mcp_server ─────────────────────────────────────────────────────────
 
+
 class TestWrapMCPServer:
     def test_returns_gateway_config(self):
         policy = _make_policy(
@@ -297,3 +403,34 @@ class TestWrapMCPServer:
         original = {"host": "localhost"}
         MCPGateway.wrap_mcp_server(original, _make_policy())
         assert original == {"host": "localhost"}
+
+
+class TestMetrics:
+    def test_records_decision_stage(self):
+        metrics = _FakeMetrics()
+        gw = MCPGateway(
+            _make_policy(),
+            enable_builtin_sanitization=False,
+            metrics=metrics,
+        )
+
+        allowed, _ = gw.intercept_tool_call("agent-1", "read_file", {})
+
+        assert allowed is True
+        assert metrics.decisions[0]["stage"] == "allowed"
+        assert metrics.decisions[0]["allowed"] is True
+
+    def test_records_rate_limit_hits(self):
+        metrics = _FakeMetrics()
+        gw = MCPGateway(
+            _make_policy(max_tool_calls=1),
+            enable_builtin_sanitization=False,
+            metrics=metrics,
+        )
+
+        gw.intercept_tool_call("agent-1", "read_file", {})
+        allowed, _ = gw.intercept_tool_call("agent-1", "read_file", {})
+
+        assert allowed is False
+        assert metrics.decisions[-1]["stage"] == "rate_limit"
+        assert metrics.rate_limit_hits == [{"agent_id": "agent-1", "tool_name": "read_file"}]

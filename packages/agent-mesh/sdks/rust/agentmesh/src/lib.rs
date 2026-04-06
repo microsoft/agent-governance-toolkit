@@ -20,12 +20,14 @@
 
 pub mod audit;
 pub mod identity;
+pub mod mcp;
 pub mod policy;
 pub mod trust;
 pub mod types;
 
 pub use audit::AuditLogger;
 pub use identity::{AgentIdentity, PublicIdentity};
+pub use mcp::*;
 pub use policy::{PolicyEngine, PolicyError};
 pub use trust::{TrustConfig, TrustManager};
 pub use types::{
@@ -46,20 +48,11 @@ pub struct AgentMeshClient {
 }
 
 /// Builder options for [`AgentMeshClient`].
+#[derive(Default)]
 pub struct ClientOptions {
     pub capabilities: Vec<String>,
     pub trust_config: Option<TrustConfig>,
     pub policy_yaml: Option<String>,
-}
-
-impl Default for ClientOptions {
-    fn default() -> Self {
-        Self {
-            capabilities: Vec::new(),
-            trust_config: None,
-            policy_yaml: None,
-        }
-    }
 }
 
 impl AgentMeshClient {
@@ -70,8 +63,8 @@ impl AgentMeshClient {
 
     /// Create a new client with custom options.
     pub fn with_options(agent_id: &str, opts: ClientOptions) -> Result<Self, ClientError> {
-        let identity = AgentIdentity::generate(agent_id, opts.capabilities)
-            .map_err(ClientError::Identity)?;
+        let identity =
+            AgentIdentity::generate(agent_id, opts.capabilities).map_err(ClientError::Identity)?;
 
         let trust_config = opts.trust_config.unwrap_or_default();
         let trust = TrustManager::new(trust_config);

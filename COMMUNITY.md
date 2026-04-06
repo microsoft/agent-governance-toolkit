@@ -6,6 +6,18 @@
 - **[GitHub Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)** — Questions, ideas, and general conversation
 - **[Stack Overflow](https://stackoverflow.com/questions/tagged/agent-governance-toolkit)** — Technical Q&A (tag: `agent-governance-toolkit`)
 
+## Blog Posts & Articles
+
+Community-written content about agent governance, security, and the toolkit.
+
+| Title | Author | Platform |
+|-------|--------|----------|
+| [Why AI Agent Governance Matters in 2026](https://dev.to/kanishtyagii/why-ai-agent-governance-matters-in-2026-4mnk) | [@kanish5](https://github.com/kanish5) | Dev.to |
+| [Policy-as-Code vs Prompt Engineering — When Guardrails Need Governance](https://dev.to/kanishtyagii/policy-as-code-vs-prompt-engineering-when-guardrails-need-governance-23pi) | [@kanish5](https://github.com/kanish5) | Dev.to |
+| [Decentralized Identity in Multi-Agent Systems — From Theory to Production](https://dev.to/moltycel/decentralized-identity-in-multi-agent-systems-from-theory-to-production-1oe3) | [@MoltyCel](https://github.com/MoltyCel) | Dev.to |
+
+---
+
 ## Stay Updated
 
 - ⭐ **Star** the repository to get notified of new releases

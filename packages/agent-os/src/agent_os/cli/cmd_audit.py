@@ -8,7 +8,6 @@ import argparse
 import csv
 import json
 from pathlib import Path
-from typing import Any
 
 from .output import (
     Colors,
