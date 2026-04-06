@@ -154,7 +154,8 @@ public static class McpGovernanceExtensions
     /// Options for MCP-specific governance. When <c>null</c>, uses defaults.
     /// </param>
     /// <param name="agentId">
-    /// The DID of the agent that will use the message handler.
+    /// Optional DID of the agent that will use the message handler.
+    /// When <c>null</c>, uses <see cref="McpGovernanceOptions.AgentId"/>.
     /// </param>
     /// <param name="timeProvider">Optional clock used for MCP timestamps and expiry checks.</param>
     /// <param name="sessionStore">Optional session store for session authentication state.</param>
@@ -167,7 +168,7 @@ public static class McpGovernanceExtensions
     public static McpGovernanceStack AddMcpGovernance(
             GovernanceOptions? kernelOptions = null,
             McpGovernanceOptions? mcpOptions = null,
-            string agentId = "did:mesh:default",
+            string? agentId = null,
             TimeProvider? timeProvider = null,
             IMcpSessionStore? sessionStore = null,
             IMcpNonceStore? nonceStore = null,
@@ -180,6 +181,7 @@ public static class McpGovernanceExtensions
         var resolvedNonceStore = nonceStore ?? new InMemoryMcpNonceStore();
         var resolvedRateLimitStore = rateLimitStore ?? new InMemoryMcpRateLimitStore();
         var resolvedAuditSink = auditSink ?? new InMemoryMcpAuditSink();
+        var resolvedAgentId = agentId ?? opts.AgentId;
 
         var kernel = new GovernanceKernel(kernelOptions);
 
@@ -213,7 +215,7 @@ public static class McpGovernanceExtensions
 
         var toolMapper = new McpToolMapper(opts.CustomToolMappings);
 
-        var handler = new McpMessageHandler(gateway, toolMapper, agentId);
+        var handler = new McpMessageHandler(gateway, toolMapper, resolvedAgentId);
 
         var responseScanner = opts.EnableResponseScanning ? new McpResponseScanner() : null;
 

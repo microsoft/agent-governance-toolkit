@@ -46,9 +46,16 @@ public sealed class McpGovernanceMiddleware : IMiddleware
 
         try
         {
+            context.Request.EnableBuffering();
+
             // Read the JSON-RPC request body
-            using var reader = new StreamReader(context.Request.Body, encoding: System.Text.Encoding.UTF8);
+            using var reader = new StreamReader(
+                context.Request.Body,
+                encoding: System.Text.Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: false,
+                leaveOpen: true);
             var body = await reader.ReadToEndAsync();
+            context.Request.Body.Position = 0;
             var message = JsonSerializer.Deserialize<Dictionary<string, object?>>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true, MaxDepth = 32 });
 
@@ -82,6 +89,7 @@ public sealed class McpGovernanceMiddleware : IMiddleware
         catch (JsonException)
         {
             // Not valid JSON — pass through to next middleware
+            context.Request.Body.Position = 0;
             await next(context);
         }
     }

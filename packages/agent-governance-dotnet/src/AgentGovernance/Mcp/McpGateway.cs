@@ -183,7 +183,7 @@ public sealed class McpGateway
             Logger?.LogError(ex, "MCP gateway error for {ToolName} - failing closed", toolName);
 
             // Fail-closed: any exception → deny.
-            var failReason = $"Gateway error (fail-closed): {ex.Message}";
+            var failReason = "Gateway error (fail-closed).";
 
             Metrics?.RecordMcpDecision(false, agentId, toolName, sw.Elapsed.TotalMilliseconds, "error");
 

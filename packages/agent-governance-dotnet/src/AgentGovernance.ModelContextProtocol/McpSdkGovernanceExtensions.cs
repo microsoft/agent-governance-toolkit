@@ -137,8 +137,7 @@ public static class McpSdkGovernanceExtensions
                         ex,
                         "MCP governance threw during tool interception for {ToolName} ({AgentId}); denying",
                         toolName, agentId);
-                    throw new McpException(
-                        $"Governance error: tool call denied (fail-closed). {ex.Message}");
+                    throw new McpException("Governance error: tool call denied (fail-closed).");
                 }
 
                 if (!allowed)

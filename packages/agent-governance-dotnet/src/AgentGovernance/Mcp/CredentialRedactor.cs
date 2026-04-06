@@ -67,7 +67,9 @@ public static class CredentialRedactor
 
     /// <summary>PEM-encoded private keys.</summary>
     public static readonly Regex PrivateKeyPattern =
-        new(@"-----BEGIN\s+(RSA\s+|EC\s+|OPENSSH\s+)?PRIVATE\s+KEY-----", RegexOptions.Compiled, RegexTimeout);
+        new(@"-----BEGIN(?:\s+[A-Z0-9]+)*\s+PRIVATE\s+KEY-----[\s\S]*?-----END(?:\s+[A-Z0-9]+)*\s+PRIVATE\s+KEY-----",
+            RegexOptions.Compiled | RegexOptions.Singleline,
+            RegexTimeout);
 
     /// <summary>Azure/SQL connection strings with password.</summary>
     public static readonly Regex ConnectionStringPattern =
@@ -124,10 +126,10 @@ public static class CredentialRedactor
                 if (!ReferenceEquals(before, result))
                     count++;
             }
-            catch (RegexMatchTimeoutException)
+            catch (RegexMatchTimeoutException ex)
             {
-                // If regex times out, redact entire value as precaution
-                continue;
+                Logger?.LogWarning(ex, "MCP credential redaction timed out; redacting entire value");
+                return RedactedPlaceholder;
             }
         }
 
@@ -218,9 +220,10 @@ public static class CredentialRedactor
                 if (pattern.IsMatch(input))
                     return true;
             }
-            catch (RegexMatchTimeoutException)
+            catch (RegexMatchTimeoutException ex)
             {
-                continue;
+                Logger?.LogWarning(ex, "MCP credential detection timed out; treating input as sensitive");
+                return true;
             }
         }
 
@@ -243,9 +246,10 @@ public static class CredentialRedactor
                 if (pattern.IsMatch(input))
                     detected.Add(name);
             }
-            catch (RegexMatchTimeoutException)
+            catch (RegexMatchTimeoutException ex)
             {
-                continue;
+                Logger?.LogWarning(ex, "MCP credential type detection timed out; reporting unknown sensitive content");
+                return ["Unknown sensitive content"];
             }
         }
 

@@ -1,5 +1,6 @@
 // Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using AgentGovernance.Extensions;
@@ -211,6 +212,22 @@ public class McpServiceCollectionExtensionsTests
         var middleware = provider.GetService<McpGovernanceMiddleware>();
         Assert.NotNull(middleware);
     }
+
+    [Fact]
+    public void AddMcpGovernance_UsesConfiguredAgentId()
+    {
+        var services = new ServiceCollection();
+        services.AddMcpGovernance(new McpGovernanceOptions
+        {
+            AgentId = "did:mesh:configured-agent"
+        });
+        var provider = services.BuildServiceProvider();
+        var handler = provider.GetRequiredService<McpMessageHandler>();
+        var agentIdField = typeof(McpMessageHandler).GetField("_agentId", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(agentIdField);
+        Assert.Equal("did:mesh:configured-agent", agentIdField!.GetValue(handler));
+    }
 }
 
 public class McpGovernanceMiddlewareTests
@@ -330,6 +347,22 @@ public class McpGovernanceMiddlewareTests
         });
 
         Assert.True(nextCalled);
+    }
+
+    [Fact]
+    public async Task Middleware_InvalidJson_PassesThroughWithBufferedBody()
+    {
+        var middleware = CreateMiddleware();
+        var context = CreateHttpContext("POST", "application/json", "not json {{{");
+        string? forwardedBody = null;
+
+        await middleware.InvokeAsync(context, async ctx =>
+        {
+            using var reader = new StreamReader(ctx.Request.Body, Encoding.UTF8, leaveOpen: true);
+            forwardedBody = await reader.ReadToEndAsync();
+        });
+
+        Assert.Equal("not json {{{", forwardedBody);
     }
 
     [Fact]

@@ -8,6 +8,36 @@ using Xunit;
 
 namespace AgentGovernance.Tests;
 
+#if NET10_0_OR_GREATER
+internal sealed class RequiresMldsaSupportFactAttribute : FactAttribute
+{
+    public RequiresMldsaSupportFactAttribute()
+    {
+        if (!IsMldsaSupported())
+        {
+            Skip = "Requires .NET 10+ with ML-DSA support.";
+        }
+    }
+
+    private static bool IsMldsaSupported()
+    {
+        try
+        {
+            using var signer = McpMessageSigner.CreateMLDsa();
+            return signer.ExportMLDsaPublicKey() is { Length: > 0 };
+        }
+        catch (PlatformNotSupportedException)
+        {
+            return false;
+        }
+        catch (CryptographicException)
+        {
+            return false;
+        }
+    }
+}
+#endif
+
 public class McpMessageSignerTests
 {
     private static byte[] CreateTestKey(int length = 32) =>
@@ -244,22 +274,37 @@ public class McpMessageSignerTests
     [Fact]
     public void Constructor_ShortKey_Throws()
     {
-        var shortKey = new byte[8];
+        var shortKey = new byte[16];
 
         var ex = Assert.Throws<ArgumentException>(() => new McpMessageSigner(shortKey));
-        Assert.Contains("at least 16 bytes", ex.Message);
+        Assert.Contains("at least 32 bytes", ex.Message);
     }
 
     [Fact]
     public void Constructor_MinimumKeyLength_Works()
     {
-        var key = CreateTestKey(16);
+        var key = CreateTestKey(32);
         var signer = new McpMessageSigner(key);
 
         var envelope = signer.SignMessage("""{"ok":true}""");
         var result = signer.VerifyMessage(envelope);
 
         Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void VerifyMessage_NonceStoreFailure_DoesNotLeakExceptionDetails()
+    {
+        var signer = new McpMessageSigner(
+            CreateTestKey(),
+            new ThrowingNonceStore(),
+            new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z")));
+        var envelope = signer.SignMessage("""{"ok":true}""");
+
+        var result = signer.VerifyMessage(envelope);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("Verification error (fail-closed).", result.FailureReason);
     }
 
     // ── Factory methods ─────────────────────────────────────────────────
@@ -480,14 +525,14 @@ public class McpMessageSignerTests
 #if NET10_0_OR_GREATER
     // ── ML-DSA-65 post-quantum (.NET 10+) ───────────────────────────────
 
-    [Fact]
+    [RequiresMldsaSupportFact]
     public void CreateMLDsa_ReturnsSignerWithMLDsa65Algorithm()
     {
         using var signer = McpMessageSigner.CreateMLDsa();
         Assert.Equal(SigningAlgorithm.MLDsa65, signer.Algorithm);
     }
 
-    [Fact]
+    [RequiresMldsaSupportFact]
     public void MLDsa_SignAndVerify_RoundTrip()
     {
         using var signer = McpMessageSigner.CreateMLDsa();
@@ -502,7 +547,7 @@ public class McpMessageSignerTests
         Assert.Equal("MLDsa65", envelope.Algorithm);
     }
 
-    [Fact]
+    [RequiresMldsaSupportFact]
     public void MLDsa_TamperedPayload_FailsVerification()
     {
         using var signer = McpMessageSigner.CreateMLDsa();
@@ -522,7 +567,7 @@ public class McpMessageSignerTests
         Assert.False(result.IsValid);
     }
 
-    [Fact]
+    [RequiresMldsaSupportFact]
     public void MLDsa_DifferentSigner_FailsVerification()
     {
         using var signer1 = McpMessageSigner.CreateMLDsa();
@@ -534,7 +579,7 @@ public class McpMessageSignerTests
         Assert.False(result.IsValid);
     }
 
-    [Fact]
+    [RequiresMldsaSupportFact]
     public void MLDsa_ReplayDetection_Works()
     {
         using var signer = McpMessageSigner.CreateMLDsa();
@@ -548,7 +593,7 @@ public class McpMessageSignerTests
         Assert.Contains("replay", replay.FailureReason, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
+    [RequiresMldsaSupportFact]
     public void MLDsa_ExportPublicKey_ReturnsBytes()
     {
         using var signer = McpMessageSigner.CreateMLDsa();
@@ -558,7 +603,7 @@ public class McpMessageSignerTests
         Assert.Equal(1952, pubKey.Length); // ML-DSA-65 public key size
     }
 
-    [Fact]
+    [RequiresMldsaSupportFact]
     public void MLDsa_VerifierFromPublicKey_CanVerify()
     {
         using var signer = McpMessageSigner.CreateMLDsa();
@@ -572,7 +617,7 @@ public class McpMessageSignerTests
         Assert.Equal("sender-a", result.SenderId);
     }
 
-    [Fact]
+    [RequiresMldsaSupportFact]
     public void MLDsa_Disposable_NoThrowOnDoubleDispose()
     {
         var signer = McpMessageSigner.CreateMLDsa();
@@ -580,4 +625,25 @@ public class McpMessageSignerTests
         signer.Dispose(); // should not throw
     }
 #endif
+
+    private sealed class ThrowingNonceStore : IMcpNonceStore
+    {
+        public Task<bool> ContainsAsync(string nonce, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException(@"C:\sensitive\path");
+        }
+
+        public Task<bool> AddAsync(string nonce, DateTimeOffset timestamp, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException(@"C:\sensitive\path");
+        }
+
+        public Task<int> CleanupAsync(DateTimeOffset cutoff, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException(@"C:\sensitive\path");
+        }
+    }
 }

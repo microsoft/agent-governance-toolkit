@@ -95,8 +95,8 @@ public sealed class McpSessionAuthenticator
                 UserId = userId,
                 CreatedAt = now,
                 ExpiresAt = now.Add(SessionTtl),
-                // Composite key for rate limiting: userId:agentId or just agentId
-                RateLimitKey = userId is not null ? $"{userId}:{agentId}" : agentId
+                // Composite key for rate limiting: userId|agentId or just agentId
+                RateLimitKey = userId is not null ? $"{userId}|{agentId}" : agentId
             };
 
             if (!TrySetSession(session))

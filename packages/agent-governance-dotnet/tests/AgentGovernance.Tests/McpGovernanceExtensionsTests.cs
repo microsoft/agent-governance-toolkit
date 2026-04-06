@@ -1,5 +1,6 @@
 // Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
+using System.Reflection;
 using AgentGovernance.Extensions;
 using AgentGovernance.Mcp;
 using AgentGovernance.Mcp.Abstractions;
@@ -93,6 +94,21 @@ public class McpGovernanceExtensionsTests
         });
 
         Assert.NotNull(response["result"]);
+    }
+
+    [Fact]
+    public void AddMcpGovernance_OptionsAgentId_UsedWhenArgumentNotProvided()
+    {
+        var stack = McpGovernanceExtensions.AddMcpGovernance(
+            mcpOptions: new McpGovernanceOptions
+            {
+                AgentId = "did:mesh:configured-agent"
+            });
+
+        var agentIdField = typeof(McpMessageHandler).GetField("_agentId", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(agentIdField);
+        Assert.Equal("did:mesh:configured-agent", agentIdField!.GetValue(stack.Handler));
     }
 
     // ── UseMcpGovernance ─────────────────────────────────────────────────

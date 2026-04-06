@@ -8,6 +8,15 @@ namespace AgentGovernance.Tests;
 
 public class McpGatewayTests
 {
+    private sealed class ThrowingAuditSink : IMcpAuditSink
+    {
+        public Task RecordAsync(McpAuditEntry entry, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException(@"C:\sensitive\path");
+        }
+    }
+
     private static GovernanceKernel CreateKernel(string? yaml = null)
     {
         var kernel = new GovernanceKernel(new GovernanceOptions
@@ -171,6 +180,20 @@ public class McpGatewayTests
         var (allowed, _) = gateway.InterceptToolCall("did:mesh:a1", "db_query", args);
 
         Assert.True(allowed);
+    }
+
+    [Fact]
+    public void InterceptToolCall_AuditSinkFailure_DoesNotLeakExceptionDetails()
+    {
+        var gateway = new McpGateway(
+            CreateKernel(),
+            auditSink: new ThrowingAuditSink(),
+            timeProvider: new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z")));
+
+        var (allowed, reason) = gateway.InterceptToolCall("did:mesh:a1", "db_query", new Dictionary<string, object>());
+
+        Assert.False(allowed);
+        Assert.Equal("Gateway error (fail-closed).", reason);
     }
 
     // ── Stage 4: Rate limiting (budget) ──────────────────────────────────

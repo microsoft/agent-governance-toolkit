@@ -133,11 +133,13 @@ public sealed class McpMessageHandler
         }
         catch (UnauthorizedAccessException ex)
         {
-            return JsonRpcError(id, -32003, ex.Message);
+            Logger?.LogWarning(ex, "MCP message denied by governance");
+            return JsonRpcError(id, -32003, "Access denied by governance policy.");
         }
         catch (Exception ex)
         {
-            return JsonRpcError(id, -32603, $"Internal error: {ex.Message}");
+            Logger?.LogError(ex, "MCP message handling failed");
+            return JsonRpcError(id, -32603, "Internal error.");
         }
     }
 

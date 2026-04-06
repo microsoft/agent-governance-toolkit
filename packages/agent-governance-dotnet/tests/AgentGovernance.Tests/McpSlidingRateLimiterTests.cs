@@ -1,5 +1,6 @@
 // Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
+using System.Reflection;
 using AgentGovernance.Mcp;
 using AgentGovernance.Mcp.Abstractions;
 using Xunit;
@@ -8,6 +9,13 @@ namespace AgentGovernance.Tests;
 
 public class McpSlidingRateLimiterTests
 {
+    private static int GetBucketLockCount(McpSlidingRateLimiter limiter)
+    {
+        var field = typeof(McpSlidingRateLimiter).GetField("_bucketLocks", BindingFlags.Instance | BindingFlags.NonPublic);
+        var bucketLocks = Assert.IsAssignableFrom<System.Collections.IDictionary>(field?.GetValue(limiter));
+        return bucketLocks.Count;
+    }
+
     // ── TryAcquire basics ────────────────────────────────────────────────
 
     [Fact]
@@ -288,6 +296,27 @@ public class McpSlidingRateLimiterTests
     {
         var limiter = new McpSlidingRateLimiter();
         Assert.Equal(0, limiter.CleanupExpired());
+    }
+
+    [Fact]
+    public void CleanupExpired_EvictsInactiveLockEntries()
+    {
+        var timeProvider = new ManualTimeProvider(DateTimeOffset.Parse("2024-01-01T00:00:00Z"));
+        var limiter = new McpSlidingRateLimiter(new InMemoryMcpRateLimitStore(), timeProvider)
+        {
+            WindowSize = TimeSpan.FromMilliseconds(50),
+            LockEntryTtl = TimeSpan.FromMilliseconds(1),
+            LockSweepInterval = TimeSpan.Zero
+        };
+
+        limiter.TryAcquire("agent-1");
+        Assert.Equal(1, GetBucketLockCount(limiter));
+
+        timeProvider.Advance(TimeSpan.FromMilliseconds(100));
+
+        limiter.CleanupExpired();
+
+        Assert.Equal(0, GetBucketLockCount(limiter));
     }
 
     // ── Thread safety ────────────────────────────────────────────────────

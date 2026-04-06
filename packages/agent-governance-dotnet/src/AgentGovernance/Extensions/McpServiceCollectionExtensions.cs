@@ -80,7 +80,7 @@ public static class McpServiceCollectionExtensions
         services.AddSingleton(sp => new McpMessageHandler(
             sp.GetRequiredService<McpGateway>(),
             sp.GetRequiredService<McpToolMapper>(),
-            "did:mesh:default"));
+            options.AgentId));
 
         if (options.EnableResponseScanning)
             services.AddSingleton<McpResponseScanner>();

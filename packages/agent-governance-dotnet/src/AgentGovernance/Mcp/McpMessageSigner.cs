@@ -69,14 +69,14 @@ public sealed class McpMessageSigner : IDisposable
     /// <summary>
     /// Initializes a new message signer with the given shared secret (HMAC-SHA256).
     /// </summary>
-    /// <param name="signingKey">Shared secret key (minimum 16 bytes, 32 recommended).</param>
+    /// <param name="signingKey">Shared secret key (minimum 32 bytes).</param>
     /// <param name="nonceStore">The nonce store used for replay protection.</param>
     /// <param name="timeProvider">The clock used for timestamps and replay-window checks.</param>
     public McpMessageSigner(byte[] signingKey, IMcpNonceStore? nonceStore = null, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(signingKey);
-        if (signingKey.Length < 16)
-            throw new ArgumentException("Signing key must be at least 16 bytes.", nameof(signingKey));
+        if (signingKey.Length < 32)
+            throw new ArgumentException("Signing key must be at least 32 bytes.", nameof(signingKey));
         _signingKey = signingKey;
         _nonceStore = nonceStore ?? new InMemoryMcpNonceStore();
         _timeProvider = timeProvider ?? TimeProvider.System;
@@ -226,8 +226,8 @@ public sealed class McpMessageSigner : IDisposable
         }
         catch (Exception ex)
         {
-            // Fail-closed
-            return McpVerificationResult.Failed($"Verification error (fail-closed): {ex.Message}");
+            Logger?.LogError(ex, "MCP message verification failed closed");
+            return McpVerificationResult.Failed("Verification error (fail-closed).");
         }
     }
 

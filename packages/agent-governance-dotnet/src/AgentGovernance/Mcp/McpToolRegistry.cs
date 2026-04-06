@@ -13,6 +13,7 @@ public sealed class McpToolRegistry
 {
     private readonly McpMessageHandler _handler;
     private readonly ILogger<McpToolRegistry>? _logger;
+    private readonly object _registrationsLock = new();
     private readonly List<ToolRegistration> _registrations = new();
 
     /// <summary>
@@ -27,7 +28,16 @@ public sealed class McpToolRegistry
     }
 
     /// <summary>Gets all discovered tool registrations.</summary>
-    public IReadOnlyList<ToolRegistration> Registrations => _registrations.AsReadOnly();
+    public IReadOnlyList<ToolRegistration> Registrations
+    {
+        get
+        {
+            lock (_registrationsLock)
+            {
+                return _registrations.ToArray();
+            }
+        }
+    }
 
     /// <summary>
     /// Scans the specified assembly for methods decorated with <see cref="McpToolAttribute"/>
@@ -57,7 +67,10 @@ public sealed class McpToolRegistry
                     ["inputSchema"] = schema
                 };
                 _handler.RegisterTool(toolName, toolInfo);
-                _registrations.Add(registration);
+                lock (_registrationsLock)
+                {
+                    _registrations.Add(registration);
+                }
                 count++;
 
                 _logger?.LogDebug("Discovered MCP tool: {ToolName} from {TypeName}.{MethodName}",
@@ -79,7 +92,10 @@ public sealed class McpToolRegistry
     /// </summary>
     public ToolRegistration? GetRegistration(string toolName)
     {
-        return _registrations.Find(r => r.ToolName == toolName);
+        lock (_registrationsLock)
+        {
+            return _registrations.Find(r => r.ToolName == toolName);
+        }
     }
 
     /// <summary>

@@ -81,7 +81,7 @@ public class McpSessionAuthenticatorTests
 
         Assert.NotNull(session);
         Assert.Equal(UserId, session.UserId);
-        Assert.Equal($"{UserId}:{AgentId}", session.RateLimitKey);
+        Assert.Equal($"{UserId}|{AgentId}", session.RateLimitKey);
     }
 
     [Fact]

@@ -21,8 +21,10 @@ public sealed class McpSlidingRateLimiter
 {
     private readonly IMcpRateLimitStore _rateLimitStore;
     private readonly ConcurrentDictionary<string, object> _bucketLocks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _lockLastTouched = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte> _trackedAgents = new(StringComparer.OrdinalIgnoreCase);
     private readonly TimeProvider _timeProvider;
+    private DateTimeOffset _lastLockSweep;
 
     /// <summary>
     /// Initializes a new limiter with in-memory persistence and the system clock.
@@ -41,6 +43,7 @@ public sealed class McpSlidingRateLimiter
     {
         _rateLimitStore = rateLimitStore ?? throw new ArgumentNullException(nameof(rateLimitStore));
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _lastLockSweep = _timeProvider.GetUtcNow();
     }
 
     /// <summary>
@@ -53,6 +56,18 @@ public sealed class McpSlidingRateLimiter
     /// The duration of the sliding window. Defaults to 5 minutes.
     /// </summary>
     public TimeSpan WindowSize { get; init; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Maximum idle time before an unused per-agent lock entry is evicted.
+    /// Defaults to 15 minutes.
+    /// </summary>
+    public TimeSpan LockEntryTtl { get; init; } = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// Minimum time between background sweeps that evict stale per-agent lock entries.
+    /// Defaults to 5 minutes.
+    /// </summary>
+    public TimeSpan LockSweepInterval { get; init; } = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// Optional logger for recording rate limit events.
@@ -72,10 +87,9 @@ public sealed class McpSlidingRateLimiter
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
 
-        var bucketLock = _bucketLocks.GetOrAdd(agentId, _ => new object());
-        _trackedAgents[agentId] = 0;
-
         var now = _timeProvider.GetUtcNow();
+        var bucketLock = GetBucketLock(agentId, now);
+        _trackedAgents[agentId] = 0;
         var cutoff = now - WindowSize;
 
         lock (bucketLock)
@@ -91,6 +105,7 @@ public sealed class McpSlidingRateLimiter
 
             timestamps.Add(now);
             SaveBucket(agentId, timestamps);
+            MaybeSweepInactiveLocks(now);
             return true;
         }
     }
@@ -105,17 +120,22 @@ public sealed class McpSlidingRateLimiter
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
 
-        var bucketLock = _bucketLocks.GetOrAdd(agentId, _ => new object());
+        var now = _timeProvider.GetUtcNow();
+        var bucketLock = GetBucketLock(agentId, now);
         lock (bucketLock)
         {
             var timestamps = GetBucketTimestamps(agentId);
             if (timestamps.Count == 0)
             {
+                EvictLockIfInactive(agentId, timestamps.Count);
+                MaybeSweepInactiveLocks(now);
                 return MaxCallsPerWindow;
             }
 
-            PruneExpired(timestamps, _timeProvider.GetUtcNow() - WindowSize);
+            PruneExpired(timestamps, now - WindowSize);
             SaveBucket(agentId, timestamps);
+            EvictLockIfInactive(agentId, timestamps.Count);
+            MaybeSweepInactiveLocks(now);
             return Math.Max(0, MaxCallsPerWindow - timestamps.Count);
         }
     }
@@ -130,17 +150,22 @@ public sealed class McpSlidingRateLimiter
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
 
-        var bucketLock = _bucketLocks.GetOrAdd(agentId, _ => new object());
+        var now = _timeProvider.GetUtcNow();
+        var bucketLock = GetBucketLock(agentId, now);
         lock (bucketLock)
         {
             var timestamps = GetBucketTimestamps(agentId);
             if (timestamps.Count == 0)
             {
+                EvictLockIfInactive(agentId, timestamps.Count);
+                MaybeSweepInactiveLocks(now);
                 return 0;
             }
 
-            PruneExpired(timestamps, _timeProvider.GetUtcNow() - WindowSize);
+            PruneExpired(timestamps, now - WindowSize);
             SaveBucket(agentId, timestamps);
+            EvictLockIfInactive(agentId, timestamps.Count);
+            MaybeSweepInactiveLocks(now);
             return timestamps.Count;
         }
     }
@@ -154,11 +179,14 @@ public sealed class McpSlidingRateLimiter
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
 
-        var bucketLock = _bucketLocks.GetOrAdd(agentId, _ => new object());
+        var now = _timeProvider.GetUtcNow();
+        var bucketLock = GetBucketLock(agentId, now);
         lock (bucketLock)
         {
             SaveBucket(agentId, []);
             _trackedAgents.TryRemove(agentId, out _);
+            EvictLockIfInactive(agentId, 0);
+            MaybeSweepInactiveLocks(now);
         }
     }
 
@@ -181,12 +209,13 @@ public sealed class McpSlidingRateLimiter
     /// <returns>The total number of expired entries removed across all agents.</returns>
     public int CleanupExpired()
     {
-        var cutoff = _timeProvider.GetUtcNow() - WindowSize;
+        var now = _timeProvider.GetUtcNow();
+        var cutoff = now - WindowSize;
         int totalRemoved = 0;
 
         foreach (var agentId in _trackedAgents.Keys.ToArray())
         {
-            var bucketLock = _bucketLocks.GetOrAdd(agentId, _ => new object());
+            var bucketLock = GetBucketLock(agentId, now);
             lock (bucketLock)
             {
                 var timestamps = GetBucketTimestamps(agentId);
@@ -198,11 +227,51 @@ public sealed class McpSlidingRateLimiter
                 if (timestamps.Count == 0)
                 {
                     _trackedAgents.TryRemove(agentId, out _);
+                    EvictLockIfInactive(agentId, timestamps.Count);
                 }
             }
         }
 
+        MaybeSweepInactiveLocks(now);
         return totalRemoved;
+    }
+
+    private object GetBucketLock(string agentId, DateTimeOffset now)
+    {
+        _lockLastTouched[agentId] = now;
+        return _bucketLocks.GetOrAdd(agentId, _ => new object());
+    }
+
+    private void EvictLockIfInactive(string agentId, int timestampCount)
+    {
+        if (timestampCount > 0 || _trackedAgents.ContainsKey(agentId))
+        {
+            return;
+        }
+
+        _bucketLocks.TryRemove(agentId, out _);
+        _lockLastTouched.TryRemove(agentId, out _);
+    }
+
+    private void MaybeSweepInactiveLocks(DateTimeOffset now)
+    {
+        if (now - _lastLockSweep < LockSweepInterval)
+        {
+            return;
+        }
+
+        _lastLockSweep = now;
+        var cutoff = now - LockEntryTtl;
+        foreach (var (agentId, lastTouched) in _lockLastTouched.ToArray())
+        {
+            if (lastTouched > cutoff || _trackedAgents.ContainsKey(agentId))
+            {
+                continue;
+            }
+
+            _bucketLocks.TryRemove(agentId, out _);
+            _lockLastTouched.TryRemove(agentId, out _);
+        }
     }
 
     private List<DateTimeOffset> GetBucketTimestamps(string agentId)

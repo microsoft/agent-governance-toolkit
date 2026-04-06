@@ -63,10 +63,12 @@ public class CredentialRedactorTests
     [Fact]
     public void Redact_PrivateKey_Redacted()
     {
-        var input = "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQ...";
+        var input = "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQ...\n-----END RSA PRIVATE KEY-----";
         var result = CredentialRedactor.Redact(input);
 
         Assert.DoesNotContain("-----BEGIN RSA PRIVATE KEY-----", result);
+        Assert.DoesNotContain("MIIEpAIBAAKCAQ", result);
+        Assert.DoesNotContain("-----END RSA PRIVATE KEY-----", result);
         Assert.Contains(CredentialRedactor.RedactedPlaceholder, result);
     }
 

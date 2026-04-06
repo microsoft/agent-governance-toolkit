@@ -69,6 +69,22 @@ public class McpMessageHandlerTests
     }
 
     [Fact]
+    public void HandleMessage_ToolsCall_DeniedTool_SanitizesErrorMessage()
+    {
+        var (handler, _) = CreateHandler(deniedTools: new[] { "evil_tool" });
+
+        var response = handler.HandleMessage(MakeMessage("tools/call",
+            new Dictionary<string, object>
+            {
+                ["name"] = "evil_tool",
+                ["arguments"] = new Dictionary<string, object>()
+            }));
+
+        var error = Assert.IsType<Dictionary<string, object>>(response["error"]);
+        Assert.Equal("Access denied by governance policy.", error["message"]);
+    }
+
+    [Fact]
     public void HandleMessage_ToolsCall_UnknownTool_ReturnsError()
     {
         var (handler, _) = CreateHandler();
