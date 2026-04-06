@@ -1,6 +1,6 @@
-> この文書は [README.md](/README.md) の日本語訳です。最新の情報は英語版をご確認ください。
+> この文書は [README.md](../../README.md) の日本語訳です。最新の情報は英語版をご確認ください。
 
-🌍 [English](/README.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md)
+🌍 [English](../../README.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md)
 
 ![Agent Governance Toolkit](../../docs/assets/readme-banner.svg)
 
