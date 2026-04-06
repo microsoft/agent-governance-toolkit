@@ -1,0 +1,25 @@
+[package]
+name = "agentmesh-mcp"
+version.workspace = true
+edition.workspace = true
+description = "Public Preview — standalone MCP governance and security primitives for AgentMesh"
+license.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/agentmesh-mcp"
+readme = "README.md"
+keywords = ["agent", "mcp", "governance", "security", "agentmesh"]
+categories = ["authentication", "cryptography"]
+rust-version.workspace = true
+
+[dependencies]
+base64.workspace = true
+hmac.workspace = true
+rand.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -150,3 +150,27 @@ __all__ = [
     "KillSwitch",
     "KillResult",
 ]
+
+# ============================================================================
+# Deployment Runtime (v3.0.2+)
+# ============================================================================
+
+from agent_runtime.deploy import (
+    DeploymentResult,
+    DeploymentStatus,
+    DeploymentTarget,
+    DockerDeployer,
+    GovernanceConfig,
+    KubernetesDeployer,
+)
+
+# Update __all__ to include new exports
+__all__ = [
+    *__all__,
+    "DeploymentResult",
+    "DeploymentStatus",
+    "DeploymentTarget",
+    "DockerDeployer",
+    "GovernanceConfig",
+    "KubernetesDeployer",
+]

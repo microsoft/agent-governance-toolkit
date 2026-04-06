@@ -34,6 +34,9 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# Import the shared allowlist validation from verify.py
+from agent_compliance.verify import ALLOWED_MODULE_PREFIXES, _validate_module_name
+
 # Governance modules whose integrity we verify
 GOVERNANCE_MODULES = [
     "agent_os.integrations.base",
@@ -244,6 +247,7 @@ class IntegrityVerifier:
         # Phase 1: File hash verification
         for mod_name in self.modules:
             try:
+                _validate_module_name(mod_name)
                 mod = importlib.import_module(mod_name)
                 source_file = inspect.getfile(mod)
                 actual_hash = _hash_file(source_file)
@@ -267,7 +271,7 @@ class IntegrityVerifier:
                         error="hash mismatch" if not passed else None,
                     )
                 )
-            except ImportError:
+            except (ImportError, ValueError):
                 report.modules_missing.append(mod_name)
             except Exception as e:
                 report.file_results.append(
@@ -285,6 +289,7 @@ class IntegrityVerifier:
         # Phase 2: Critical function bytecode verification
         for mod_name, func_path in self.critical_functions:
             try:
+                _validate_module_name(mod_name)
                 mod = importlib.import_module(mod_name)
                 func = _resolve_function(mod, func_path)
                 if func is None:
@@ -359,23 +364,25 @@ class IntegrityVerifier:
 
         for mod_name in self.modules:
             try:
+                _validate_module_name(mod_name)
                 mod = importlib.import_module(mod_name)
                 source_file = inspect.getfile(mod)
                 manifest["files"][mod_name] = {
                     "sha256": _hash_file(source_file),
                     "path": source_file,
                 }
-            except (ImportError, OSError, TypeError) as e:
+            except (ImportError, OSError, TypeError, ValueError) as e:
                 logger.warning("Could not hash module %s: %s", mod_name, e)
 
         for mod_name, func_path in self.critical_functions:
             try:
+                _validate_module_name(mod_name)
                 mod = importlib.import_module(mod_name)
                 func = _resolve_function(mod, func_path)
                 if func:
                     key = f"{mod_name}:{func_path}"
                     manifest["functions"][key] = _hash_function_bytecode(func)
-            except (ImportError, OSError, TypeError, AttributeError) as e:
+            except (ImportError, OSError, TypeError, AttributeError, ValueError) as e:
                 logger.warning(
                     "Could not hash function %s.%s: %s", mod_name, func_path, e
                 )

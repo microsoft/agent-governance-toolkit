@@ -129,14 +129,34 @@ class EUAIActRiskClassifier:
     # ---- public API ----
 
     def classify(self, profile: AgentRiskProfile) -> ClassificationResult:
-        """Classify the risk level for an agent profile."""
+        """Classify the risk level for an AI system per EU AI Act Article 6.
+
+        Evaluates the profile through the following cascade:
+
+        1. **Article 5** -- prohibited practices (returns UNACCEPTABLE)
+        2. **Article 6(1)** -- safety component under Annex I legislation (returns HIGH)
+        3. **Article 6(2)** -- Annex III domain match (returns HIGH, unless exempted)
+        4. **Article 6(3)** -- exemptions for narrow procedural tasks (may downgrade)
+           - Exemptions are voided when ``profile.involves_profiling`` is ``True``
+             (GDPR Art. 4(4) profiling override).
+        5. **Capability escalation** -- high-risk capabilities (returns HIGH)
+        6. **Article 50** -- transparency obligations (returns LIMITED)
+        7. **Default** -- returns MINIMAL
+
+        Args:
+            profile: An ``AgentRiskProfile`` describing the AI system.
+
+        Returns:
+            A ``ClassificationResult`` containing the risk level, a list of
+            triggers that explain the classification, any exemptions applied,
+            and whether a profiling override was activated.
+        """
         domain = _normalize(profile.domain)
         caps = {_normalize(c) for c in profile.capabilities}
         exemption_tags = {_normalize(t) for t in profile.exemption_tags}
 
         triggers: List[str] = []
         exemptions_applied: List[str] = []
-        profiling_override = False
 
         # 1. Article 5 -- Prohibited practices (always checked first)
         if domain in self._unacceptable:
@@ -172,7 +192,6 @@ class EUAIActRiskClassifier:
             if valid_exemptions:
                 # 3b. Profiling override: exemptions do NOT apply when profiling
                 if profile.involves_profiling:
-                    profiling_override = True
                     triggers.append(
                         f"Domain '{profile.domain}' listed in Annex III"
                     )
@@ -218,7 +237,7 @@ class EUAIActRiskClassifier:
         # 5. Article 50 -- LIMITED transparency obligations
         if domain in self._limited or caps & self._limited:
             triggers.append(
-                f"Transparency obligations under Article 50"
+                "Transparency obligations under Article 50"
             )
             return ClassificationResult(
                 risk_level=RiskLevel.LIMITED,

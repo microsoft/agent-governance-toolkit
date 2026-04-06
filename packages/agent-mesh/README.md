@@ -504,6 +504,7 @@ agentmesh/
 ├── governance/         # Layer 3: Governance & Compliance
 │   ├── policy.py       # Declarative policy engine (YAML/JSON)
 │   ├── compliance.py   # Compliance mapping (EU AI Act, SOC2, HIPAA, GDPR)
+│   ├── eu_ai_act.py    # EU AI Act risk classifier (Art. 5/6, Annex I/III)
 │   ├── audit.py        # Audit logs
 │   └── shadow.py       # Legacy reference. Shadow mode has been moved to Agent SRE.
 │
@@ -537,7 +538,7 @@ agentmesh/
 
 AgentMesh automates compliance mapping for:
 
-- **EU AI Act** — Risk classification, transparency requirements
+- **EU AI Act** — Structured risk classification (Art. 5/6, Annex I/III, Art. 6(3) exemptions)
 - **SOC 2** — Security, availability, processing integrity
 - **HIPAA** — PHI handling, audit controls
 - **GDPR** — Data processing, consent, right to explanation
@@ -561,6 +562,37 @@ report = compliance.generate_report(
     period_start=datetime.utcnow() - timedelta(days=30),
     period_end=datetime.utcnow(),
 )
+```
+
+### EU AI Act Risk Classification
+
+```python
+from agentmesh.governance import EUAIActRiskClassifier, AgentRiskProfile
+
+classifier = EUAIActRiskClassifier()
+
+# Classify a credit-scoring system
+profile = AgentRiskProfile(
+    name="CreditBot",
+    domain="credit_scoring",
+    capabilities=["financial_decisioning"],
+)
+result = classifier.classify(profile)
+print(result.risk_level)   # RiskLevel.HIGH
+print(result.triggers)     # ["Domain 'credit_scoring' listed in Annex III (high-risk)"]
+
+# Art. 6(3) exemption for a narrow procedural task
+profile = AgentRiskProfile(
+    name="FormHelper",
+    domain="employment_recruitment",
+    exemption_tags=["narrow_procedural_task"],
+)
+result = classifier.classify(profile)
+print(result.risk_level)          # Not HIGH (exempted)
+print(result.exemptions_applied)  # ["narrow_procedural_task"]
+
+# Custom config for regulatory updates
+classifier = EUAIActRiskClassifier(config_path="my_updated_annex_iii.yaml")
 ```
 
 ## Threat Model

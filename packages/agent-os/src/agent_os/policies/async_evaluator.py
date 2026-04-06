@@ -34,6 +34,13 @@ from .evaluator import PolicyDecision, PolicyEvaluator
 logger = logging.getLogger(__name__)
 
 
+def _rounded_duration(value: float) -> float:
+    """Round durations while preserving tiny positive measurements."""
+    if value <= 0.0:
+        return 0.0
+    return max(round(value, 6), 1e-6)
+
+
 # ---------------------------------------------------------------------------
 # Concurrency statistics
 # ---------------------------------------------------------------------------
@@ -64,8 +71,8 @@ class ConcurrencyStats:
         """Serialise stats to a plain dictionary."""
         return {
             "evaluation_count": self.evaluation_count,
-            "total_evaluation_time": round(self.total_evaluation_time, 6),
-            "average_evaluation_time": round(self.average_evaluation_time, 6),
+            "total_evaluation_time": _rounded_duration(self.total_evaluation_time),
+            "average_evaluation_time": _rounded_duration(self.average_evaluation_time),
             "error_count": self.error_count,
             "reload_count": self.reload_count,
             "concurrent_peak": self.concurrent_peak,
@@ -237,7 +244,7 @@ class AsyncPolicyEvaluator:
                 if self._stats._active_readers > self._stats.concurrent_peak:
                     self._stats.concurrent_peak = self._stats._active_readers
 
-            start = time.monotonic()
+            start = time.perf_counter()
             try:
                 result = self._evaluator.evaluate(context)
             except Exception:
@@ -245,7 +252,7 @@ class AsyncPolicyEvaluator:
                     self._stats.error_count += 1
                 raise
             finally:
-                elapsed = time.monotonic() - start
+                elapsed = max(time.perf_counter() - start, 1e-6)
                 with self._thread_lock:
                     self._stats.evaluation_count += 1
                     self._stats.total_evaluation_time += elapsed

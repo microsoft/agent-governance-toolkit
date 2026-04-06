@@ -31,6 +31,31 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# Allowlist of module prefixes that may be imported via importlib.
+# Defense-in-depth: even though defaults are hardcoded, custom controls
+# passed via the constructor are validated against this allowlist.
+# MSRC Case 112362 — prevents RCE via unvalidated importlib.import_module.
+ALLOWED_MODULE_PREFIXES = frozenset({
+    "agent_os.",
+    "agentmesh.",
+    "agent_compliance.",
+    "agent_sre.",
+    "agent_hypervisor.",
+    "hypervisor.",
+    "agent_runtime.",
+    "agent_lightning_gov.",
+    "agent_marketplace.",
+})
+
+
+def _validate_module_name(mod_name: str) -> None:
+    """Raise ValueError if mod_name is not in the governance module allowlist."""
+    if not any(mod_name.startswith(prefix) for prefix in ALLOWED_MODULE_PREFIXES):
+        raise ValueError(
+            f"Module '{mod_name}' is not in the allowed governance module list. "
+            f"Only modules with prefixes {sorted(ALLOWED_MODULE_PREFIXES)} are permitted."
+        )
+
 
 # OWASP Agentic Security Initiative 2026 controls
 OWASP_ASI_CONTROLS = {
@@ -299,6 +324,7 @@ class GovernanceVerifier:
             )
 
         try:
+            _validate_module_name(mod_name)
             mod = importlib.import_module(mod_name)
             component = getattr(mod, component_name, None)
             if component is None:
@@ -317,7 +343,7 @@ class GovernanceVerifier:
                 module=mod_name,
                 component=component_name,
             )
-        except ImportError as e:
+        except (ImportError, ValueError) as e:
             return ControlResult(
                 control_id=control_id,
                 name=control_name,

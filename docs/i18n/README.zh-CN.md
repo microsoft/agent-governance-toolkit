@@ -1,4 +1,6 @@
-![Agent Governance Toolkit](../..//docs/assets/readme-banner.svg)
+🌍 [English](/README.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md)
+
+![Agent Governance Toolkit](../../docs/assets/readme-banner.svg)
 
 # 欢迎使用代理治理工具包 !
 

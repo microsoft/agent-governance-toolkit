@@ -70,15 +70,19 @@ REGISTERED_PACKAGES = {
     "ai-agents", "amb", "eval_type_backport",
     # Integration packages / real PyPI packages used as deps
     "hypothesis", "fakeredis", "langflow", "langgraph",
-    "agentmesh", "pydantic-ai", "haystack", "respx",
-    "langfuse", "arize", "llamaindex", "braintrust", "helicone",
+    "agentmesh", "pydantic-ai", "haystack", "haystack-ai", "respx",
+    "langfuse", "arize", "arize-phoenix", "llamaindex", "braintrust", "helicone",
     "datadog", "langsmith", "wandb", "mlflow", "agentops",
     "typer", "jsonschema", "anyio", "pre-commit", "import-linter",
     "mkdocs", "mkdocs-material", "mkdocstrings", "datasets", "sqlglot",
     "aio-pika", "aiokafka",
+    # Cedar/OPA policy backends
+    "cedarpy", "llama-index-core", "ddtrace",
     # Internal module references
     "inter-agent-trust-protocol", "agent-control-plane", "cmvk",
     "agent-tool-registry", "cedar", "opa", "huggingface_hub",
+    # APS adapter optional deps
+    "aps", "agent-passport-system",
     # Internal cross-package references (local-only, NOT on PyPI)
     # These are flagged as HIGH RISK if found in requirements.txt with version pins
     # instead of path references. See dependency confusion attack vector.
@@ -252,18 +256,39 @@ def check_pyproject_toml(filepath: str) -> list[str]:
     # Match dependency lines like: "package>=1.0" or "package[extra]>=1.0,<2.0"
     dep_re = re.compile(r'^[\s"]*([a-zA-Z0-9_-]+)', re.MULTILINE)
     in_deps = False
+    in_optional = False
     for line_num, line in enumerate(content.splitlines(), 1):
         stripped = line.strip()
-        if stripped.startswith("[project.dependencies]") or \
-           stripped.startswith("[project.optional-dependencies"):
+        if stripped.startswith("[project.dependencies]"):
             in_deps = True
+            in_optional = False
+            continue
+        if stripped.startswith("[project.optional-dependencies"):
+            in_deps = True
+            in_optional = True
             continue
         if stripped.startswith("[") and in_deps:
             in_deps = False
+            in_optional = False
             continue
         if not in_deps:
             continue
         if not stripped or stripped.startswith("#"):
+            continue
+        # In optional-dependencies, lines like 'aps = ["pkg>=1.0"]' are group
+        # headers — the key (aps) is an extras name, not a package. Parse the
+        # values inside the brackets instead.
+        if in_optional and re.match(r'^[a-zA-Z0-9_-]+\s*=\s*\[', stripped):
+            # Extract package names from the bracket contents
+            bracket_content = stripped.split("[", 1)[1].rstrip("]").strip()
+            for item in bracket_content.split(","):
+                item = item.strip().strip('"').strip("'")
+                if item:
+                    base = re.split(r'[><=!~;@\s]', item)[0].strip()
+                    if base and base.lower() not in registered_lower:
+                        findings.append(
+                            f"  {filepath}:{line_num}: '{base}' may not be registered on PyPI"
+                        )
             continue
         m = dep_re.match(stripped.strip('"').strip("'").strip(","))
         if m:

@@ -39,10 +39,7 @@ impl AuditLogger {
     pub fn log(&self, agent_id: &str, action: &str, decision: &str) -> AuditEntry {
         let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
         let seq = entries.len() as u64;
-        let prev_hash = entries
-            .last()
-            .map(|e| e.hash.clone())
-            .unwrap_or_default();
+        let prev_hash = entries.last().map(|e| e.hash.clone()).unwrap_or_default();
         let timestamp = iso8601_now();
 
         let hash_input = format!(
@@ -358,8 +355,7 @@ mod tests {
         {
             let mut entries = logger.entries.lock().unwrap();
             entries[1].previous_hash =
-                "0000000000000000000000000000000000000000000000000000000000000000"
-                    .to_string();
+                "0000000000000000000000000000000000000000000000000000000000000000".to_string();
         }
         assert!(!logger.verify());
     }

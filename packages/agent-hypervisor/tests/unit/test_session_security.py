@@ -276,10 +276,10 @@ class TestKillSwitch:
                 {"step_id": "step-1", "saga_id": "saga-1"},
             ],
         )
-        # Public Preview: no handoff, always compensated
-        assert result.handoff_success_count == 0
-        assert result.handoffs[0].status == HandoffStatus.COMPENSATED
-        assert result.compensation_triggered
+        assert result.handoff_success_count == 1
+        assert result.handoffs[0].status == HandoffStatus.HANDED_OFF
+        assert result.handoffs[0].to_agent == "backup-agent"
+        assert not result.compensation_triggered
 
     def test_kill_without_substitute(self):
         ks = KillSwitch()
@@ -324,8 +324,7 @@ class TestKillSwitch:
         ks = KillSwitch()
         ks.register_substitute("s1", "backup")
         ks.kill("a1", "s1", KillReason.MANUAL, [{"step_id": "s1", "saga_id": "sg1"}])
-        # Public Preview: no handoffs
-        assert ks.total_handoffs == 0
+        assert ks.total_handoffs == 1
 
     def test_unregister_substitute(self):
         ks = KillSwitch()

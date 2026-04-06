@@ -1,0 +1,240 @@
+{
+  "benchmark": "governance_overhead",
+  "timestamp": "2026-04-04T21:20:45.578065+00:00",
+  "python": "3.12.8",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 189 Stepping 1, GenuineIntel",
+  "iterations": 1000,
+  "warmup": 100,
+  "results": [
+    {
+      "name": "Bare action (no governance)",
+      "category": "baseline",
+      "iterations": 1000,
+      "p50_ms": 0.0003,
+      "p95_ms": 0.0004,
+      "p99_ms": 0.0004,
+      "mean_ms": 0.0003,
+      "ops_per_sec": 3076917
+    },
+    {
+      "name": "Simulated tool call (no governance)",
+      "category": "baseline",
+      "iterations": 1000,
+      "p50_ms": 0.0017,
+      "p95_ms": 0.002,
+      "p99_ms": 0.002,
+      "mean_ms": 0.0017,
+      "ops_per_sec": 588062
+    },
+    {
+      "name": "Policy eval (1 rules)",
+      "category": "policy",
+      "iterations": 1000,
+      "p50_ms": 0.0048,
+      "p95_ms": 0.0056,
+      "p99_ms": 0.0065,
+      "mean_ms": 0.0053,
+      "ops_per_sec": 190147
+    },
+    {
+      "name": "Policy eval (10 rules)",
+      "category": "policy",
+      "iterations": 1000,
+      "p50_ms": 0.0064,
+      "p95_ms": 0.0151,
+      "p99_ms": 0.0737,
+      "mean_ms": 0.0101,
+      "ops_per_sec": 98574
+    },
+    {
+      "name": "Policy eval (50 rules)",
+      "category": "policy",
+      "iterations": 1000,
+      "p50_ms": 0.012,
+      "p95_ms": 0.0129,
+      "p99_ms": 0.019,
+      "mean_ms": 0.0128,
+      "ops_per_sec": 78015
+    },
+    {
+      "name": "Policy eval (100 rules)",
+      "category": "policy",
+      "iterations": 1000,
+      "p50_ms": 0.0196,
+      "p95_ms": 0.042,
+      "p99_ms": 0.1689,
+      "mean_ms": 0.0259,
+      "ops_per_sec": 38543
+    },
+    {
+      "name": "Trust policy eval (1 rules)",
+      "category": "trust",
+      "iterations": 1000,
+      "p50_ms": 0.003,
+      "p95_ms": 0.0065,
+      "p99_ms": 0.0073,
+      "mean_ms": 0.0039,
+      "ops_per_sec": 258378
+    },
+    {
+      "name": "Trust policy eval (10 rules)",
+      "category": "trust",
+      "iterations": 1000,
+      "p50_ms": 0.0043,
+      "p95_ms": 0.0105,
+      "p99_ms": 0.0397,
+      "mean_ms": 0.0068,
+      "ops_per_sec": 147595
+    },
+    {
+      "name": "Trust policy eval (50 rules)",
+      "category": "trust",
+      "iterations": 1000,
+      "p50_ms": 0.01,
+      "p95_ms": 0.0207,
+      "p99_ms": 0.0705,
+      "mean_ms": 0.0127,
+      "ops_per_sec": 78802
+    },
+    {
+      "name": "Credential issuance",
+      "category": "credential",
+      "iterations": 1000,
+      "p50_ms": 0.0104,
+      "p95_ms": 0.0242,
+      "p99_ms": 0.0884,
+      "mean_ms": 0.0146,
+      "ops_per_sec": 68665
+    },
+    {
+      "name": "Token validation",
+      "category": "credential",
+      "iterations": 1000,
+      "p50_ms": 0.0505,
+      "p95_ms": 0.1664,
+      "p99_ms": 0.4524,
+      "mean_ms": 0.0716,
+      "ops_per_sec": 13957
+    },
+    {
+      "name": "Token hash verify",
+      "category": "credential",
+      "iterations": 1000,
+      "p50_ms": 0.0008,
+      "p95_ms": 0.0009,
+      "p99_ms": 0.0009,
+      "mean_ms": 0.0008,
+      "ops_per_sec": 1239311
+    },
+    {
+      "name": "Audit log write (Merkle)",
+      "category": "audit",
+      "iterations": 1000,
+      "p50_ms": 0.0481,
+      "p95_ms": 0.1194,
+      "p99_ms": 0.3689,
+      "mean_ms": 0.0778,
+      "ops_per_sec": 12852
+    },
+    {
+      "name": "Merkle chain verify (100 entries)",
+      "category": "audit",
+      "iterations": 1000,
+      "p50_ms": 0.6579,
+      "p95_ms": 1.6621,
+      "p99_ms": 3.3003,
+      "mean_ms": 0.8684,
+      "ops_per_sec": 1151
+    },
+    {
+      "name": "Ring computation",
+      "category": "rings",
+      "iterations": 10000,
+      "p50_ms": 0.0003,
+      "p95_ms": 0.0004,
+      "p99_ms": 0.0006,
+      "mean_ms": 0.0006,
+      "ops_per_sec": 1778853
+    },
+    {
+      "name": "Ring enforcement check",
+      "category": "rings",
+      "iterations": 10000,
+      "p50_ms": 0.0013,
+      "p95_ms": 0.0014,
+      "p99_ms": 0.0016,
+      "mean_ms": 0.0014,
+      "ops_per_sec": 704483
+    },
+    {
+      "name": "Delta capture",
+      "category": "delta_audit",
+      "iterations": 1000,
+      "p50_ms": 0.0091,
+      "p95_ms": 0.0099,
+      "p99_ms": 0.0129,
+      "mean_ms": 0.0094,
+      "ops_per_sec": 106777
+    },
+    {
+      "name": "Hash chain root (10 deltas)",
+      "category": "delta_audit",
+      "iterations": 1000,
+      "p50_ms": 0.0914,
+      "p95_ms": 0.1267,
+      "p99_ms": 0.2976,
+      "mean_ms": 0.1015,
+      "ops_per_sec": 9851
+    },
+    {
+      "name": "Session lifecycle",
+      "category": "hypervisor",
+      "iterations": 500,
+      "p50_ms": 0.0172,
+      "p95_ms": 0.0269,
+      "p99_ms": 0.2045,
+      "mean_ms": 0.0287,
+      "ops_per_sec": 34884
+    },
+    {
+      "name": "E2E: Ungoverned action",
+      "category": "e2e",
+      "iterations": 1000,
+      "p50_ms": 0.0004,
+      "p95_ms": 0.0005,
+      "p99_ms": 0.0005,
+      "mean_ms": 0.0004,
+      "ops_per_sec": 2311070
+    },
+    {
+      "name": "E2E: Governed action (full stack)",
+      "category": "e2e",
+      "iterations": 1000,
+      "p50_ms": 0.0661,
+      "p95_ms": 0.1131,
+      "p99_ms": 0.5185,
+      "mean_ms": 0.0917,
+      "ops_per_sec": 10907
+    },
+    {
+      "name": "E2E: Governed (policy only)",
+      "category": "e2e",
+      "iterations": 1000,
+      "p50_ms": 0.0124,
+      "p95_ms": 0.0142,
+      "p99_ms": 0.1195,
+      "mean_ms": 0.0202,
+      "ops_per_sec": 49556
+    }
+  ],
+  "overhead_summary": {
+    "ungoverned_p50_ms": 0.0004,
+    "governed_p50_ms": 0.0661,
+    "overhead_p50_ms": 0.0657,
+    "ungoverned_p99_ms": 0.0005,
+    "governed_p99_ms": 0.5185,
+    "overhead_p99_ms": 0.518,
+    "multiplier_p50": 165.2
+  }
+}

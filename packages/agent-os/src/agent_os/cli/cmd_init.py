@@ -9,8 +9,6 @@ import json
 from pathlib import Path
 
 from .output import (
-    AVAILABLE_POLICIES,
-    Colors,
     format_error,
     get_output_format,
 )

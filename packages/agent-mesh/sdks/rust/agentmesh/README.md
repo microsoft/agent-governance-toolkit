@@ -6,9 +6,28 @@ Rust SDK for the [Agent Governance Toolkit](https://github.com/microsoft/agent-g
 
 ## Install
 
+### Full SDK
+
+```bash
+cargo add agentmesh
+```
+
 ```toml
 [dependencies]
-agentmesh = "0.1"
+agentmesh = "3.0.2"
+```
+
+### Standalone MCP Package
+
+If you only need the MCP governance/security surface, install the standalone crate:
+
+```bash
+cargo add agentmesh-mcp
+```
+
+```toml
+[dependencies]
+agentmesh-mcp = "3.0.2"
 ```
 
 ## Quick Start
@@ -49,6 +68,34 @@ policies:
     // Audit chain is verifiable
     assert!(client.audit.verify());
 }
+```
+
+## MCP-Only Quick Start
+
+```rust
+use agentmesh_mcp::{
+    CredentialRedactor, InMemoryNonceStore, McpMessageSigner, SystemClock,
+    SystemNonceGenerator,
+};
+use std::sync::Arc;
+use std::time::Duration;
+
+let signer = McpMessageSigner::new(
+    b"top-secret-signing-key".to_vec(),
+    Arc::new(SystemClock),
+    Arc::new(SystemNonceGenerator),
+    Arc::new(InMemoryNonceStore::default()),
+    Duration::from_secs(300),
+    Duration::from_secs(600),
+)?;
+
+let message = signer.sign("hello from mcp")?;
+signer.verify(&message)?;
+
+let redactor = CredentialRedactor::new()?;
+let result = redactor.redact("Authorization: Bearer super-secret-token");
+assert!(result.sanitized.contains("[REDACTED_BEARER_TOKEN]"));
+# Ok::<(), agentmesh_mcp::McpError>(())
 ```
 
 ## API Overview

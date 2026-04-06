@@ -1,5 +1,17 @@
 # Copilot Instructions for agent-governance-toolkit
 
+## Decision Escalation
+
+For major design changes, always ask the maintainer (@imran-siddique) before proceeding:
+- New packages or modules that change the repo structure
+- Cross-cutting changes spanning 3+ packages
+- Security model changes (identity, trust, policy engine)
+- Breaking API changes to public interfaces
+- New framework integrations or SDK additions
+- Changes to CI/CD pipeline architecture
+
+Do NOT auto-merge large feature PRs without maintainer review.
+
 ## PR Merge Workflow
 
 When merging PRs, follow this sequence for EACH PR (do not batch):
