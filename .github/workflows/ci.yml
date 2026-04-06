@@ -170,9 +170,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: "8.0.x"
       - name: Build .NET SDK
         working-directory: packages/agent-governance-dotnet
         run: dotnet build --configuration Release --verbosity quiet
