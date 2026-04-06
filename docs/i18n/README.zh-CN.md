@@ -267,7 +267,7 @@ decision = engine.evaluate("did:mesh:agent-1", {"tool_name": "analyze"})
 | **Python** | [`agent-governance-toolkit[full]`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
 | **TypeScript** | [`@agentmesh/sdk`](../../packages/agent-mesh/sdks/typescript/) | `npm install @agentmesh/sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
-| **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
+| **Rust** | [`agentmesh`](../../packages/agent-mesh/sdks/rust/agentmesh/README.md) | `cargo add agentmesh` |
 | **Go** | [`agentmesh`](../../packages/agent-mesh/sdks/go/) | `go get github.com/microsoft/agent-governance-toolkit/sdks/go` |
 
 ### Python 软件包 (PyPI)

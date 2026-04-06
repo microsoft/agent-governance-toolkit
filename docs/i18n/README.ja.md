@@ -111,7 +111,7 @@ pip install agentmesh-lightning        # 強化学習トレーニングガバナ
 - **エージェント SRE**: SLO、エラーバジェット、リプレイデバッグ、カオスエンジニアリング、サーキットブレーカー、プログレッシブデリバリー
   - [Agent SRE](../../packages/agent-sre/) | [オブザーバビリティ統合](../../packages/agent-hypervisor/src/hypervisor/observability/)
 - **MCP セキュリティスキャナー**: MCP ツール定義におけるツールポイズニング、タイポスクワッティング、隠し命令、ラグプル攻撃を検出
-  - [MCP スキャナー](../../packages/agent-os/src/agentos/mcp_security.py) | [CLI](../../packages/agent-os/src/agentos/cli/mcp_scan.py)
+  - [MCP スキャナー](../../packages/agent-os/src/agent_os/mcp_security.py) | [CLI](../../packages/agent-os/src/agent_os/cli/mcp_scan.py)
 - **トラストレポート CLI**: `agentmesh trust report` — トラストスコア、タスクの成功/失敗、エージェントアクティビティを可視化
   - [トラスト CLI](../../packages/agent-mesh/src/agentmesh/cli/trust_cli.py)
 - **シークレットスキャンとファジング**: Gitleaks ワークフロー、ポリシー・インジェクション・サンドボックス・トラスト・MCP をカバーする7つのファズターゲット
@@ -287,8 +287,8 @@ decision = engine.evaluate("did:mesh:agent-1", {"tool_name": "analyze"})
 | **Python** | [`agent-governance-toolkit[full]`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
 | **TypeScript** | [`@agentmesh/sdk`](../../packages/agent-mesh/sdks/typescript/) | `npm install @agentmesh/sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
-| **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
-| **Rust MCP** | [`agentmesh-mcp`](https://crates.io/crates/agentmesh-mcp) | `cargo add agentmesh-mcp` |
+| **Rust** | [`agentmesh`](../../packages/agent-mesh/sdks/rust/agentmesh/README.md) | `cargo add agentmesh` |
+| **Rust MCP** | [`agentmesh-mcp`](../../packages/agent-mesh/sdks/rust/agentmesh-mcp/README.md) | `cargo add agentmesh-mcp` |
 | **Go** | [`agentmesh`](../../packages/agent-mesh/sdks/go/) | `go get github.com/microsoft/agent-governance-toolkit/sdks/go` |
 
 ### Python パッケージ (PyPI)
