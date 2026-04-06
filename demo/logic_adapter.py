@@ -165,6 +165,9 @@ class GovernanceDemoLogic:
         endpoint: Optional[str],
     ) -> None:
         """Write the correct API key env-var for the chosen backend."""
+        for key in ["GOOGLE_API_KEY", "AZURE_OPENAI_API_KEY", "OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT"]:
+            os.environ.pop(key, None)
+
         if backend_type == BACKEND_GEMINI:
             os.environ["GOOGLE_API_KEY"] = api_key
         elif backend_type == BACKEND_AZURE:

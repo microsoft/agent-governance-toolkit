@@ -25,7 +25,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Bootstrap sys.path so the demo packages resolve correctly
 # ---------------------------------------------------------------------------
-_REPO  = Path(__file__).resolve().parent.parent
+_REPO  = Path(__file__).resolve().parent.parent.parent
 _DEMO  = _REPO / "demo"
 for p in [
     _DEMO,

@@ -22,6 +22,20 @@ from logic_adapter import (
     BACKEND_GEMINI,
 )
 
+def _run_async(coro):
+    """Safely execute async code accounting for Streamlit's event loop environment."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(1) as pool:
+            return pool.submit(lambda: asyncio.run(coro)).result()
+    else:
+        return asyncio.run(coro)
+
 # ---------------------------------------------------------------------------
 # Page setup
 # ---------------------------------------------------------------------------
@@ -139,7 +153,7 @@ with tab_chat:
             st.markdown(prompt)
 
         with st.spinner("Governance layer evaluating... then LLM responding..."):
-            result = asyncio.run(
+            result = _run_async(
                 st.session_state.logic.run_agent_interaction(
                     agent_name="research-agent",
                     prompt=prompt,
@@ -215,8 +229,8 @@ with tab_pipeline:
         else:
             st.session_state.pipeline_log = []
 
-            with st.spinner("Pipeline running... Collector → Transformer → Validator"):
-                steps = asyncio.run(
+            with st.spinner("Executing governed multi-agent pipeline..."):
+                steps = _run_async(
                     st.session_state.logic.run_pipeline(
                         task_input=task_input,
                         model=model_name,
@@ -311,6 +325,6 @@ with tab_policy:
     if policy_files:
         for pf in policy_files:
             with st.expander(f"📄 {pf.name}", expanded=True):
-                st.code(pf.read_text(), language="yaml")
+                st.code(pf.read_text(encoding="utf-8"), language="yaml")
     else:
         st.warning("No policy files found in `demo/policies/`.")
