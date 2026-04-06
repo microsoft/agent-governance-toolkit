@@ -72,7 +72,8 @@ export function createExampleServer(): {
   const redactor = new sdk.CredentialRedactor();
   const responseScanner = new sdk.MCPResponseScanner();
   const securityScanner = new sdk.MCPSecurityScanner();
-  const rateLimiter = new sdk.MCPSlidingRateLimiter({ maxRequests: 5, windowMs: 60_000 });
+  const routeRateLimiter = new sdk.MCPSlidingRateLimiter({ maxRequests: 5, windowMs: 60_000 });
+  const gatewayRateLimiter = new sdk.MCPSlidingRateLimiter({ maxRequests: 5, windowMs: 60_000 });
   const sessionAuthenticator = new sdk.MCPSessionAuthenticator({
     secret: loadSecret('MCP_SESSION_SECRET'),
     ttlMs: 5 * 60_000,
@@ -84,7 +85,7 @@ export function createExampleServer(): {
     allowedTools: Object.keys(toolHandlers),
     sensitiveTools: ['read_file'],
     blockedPatterns: ['../', '..\\\\', '<system>', 'ignore previous instructions'],
-    rateLimiter,
+    rateLimiter: gatewayRateLimiter,
     auditSink,
     approvalHandler: async ({ toolName, params }) =>
       toolName === 'read_file' && params.approved !== true
@@ -131,6 +132,15 @@ export function createExampleServer(): {
     const signature = await messageSigner.verify(signedCall);
     if (!signature.valid) {
       response.status(401).json({ error: signature.reason });
+      return;
+    }
+
+    const routeRateLimit = await routeRateLimiter.consume(`${agentId}:${toolName}`);
+    if (!routeRateLimit.allowed) {
+      response.status(429).json({
+        error: 'Rate limit exceeded for this tool',
+        rateLimit: routeRateLimit,
+      });
       return;
     }
 
