@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import html
+import logging
 import time
 
 import bleach
@@ -12,6 +13,9 @@ import plotly.express as px
 import streamlit as st
 
 from simulator import AGENTS, DECISIONS, POLICIES, append_events, initialize_state
+
+
+logger = logging.getLogger(__name__)
 
 
 DECISION_COLORS = {"allow": "#1e9d63", "deny": "#c43d2c", "escalate": "#d18b00"}
@@ -164,14 +168,30 @@ def _coerce_bounded_int(value: object, *, default: int, min_value: int, max_valu
     try:
         parsed = int(value)
     except (TypeError, ValueError):
+        logger.warning("Invalid numeric input '%s'; defaulting to %s.", value, default)
         parsed = default
-    return max(min_value, min(max_value, parsed))
+
+    bounded = max(min_value, min(max_value, parsed))
+    if bounded != parsed:
+        logger.warning(
+            "Out-of-range numeric input '%s'; clamped to %s within [%s, %s].",
+            parsed,
+            bounded,
+            min_value,
+            max_value,
+        )
+    return bounded
 
 
 def _validated_selection(selected: object, allowed: list[str], fallback: list[str]) -> list[str]:
     if not isinstance(selected, list):
+        logger.warning("Invalid selection payload type '%s'; falling back to defaults.", type(selected).__name__)
         return fallback
+
     sanitized = [item for item in selected if item in allowed]
+    dropped_count = len(selected) - len(sanitized)
+    if dropped_count > 0:
+        logger.warning("Dropped %s invalid selection value(s).", dropped_count)
     return sanitized or fallback
 
 

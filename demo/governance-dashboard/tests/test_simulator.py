@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 import pandas as pd
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -111,6 +112,13 @@ def test_load_decision_weights_valid_and_invalid(monkeypatch) -> None:
 
     monkeypatch.setenv("AGD_DECISION_WEIGHTS", "1,0,-1")
     assert simulator._load_decision_weights() == simulator.DEFAULT_DECISION_WEIGHTS
+
+
+def test_load_decision_weights_strict_mode_raises(monkeypatch) -> None:
+    monkeypatch.setenv("AGD_STRICT_DECISION_WEIGHTS", "true")
+    monkeypatch.setenv("AGD_DECISION_WEIGHTS", "0.9,0.1")
+    with pytest.raises(ValueError):
+        simulator._load_decision_weights()
 
 
 def test_ensure_trust_map_normalizes_tampered_state(monkeypatch) -> None:

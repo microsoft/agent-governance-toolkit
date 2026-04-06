@@ -61,26 +61,30 @@ def _load_decision_weights() -> list[float]:
     """Load decision weights from env with strict validation and safe fallback."""
 
     raw = os.getenv("AGD_DECISION_WEIGHTS", "")
+    strict_mode = os.getenv("AGD_STRICT_DECISION_WEIGHTS", "false").strip().lower() in {"1", "true", "yes"}
+
+    def _reject(reason: str) -> list[float]:
+        if strict_mode:
+            raise ValueError(reason)
+        logger.warning("%s Using defaults.", reason)
+        return DEFAULT_DECISION_WEIGHTS
+
     if not raw:
         return DEFAULT_DECISION_WEIGHTS
 
     try:
         weights = [float(v.strip()) for v in raw.split(",")]
-    except ValueError:
-        logger.warning("Invalid AGD_DECISION_WEIGHTS format '%s'; using defaults.", raw)
-        return DEFAULT_DECISION_WEIGHTS
+    except ValueError as exc:
+        return _reject(f"Invalid AGD_DECISION_WEIGHTS format '{raw}': {exc}")
 
     if len(weights) != len(DECISIONS):
-        logger.warning("AGD_DECISION_WEIGHTS must provide %s values; using defaults.", len(DECISIONS))
-        return DEFAULT_DECISION_WEIGHTS
+        return _reject(f"AGD_DECISION_WEIGHTS must provide {len(DECISIONS)} values")
     if any(w <= 0 for w in weights):
-        logger.warning("AGD_DECISION_WEIGHTS contains non-positive values; using defaults.")
-        return DEFAULT_DECISION_WEIGHTS
+        return _reject("AGD_DECISION_WEIGHTS contains non-positive values")
 
     total = sum(weights)
     if total <= 0:
-        logger.warning("AGD_DECISION_WEIGHTS sum is invalid; using defaults.")
-        return DEFAULT_DECISION_WEIGHTS
+        return _reject("AGD_DECISION_WEIGHTS sum is invalid")
 
     return [w / total for w in weights]
 
