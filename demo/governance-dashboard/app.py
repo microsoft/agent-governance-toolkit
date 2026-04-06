@@ -277,7 +277,7 @@ with st.sidebar:
     st.header("Controls")
     live_mode = st.toggle("Live mode", value=True)
     refresh_seconds = st.slider("Refresh interval (seconds)", min_value=1, max_value=10, value=2)
-    events_per_tick = st.slider("Events per tick", min_value=1, max_value=15, value=4)
+    events_per_tick = st.slider("Events per tick", min_value=1, max_value=10, value=4)
 
     if st.button("Generate one tick now", use_container_width=True):
         append_events(events_per_tick)
@@ -291,7 +291,7 @@ with st.sidebar:
 
 # Defensive checks in case values are programmatically mutated in session state.
 refresh_seconds = _coerce_bounded_int(refresh_seconds, default=2, min_value=1, max_value=10)
-events_per_tick = _coerce_bounded_int(events_per_tick, default=4, min_value=1, max_value=15)
+events_per_tick = _coerce_bounded_int(events_per_tick, default=4, min_value=1, max_value=10)
 selected_agents = _validated_selection(selected_agents, AGENTS, AGENTS)
 selected_decisions = _validated_selection(selected_decisions, DECISIONS, DECISIONS)
 selected_policies = _validated_selection(selected_policies, POLICIES, POLICIES)
@@ -411,7 +411,7 @@ with row2_right:
     alerts = alerts.sort_values(["severity_rank", "timestamp"], ascending=[False, False]).head(30)
 
     if alerts.empty:
-        st.info("No violations detected")
+        st.info("No violations detected for the selected filters. Adjust filters to view more events.")
     else:
         alert_table = alerts[
             [

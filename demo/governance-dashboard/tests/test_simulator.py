@@ -90,3 +90,40 @@ def test_append_events_keeps_rolling_window(monkeypatch) -> None:
 
     simulator.append_events(10)
     assert len(simulator.st.session_state.events) == 1500
+
+
+def test_append_events_applies_hard_limit(monkeypatch) -> None:
+    _setup_fake_state(monkeypatch)
+    simulator.initialize_state(simulator.SimulationConfig(seed_events=1))
+
+    simulator.append_events(999)
+    assert len(simulator.st.session_state.events) == 11
+
+
+def test_load_decision_weights_valid_and_invalid(monkeypatch) -> None:
+    monkeypatch.setenv("AGD_DECISION_WEIGHTS", "0.7,0.2,0.1")
+    valid_weights = simulator._load_decision_weights()
+    assert len(valid_weights) == 3
+    assert abs(sum(valid_weights) - 1.0) < 1e-9
+
+    monkeypatch.setenv("AGD_DECISION_WEIGHTS", "0.9,0.1")
+    assert simulator._load_decision_weights() == simulator.DEFAULT_DECISION_WEIGHTS
+
+    monkeypatch.setenv("AGD_DECISION_WEIGHTS", "1,0,-1")
+    assert simulator._load_decision_weights() == simulator.DEFAULT_DECISION_WEIGHTS
+
+
+def test_ensure_trust_map_normalizes_tampered_state(monkeypatch) -> None:
+    fake_state = _setup_fake_state(monkeypatch)
+    fake_state.trust_map = {
+        ("orchestrator", "research-agent"): 500,
+        ("orchestrator", "orchestrator"): 10,
+        "bad-key": -5,
+    }
+
+    simulator._ensure_trust_map()
+
+    trust_map = fake_state.trust_map
+    assert len(trust_map) == len(simulator.AGENTS) * (len(simulator.AGENTS) - 1)
+    assert trust_map[("orchestrator", "research-agent")] == 100.0
+    assert ("orchestrator", "orchestrator") not in trust_map

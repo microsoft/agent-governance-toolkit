@@ -5,13 +5,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import logging
 import os
 import math
 import random
+from threading import RLock
 from typing import Any
 
 import pandas as pd
 import streamlit as st
+
+
+logger = logging.getLogger(__name__)
+_STATE_LOCK = RLock()
 
 
 AGENTS = [
@@ -61,15 +67,19 @@ def _load_decision_weights() -> list[float]:
     try:
         weights = [float(v.strip()) for v in raw.split(",")]
     except ValueError:
+        logger.warning("Invalid AGD_DECISION_WEIGHTS format '%s'; using defaults.", raw)
         return DEFAULT_DECISION_WEIGHTS
 
     if len(weights) != len(DECISIONS):
+        logger.warning("AGD_DECISION_WEIGHTS must provide %s values; using defaults.", len(DECISIONS))
         return DEFAULT_DECISION_WEIGHTS
     if any(w <= 0 for w in weights):
+        logger.warning("AGD_DECISION_WEIGHTS contains non-positive values; using defaults.")
         return DEFAULT_DECISION_WEIGHTS
 
     total = sum(weights)
     if total <= 0:
+        logger.warning("AGD_DECISION_WEIGHTS sum is invalid; using defaults.")
         return DEFAULT_DECISION_WEIGHTS
 
     return [w / total for w in weights]
@@ -132,28 +142,31 @@ def _compute_trust_drift(decision: str) -> float:
 
 
 def _ensure_trust_map() -> None:
-    trust_map: dict[tuple[str, str], float] = {}
-    raw_map = st.session_state.get("trust_map")
+    with _STATE_LOCK:
+        trust_map: dict[tuple[str, str], float] = {}
+        raw_map = st.session_state.get("trust_map")
 
-    if isinstance(raw_map, dict):
-        for key, value in raw_map.items():
-            if (
-                isinstance(key, tuple)
-                and len(key) == 2
-                and key[0] in AGENTS
-                and key[1] in AGENTS
-                and key[0] != key[1]
-            ):
-                trust_map[(key[0], key[1])] = _clamp_trust_score(value)
+        if isinstance(raw_map, dict):
+            for key, value in raw_map.items():
+                if (
+                    isinstance(key, tuple)
+                    and len(key) == 2
+                    and key[0] in AGENTS
+                    and key[1] in AGENTS
+                    and key[0] != key[1]
+                ):
+                    trust_map[(key[0], key[1])] = _clamp_trust_score(value)
+                else:
+                    logger.warning("Dropping invalid trust_map key: %s", key)
 
-    for src in AGENTS:
-        for dst in AGENTS:
-            if src == dst:
-                continue
-            if (src, dst) not in trust_map:
-                trust_map[(src, dst)] = _clamp_trust_score(random.uniform(65.0, 95.0))
+        for src in AGENTS:
+            for dst in AGENTS:
+                if src == dst:
+                    continue
+                if (src, dst) not in trust_map:
+                    trust_map[(src, dst)] = _clamp_trust_score(random.uniform(65.0, 95.0))
 
-    st.session_state.trust_map = trust_map
+        st.session_state.trust_map = trust_map
 
 
 def _build_event(ts: datetime) -> dict[str, Any]:
@@ -163,9 +176,10 @@ def _build_event(ts: datetime) -> dict[str, Any]:
 
     pair = (source, target)
     drift = _compute_trust_drift(decision)
-    current_score = _clamp_trust_score(st.session_state.trust_map.get(pair, random.uniform(65.0, 95.0)))
-    st.session_state.trust_map[pair] = _clamp_trust_score(current_score + drift)
-    trust_score = _clamp_trust_score(st.session_state.trust_map[pair])
+    with _STATE_LOCK:
+        current_score = _clamp_trust_score(st.session_state.trust_map.get(pair, random.uniform(65.0, 95.0)))
+        st.session_state.trust_map[pair] = _clamp_trust_score(current_score + drift)
+        trust_score = _clamp_trust_score(st.session_state.trust_map[pair])
 
     violation = decision in {"deny", "escalate"}
     severity = random.choice(["low", "medium", "high", "critical"]) if violation else "none"
@@ -197,27 +211,35 @@ def initialize_state(config: SimulationConfig | None = None) -> None:
 
     config = config or SimulationConfig()
 
-    if "events" in st.session_state:
-        return
+    with _STATE_LOCK:
+        if "events" in st.session_state:
+            return
 
-    _ensure_trust_map()
+        _ensure_trust_map()
 
-    now = datetime.now(tz=timezone.utc)
-    rows = []
-    for idx in range(config.seed_events):
-        rows.append(_build_event(now - timedelta(seconds=config.seed_events - idx)))
+        now = datetime.now(tz=timezone.utc)
+        rows = []
+        for idx in range(config.seed_events):
+            rows.append(_build_event(now - timedelta(seconds=config.seed_events - idx)))
 
-    st.session_state.events = pd.DataFrame(rows)
+        st.session_state.events = pd.DataFrame(rows)
 
 
 def append_events(count: int = 1) -> None:
     """Append generated events to session state while preserving a rolling window."""
 
+    try:
+        parsed_count = int(count)
+    except (TypeError, ValueError):
+        parsed_count = 1
+
+    bounded_count = max(1, min(10, parsed_count))
     _ensure_trust_map()
     latest = datetime.now(tz=timezone.utc)
-    rows = [_build_event(latest + timedelta(milliseconds=i * 100)) for i in range(max(1, count))]
+    rows = [_build_event(latest + timedelta(milliseconds=i * 100)) for i in range(bounded_count)]
     new_df = pd.DataFrame(rows)
 
-    st.session_state.events = pd.concat([st.session_state.events, new_df], ignore_index=True)
-    # Keep recent window for fast rendering in demo mode.
-    st.session_state.events = st.session_state.events.tail(1500).reset_index(drop=True)
+    with _STATE_LOCK:
+        st.session_state.events = pd.concat([st.session_state.events, new_df], ignore_index=True)
+        # Keep recent window for fast rendering in demo mode.
+        st.session_state.events = st.session_state.events.tail(1500).reset_index(drop=True)
