@@ -35,7 +35,7 @@ PORT=8080 npx copilot-governance
 ```
 
 Deploy this server as a GitHub App with the agent endpoint pointing to
-`https://your-host/agent`. See [GitHub Copilot Extensions docs](https://docs.github.com/en/copilot/building-copilot-extensions) for setup.
+`https://your-host/agent`. See [GitHub Copilot Extensions docs](https://docs.github.com/en/copilot/building-copilot-extensions/about-building-copilot-extensions) for setup.
 
 ---
 
@@ -209,7 +209,7 @@ See the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance
 - [OWASP Agentic Top-10](https://genai.owasp.org/)
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
 - [`@agentmesh/mastra`](../mastra-agentmesh/) — TypeScript governance middleware
-- [GitHub Copilot Extensions docs](https://docs.github.com/en/copilot/building-copilot-extensions)
+- [GitHub Copilot Extensions docs](https://docs.github.com/en/copilot/building-copilot-extensions/about-building-copilot-extensions)
 
 ---
 
