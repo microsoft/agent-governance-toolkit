@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import html
 import time
 
 import pandas as pd
@@ -25,8 +26,6 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
-
     :root {
         --agd-bg-1: #f2f7f4;
         --agd-bg-2: #e8efe8;
@@ -43,11 +42,11 @@ st.markdown(
           radial-gradient(circle at 88% 14%, #f5e8d2 0%, rgba(245, 232, 210, 0) 34%),
           linear-gradient(145deg, var(--agd-bg-1), var(--agd-bg-2));
         color: var(--agd-text);
-        font-family: "Space Grotesk", sans-serif;
+                font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     }
 
     h1, h2, h3 {
-        font-family: "Space Grotesk", sans-serif !important;
+                font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif !important;
         letter-spacing: -0.01em;
     }
 
@@ -132,7 +131,7 @@ st.markdown(
     .agd-kpi-escalate .agd-kpi-value { color: #b67600; }
 
     code {
-        font-family: "IBM Plex Mono", monospace !important;
+        font-family: "Consolas", "Courier New", monospace !important;
     }
 
     @media (max-width: 960px) {
@@ -328,7 +327,7 @@ with right:
         legend_title_text="",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(255,255,255,0.45)",
-        font=dict(family="Space Grotesk", size=12, color="#132026"),
+        font=dict(family="Segoe UI, Helvetica Neue, Arial, sans-serif", size=12, color="#132026"),
     )
     st.plotly_chart(fig_coverage, use_container_width=True)
 
@@ -365,7 +364,7 @@ with row2_left:
             coloraxis_colorbar_title="Trust",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(255,255,255,0.45)",
-            font=dict(family="Space Grotesk", size=12, color="#132026"),
+            font=dict(family="Segoe UI, Helvetica Neue, Arial, sans-serif", size=12, color="#132026"),
         )
         fig_heatmap.update_xaxes(title_text="Target Agent")
         fig_heatmap.update_yaxes(title_text="Source Agent")
@@ -406,6 +405,7 @@ with row2_right:
             index=0,
         )
         chosen = alerts[alerts["audit_id"] == selected_audit_id].iloc[0]
+        safe_details = html.escape(str(chosen["details"]))
         st.json(
             {
                 "audit_id": chosen["audit_id"],
@@ -417,7 +417,7 @@ with row2_right:
                 "severity": chosen["severity"],
                 "category": chosen["violation_category"],
                 "trust_score": float(chosen["trust_score"]),
-                "details": chosen["details"],
+                "details": safe_details,
             }
         )
 
@@ -452,7 +452,7 @@ else:
         legend_title_text="",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(255,255,255,0.45)",
-        font=dict(family="Space Grotesk", size=12, color="#132026"),
+        font=dict(family="Segoe UI, Helvetica Neue, Arial, sans-serif", size=12, color="#132026"),
     )
     st.plotly_chart(fig_timeline, use_container_width=True)
 

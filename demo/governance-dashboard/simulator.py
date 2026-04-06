@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import math
 import random
 from typing import Any
 
@@ -44,7 +45,48 @@ VIOLATION_CATEGORIES = [
 
 @dataclass(frozen=True)
 class SimulationConfig:
+    """Configuration values used by the in-app event simulator."""
+
     seed_events: int = 80
+
+
+def _clamp_trust_score(value: Any, fallback: float = 50.0) -> float:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        score = fallback
+
+    if math.isnan(score) or math.isinf(score):
+        score = fallback
+
+    return round(max(0.0, min(100.0, score)), 2)
+
+
+def _validate_event_payload(event: dict[str, Any]) -> dict[str, Any]:
+    # Normalize generated values to protect the dashboard from malformed state.
+    event["agent_source"] = event.get("agent_source") if event.get("agent_source") in AGENTS else AGENTS[0]
+
+    target = event.get("agent_target")
+    if target not in AGENTS or target == event["agent_source"]:
+        event["agent_target"] = next(a for a in AGENTS if a != event["agent_source"])
+
+    event["policy_name"] = event.get("policy_name") if event.get("policy_name") in POLICIES else POLICIES[0]
+    event["decision"] = event.get("decision") if event.get("decision") in DECISIONS else "deny"
+
+    event["trust_score"] = _clamp_trust_score(event.get("trust_score"))
+    event["violation"] = bool(event.get("violation"))
+
+    valid_severity = {"none", "low", "medium", "high", "critical"}
+    severity = str(event.get("severity", "none")).lower()
+    event["severity"] = severity if severity in valid_severity else "none"
+
+    valid_categories = {"none", *VIOLATION_CATEGORIES}
+    category = str(event.get("violation_category", "none"))
+    event["violation_category"] = category if category in valid_categories else "none"
+
+    event["details"] = str(event.get("details", ""))
+
+    return event
 
 
 def _random_agent_pair() -> tuple[str, str]:
@@ -81,14 +123,15 @@ def _build_event(ts: datetime) -> dict[str, Any]:
 
     pair = (source, target)
     drift = _compute_trust_drift(decision)
-    st.session_state.trust_map[pair] = max(0.0, min(100.0, st.session_state.trust_map[pair] + drift))
-    trust_score = round(st.session_state.trust_map[pair], 2)
+    current_score = _clamp_trust_score(st.session_state.trust_map.get(pair, random.uniform(65.0, 95.0)))
+    st.session_state.trust_map[pair] = _clamp_trust_score(current_score + drift)
+    trust_score = _clamp_trust_score(st.session_state.trust_map[pair])
 
     violation = decision in {"deny", "escalate"}
     severity = random.choice(["low", "medium", "high", "critical"]) if violation else "none"
     category = random.choice(VIOLATION_CATEGORIES) if violation else "none"
 
-    return {
+    event = {
         "timestamp": ts,
         "audit_id": f"AUD-{random.randint(100000, 999999)}",
         "agent_source": source,
@@ -106,8 +149,12 @@ def _build_event(ts: datetime) -> dict[str, Any]:
         ),
     }
 
+    return _validate_event_payload(event)
+
 
 def initialize_state(config: SimulationConfig | None = None) -> None:
+    """Initialize session-scoped simulator state and seed baseline events."""
+
     config = config or SimulationConfig()
 
     if "events" in st.session_state:
@@ -115,7 +162,7 @@ def initialize_state(config: SimulationConfig | None = None) -> None:
 
     _ensure_trust_map()
 
-    now = datetime.utcnow()
+    now = datetime.now(tz=timezone.utc)
     rows = []
     for idx in range(config.seed_events):
         rows.append(_build_event(now - timedelta(seconds=config.seed_events - idx)))
@@ -124,8 +171,10 @@ def initialize_state(config: SimulationConfig | None = None) -> None:
 
 
 def append_events(count: int = 1) -> None:
+    """Append generated events to session state while preserving a rolling window."""
+
     _ensure_trust_map()
-    latest = datetime.utcnow()
+    latest = datetime.now(tz=timezone.utc)
     rows = [_build_event(latest + timedelta(milliseconds=i * 100)) for i in range(max(1, count))]
     new_df = pd.DataFrame(rows)
 

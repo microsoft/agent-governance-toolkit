@@ -53,11 +53,9 @@ docker compose down
 3. Filter by source agents, policy, or decision.
 4. Inspect `Violation Alerts` and select an `audit_id` for drill-down details.
 
-```markdown
 ![Dashboard Overview](screenshots/dashboard-overview.jpeg)
-![Violation Drill-down](screenshots/violation-drilldown.jpeg)
-![Trust Heatmap](screenshots/trust-heatmap.jpeg)
-```
+![Violation Drill-down](screenshots/violation_drilldown.jpeg)
+![Trust Heatmap](screenshots/trustscore_heatmap.jpeg)
 
 ## Notes
 
