@@ -187,6 +187,28 @@ Document the automated detection-to-response pipeline for sandboxing violations:
 - **`QuarantineManager`**: isolates a suspect agent without termination so in-flight saga state is preserved for forensic investigation
 - **`AgentRateLimiter`**: enforces per-ring call quotas; exceeding the limit triggers a `RATE_LIMIT` kill reason rather than silently dropping requests
 
+#### Side-Channel Attack Mitigations
+
+Side-channel attacks allow an agent to infer information about co-resident agents or the host system by exploiting shared hardware resources (CPU cache, memory bus, timing signals) rather than software vulnerabilities. Document mitigations and known trade-offs for your deployment:
+
+**CPU cache and timing attacks**:
+- Disable hyper-threading / SMT on hosts running Ring 0 and Ring 1 agents where cross-thread cache-timing attacks (e.g., Spectre variant 1) are a concern; document whether the typical 10–30% CPU throughput reduction is accepted or mitigated differently
+- CPU pinning (exclusive core allocation) for high-trust agents prevents cache-sharing with lower-ring agents on the same host; document whether the scheduler enforces exclusive core assignment or uses soft affinity only
+- For gVisor deployments: gVisor's user-space kernel provides additional isolation from host timing signals; document whether this satisfies your threat model for Ring 3 agents
+
+**Shared memory**:
+- IPC namespace isolation (Layer 2) ensures no shared memory segments, message queues, or semaphore sets are accessible across agent containers
+- If any inter-agent data path uses shared memory as a performance optimization (e.g., high-throughput data feeds), document that it is explicitly scoped to same-ring, same-trust agents only and does not cross privilege boundaries
+
+**Memory access pattern leakage**:
+- Agents processing sensitive data should use constant-time algorithms for cryptographic comparisons to prevent timing oracle attacks
+- Ed25519 signing via libsodium uses constant-time scalar multiplication by default; document the library version and any build flags that affect this guarantee
+
+**Known limitations and trade-offs**:
+- Microarchitectural attacks (Spectre, Meltdown, Rowhammer) cannot be fully mitigated at the container layer without hypervisor isolation (Layer 3); document whether your deployment accepts this residual risk or requires gVisor/Kata for agents processing sensitive data
+- Performance trade-offs: CPU pinning, SMT disabling, and gVisor each carry measurable overhead; document the impact and the threshold at which performance constraints override isolation requirements
+- Review cadence: side-channel vulnerability disclosure is ongoing; document how frequently mitigations are reassessed against new CVEs
+
 #### Defense-in-Depth Composition
 
 AGT enforces three overlapping isolation layers. A breach at any one layer is contained by the layers below it:
@@ -300,10 +322,37 @@ Key rotation: schedule (e.g., 90 days), automated vs. manual, rotation impact on
 Key revocation: triggers (agent compromise, trust score drop below threshold), propagation time, how downstream agents are notified
 DID lifecycle: creation, update, deactivation linked to agent lifecycle events
 
+**Key Compromise and Recovery**
+
+Document how your deployment detects and responds to a compromised Ed25519 private key:
+
+Detection mechanisms:
+- HSM anomaly alerts: unexpected key access patterns, failed signing attempts from unauthorized processes, or HSM audit log gaps indicating key extraction attempts
+- Trust score anomaly: sudden behavioral drift (unusual delegation patterns, unexpected capability requests) correlated with signing activity may indicate key misuse before formal compromise is confirmed
+- External indicators: threat intelligence feeds, certificate transparency log monitoring, or compromise notification from the affected agent host
+
+Immediate mitigation steps (target: <5 minutes from detection to containment):
+1. Revoke the key in the vault system — revocation must propagate to all agents holding a cached copy of the public key
+2. Quarantine the affected agent via `QuarantineManager` — halts all signing operations without destroying in-flight saga state
+3. Issue a DID deactivation event — downstream agents must re-verify on next connection and reject the deactivated DID
+4. Rotate to a new Ed25519 keypair, generate a new DID, and re-register the agent in AgentMesh
+
+Propagation timeline and impact on dependent agents:
+- Document time from vault revocation to all downstream agents honoring it (target: <30 seconds for in-memory cache invalidation, <5 minutes for full cross-region propagation)
+- IATP attestations signed by the compromised key are invalid after revocation; document whether attestations are cached and for how long
+- Delegation chains originating from the compromised agent are invalidated at revocation — downstream agents must re-establish trust with a new delegator
+- Document the recovery playbook: authorized human roles, approval required, and how the incident is recorded in the Merkle audit trail for regulatory review
+
 #### 4.4.3 Verification Mechanisms (ASI-07 focus)
 Peer identity verification before inter-agent calls: DID resolution, certificate validation steps
 Trust score check at connection time: minimum threshold, what happens on failure
-Replay attack prevention: nonce usage, timestamp windows
+Replay attack prevention:
+- Nonce generation: 128-bit cryptographically random nonce included in every IATP attestation payload; nonces are single-use and stored in a bounded TTL cache (document TTL and eviction policy)
+- Nonce reuse detection: each receiving agent maintains a per-sender nonce cache for the TTL window; a duplicate nonce from the same sender DID is rejected immediately and logged as a potential replay attempt
+- Nonce cache across distributed agents: document how caches are synchronized across horizontally scaled replicas (e.g., shared Redis cache vs. per-instance cache with accept-on-first-seen policy)
+- Timestamp validation: each message carries an NTP-synchronized timestamp; receiving agents reject messages where `|sender_timestamp − receiver_timestamp| > max_clock_drift`
+- Maximum allowable clock drift: document the deployment-specific value (e.g., ±30s for async workflows, ±500ms for latency-sensitive deployments); messages exceeding the threshold are rejected even with a valid nonce
+- Clock drift monitoring: document how NTP synchronization health is monitored across agent hosts; excessive drift should trigger an alert before it causes widespread message rejection
 Delegation chain verification: how IATP attestations are walked and validated end-to-end
 Failure behavior: what agents do when verification fails (deny, escalate, log)
 ---
