@@ -103,10 +103,7 @@ func main() {
 
 ## MCP Documentation
 
-- [API Reference](./docs/api-reference.md)
-- [OWASP MCP Mapping](./docs/owasp-mcp-mapping.md)
-- [MCP Tools Guide](./docs/mcp-tools.md)
-- [Standalone MCP Governance Module](../../packages/mcp-governance-go/README.md)
+- [MCP HTTP Server Example](./examples/mcp-http-server/README.md)
 
 ## API Overview
 

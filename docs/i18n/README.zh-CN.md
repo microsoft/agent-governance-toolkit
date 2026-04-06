@@ -71,8 +71,7 @@ pip install agentmesh-lightning        # 强化学习训练治理
 - **[.NET SDK](../../packages/agent-governance-dotnet/README.md)** — 提供完整 OWASP 覆盖的 NuGet 包
 - **[Rust SDK](../../packages/agent-mesh/sdks/rust/agentmesh/README.md)** — crates.io 上的库，包含策略、信任、审计及 Ed25519 身份
 - **[Go SDK](../../packages/agent-mesh/sdks/go/README.md)** — 提供策略、信任、审计与身份功能的 Go 模块
-- **[Go MCP 安全文档](../../packages/agent-mesh/sdks/go/docs/owasp-mcp-mapping.md)** — Go SDK 中的 MCP gateway、签名、限流、工具扫描与密钥泄露防护
-- **[Go MCP 独立模块](../../packages/agent-mesh/packages/mcp-governance-go/README.md)** — 仅引入 MCP 安全原语的独立 Go 模块
+- **[Go MCP HTTP 示例](../../packages/agent-mesh/sdks/go/examples/mcp-http-server/README.md)** — 演示 gateway、会话绑定、签名校验、限流与响应净化的可运行示例
 - **[教程](../../docs/tutorials/)** — 涵盖策略、身份、集成、合规、SRE 与沙箱的分步指南
 - **[Azure 部署](../../docs/deployment/README.md)** — 支持 AKS, Azure AI Foundry, Container Apps, OpenClaw 边车
 - **[NVIDIA OpenShell 集成](../../docs/integrations/openshell.md)** — 将沙箱隔离与治理智能相结合
@@ -271,7 +270,7 @@ decision = engine.evaluate("did:mesh:agent-1", {"tool_name": "analyze"})
 | **Python** | [`agent-governance-toolkit[full]`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
 | **TypeScript** | [`@agentmesh/sdk`](../../packages/agent-mesh/sdks/typescript/) | `npm install @agentmesh/sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
-| **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
+| **Rust** | [`agentmesh`](../../packages/agent-mesh/sdks/rust/agentmesh/README.md) | `cargo add agentmesh` |
 | **Go** | [`agentmesh`](../../packages/agent-mesh/sdks/go/) | `go get github.com/microsoft/agent-governance-toolkit/sdks/go` |
 
 ### Python 软件包 (PyPI)
