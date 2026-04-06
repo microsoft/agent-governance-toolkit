@@ -137,7 +137,7 @@ spec:
 ```
 
 On **Azure Kubernetes Service (AKS)**:
-- Enable the [Kata Container node pool](https://learn.microsoft.com/azure/aks/use-katacontainers) for VM-level isolation.
+- Enable the [AKS Kata Containers documentation](https://learn.microsoft.com/azure/aks/) for VM-level isolation guidance.
 - Use [Azure Container Instances (ACI)](https://learn.microsoft.com/azure/container-instances/) with Hyper-V isolation for per-tool ephemeral sandboxes.
 
 ## File System Restrictions
