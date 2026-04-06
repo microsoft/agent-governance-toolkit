@@ -1,6 +1,4 @@
-🌍 [English](/README.md) | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md)
-
-![Agent Governance Toolkit](../../docs/assets/readme-banner.svg)
+![Agent Governance Toolkit](../..//docs/assets/readme-banner.svg)
 
 # 欢迎使用代理治理工具包 !
 
@@ -93,7 +91,7 @@ pip install agentmesh-lightning        # 强化学习训练治理
 - **代理 SRE**: 包含 SLO、错误预算、回放调试、混沌工程、熔断机制与渐进式发布
   - [Agent SRE](../../packages/agent-sre/) | [可观测性集成](../../packages/agent-hypervisor/src/hypervisor/observability/)
 - **MCP 安全扫描器**: 检测 MCP 工具定义中的工具投毒、拼写劫持(typosquatting)、隐藏指令与rug-pull攻击
-  - [MCP 扫描器](../../packages/agent-os/src/agentos/mcp_security.py) | [CLI](../../packages/agent-os/src/agentos/cli/mcp_scan.py)
+  - [MCP 扫描器](../../packages/agent-os/src/agent_os/mcp_security.py) | [CLI](../../packages/agent-os/src/agent_os/cli/mcp_scan.py)
 - **信任报告 CLI**: `agentmesh trust report` — 可视化信任评分、任务成功/失败情况及代理活动
   - [信任 CLI](../../packages/agent-mesh/src/agentmesh/cli/trust_cli.py)
 - **密钥扫描与模糊测试**: 基于 Gitleaks 的工作流，包含 7 个模糊测试目标，覆盖策略、注入、沙箱、信任及 MCP
