@@ -77,13 +77,13 @@ After these incidents plus a position limit breach caught by the prime broker, t
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                         MARKET INFRASTRUCTURE                             │
-│  ┌────────────────┐  ┌─────────────────┐  ┌──────────────────┐          │
-│  │ NASDAQ ITCH    │  │ NYSE OpenBook   │  │ CBOE OPRA        │          │
-│  │ (Level 2 data) │  │ (Depth of book) │  │ (Options feed)   │          │
-│  │ <50μs latency  │  │ <80μs latency   │  │ <120μs latency   │          │
-│  └────────┬───────┘  └────────┬────────┘  └────────┬─────────┘          │
-│           │                   │                     │                     │
+│                         MARKET INFRASTRUCTURE                            │
+│  ┌────────────────┐  ┌─────────────────┐  ┌──────────────────┐           │
+│  │ NASDAQ ITCH    │  │ NYSE OpenBook   │  │ CBOE OPRA        │           │
+│  │ (Level 2 data) │  │ (Depth of book) │  │ (Options feed)   │           │
+│  │ <50μs latency  │  │ <80μs latency   │  │ <120μs latency   │           │
+│  └────────┬───────┘  └────────┬────────┘  └─────────┬────────┘           │
+│           │                   │                     │                    │
 │  ┌────────┴───────────────────┴─────────────────────┴─────────┐          │
 │  │         Bloomberg/Reuters (News, Fundamentals)             │          │
 │  │         Social Sentiment Feeds (Twitter, StockTwits)       │          │
@@ -101,8 +101,8 @@ After these incidents plus a position limit breach caught by the prime broker, t
         └───────────────────────┬───────────────────────────────┘
                                 │
                                 ▼
-        ┌───────────────────────────────────────────────────────────┐
-        │              AGT GOVERNANCE LAYER                         │
+        ┌──────────────────────────────────────────────────────────┐
+        │              AGT GOVERNANCE LAYER                        │
         │   ┌──────────────────┐  ┌────────────────────┐           │
         │   │   Agent OS       │  │   AgentMesh        │           │
         │   │   Policy Engine  │  │   Ed25519 Identity │           │
@@ -116,7 +116,7 @@ After these incidents plus a position limit breach caught by the prime broker, t
         │   │   • Ring 2: Standard (4 vCPU, 8GB)       │           │
         │   │   • Kill switch: <30ms termination       │           │
         │   └──────────────────────────────────────────┘           │
-        └───────────────────────┬───────────────────────────────────┘
+        └───────────────────────┬──────────────────────────────────┘
                                 │
           ┌─────────────────────┼─────────────────────┐
           │                     │                     │
@@ -133,17 +133,17 @@ After these incidents plus a position limit breach caught by the prime broker, t
           │                    │                     │
           │    ┌───────────────┴────────────┐        │
           │    ▼                            ▼        │
-          │  ┌──────────────┐    ┌──────────────┐   │
-          │  │ Risk Mgmt    │    │ Compliance   │   │
-          │  │ Agent        │    │ Monitor Agent│   │
-          │  │ Ring 1       │    │ Ring 1       │   │
-          │  │ Trust: 820   │    │ Trust: 840   │   │
-          │  │              │    │              │   │
-          │  │ VaR, limits  │    │ Manipulation │   │
-          │  │ 0.8ms review │    │ 1.2ms review │   │
-          │  └──────┬───────┘    └──────┬───────┘   │
-          │         │ APPROVE/DENY      │           │
-          │         └──────────┬────────┘           │
+          │  ┌──────────────┐    ┌──────────────┐    │
+          │  │ Risk Mgmt    │    │ Compliance   │    │
+          │  │ Agent        │    │ Monitor Agent│    │
+          │  │ Ring 1       │    │ Ring 1       │    │
+          │  │ Trust: 820   │    │ Trust: 840   │    │
+          │  │              │    │              │    │
+          │  │ VaR, limits  │    │ Manipulation │    │
+          │  │ 0.8ms review │    │ 1.2ms review │    │
+          │  └──────┬───────┘    └──────┬───────┘    │
+          │         │ APPROVE/DENY      │            │
+          │         └──────────┬────────┘            │
           │                    ▼                     │
           │         ┌────────────────────┐           │
           └────────►│  Execution Agent   │◄──────────┘
@@ -173,17 +173,17 @@ After these incidents plus a position limit breach caught by the prime broker, t
                     └────────┬───────────────┘
                              │
                              ▼
-        ┌──────────────────────────────────────────────────┐
-        │     POST-TRADE & AUDIT INFRASTRUCTURE            │
-        │                                                  │
+        ┌─────────────────────────────────────────────────┐
+        │     POST-TRADE & AUDIT INFRASTRUCTURE           │
+        │                                                 │
         │  ┌────────────────────────────────────────┐     │
         │  │  Prime Broker (Goldman Sachs)          │     │
-        │  │  • T+2 settlement                       │     │
-        │  │  • Position reconciliation              │     │
-        │  │  • Margin calculations                  │     │
-        │  │  • FIX Allocations Protocol             │     │
+        │  │  • T+2 settlement                      │     │
+        │  │  • Position reconciliation             │     │
+        │  │  • Margin calculations                 │     │
+        │  │  • FIX Allocations Protocol            │     │
         │  └────────────────────────────────────────┘     │
-        │                                                  │
+        │                                                 │
         │  ┌────────────────────────────────────────┐     │
         │  │  Agent Compliance (Audit Trail)        │     │
         │  │  • Merkle-chained append-only logs     │     │
@@ -191,14 +191,14 @@ After these incidents plus a position limit breach caught by the prime broker, t
         │  │  • SEC Rule 17a-4 compliant            │     │
         │  │  • Microsecond timestamps (NTP sync)   │     │
         │  └────────────────────────────────────────┘     │
-        │                                                  │
+        │                                                 │
         │  ┌────────────────────────────────────────┐     │
         │  │  Regulatory Reporting                  │     │
         │  │  • CAT (Consolidated Audit Trail)      │     │
         │  │  • OATS (FINRA reporting)              │     │
         │  │  • Blue Sheets (SEC requests)          │     │
         │  └────────────────────────────────────────┘     │
-        └──────────────────────────────────────────────────┘
+        └─────────────────────────────────────────────────┘
 
 LATENCY BUDGET (Market Signal → Order Acknowledgment):
   Market data capture:          180μs (p50)
