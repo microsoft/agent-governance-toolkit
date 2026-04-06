@@ -2,9 +2,7 @@
   "version": "0.2",
   "language": "en",
   "useGitignore": true,
-  "dictionaries": [
-    "repo-terms"
-  ],
+  "dictionaries": ["repo-terms"],
   "dictionaryDefinitions": [
     {
       "name": "repo-terms",
@@ -27,12 +25,14 @@
     "CI",
     "CLI",
     "cmdshell",
+    "CODEOWNERS",
     "CodeQL",
     "CORS",
     "CSP",
     "dataclass",
     "deque",
     "DSPM",
+    "Entra",
     "EUAI",
     "FIPS",
     "GitHub",
