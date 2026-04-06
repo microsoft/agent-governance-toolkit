@@ -82,7 +82,7 @@ flowchart LR
 **AGT evidence:** AGT's `SupplyChainGuard` checks pinned versions, fresh releases, typosquats, and lockfile drift; the repository also ships a CycloneDX SBOM generator. **This is strongest when enforced in CI**; some checks are advisory until wired into hard-fail pipelines.  
 **References:** [supply chain guard], [sbom generator], [supply chain tests]
 
-### AAI012: Agent Checker out of the loop vulnerability
+### AAI012: Agent Checker Out of the Loop Vulnerability
 
 **Pattern:** move governance review left. Give reviewers concrete checks for missing middleware, missing audit logging, absent trust verification, and unconstrained tool access before the system is deployed.
 
@@ -103,7 +103,9 @@ flowchart TB
     Trust --> Kernel[Execution boundary and protection rings]
     Kernel --> Tools[Tools, MCP servers, A2A peers, external systems]
 
+    Ingress --> Audit
     Kernel --> SRE[SRE controls: circuit breaker and rogue detection]
+    Kernel --> Audit
     Policy --> Audit[Tamper-evident audit trail]
     Trust --> Audit
     SRE --> Audit
@@ -113,30 +115,30 @@ The key architectural lesson is **layering**. Reviewer-side governance catches o
 
 ## Lessons Learned
 
-1. **Inline enforcement beats standalone scanners.** Detection utilities are most valuable when they are wired directly into execution paths rather than left as reports someone may ignore.
-2. **Tamper evidence should be first-class.** Agent accountability is much stronger when audit records are chained or otherwise made tamper-evident.
-3. **Identity is not enough without trust and scope.** DID-style identity helps, but agent systems still need capability limits, rate limits, and per-skill authorization.
+1. **Inline enforcement beats standalone scanners (see AAI003, AAI002).** Detection utilities are most valuable when they are wired directly into execution paths rather than left as reports someone may ignore.
+2. **Tamper evidence should be first-class (see AAI011).** Agent accountability is much stronger when audit records are chained or otherwise made tamper-evident.
+3. **Identity is not enough without trust and scope (see AAI001, AAI007).** DID-style identity helps, but agent systems still need capability limits, rate limits, and per-skill authorization.
 4. **AAI014 and AAI012 remain partly sociotechnical.** Runtime anomaly detection and reviewer tooling help, but they do not replace human accountability, approval workflows, or domain-specific evaluation standards.
 5. **Standards are still needed** for portable trust assertions, agent-to-agent policy vocabularies, and interoperable tamper-evident audit formats across runtimes.
 
 ## Evidence Links
 
-- [mcp-proxy policy](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-mesh/packages/mcp-proxy/src/policy.ts)
-- [mcp-proxy sanitizer](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-mesh/packages/mcp-proxy/src/sanitizer.ts)
-- [mcp-proxy audit](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-mesh/packages/mcp-proxy/src/audit.ts)
-- [mcp-trust proxy](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agentmesh-integrations/mcp-trust-proxy/mcp_trust_proxy/proxy.py)
-- [A2A trust gate](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agentmesh-integrations/a2a-protocol/a2a_agentmesh/trust_gate.py)
-- [agent-os audit](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-os/src/agent_os/audit_logger.py)
-- [kernel space](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-os/modules/control-plane/src/agent_control_plane/kernel_space.py)
-- [control signals](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-os/modules/control-plane/src/agent_control_plane/signals.py)
-- [prompt injection](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-os/src/agent_os/prompt_injection.py)
-- [memory guard](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-os/src/agent_os/memory_guard.py)
-- [circuit breaker](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-sre/src/agent_sre/cascade/circuit_breaker.py)
-- [rogue detector](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-sre/src/agent_sre/anomaly/rogue_detector.py)
-- [MAF rogue middleware](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-os/src/agent_os/integrations/maf_adapter.py)
-- [supply chain guard](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-compliance/src/agent_compliance/supply_chain.py)
-- [sbom generator](https://github.com/microsoft/agent-governance-toolkit/blob/main/scripts/generate_sbom.py)
-- [supply chain tests](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-compliance/tests/test_supply_chain.py)
-- [copilot reviewer](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agentmesh-integrations/copilot-governance/src/reviewer.ts)
-- [copilot owasp](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agentmesh-integrations/copilot-governance/src/owasp.ts)
-- [copilot readme](https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agentmesh-integrations/copilot-governance/README.md)
+[mcp-proxy policy]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-mesh/packages/mcp-proxy/src/policy.ts
+[mcp-proxy sanitizer]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-mesh/packages/mcp-proxy/src/sanitizer.ts
+[mcp-proxy audit]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-mesh/packages/mcp-proxy/src/audit.ts
+[mcp-trust proxy]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agentmesh-integrations/mcp-trust-proxy/mcp_trust_proxy/proxy.py
+[A2A trust gate]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agentmesh-integrations/a2a-protocol/a2a_agentmesh/trust_gate.py
+[agent-os audit]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-os/src/agent_os/audit_logger.py
+[kernel space]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-os/modules/control-plane/src/agent_control_plane/kernel_space.py
+[control signals]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-os/modules/control-plane/src/agent_control_plane/signals.py
+[prompt injection]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-os/src/agent_os/prompt_injection.py
+[memory guard]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-os/src/agent_os/memory_guard.py
+[circuit breaker]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-sre/src/agent_sre/cascade/circuit_breaker.py
+[rogue detector]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-sre/src/agent_sre/anomaly/rogue_detector.py
+[MAF rogue middleware]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-os/src/agent_os/integrations/maf_adapter.py
+[supply chain guard]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-compliance/src/agent_compliance/supply_chain.py
+[sbom generator]: https://github.com/microsoft/agent-governance-toolkit/blob/main/scripts/generate_sbom.py
+[supply chain tests]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agent-compliance/tests/test_supply_chain.py
+[copilot reviewer]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agentmesh-integrations/copilot-governance/src/reviewer.ts
+[copilot owasp]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agentmesh-integrations/copilot-governance/src/owasp.ts
+[copilot readme]: https://github.com/microsoft/agent-governance-toolkit/blob/main/packages/agentmesh-integrations/copilot-governance/README.md
