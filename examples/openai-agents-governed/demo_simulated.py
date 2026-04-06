@@ -2,14 +2,17 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 """
-OpenAI Agents SDK + Governance Toolkit — Getting Started
-========================================================
+OpenAI Agents SDK + Governance Toolkit — Simulated Demo (No Dependencies Required)
+==================================================================================
 
-Minimal example showing how to add governance to an existing OpenAI
-Agents SDK workflow. Copy this pattern into your own project.
+Demonstrates governance concepts using mock AgentContext/ToolContext classes
+without requiring the OpenAI Agents SDK to be installed.
 
     pip install agent-governance-toolkit[full]
-    python examples/openai-agents-governed/getting_started.py
+    python examples/openai-agents-governed/demo_simulated.py
+
+This demo runs without the OpenAI Agents SDK installed.
+For real SDK integration, see getting_started.py.
 
 What this demonstrates:
   1. Load YAML governance policies

@@ -1,0 +1,2 @@
+openai-agents>=0.1.0
+agent-governance-toolkit[full]

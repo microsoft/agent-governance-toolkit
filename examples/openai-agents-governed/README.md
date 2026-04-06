@@ -6,15 +6,27 @@
 > and rogue detection event is audit-logged in a Merkle-chained,
 > tamper-proof trail.
 
+## Two ways to run
+
+| File | What it does | Dependencies |
+|------|-------------|-------------|
+| `getting_started.py` | **Real OpenAI Agents SDK integration** — uses actual `Agent`, `function_tool`, and `InputGuardrail` objects with AGT governance wired as a guardrail | `pip install openai-agents agent-governance-toolkit[full]` |
+| `demo_simulated.py` | **No-dependency version** — demonstrates the same governance concepts using mock context classes, no SDK required | `pip install agent-governance-toolkit[full]` |
+
 ## Quick Start (< 2 minutes)
 
 ```bash
-pip install agent-governance-toolkit[full]
+# Real SDK integration (requires openai-agents)
+pip install -r examples/openai-agents-governed/requirements.txt
 python examples/openai-agents-governed/getting_started.py
+
+# No-dependency simulated demo
+pip install agent-governance-toolkit[full]
+python examples/openai-agents-governed/demo_simulated.py
 ```
 
-`getting_started.py` is a **~170-line** copy-paste-friendly example showing
-the core integration pattern:
+`getting_started.py` shows how to wire AGT governance as a real
+`InputGuardrail` in the OpenAI Agents SDK. The core integration pattern:
 
 ```python
 from agent_os.policies.evaluator import PolicyEvaluator
@@ -245,7 +257,9 @@ Demonstrates the cryptographic integrity guarantees of the audit trail:
 
 | File | Purpose |
 |------|---------|
-| `getting_started.py` | **Start here** — minimal integration example (~170 lines) |
+| `getting_started.py` | **Start here** — real OpenAI Agents SDK integration with AGT governance guardrails |
+| `demo_simulated.py` | No-dependency simulated demo (~170 lines) |
+| `requirements.txt` | Python dependencies for the real SDK integration |
 | `openai_agents_governance_demo.py` | Full 9-scenario showcase |
 | `policies/agent_governance_policy.yaml` | Role-based + PII + injection + handoff policies |
 | `policies/quality_gate_policy.yaml` | Publishing quality gates |
