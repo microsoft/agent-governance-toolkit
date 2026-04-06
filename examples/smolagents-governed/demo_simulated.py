@@ -1,14 +1,18 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 """
-Hugging Face smolagents + Governance Toolkit — Getting Started
-==============================================================
+Hugging Face smolagents + Governance Toolkit — Simulated Demo (No Dependencies Required)
+========================================================================================
 
 Minimal example showing how to add governance to an existing
-smolagents workflow.  Copy this pattern into your own project.
+smolagents workflow using mock context objects.  Copy this pattern
+into your own project.
 
     pip install agent-governance-toolkit[full]
-    python examples/smolagents-governed/getting_started.py
+    python examples/smolagents-governed/demo_simulated.py
+
+This demo runs without smolagents installed.
+For real smolagents integration, see getting_started.py.
 
 What this demonstrates:
   1. Load YAML governance policies

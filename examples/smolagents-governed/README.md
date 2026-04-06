@@ -7,17 +7,30 @@
 
 ![smolagents governance demo](demo.gif)
 
+## Two Ways to Run
+
+| Script | What it does | Dependencies |
+|--------|-------------|--------------|
+| `getting_started.py` | **Real smolagents integration** — creates tools with `@tool`, wraps `forward()` with governance, optionally runs a `ToolCallingAgent` | `pip install smolagents` |
+| `demo_simulated.py` | **No-dependency version** — demonstrates governance concepts using mock context objects (no smolagents install needed) | None beyond AGT |
+
 ## Quick Start (< 2 minutes)
 
 ```bash
-pip install agent-governance-toolkit[full]
+# Real smolagents integration
+pip install smolagents agent-governance-toolkit[full]
 python examples/smolagents-governed/getting_started.py
+
+# Or run without smolagents installed
+pip install agent-governance-toolkit[full]
+python examples/smolagents-governed/demo_simulated.py
 ```
 
-`getting_started.py` is a **~150-line** copy-paste-friendly example showing
-the core integration pattern:
+`getting_started.py` shows the key integration pattern — wrapping smolagents
+tool `forward()` methods with governance checks:
 
 ```python
+from smolagents import tool, ToolCallingAgent
 from agent_os.policies.evaluator import PolicyEvaluator
 from agent_os.integrations.maf_adapter import (
     GovernancePolicyMiddleware,
@@ -32,15 +45,19 @@ evaluator = PolicyEvaluator()
 evaluator.load_policies(Path("./policies"))
 middleware = GovernancePolicyMiddleware(evaluator=evaluator, audit_log=audit_log)
 
-# 2. Wrap your agent's LLM calls with governance
+# 2. Create real smolagents tools, wrap forward() with governance
+@tool
+def web_search(query: str) -> str:
+    """Search the web."""
+    return f"Results for: {query}"
+
+# 3. Governance intercepts tool execution
 try:
     await middleware.process(agent_context, your_llm_call)
-    # LLM call succeeded — governance approved
 except MiddlewareTermination:
-    # Governance blocked the request BEFORE the LLM was called
-    pass
+    pass  # Blocked BEFORE the LLM was called
 
-# 3. Verify the tamper-proof audit trail
+# 4. Verify the tamper-proof audit trail
 valid, err = audit_log.verify_integrity()
 ```
 
@@ -230,7 +247,9 @@ Demonstrates the cryptographic integrity guarantees of the audit trail:
 
 | File | Purpose |
 |------|---------|
-| `getting_started.py` | **Start here** — minimal integration example (~120 lines) |
+| `getting_started.py` | **Start here** — real smolagents integration with governed tools |
+| `demo_simulated.py` | No-dependency version using mock context objects |
+| `requirements.txt` | Python dependencies for the real integration |
 | `smolagents_governance_demo.py` | Full 9-scenario showcase |
 | `policies/research_governance_policy.yaml` | Role-based + PII + injection + delegation policies |
 | `policies/model_safety_policy.yaml` | Model trust and publishing quality gates |
