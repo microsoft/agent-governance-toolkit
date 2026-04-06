@@ -85,7 +85,7 @@ For each agent, include:
 
 ### 3.2 System Architecture Overview
 
-[Include architecture diagram (PNG, JPEG, ASCII, or Mermaid) showing: External systems → AGT governance layer (Agent OS, AgentMesh, Agent Runtime) → Individual agents with ring labels → Audit/observability layer. Keep diagram clean with 6-8 boxes maximum.]
+[Include architecture diagram (PNG, JPEG, ASCII, or Mermaid) showing: External systems → AGT governance layer (Agent OS, AgentMesh, Agent Runtime) → Individual agents with ring labels → Audit/observability layer. Keep diagram clean with 6-8 boxes maximum. Insert caption below the diagram.]
 
 [Example ASCII diagram:]
 
@@ -144,11 +144,79 @@ Describe 2-3 key communication patterns. For each pattern, include:
 - Governance controls applied (IATP trust attestations, capability delegation with monotonic narrowing, policy enforcement at each hop)
 - Concrete example (e.g., "When triage-agent delegates to insurance-verification-agent, an IATP cryptographic trust attestation is signed and verified. The downstream agent inherits the minimum of both agents' trust scores (trust score monotonic narrowing), preventing a lower-trust agent from leveraging a higher-trust agent to bypass privilege restrictions. Agent OS enforces that delegated capabilities cannot exceed the parent agent's grants—a Ring 2 agent cannot delegate Ring 1 privileges")
 
+### 3.4 Agent Runtime Sandboxing
+
+Document the OS-level and application-level mechanisms that enforce execution boundaries for each agent. For each mechanism, explain what it enforces and which specific escape risk it mitigates. AGT applies three overlapping isolation layers; describe which layers are active in your deployment and why any layers are omitted.
+
+#### Execution Isolation Primitives
+
+| Mechanism | Layer | What It Enforces | Escape Risk Mitigated |
+|-----------|-------|------------------|-----------------------|
+| **Linux cgroups v2** | OS kernel | Per-container CPU, memory, and I/O quotas keyed to privilege ring (e.g., Ring 3: 256 MiB RAM, 0.25 vCPU; Ring 2: 512 MiB, 0.5 vCPU) | Runaway agents exhausting host resources or executing resource-exhaustion loops |
+| **Linux namespaces** (PID, network, mount, IPC, UTS) | OS kernel | Each agent container gets an isolated PID tree, network stack, and filesystem view; no cross-container process visibility | Lateral movement between agent containers; one agent reading or signaling another agent's processes |
+| **seccomp-BPF profiles** | OS kernel | Allowlist of permitted Linux syscalls per container; blocks `ptrace`, `reboot`, raw socket creation, and other dangerous calls | Exploiting OS-level syscalls after a userspace compromise (e.g., container breakout via unpatched kernel syscall) |
+| **AppArmor / SELinux** (where supported) | OS mandatory access control | Policy restricts filesystem paths, network operations, and Linux capabilities even if cgroup/seccomp profiles are bypassed | Defense-in-depth if seccomp profile is incomplete or a profile misconfiguration is exploited |
+| **gVisor (`runsc`)** or **Kata Containers** (high-security deployments) | Hypervisor / user-space kernel | Intercepts syscalls through a user-space kernel (gVisor) or hardware VM isolation (Kata); agent OS-level exploits cannot reach the host kernel | Kernel-level container escape exploiting unpatched host CVEs; recommended for Ring 3 agents executing untrusted or model-generated code |
+
+#### Privilege Ring → Resource Limit Mapping
+
+Document how Agent Runtime maps each privilege ring to concrete OS-enforced resource limits:
+
+| Ring | Trust Score Range | CPU Limit | Memory Limit | Network Access | Syscall Scope |
+|------|-------------------|-----------|--------------|----------------|---------------|
+| Ring 3 — Sandbox | Default (new / untrusted agents) | 0.25 vCPU | 256 MiB | None (egress blocked via network namespace) | Read and file I/O only; `execve`, socket creation blocked |
+| Ring 2 — Standard | eff_score ≥ 0.60 | 0.5 vCPU | 512 MiB | Restricted (allowlisted endpoints only) | Read/write, limited API calls; no raw sockets |
+| Ring 1 — Privileged | eff_score ≥ 0.95 + consensus | 1.0 vCPU | 1 GiB | Broad (monitored) | All except kernel-modification syscalls |
+| Ring 0 — Root | SRE Witness attestation only | Unlimited | Unlimited | Unrestricted | All (reserved for runtime-level configuration) |
+
+Note: Rate limits (Ring 3: 10 calls/min, Ring 2: 100 calls/min, Ring 1: 1,000 calls/min) are enforced by `AgentRateLimiter` at the application layer on top of cgroup quotas.
+
+#### VFS Namespace Isolation
+
+Agent Runtime's `SessionVFS` provides per-agent isolated filesystem views within shared sessions:
+- Each agent writes to its own namespace — cross-agent file reads are blocked at the application layer even when agents share a host
+- Delete and modify operations are scoped per agent DID — one agent cannot overwrite or remove another agent's workspace files
+- Isolation level is configurable per session: **Snapshot** (low overhead, concurrent writes allowed), **Read Committed** (vector clocks for causal ordering), or **Serializable** (intent locks, highest consistency, no concurrent writes)
+- Combine with mount namespace isolation (Layer 2) so that VFS bypasses at the application layer do not expose the underlying host filesystem
+
+#### Breach Detection and Emergency Response
+
+Document the automated detection-to-response pipeline for sandboxing violations:
+- **`RingBreachDetector`**: fires alerts when an agent attempts actions above its ring level — WARNING for a 1-ring gap, HIGH for a 2-ring gap, CRITICAL for a 3-ring gap (e.g., Ring 3 agent attempting a Ring 0 action)
+- **`KillSwitch`**: immediately terminates the violating agent and triggers saga compensation for all in-flight work; document which kill reasons are wired to automatic triggers (`RING_BREACH`, `RATE_LIMIT`, `BEHAVIORAL_DRIFT`) vs. require human confirmation (`MANUAL`)
+- **`QuarantineManager`**: isolates a suspect agent without termination so in-flight saga state is preserved for forensic investigation
+- **`AgentRateLimiter`**: enforces per-ring call quotas; exceeding the limit triggers a `RATE_LIMIT` kill reason rather than silently dropping requests
+
+#### Defense-in-Depth Composition
+
+AGT enforces three overlapping isolation layers. A breach at any one layer is contained by the layers below it:
+
+```
+Layer 1 — Application (AGT)
+  Agent OS policy engine: capability allow/deny lists, ring enforcement, <0.1ms latency
+  CapabilityGuardMiddleware: per-agent tool allowlist/denylist
+  SessionVFS: per-agent filesystem namespace at the application layer
+
+Layer 2 — OS Kernel (Linux)
+  cgroups v2: CPU, memory, and I/O resource quotas per container
+  Linux namespaces: PID, network, mount, IPC, and UTS isolation
+  seccomp-BPF: syscall filtering (deny ptrace, reboot, raw sockets)
+  AppArmor / SELinux: mandatory access control for filesystem and network paths
+
+Layer 3 — Hypervisor (optional; recommended for high-security Ring 3 deployments)
+  gVisor (runsc): user-space kernel intercepts all syscalls; host kernel never directly exposed
+  Kata Containers: hardware VM isolation; guest kernel runs in a dedicated VM
+```
+
+A policy bypass at Layer 1 is contained by cgroup and namespace isolation at Layer 2. A kernel exploit at Layer 2 is contained by VM-level isolation at Layer 3. In your case study, document which layers are deployed, the rationale for any omitted layers, and any deployment-specific hardening (e.g., Kubernetes `securityContext` with `runAsNonRoot: true`, `readOnlyRootFilesystem: true`, and dropped Linux capabilities).
+
 ---
 
 ## 4. Governance Policies Applied
 
 ### 4.1 OWASP ASI Risk Coverage
+OWASP Agentic System Integrity (ASI) is a security project and framework focused on identifying and mitigating the unique risks associated with autonomous AI agents and their ability to take independent actions in digital environments. Read more: [OWASP Top 10 for Agentic Applications for 2026](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)
+
 
 | OWASP Risk | Description | AGT Controls Applied |
 |------------|-------------|---------------------|
@@ -166,6 +234,20 @@ Describe 2-3 key communication patterns. For each pattern, include:
 Additional security measures: mTLS for inter-agent communication, secrets management (Azure Key Vault), network segmentation (Azure Private Link).
 
 ### 4.2 Key Governance Policies
+
+  This section details the mission-critical governance policies that prevented [X] violations worth $[Y]M in potential exposure over [Z] months of
+  production operation. The policies below represent the minimum viable governance layer required to safely deploy autonomous agents in [industry
+  name] environments under [primary regulation]. Each policy maps to specific regulatory requirements, demonstrates sub-millisecond enforcement
+  latency, and includes real production examples showing AGT controls in action.
+
+  **Most Critical Policies at a Glance:**
+
+  | Policy Name | Regulatory Driver | Prevented Risk | Impact |
+  |-------------|-------------------|----------------|--------|
+  | [e.g., PHI Minimum Necessary Access] | HIPAA §164.514(d) | Unauthorized sensitive data access | Blocked 412 violations, avoided $50K+ per incident |
+  | [e.g., High-Value Transaction Escalation] | [Regulation/Standard] | Unapproved financial exposure | Prevented $2.8M in unauthorized transactions |
+  | [e.g., Vulnerable Population Protection] | [Regulation/Standard] | Clinical harm to at-risk patients | Caught 83 pediatric dosing errors (81% flag rate) |
+  | [e.g., Rogue Agent Detection] | [Regulation/Standard] | Configuration drift, malicious behavior | Kill switch activated 0 times (100% preventive success) |
 
 For each policy (e.g., PHI Minimum Necessary Access Control, High-Value Transaction Escalation, Vulnerable Population Protection, Rogue Agent Detection, Trust Delegation), include:
 - **Regulatory driver**: Specific regulation with citation (e.g., "HIPAA §164.514(d)(3)")
@@ -199,6 +281,31 @@ For each regulation, include:
 - Content (policy compliance rates, audit coverage metrics, trust score distributions, OWASP ASI risk posture)
 - Recipients (Chief Compliance Officer, external auditor, regulatory bodies upon request)
 
+
+### 4.4 Cryptographic Controls
+
+#### 4.4.1 Cryptographic Operations 
+Fields to document per operation:
+
+Agent identity signing — algorithm (Ed25519), what is signed, where verification happens
+IATP trust attestation — how attestations are signed, what the payload contains, verification chain
+Inter-agent message integrity — signing at each hop, hash algorithm
+Audit trail integrity — Merkle chain hash function, tamper detection
+Transport — mTLS version, required cipher suites
+
+#### 4.4.2 Key Management Practices (ASI-03 focus)
+Key generation: where keys are generated (HSM vs. software), entropy source
+Key storage: vault system used (Azure Key Vault, AWS KMS, HashiCorp Vault), access policy
+Key rotation: schedule (e.g., 90 days), automated vs. manual, rotation impact on running agents
+Key revocation: triggers (agent compromise, trust score drop below threshold), propagation time, how downstream agents are notified
+DID lifecycle: creation, update, deactivation linked to agent lifecycle events
+
+#### 4.4.3 Verification Mechanisms (ASI-07 focus)
+Peer identity verification before inter-agent calls: DID resolution, certificate validation steps
+Trust score check at connection time: minimum threshold, what happens on failure
+Replay attack prevention: nonce usage, timestamp windows
+Delegation chain verification: how IATP attestations are walked and validated end-to-end
+Failure behavior: what agents do when verification fails (deny, escalate, log)
 ---
 
 ## 5. Outcomes and Metrics
@@ -334,13 +441,100 @@ For each challenge, include:
 
 ## Template Metadata
 
-
 **Version**: 1.0
-**Last Updated**: 2026-04-05
+**AGT Version**: 3.0.2
 **Maintained By**: Agent Governance Toolkit Community
 **Repository**: https://github.com/microsoft/agent-governance-toolkit
 
 **Additional Resources:**
-- Review sample hypothetical case studies in `docs/case-studies/` for reference
+- Review sample hypothetical case studies in `docs/case-studies/` for reference. (Case studies are tied to specific AGT releases and component names may evolve)
 - Consult `docs/ARCHITECTURE.md` and `docs/OWASP-COMPLIANCE.md` for technical details
 - Ask questions in GitHub Discussions
+
+## Documentation Maintenance Guidance
+
+  ### Version Compatibility
+
+  Case studies reference specific AGT versions and may become outdated as the toolkit evolves. Follow these guidelines to maintain accuracy:
+
+  **When to Update Documentation:**
+  - **Breaking changes**: Component renames, API changes, or deprecated features
+  - **Major version updates**: When AGT releases a new major version (e.g., 3.x → 4.x)
+  - **Feature additions**: When new governance capabilities are added that enhance the case study
+  - **Regulatory changes**: When regulations cited in the case study are updated
+
+  **How to Handle Breaking Changes:**
+
+  1. **Component Name Changes**
+     - Update all references throughout the document (search and replace)
+     - Example: If `AgentMesh` → `AgentTrust`, update:
+       - "AGT Components Deployed" metadata
+       - Architecture diagrams
+       - Policy implementation sections
+       - Technical explanations
+
+  2. **API/Feature Deprecations**
+     - Add deprecation notice: `_Note: [Feature] was deprecated in AGT v[X.Y.Z]. Current implementations should use [Alternative] instead._`
+     - Keep original example intact for historical reference
+     - Add new example showing current approach
+
+  3. **Trust Score/Ring Changes**
+     - If trust scoring system changes (e.g., 0-1000 → 0-100), update all agent persona descriptions
+     - If privilege rings change (e.g., Ring 0-3 → different model), update architecture section
+
+  **Version Tagging Best Practices:**
+
+  - **Initial creation**: Tag with current AGT version in disclaimer
+  - **Minor updates** (typo fixes, clarifications): Don't update version tag
+  - **Compatibility updates** (component names, APIs): Update to new AGT version and add changelog note:
+    Changelog:
+  - v3.0.2 → v3.5.0 (March 2026): Updated AgentMesh references to AgentTrust
+  - v3.5.0 → v4.0.0 (June 2026): Updated trust scoring from 0-1000 to 0-100 scale
+
+  **Handling Outdated Case Studies:**
+
+  If a case study becomes significantly outdated (>2 major versions behind), consider:
+  1. **Archive approach**: Move to `docs/case-studies/archived/` with prominent notice
+  2. **Rewrite approach**: Create new version with updated components
+  3. **Hybrid approach**: Keep original with "Modern Equivalent" section showing current implementation
+
+  **Component Reference Checklist:**
+
+  When updating for new AGT versions, verify these component references:
+  - [ ] Agent OS policy syntax and features
+  - [ ] AgentMesh/identity system terminology
+  - [ ] Trust scoring ranges (0-1000 or updated scale)
+  - [ ] Privilege ring model (Ring 0-3 or updated)
+  - [ ] IATP protocol version and features
+  - [ ] Ed25519 cryptographic identity (or successor)
+  - [ ] Audit trail format (Merkle chains, WORM storage)
+  - [ ] OWASP ASI risk mappings (ASI-01 through ASI-10)
+
+  **Documentation Freeze for Stable References:**
+
+  Some organizations may reference case studies in compliance documentation or vendor contracts. To support this:
+  - Version-specific case studies remain available via Git tags (e.g., `git checkout v3.0.2`)
+  - Breaking changes to case studies should be communicated in release notes
+  - Consider maintaining at least 2 major versions of case study documentation
+
+  **Questions to Ask When Updating:**
+
+  1. Does this case study still demonstrate best practices with current AGT?
+  2. Are the governance patterns still recommended, or have better approaches emerged?
+  3. Do performance metrics (e.g., <0.1ms policy latency) still reflect current expectations?
+  4. Are regulatory citations still accurate and current?
+  5. Do the OWASP ASI risk mappings align with the latest OWASP guidance?
+
+  ### Contact for Documentation Updates
+
+  - **Issue tracker**: https://github.com/microsoft/agent-governance-toolkit/issues
+  - **Tag**: Use `documentation` label for case study update requests
+  - **Community**: Discuss in GitHub Discussions under "Case Studies" category
+
+  ---
+  This guidance addresses:
+  - Backward compatibility: Clear versioning and changelog approach
+  - Breaking changes: Specific steps for handling component renames
+  - Maintainability: Checklist and triggers for when updates are needed
+  - Historical preservation: Archive approach for significantly outdated docs
+  - Stakeholder needs: Acknowledges compliance/contract references
