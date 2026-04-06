@@ -237,21 +237,42 @@ CHP's authorization workflow implements delegation patterns designed for healthc
 
 **Drug-Drug Interaction and Contraindication Checking for Chemotherapy**
 
-Prevents pilot near-miss (carboplatin approved for renal-impaired patient). Authorization-decision-agent queries Epic for contraindications before approving chemotherapy (J-code drugs): renal function (eGFR <60 mL/min + nephrotoxic drug → escalate), hepatic function (elevated enzymes + hepatically metabolized drug → review), bone marrow function (neutrophils <1,500 or platelets <100,000 → flag), drug interactions (Micromedex query). Policy latency: 0.12ms + 200-400ms FHIR queries.
+Prevents pilot near-miss (carboplatin approved for renal-impaired patient). 
+Authorization-decision-agent queries Epic for contraindications before approving chemotherapy (J-code drugs): renal function (eGFR <60 mL/min + nephrotoxic drug → escalate), hepatic function (elevated enzymes + hepatically metabolized drug → review), bone marrow function (neutrophils <1,500 or platelets <100,000 → flag), drug interactions (Micromedex query). 
+Policy latency: 0.12ms + 200-400ms FHIR queries.
 
-**Lung Cancer Patient Near-Miss (Month 2)**: 68-year-old with stage III NSCLC needs carboplatin + pemetrexed ($38,000). Agent approves medical necessity. Policy activates: eGFR 32 mL/min (severe renal impairment). Policy halts: "Carboplatin nephrotoxic, requires Calvert formula dose reduction." Routes to oncology pharmacist who calculates 40% dose reduction, coordinates with oncologist, resubmits. Outcome: Patient completed 4 cycles with renal-adjusted dosing, no acute kidney injury, eGFR stable. Without intervention: likely acute kidney failure requiring dialysis. 12-month production: Policy flagged 127 chemotherapy authorizations (83 renal, 28 hepatic, 12 bone marrow, 4 drug interactions). 89 dose adjustments, 24 treatment plan changes, 14 confirmations safe with monitoring. Zero chemo-related acute kidney injuries or hepatotoxicity.
+**Lung Cancer Patient Near-Miss (Month 2)**: 68-year-old with stage III NSCLC needs carboplatin + pemetrexed ($38,000). Agent approves medical necessity. 
+Policy activates: eGFR 32 mL/min (severe renal impairment). 
+Policy halts: "Carboplatin nephrotoxic, requires Calvert formula dose reduction." Routes to oncology pharmacist who calculates 40% dose reduction, coordinates with oncologist, resubmits. 
+Outcome: Patient completed 4 cycles with renal-adjusted dosing, no acute kidney injury, eGFR stable. 
+Without intervention: likely acute kidney failure requiring dialysis. 
+12-month production: Policy flagged 127 chemotherapy authorizations (83 renal, 28 hepatic, 12 bone marrow, 4 drug interactions). 89 dose adjustments, 24 treatment plan changes, 14 confirmations safe with monitoring. Zero chemo-related acute kidney injuries or hepatotoxicity.
 
 **Emergency Surgery Fast-Path with Retrospective Review**
 
 Addresses pilot ruptured appendix scenario (4-hour delay, worsening sepsis). Detects emergency indicators: ED/ICU/OR source, emergency diagnosis codes (MI, stroke, trauma, acute abdomen), STAT flags, after-hours timing. Agent OS bypasses standard workflow, routes to clinical-safety-override-agent (Ring 0, trust 900) for rapid safety verification, not full medical necessity review.
 
-**3 AM Emergency C-Section (Month 5)**: 34-year-old at 38 weeks gestation, fetal bradycardia (80 bpm, Category III tracing). OB resident submits at 3:21 AM: diagnosis O36.8391 (fetal distress), procedure CPT 59510, STAT flag. Emergency detection (4s): Agent OS activates emergency policy. Safety verification (4s): confirms Aetna coverage, in-network, no contraindications. Issues PROVISIONAL EMERGENCY AUTHORIZATION. Processing overhead (4s): system coordination and logging. Total: 12 seconds. Cesarean at 3:34 AM. Outcome: Baby Apgar 7/9, discharged 48 hours. Retrospective review next morning confirms appropriate, Aetna auto-approves. Safeguard: 12-month production—847 emergency auths processed, 823 (97.2%) confirmed appropriate, 18 gray-zone, 6 flagged abuse (5 confirmed legitimate, 1 actual abuse—provider lost fast-path privileges 90 days).
+**3 AM Emergency C-Section (Month 5)**: 34-year-old at 38 weeks gestation, fetal bradycardia (80 bpm, Category III tracing). OB resident submits at 3:21 AM: diagnosis O36.8391 (fetal distress), procedure CPT 59510, STAT flag. 
+Emergency detection (4s): Agent OS activates emergency policy. 
+Safety verification (4s): confirms Aetna coverage, in-network, no contraindications. Issues PROVISIONAL EMERGENCY AUTHORIZATION. 
+Processing overhead (4s): system coordination and logging. 
+Total: 12 seconds. 
+Cesarean at 3:34 AM. Outcome: Baby Apgar 7/9, discharged 48 hours. Retrospective review next morning confirms appropriate, Aetna auto-approves. 
+Safeguard: 12-month production—847 emergency auths processed, 823 (97.2%) confirmed appropriate, 18 gray-zone, 6 flagged abuse (5 confirmed legitimate, 1 actual abuse—provider lost fast-path privileges 90 days).
 
 **Pediatric Medication Dosing Verification with Weight-Based Calculation**
 
-Prevents pilot ADHD error (9-year-old nearly received adult-max Vyvanse 70mg). Activates for age <18: queries weight from Epic, calculates mg/kg dosing, checks age-specific maximums, flags developmental concerns (stimulants <6, antipsychotics <5), verifies formulation appropriateness. Policy latency: 0.08ms + 150-250ms weight/age queries.
+Prevents pilot ADHD error (9-year-old nearly received adult-max Vyvanse 70mg). Activates for age <18: queries weight from Epic, calculates mg/kg dosing, checks age-specific maximums, flags developmental concerns (stimulants <6, antipsychotics <5), verifies formulation appropriateness. 
+Policy latency: 0.08ms + 150-250ms weight/age queries.
 
-**Seizure Medication Toddler Near-Miss (Month 6)**: 3-year-old with epilepsy prescribed levetiracetam 500mg BID. Agent approves medical necessity. Pediatric policy activates: weight 14 kg, recommended 140-280mg BID (10-20 mg/kg), prescribed 500mg BID (36 mg/kg, 78% over max). Policy alerts: "Risk sedation, toxicity." Routes to pediatric pharmacist who contacts neurologist. Neurologist: "I copied adult dose, forgot to adjust for weight. 200mg BID correct. That dose would have caused severe sedation or worse." Resubmitted with corrected dose (200mg BID). Outcome: Seizure control, no adverse effects. Without intervention: 2.5x recommended dose, likely severe sedation, respiratory depression. 12-month production: Flagged 83 pediatric medication auths, 67 had weight-based dosing discrepancies requiring review (81% flag rate—reflecting prescriber reliance on adult dosing templates), 12 high-end requiring confirmation, 4 false positives. Prevented estimated $4M+ malpractice exposure.
+**Seizure Medication Toddler Near-Miss (Month 6)**: 3-year-old with epilepsy prescribed levetiracetam 500mg BID. Agent approves medical necessity. 
+Pediatric policy activates: weight 14 kg, recommended 140-280mg BID (10-20 mg/kg), prescribed 500mg BID (36 mg/kg, 78% over max). 
+Policy alerts: "Risk sedation, toxicity." Routes to pediatric pharmacist who contacts neurologist. 
+Neurologist: "I copied adult dose, forgot to adjust for weight. 200mg BID correct. That dose would have caused severe sedation or worse." 
+Resubmitted with corrected dose (200mg BID). 
+Outcome: Seizure control, no adverse effects. 
+Without intervention: 2.5x recommended dose, likely severe sedation, respiratory depression. 
+12-month production: Flagged 83 pediatric medication auths, 67 had weight-based dosing discrepancies requiring review (81% flag rate—reflecting prescriber reliance on adult dosing templates), 12 high-end requiring confirmation, 4 false positives. Prevented estimated $4M+ malpractice exposure.
 
 ### 4.3 Compliance Alignment
 
