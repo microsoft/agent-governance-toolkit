@@ -241,27 +241,62 @@ describe("validatePolicy", () => {
 // ---------------------------------------------------------------------------
 
 describe("owasp", () => {
-  it("exports OWASP_AGENTIC_RISKS with expected keys", () => {
-    expect(OWASP_AGENTIC_RISKS["AT01"]).toBeDefined();
-    expect(OWASP_AGENTIC_RISKS["AT08"]).toBeDefined();
+  it("exports exactly 10 canonical ASI risks", () => {
+    const riskIds = Object.keys(OWASP_AGENTIC_RISKS);
+
+    expect(riskIds).toHaveLength(10);
+    expect(riskIds).toEqual([
+      "ASI01",
+      "ASI02",
+      "ASI03",
+      "ASI04",
+      "ASI05",
+      "ASI06",
+      "ASI07",
+      "ASI08",
+      "ASI09",
+      "ASI10",
+    ]);
+    expect(OWASP_AGENTIC_RISKS["AT01"]).toBeUndefined();
+    expect(OWASP_AGENTIC_RISKS["ASI01"]?.title).toBe("Agent Goal Hijack");
+    expect(OWASP_AGENTIC_RISKS["ASI04"]?.title).toBe("Agentic Supply Chain Vulnerabilities");
+    expect(OWASP_AGENTIC_RISKS["ASI05"]?.title).toBe("Unexpected Code Execution (RCE)");
   });
 
-  it("getOwaspRisks returns matching risks", () => {
-    const risks = getOwaspRisks(["AT01", "AT08"]);
+  it("getOwaspRisks returns matching canonical risks", () => {
+    const risks = getOwaspRisks(["ASI01", "ASI08"]);
+
     expect(risks).toHaveLength(2);
-    expect(risks[0].id).toBe("AT01");
+    expect(risks[0]?.id).toBe("ASI01");
+    expect(risks[0]?.title).toBe("Agent Goal Hijack");
+    expect(risks[1]?.id).toBe("ASI08");
   });
 
-  it("getOwaspRisks skips unknown IDs", () => {
+  it("getOwaspRisks skips legacy AT IDs as unknown", () => {
     const risks = getOwaspRisks(["AT01", "UNKNOWN"]);
-    expect(risks).toHaveLength(1);
+
+    expect(risks).toHaveLength(0);
   });
 
-  it("formatOwaspRisks returns a non-empty string for valid IDs", () => {
-    const md = formatOwaspRisks(["AT01", "AT08"]);
-    expect(md).toContain("AT01");
-    expect(md).toContain("AT08");
+  it("formatOwaspRisks returns a non-empty string for valid ASI IDs", () => {
+    const md = formatOwaspRisks(["ASI01", "ASI08"]);
+
+    expect(md).toContain("ASI01");
+    expect(md).toContain("Agent Goal Hijack");
+    expect(md).toContain("ASI08");
     expect(md).toContain("https://");
+  });
+
+  it("formatOwaspRisks skips legacy AT IDs", () => {
+    expect(formatOwaspRisks(["AT01", "AT08"])).toBe("");
+  });
+
+  it("Object.values contains no duplicate canonical risks", () => {
+    const values = Object.values(OWASP_AGENTIC_RISKS);
+    const uniqueIds = new Set(values.map((risk) => risk.id));
+
+    expect(values).toHaveLength(10);
+    expect(uniqueIds.size).toBe(10);
   });
 
   it("formatOwaspRisks returns empty string for empty array", () => {
@@ -394,8 +429,10 @@ describe("handleAgentRequest", () => {
         messages: [{ role: "user", content: "@governance owasp" }],
       })
     );
-    expect(output).toContain("AT01");
-    expect(output).toContain("AT08");
+    expect(output).toContain("ASI01");
+    expect(output).toContain("ASI08");
+    expect(output).toContain("Agent Goal Hijack");
+    expect(output).not.toContain("AT01");
   });
 
   it("uses help fallback for explicit help command", async () => {

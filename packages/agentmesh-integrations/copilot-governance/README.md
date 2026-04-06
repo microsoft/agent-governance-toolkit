@@ -64,7 +64,7 @@ Rule: `missing-governance-middleware`
 
 This file defines or executes agent tools but does not apply governance middleware...
 
-**OWASP Agentic Top-10:** `AT07`, `AT08`
+**OWASP Agentic Top-10:** `ASI02`, `ASI03`
 ```
 
 ### Validate a policy YAML file
@@ -105,13 +105,13 @@ policy:
 
 | Rule | Severity | OWASP |
 |------|----------|-------|
-| Missing governance middleware | High | AT07, AT08 |
-| Unguarded direct tool execution | High | AT07, AT08 |
-| No audit logging | High | AT09 |
-| No PII redaction | Medium | AT06 |
-| No trust verification for agent handoffs | Medium | AT07, AT08 |
-| No tool allow-list/deny-list | Medium | AT08 |
-| No prompt-injection input filters | Medium | AT01 |
+| Missing governance middleware | High | ASI02, ASI03 |
+| Unguarded direct tool execution | High | ASI02 |
+| No audit logging | High | — |
+| No PII redaction | Medium | — |
+| No trust verification for agent handoffs | Medium | ASI03, ASI07 |
+| No tool allow-list/deny-list | Medium | ASI02, ASI03 |
+| No prompt-injection input filters | Medium | ASI01 |
 
 ---
 

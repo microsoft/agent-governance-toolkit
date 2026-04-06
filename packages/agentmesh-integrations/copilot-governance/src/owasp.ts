@@ -3,12 +3,11 @@
 /**
  * OWASP Agentic Security Initiative — Agentic Top-10 risk catalogue.
  *
- * Reference: https://genai.owasp.org/llm-top-10/
- * Agentic extension: https://owasp.org/www-project-top-10-for-large-language-model-applications/
+ * Reference: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
  */
 
 export interface OwaspRisk {
-  /** Risk identifier, e.g. "AT01". */
+  /** Risk identifier, e.g. "ASI01". */
   id: string;
   /** Short title. */
   title: string;
@@ -18,49 +17,80 @@ export interface OwaspRisk {
   url: string;
 }
 
-/** OWASP Agentic Top-10 risks most relevant to agent governance. */
+const OWASP_AGENTIC_TOP_10_2026_URL_BASE =
+  "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/";
+
+/** Canonical OWASP Agentic Top-10 2026 risks keyed by ASI identifier. */
 export const OWASP_AGENTIC_RISKS: Record<string, OwaspRisk> = {
-  AT01: {
-    id: "AT01",
-    title: "Prompt Injection",
+  ASI01: {
+    id: "ASI01",
+    title: "Agent Goal Hijack",
     description:
-      "Malicious content in inputs hijacks agent actions by overriding original instructions.",
-    url: "https://genai.owasp.org/llmrisk/llm01-prompt-injection/",
+      "Attackers manipulate the agent's instructions to divert it from its original objective via indirect prompt injection.",
+    url: OWASP_AGENTIC_TOP_10_2026_URL_BASE,
   },
-  AT02: {
-    id: "AT02",
-    title: "Insecure Output Handling",
+  ASI02: {
+    id: "ASI02",
+    title: "Tool Misuse & Exploitation",
     description:
-      "Agent outputs are passed to downstream components without validation or sanitisation.",
-    url: "https://genai.owasp.org/llmrisk/llm02-insecure-output-handling/",
+      "Agents misuse legitimate tools due to ambiguous, manipulated, or malicious input.",
+    url: OWASP_AGENTIC_TOP_10_2026_URL_BASE,
   },
-  AT06: {
-    id: "AT06",
-    title: "Sensitive Information Disclosure",
+  ASI03: {
+    id: "ASI03",
+    title: "Identity & Privilege Abuse",
     description:
-      "PII or secrets are leaked in agent inputs, outputs, or audit logs.",
-    url: "https://genai.owasp.org/llmrisk/llm06-sensitive-information-disclosure/",
+      "Agents inherit or escalate privileges by leaking, reusing, or mishandling credentials or session tokens.",
+    url: OWASP_AGENTIC_TOP_10_2026_URL_BASE,
   },
-  AT07: {
-    id: "AT07",
-    title: "Insecure Plugin / Tool Design",
+  ASI04: {
+    id: "ASI04",
+    title: "Agentic Supply Chain Vulnerabilities",
     description:
-      "Tools lack authorisation, input validation, or allow-listing, enabling privilege escalation.",
-    url: "https://genai.owasp.org/llmrisk/llm07-insecure-plugin-design/",
+      "Compromised or malicious tools, models, plugins, MCP servers, or prompts injected into agent workflows.",
+    url: OWASP_AGENTIC_TOP_10_2026_URL_BASE,
   },
-  AT08: {
-    id: "AT08",
-    title: "Excessive Agency",
+  ASI05: {
+    id: "ASI05",
+    title: "Unexpected Code Execution (RCE)",
     description:
-      "Agent is granted more permissions or capabilities than required for its task.",
-    url: "https://genai.owasp.org/llmrisk/llm08-excessive-agency/",
+      "Agents generate and execute untrusted code or commands.",
+    url: OWASP_AGENTIC_TOP_10_2026_URL_BASE,
   },
-  AT09: {
-    id: "AT09",
-    title: "Overreliance",
+  ASI06: {
+    id: "ASI06",
+    title: "Memory & Context Poisoning",
     description:
-      "Humans over-trust agent outputs without proper validation or audit trails.",
-    url: "https://genai.owasp.org/llmrisk/llm09-overreliance/",
+      "Attackers inject malicious data into an agent's persistent memory or context, affecting future reasoning.",
+    url: OWASP_AGENTIC_TOP_10_2026_URL_BASE,
+  },
+  ASI07: {
+    id: "ASI07",
+    title: "Insecure Inter-Agent Communication",
+    description:
+      "Communication between agents lacks authentication, encryption, or schema validation.",
+    url: OWASP_AGENTIC_TOP_10_2026_URL_BASE,
+  },
+  ASI08: {
+    id: "ASI08",
+    title: "Cascading Failures",
+    description:
+      "Failures in one agent or component propagate unpredictably, causing widespread system harm.",
+    url: OWASP_AGENTIC_TOP_10_2026_URL_BASE,
+  },
+  ASI09: {
+    id: "ASI09",
+    title: "Human-Agent Trust Exploitation",
+    description:
+      "Attackers abuse human trust in AI agents to persuade users to approve unauthorized actions.",
+    url: OWASP_AGENTIC_TOP_10_2026_URL_BASE,
+  },
+  ASI10: {
+    id: "ASI10",
+    title: "Rogue Agents",
+    description:
+      "Malicious, compromised, or self-propagating agents perform unauthorized activities.",
+    url: OWASP_AGENTIC_TOP_10_2026_URL_BASE,
   },
 };
 
