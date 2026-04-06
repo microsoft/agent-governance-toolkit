@@ -125,6 +125,7 @@ try:
         resume_agent,
         user_space_execution,
     )
+
     _CONTROL_PLANE_AVAILABLE = True
 except ImportError:
     _CONTROL_PLANE_AVAILABLE = False
@@ -176,6 +177,29 @@ from agent_os.mcp_security import (
     ScanResult,
     ToolFingerprint,
 )
+from agent_os.credential_redactor import CredentialMatch, CredentialPattern, CredentialRedactor
+from agent_os.mcp_message_signer import (
+    MCPMessageSigner,
+    MCPSignedEnvelope,
+    MCPVerificationResult,
+)
+from agent_os.mcp_protocols import (
+    InMemoryAuditSink,
+    InMemoryNonceStore,
+    InMemoryRateLimitStore,
+    InMemorySessionStore,
+    MCPAuditSink,
+    MCPNonceStore,
+    MCPRateLimitStore,
+    MCPSessionStore,
+)
+from agent_os.mcp_response_scanner import (
+    MCPResponseScanResult,
+    MCPResponseScanner,
+    MCPResponseThreat,
+)
+from agent_os.mcp_session_auth import MCPSession, MCPSessionAuthenticator
+from agent_os.mcp_sliding_rate_limiter import MCPSlidingRateLimiter
 
 # Mute Agent Primitives — Face/Hands kernel-level decorators
 from agent_os.mute import (
@@ -229,7 +253,6 @@ __all__ = [
     "__author__",
     "AVAILABLE_PACKAGES",
     "check_installation",
-
     # Control Plane
     "AgentControlPlane",
     "create_control_plane",
@@ -260,7 +283,6 @@ __all__ = [
     "FlightRecorder",
     "ExecutionEngine",
     "ExecutionStatus",
-
     # Mute Agent Primitives
     "face_agent",
     "mute_agent",
@@ -271,7 +293,6 @@ __all__ = [
     "StepResult",
     "PipelineResult",
     "CapabilityViolation",
-
     # Stateless API
     "StatelessKernel",
     "ExecutionContext",
@@ -279,7 +300,6 @@ __all__ = [
     "ExecutionResult",
     "StatelessMemoryBackend",
     "stateless_execute",
-
     # Base Agent Classes
     "BaseAgent",
     "ToolUsingAgent",
@@ -287,26 +307,22 @@ __all__ = [
     "AuditEntry",
     "PolicyDecision",
     "TypedResult",
-
     # AGENTS.md Compatibility
     "AgentsParser",
     "AgentsConfig",
     "AgentSkill",
     "discover_agents",
-
     # Semantic Policy Engine
     "SemanticPolicyEngine",
     "IntentCategory",
     "IntentClassification",
     "PolicyDenied",
-
     # Prompt Injection Detection
     "PromptInjectionDetector",
     "InjectionType",
     "ThreatLevel",
     "DetectionResult",
     "DetectionConfig",
-
     # MCP Security
     "MCPSecurityScanner",
     "MCPThreatType",
@@ -314,13 +330,31 @@ __all__ = [
     "MCPThreat",
     "ToolFingerprint",
     "ScanResult",
-
+    "CredentialRedactor",
+    "CredentialPattern",
+    "CredentialMatch",
+    "MCPSessionStore",
+    "MCPNonceStore",
+    "MCPRateLimitStore",
+    "MCPAuditSink",
+    "InMemorySessionStore",
+    "InMemoryNonceStore",
+    "InMemoryRateLimitStore",
+    "InMemoryAuditSink",
+    "MCPResponseScanner",
+    "MCPResponseScanResult",
+    "MCPResponseThreat",
+    "MCPSessionAuthenticator",
+    "MCPSession",
+    "MCPMessageSigner",
+    "MCPSignedEnvelope",
+    "MCPVerificationResult",
+    "MCPSlidingRateLimiter",
     # LlamaFirewall Integration
     "LlamaFirewallAdapter",
     "FirewallMode",
     "FirewallVerdict",
     "FirewallResult",
-
     # Context Budget Scheduler
     "ContextScheduler",
     "ContextWindow",
