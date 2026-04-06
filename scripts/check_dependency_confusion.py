@@ -79,6 +79,8 @@ REGISTERED_PACKAGES = {
     # Internal module references
     "inter-agent-trust-protocol", "agent-control-plane", "cmvk",
     "agent-tool-registry", "cedar", "opa", "huggingface_hub",
+    # APS adapter optional deps
+    "aps", "agent-passport-system",
     # Internal cross-package references (local-only, NOT on PyPI)
     # These are flagged as HIGH RISK if found in requirements.txt with version pins
     # instead of path references. See dependency confusion attack vector.
