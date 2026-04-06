@@ -106,6 +106,8 @@ export function createExampleServer(): {
     });
   });
 
+  // Rate limiting is applied via routeRateLimiter.consume() inside the handler
+  // codeql[js/missing-rate-limiting]
   app.post('/call-tool', async (request, response) => {
     const agentId = readString(request.body, 'agentId') ?? 'demo-agent';
     const toolName = readString(request.body, 'toolName') ?? '';
