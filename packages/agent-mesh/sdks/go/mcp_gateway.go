@@ -63,11 +63,7 @@ func NewMcpGateway(config McpGatewayConfig) (*McpGateway, error) {
 		config.ResponseScanner = responseScanner
 	}
 	if config.Signer == nil {
-		signer, err := NewMcpMessageSigner(McpMessageSignerConfig{Key: []byte("0123456789abcdef0123456789abcdef")})
-		if err != nil {
-			return nil, err
-		}
-		config.Signer = signer
+		return nil, fmt.Errorf("%w: gateway signer is required", ErrMcpInvalidConfig)
 	}
 	if config.Audit == nil {
 		config.Audit = NewAuditLogger()

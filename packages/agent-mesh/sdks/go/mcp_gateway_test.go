@@ -55,6 +55,21 @@ func buildGatewayForTest(t *testing.T, now *time.Time, maxRequests int, policy M
 	return gateway, session
 }
 
+func TestNewMcpGatewayRequiresSigner(t *testing.T) {
+	_, err := NewMcpGateway(McpGatewayConfig{
+		Authenticator: &McpSessionAuthenticator{},
+		RateLimiter:   &McpSlidingRateLimiter{},
+		Scanner:       NewMcpSecurityScanner(McpSecurityScannerConfig{}),
+		ResponseScanner: &McpResponseScanner{},
+		Audit:         NewAuditLogger(),
+		Policy:        DefaultMcpPolicy(),
+		Metrics:       NewMcpMetrics(),
+	})
+	if err == nil || !errors.Is(err, ErrMcpInvalidConfig) {
+		t.Fatalf("expected invalid config error when signer is missing, got %v", err)
+	}
+}
+
 func TestMcpGatewayAllowsSafeToolCalls(t *testing.T) {
 	now := time.Date(2026, 4, 6, 12, 0, 0, 0, time.UTC)
 	gateway, session := buildGatewayForTest(t, &now, 5, DefaultMcpPolicy())
