@@ -103,7 +103,7 @@ grpc = [
     "grpcio-tools>=1.60.0,<2.0",
 ]
 agent-os = [
-    "agent-os-kernel[nexus,iatp]>=1.2.0,<2.0",
+    "agent-os-kernel[nexus,iatp]>=1.2.0,<4.0",
 ]
 all = [
     "fastapi>=0.115.0,<1.0",
