@@ -48,7 +48,7 @@ api = ["fastapi>=0.115.0,<1.0", "uvicorn>=0.27.0,<1.0"]
 otel = [
     "opentelemetry-exporter-otlp>=1.20,<2.0",
 ]
-langfuse = ["langfuse>=2.0,<3.0"]
+langfuse = ["langfuse>=2.0,<5.0"]
 arize = ["arize-phoenix>=4.0,<5.0"]
 langchain = ["langchain-core>=1.2.11,<2.0"]
 llamaindex = ["llama-index-core>=0.10,<1.0"]
@@ -59,7 +59,7 @@ langsmith = ["langsmith>=0.1,<1.0"]
 wandb = ["wandb>=0.16,<1.0"]
 mlflow = ["mlflow>=2.10,<3.0"]
 agentops = ["agentops>=0.3,<1.0"]
-all = ["opentelemetry-exporter-otlp>=1.20,<2.0", "langfuse>=2.0,<3.0", "arize-phoenix>=4.0,<5.0", "langchain-core>=1.2.11,<2.0", "llama-index-core>=0.10,<1.0", "braintrust>=0.0.100,<1.0", "helicone>=4.0,<5.0", "ddtrace>=2.0,<3.0", "langsmith>=0.1,<1.0", "wandb>=0.16,<1.0", "mlflow>=2.10,<3.0", "agentops>=0.3,<1.0"]
+all = ["opentelemetry-exporter-otlp>=1.20,<2.0", "langfuse>=2.0,<5.0", "arize-phoenix>=4.0,<5.0", "langchain-core>=1.2.11,<2.0", "llama-index-core>=0.10,<1.0", "braintrust>=0.0.100,<1.0", "helicone>=4.0,<5.0", "ddtrace>=2.0,<3.0", "langsmith>=0.1,<1.0", "wandb>=0.16,<1.0", "mlflow>=2.10,<3.0", "agentops>=0.3,<1.0"]
 
 [project.scripts]
 agent-sre = "agent_sre.cli.main:cli"
