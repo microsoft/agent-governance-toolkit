@@ -52,7 +52,7 @@ dependencies = [
     "httpx>=0.27.0,<1.0",
     "aiohttp>=3.13.3,<4.0",
     "pyyaml>=6.0,<7.0",
-    "structlog>=24.1.0,<25.0",
+    "structlog>=24.1.0,<26.0",
     "click>=8.1.0,<9.0",
     "rich>=13.0.0,<14.0",
 ]
