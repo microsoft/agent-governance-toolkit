@@ -20,6 +20,7 @@ Community-written content about agent governance, security, and the toolkit.
 | [Decentralized Identity in Multi-Agent Systems — From Theory to Production](https://dev.to/moltycel/decentralized-identity-in-multi-agent-systems-from-theory-to-production-1oe3) | [@MoltyCel](https://github.com/MoltyCel) | Dev.to |
 | [OWASP Agentic Top 10 — What Every AI Developer Should Know in 2026](https://dev.to/zhangzeyu/owasp-agentic-top-10-what-every-ai-developer-should-know-in-2026-55hi) | [@lawcontinue](https://github.com/lawcontinue) | Dev.to |
 | [EU AI Act for AI Agent Developers: A Practical Compliance Checklist](https://eu-ai-act.ai-mvp.com/2026/04/10/eu-ai-act-compliance-checklist-for-ai-agent-developers/) | [@carloshvp](https://github.com/carloshvp) | ai-mvp.com |
+| [MCP Security: Why Your AI Agents Need a Firewall for Tool Calls](https://dev.to/aymenhmaidi/mcp-security-why-your-ai-agents-tool-calls-need-a-firewall-3h48) | [@aymenhmaidiwastaken](https://github.com/aymenhmaidiwastaken) | Dev.to |
 
 ---
 
