@@ -43,7 +43,7 @@ dependencies = [
 [project.optional-dependencies]
 # Integration adapters (optional — hypervisor works standalone)
 nexus = [
-    "structlog>=24.1.0,<25.0",
+    "structlog>=24.1.0,<26.0",
 ]
 api = [
     "fastapi>=0.115.0,<1.0",
