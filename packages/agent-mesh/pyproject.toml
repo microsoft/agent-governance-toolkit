@@ -96,7 +96,7 @@ django = [
     "django>=4.2,<6.0",
 ]
 websocket = [
-    "websockets>=12.0,<13.0",
+    "websockets>=12.0,<17.0",
 ]
 grpc = [
     "grpcio>=1.60.0,<2.0",
