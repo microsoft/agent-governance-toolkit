@@ -62,7 +62,7 @@ dev = [
     "jsonschema>=4.0.0,<5.0",
 ]
 blockchain = [
-    "web3>=6.0.0,<7.0",  # Reserved for future blockchain anchoring — not yet used
+    "web3>=6.0.0,<8.0",  # Reserved for future blockchain anchoring — not yet used
 ]
 observability = [
     "agent-sre>=1.1.0,<2.0",  # PrometheusExporter bridge for RingMetricsCollector
