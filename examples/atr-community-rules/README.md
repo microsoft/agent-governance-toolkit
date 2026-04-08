@@ -48,9 +48,11 @@ The sync script maps:
 
 ## Running Tests
 
+<!-- cspell:disable -->
 ```bash
 pytest examples/atr-community-rules/test_atr_policy.py -v
 ```
+<!-- cspell:enable -->
 
 ## Keeping Rules Updated
 
