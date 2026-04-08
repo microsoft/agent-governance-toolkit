@@ -32,10 +32,9 @@ from datetime import datetime, timezone
 from types import ModuleType
 from typing import Any, Optional
 
-logger = logging.getLogger(__name__)
+from agent_compliance.verify import _validate_module_name
 
-# Import the shared allowlist validation from verify.py
-from agent_compliance.verify import ALLOWED_MODULE_PREFIXES, _validate_module_name
+logger = logging.getLogger(__name__)
 
 # Governance modules whose integrity we verify
 GOVERNANCE_MODULES = [
