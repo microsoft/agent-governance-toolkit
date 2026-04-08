@@ -31,4 +31,14 @@ try:
 except ImportError:
     pass
 
-from agent_compliance.supply_chain import SupplyChainGuard, SupplyChainFinding, SupplyChainConfig  # noqa: F401
+from agent_compliance.supply_chain import (
+    SupplyChainGuard,
+    SupplyChainFinding,
+    SupplyChainConfig,
+)  # noqa: F401
+from agent_compliance.prompt_defense import (  # noqa: F401
+    PromptDefenseEvaluator,
+    PromptDefenseConfig,
+    PromptDefenseFinding,
+    PromptDefenseReport,
+)
