@@ -1,0 +1,178 @@
+version: "1.0"
+name: atr-community-security-rules
+description: >
+  Community-maintained security detection rules from the Agent Threat Rules (ATR)
+  project. These 15 rules cover prompt injection, tool poisoning, context exfiltration,
+  and privilege escalation -- the most common attack vectors against AI agents.
+  Full ruleset (108 rules) available at https://agentthreatrule.org
+  Source: https://github.com/Agent-Threat-Rule/agent-threat-rules
+
+rules:
+  # ============================================================
+  # PROMPT INJECTION (5 rules)
+  # ============================================================
+
+  # ATR-2026-00001: Direct Prompt Injection via User Input
+  - name: atr-00001-direct-prompt-injection
+    condition:
+      field: user_input
+      operator: matches
+      value: "(?i)\\b(ignore|disregard|forget|override|bypass|skip|abandon|drop|cancel|suppress)\\s+(all\\s+)?(the\\s+|your\\s+|my\\s+|any\\s+)?(previous|prior|above|earlier|preceding|original|existing|current|initial|default)?\\s*(instructions?|prompts?|rules?|guidelines?|directives?|constraints?|context|programming|protocols?|policies|configuration|guardrails?|restrictions?)"
+    action: deny
+    priority: 80
+    message: "[ATR-00001] Direct prompt injection detected: instruction override attempt. Input contains patterns attempting to override the agent's instructions."
+
+  # ATR-2026-00003: Jailbreak Attempt (mode switching)
+  - name: atr-00003-jailbreak-mode-switch
+    condition:
+      field: user_input
+      operator: matches
+      value: "(?i)\\b(enable|activate|enter|switch\\s+to|turn\\s+on|engage|initiate)\\s+(developer|dev|maintenance|debug|unrestricted|unlimited|unfiltered|uncensored|admin|root|god|sudo|super|jailbreak|override|master|privileged)\\s+(mode|access|state|level|permissions?)\\b"
+    action: deny
+    priority: 80
+    message: "[ATR-00003] Jailbreak attempt detected: mode switching request to elevate agent capabilities."
+
+  # ATR-2026-00003: Jailbreak Attempt (named personas)
+  - name: atr-00003-jailbreak-named-persona
+    condition:
+      field: user_input
+      operator: matches
+      value: "(?i)(?:(?:pretend|act(?:ing)?\\s+as|you\\s+are\\s+(?:now\\s+)?|enable|activate|enter)\\s+(?:a\\s+)?\\b(DAN|D\\.A\\.N|STAN|DUDE|AIM|UCAR|BetterDAN|BasedGPT|JailbreakGPT|EvilGPT|UnfilteredGPT|KEVIN|Maximum|Omega|Jailbroken|AntiGPT|DevMode)\\b|\\bdo\\s+anything\\s+now\\b)"
+    action: deny
+    priority: 80
+    message: "[ATR-00003] Jailbreak attempt detected: known jailbreak persona activation (DAN, STAN, etc.)."
+
+  # ATR-2026-00004: System Prompt Override
+  - name: atr-00004-system-prompt-override
+    condition:
+      field: user_input
+      operator: matches
+      value: "(?i)<\\|?(im_start|im_end|system|endoftext|pad)\\|?>|<<\\s*SYS\\s*>>|<<\\s*/SYS\\s*>>|\\[INST\\]|\\[/INST\\]|<\\|begin_of_text\\|>|<\\|start_header_id\\|>\\s*system"
+    action: deny
+    priority: 100
+    message: "[ATR-00004] CRITICAL: System prompt override attempt via model-specific special tokens (ChatML, Llama, Mistral)."
+
+  # ATR-2026-00005: Multi-Turn Injection (false prior agreement)
+  - name: atr-00005-multi-turn-false-agreement
+    condition:
+      field: user_input
+      operator: matches
+      value: "(?i)(earlier\\s+you\\s+(said|agreed|confirmed|promised|stated|told\\s+me)|you\\s+(already|previously|earlier)\\s+(agreed|confirmed|said|promised|consented|approved)|as\\s+(we|you)\\s+(established|discussed|agreed|confirmed|decided)|you\\s+gave\\s+(me\\s+)?(permission|consent|approval))"
+    action: deny
+    priority: 60
+    message: "[ATR-00005] Multi-turn injection detected: false claims of prior agreement to manipulate agent."
+
+  # ============================================================
+  # TOOL POISONING (5 rules)
+  # ============================================================
+
+  # ATR-2026-00100: Consent Bypass via Hidden Instructions
+  - name: atr-00100-consent-bypass
+    condition:
+      field: tool_description
+      operator: matches
+      value: "(?:always|directly|automatically)\\s+(?:pass|send|forward)\\s+(?:results?|data|output|them|it|everything)\\s+(?:directly\\s+)?to\\s+(?:the\\s+)?\\w+\\s+(?:without|skip(?:ping)?)\\s+(?:asking|requiring|requesting)\\s+(?:for\\s+)?(?:user|human)\\s+(?:confirmation|approval|consent)"
+    action: deny
+    priority: 80
+    message: "[ATR-00100] Tool poisoning detected: tool instructs LLM to forward data without user consent."
+
+  # ATR-2026-00101: Trust Escalation Override
+  - name: atr-00101-trust-escalation-override
+    condition:
+      field: tool_description
+      operator: matches
+      value: "(?:authoritative|highest[_-]?priority)\\s+(?:system\\s+)?(?:directives?|instructions?)\\s+that\\s+override\\s+(?:any\\s+)?(?:user\\s+(?:preferences?|instructions?)|safety\\s+(?:guidelines?|policies?))"
+    action: deny
+    priority: 80
+    message: "[ATR-00101] Tool poisoning detected: tool declares output as authoritative directives overriding safety."
+
+  # ATR-2026-00103: Hidden Safety Bypass Instructions
+  - name: atr-00103-hidden-safety-bypass
+    condition:
+      field: tool_description
+      operator: matches
+      value: "NOTE\\s+TO\\s+AI:.*(?:disregard|ignore|bypass).*(?:safety|security|previous).*(?:instructions|checks|policies)"
+    action: deny
+    priority: 100
+    message: "[ATR-00103] CRITICAL: Tool contains hidden NOTE TO AI instructions to bypass safety mechanisms."
+
+  # ATR-2026-00105: Silent Action Concealment
+  - name: atr-00105-silent-action-concealment
+    condition:
+      field: tool_description
+      operator: matches
+      value: "(?:do\\s+not|don't)\\s+(?:mention|tell|inform|notify)\\s+(?:this\\s+to\\s+)?(?:the\\s+)?user\\s+(?:as\\s+it\\s+is|about|that)"
+    action: deny
+    priority: 80
+    message: "[ATR-00105] Tool poisoning detected: tool instructs LLM to hide actions from user."
+
+  # ATR-2026-00106: Schema-Description Contradiction
+  - name: atr-00106-schema-description-contradiction
+    condition:
+      field: tool_description
+      operator: matches
+      value: "(?:safe|read-only|readonly|read\\s+only).*(?:query|operation|access).*write[_-]?mode.*(?:boolean|true|enable)"
+    action: deny
+    priority: 80
+    message: "[ATR-00106] Tool poisoning detected: tool claims read-only but exposes write_mode parameter."
+
+  # ============================================================
+  # CONTEXT EXFILTRATION (3 rules)
+  # ============================================================
+
+  # ATR-2026-00020: System Prompt Leakage
+  - name: atr-00020-system-prompt-leak
+    condition:
+      field: tool_response
+      operator: matches
+      value: "(?i)(my|the)\\s+(system\\s+)?(?:prompt|instructions?)\\s+(?:is|are|says?|states?|reads?|tells?\\s+me)|(?:here\\s+(?:is|are)|below\\s+(?:is|are)|let\\s+me\\s+share)\\s+(?:my|the)\\s+(?:system\\s+)?(?:prompt|instructions?|rules?|config)"
+    action: deny
+    priority: 80
+    message: "[ATR-00020] Context exfiltration detected: agent output reveals system prompt content."
+
+  # ATR-2026-00021: Credential Exposure in Output
+  - name: atr-00021-credential-exposure
+    condition:
+      field: tool_response
+      operator: matches
+      value: "(?:sk-[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}|AIza[a-zA-Z0-9_-]{35}|ghp_[a-zA-Z0-9]{36}|xox[bpors]-[a-zA-Z0-9\\-]{10,}|-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----|eyJ[a-zA-Z0-9_-]{10,}\\.eyJ[a-zA-Z0-9_-]{10,}\\.[a-zA-Z0-9_-]+)"
+    action: deny
+    priority: 100
+    message: "[ATR-00021] CRITICAL: Credential or secret detected in tool response. Rotate exposed credentials immediately."
+
+  # ATR-2026-00113: Credential File Theft
+  - name: atr-00113-credential-file-theft
+    condition:
+      field: tool_response
+      operator: matches
+      value: "(?i)~/?\\.(?:aws/credentials|ssh/id_(?:rsa|ed25519|ecdsa)|npmrc|netrc|docker/config\\.json|kube/config)"
+    action: deny
+    priority: 100
+    message: "[ATR-00113] CRITICAL: Access to well-known credential files detected. Possible credential theft."
+
+  # ============================================================
+  # PRIVILEGE ESCALATION (2 rules)
+  # ============================================================
+
+  # ATR-2026-00040: Privilege Escalation via Tool Names
+  - name: atr-00040-privilege-escalation-tools
+    condition:
+      field: user_input
+      operator: matches
+      value: "(?i)(?:exec|execute|shell|bash|cmd|terminal|subprocess|os_command|system_call|run_command|powershell|modify_permissions?|grant_access|elevate|set_role|chmod|chown|sudo|setuid)"
+    action: deny
+    priority: 100
+    message: "[ATR-00040] CRITICAL: Privilege escalation attempt detected via system shell or permission modification tool."
+
+  # ATR-2026-00110: Eval Injection / Dynamic Code Execution
+  - name: atr-00110-eval-injection
+    condition:
+      field: user_input
+      operator: matches
+      value: "(?i)(?:eval\\s*\\(|new\\s+Function\\s*\\(|vm\\.(runIn|createContext|compileFunction)|require\\s*\\(\\s*['\"]child_process['\"]|import\\s*\\(\\s*['\"]child_process)"
+    action: deny
+    priority: 100
+    message: "[ATR-00110] CRITICAL: Dynamic code execution detected (eval, Function, vm, child_process). Possible sandbox escape."
+
+defaults:
+  action: allow
