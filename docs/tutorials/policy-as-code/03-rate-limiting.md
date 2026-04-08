@@ -173,10 +173,11 @@ python docs/tutorials/policy-as-code/examples/03_rate_limiting.py
 ## What's missing?
 
 We can now block dangerous tools, scope permissions by role, and rate-limit
-runaway agents. But our policies are identical in development and production. In
-a real deployment, you might want relaxed rules while testing and strict rules
-in production — that's **conditional policies**.
+runaway agents. But every rule we've written applies the same way everywhere.
+What if a tool should be allowed in dev but blocked in production? And what
+happens when the security team and a product team write separate policies
+that disagree? That's **conditional policies**.
 
 **Previous:** [Chapter 2 — Capability Scoping](02-capability-scoping.md)
-**Next:** Chapter 4 — Conditional Policies (coming soon) —
-environment-aware rules that change between dev and production.
+**Next:** [Chapter 4 — Conditional Policies](04-conditional-policies.md) —
+environment-aware rules and conflict resolution when policies disagree.
