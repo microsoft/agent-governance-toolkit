@@ -353,8 +353,8 @@ broadest                                            most specific
 Think of it like a company org chart:
 
 - **GLOBAL** = a rule from the CEO that applies to everyone
-- **TENANT** = a rule from a team lead that applies to their team
-- **ORGANIZATION** = a rule from a department head
+- **TENANT** = a rule from a division VP that applies to their division
+- **ORGANIZATION** = a rule from a department manager within that division
 - **AGENT** = a rule written for one specific agent
 
 When using `MOST_SPECIFIC_WINS`, the more specific scope always wins. If two
