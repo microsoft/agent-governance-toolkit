@@ -391,6 +391,10 @@ class PromptDefenseEvaluator:
         allowed = set(self.config.vectors)
         return tuple(r for r in _RULES if r.vector_id in allowed)
 
+    #: Maximum prompt length to scan (defense-in-depth against ReDoS).
+    #: System prompts above 100 KB are almost certainly not real prompts.
+    MAX_PROMPT_LENGTH = 100_000
+
     def evaluate(self, prompt: str) -> PromptDefenseReport:
         """Evaluate a system prompt for missing defenses.
 
@@ -399,7 +403,16 @@ class PromptDefenseEvaluator:
 
         Returns:
             A complete report with per-vector findings, grade, and score.
+
+        Raises:
+            ValueError: If the prompt exceeds MAX_PROMPT_LENGTH.
         """
+        if len(prompt) > self.MAX_PROMPT_LENGTH:
+            raise ValueError(
+                f"Prompt length {len(prompt)} exceeds maximum "
+                f"{self.MAX_PROMPT_LENGTH} (ReDoS protection)"
+            )
+
         findings: list[PromptDefenseFinding] = []
 
         for rule in self._rules:
@@ -414,6 +427,11 @@ class PromptDefenseEvaluator:
                         evidence = match.group(0)[:60]
 
             defended = matched >= rule.min_matches
+            # Confidence scoring:
+            #   Defended: starts at 0.5, +0.2 per pattern match, capped at 0.9
+            #     (more matching patterns = higher confidence the defense is real)
+            #   Not defended but partial match: 0.4 (some signal, but insufficient)
+            #   Not defended, zero matches: 0.8 (high confidence it's truly missing)
             confidence = (
                 min(0.9, 0.5 + matched * 0.2) if defended else (0.4 if matched > 0 else 0.8)
             )
@@ -468,8 +486,18 @@ class PromptDefenseEvaluator:
 
         Returns:
             A complete defense audit report.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+            PermissionError: If the file cannot be read.
+            ValueError: If the file is empty.
         """
-        content = Path(path).read_text(encoding="utf-8")
+        resolved = Path(path).resolve()
+        if not resolved.is_file():
+            raise FileNotFoundError(f"Prompt file not found: {resolved}")
+        content = resolved.read_text(encoding="utf-8")
+        if not content.strip():
+            raise ValueError(f"Prompt file is empty: {resolved}")
         return self.evaluate(content)
 
     def evaluate_batch(
