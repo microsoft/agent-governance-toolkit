@@ -144,7 +144,7 @@ export class AgentIdentity {
   }
 
   /** Suspend this identity temporarily. */
-  suspend(reason?: string): void {
+  suspend(_reason?: string): void {
     if (this._status === 'revoked') {
       throw new Error('Cannot suspend a revoked identity');
     }
@@ -152,7 +152,7 @@ export class AgentIdentity {
   }
 
   /** Revoke this identity permanently. */
-  revoke(reason?: string): void {
+  revoke(_reason?: string): void {
     this._status = 'revoked';
   }
 

@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 import { PolicyEngine } from '../src/policy';
-import { PolicyRule } from '../src/types';
 import { writeFileSync, unlinkSync, mkdtempSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';

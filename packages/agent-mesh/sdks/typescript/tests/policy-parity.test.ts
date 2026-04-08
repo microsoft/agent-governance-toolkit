@@ -10,9 +10,6 @@ import {
   Policy,
   PolicyDecisionResult,
 } from '../src/types';
-import { writeFileSync, unlinkSync, mkdtempSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
 
 describe('PolicyEngine — Rich Policy API', () => {
   // ── Policy loading ──
@@ -441,12 +438,6 @@ describe('PolicyConflictResolver', () => {
 // ── Full YAML policy document round-trip ──
 
 describe('YAML policy document loading', () => {
-  let tempDir: string;
-
-  beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'policy-parity-'));
-  });
-
   it('loads a full policy document from YAML', () => {
     const yamlContent = `
 apiVersion: governance.toolkit/v1

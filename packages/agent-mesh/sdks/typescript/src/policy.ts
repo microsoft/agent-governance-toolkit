@@ -343,7 +343,6 @@ export class PolicyEngine {
 
   /** Parse and load a YAML string as a Policy document. */
   loadYaml(yamlContent: string): Policy {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const yaml = require('js-yaml');
     const data = yaml.load(yamlContent) as Record<string, unknown>;
     const policy = dataToPolicy(data);
@@ -476,7 +475,6 @@ export class PolicyEngine {
 
   /** Load policy rules from a YAML file (legacy flat format). */
   async loadFromYAML(yamlPath: string): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const yaml = require('js-yaml');
     const content = readFileSync(yamlPath, 'utf-8');
     const doc = yaml.load(content) as { rules?: PolicyRule[] };

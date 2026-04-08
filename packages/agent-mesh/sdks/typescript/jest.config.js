@@ -8,4 +8,5 @@ module.exports = {
   testMatch: ['**/*.test.ts'],
   collectCoverageFrom: ['src/**/*.ts'],
   coverageDirectory: 'coverage',
+  testPathIgnorePatterns: ['/node_modules/', '/dist/'],
 };

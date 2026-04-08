@@ -189,3 +189,334 @@ export interface GovernanceResult {
   auditEntry: AuditEntry;
   executionTime: number;
 }
+
+// ── MCP Security ──
+
+export type MCPMaybePromise<T> = T | Promise<T>;
+
+export type MCPFindingSeverity = 'info' | 'warning' | 'critical';
+
+export type MCPResponseThreatType =
+  | 'instruction_injection'
+  | 'imperative_language'
+  | 'credential_leak'
+  | 'exfiltration_url';
+
+export interface MCPResponseFinding {
+  type: MCPResponseThreatType;
+  severity: MCPFindingSeverity;
+  message: string;
+  matchedText?: string;
+  path?: string;
+}
+
+export interface MCPResponseScannerConfig {
+  blockSeverities?: MCPFindingSeverity[];
+  sanitizeText?: boolean;
+  suspiciousHosts?: string[];
+  clock?: MCPClock;
+  scanTimeoutMs?: number;
+  logger?: MCPDebugLogger;
+}
+
+export interface MCPResponseScanResult<T = unknown> {
+  safe: boolean;
+  blocked: boolean;
+  findings: MCPResponseFinding[];
+  original: T;
+  sanitized: T;
+}
+
+export interface CredentialPatternDefinition {
+  name: string;
+  pattern: RegExp | string;
+  replacement?: string;
+}
+
+export interface MCPRedaction {
+  type: string;
+  path?: string;
+  replacement: string;
+  matchedText?: string;
+}
+
+export interface CredentialRedactorConfig {
+  replacementText?: string;
+  redactSensitiveKeys?: boolean;
+  customPatterns?: CredentialPatternDefinition[];
+  logger?: MCPDebugLogger;
+}
+
+export interface CredentialRedactionResult<T = unknown> {
+  redacted: T;
+  redactions: MCPRedaction[];
+}
+
+export interface MCPClock {
+  now(): number | Date;
+  monotonic?(): number;
+}
+
+export interface MCPDebugLogger {
+  debug?(message: string, details?: Record<string, unknown>): void;
+}
+
+export interface MCPSessionTokenPayload {
+  tokenVersion: string;
+  agentId: string;
+  sessionId: string;
+  issuedAt: number;
+  expiresAt: number;
+  nonce: string;
+  metadata?: Record<string, string>;
+}
+
+export interface MCPSessionRecord {
+  agentId: string;
+  sessionId: string;
+  issuedAt: number;
+  expiresAt: number;
+  tokenId: string;
+  metadata?: Record<string, string>;
+}
+
+export interface MCPSessionStore {
+  listSessions(agentId: string): MCPMaybePromise<MCPSessionRecord[]>;
+  getSession(
+    agentId: string,
+    sessionId: string,
+  ): MCPMaybePromise<MCPSessionRecord | undefined>;
+  upsertSession(record: MCPSessionRecord): MCPMaybePromise<void>;
+  removeSession(agentId: string, sessionId: string): MCPMaybePromise<void>;
+}
+
+export interface MCPSessionAuthConfig {
+  secret: string | Uint8Array;
+  ttlMs?: number;
+  maxConcurrentSessions?: number;
+  maxClockSkewMs?: number;
+  clock?: MCPClock;
+  sessionStore?: MCPSessionStore;
+  logger?: MCPDebugLogger;
+}
+
+export interface MCPSessionIssueResult {
+  token: string;
+  payload: MCPSessionTokenPayload;
+}
+
+export interface MCPSessionVerificationResult {
+  valid: boolean;
+  reason?: string;
+  payload?: MCPSessionTokenPayload;
+}
+
+export interface MCPNonceStore {
+  consume(
+    scope: string,
+    nonce: string,
+    expiresAt: number,
+  ): MCPMaybePromise<boolean>;
+  reset?(scope?: string): MCPMaybePromise<void>;
+}
+
+export interface MCPMessageEnvelope<T = unknown> {
+  payload: T;
+  timestamp: number;
+  nonce: string;
+  signature: string;
+  keyId?: string;
+}
+
+export interface MCPMessageSignerConfig {
+  secret: string | Uint8Array;
+  keyId?: string;
+  maxClockSkewMs?: number;
+  nonceTtlMs?: number;
+  clock?: MCPClock;
+  nonceStore?: MCPNonceStore;
+  logger?: MCPDebugLogger;
+}
+
+export interface MCPMessageVerificationResult<T = unknown> {
+  valid: boolean;
+  reason?: string;
+  envelope?: MCPMessageEnvelope<T>;
+}
+
+export interface MCPSlidingRateLimitConfig {
+  maxRequests: number;
+  windowMs: number;
+  clock?: MCPClock;
+  logger?: MCPDebugLogger;
+}
+
+export interface MCPSlidingRateLimitResult {
+  allowed: boolean;
+  count: number;
+  limit: number;
+  remaining: number;
+  resetAt: number;
+  retryAfterMs: number;
+}
+
+export enum MCPThreatType {
+  ToolPoisoning = 'tool_poisoning',
+  RugPull = 'rug_pull',
+  CrossServerAttack = 'cross_server_attack',
+  ConfusedDeputy = 'confused_deputy',
+  HiddenInstruction = 'hidden_instruction',
+  DescriptionInjection = 'description_injection',
+}
+
+export enum MCPSeverity {
+  Info = 'info',
+  Warning = 'warning',
+  Critical = 'critical',
+}
+
+export interface MCPThreat {
+  threatType: MCPThreatType;
+  severity: MCPSeverity;
+  toolName: string;
+  serverName: string;
+  message: string;
+  matchedPattern?: string;
+  details?: Record<string, unknown>;
+}
+
+export interface ToolFingerprint {
+  toolName: string;
+  serverName: string;
+  descriptionHash: string;
+  schemaHash: string;
+  firstSeen: number;
+  lastSeen: number;
+  version: number;
+}
+
+export interface MCPToolDefinition {
+  name: string;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+}
+
+export interface MCPScanResult {
+  safe: boolean;
+  threats: MCPThreat[];
+  toolsScanned: number;
+  toolsFlagged: number;
+}
+
+export interface MCPScanAuditRecord {
+  timestamp: string;
+  action: string;
+  toolName: string;
+  serverName: string;
+  threatsFound: number;
+  threatTypes: MCPThreatType[];
+}
+
+export enum ApprovalStatus {
+  Pending = 'pending',
+  Approved = 'approved',
+  Denied = 'denied',
+}
+
+export interface MCPApprovalRequest {
+  agentId: string;
+  toolName: string;
+  params: Record<string, unknown>;
+  auditParams: Record<string, unknown>;
+  findings: MCPResponseFinding[];
+  policyDecision?: LegacyPolicyDecision;
+}
+
+export type MCPApprovalHandler = (
+  request: MCPApprovalRequest,
+) => MCPMaybePromise<ApprovalStatus>;
+
+export interface MCPMetricAttributes {
+  [key: string]: string | number | boolean;
+}
+
+export interface MCPMetricRecorder {
+  recordMcpDecision(decision: string, attributes?: MCPMetricAttributes): void;
+  recordMcpThreatsDetected(
+    count: number,
+    attributes?: MCPMetricAttributes,
+  ): void;
+  recordMcpRateLimitHit(
+    agentId: string,
+    attributes?: MCPMetricAttributes,
+  ): void;
+  recordMcpScan(scanned: number, flagged: number, attributes?: MCPMetricAttributes): void;
+}
+
+export interface MCPAuditSink {
+  record(entry: MCPGatewayAuditEntry): MCPMaybePromise<void>;
+}
+
+export interface MCPGatewayConfig {
+  deniedTools?: string[];
+  allowedTools?: string[];
+  sensitiveTools?: string[];
+  blockedPatterns?: Array<string | RegExp>;
+  enableBuiltinSanitization?: boolean;
+  clock?: MCPClock;
+  scanTimeoutMs?: number;
+  logger?: MCPDebugLogger;
+  policyEvaluator?: {
+    evaluate(action: string, context?: Record<string, unknown>): LegacyPolicyDecision;
+  };
+  approvalHandler?: MCPApprovalHandler;
+  rateLimiter?: {
+    consume(agentId: string): MCPMaybePromise<MCPSlidingRateLimitResult>;
+  };
+  rateLimit?: {
+    maxRequests: number;
+    windowMs: number;
+  };
+  auditSink?: MCPAuditSink;
+  metrics?: MCPMetricRecorder;
+}
+
+export interface MCPGatewayDecisionResult {
+  allowed: boolean;
+  reason: string;
+  auditParams: Record<string, unknown>;
+  findings: MCPResponseFinding[];
+  approvalStatus?: ApprovalStatus;
+  policyDecision?: LegacyPolicyDecision;
+  rateLimit?: MCPSlidingRateLimitResult;
+}
+
+export interface MCPSecurityScannerConfig {
+  clock?: MCPClock;
+  scanTimeoutMs?: number;
+  logger?: MCPDebugLogger;
+}
+
+export interface MCPGatewayAuditEntry {
+  timestamp: string;
+  agentId: string;
+  toolName: string;
+  params: Record<string, unknown>;
+  auditParams: Record<string, unknown>;
+  allowed: boolean;
+  reason: string;
+  approvalStatus?: ApprovalStatus;
+  policyDecision?: LegacyPolicyDecision;
+  findings: MCPResponseFinding[];
+}
+
+export interface MCPWrappedServerConfig {
+  serverConfig: Record<string, unknown>;
+  allowedTools: string[];
+  deniedTools: string[];
+  sensitiveTools: string[];
+  rateLimit?: {
+    maxRequests: number;
+    windowMs: number;
+  };
+}

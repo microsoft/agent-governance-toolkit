@@ -1,9 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 import { createHash } from 'crypto';
-import { AuditConfig, AuditEntry, LegacyPolicyDecision } from './types';
-
-type PolicyDecision = LegacyPolicyDecision;
+import { AuditConfig, AuditEntry } from './types';
 
 const GENESIS_HASH = '0'.repeat(64);
 
