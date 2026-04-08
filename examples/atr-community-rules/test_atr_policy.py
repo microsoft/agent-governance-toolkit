@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """
 Tests for ATR community security rules integrated with AGT PolicyEvaluator.
 

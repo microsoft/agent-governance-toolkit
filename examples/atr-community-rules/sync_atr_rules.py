@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 #!/usr/bin/env python3
 """
 Sync ATR (Agent Threat Rules) YAML rules into AGT PolicyDocument format.
