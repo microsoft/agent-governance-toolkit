@@ -528,5 +528,5 @@ the right automatic answer. You want a **human to review and approve** before
 the agent proceeds.
 
 **Previous:** [Chapter 3 — Rate Limiting](03-rate-limiting.md)
-**Next:** Chapter 5 — Approval Workflows (coming soon) — route dangerous
-actions to a human before execution.
+**Next:** [Chapter 5 — Approval Workflows](05-approval-workflows.md) — route
+dangerous actions to a human before execution.
