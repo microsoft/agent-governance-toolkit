@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 version: "1.0"
 name: approval-workflow-policy
 description: >

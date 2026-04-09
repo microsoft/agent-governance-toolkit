@@ -1,3 +1,6 @@
+<!-- Copyright (c) Microsoft Corporation. -->
+<!-- Licensed under the MIT License. -->
+
 # Chapter 5: Approval Workflows
 
 In Chapters 1–4, every policy decision was instant: allow or deny. The system
