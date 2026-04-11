@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Orphan agent detection.
 
 Identifies agents that have gone silent (missed heartbeats),

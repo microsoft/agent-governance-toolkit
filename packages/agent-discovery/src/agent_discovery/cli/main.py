@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Agent Discovery CLI — find shadow AI agents in your organization.
 
 Usage:

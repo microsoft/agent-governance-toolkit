@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Agent Discovery — Shadow AI agent discovery and inventory for AGT.
 
 Find, inventory, and reconcile AI agents running across your organization.

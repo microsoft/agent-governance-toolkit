@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Agent inventory with deduplication and correlation.
 
 The inventory stores one logical agent per unique fingerprint, merging

@@ -2,6 +2,9 @@
 
 # 🛡️ OWASP MCP Top 10 — Compliance Mapping
 
+> **Disclaimer**: This document is an internal self-assessment mapping, NOT a validated certification or third-party audit. It documents how the toolkit's capabilities align with the referenced standard. Organizations must perform their own compliance assessments with qualified auditors.
+
+
 **How the Agent Governance stack covers the [OWASP Top 10 for Model Context Protocol (2025 Beta)](https://owasp.org/www-project-mcp-top-10/)**
 
 > ⚠️ The OWASP MCP Top 10 is currently in **Phase 3 — Beta Release and Pilot Testing**.

@@ -327,7 +327,7 @@ class AgentSREServer:
     def __init__(
         self,
         state: APIState,
-        host: str = "0.0.0.0",
+        host: str = "127.0.0.1",
         port: int = 8080,
     ) -> None:
         self._state = state

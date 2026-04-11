@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Config/artifact scanner — find agent configurations on the filesystem.
 
 Scans directories for files that indicate AI agent deployments:

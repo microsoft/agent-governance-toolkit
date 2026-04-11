@@ -2,6 +2,9 @@
 
 # ATF Conformance Assessment — Agent Governance Toolkit
 
+> **Disclaimer**: This document is an internal self-assessment mapping, NOT a validated certification or third-party audit. It documents how the toolkit's capabilities align with the referenced standard. Organizations must perform their own compliance assessments with qualified auditors.
+
+
 **Organization:** Microsoft Corporation
 **Implementation:** Agent Governance Toolkit (agent-governance-toolkit)
 **ATF Version:** 0.9.0

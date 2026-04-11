@@ -4,6 +4,9 @@
 
 # 🔒 SOC 2 Type II — Trust Service Criteria Mapping
 
+> **Disclaimer**: This document is an internal self-assessment mapping, NOT a validated certification or third-party audit. It documents how the toolkit's capabilities align with the referenced standard. Organizations must perform their own compliance assessments with qualified auditors.
+
+
 **How the Agent Governance Toolkit maps to the [AICPA SOC 2 Type II Trust Service Criteria (2017)](https://www.aicpa-cima.com/resources/download/2017-trust-services-criteria-with-revised-points-of-focus-2022)**
 
 </div>

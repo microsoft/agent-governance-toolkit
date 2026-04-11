@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Data models for agent discovery.
 
 All models use Pydantic v2 for validation and serialization.

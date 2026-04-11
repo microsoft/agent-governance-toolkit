@@ -1,5 +1,8 @@
 # OWASP Top 10 for LLM Applications — Coverage Mapping
 
+> **Disclaimer**: This document is an internal self-assessment mapping, NOT a validated certification or third-party audit. It documents how the toolkit's capabilities align with the referenced standard. Organizations must perform their own compliance assessments with qualified auditors.
+
+
 **Mapping Version:** 1.0
 **OWASP Reference:** [OWASP Top 10 for LLM Applications (2025)](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 **Toolkit Version:** v1.1.0

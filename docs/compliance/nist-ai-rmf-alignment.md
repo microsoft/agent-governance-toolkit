@@ -24,6 +24,9 @@
 
 # NIST AI Risk Management Framework (AI RMF 1.0) — Alignment Assessment
 
+> **Disclaimer**: This document is an internal self-assessment mapping, NOT a validated certification or third-party audit. It documents how the toolkit's capabilities align with the referenced standard. Organizations must perform their own compliance assessments with qualified auditors.
+
+
 **Agent Governance Toolkit (AGT)**
 **Document Version:** 1.0
 **Date:** 2026-07-14

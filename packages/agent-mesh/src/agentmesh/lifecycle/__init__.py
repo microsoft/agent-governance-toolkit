@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Agent Lifecycle Management for AgentMesh.
 
 Provides birth-to-retirement management of agent identities:

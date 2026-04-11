@@ -6,7 +6,7 @@ Agent Governance — Quick Start
 Boot the full governance stack and execute a governed action.
 
 Usage:
-    pip install ai-agent-governance
+    pip install agent-governance-toolkit
     python examples/quickstart.py
 """
 
