@@ -251,7 +251,13 @@ class PluginInstaller:
         _seen: Optional[set[str]] = None,
     ) -> Path:
         manifest = self._registry.get_plugin(name, version)
-        if verify and manifest.signature and manifest.author in self._trusted_keys:
+        # Signature verification — only when keys are configured and signature exists
+        if verify and self._trusted_keys and manifest.signature:
+            if manifest.author not in self._trusted_keys:
+                raise MarketplaceError(
+                    f"Plugin {name}@{manifest.version} signed by untrusted "
+                    f"author '{manifest.author}'"
+                )
             verify_signature(manifest, self._trusted_keys[manifest.author])
         if _seen is None:
             _seen = set()

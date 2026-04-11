@@ -295,7 +295,8 @@ class TrustHandshake:
 
             # Verify nonce and basic checks
             verification = await self._verify_response(
-                response, challenge, required_trust_score, required_capabilities
+                response, challenge, required_trust_score, required_capabilities,
+                expected_peer_did=peer_did,
             )
 
             if not verification["valid"]:
@@ -310,7 +311,7 @@ class TrustHandshake:
             result = HandshakeResult.success(
                 peer_did=peer_did,
                 trust_score=verification.get("registry_trust_score", response.trust_score),
-                capabilities=response.capabilities,
+                capabilities=verification.get("registry_capabilities", response.capabilities),
                 started=start,
                 user_context=response_user_ctx,
             )
@@ -412,23 +413,33 @@ class TrustHandshake:
         challenge: HandshakeChallenge,
         required_score: int,
         required_capabilities: Optional[list[str]],
+        expected_peer_did: Optional[str] = None,
     ) -> dict:
         """Verify handshake response with Ed25519 signature verification.
 
         Checks performed in order:
         1. Challenge ID matches
         2. Challenge not expired
-        3. Peer DID is registered and active
-        4. Ed25519 signature is valid
-        5. Public key matches registered identity
-        6. Trust score meets threshold
-        7. Required capabilities are present
+        3. Response DID matches expected peer DID (if provided)
+        4. Peer DID is registered and active
+        5. Ed25519 signature is valid
+        6. Public key matches registered identity
+        7. Registry trust score meets threshold (never self-reported)
+        8. Registry capabilities include all required capabilities
         """
         if response.challenge_id != challenge.challenge_id:
             return {"valid": False, "reason": "Challenge ID mismatch"}
 
         if challenge.is_expired():
             return {"valid": False, "reason": "Challenge expired"}
+
+        # Bind response to the expected peer DID to prevent DID substitution
+        if expected_peer_did and response.agent_did != expected_peer_did:
+            return {
+                "valid": False,
+                "reason": f"Response DID {response.agent_did} does not match "
+                          f"expected peer {expected_peer_did}",
+            }
 
         # Look up peer identity for public-key verification
         if not self.registry:
@@ -459,26 +470,32 @@ class TrustHandshake:
         if response.public_key != peer_identity.public_key:
             return {"valid": False, "reason": "Public key mismatch with registered identity"}
 
-        if response.trust_score < required_score:
+        # Use registry-authoritative trust score — never trust self-reported value
+        registry_trust_score = getattr(peer_identity, "trust_score", TRUST_SCORE_DEFAULT)
+
+        if registry_trust_score < required_score:
             return {
                 "valid": False,
-                "reason": f"Trust score {response.trust_score} below required {required_score}"
+                "reason": f"Trust score {registry_trust_score} below required {required_score}"
             }
 
-        # V06: Prefer registry trust score over self-reported value
-        registry_trust_score = response.trust_score
-        if self.registry and hasattr(peer_identity, "trust_score"):
-            registry_trust_score = getattr(peer_identity, "trust_score", response.trust_score)
+        # Use registry-authoritative capabilities — never trust self-reported value
+        registry_capabilities = list(getattr(peer_identity, "capabilities", []))
 
         if required_capabilities:
-            missing = set(required_capabilities) - set(response.capabilities)
+            missing = set(required_capabilities) - set(registry_capabilities)
             if missing:
                 return {
                     "valid": False,
                     "reason": f"Missing capabilities: {missing}"
                 }
 
-        return {"valid": True, "reason": None, "registry_trust_score": registry_trust_score}
+        return {
+            "valid": True,
+            "reason": None,
+            "registry_trust_score": registry_trust_score,
+            "registry_capabilities": registry_capabilities,
+        }
 
     def create_challenge(self) -> HandshakeChallenge:
         """Create and register a new challenge."""

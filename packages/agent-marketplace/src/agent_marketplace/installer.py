@@ -95,8 +95,18 @@ class PluginInstaller:
         """
         manifest = self._registry.get_plugin(name, version)
 
-        # Signature verification
-        if verify and manifest.signature and manifest.author in self._trusted_keys:
+        # Signature verification — fail closed when verify=True
+        if verify:
+            if not manifest.signature:
+                raise MarketplaceError(
+                    f"Plugin {name}@{manifest.version} has no signature; "
+                    "install with verify=False to bypass (not recommended)"
+                )
+            if manifest.author not in self._trusted_keys:
+                raise MarketplaceError(
+                    f"Plugin {name}@{manifest.version} signed by untrusted "
+                    f"author '{manifest.author}'"
+                )
             public_key = self._trusted_keys[manifest.author]
             verify_signature(manifest, public_key)
             logger.info("Signature verified for %s@%s", name, manifest.version)
@@ -104,7 +114,7 @@ class PluginInstaller:
         # Dependency resolution
         if _seen is None:
             _seen = set()
-        self._resolve_dependencies(manifest, _seen=_seen)
+        self._resolve_dependencies(manifest, verify=verify, _seen=_seen)
 
         # Install to plugins directory
         dest = self._plugins_dir / name
@@ -160,12 +170,14 @@ class PluginInstaller:
         self,
         manifest: PluginManifest,
         *,
+        verify: bool = True,
         _seen: set[str],
     ) -> None:
         """Recursively resolve and install plugin dependencies.
 
         Args:
             manifest: The manifest whose dependencies should be resolved.
+            verify: Whether to verify signatures on dependencies.
             _seen: Set of already-visited plugin names (cycle detection).
 
         Raises:
@@ -180,7 +192,7 @@ class PluginInstaller:
             dest = self._plugins_dir / dep_name
             if dest.exists():
                 continue  # already installed
-            self.install(dep_name, dep_version, verify=False, _seen=_seen)
+            self.install(dep_name, dep_version, verify=verify, _seen=_seen)
 
     # ------------------------------------------------------------------
     # Sandboxing
