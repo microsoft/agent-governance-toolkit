@@ -76,6 +76,7 @@ pip install agent-sre              # SRE toolkit
 pip install agent-governance-toolkit    # Compliance & attestation
 pip install agentmesh-marketplace      # Plugin marketplace
 pip install agentmesh-lightning        # RL training governance
+pip install agent-discovery            # Shadow AI agent discovery
 ```
 </details>
 
@@ -103,8 +104,8 @@ Still have questions? File a [GitHub issue](https://github.com/microsoft/agent-g
 
 - **Deterministic Policy Enforcement**: Every agent action evaluated against policy *before* execution at sub-millisecond latency (<0.1 ms)
   - [Policy Engine](packages/agent-os/) | [Benchmarks](BENCHMARKS.md)
-- **Zero-Trust Agent Identity**: Ed25519 cryptographic credentials, SPIFFE/SVID support, trust scoring on a 0–1000 scale
-  - [AgentMesh](packages/agent-mesh/) | [Trust Scoring](packages/agent-mesh/)
+- **Zero-Trust Agent Identity**: Ed25519 + **quantum-safe ML-DSA-65** cryptographic credentials, SPIFFE/SVID support, trust scoring on a 0–1000 scale
+  - [AgentMesh](packages/agent-mesh/) | [Quantum-Safe Signing](packages/agent-mesh/src/agentmesh/identity/quantum_safe.py)
 - **Execution Sandboxing**: 4-tier privilege rings, saga orchestration, termination control, kill switch
   - [Agent Runtime](packages/agent-runtime/) | [Agent Hypervisor](packages/agent-hypervisor/)
 - **Agent SRE**: SLOs, error budgets, replay debugging, chaos engineering, circuit breakers, progressive delivery
@@ -117,6 +118,12 @@ Still have questions? File a [GitHub issue](https://github.com/microsoft/agent-g
   - [Security workflows](.github/workflows/)
 - **12+ Framework Integrations**: Microsoft Agent Framework, LangChain, CrewAI, AutoGen, Dify, LlamaIndex, OpenAI Agents, Google ADK, and more
   - [Framework quickstarts](examples/quickstart/) | [Integration proposals](docs/proposals/)
+- **Shadow AI Discovery**: Scan processes, filesystems, and GitHub repos to find unregistered agents. Inventory with dedup, reconciliation, and risk scoring
+  - [Agent Discovery](packages/agent-discovery/) | [Tutorial](docs/tutorials/29-agent-discovery.md)
+- **Agent Lifecycle Management**: Provisioning workflows, credential rotation, heartbeat monitoring, orphan detection, decommissioning with full audit trail
+  - [Lifecycle Manager](packages/agent-mesh/src/agentmesh/lifecycle/) | [Tutorial](docs/tutorials/30-agent-lifecycle.md)
+- **Governance Dashboard**: Real-time Streamlit dashboard with fleet overview, shadow agent alerts, lifecycle monitor, policy feed, and trust heatmap
+  - [Dashboard Demo](demo/governance-dashboard/) | [Docker Compose](demo/governance-dashboard/docker-compose.yml)
 - **Full OWASP Coverage**: 10/10 Agentic Top 10 risks addressed with dedicated controls for each ASI category
   - [OWASP Compliance](docs/OWASP-COMPLIANCE.md) | [Competitive Comparison](docs/COMPARISON.md)
 - **GitHub Actions for CI/CD**: Automated security scanning and governance attestation for PR workflows
@@ -295,12 +302,15 @@ Three evaluation modes per backend: **embedded engine** (cedarpy/opa CLI), **rem
 | Package | PyPI | Description |
 |---------|------|-------------|
 | **Agent OS** | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | Policy engine — deterministic action evaluation, capability model, audit logging, action interception, MCP gateway |
-| **AgentMesh** | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | Inter-agent trust — Ed25519 identity, SPIFFE/SVID credentials, trust scoring, A2A/MCP/IATP protocol bridges |
+| **AgentMesh** | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | Inter-agent trust — Ed25519/ML-DSA-65 identity, SPIFFE/SVID credentials, trust scoring, A2A/MCP/IATP protocol bridges, lifecycle management |
 | **Agent Runtime** | [`agentmesh-runtime`](packages/agent-runtime/) | Execution supervisor — 4-tier privilege rings, saga orchestration, termination control, joint liability, append-only audit log |
 | **Agent SRE** | [`agent-sre`](https://pypi.org/project/agent-sre/) | Reliability engineering — SLOs, error budgets, replay debugging, chaos engineering, progressive delivery |
 | **Agent Compliance** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | Runtime policy enforcement — OWASP ASI 2026 controls, governance attestation, integrity verification |
 | **Agent Marketplace** | [`agentmesh-marketplace`](packages/agent-marketplace/) | Plugin lifecycle — discover, install, verify, and sign plugins |
 | **Agent Lightning** | [`agentmesh-lightning`](packages/agent-lightning/) | RL training governance — governed runners, policy rewards |
+| **Agent Discovery** | [`agent-discovery`](packages/agent-discovery/) | Shadow AI discovery — scan processes, configs, and repos; inventory with dedup; reconciliation and risk scoring |
+| **Agent Hypervisor** | [`agent-hypervisor`](packages/agent-hypervisor/) | Reversibility verification, execution plan validation, hypervisor-level governance |
+| **MCP Governance** | [`agent-mcp-governance`](packages/agent-mcp-governance/) | MCP-specific security scanning and governance enforcement |
 
 ## Framework Integrations
 
@@ -326,7 +336,7 @@ Works with **20+ agent frameworks** including:
 |------|----|--------|
 | Agent Goal Hijacking | ASI-01 | ✅ Policy engine blocks unauthorized goal changes |
 | Excessive Capabilities | ASI-02 | ✅ Capability model enforces least-privilege |
-| Identity & Privilege Abuse | ASI-03 | ✅ Zero-trust identity with Ed25519 certs |
+| Identity & Privilege Abuse | ASI-03 | ✅ Zero-trust identity with Ed25519 + quantum-safe ML-DSA-65 certs |
 | Uncontrolled Code Execution | ASI-04 | ✅ Agent Runtime execution rings + sandboxing |
 | Insecure Output Handling | ASI-05 | ✅ Content policies validate all outputs |
 | Memory Poisoning | ASI-06 | ✅ Episodic memory with integrity checks |
@@ -368,7 +378,7 @@ This toolkit provides **application-level (Python middleware) governance**, not 
 | Layer | What It Provides | What It Does NOT Provide |
 |-------|-----------------|------------------------|
 | Policy Engine | Deterministic action interception, deny-list enforcement | Hardware-level memory isolation |
-| Identity (IATP) | Ed25519 cryptographic agent credentials, trust scoring | OS-level process separation |
+| Identity (IATP) | Ed25519 + ML-DSA-65 (quantum-safe) cryptographic agent credentials, trust scoring | OS-level process separation |
 | Execution Rings | Logical privilege tiers with resource limits | CPU ring-level enforcement |
 | Bootstrap Integrity | SHA-256 tamper detection of governance modules at startup | Hardware root-of-trust (TPM/Secure Boot) |
 

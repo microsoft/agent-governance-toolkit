@@ -57,7 +57,7 @@ def handle_error(e: Exception, output_json: bool = False, custom_msg: str | None
 
 
 @click.group()
-@click.version_option(version="1.0.0-alpha")
+@click.version_option(version="3.1.0")
 def app():
     """
     AgentMesh - The Secure Nervous System for Cloud-Native Agent Ecosystems

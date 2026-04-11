@@ -66,9 +66,23 @@ python demo/maf_governance_demo.py --verbose
 |------|---------|
 | `demo/maf_governance_demo.py` | Main demo script (real LLM calls) |
 | `demo/policies/research_policy.yaml` | Declarative governance policy |
+| `demo/governance-dashboard/` | **Real-time Streamlit dashboard** — fleet overview, shadow agents, lifecycle, policy feed, trust heatmap |
 | `packages/agent-os/src/agent_os/integrations/maf_adapter.py` | Governance middleware |
 | `packages/agent-mesh/src/agentmesh/governance/audit.py` | Merkle-chained audit log |
 | `packages/agent-sre/src/agent_sre/anomaly/rogue_detector.py` | Rogue agent detector |
+
+## Governance Dashboard
+
+For a visual overview of your agent fleet:
+
+```bash
+cd demo/governance-dashboard
+pip install -r requirements.txt
+streamlit run app.py
+# or: docker-compose up
+```
+
+See the [dashboard README](governance-dashboard/README.md) for details.
 
 ## Links
 

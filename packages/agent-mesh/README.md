@@ -103,6 +103,7 @@ The protocols exist (A2A, MCP, IATP). The agents are shipping. **The trust layer
 ├───────────┼─────────────────────────────────────────────────────────────────┤
 │  LAYER 1  │  Identity & Zero-Trust Core                                     │
 │           │  Agent CA · Ephemeral creds · SPIFFE/SVID · Human sponsors      │
+│           │  Ed25519 + ML-DSA-65 (quantum-safe) · Lifecycle management      │
 └───────────┴─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -121,9 +122,12 @@ AgentMesh provides:
 | Capability | Description |
 |------------|-------------|
 | **Agent Identity** | First-class identity with human sponsor accountability |
+| **Quantum-Safe Signing** | Ed25519 + ML-DSA-65 (FIPS 204) post-quantum signatures |
 | **Ephemeral Credentials** | 15-minute TTL by default, auto-rotation |
+| **Lifecycle Management** | Provisioning → approval → activation → rotation → decommission |
 | **Protocol Bridge** | Native A2A, MCP, IATP with unified trust model |
 | **Reward Engine** | Continuous behavioral scoring |
+| **Orphan Detection** | Find silent, unowned, and stale agents |
 | **Compliance Automation** | EU AI Act, SOC 2, HIPAA, GDPR mapping |
 
 ## How It Works
@@ -610,7 +614,7 @@ classifier = EUAIActRiskClassifier(config_path="my_updated_annex_iii.yaml")
 | Quarter | Milestone |
 |---------|-----------|
 | **Q1 2026** | ✅ Core trust layer, identity, governance engine, 6 framework integrations |
-| **Q2 2026** | TypeScript SDK, Go SDK, Dashboard UI. Marketplace is now a standalone `agentmesh-marketplace` package. |
+| **Q2 2026** | ✅ TypeScript SDK, Go SDK, lifecycle management, quantum-safe ML-DSA-65 signing, governance dashboard |
 | **Q3 2026** | AI Card spec contribution, CNCF Sandbox application |
 | **Q4 2026** | Managed cloud service (AgentMesh Cloud), SOC2 Type II |
 

@@ -11,18 +11,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Security
-- **Hardened CLI Error Handling** — standardized sanitized JSON error output across all 7 ecosystem tools to prevent internal information disclosure (CWE-209).
-- **Audit Log Whitelisting** — implemented strict key-whitelisting in `agentmesh audit` JSON output to prevent accidental leakage of sensitive agent internal state.
-- **CLI Input Validation** — added regex-based validation for agent identifiers (DIDs/names) in registration and verification commands to prevent injection attacks.
+
+## [3.1.0] - 2026-04-11
 
 ### Added
-- **EU AI Act Risk Classifier** (`agentmesh.governance.EUAIActRiskClassifier`) — structured risk classification per Article 6 and Annex III, with Art. 6(1) Annex I safety-component path, Art. 6(3) exemptions, GDPR Art. 4(4) profiling override, and configurable YAML categories for regulatory updates (#756).
+- **Unified `agt` CLI** with plugin discovery, doctor command, and 79 tests (#924)
+- **Governance Dashboard** — real-time agent fleet visibility (#925)
+- **Agent Lifecycle Management** — provisioning to decommission (#923)
+- **Agent Discovery Package** — shadow AI discovery & inventory (#921)
+- **Quantum-Safe Signing** — ML-DSA-65 alongside Ed25519 (#927)
+- **Vendor Independence Enforcement** across all core packages
+- **OWASP ASI 2026 Taxonomy Migration** with reference architecture
+- **PromptDefenseEvaluator** — 12-vector prompt audit (#854)
+- **EU AI Act Risk Classifier** (`agentmesh.governance.EUAIActRiskClassifier`) — structured risk classification per Article 6 and Annex III, with Art. 6(1) Annex I safety-component path, Art. 6(3) exemptions, GDPR Art. 4(4) profiling override, and configurable YAML categories for regulatory updates (#756)
+
+### Security
+- Patched dependency verification bypass and trust handshake DID forgery (#920)
+- **Hardened CLI Error Handling** — standardized sanitized JSON error output across all 7 ecosystem tools to prevent internal information disclosure (CWE-209)
+- **Audit Log Whitelisting** — implemented strict key-whitelisting in `agentmesh audit` JSON output to prevent accidental leakage of sensitive agent internal state
+- **CLI Input Validation** — added regex-based validation for agent identifiers (DIDs/names) in registration and verification commands to prevent injection attacks
+
+### Fixed
+- Repo hygiene: MIT headers, compliance disclaimers, dependency confusion, network bindings (#926)
+- CI: pyyaml added to agent-compliance direct dependencies
+- Code samples updated to v3 API
+- Various dependency bumps (cryptography, path-to-regexp, etc.)
 
 ### Documentation
-- Added `EUAIActRiskClassifier` usage example and API docs to `packages/agent-mesh/README.md`.
-- Updated `QUICKSTART.md` and `Tutorial 04 — Audit & Compliance` with secure JSON error handling examples and schema details.
-- Added "Secure Error Handling" sections to primary documentation to guide users on interpreting sanitized machine-readable outputs.
+- Modern Agent Architecture overview for enterprise sharing
+- NIST AI RMF 1.0 alignment assessment
+- MCP governance consolidated into docs/compliance/
+- Policy-as-code tutorial chapter 4
+- Added `EUAIActRiskClassifier` usage example and API docs to `packages/agent-mesh/README.md`
+- Updated `QUICKSTART.md` and `Tutorial 04 — Audit & Compliance` with secure JSON error handling examples and schema details
+- Added "Secure Error Handling" sections to primary documentation to guide users on interpreting sanitized machine-readable outputs
 
 
 ## [3.0.2] - 2026-04-02
