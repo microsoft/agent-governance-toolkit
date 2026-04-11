@@ -86,6 +86,13 @@ guides.
 
 ---
 
+## Discovery & Inventory
+
+| # | Tutorial | What You'll Learn | Package |
+|---|----------|-------------------|---------|
+| 29 | [Agent Discovery](29-agent-discovery.md) | Shadow AI scanning, inventory dedup, reconciliation, risk scoring, CI/CD integration | `agent-discovery` |
+| 30 | [Agent Lifecycle Management](30-agent-lifecycle.md) | Provisioning, approval workflows, credential rotation, orphan detection, decommissioning | `agentmesh-platform` |
+
 ## Extending the Toolkit
 
 | # | Tutorial | What You'll Learn | Package |
@@ -129,6 +136,13 @@ guides.
 5. [12 — Liability & Attribution](12-liability-and-attribution.md) → who's responsible
 6. [17 — Advanced Trust & Behavior](17-advanced-trust-and-behavior.md) → dynamic trust
 7. [24 — Cost & Token Budgets](24-cost-and-token-budgets.md) → control agent spend
+
+### 🔎 "I need to find all agents in my org"
+
+1. [29 — Agent Discovery](29-agent-discovery.md) → scan processes, configs, and repos
+2. [02 — Trust & Identity](02-trust-and-identity.md) → register discovered agents
+3. [01 — Policy Engine](01-policy-engine.md) → govern the agents you find
+4. [27 — MCP Scan CLI](27-mcp-scan-cli.md) → secure discovered MCP servers
 
 ---
 
