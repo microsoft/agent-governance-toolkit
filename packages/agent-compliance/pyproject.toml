@@ -35,6 +35,7 @@ classifiers = [
 dependencies = [
     "pydantic>=2.4.0,<3.0",
     "pyyaml>=6.0,<7.0",
+    "click>=8.0,<9.0",
 ]
 
 [project.optional-dependencies]
@@ -65,3 +66,4 @@ Repository = "https://github.com/microsoft/agent-governance-toolkit"
 agent-governance-toolkit = "agent_compliance.cli.main:main"
 agent-governance = "agent_compliance.cli.main:main"
 agent-compliance = "agent_compliance.cli.main:main"
+agt = "agent_compliance.cli.agt:main"
