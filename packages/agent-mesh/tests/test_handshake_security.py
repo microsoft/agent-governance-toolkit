@@ -339,3 +339,155 @@ class TestSignatureTampering:
         )
 
         assert not verification["valid"]
+
+
+# ---------------------------------------------------------------------------
+# S360 WI 1140377 — Self-reported trust score / capability inflation
+# ---------------------------------------------------------------------------
+
+class TestTrustScoreInflation:
+    """Self-reported trust scores must be ignored in favour of the registry."""
+
+    @pytest.mark.asyncio
+    async def test_inflated_self_reported_trust_score_rejected(self):
+        """A peer cannot inflate its trust score to pass a threshold."""
+        agent_a = _make_identity("verifier")
+        agent_b = _make_identity("low-trust-peer")
+        registry = _make_registry(agent_a, agent_b)
+
+        hs = TrustHandshake(
+            agent_did=str(agent_a.did), identity=agent_a, registry=registry
+        )
+
+        # Get a valid challenge/response
+        challenge = HandshakeChallenge.generate()
+        peer_hs = TrustHandshake(
+            agent_did=str(agent_b.did), identity=agent_b, registry=registry
+        )
+        response = await peer_hs.respond(
+            challenge=challenge,
+            my_capabilities=["read:data"],
+            my_trust_score=999,  # self-report inflated score
+            identity=agent_b,
+        )
+
+        # Registry trust score is the default (~500), require 900
+        verification = await hs._verify_response(
+            response, challenge, 900, None
+        )
+
+        # Must reject based on registry score, not self-reported 999
+        assert not verification["valid"]
+        assert "trust score" in verification["reason"].lower()
+
+    @pytest.mark.asyncio
+    async def test_registry_trust_score_used_in_result(self):
+        """The result uses the registry trust score, not self-reported."""
+        agent_a = _make_identity("verifier")
+        agent_b = _make_identity("peer")
+        registry = _make_registry(agent_a, agent_b)
+
+        hs = TrustHandshake(
+            agent_did=str(agent_a.did), identity=agent_a, registry=registry
+        )
+
+        result = await hs.initiate(
+            peer_did=str(agent_b.did),
+            required_trust_score=0,  # low threshold so it passes
+        )
+
+        assert result.verified
+        # Trust score should come from registry, not arbitrary self-report
+        assert result.trust_score == getattr(agent_b, "trust_score", result.trust_score)
+
+
+class TestCapabilityInflation:
+    """Self-reported capabilities must be ignored in favour of the registry."""
+
+    @pytest.mark.asyncio
+    async def test_fake_capabilities_rejected(self):
+        """A peer cannot claim capabilities it does not have in the registry."""
+        agent_a = _make_identity("verifier")
+        # agent_b only has ["read:data", "write:reports"]
+        agent_b = _make_identity("limited-peer")
+        registry = _make_registry(agent_a, agent_b)
+
+        hs = TrustHandshake(
+            agent_did=str(agent_a.did), identity=agent_a, registry=registry
+        )
+
+        challenge = HandshakeChallenge.generate()
+        peer_hs = TrustHandshake(
+            agent_did=str(agent_b.did), identity=agent_b, registry=registry
+        )
+        response = await peer_hs.respond(
+            challenge=challenge,
+            my_capabilities=["read:data", "admin:delete"],  # inflated
+            my_trust_score=500,
+            identity=agent_b,
+        )
+
+        # Require admin:delete which is NOT in the registry
+        verification = await hs._verify_response(
+            response, challenge, 0, ["admin:delete"]
+        )
+
+        assert not verification["valid"]
+        assert "missing capabilities" in verification["reason"].lower()
+
+    @pytest.mark.asyncio
+    async def test_registry_capabilities_used_in_result(self):
+        """The HandshakeResult uses registry capabilities, not self-reported."""
+        agent_a = _make_identity("verifier")
+        agent_b = _make_identity("peer", capabilities=["read:data", "write:reports"])
+        registry = _make_registry(agent_a, agent_b)
+
+        hs = TrustHandshake(
+            agent_did=str(agent_a.did), identity=agent_a, registry=registry
+        )
+
+        result = await hs.initiate(
+            peer_did=str(agent_b.did),
+            required_trust_score=0,
+        )
+
+        assert result.verified
+        # Capabilities must come from registry, not self-reported
+        assert set(result.capabilities) == {"read:data", "write:reports"}
+
+
+class TestDIDBindingEnforcement:
+    """Response DID must match the expected peer DID."""
+
+    @pytest.mark.asyncio
+    async def test_did_substitution_rejected(self):
+        """A response for a different DID than requested is rejected."""
+        agent_a = _make_identity("verifier")
+        agent_b = _make_identity("expected-peer")
+        agent_c = _make_identity("substitute-peer")
+        registry = _make_registry(agent_a, agent_b, agent_c)
+
+        hs = TrustHandshake(
+            agent_did=str(agent_a.did), identity=agent_a, registry=registry
+        )
+
+        # Agent C creates a valid response for itself
+        challenge = HandshakeChallenge.generate()
+        peer_hs = TrustHandshake(
+            agent_did=str(agent_c.did), identity=agent_c, registry=registry
+        )
+        response = await peer_hs.respond(
+            challenge=challenge,
+            my_capabilities=["read:data"],
+            my_trust_score=500,
+            identity=agent_c,
+        )
+
+        # Verify with expected_peer_did=agent_b, but response is from agent_c
+        verification = await hs._verify_response(
+            response, challenge, 0, None,
+            expected_peer_did=str(agent_b.did),
+        )
+
+        assert not verification["valid"]
+        assert "does not match" in verification["reason"].lower()
