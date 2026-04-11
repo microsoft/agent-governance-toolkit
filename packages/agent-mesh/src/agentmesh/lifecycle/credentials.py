@@ -11,11 +11,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from .models import (
-    AgentLifecycleState,
-    CredentialPolicy,
     LifecycleEvent,
     LifecycleEventType,
-    ManagedAgent,
 )
 from .manager import LifecycleManager
 

@@ -1,0 +1,63 @@
+apiVersion: governance.toolkit/v1
+metadata:
+  name: openshell-sandbox-policy
+  description: Governance policy for agents running inside OpenShell sandboxes
+rules:
+  - name: block-dangerous-shell
+    condition:
+      field: action
+      operator: matches
+      value: "shell:(rm|dd|mkfs|shutdown|reboot|chmod|chown)"
+    action: deny
+    priority: 100
+    message: "Destructive shell command blocked by governance policy"
+
+  - name: block-metadata-endpoint
+    condition:
+      field: action
+      operator: contains
+      value: "169.254.169.254"
+    action: deny
+    priority: 100
+    message: "Cloud metadata endpoint access blocked"
+
+  - name: block-writes-outside-workspace
+    condition:
+      field: action
+      operator: matches
+      value: "file:write:/(etc|usr|root|bin|sbin)"
+    action: deny
+    priority: 95
+    message: "File writes restricted to /workspace"
+
+  - name: allow-file-read
+    condition:
+      field: action
+      operator: starts_with
+      value: "file:read"
+    action: allow
+    priority: 90
+
+  - name: allow-file-write-workspace
+    condition:
+      field: action
+      operator: starts_with
+      value: "file:write:/workspace"
+    action: allow
+    priority: 85
+
+  - name: allow-safe-shell
+    condition:
+      field: action
+      operator: in
+      value:
+        - "shell:ls"
+        - "shell:cat"
+        - "shell:grep"
+        - "shell:find"
+        - "shell:echo"
+        - "shell:python"
+        - "shell:pip"
+        - "shell:git"
+    action: allow
+    priority: 80

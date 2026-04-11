@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openshell_agentmesh"
+version = "0.1.0"
+description = "Public Preview — OpenShell + AgentMesh governance skill for sandboxed AI agents"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
+]
+keywords = ["agents", "openshell", "nvidia", "sandbox", "governance", "trust", "agentmesh"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "pyyaml>=6.0,<7.0",
+]
+
+[project.optional-dependencies]
+agentmesh = ["agentmesh-platform>=3.0,<4.0"]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/integrations/openshell.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["openshell_agentmesh"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

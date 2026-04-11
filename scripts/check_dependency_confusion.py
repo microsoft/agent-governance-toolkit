@@ -24,15 +24,16 @@ import sys
 
 # Known registered PyPI package names for this project
 REGISTERED_PACKAGES = {
-    # Core packages (on PyPI)
-    "agent-os-kernel",
-    "agentmesh-platform",
-    "agent-hypervisor",
-    "agentmesh-runtime",
-    "agent-sre",
-    "agent-governance-toolkit",
-    "agentmesh-lightning",
-    "agentmesh-marketplace",
+    # Core packages (on PyPI) — both hyphen and underscore variants
+    "agent-os-kernel", "agent_os_kernel",
+    "agentmesh-platform", "agentmesh_platform",
+    "agent-hypervisor", "agent_hypervisor",
+    "agentmesh-runtime", "agentmesh_runtime",
+    "agent-sre", "agent_sre",
+    "agent-governance-toolkit", "agent_governance_toolkit",
+    "agentmesh-lightning", "agentmesh_lightning",
+    "agentmesh-marketplace", "agentmesh_marketplace",
+    "agent-discovery", "agent_discovery",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
     "fastapi", "uvicorn", "structlog", "click", "rich", "numpy", "scipy",

@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 
 from .models import (
     AgentLifecycleState,
-    LifecycleEvent,
     LifecycleEventType,
     ManagedAgent,
 )
