@@ -12,6 +12,16 @@ For major design changes, always ask the maintainer (@imran-siddique) before pro
 
 Do NOT auto-merge large feature PRs without maintainer review.
 
+## External Contribution Quality Gate
+
+When external contributors open issues or PRs proposing integration with their own project/tool/library, apply these quality checks before investing review time:
+
+- **Minimum credibility threshold**: The referenced project should have meaningful community adoption (e.g., 50+ GitHub stars, multiple contributors, evidence of production usage). One-person repos with <10 stars and no community traction do not warrant integration effort.
+- **Self-promotion filter**: Issues or PRs that primarily serve to promote the contributor's own low-profile project — rather than adding genuine value to AGT — should be deprioritized. Politely acknowledge but do not fast-track.
+- **Verify claims**: If the PR cites benchmarks, adoption numbers, or production deployments, spot-check them. Unverifiable claims are a red flag.
+- **Scope proportionality**: A small or unknown project requesting a large integration surface (new package, new dependency, new CI pipeline) is disproportionate. Suggest they contribute as an example or community link instead.
+- **Dependency risk**: Adding a dependency on an obscure package creates supply chain risk. Prefer vendored examples or optional integrations that don't add to the core dependency tree.
+
 ## PR Merge Workflow
 
 When merging PRs, follow this sequence for EACH PR (do not batch):

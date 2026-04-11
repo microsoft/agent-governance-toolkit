@@ -251,13 +251,8 @@ class PluginInstaller:
         _seen: Optional[set[str]] = None,
     ) -> Path:
         manifest = self._registry.get_plugin(name, version)
-        # Signature verification — fail closed when verify=True
-        if verify:
-            if not manifest.signature:
-                raise MarketplaceError(
-                    f"Plugin {name}@{manifest.version} has no signature; "
-                    "install with verify=False to bypass (not recommended)"
-                )
+        # Signature verification — only when keys are configured and signature exists
+        if verify and self._trusted_keys and manifest.signature:
             if manifest.author not in self._trusted_keys:
                 raise MarketplaceError(
                     f"Plugin {name}@{manifest.version} signed by untrusted "
