@@ -97,6 +97,8 @@ pip install agent-discovery            # Shadow AI agent discovery
 - **[Architecture Decisions](docs/adr/README.md)** — ADR log for key identity, runtime, and policy choices
 - **[Architecture Infographic](docs/diagrams/architecture-overview.png)** — Visual overview of all components and data flow ([SVG](docs/diagrams/architecture-overview.svg) · [draw.io source](docs/diagrams/architecture-overview.drawio))
 - **[NIST RFI Mapping](docs/compliance/nist-rfi-2026-00206.md)** — Mapping to NIST AI Agent Security RFI (2026-00206)
+- **[VS Code Extension](packages/agent-os-vscode/)** — Agent OS governance directly in VS Code
+- **[Framework Integrations](packages/agentmesh-integrations/)** — LangChain, OpenAI Agents, CrewAI, Haystack, and more
 
 Still have questions? File a [GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) or see our [Community page](COMMUNITY.md).
 
@@ -311,6 +313,8 @@ Three evaluation modes per backend: **embedded engine** (cedarpy/opa CLI), **rem
 | **Agent Discovery** | [`agent-discovery`](packages/agent-discovery/) | Shadow AI discovery — scan processes, configs, and repos; inventory with dedup; reconciliation and risk scoring |
 | **Agent Hypervisor** | [`agent-hypervisor`](packages/agent-hypervisor/) | Reversibility verification, execution plan validation, hypervisor-level governance |
 | **MCP Governance** | [`agent-mcp-governance`](packages/agent-mcp-governance/) | MCP-specific security scanning and governance enforcement |
+| **VS Code Extension** | [`agent-os-vscode`](packages/agent-os-vscode/) | Agent OS governance directly in VS Code — policy visualization, audit viewer |
+| **Integrations** | [`agentmesh-integrations`](packages/agentmesh-integrations/) | Framework adapters — LangChain, OpenAI Agents, CrewAI, Haystack, Flowise, MCP proxy |
 
 ## Framework Integrations
 
