@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Security scanning module for agent governance.
 
 This module provides security scanning capabilities for agent code and plugins:

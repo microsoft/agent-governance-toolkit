@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Lifecycle Manager — orchestrates the agent lifecycle state machine.
 
 Manages provisioning, activation, suspension, and decommissioning

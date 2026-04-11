@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Governance attestation validation module.
 
 This module provides validation for PR governance attestation checklists,

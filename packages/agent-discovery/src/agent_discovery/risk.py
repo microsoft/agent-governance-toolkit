@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Risk scoring for ungoverned and shadow agents.
 
 Scores agents based on governance posture: no identity, unknown owner,

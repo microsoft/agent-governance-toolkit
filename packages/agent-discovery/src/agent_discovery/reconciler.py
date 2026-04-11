@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Reconciler — compare discovered agents against governance registries.
 
 The reconciler uses a `RegistryProvider` interface so it can work with

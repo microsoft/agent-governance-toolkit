@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Abstract base scanner and scanner registry."""
 
 from __future__ import annotations

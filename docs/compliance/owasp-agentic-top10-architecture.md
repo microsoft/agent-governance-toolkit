@@ -3,6 +3,9 @@
 
 # OWASP Agentic Security Initiative (ASI 2026) — Reference Architecture
 
+> **Disclaimer**: This document is an internal self-assessment mapping, NOT a validated certification or third-party audit. It documents how the toolkit's capabilities align with the referenced standard. Organizations must perform their own compliance assessments with qualified auditors.
+
+
 > **Version:** 1.0 · **Taxonomy:** OWASP ASI 2026 (ASI01–ASI11)
 > **Scope:** Agent Governance Toolkit (AGT) mitigation patterns, code evidence, and gap analysis.
 

@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Credential rotation for managed agents.
 
 Provides automatic and manual credential rotation with configurable

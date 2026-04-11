@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Lifecycle data models.
 
 Defines the states, policies, and events for managing agent lifecycles.

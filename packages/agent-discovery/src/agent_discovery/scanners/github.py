@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """GitHub scanner — find agent configurations in GitHub repositories.
 
 Scans repositories for files and patterns that indicate AI agent deployments:

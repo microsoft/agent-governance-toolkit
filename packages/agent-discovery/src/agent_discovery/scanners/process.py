@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Process scanner — detect AI agent processes on the local host.
 
 Scans running processes for signatures of known AI agent frameworks.
