@@ -1,5 +1,17 @@
 # Tutorial 28 — Building Custom Governance Integrations
 
+> **Package:** `agent-os-kernel` / standalone · **Time:** 30 minutes · **Prerequisites:** Python 3.10+
+
+---
+
+## What You'll Learn
+
+- Trust integrations — standalone packages for identity, gating, and trust tracking
+- Kernel adapters — `BaseIntegration` subclasses with pre/post hooks and tool interception
+- Publishing governance packages — package structure, PR requirements, and versioning
+
+---
+
 Every governed agent system follows the same pattern: verify identity, gate
 actions, intercept tool calls, log everything. The toolkit provides 15 kernel
 adapters and 17 trust integrations that implement this pattern. This tutorial
@@ -852,3 +864,11 @@ to match the toolkit version on acceptance.
 | Framework integrations tutorial | `docs/tutorials/03-framework-integrations.md` |
 | Template integration (copy this) | `packages/agentmesh-integrations/template-agentmesh/` |
 | GovernancePolicy patterns | Tutorial 03, Section 7 |
+
+---
+
+## Next Steps
+
+- [Tutorial 03 — Framework Integrations](03-framework-integrations.md)
+- [Tutorial 02 — Trust & Identity](02-trust-and-identity.md)
+- [Tutorial 04 — Audit & Compliance](04-audit-and-compliance.md)

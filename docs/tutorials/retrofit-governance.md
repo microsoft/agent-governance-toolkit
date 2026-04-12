@@ -1,4 +1,15 @@
-# Retrofit Governance onto an Existing Agent
+# Guide: Retrofit Governance onto an Existing Agent
+
+> **Package:** `agent-os-kernel` · **Time:** 10 minutes · **Prerequisites:** Python 3.10+, existing agent
+
+---
+
+## What You'll Learn
+
+- Add policy enforcement to any existing agent in 3 steps — install, wrap, and configure
+- Blocked-pattern detection and audit trail without rewriting existing logic
+
+---
 
 Got an AI agent already running in production? This tutorial shows you how to
 add policy enforcement, blocked-pattern detection, and an audit trail in **three

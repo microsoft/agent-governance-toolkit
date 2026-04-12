@@ -1,4 +1,15 @@
-# Progressive Governance: Start Simple, Add Layers
+# Guide: Progressive Governance — Start Simple, Add Layers
+
+> **Applies to:** All AGT packages · **Time:** 15 minutes · **Prerequisites:** None
+
+---
+
+## What You'll Learn
+
+- The 5-level progressive complexity model for agent governance
+- When to add each governance layer based on your team's risk profile
+
+---
 
 > **You don't need the full stack to start.** Most teams run Level 1–2 in
 > production and never need Level 5. Pick the level that matches your risk.
