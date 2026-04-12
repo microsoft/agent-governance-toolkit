@@ -1,0 +1,198 @@
+# ATR Community Detection Rules
+#
+# Extended detection patterns for AI agent threat detection.
+# Inspired by Cisco AI Defense's 108-rule catalogue and the broader
+# ATR (Agent Threat Research) community.
+#
+# Reference: Issue #901
+# Credits: Cisco AI Defense / ATR community research
+#
+# WARNING: This is a community-maintained rule set provided as a
+# starting point. Review and customize for your environment before
+# deploying to production.
+
+version: "1.0"
+name: atr-community-rules
+description: >
+  Extended ATR community detection rules - 90+ patterns across 9 categories
+  for comprehensive AI agent threat detection. Supplements the base
+  mcp-security.yaml with deeper coverage of prompt injection, data
+  exfiltration, privilege escalation, credential theft, and supply-chain
+  attacks.
+
+categories:
+
+  # -----------------------------------------------------------------------
+  # 1. Invisible Unicode (existing category - extended)
+  # -----------------------------------------------------------------------
+  invisible_unicode:
+    - '[\u200b\u200c\u200d\ufeff]'          # zero-width chars
+    - '[\u202a-\u202e]'                      # bidi overrides
+    - '[\u2066-\u2069]'                      # bidi isolates
+    - '[\u00ad]'                             # soft hyphen
+    - '[\u2060\u180e]'                       # word joiner / mongolian vowel
+    - '[\u034f]'                             # combining grapheme joiner
+    - '[\u115f\u1160]'                       # hangul filler chars
+    - '[\u2800]'                             # braille blank
+    - '[\uffa0]'                             # halfwidth hangul filler
+
+  # -----------------------------------------------------------------------
+  # 2. Hidden Comments (existing category - extended)
+  # -----------------------------------------------------------------------
+  hidden_comments:
+    - '<!--.*?-->'                           # HTML comments
+    - '\[//\]:\s*#\s*\(.*?\)'               # markdown reference-style
+    - '\[comment\]:\s*<>\s*\(.*?\)'          # markdown comment
+    - '%\s.*$'                               # LaTeX-style comments
+    - '{#.*?#}'                              # Jinja2 comments
+    - '/\*[\s\S]*?\*/'                       # C-style block comments in prompts
+
+  # -----------------------------------------------------------------------
+  # 3. Hidden Instructions / Prompt Injection (existing - extended)
+  # -----------------------------------------------------------------------
+  hidden_instructions:
+    - 'ignore\s+(all\s+)?previous'
+    - 'override\s+(the\s+)?(previous|above|original)'
+    - 'instead\s+of\s+(the\s+)?(above|previous|described)'
+    - 'actually\s+do'
+    - '\bsystem\s*:'
+    - '\bassistant\s*:'
+    - 'do\s+not\s+follow'
+    - 'disregard\s+(all\s+)?(above|prior|previous)'
+    - 'forget\s+(all\s+)?(previous|prior|above)'
+    - 'new\s+instructions?\s*:'
+    - 'begin\s+new\s+(task|instructions?|session)'
+    - 'switch\s+to\s+(a\s+)?new\s+(role|mode|persona)'
+    - 'from\s+now\s+on\s+(you\s+are|act\s+as)'
+    - 'pretend\s+(you\s+are|to\s+be)'
+    - 'jailbreak'
+    - 'DAN\s+mode'
+    - 'developer\s+mode\s+enabled'
+    - '\[SYSTEM\]'
+    - '###\s*(SYSTEM|INSTRUCTION|OVERRIDE)'
+
+  # -----------------------------------------------------------------------
+  # 4. Encoded Payloads (existing - extended)
+  # -----------------------------------------------------------------------
+  encoded_payloads:
+    - '[A-Za-z0-9+/]{40,}={0,2}'            # base64 blobs
+    - '(?:\\x[0-9a-fA-F]{2}){4,}'           # hex escape sequences
+    - '(?:%[0-9a-fA-F]{2}){4,}'             # URL-encoded sequences
+    - '\\u[0-9a-fA-F]{4}(?:\\u[0-9a-fA-F]{4}){3,}'  # unicode escapes
+    - 'data:[a-z]+/[a-z]+;base64,'          # data URI with base64
+    - 'eval\(atob\('                         # JS decode-and-exec
+
+  # -----------------------------------------------------------------------
+  # 5. Exfiltration (existing - extended)
+  # -----------------------------------------------------------------------
+  exfiltration:
+    - '\bcurl\b'
+    - '\bwget\b'
+    - '\bfetch\s*\('
+    - 'https?://'
+    - '\bsend\s+email\b'
+    - '\bsend\s+to\b'
+    - '\bpost\s+to\b'
+    - 'include\s+the\s+contents?\s+of\b'
+    - '\bexfiltrat'
+    - '\bupload\s+(this|the|all)\b'
+    - 'webhook[.:]\s*https?://'
+    - '\bsend\s+(data|file|content)\s+to\b'
+    - '\brequest\.post\b'
+    - '\bhttp\.client\b'
+    - 'dns\s+tunnel'
+    - '\bngrok\b'
+
+  # -----------------------------------------------------------------------
+  # 6. Privilege Escalation (NEW)
+  # -----------------------------------------------------------------------
+  privilege_escalation:
+    - '\bsudo\b'
+    - '\badmin\s+access\b'
+    - '\broot\s+access\b'
+    - '\belevate\s+privile'
+    - '\bexec\s*\('
+    - '\beval\s*\('
+    - '\bchmod\s+[0-7]{3,4}\b'
+    - '\bchown\b'
+    - 'grant\s+(all|admin|superuser)'
+    - 'role\s*=\s*["\x27]?admin'
+    - '\bsetuid\b'
+    - 'escalat(e|ion)\s+(to\s+)?(admin|root|superuser)'
+    - '\bsu\s+-\b'
+    - 'modify\s+(acl|permission|role)'
+    - 'add\s+(to\s+)?admin\s+group'
+    - '\brunas\b'
+
+  # -----------------------------------------------------------------------
+  # 7. Credential Theft (NEW)
+  # -----------------------------------------------------------------------
+  credential_theft:
+    - '\bAPI[_-]?KEY\b'
+    - '\bSECRET[_-]?KEY\b'
+    - '\bACCESS[_-]?TOKEN\b'
+    - '\bBEARER\s+[A-Za-z0-9._~+/=-]+'
+    - 'password\s*[:=]'
+    - '\bAWS_SECRET_ACCESS_KEY\b'
+    - '\bAZURE[_-]?(CLIENT|TENANT)[_-]?SECRET\b'
+    - '\bGH[_-]?TOKEN\b'
+    - '\bGITHUB[_-]?TOKEN\b'
+    - 'print\s*\(\s*os\.environ'
+    - 'dump\s+(all\s+)?env(ironment)?\s+var'
+    - '\.env\b.*\bread\b'
+    - 'extract\s+(api|secret|token|key|credential)'
+    - '\bcredential\s+store\b'
+    - 'keychain\s+(dump|extract|read)'
+
+  # -----------------------------------------------------------------------
+  # 8. Supply Chain (NEW)
+  # -----------------------------------------------------------------------
+  supply_chain:
+    - 'pip\s+install\s+--index-url\s+http://'
+    - 'npm\s+install\s+--registry\s+http://'
+    - '\btyposquat'
+    - 'dependency\s+confusion'
+    - 'install\s+from\s+http://'
+    - '\bsetup\.py\b.*\bos\.system\b'
+    - 'postinstall.*curl'
+    - '\bpre-commit\s+hook\b.*\b(curl|wget|exec)\b'
+    - 'requirements\.txt.*--extra-index-url'
+    - 'package\s+manifest\s+tamper'
+    - '\bpinned\s+hash\s+mismatch\b'
+    - 'lockfile\s+(inject|poison|manipulat)'
+
+  # -----------------------------------------------------------------------
+  # 9. Excessive Autonomy (NEW)
+  # -----------------------------------------------------------------------
+  excessive_autonomy:
+    - 'spawn\s+(a\s+)?(new\s+)?agent'
+    - 'create\s+(a\s+)?(new\s+)?(sub-?)?agent'
+    - 'self[_-]?modif(y|ication)'
+    - 'rewrit(e|ing)\s+(my|your|own)\s+(code|instructions|prompt)'
+    - 'autonomous(ly)?\s+(decide|act|execute|run)'
+    - 'loop\s+until\s+(done|complete|success)'
+    - 'run\s+indefinitely'
+    - 'disable\s+(safety|guardrail|limit|oversight)'
+    - 'remove\s+(all\s+)?(constraint|restriction|limit)'
+    - 'bypass\s+(approval|review|human)'
+
+suspicious_decoded_keywords:
+  - ignore
+  - override
+  - system
+  - password
+  - secret
+  - admin
+  - root
+  - exec
+  - eval
+  - "import os"
+  - send
+  - curl
+  - fetch
+  - credential
+  - token
+  - jailbreak
+  - exfiltrate
+  - typosquat
+  - keychain
