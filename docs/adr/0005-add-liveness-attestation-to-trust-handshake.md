@@ -7,19 +7,48 @@
 
 The current TrustHandshake (`TrustBridge.verify_peer`) validates identity and computes a trust score at connection time, but has no mechanism to detect whether a previously verified agent is still alive and responsive. This creates two gaps:
 
-1. **Stale trust scores.** An agent that passed verification an hour ago may have crashed, lost its credential, or been decommissioned. The cached `HandshakeResult` still shows `verified: true` with a high trust score, so callers continue routing work to a dead peer. The RewardEngine cannot penalize an agent it doesn't know is gone.
+1. **Ghost agents.** An agent that passed verification an hour ago may have crashed, lost its credential, or been decommissioned. The cached `HandshakeResult` still shows `verified: true` with a high trust score, so callers continue routing work to a dead peer. Because the trust score never drops below threshold, the agent remains cryptographically valid and authorized but operationally dead — a ghost agent whose authority persists silently.
 
 2. **Ungraceful handoff.** When an agent restarts (crash, deployment, scaling event), its in-flight delegation context — scoped capabilities, active task state, ephemeral credentials — is lost. The current protocol has no way for the restarted agent to signal "I'm back" and for peers to re-evaluate trust without a full handshake re-execution.
 
 Both gaps become acute in multi-agent orchestration where agents delegate chains of work. A stale or silently restarted agent in the middle of a delegation chain can cause silent failures that propagate before any peer notices.
 
-ADR 0003 sets a 200ms SLA for the trust handshake. Liveness checks must stay well below this budget — they are not full handshakes, they are lightweight probes that feed into the existing trust score.
+ADR 0003 sets a 200ms SLA for the trust handshake. Liveness checks must stay well below this budget — they are not full handshakes, they are lightweight probes that compose with the existing trust model.
 
 ## Decision
 
-Add a liveness attestation layer to TrustHandshake as an opt-in extension. The design has four components:
+Add a liveness attestation layer to TrustHandshake as an opt-in extension. The design decomposes agent trust into three independent properties, each with its own lifecycle, and models liveness as a gate rather than a score modifier.
 
-**1. Heartbeat protocol.** An agent that wants to be considered "live" registers a heartbeat with its local TrustBridge, specifying a TTL (default: 300 seconds). The agent refreshes the heartbeat at `TTL / 2` intervals. The TrustBridge tracks the last heartbeat timestamp per DID. This follows the SIP REGISTER pattern — lightweight, stateless, and compatible with the 200ms handshake SLA since heartbeats are asynchronous background signals, not in the critical path.
+### Three-property decomposition
+
+Agent trust is decomposed into three independent properties with distinct timelines:
+
+| Property | What it proves | Decay timeline | Recovery path |
+|----------|---------------|----------------|---------------|
+| **Identity** | Who the agent is (DID + Ed25519 keypair) | Extremely slow — rotation only on key compromise | Re-registration with new keypair |
+| **Authority** | What the agent is allowed to do (delegation scope, capabilities) | Medium — delegation expiration, explicit revocation | Principal re-delegation |
+| **Liveness** | Whether the agent is operationally alive right now | Rapid — minutes to hours, configurable per context | Heartbeat resumption |
+
+These three properties are evaluated independently. A valid agent must satisfy all three: `identity_valid AND authority_valid AND liveness_active`.
+
+### Liveness as a gate, not a score modifier
+
+Liveness is modeled as an independent boolean gate rather than a delta on trust_score. The enforcement rule is:
+
+```
+can_exercise_authority = identity_valid AND authority_valid AND liveness_active
+```
+
+This eliminates the ghost-agent gap. A high-reputation agent (trust_score: 900) that crashes cannot exercise authority during downtime regardless of its score — liveness is a hard gate, not a soft penalty. Score-based approaches permit ghost agents when the base score is high enough to absorb the liveness penalty; gate-based approaches do not.
+
+### Heartbeat protocol
+
+An agent that wants to be considered "live" registers a heartbeat with its local TrustBridge, specifying a TTL (default: 300 seconds). The agent refreshes the heartbeat at `TTL / 2` intervals. The TrustBridge tracks the last heartbeat timestamp per DID.
+
+The heartbeat payload includes:
+- Agent DID
+- Timestamp
+- **Delegation chain hash** — binds liveness proof to authority proof in the same message, so validators do not need a second round-trip to check whether the alive agent still holds the scope it claims
 
 ```python
 # Agent registers liveness
@@ -27,54 +56,54 @@ await bridge.register_liveness(ttl_seconds=300)
 
 # TrustBridge exposes liveness status
 status = bridge.get_liveness(peer_did="did:mesh:agent-b")
-# Returns: LivenessStatus(is_alive=True, last_seen=..., ttl_remaining=142)
+# Returns: LivenessStatus(is_alive=True, last_seen=..., ttl_remaining=142,
+#                          delegation_chain_hash="sha256:abc...")
 ```
 
-**2. Composition with HandshakeResult.** Liveness becomes a `liveness_delta` component in the trust score, not a replacement for any existing signal. The formula:
+This follows the SIP REGISTER pattern — lightweight, stateless, and compatible with the 200ms handshake SLA since heartbeats are asynchronous background signals, not in the critical path.
 
-```
-effective_trust_score = handshake_trust_score + liveness_delta
-```
+### Suspension semantics
 
-Where `liveness_delta` is:
-- `+50` if the agent has a valid, non-expired heartbeat (alive and responsive)
-- `0` if the agent has never registered a heartbeat (liveness unknown — no penalty)
-- `-100` after soft expiry (1× TTL elapsed since last heartbeat)
-- `-200` after hard expiry (2× TTL elapsed — agent marked unreachable)
+Missed heartbeats trigger **authority suspension** (reversible), not **revocation** (irreversible):
 
-The delta values are configurable per deployment. The key invariant is that agents that never opt into liveness see no change to their trust score — backward compatibility is preserved by treating "no heartbeat" as "liveness unknown" rather than "dead."
+- **Active** (heartbeat within TTL): Agent can exercise full delegated authority.
+- **Suspended** (heartbeat missed, within 2× TTL): Authority is frozen. The agent cannot exercise delegated authority, but the delegation itself is not revoked. The TrustBridge emits an `agent.liveness.suspended` event.
+- **Expired** (beyond 2× TTL): Agent is marked `unreachable`. The TrustBridge emits an `agent.liveness.expired` event. Delegation remains intact but dormant.
 
-**3. Decay model.** Two-phase decay after a missed heartbeat:
+On heartbeat resumption:
+- Suspended → Active: Immediate. Authority restored, no re-delegation needed.
+- Expired → Active: Requires delegation chain hash verification. If the delegation is still valid (not expired, not revoked), authority is restored. If the delegation expired during downtime, the agent must obtain a new delegation from its principal.
 
-- **Soft decay** (1× TTL to 2× TTL): `liveness_delta` decreases linearly from 0 to -200. The agent is still routable but peers see a declining trust score. The RewardEngine records a `heartbeat_missed` event.
-- **Hard expiry** (beyond 2× TTL): Agent is marked `unreachable`. `verify_peer` calls return `verified: false` unless the caller explicitly opts into `allow_stale=True`. The TrustBridge emits an `agent.liveness.expired` event for observability.
+This allows rapid recovery from transient failures (restarts, network partitions) without requiring principal re-delegation.
 
 A background cleanup task removes expired liveness records periodically (default: every 60 seconds).
 
-**4. Restart recovery.** When a restarted agent sends its first heartbeat, the TrustBridge:
-- Clears the `unreachable` flag
-- Resets `liveness_delta` to `+50`
-- Does NOT require a full handshake re-execution — the existing `HandshakeResult` (identity + capabilities) remains valid if the credential has not expired
+### Backward compatibility
 
-If the agent's ephemeral credential has also expired during the downtime (15-minute TTL per current design), a full handshake is required. This composes naturally: liveness recovery is fast (single heartbeat), credential recovery follows the existing rotation flow.
+Agents that do not emit heartbeats are treated as `liveness_unknown`. The enforcement behavior depends on context:
+
+- **Enforcement-enabled contexts** (default for new delegations): `liveness_unknown` agents cannot exercise delegated authority. This prevents the ghost-agent gap from persisting in production.
+- **Legacy mode** (opt-in per operator): `liveness_unknown` agents are permitted. Operators can explicitly opt out of liveness enforcement during migration.
+
+This is stricter than "no penalty, no bonus" but provides a clear migration path. Operators upgrading existing deployments enable legacy mode, migrate agents to emit heartbeats, then disable legacy mode.
+
+`HandshakeResult` gains an optional `liveness` field. Existing consumers that do not read this field see no behavioral change in legacy mode.
+
+No changes to the IATP protocol wire format. Heartbeats are a local TrustBridge concern, not a cross-agent protocol message.
 
 ## Consequences
 
 **Benefits:**
-- Stale agents are detected within 2× TTL (default: 10 minutes) without any change to the handshake critical path.
-- The RewardEngine gets a new signal (`heartbeat_missed`, `heartbeat_resumed`) for behavioral scoring.
-- Delegation chains can check liveness before forwarding work, reducing silent failures.
-- The opt-in design means zero impact on existing agents and deployments.
+- Ghost agents are eliminated by the gate model — no amount of base trust score can compensate for a failed liveness check.
+- The three-property decomposition gives operators independent knobs for identity, authority, and liveness, each with appropriate timelines.
+- Suspension semantics allow rapid recovery from transient failures without principal involvement.
+- Delegation chain hash in heartbeat payload eliminates a round-trip for authority freshness verification.
+- The RewardEngine gets new signals (`heartbeat_missed`, `heartbeat_resumed`, `authority_suspended`) for behavioral scoring.
 
 **Tradeoffs:**
-- Adds background state (last heartbeat timestamp per DID) to TrustBridge. For deployments with thousands of agents, this needs a storage backend beyond in-memory (Redis or the existing agent registry).
-- The `liveness_delta` values (+50 / -100 / -200) are initial proposals based on production experience with SIP REGISTER-style systems. They may need tuning after real-world deployment data.
-- Agents behind NAT or firewalls that cannot send outbound heartbeats will show as "liveness unknown" permanently. This is acceptable (no penalty) but limits the value of liveness attestation in those environments.
-
-**Backward compatibility:**
-- `HandshakeResult` gains an optional `liveness` field. Existing consumers that don't read this field see no change.
-- `verify_peer` behavior is unchanged for agents without heartbeats. Only agents that have registered AND subsequently expired see a trust score reduction.
-- No changes to the IATP protocol wire format. Heartbeats are a local TrustBridge concern, not a cross-agent protocol message.
+- Stricter backward compatibility (enforcement-enabled by default) requires operators to actively opt out for legacy agents. This is intentional — the ghost-agent gap is a security issue, not a convenience issue.
+- Adds background state (last heartbeat timestamp + delegation chain hash per DID) to TrustBridge. For deployments with thousands of agents, this needs a storage backend beyond in-memory.
+- Agents behind NAT or firewalls that cannot send outbound heartbeats will show as `liveness_unknown` and cannot exercise delegated authority in enforcement-enabled contexts. Operators must use legacy mode or establish a heartbeat relay for these agents.
 
 **Follow-up work:**
 - Integration with the Orphan Detection module: agents that are both `unreachable` (liveness) and `unowned` (no sponsor) should be flagged for decommissioning.
@@ -82,4 +111,5 @@ If the agent's ephemeral credential has also expired during the downtime (15-min
 
 **Reference implementations:**
 - [AgentNexus ADR-012 §3](https://github.com/kevinkaylie/AgentNexus/blob/main/docs/adr/012-push-gateway-and-mcp-collaboration.md) — SIP REGISTER-style TTL registration with `expires/2` refresh, production-tested with 330+ test cases.
-- [AgentNexus ADR-014 §3](https://github.com/kevinkaylie/AgentNexus/blob/main/docs/adr/014-governance-trust-network.md) — Reputation system with `behavior_delta` component, including interaction frequency as a liveness proxy.
+- [AgentNexus ADR-014 §3](https://github.com/kevinkaylie/AgentNexus/blob/main/docs/adr/014-governance-trust-network.md) — Three-dimensional trust scoring (base_score + behavior_delta + attestation_bonus) with independent decay timelines.
+- APS session-heartbeat machinery — reference implementation of the liveness property with delegation binding.
