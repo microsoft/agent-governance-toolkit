@@ -195,6 +195,70 @@ policies:
     window: "60s"
 ```
 
+### Execution Rings (`rings.rs`)
+
+Four-level privilege model inspired by hardware protection rings.
+
+| Function / Method | Description |
+|---|---|
+| `RingEnforcer::new()` | Create a new enforcer with no assignments |
+| `enforcer.assign(agent_id, ring)` | Assign an agent to a ring |
+| `enforcer.get_ring(agent_id)` | Get assigned ring (if any) |
+| `enforcer.check_access(agent_id, action)` | Check if action is permitted |
+| `enforcer.set_ring_permissions(ring, actions)` | Configure allowed actions for a ring |
+
+Ring levels:
+
+| Ring | Level | Access |
+|------|-------|--------|
+| `Admin` | 0 | All actions allowed |
+| `Standard` | 1 | Configurable actions |
+| `Restricted` | 2 | Configurable actions |
+| `Sandboxed` | 3 | All actions denied |
+
+```rust
+use agentmesh::{RingEnforcer, Ring};
+
+let mut enforcer = RingEnforcer::new();
+enforcer.set_ring_permissions(Ring::Standard, vec!["data.read".into(), "data.write".into()]);
+enforcer.assign("my-agent", Ring::Standard);
+
+assert!(enforcer.check_access("my-agent", "data.read"));
+assert!(!enforcer.check_access("my-agent", "shell:rm"));
+```
+
+### Agent Lifecycle (`lifecycle.rs`)
+
+Eight-state lifecycle model tracking an agent from provisioning through decommissioning.
+
+| Function / Method | Description |
+|---|---|
+| `LifecycleManager::new(agent_id)` | Create a new manager (starts in `Provisioning`) |
+| `manager.state()` | Get current lifecycle state |
+| `manager.events()` | Get recorded transition events |
+| `manager.transition(to, reason, initiated_by)` | Transition to a new state |
+| `manager.can_transition(to)` | Check if a transition is valid |
+| `manager.activate(reason)` | Convenience: transition to `Active` |
+| `manager.suspend(reason)` | Convenience: transition to `Suspended` |
+| `manager.quarantine(reason)` | Convenience: transition to `Quarantined` |
+| `manager.decommission(reason)` | Convenience: transition to `Decommissioning` |
+
+Lifecycle states: `Provisioning` -> `Active` <-> `Suspended` / `Rotating` / `Degraded` -> `Quarantined` -> `Decommissioning` -> `Decommissioned`
+
+```rust
+use agentmesh::{LifecycleManager, LifecycleState};
+
+let mut mgr = LifecycleManager::new("my-agent");
+mgr.activate("initial boot").unwrap();
+assert_eq!(mgr.state(), LifecycleState::Active);
+
+mgr.suspend("maintenance window").unwrap();
+assert_eq!(mgr.state(), LifecycleState::Suspended);
+
+mgr.activate("maintenance complete").unwrap();
+assert_eq!(mgr.events().len(), 3);
+```
+
 ## License
 
 See repository root [LICENSE](../../../../LICENSE).

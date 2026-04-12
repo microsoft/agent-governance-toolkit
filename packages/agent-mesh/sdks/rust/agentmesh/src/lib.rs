@@ -20,15 +20,19 @@
 
 pub mod audit;
 pub mod identity;
+pub mod lifecycle;
 pub mod mcp;
 pub mod policy;
+pub mod rings;
 pub mod trust;
 pub mod types;
 
 pub use audit::AuditLogger;
 pub use identity::{AgentIdentity, PublicIdentity};
+pub use lifecycle::{LifecycleEvent, LifecycleManager, LifecycleState};
 pub use mcp::*;
 pub use policy::{PolicyEngine, PolicyError};
+pub use rings::{Ring, RingEnforcer};
 pub use trust::{TrustConfig, TrustManager};
 pub use types::{
     AuditEntry, AuditFilter, CandidateDecision, ConflictResolutionStrategy, GovernanceResult,
