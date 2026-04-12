@@ -7,6 +7,10 @@ export type { PolicyDecision } from './policy';
 export { AuditLogger } from './audit';
 export { AgentMeshClient } from './client';
 export { GovernanceMetrics } from './metrics';
+export { McpSecurityScanner, McpThreatType } from './mcp';
+export type { McpScanResult, McpThreat, McpToolDefinition } from './mcp';
+export { LifecycleManager, LifecycleState } from './lifecycle';
+export type { LifecycleEvent } from './lifecycle';
 
 export {
   ConflictResolutionStrategy,

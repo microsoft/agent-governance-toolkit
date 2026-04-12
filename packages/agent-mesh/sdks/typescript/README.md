@@ -123,6 +123,65 @@ const result = await client.executeWithGovernance('data.read', { user: 'alice' }
 // result: { decision, trustScore, auditEntry, executionTime }
 ```
 
+### `McpSecurityScanner`
+
+Scan MCP tool definitions for security threats — tool poisoning, typosquatting, hidden instructions, and rug-pull payloads.
+
+```typescript
+import { McpSecurityScanner } from '@agentmesh/sdk';
+
+const scanner = new McpSecurityScanner();
+
+const result = scanner.scan({
+  name: 'read_file',
+  description: 'Reads a file from disk.',
+});
+console.log(result.safe);       // true
+console.log(result.risk_score); // 0
+
+// Batch scan
+const results = scanner.scanAll(tools);
+const risky = results.filter((r) => !r.safe);
+```
+
+**Detected threat types:**
+
+| Threat | Description |
+|--------|-------------|
+| `tool_poisoning` | Prompt-injection patterns (`<system>`, `ignore previous`, encoded payloads) |
+| `typosquatting` | Tool names within edit-distance 2 of well-known tools |
+| `hidden_instruction` | Zero-width Unicode characters or homoglyphs |
+| `rug_pull` | Abnormally long descriptions containing instruction-like patterns |
+
+### `LifecycleManager`
+
+Govern agent state transitions with an enforced state machine and event log.
+
+```typescript
+import { LifecycleManager, LifecycleState } from '@agentmesh/sdk';
+
+const lm = new LifecycleManager('agent-1');
+
+lm.activate('Ready to serve');         // provisioning → active
+lm.suspend('Scheduled maintenance');   // active → suspended
+lm.activate('Back online');            // suspended → active
+lm.quarantine('Trust violation');      // active → quarantined
+lm.decommission('End of life');        // quarantined → decommissioning
+
+console.log(lm.state);   // 'decommissioning'
+console.log(lm.events);  // full transition history
+```
+
+**State machine:**
+
+```
+provisioning → active → suspended ↔ active
+                     → rotating  → active | degraded
+                     → degraded  → active | quarantined | decommissioning
+                     → quarantined → active | decommissioning
+                     → decommissioning → decommissioned
+```
+
 ## Development
 
 ```bash
