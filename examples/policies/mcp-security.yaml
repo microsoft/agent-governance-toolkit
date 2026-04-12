@@ -85,3 +85,5 @@ suspicious_decoded_keywords:
   - send
   - curl
   - fetch
+
+# For extended detection rules (87+ patterns), see atr-community-rules.yaml

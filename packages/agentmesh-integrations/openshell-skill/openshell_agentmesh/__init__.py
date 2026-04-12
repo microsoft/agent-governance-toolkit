@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""OpenShell + AgentMesh governance skill — policy, trust, and audit for sandboxed agents."""
+"""OpenShell + AgentMesh governance skill."""
 
 from openshell_agentmesh.skill import GovernanceSkill, PolicyDecision
 
