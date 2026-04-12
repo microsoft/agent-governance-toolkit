@@ -209,7 +209,8 @@ OpenShell can *host* the sidecar. The governance sidecar runs inside or alongsid
 
 ## Related
 
-- [OpenClaw Skill](../../packages/agentmesh-integrations/openclaw-skill/) — Lightweight skill for OpenClaw agents
+- [OpenShell Governance Skill](../../packages/agentmesh-integrations/openshell-skill/) — Python skill package for OpenShell agents
+- [Runnable Example](../../examples/openshell-governed/) — Self-contained demo with policy enforcement
 - [OpenClaw Sidecar Deployment](../deployment/openclaw-sidecar.md) — AKS and Docker Compose guide
 - [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) — Runtime sandbox for AI agents
 - [Architecture](../ARCHITECTURE.md) — Full toolkit architecture
