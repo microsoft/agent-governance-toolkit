@@ -1,0 +1,25 @@
+# lotl_prevention_policy.yaml
+metadata:
+  name: "Blue Team LotL Shield"
+  version: "1.0"
+  description: "Detects and blocks common Living off the Land binaries often misused by autonomous agents."
+
+rules:
+  - id: "block-unauthorized-download"
+    action: "shell_exec"
+    condition:
+      # This catches agents trying to pipe web scripts directly into bash
+      parameter: "command"
+      operator: "regex_match"
+      value: "(curl|wget).*\\|.*(bash|sh|python)"
+    effect: "DENY"
+    message: "Critical: Potential remote code execution via piped shell script detected."
+
+  - id: "block-sensitive-file-read"
+    action: "file_read"
+    condition:
+      parameter: "path"
+      operator: "in"
+      value: ["/etc/shadow", "/etc/passwd", "~/.ssh/id_rsa"]
+    effect: "DENY"
+    message: "Security Violation: Unauthorized access to system credentials."
