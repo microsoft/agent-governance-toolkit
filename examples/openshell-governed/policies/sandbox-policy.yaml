@@ -16,11 +16,11 @@ rules:
     priority: 95
     message: File writes restricted to /workspace
   - name: allow-file-read
-    condition: {field: action, operator: starts_with, value: "file:read"}
+    condition: {field: action, operator: matches, value: "^file:read"}
     action: allow
     priority: 90
   - name: allow-workspace-write
-    condition: {field: action, operator: starts_with, value: "file:write:/workspace"}
+    condition: {field: action, operator: matches, value: "^file:write:/workspace"}
     action: allow
     priority: 85
   - name: allow-safe-shell
