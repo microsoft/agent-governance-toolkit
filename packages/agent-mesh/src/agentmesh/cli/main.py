@@ -79,6 +79,12 @@ def init(name: str, sponsor: str, output: str, output_json: bool):
     Creates the scaffolding for a governed agent with identity, trust, and audit built in.
     """
     output_path = Path(output)
+    # Validate name to prevent path traversal (CWE-22)
+    import re as _re
+    if not _re.match(r'^[a-zA-Z0-9_-]+$', name):
+        raise click.BadParameter(
+            f"Agent name must contain only alphanumerics, hyphens, and underscores: '{name}'"
+        )
     agent_dir = output_path / name
 
     if not output_json:

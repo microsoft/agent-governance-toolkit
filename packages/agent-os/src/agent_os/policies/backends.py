@@ -203,6 +203,10 @@ class OPABackend:
         if self._opa_available and self._rego_content:
             return self._evaluate_cli(context)
         if self._rego_content:
+            logger.warning(
+                "OPA CLI not available — falling back to built-in regex evaluation. "
+                "Install OPA CLI for full policy evaluation: https://www.openpolicyagent.org/docs/latest/#running-opa"
+            )
             return self._evaluate_builtin(context)
         return BackendDecision(
             allowed=False,
@@ -448,6 +452,10 @@ class CedarBackend:
             ):
                 result = self._evaluate_cli(context)
             else:
+                logger.warning(
+                    "Neither cedarpy nor Cedar CLI available — falling back to built-in "
+                    "pattern evaluation. Install cedar-py or the Cedar CLI for full evaluation."
+                )
                 result = self._evaluate_builtin(context)
             result.evaluation_ms = (
                 datetime.now(timezone.utc) - start

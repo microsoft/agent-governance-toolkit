@@ -219,7 +219,7 @@ def _json_response(handler: _APIHandler, status: int, data: Any) -> None:
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
     handler.send_header("Content-Length", str(len(body)))
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.send_header("Access-Control-Allow-Origin", "http://localhost:8501")  # restrict to dashboard
     handler.end_headers()
     handler.wfile.write(body)
 

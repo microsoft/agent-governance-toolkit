@@ -190,7 +190,7 @@ class ScopeChain(BaseModel):
         if not v or not v.strip():
             raise DelegationError("root_sponsor_email must not be empty")
         if "@" not in v:
-            raise DelegationError(f"Invalid root_sponsor_email format: {v}")
+            raise DelegationError(f"Invalid root_sponsor_email format: {v[:3]}***")
         return v
 
     @field_validator("root_capabilities")
