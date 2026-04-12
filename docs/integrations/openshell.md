@@ -69,7 +69,7 @@ Neither replaces the other — they're complementary layers in a defense-in-dept
 
 ### Option A: Governance Skill Inside the Sandbox
 
-Install the toolkit as an [OpenClaw skill](../packages/agentmesh-integrations/openclaw-skill/) that the agent invokes before each action:
+Install the toolkit as an [OpenShell governance skill](../../packages/agentmesh-integrations/openshell-skill/) that the agent invokes before each action:
 
 ```bash
 # Inside the sandbox

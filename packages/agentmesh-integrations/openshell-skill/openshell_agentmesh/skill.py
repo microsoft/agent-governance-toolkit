@@ -3,25 +3,20 @@
 """Governance skill for OpenShell sandboxed agents."""
 
 from __future__ import annotations
-
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
-
 import yaml
-
 
 @dataclass
 class PolicyDecision:
-    """Result of a policy evaluation."""
     allowed: bool
     action: str
     reason: str
     policy_name: Optional[str] = None
     trust_score: float = 0.0
-
 
 @dataclass
 class _PolicyRule:
@@ -33,10 +28,7 @@ class _PolicyRule:
     priority: int = 0
     message: str = ""
 
-
 class GovernanceSkill:
-    """AGT governance skill for OpenShell sandboxes."""
-
     def __init__(self, policy_dir: Optional[Path] = None, trust_threshold: float = 0.5) -> None:
         self._rules: list[_PolicyRule] = []
         self._trust_scores: dict[str, float] = {}
@@ -55,17 +47,9 @@ class GovernanceSkill:
                 doc = yaml.safe_load(f)
             if not doc:
                 continue
-            for rule_data in doc.get("rules", []):
-                cond = rule_data.get("condition", {})
-                self._rules.append(_PolicyRule(
-                    name=rule_data.get("name", yaml_file.stem),
-                    field=cond.get("field", "action"),
-                    operator=cond.get("operator", "equals"),
-                    value=cond.get("value", ""),
-                    action=rule_data.get("action", "deny"),
-                    priority=rule_data.get("priority", 0),
-                    message=rule_data.get("message", ""),
-                ))
+            for rd in doc.get("rules", []):
+                cond = rd.get("condition", {})
+                self._rules.append(_PolicyRule(name=rd.get("name", yaml_file.stem), field=cond.get("field", "action"), operator=cond.get("operator", "equals"), value=cond.get("value", ""), action=rd.get("action", "deny"), priority=rd.get("priority", 0), message=rd.get("message", "")))
         self._rules.sort(key=lambda r: r.priority, reverse=True)
         return len(self._rules)
 
@@ -77,7 +61,7 @@ class GovernanceSkill:
             target = action if rule.field == "action" else context.get(rule.field, "")
             if self._match(rule.operator, target, rule.value):
                 allowed = rule.action == "allow"
-                reason = rule.message or f"{'Allowed' if allowed else 'Denied'} by rule: {rule.name}"
+                reason = rule.message or (("Allowed" if allowed else "Denied") + " by rule: " + rule.name)
                 decision = PolicyDecision(allowed=allowed, action=action, reason=reason, policy_name=rule.name, trust_score=trust)
                 self.log_action(action, "allow" if allowed else "deny", agent_did, context)
                 return decision
@@ -104,14 +88,9 @@ class GovernanceSkill:
 
     @staticmethod
     def _match(operator: str, target: str, value: Any) -> bool:
-        if operator == "equals":
-            return target == value
-        if operator == "starts_with":
-            return target.startswith(str(value))
-        if operator == "contains":
-            return str(value) in target
-        if operator == "matches":
-            return bool(re.search(str(value), target))
-        if operator == "in":
-            return target in (value if isinstance(value, list) else [value])
+        if operator == "equals": return target == value
+        if operator == "starts_with": return target.startswith(str(value))
+        if operator == "contains": return str(value) in target
+        if operator == "matches": return bool(re.search(str(value), target))
+        if operator == "in": return target in (value if isinstance(value, list) else [value])
         return False
