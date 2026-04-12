@@ -1,4 +1,17 @@
-# 🔄 Tutorial 11 — Saga Orchestration
+# Tutorial 11 — Saga Orchestration
+
+> **Package:** `agentmesh-runtime` · **Time:** 30 minutes · **Prerequisites:** Python 3.11+
+
+---
+
+## What You'll Learn
+
+- Multi-step transactions with compensating actions
+- Saga DSL for declarative pipeline definitions
+- Fan-out for parallel step execution
+- Compensating actions and rollback strategies
+
+---
 
 **Multi-step agent transactions with compensating actions, parallel fan-out, and semantic checkpoints.**
 
@@ -992,3 +1005,11 @@ Governance Toolkit. Here's where to go next:
    achieved when restarting a saga.
 6. **Plan for ESCALATED state** — wire up alerting for sagas that can't
    be compensated automatically.
+
+---
+
+## Next Steps
+
+- **Liability & Attribution:** [Tutorial 12 — Liability & Attribution](12-liability-and-attribution.md)
+- **Observability:** [Tutorial 13 — Observability & Distributed Tracing](13-observability-and-tracing.md)
+- **Execution Sandboxing:** [Tutorial 06 — Execution Sandboxing](06-execution-sandboxing.md)

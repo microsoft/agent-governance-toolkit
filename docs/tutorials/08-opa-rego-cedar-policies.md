@@ -1,7 +1,19 @@
 # Tutorial 08 — OPA/Rego & Cedar Policy Backends
 
+> **Package:** `agent-os-kernel` · **Time:** 35 minutes · **Prerequisites:** Python 3.10+
+
+---
+
+## What You'll Learn
+
+- External policy backends for OPA/Rego and Cedar
+- 3 evaluation modes: standalone, hybrid, and multi-backend
+- Enterprise policy integration with existing infrastructure
+
+---
+
 The Agent Governance Toolkit ships with a declarative YAML policy engine that
-covers most use cases out of the box. But enterprises rarely start from
+covers most use cases out of the box.But enterprises rarely start from
 scratch—they already have policy investments in [Open Policy Agent
 (OPA)](https://www.openpolicyagent.org/) with Rego, or
 [Cedar](https://www.cedarpolicy.com/) from AWS. Rather than force a rewrite,
@@ -1278,3 +1290,11 @@ print(f"Reason: {decision.reason}")
 | `PolicyEngine` | `packages/agent-mesh/src/agentmesh/governance/policy.py` |
 | OPA tests | `packages/agent-mesh/tests/test_opa.py` |
 | Cedar tests | `packages/agent-mesh/tests/test_cedar.py` |
+
+---
+
+## Next Steps
+
+- **Policy Engine:** [Tutorial 01 — Policy Engine](01-policy-engine.md)
+- **Prompt Injection:** [Tutorial 09 — Prompt Injection Detection](09-prompt-injection-detection.md)
+- **Compliance Verification:** [Tutorial 18 — Compliance Verification](18-compliance-verification.md)

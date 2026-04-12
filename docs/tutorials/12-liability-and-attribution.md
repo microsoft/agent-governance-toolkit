@@ -1,4 +1,17 @@
-# ⚖️ Tutorial 12 — Liability & Attribution
+# Tutorial 12 — Liability & Attribution
+
+> **Package:** `agentmesh-runtime` · **Time:** 25 minutes · **Prerequisites:** Python 3.11+
+
+---
+
+## What You'll Learn
+
+- Vouching and sponsorship protocols for agent accountability
+- Slashing penalties for governance violations
+- Causal attribution across multi-agent workflows
+- Quarantine and isolation for misbehaving agents
+
+---
 
 **Track accountability across multi-agent workflows: who vouched for whom, who caused what, and what penalties apply when things go wrong.**
 

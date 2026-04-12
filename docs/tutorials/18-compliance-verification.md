@@ -1,5 +1,17 @@
 # Tutorial 18 — Compliance Verification & Attestation
 
+> **Package:** `agent-governance-toolkit` · **Time:** 30 minutes · **Prerequisites:** Python 3.10+
+
+---
+
+## What You'll Learn
+
+- Governance grading with automated compliance checks
+- Regulatory framework mapping (OWASP ASI 2026)
+- Cryptographic attestation records for audit trails
+
+---
+
 ## Proving governance compliance — from internal verification to regulatory audits
 
 Every governed agent system must answer a deceptively simple question: _"Can you prove you're compliant?"_  Not "do you think you are," but **prove** — with cryptographic attestations, coverage grades, and audit-ready reports that satisfy both your engineering team and your compliance officer.

@@ -1,5 +1,9 @@
 # Tutorial 19 — .NET SDK (Microsoft.AgentGovernance)
 
+> **Package:** `Microsoft.AgentGovernance` · **Time:** 30 minutes · **Prerequisites:** .NET 8.0+
+
+---
+
 Full agent governance in C# / .NET 8 — the same policy engine, execution rings,
 circuit breakers, prompt injection detection, SLO tracking, saga orchestration,
 rate limiting, zero-trust identity, and OpenTelemetry metrics you get from the

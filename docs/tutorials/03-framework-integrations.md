@@ -1,7 +1,20 @@
 # Tutorial 03 — Wrapping AI Frameworks with Governance
 
+> **Package:** `agent-os-kernel` · **Time:** 25 minutes · **Prerequisites:** Python 3.10+
+
+---
+
+## What You'll Learn
+
+- Govern LangChain agents with policy-aware wrappers
+- Govern CrewAI multi-agent workflows
+- Govern AutoGen conversational agents
+- Govern OpenAI Agents and Google ADK pipelines
+
+---
+
 Every adapter in Agent OS follows the same pattern: **create a policy, create a
-kernel, wrap the framework object, use the governed object as normal**.  The
+kernel, wrap the framework object, use the governed object as normal**.The
 kernel sits between your code and the LLM framework—intercepting calls,
 enforcing limits, blocking disallowed tools, and logging everything.
 

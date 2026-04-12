@@ -1,7 +1,19 @@
-# Tutorial 4 — Audit Logging & Compliance
+# Tutorial 04 — Audit Logging & Compliance
+
+> **Package:** `agent-governance-toolkit` · **Time:** 25 minutes · **Prerequisites:** Python 3.10+
+
+---
+
+## What You'll Learn
+
+- Append-only audit logs with cryptographic integrity
+- Hash chains for tamper-evident event recording
+- OWASP ASI 2026 compliance mapping and verification
+
+---
 
 Every action an AI agent takes — tool calls, policy decisions, trust
-handshakes — must be recorded in a **tamper-proof** log. Without it,
+handshakes — must be recorded in a **tamper-proof** log.Without it,
 you cannot answer the question every auditor will ask: *"What exactly did
 this agent do, and who authorised it?"*
 

@@ -1,7 +1,19 @@
 # Tutorial 07 — MCP Security Gateway
 
+> **Package:** `agent-os-kernel` · **Time:** 30 minutes · **Prerequisites:** Python 3.10+
+
+---
+
+## What You'll Learn
+
+- Tool poisoning detection and definition drift monitoring
+- Parameter sanitization and schema enforcement
+- Human-in-the-loop approval workflows for sensitive tools
+
+---
+
 The MCP Security Gateway is a governance layer that sits between MCP clients and
-servers, enforcing policy-based controls on every tool call.  It defends against
+servers, enforcing policy-based controls on every tool call.It defends against
 tool misuse ([OWASP ASI02](https://genai.owasp.org/)) and MCP-layer attacks such
 as tool poisoning, rug pulls, and cross-server impersonation—before an agent can
 act on a compromised tool definition.
