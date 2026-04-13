@@ -83,6 +83,8 @@ parameters:
         path: packages/agent-runtime
       - name: agent-lightning
         path: packages/agent-lightning
+      - name: agent-marketplace
+        path: packages/agent-marketplace
 
   - name: npmPackages
     type: object
@@ -116,7 +118,7 @@ pool:
 
 stages:
   # =======================================================
-  # PYTHON (PyPI) — 7 packages
+  # PYTHON (PyPI) — 8 packages
   # =======================================================
   - stage: Build_PyPI
     displayName: 'Build Python Packages'
@@ -376,10 +378,10 @@ stages:
               domaintenantid: '$(ESRP_DOMAIN_TENANT_ID)'
 
   # =======================================================
-  # RUST (crates.io) — agentmesh crate
+  # RUST (crates.io) — agentmesh + agentmesh-mcp crates
   # =======================================================
   - stage: Build_Rust
-    displayName: 'Build & Test Rust Crate'
+    displayName: 'Build & Test Rust Crates'
     dependsOn: []
     condition: or(eq('${{ parameters.target }}', 'rust'), eq('${{ parameters.target }}', 'all'))
     jobs:
@@ -394,46 +396,47 @@ stages:
             displayName: 'Install Rust ${{ parameters.rustVersion }}'
 
           - script: |
-              cargo build --release -p agentmesh
+              cargo build --release --workspace
             workingDirectory: 'packages/agent-mesh/sdks/rust'
-            displayName: 'Build agentmesh crate'
+            displayName: 'Build all crates'
 
           - script: |
-              cargo test --release -p agentmesh
+              cargo test --release --workspace
             workingDirectory: 'packages/agent-mesh/sdks/rust'
-            displayName: 'Run tests'
+            displayName: 'Run all tests'
 
           - script: |
-              cargo package -p agentmesh --list
-              cargo package -p agentmesh --allow-dirty
-              echo "=== Packaged crate ==="
-              ls -la target/package/*.crate
-              # ESRP requires a zip containing the .crate file(s)
               mkdir -p $(Pipeline.Workspace)/rust-packages
+              for CRATE in agentmesh agentmesh-mcp; do
+                echo "=== Packaging $CRATE ==="
+                cargo package -p $CRATE --allow-dirty
+              done
+              echo "=== Packaged crates ==="
+              ls -la target/package/*.crate
               cp target/package/*.crate $(Pipeline.Workspace)/rust-packages/
             workingDirectory: 'packages/agent-mesh/sdks/rust'
-            displayName: 'Package crate'
+            displayName: 'Package all crates'
 
           - task: PublishPipelineArtifact@1
             inputs:
               targetPath: '$(Pipeline.Workspace)/rust-packages'
-              artifact: 'rust-agentmesh'
+              artifact: 'rust-crates'
               publishLocation: 'pipeline'
-            displayName: 'Publish crate artifact'
+            displayName: 'Publish crate artifacts'
 
   - stage: Publish_Rust
     displayName: 'Publish to crates.io via ESRP'
     dependsOn: Build_Rust
     condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'rust'), eq('${{ parameters.target }}', 'all')))
     jobs:
-      - job: PublishCrate
-        displayName: 'ESRP Publish agentmesh to crates.io'
+      - job: PublishCrates
+        displayName: 'ESRP Publish agentmesh + agentmesh-mcp to crates.io'
         steps:
           - task: DownloadPipelineArtifact@2
             inputs:
-              artifact: 'rust-agentmesh'
+              artifact: 'rust-crates'
               targetPath: '$(Pipeline.Workspace)/rust-publish'
-            displayName: 'Download crate artifact'
+            displayName: 'Download crate artifacts'
 
           - script: |
               echo "=== Crates to publish ==="
