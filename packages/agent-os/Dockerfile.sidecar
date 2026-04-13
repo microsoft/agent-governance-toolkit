@@ -1,9 +1,10 @@
 # Governance Sidecar Dockerfile
 # Lightweight image for the AGT governance sidecar.
-# Bundles policy evaluation, trust scoring, and audit logging.
+# Bundles the Agent OS governance API (policy evaluation, prompt injection
+# detection, stateless execution, health/metrics endpoints).
 #
 # Build:  docker build -t agentmesh/governance-sidecar:0.3.0 -f Dockerfile.sidecar .
-# Run:    docker run -v ./policies:/policies:ro -p 8081:8081 agentmesh/governance-sidecar:0.3.0
+# Run:    docker run -p 8081:8081 agentmesh/governance-sidecar:0.3.0
 
 FROM python:3.12-slim
 
@@ -12,9 +13,10 @@ LABEL description="Agent Governance Toolkit — governance sidecar for autonomou
 
 WORKDIR /app
 
-# Install only what the sidecar needs
+# Copy all source (modules/ is needed for full [full] install)
 COPY pyproject.toml ./
 COPY src/ ./src/
+COPY modules/ ./modules/
 
 RUN pip install --no-cache-dir -e ".[full]" && \
     rm -rf /root/.cache
@@ -23,16 +25,16 @@ RUN pip install --no-cache-dir -e ".[full]" && \
 RUN useradd -m -s /bin/bash sidecar
 USER sidecar
 
-# Policy directory (mount via ConfigMap or volume)
-ENV POLICY_DIR=/policies
 ENV LOG_LEVEL=INFO
 ENV PYTHONUNBUFFERED=1
+ENV HOST=0.0.0.0
+ENV PORT=8081
 
-EXPOSE 8081 9091
+EXPOSE 8081
 
-# Run the governance server in sidecar mode
+# Run the governance API server — host/port configurable via env or args
 ENTRYPOINT ["python", "-m", "agent_os.server"]
-CMD ["--host", "127.0.0.1", "--port", "8081"]
+CMD ["--host", "0.0.0.0", "--port", "8081"]
 
-HEALTHCHECK --interval=15s --timeout=5s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health')" || exit 1
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')" || exit 1
