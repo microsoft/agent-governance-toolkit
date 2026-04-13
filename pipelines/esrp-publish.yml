@@ -340,42 +340,68 @@ stages:
             displayName: 'Publish unsigned NuGet artifacts'
 
   - stage: Publish_NuGet
-    displayName: 'Publish to NuGet.org via ESRP'
+    displayName: 'Sign & Publish to NuGet.org'
     dependsOn: Build_NuGet
     condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'nuget'), eq('${{ parameters.target }}', 'all')))
     jobs:
       - job: PublishNuGet
-        displayName: 'ESRP Publish to NuGet.org'
+        displayName: 'ESRP Sign + NuGet Push'
         steps:
           - task: DownloadPipelineArtifact@2
             inputs:
               artifact: 'nuget-unsigned'
-              targetPath: '$(Pipeline.Workspace)/nuget-publish'
-            displayName: 'Download NuGet artifacts'
+              targetPath: '$(Pipeline.Workspace)/nuget-unsigned'
+            displayName: 'Download unsigned NuGet artifacts'
 
           - script: |
-              echo "=== Packages to publish ==="
-              ls -la $(Pipeline.Workspace)/nuget-publish/
-            displayName: 'List packages'
+              echo "=== Unsigned packages ==="
+              ls -la $(Pipeline.Workspace)/nuget-unsigned/
+            displayName: 'List unsigned packages'
 
-          - task: EsrpRelease@11
-            displayName: 'ESRP Sign and Publish to NuGet.org'
+          # Step 1: Sign the .nupkg with ESRP Code Signing
+          - task: EsrpCodeSigning@5
+            displayName: 'ESRP Code Sign NuGet package'
             inputs:
-              connectedservicename: 'Agent Governance Toolkit'
-              usemanagedidentity: true
-              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              signcertname: '$(ESRP_CERT_IDENTIFIER)'
-              clientid: '$(ESRP_CLIENT_ID)'
-              intent: 'PackageDistribution'
-              contenttype: 'NuGet'
-              contentsource: 'Folder'
-              folderlocation: '$(Pipeline.Workspace)/nuget-publish'
-              waitforreleasecompletion: true
-              owners: '$(ESRP_OWNERS)'
-              approvers: '$(ESRP_APPROVERS)'
-              serviceendpointurl: 'https://api.esrp.microsoft.com'
-              mainpublisher: 'ESRPRELPACMAN'
-              domaintenantid: '$(ESRP_DOMAIN_TENANT_ID)'
+              ConnectedServiceName: 'Agent Governance Toolkit'
+              AppRegistrationClientId: '$(ESRP_CLIENT_ID)'
+              AppRegistrationTenantId: '$(ESRP_DOMAIN_TENANT_ID)'
+              AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
+              AuthSignCertName: '$(ESRP_CERT_IDENTIFIER)'
+              FolderPath: '$(Pipeline.Workspace)/nuget-unsigned'
+              Pattern: '*.nupkg'
+              signConfigType: 'inlineSignParams'
+              inlineOperation: |
+                [
+                  {
+                    "keyCode": "CP-401405",
+                    "operationSetCode": "NuGetSign",
+                    "parameters": [],
+                    "toolName": "sign",
+                    "toolVersion": "1.0"
+                  },
+                  {
+                    "keyCode": "CP-401405",
+                    "operationSetCode": "NuGetVerify",
+                    "parameters": [],
+                    "toolName": "sign",
+                    "toolVersion": "1.0"
+                  }
+                ]
+
+          - script: |
+              echo "=== Signed packages ==="
+              ls -la $(Pipeline.Workspace)/nuget-unsigned/
+            displayName: 'List signed packages'
+
+          # Step 2: Push signed package to NuGet.org
+          - script: |
+              dotnet nuget push "$(Pipeline.Workspace)/nuget-unsigned/**/*.nupkg" \
+                --source https://api.nuget.org/v3/index.json \
+                --api-key "$NUGET_API_KEY" \
+                --skip-duplicate
+            env:
+              NUGET_API_KEY: $(NUGET_API_KEY)
+            displayName: 'Push signed package to NuGet.org'
 
   # =======================================================
   # RUST (crates.io) — agentmesh + agentmesh-mcp crates
