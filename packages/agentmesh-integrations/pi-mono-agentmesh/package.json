@@ -1,0 +1,48 @@
+{
+  "name": "@microsoft/agentmesh-pi-mono",
+  "version": "3.1.0",
+  "description": "Public Preview - Governance, policy enforcement, and audit hooks for pi-mono coding agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "pi-mono",
+    "agentmesh",
+    "governance",
+    "trust",
+    "audit",
+    "coding-agent",
+    "policy",
+    "security"
+  ],
+  "author": "Microsoft Corporation",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/agent-governance-toolkit.git",
+    "directory": "packages/agentmesh-integrations/pi-mono-agentmesh"
+  },
+  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agentmesh-integrations/pi-mono-agentmesh",
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": ">=0.65.2",
+    "@microsoft/agentmesh-sdk": ">=3.0.2"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "0.65.2",
+    "@microsoft/agentmesh-sdk": "3.0.2",
+    "@types/node": "20.0.0",
+    "tsup": "8.0.0",
+    "typescript": "5.7.3",
+    "vitest": "3.0.5"
+  }
+}
