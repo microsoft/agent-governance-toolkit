@@ -367,7 +367,7 @@ stages:
               signcertname: '$(ESRP_CERT_IDENTIFIER)'
               clientid: '$(ESRP_CLIENT_ID)'
               intent: 'PackageDistribution'
-              contenttype: 'Nuget'
+              contenttype: 'NuGet'
               contentsource: 'Folder'
               folderlocation: '$(Pipeline.Workspace)/nuget-publish'
               waitforreleasecompletion: true
