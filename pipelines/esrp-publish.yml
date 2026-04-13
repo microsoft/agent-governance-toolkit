@@ -110,8 +110,15 @@ parameters:
 # Service connection name is hardcoded (required at compile time by ADO).
 # All other values sourced from ADO pipeline variables (mark as secret):
 #   ESRP_KEYVAULT_NAME, ESRP_CERT_IDENTIFIER,
-#   ESRP_CLIENT_ID, ESRP_DOMAIN_TENANT_ID, ESRP_OWNERS, ESRP_APPROVERS
+#   ESRP_CLIENT_ID, ESRP_OWNERS, ESRP_APPROVERS
+#
+# Note: ESRP_DOMAIN_TENANT_ID was removed from pipeline variables due to
+# cyclical reference. The Microsoft corporate tenant ID is a well-known
+# public value used as the ESRP default.
 # -------------------------------------------------------
+
+variables:
+  MICROSOFT_TENANT_ID: '72f988bf-86f1-41af-91ab-2d7cd011db47'
 
 pool:
   vmImage: ubuntu-latest
@@ -195,7 +202,7 @@ stages:
                 approvers: '$(ESRP_APPROVERS)'
                 serviceendpointurl: 'https://api.esrp.microsoft.com'
                 mainpublisher: 'ESRPRELPACMAN'
-                domaintenantid: '$(ESRP_DOMAIN_TENANT_ID)'
+                domaintenantid: '$(MICROSOFT_TENANT_ID)'
 
   # =======================================================
   # NPM — 7 packages (@microsoft scope)
@@ -284,7 +291,7 @@ stages:
               approvers: '$(ESRP_APPROVERS)'
               serviceendpointurl: 'https://api.esrp.microsoft.com'
               mainpublisher: 'ESRPRELPACMAN'
-              domaintenantid: '$(ESRP_DOMAIN_TENANT_ID)'
+              domaintenantid: '$(MICROSOFT_TENANT_ID)'
 
   # =======================================================
   # NUGET — Microsoft.AgentGovernance
@@ -364,7 +371,7 @@ stages:
             inputs:
               ConnectedServiceName: 'Agent Governance Toolkit'
               AppRegistrationClientId: '$(ESRP_CLIENT_ID)'
-              AppRegistrationTenantId: '$(ESRP_DOMAIN_TENANT_ID)'
+              AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
               AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
               AuthSignCertName: '$(ESRP_CERT_IDENTIFIER)'
               FolderPath: '$(Pipeline.Workspace)/nuget-unsigned'
@@ -486,7 +493,7 @@ stages:
               approvers: '$(ESRP_APPROVERS)'
               serviceendpointurl: 'https://api.esrp.microsoft.com'
               mainpublisher: 'ESRPRELPACMAN'
-              domaintenantid: '$(ESRP_DOMAIN_TENANT_ID)'
+              domaintenantid: '$(MICROSOFT_TENANT_ID)'
 
   # =======================================================
   # GO — github.com/microsoft/agent-governance-toolkit module
