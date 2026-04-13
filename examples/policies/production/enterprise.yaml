@@ -1,0 +1,82 @@
+# Production Policy: Enterprise
+# Risk profile: MEDIUM — general enterprise, SaaS products
+# Philosophy: Allow common operations, escalate sensitive ones, block dangerous
+
+version: "1.0"
+name: enterprise
+description: >
+  Standard enterprise governance. Balanced between productivity and safety.
+  Escalates sensitive operations to humans, blocks destructive actions.
+
+rules:
+  # Safe operations — allow
+  - action: "web_search"
+    effect: allow
+  - action: "read_file"
+    effect: allow
+  - action: "api_call"
+    effect: allow
+  - action: "database_query"
+    effect: allow
+  - action: "calculator"
+    effect: allow
+  - action: "summarize"
+    effect: allow
+
+  # Sensitive operations — require human approval
+  - action: "write_file"
+    effect: escalate
+    reason: "File writes require human approval"
+  - action: "send_email"
+    effect: escalate
+    reason: "Outbound email requires human review"
+  - action: "deploy"
+    effect: escalate
+    reason: "Deployments require human sign-off"
+  - action: "create_pr"
+    effect: escalate
+    reason: "PR creation requires human review"
+  - action: "database_write"
+    effect: escalate
+    reason: "Database mutations require approval"
+
+  # Dangerous operations — deny
+  - action: "delete_file"
+    effect: deny
+    reason: "File deletion is not permitted"
+  - action: "execute_code"
+    effect: deny
+    reason: "Arbitrary code execution is blocked"
+  - action: "ssh_connect"
+    effect: deny
+    reason: "Direct SSH is not permitted"
+  - action: "drop_table"
+    effect: deny
+    reason: "Schema changes are not permitted"
+
+  # Default: deny unknown actions
+  - action: "*"
+    effect: deny
+    reason: "Unknown action — default deny"
+
+content_filters:
+  blocked_patterns:
+    - '\b\d{3}-\d{2}-\d{4}\b'         # SSN
+    - '\b(?:\d[ -]*?){13,16}\b'        # Credit card numbers
+    - '(?i)password\s*[:=]\s*\S+'      # Passwords in output
+
+escalation:
+  actions_requiring_approval:
+    - write_file
+    - send_email
+    - deploy
+    - create_pr
+    - database_write
+  timeout_seconds: 300
+  default_on_timeout: deny
+
+settings:
+  require_human_approval: true
+  max_tool_calls_per_session: 50
+  log_level: "audit"
+  audit_all_decisions: true

@@ -1,0 +1,103 @@
+# Production Policy: Healthcare (HIPAA)
+# Risk profile: HIGH — patient data, medical records, HIPAA-regulated
+# Philosophy: Deny by default, allow only explicitly permitted operations
+
+version: "1.0"
+name: healthcare-hipaa
+description: >
+  HIPAA-compliant governance for healthcare AI agents. All patient data
+  access is logged, PHI patterns are blocked from output, and human
+  approval is required for any data mutation.
+
+rules:
+  # Read operations — allow with audit
+  - action: "read_patient_record"
+    effect: allow
+    conditions:
+      require_audit: true
+      require_purpose: true
+  - action: "search_medical_database"
+    effect: allow
+    conditions:
+      require_audit: true
+  - action: "web_search"
+    effect: allow
+
+  # Clinical support — allow with audit
+  - action: "summarize_diagnosis"
+    effect: allow
+    conditions:
+      require_audit: true
+  - action: "check_drug_interaction"
+    effect: allow
+  - action: "lookup_icd_code"
+    effect: allow
+
+  # Mutations — require human approval
+  - action: "update_patient_record"
+    effect: escalate
+    reason: "Patient record updates require clinician approval"
+  - action: "send_referral"
+    effect: escalate
+    reason: "Referrals require physician sign-off"
+  - action: "prescribe_medication"
+    effect: escalate
+    reason: "Prescriptions require licensed provider approval"
+  - action: "send_email"
+    effect: escalate
+    reason: "Outbound communication requires HIPAA review"
+  - action: "export_data"
+    effect: escalate
+    reason: "Data export requires compliance review"
+
+  # Dangerous operations — deny
+  - action: "delete_patient_record"
+    effect: deny
+    reason: "Patient records cannot be deleted by agents"
+  - action: "execute_code"
+    effect: deny
+  - action: "ssh_connect"
+    effect: deny
+  - action: "deploy"
+    effect: deny
+    reason: "Agents cannot deploy in clinical environments"
+
+  # Default deny
+  - action: "*"
+    effect: deny
+    reason: "HIPAA: unlisted actions denied by default"
+
+content_filters:
+  blocked_patterns:
+    - '\b\d{3}-\d{2}-\d{4}\b'           # SSN
+    - '\bMRN[:\s]?\d{6,10}\b'           # Medical Record Number
+    - '\b[A-Z]\d{2}(?:\.\d{1,4})?\b'    # ICD codes in output
+    - '(?i)patient\s+name\s*[:=]\s*\w+'  # Patient names
+    - '(?i)date\s+of\s+birth\s*[:=]'     # DOB
+    - '\b(?:\d[ -]*?){13,16}\b'          # Credit cards
+
+  data_classification:
+    max_classification: RESTRICTED
+    denied_categories: ["PCI", "ITAR"]
+    required_geography: "US"
+
+escalation:
+  actions_requiring_approval:
+    - update_patient_record
+    - send_referral
+    - prescribe_medication
+    - send_email
+    - export_data
+  timeout_seconds: 600
+  default_on_timeout: deny
+  escalation_chain:
+    - attending_physician
+    - department_head
+    - compliance_officer
+
+settings:
+  require_human_approval: true
+  max_tool_calls_per_session: 30
+  log_level: "audit"
+  audit_all_decisions: true
+  retention_days: 2555    # 7 years HIPAA requirement

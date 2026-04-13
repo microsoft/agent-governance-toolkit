@@ -1,0 +1,80 @@
+# Production Policy: Strict / High-Security
+# Risk profile: MAXIMUM — defense, critical infrastructure, ITAR
+# Philosophy: Deny everything by default. Allowlist only.
+
+version: "1.0"
+name: strict-high-security
+description: >
+  Maximum-security governance for defense, critical infrastructure,
+  and ITAR-regulated environments. All actions denied by default.
+  Only explicitly allowlisted operations are permitted, and all
+  mutations require multi-level human approval.
+
+rules:
+  # Explicitly allowed read-only operations
+  - action: "read_file"
+    effect: allow
+    conditions:
+      require_audit: true
+      allowed_paths:
+        - "/approved/workspace/*"
+  - action: "web_search"
+    effect: allow
+    conditions:
+      require_audit: true
+      allowed_domains:
+        - "*.gov"
+        - "*.mil"
+        - "*.edu"
+
+  # All write operations — require multi-level approval
+  - action: "write_file"
+    effect: escalate
+    reason: "All writes require security officer approval"
+  - action: "send_email"
+    effect: escalate
+    reason: "All external communication requires security review"
+  - action: "api_call"
+    effect: escalate
+    reason: "All outbound API calls require approval"
+
+  # Everything else — deny
+  - action: "*"
+    effect: deny
+    reason: "Strict mode: all unlisted actions denied"
+
+content_filters:
+  blocked_patterns:
+    - '\b\d{3}-\d{2}-\d{4}\b'           # SSN
+    - '\b(?:\d[ -]*?){13,16}\b'          # Credit cards
+    - '(?i)(classified|secret|top.secret|confidential)\s*[:/-]' # Classification markers
+    - '(?i)itar|export.control'           # ITAR references
+    - 'AKIA[0-9A-Z]{16}'                 # AWS keys
+    - 'sk-[a-zA-Z0-9]{20,}'              # API keys
+    - 'eyJ[a-zA-Z0-9\-_]+\.eyJ'          # JWT tokens
+    - '-----BEGIN.*PRIVATE KEY-----'      # PEM keys
+    - 'https?://(?!.*\.(gov|mil|edu))'    # Non-approved domains
+
+  data_classification:
+    max_classification: CONFIDENTIAL
+    denied_categories: ["ITAR"]
+
+escalation:
+  actions_requiring_approval:
+    - write_file
+    - send_email
+    - api_call
+  timeout_seconds: 1800
+  default_on_timeout: deny
+  escalation_chain:
+    - security_officer
+    - facility_security_officer
+    - program_manager
+
+settings:
+  require_human_approval: true
+  max_tool_calls_per_session: 10
+  log_level: "audit"
+  audit_all_decisions: true
+  retention_days: 3650    # 10 years
+  quantum_safe_signing: true

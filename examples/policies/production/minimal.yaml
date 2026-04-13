@@ -1,0 +1,47 @@
+# Production Policy: Minimal
+# Risk profile: LOW — for startups, internal tools, experimentation
+# Philosophy: Allow most actions, block only the clearly dangerous ones
+
+version: "1.0"
+name: minimal
+description: >
+  Minimal governance for low-risk environments. Allows most actions,
+  blocks destructive operations, and logs everything for basic audit.
+
+rules:
+  # Allow common read and search operations
+  - action: "web_search"
+    effect: allow
+  - action: "read_file"
+    effect: allow
+  - action: "api_call"
+    effect: allow
+  - action: "database_query"
+    effect: allow
+
+  # Block destructive operations
+  - action: "delete_file"
+    effect: deny
+    reason: "File deletion requires manual intervention"
+  - action: "drop_table"
+    effect: deny
+    reason: "Database schema changes are not permitted"
+  - action: "execute_code"
+    effect: deny
+    reason: "Arbitrary code execution is blocked"
+  - action: "ssh_connect"
+    effect: deny
+    reason: "Direct SSH access is not permitted"
+
+  # Everything else: allow
+  - action: "*"
+    effect: allow
+
+content_filters:
+  blocked_patterns: []
+
+settings:
+  require_human_approval: false
+  max_tool_calls_per_session: 100
+  log_level: "info"
+  audit_all_decisions: true

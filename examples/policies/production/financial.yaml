@@ -1,0 +1,102 @@
+# Production Policy: Financial Services (SOX/PCI)
+# Risk profile: HIGH — trading, banking, SOX/PCI-regulated
+# Philosophy: Strict controls on financial data and transactions
+
+version: "1.0"
+name: financial-sox-pci
+description: >
+  SOX and PCI-DSS compliant governance for financial AI agents.
+  All transaction-related actions require dual approval. PCI data
+  is never exposed in agent output.
+
+rules:
+  # Market data — allow (read-only)
+  - action: "fetch_market_data"
+    effect: allow
+  - action: "web_search"
+    effect: allow
+  - action: "read_report"
+    effect: allow
+  - action: "calculate"
+    effect: allow
+  - action: "summarize"
+    effect: allow
+
+  # Account queries — allow with audit
+  - action: "query_account"
+    effect: allow
+    conditions:
+      require_audit: true
+  - action: "query_transaction_history"
+    effect: allow
+    conditions:
+      require_audit: true
+
+  # Transactions — require dual approval
+  - action: "execute_trade"
+    effect: escalate
+    reason: "SOX: trades require dual approval"
+  - action: "transfer_funds"
+    effect: escalate
+    reason: "Fund transfers require dual approval"
+  - action: "modify_account"
+    effect: escalate
+    reason: "Account modifications require compliance review"
+  - action: "generate_report"
+    effect: escalate
+    reason: "Financial reports require review before distribution"
+  - action: "send_email"
+    effect: escalate
+    reason: "External communication requires compliance review"
+
+  # Dangerous — deny
+  - action: "delete_record"
+    effect: deny
+    reason: "SOX: financial records cannot be deleted"
+  - action: "execute_code"
+    effect: deny
+  - action: "deploy"
+    effect: deny
+  - action: "modify_schema"
+    effect: deny
+    reason: "Database schema changes require change management"
+
+  # Default deny
+  - action: "*"
+    effect: deny
+    reason: "SOX/PCI: unlisted actions denied by default"
+
+content_filters:
+  blocked_patterns:
+    - '\b(?:\d[ -]*?){13,16}\b'          # Credit card numbers
+    - '\b\d{3}-\d{2}-\d{4}\b'           # SSN
+    - '(?i)account\s*number\s*[:=]\s*\d+' # Account numbers
+    - '(?i)routing\s*number\s*[:=]\s*\d+' # Routing numbers
+    - '(?i)cvv\s*[:=]\s*\d{3,4}'         # CVV codes
+    - 'AKIA[0-9A-Z]{16}'                 # AWS keys (prevent exfiltration)
+
+  data_classification:
+    max_classification: CONFIDENTIAL
+    denied_categories: ["PHI", "ITAR"]
+    allowed_categories: ["PCI", "PII"]
+
+escalation:
+  actions_requiring_approval:
+    - execute_trade
+    - transfer_funds
+    - modify_account
+    - generate_report
+    - send_email
+  timeout_seconds: 900
+  default_on_timeout: deny
+  escalation_chain:
+    - trading_desk_supervisor
+    - compliance_officer
+    - chief_risk_officer
+
+settings:
+  require_human_approval: true
+  max_tool_calls_per_session: 25
+  log_level: "audit"
+  audit_all_decisions: true
+  retention_days: 2555    # 7 years SOX requirement

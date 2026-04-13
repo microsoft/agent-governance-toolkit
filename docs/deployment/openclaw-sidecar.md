@@ -131,98 +131,142 @@ curl http://localhost:9091/metrics
 
 ## Production Deployment on AKS
 
-### Helm Values
+> **Note:** The governance sidecar does **not** require PostgreSQL, Redis, or Event Grid. Those are optional components for the full enterprise AgentMesh cluster deployment. The sidecar is self-contained — policies load from a ConfigMap, audit logs go to stdout.
 
-Use the AgentMesh Helm chart with OpenClaw-specific configuration:
+### 1. Build the Governance Sidecar Image
 
-**`values-openclaw.yaml`:**
-
-```yaml
-global:
-  namespace: openclaw-governed
-  imageTag: "0.3.0"
-  tls:
-    enabled: true
-    certSecretName: openclaw-tls
-
-# OpenClaw as the primary workload
-openclaw:
-  enabled: true
-  image:
-    repository: ghcr.io/openclaw/openclaw
-    tag: latest
-  resources:
-    requests:
-      cpu: "1.0"
-      memory: "2Gi"
-    limits:
-      cpu: "2.0"
-      memory: "4Gi"
-  env:
-    - name: GOVERNANCE_PROXY
-      value: http://localhost:8081
-
-# Governance sidecar
-sidecar:
-  enabled: true
-  image:
-    repository: agentmesh/governance-sidecar
-    tag: "0.3.0"
-  resources:
-    requests:
-      cpu: "0.25"
-      memory: "256Mi"
-    limits:
-      cpu: "0.5"
-      memory: "512Mi"
-  ports:
-    proxy: 8081
-    metrics: 9091
-  env:
-    - name: POLICY_DIR
-      value: /policies
-    - name: TRUST_SCORE_INITIAL
-      value: "0.5"
-    - name: EXECUTION_RING
-      value: "3"
-    - name: OTEL_EXPORTER_OTLP_ENDPOINT
-      value: http://otel-collector:4318
-
-# Policy ConfigMap
-policies:
-  configMapName: openclaw-policies
-
-# Monitoring
-monitoring:
-  enabled: true
-  serviceMonitor:
-    enabled: true
-    interval: 15s
-  prometheusRule:
-    enabled: true
-```
-
-### Deploy
+The sidecar image is not published to a public registry. Build from source and push to your own container registry:
 
 ```bash
-# Create namespace
+# Build from the agent-os package (bundles policy + trust + audit in one image)
+cd packages/agent-os
+docker build -t <YOUR_REGISTRY>/agentmesh/governance-sidecar:0.3.0 \
+  -f Dockerfile.sidecar .
+docker push <YOUR_REGISTRY>/agentmesh/governance-sidecar:0.3.0
+```
+
+### 2. Create the Policy ConfigMap
+
+```bash
 kubectl create namespace openclaw-governed
 
-# Create policy ConfigMap
+# Load your governance policies
 kubectl create configmap openclaw-policies \
   --from-file=policies/ \
   -n openclaw-governed
-
-# Deploy with Helm
-helm install openclaw-governed \
-  packages/agent-mesh/charts/agentmesh \
-  -f values-openclaw.yaml \
-  -n openclaw-governed
-
-# Verify
-kubectl get pods -n openclaw-governed
-kubectl logs -l app=openclaw-governed -c governance-sidecar -n openclaw-governed
 ```
+
+### 3. Deploy OpenClaw + Governance Sidecar
+
+Use a standard Kubernetes Deployment with two containers in one pod — the agent and its governance sidecar:
+
+**`openclaw-governed.yaml`:**
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openclaw-governed
+  namespace: openclaw-governed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openclaw-governed
+  template:
+    metadata:
+      labels:
+        app: openclaw-governed
+    spec:
+      containers:
+        # --- The autonomous agent ---
+        - name: openclaw
+          image: ghcr.io/openclaw/openclaw:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GOVERNANCE_PROXY
+              value: http://localhost:8081
+
+        # --- Governance sidecar (AGT) ---
+        - name: governance-sidecar
+          image: <YOUR_REGISTRY>/agentmesh/governance-sidecar:0.3.0
+          ports:
+            - containerPort: 8081
+              name: proxy
+            - containerPort: 9091
+              name: metrics
+          env:
+            - name: POLICY_DIR
+              value: /policies
+            - name: LOG_LEVEL
+              value: INFO
+          volumeMounts:
+            - name: policies
+              mountPath: /policies
+              readOnly: true
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+      volumes:
+        - name: policies
+          configMap:
+            name: openclaw-policies
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openclaw-governed
+  namespace: openclaw-governed
+spec:
+  selector:
+    app: openclaw-governed
+  ports:
+    - name: agent
+      port: 8080
+      targetPort: 8080
+    - name: metrics
+      port: 9091
+      targetPort: 9091
+```
+
+### 4. Deploy and Verify
+
+```bash
+kubectl apply -f openclaw-governed.yaml
+
+# Verify both containers are running
+kubectl get pods -n openclaw-governed
+
+# Check governance sidecar logs
+kubectl logs -l app=openclaw-governed -c governance-sidecar -n openclaw-governed
+
+# Verify sidecar health
+kubectl exec -n openclaw-governed deploy/openclaw-governed -c openclaw -- \
+  curl -s http://localhost:8081/health
+```
+
+### What About the AgentMesh Helm Chart?
+
+The [AgentMesh Helm chart](../../packages/agent-mesh/charts/agentmesh/) deploys the **full 4-component enterprise architecture** (API Gateway, Trust Engine, Policy Server, Audit Collector). That is a different deployment model — use it when you need a centralized governance control plane serving multiple agents.
+
+For the **OpenClaw sidecar** pattern (one governance instance per agent pod), use the plain Kubernetes manifests above. This is simpler, requires no external dependencies (no PostgreSQL, no Redis), and works immediately.
+
+### What Secrets Do I Need?
+
+| Secret | Purpose | Required for Sidecar? |
+|---|---|---|
+| **Ed25519 agent key** | Agent DID identity signing | Only if using DID identity |
+| **TLS cert/key** | mTLS between components | No (sidecar uses localhost) |
+| **Redis credentials** | Shared session/cache state | No (sidecar is self-contained) |
+| **PostgreSQL credentials** | Persistent audit storage | No (sidecar logs to stdout) |
+
+For a basic policy-enforcement sidecar, **no secrets are required** — just the policy ConfigMap.
 
 ---
 
