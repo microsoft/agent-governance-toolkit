@@ -1,4 +1,4 @@
-# @agentmesh/sdk
+# @microsoft/agentmesh-sdk
 
 > [!IMPORTANT]
 > **Public Preview** — This npm package is a Microsoft-signed public preview release.
@@ -11,13 +11,13 @@ Provides agent identity (Ed25519 DIDs), trust scoring, policy evaluation, hash-c
 ## Installation
 
 ```bash
-npm install @agentmesh/sdk
+npm install @microsoft/agentmesh-sdk
 ```
 
 ## Quick Start
 
 ```typescript
-import { AgentMeshClient } from '@agentmesh/sdk';
+import { AgentMeshClient } from '@microsoft/agentmesh-sdk';
 
 const client = AgentMeshClient.create('my-agent', {
   capabilities: ['data.read', 'data.write'],
@@ -44,7 +44,7 @@ console.log(client.audit.verify()); // true
 Manage agent identities built on Ed25519 key pairs.
 
 ```typescript
-import { AgentIdentity } from '@agentmesh/sdk';
+import { AgentIdentity } from '@microsoft/agentmesh-sdk';
 
 const identity = AgentIdentity.generate('agent-1', ['read']);
 const signature = identity.sign(new TextEncoder().encode('hello'));
@@ -60,7 +60,7 @@ const restored = AgentIdentity.fromJSON(json);
 Track and score trust for peer agents.
 
 ```typescript
-import { TrustManager } from '@agentmesh/sdk';
+import { TrustManager } from '@microsoft/agentmesh-sdk';
 
 const tm = new TrustManager({ initialScore: 0.5, decayFactor: 0.95 });
 
@@ -76,7 +76,7 @@ const score = tm.getTrustScore('peer-1');
 Rule-based policy evaluation with conditions and YAML support.
 
 ```typescript
-import { PolicyEngine } from '@agentmesh/sdk';
+import { PolicyEngine } from '@microsoft/agentmesh-sdk';
 
 const engine = new PolicyEngine([
   { action: 'data.*', effect: 'allow' },
@@ -96,7 +96,7 @@ await engine.loadFromYAML('./policy.yaml');
 Append-only audit log with hash-chain integrity verification.
 
 ```typescript
-import { AuditLogger } from '@agentmesh/sdk';
+import { AuditLogger } from '@microsoft/agentmesh-sdk';
 
 const logger = new AuditLogger();
 
@@ -113,7 +113,7 @@ logger.exportJSON(); // full log as JSON string
 Unified client tying identity, trust, policy, and audit together.
 
 ```typescript
-import { AgentMeshClient } from '@agentmesh/sdk';
+import { AgentMeshClient } from '@microsoft/agentmesh-sdk';
 
 const client = AgentMeshClient.create('my-agent', {
   policyRules: [{ action: 'data.*', effect: 'allow' }],
@@ -128,7 +128,7 @@ const result = await client.executeWithGovernance('data.read', { user: 'alice' }
 Scan MCP tool definitions for security threats — tool poisoning, typosquatting, hidden instructions, and rug-pull payloads.
 
 ```typescript
-import { McpSecurityScanner } from '@agentmesh/sdk';
+import { McpSecurityScanner } from '@microsoft/agentmesh-sdk';
 
 const scanner = new McpSecurityScanner();
 
@@ -158,7 +158,7 @@ const risky = results.filter((r) => !r.safe);
 Govern agent state transitions with an enforced state machine and event log.
 
 ```typescript
-import { LifecycleManager, LifecycleState } from '@agentmesh/sdk';
+import { LifecycleManager, LifecycleState } from '@microsoft/agentmesh-sdk';
 
 const lm = new LifecycleManager('agent-1');
 

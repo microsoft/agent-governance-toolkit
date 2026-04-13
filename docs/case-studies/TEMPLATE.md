@@ -491,7 +491,7 @@ For each challenge, include:
 ## Template Metadata
 
 **Version**: 1.0
-**AGT Version**: 3.0.2
+**AGT Version**: 3.1.0
 **Maintained By**: Agent Governance Toolkit Community
 **Repository**: https://github.com/microsoft/agent-governance-toolkit
 
@@ -537,7 +537,7 @@ For each challenge, include:
   - **Minor updates** (typo fixes, clarifications): Don't update version tag
   - **Compatibility updates** (component names, APIs): Update to new AGT version and add changelog note:
     Changelog:
-  - v3.0.2 → v3.5.0 (March 2026): Updated AgentMesh references to AgentTrust
+  - v3.1.0 → v3.5.0 (March 2026): Updated AgentMesh references to AgentTrust
   - v3.5.0 → v4.0.0 (June 2026): Updated trust scoring from 0-1000 to 0-100 scale
 
   **Handling Outdated Case Studies:**
@@ -562,7 +562,7 @@ For each challenge, include:
   **Documentation Freeze for Stable References:**
 
   Some organizations may reference case studies in compliance documentation or vendor contracts. To support this:
-  - Version-specific case studies remain available via Git tags (e.g., `git checkout v3.0.2`)
+  - Version-specific case studies remain available via Git tags (e.g., `git checkout v3.1.0`)
   - Breaking changes to case studies should be communicated in release notes
   - Consider maintaining at least 2 major versions of case study documentation
 

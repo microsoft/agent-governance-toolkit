@@ -65,7 +65,7 @@ guides.
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
 | 19 | [.NET SDK](19-dotnet-sdk.md) | GovernanceKernel, policy, rings, saga, SLO, OpenTelemetry in C# | `Microsoft.AgentGovernance` |
-| 20 | [TypeScript SDK](20-typescript-sdk.md) | Identity, trust, policy, audit in TypeScript/Node.js | `@agentmesh/sdk` |
+| 20 | [TypeScript SDK](20-typescript-sdk.md) | Identity, trust, policy, audit in TypeScript/Node.js | `@microsoft/agentmesh-sdk` |
 | 21 | [Rust SDK](21-rust-sdk.md) | Policy, trust, audit, identity with `agentmesh` crate | `agentmesh` |
 | 22 | [Go SDK](22-go-sdk.md) | Policy, trust, audit, identity with Go module | `agentmesh` |
 
@@ -73,7 +73,7 @@ guides.
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
-| 23 | [Delegation Chains](23-delegation-chains.md) | Monotonic scope narrowing, multi-agent delegation, cascade revocation | `@agentmesh/sdk` |
+| 23 | [Delegation Chains](23-delegation-chains.md) | Monotonic scope narrowing, multi-agent delegation, cascade revocation | `@microsoft/agentmesh-sdk` |
 | 24 | [Cost & Token Budgets](24-cost-and-token-budgets.md) | Per-session token limits, context scheduling, budget signals | `agent-os-kernel` |
 
 ## Supply Chain Security
@@ -159,7 +159,7 @@ Install the full toolkit:
 ```bash
 pip install agent-governance-toolkit[full]    # Python
 dotnet add package Microsoft.AgentGovernance  # .NET
-npm install @agentmesh/sdk                    # TypeScript
+npm install @microsoft/agentmesh-sdk                    # TypeScript
 cargo add agentmesh                           # Rust
 go get github.com/microsoft/agent-governance-toolkit/sdks/go  # Go
 ```

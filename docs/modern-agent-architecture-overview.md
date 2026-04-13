@@ -216,7 +216,7 @@ Catches: tool poisoning, typosquatting, hidden instructions, rug-pull attacks.
 pip install agent-governance-toolkit[full]
 ```
 
-Also available for: **TypeScript** (`npm install @agentmesh/sdk`), **.NET** (`dotnet add package Microsoft.AgentGovernance`), **Rust** (`cargo add agentmesh`), **Go**
+Also available for: **TypeScript** (`npm install @microsoft/agentmesh-sdk`), **.NET** (`dotnet add package Microsoft.AgentGovernance`), **Rust** (`cargo add agentmesh`), **Go**
 
 ### Step 2: Your First Governed Agent
 

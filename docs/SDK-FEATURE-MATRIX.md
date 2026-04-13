@@ -69,7 +69,7 @@ governance stack for enterprise deployments:
 
 ### TypeScript SDK
 
-**Package:** [`@agentmesh/sdk`](https://www.npmjs.com/package/@agentmesh/sdk) ·
+**Package:** [`@microsoft/agentmesh-sdk`](https://www.npmjs.com/package/@microsoft/agentmesh-sdk) ·
 **Source:** [`packages/agent-mesh/sdks/typescript/`](../packages/agent-mesh/sdks/typescript/)
 
 | Module | Features |
@@ -161,7 +161,7 @@ full governance stack.
 | Language | Command |
 |----------|---------|
 | Python | `pip install agent-governance-toolkit[full]` |
-| TypeScript | `npm install @agentmesh/sdk` |
+| TypeScript | `npm install @microsoft/agentmesh-sdk` |
 | .NET | `dotnet add package Microsoft.AgentGovernance` |
 | Rust | `cargo add agentmesh` |
 | Rust (MCP only) | `cargo add agentmesh-mcp` |

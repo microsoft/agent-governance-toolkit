@@ -24,7 +24,7 @@ Core paths (`agent_os/`, `agentmesh/`, `agent_hypervisor/`, `agent_sre/`) must f
 | **agentmesh** (Rust) | None — pure crypto + serde | ✅ Independent |
 | **agentmesh-mcp** (Rust) | None — pure crypto + serde | ✅ Independent |
 | **agentmesh** (Go) | None — yaml.v3 only | ✅ Independent |
-| **@agentmesh/sdk** (TypeScript) | None — zero runtime deps | ✅ Independent |
+| **@microsoft/agentmesh-sdk** (TypeScript) | None — zero runtime deps | ✅ Independent |
 | **Microsoft.AgentGovernance** (.NET) | None — YamlDotNet only | ✅ Independent |
 
 ## Adapter Pattern

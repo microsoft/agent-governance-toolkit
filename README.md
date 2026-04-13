@@ -70,7 +70,7 @@ result = evaluator.evaluate({"tool_name": "delete_file"})   # ❌ Blocked determ
 <summary><b>TypeScript</b></summary>
 
 ```typescript
-import { PolicyEngine } from "@agentmesh/sdk";
+import { PolicyEngine } from "@microsoft/agentmesh-sdk";
 
 const engine = new PolicyEngine([
   { action: "web_search", effect: "allow" },
@@ -216,7 +216,7 @@ Full methodology: [BENCHMARKS.md](BENCHMARKS.md)
 | Language | Package | Command |
 |----------|---------|---------|
 | **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
-| **TypeScript** | [`@agentmesh/sdk`](packages/agent-mesh/sdks/typescript/) | `npm install @agentmesh/sdk` |
+| **TypeScript** | [`@microsoft/agentmesh-sdk`](packages/agent-mesh/sdks/typescript/) | `npm install @microsoft/agentmesh-sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 | **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
 | **Go** | [`agentmesh`](packages/agent-mesh/sdks/go/) | `go get github.com/microsoft/agent-governance-toolkit/sdks/go` |
