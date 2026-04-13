@@ -338,12 +338,12 @@ stages:
             displayName: 'Publish unsigned NuGet artifacts'
 
   - stage: Publish_NuGet
-    displayName: 'Publish to NuGet.org'
+    displayName: 'Publish to NuGet.org via ESRP'
     dependsOn: Build_NuGet
     condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'nuget'), eq('${{ parameters.target }}', 'all')))
     jobs:
       - job: PublishNuGet
-        displayName: 'Push to NuGet.org'
+        displayName: 'ESRP Publish to NuGet.org'
         steps:
           - task: DownloadPipelineArtifact@2
             inputs:
@@ -356,14 +356,24 @@ stages:
               ls -la $(Pipeline.Workspace)/nuget-publish/
             displayName: 'List packages'
 
-          - script: |
-              dotnet nuget push "$(Pipeline.Workspace)/nuget-publish/**/*.nupkg" \
-                --source https://api.nuget.org/v3/index.json \
-                --api-key "$NUGET_API_KEY" \
-                --skip-duplicate
-            env:
-              NUGET_API_KEY: $(NUGET_API_KEY)
-            displayName: 'Push to NuGet.org'
+          - task: EsrpRelease@11
+            displayName: 'ESRP Sign and Publish to NuGet.org'
+            inputs:
+              connectedservicename: 'Agent Governance Toolkit'
+              usemanagedidentity: true
+              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
+              signcertname: '$(ESRP_CERT_IDENTIFIER)'
+              clientid: '$(ESRP_CLIENT_ID)'
+              intent: 'PackageDistribution'
+              contenttype: 'Nuget'
+              contentsource: 'Folder'
+              folderlocation: '$(Pipeline.Workspace)/nuget-publish'
+              waitforreleasecompletion: true
+              owners: '$(ESRP_OWNERS)'
+              approvers: '$(ESRP_APPROVERS)'
+              serviceendpointurl: 'https://api.esrp.microsoft.com'
+              mainpublisher: 'ESRPRELPACMAN'
+              domaintenantid: '$(ESRP_DOMAIN_TENANT_ID)'
 
   # =======================================================
   # RUST (crates.io) — agentmesh crate
