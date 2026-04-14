@@ -1,27 +1,21 @@
 # Production Policy Library
-#
-# These are production-ready policy sets for common enterprise scenarios.
-# Unlike the sample policies in the parent directory, these are designed
-# to be deployed as-is or with minimal customization.
-#
-# Each policy file is self-contained and includes:
-# - Action rules (allow/deny/escalate)
-# - Content filters (PII/PHI/PCI patterns)
-# - Rate limits
-# - Human escalation triggers
-# - Audit requirements
-#
-# Choose the policy that matches your risk profile:
-#
-# | Policy | Risk Profile | Best For |
-# |--------|-------------|----------|
-# | minimal.yaml | Low | Startups, internal tools, experimentation |
-# | enterprise.yaml | Medium | General enterprise, SaaS products |
-# | healthcare.yaml | High | HIPAA-regulated, patient data |
-# | financial.yaml | High | SOX/PCI-regulated, trading, banking |
-# | strict.yaml | Maximum | Defense, critical infrastructure, ITAR |
-#
-# Usage:
-#   from agent_os.policies import PolicyEvaluator
-#   evaluator = PolicyEvaluator()
-#   evaluator.load_policies("examples/policies/production/enterprise.yaml")
+
+Ready-to-use governance policies for common enterprise scenarios.
+Each file uses the AGT PolicyDocument schema and works with PolicyEvaluator.
+
+| Policy | Risk | Default | Best For |
+|--------|------|---------|----------|
+| minimal.yaml | Low | allow | Startups, internal tools |
+| enterprise.yaml | Medium | deny | General enterprise, SaaS |
+| healthcare.yaml | High | deny | HIPAA-regulated |
+| financial.yaml | High | deny | SOX/PCI-regulated |
+| strict.yaml | Maximum | deny | Defense, critical infrastructure |
+
+## Usage
+
+```python
+from agentmesh.governance.policy import PolicyDocument
+
+policy = PolicyDocument.from_yaml(open("enterprise.yaml").read())
+decision = policy.evaluate({"action": "write_file"})
+```
