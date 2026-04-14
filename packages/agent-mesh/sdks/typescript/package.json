@@ -43,7 +43,7 @@
   },
   "dependencies": {
     "js-yaml": "4.1.1",
-    "@noble/ed25519": "2.0.0"
+    "@noble/ed25519": "3.1.0"
   },
   "engines": {
     "node": ">=18.0.0"
