@@ -69,7 +69,7 @@ iatp = [
 
 amb = [
     "anyio>=3.0.0,<4.0",
-    "aiofiles>=23.0.0,<24.0",
+    "aiofiles>=23.0.0,<26.0",
 ]
 
 observability = [
