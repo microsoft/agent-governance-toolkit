@@ -373,7 +373,7 @@ stages:
               AppRegistrationClientId: '$(ESRP_CLIENT_ID)'
               AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
               AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
-              AuthSignCertName: '$(ESRP_CERT_IDENTIFIER)'
+              AuthCertName: '$(ESRP_CERT_IDENTIFIER)'
               FolderPath: '$(Pipeline.Workspace)/nuget-unsigned'
               Pattern: '*.nupkg'
               signConfigType: 'inlineSignParams'
