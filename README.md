@@ -49,6 +49,12 @@ agt doctor
 
 # 3. Verify OWASP compliance
 agt verify
+
+# 4. Verify runtime evidence, when available
+agt verify --evidence ./agt-evidence.json
+
+# 5. Fail CI on weak runtime evidence
+agt verify --evidence ./agt-evidence.json --strict
 ```
 
 Then govern your first action:
