@@ -37,7 +37,7 @@
     "ts-jest": "29.4.9",
     "@types/jest": "29.5.14",
     "eslint": "9.0.0",
-    "@typescript-eslint/parser": "8.58.0",
+    "@typescript-eslint/parser": "8.58.2",
     "@typescript-eslint/eslint-plugin": "8.58.0",
     "rimraf": "6.1.3"
   },
