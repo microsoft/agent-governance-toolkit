@@ -4,7 +4,7 @@ This document summarizes the security threat model for the Agent Governance
 Toolkit (AGT) using a STRIDE-oriented view of the main trust boundaries in the
 system.
 
-For the current 10/10 OWASP Agentic Top 10 coverage mapping, see
+For the OWASP Agentic Top 10 coverage mapping, see
 [`packages/agent-compliance/docs/OWASP-COMPLIANCE.md`](../packages/agent-compliance/docs/OWASP-COMPLIANCE.md).
 
 ## Scope
@@ -175,6 +175,27 @@ AGT reduces risk but does not eliminate it. The main residual risks are:
 - External tools or plugins that behave unsafely inside their allowed scope
 - Gaps between documented controls and the exact deployment posture of a given
   organization
+- **Knowledge flow risks**: AGT governs tool calls but not the knowledge
+  (documents, embeddings, context) that agents consume and propagate — see
+  [Limitations §7](LIMITATIONS.md#7-knowledge-governance-gap)
+- **Credential persistence**: AGT does not observe or revoke credentials agents
+  hold across tasks within a session — accumulated permissions may exceed
+  what the current task requires — see
+  [Limitations §8](LIMITATIONS.md#8-credential-persistence-gap)
+
+## Configuration Bypass Vectors
+
+Governance enforcement depends on correct initialization. These configuration
+states can result in agents running without effective governance:
+
+| Bypass Vector | Risk | Mitigation |
+|---------------|------|------------|
+| **No policies loaded** | Default action is `allow` — all actions pass ungoverned | Always load policy files; use `strict` mode in production |
+| **Permissive mode in production** | `permissive` mode allows all actions by default | Reserve `permissive` mode for dev/test; enforce `strict` in deployment |
+| **Tool aliasing** | Registering a tool under an unexpected name bypasses name-based policy rules | Use `strict` mode (deny-by-default) so unrecognized tools are blocked; use regex patterns in policy rules rather than exact tool names |
+| **Import-only governance** | Importing the governance module without configuring policies creates false "governed" status | Use `agt doctor` and `agt audit` to verify effective enforcement state |
+
+> *These vectors were identified in external red-team analysis by [Periculo](https://www.periculo.co.uk/cyber-security-blog/red-teaming-the-microsoft-agent-governance-toolkit-15-bypass-vectors).*
 
 ## Recommended Operational Practices
 

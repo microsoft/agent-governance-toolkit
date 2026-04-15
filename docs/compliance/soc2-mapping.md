@@ -27,9 +27,9 @@ The Agent Governance Toolkit provides runtime governance infrastructure that add
 
 | Criteria | Coverage | Key Controls Addressed | Primary Gaps |
 |----------|----------|----------------------|--------------|
-| **Security** (CC1–CC9) | ⚠️ Partial | Policy engine, RBAC, DID identity, execution rings, audit logging, MCP security scanning | Kill switch placeholder, detection modules unwired from enforcement |
+| **Security** (CC1–CC9) | ⚠️ Partial | Policy engine, RBAC, DID identity, execution rings, audit logging, MCP security scanning, kill switch | Detection modules unwired from enforcement |
 | **Availability** (A1) | ⚠️ Partial | Circuit breakers, SLO/error budgets, chaos testing framework, sub-millisecond enforcement | Chaos engine framework-only, no health check endpoints, rate limiter unwired |
-| **Processing Integrity** (PI1) | ⚠️ Partial | Merkle audit chain, policy validation, input sanitization, drift detection | 3 of 4 audit chain implementations have integrity defects, `post_execute()` never blocks |
+| **Processing Integrity** (PI1) | ⚠️ Partial | Merkle audit chain, Delta audit chain (SHA-256 verified), policy validation, input sanitization, drift detection | 2 of 4 audit chain implementations have integrity defects, `post_execute()` never blocks |
 | **Confidentiality** (C1) | ⚠️ Partial | Ed25519 identity, HMAC-SHA256 signing, egress policy, PII/secret detection, credential redaction in audit logs | Symmetric HMAC keys, no at-rest encryption, non-credential PII not redacted in audit entries |
 | **Privacy** (P1–P8) | ❌ Gap | 2 PII regex patterns, blocked patterns, retention_days schema field | No consent management, no DSAR, no data minimization, retention not enforced |
 
@@ -130,7 +130,7 @@ audit.log_decision(
 
 ### Security Gaps
 
-- [ ] **Kill switch is placeholder** (CC7.4): `KillSwitch.kill()` at `kill_switch.py:86` returns structured `KillResult` objects but does not terminate agent processes. `handoff_success_count` is hardcoded to 0. All in-flight saga steps are auto-marked COMPENSATED without actual compensation.
+- [x] ~~**Kill switch is placeholder**~~ (CC7.4): **Resolved.** `KillSwitch` now registers agents and substitutes, creates `StepHandoff` records, and increments `handoff_success_count` during saga orchestration. See `kill_switch.py:69-178`.
 - [ ] **Detection modules not wired to enforcement** (CC6.8): `PromptInjectionDetector`, `RateLimiter`, `BoundedSemaphore`, `ScopeGuard`, `SupplyChainGuard`, and `MCPSecurityScanner` exist as standalone utilities but are not auto-wired into the `BaseIntegration` enforcement lifecycle. 6 of 10 OWASP risks share this structural gap.
 - [ ] **MCP scanner acknowledges incompleteness** (CC7.3): Line 287 of `mcp_security.py` warns it "uses built-in sample rules that may not cover all MCP tool poisoning techniques."
 - [ ] **Regex-only prompt injection detection** (CC6.8): No semantic or multilingual detection. English-only regex patterns can be bypassed via paraphrasing.
@@ -260,7 +260,7 @@ assert entry.previous_hash != "" or log.entries.index(entry) == 0
 
 ### Processing Integrity Gaps
 
-- [ ] **DeltaEngine chain verification is a stub** (PI1.5): `verify_chain()` at `packages/agent-hypervisor/src/hypervisor/audit/delta.py:99` always returns `True` with comment "Public Preview: no chain verification." The hypervisor's entire audit trail has zero tamper evidence.
+- [x] ~~**DeltaEngine chain verification is a stub**~~ (PI1.5): **Resolved.** `verify_chain()` now computes SHA-256 hashes and verifies parent linkage across entries. See `delta.py:67-127`.
 - [ ] **FlightRecorder hash covers INSERT-time state** (PI1.5): Hash is computed at insert time with `policy_verdict='pending'`, but the verdict is later updated to `'allowed'`/`'blocked'`. Tampering of the verdict field is undetectable by integrity verification.
 - [ ] **Anomaly detections outside tamper-evident chain** (PI1.5): `RogueAgentDetector` stores assessments in an in-memory list, not in the integrity-protected audit chain.
 - [ ] **`post_execute()` never blocks** (PI1.3): `base.py:977-1038` computes drift scores and emits `DRIFT_DETECTED` events but always returns `(True, None)` — advisory only, no enforcement on output integrity.
@@ -269,7 +269,7 @@ assert entry.previous_hash != "" or log.entries.index(entry) == 0
 
 ### Recommended Controls
 
-1. **Fix DeltaEngine `verify_chain()` stub** — replace with real SHA-256 chain verification (same algorithm as `MerkleAuditChain`).
+1. ~~**Fix DeltaEngine `verify_chain()` stub**~~ — **Done.** Now performs real SHA-256 chain verification.
 2. **Fix FlightRecorder hash** — compute hash over final state including resolved verdict, not INSERT-time state.
 3. Wire anomaly detections into the tamper-evident audit chain.
 4. Add `GovernancePolicy.block_on_drift` flag to enable enforcement in `post_execute()`.
@@ -409,8 +409,8 @@ All file paths referenced in this document, organized by package:
 | File | Evidence For |
 |------|-------------|
 | `src/hypervisor/models.py:46-69` | CC6.7 — Execution rings (Ring 0–3) |
-| `src/hypervisor/security/kill_switch.py:64-136` | CC7.4 — Kill switch (placeholder handoff) |
-| `src/hypervisor/audit/delta.py:59-110` | PI1.5 — Delta audit engine (`verify_chain()` stub) |
+| `src/hypervisor/security/kill_switch.py:64-178` | CC7.4 — Kill switch with saga handoff |
+| `src/hypervisor/audit/delta.py:59-127` | PI1.5 — Delta audit engine with SHA-256 chain verification |
 | `src/hypervisor/rings/breach_detector.py:1-60` | CC9.1 — Ring breach detection |
 
 ### Agent SRE (`packages/agent-sre/`)
@@ -446,15 +446,21 @@ All gaps consolidated and rated by severity for remediation prioritization.
 | Gap | Criteria | Impact | Location |
 |-----|----------|--------|----------|
 | **Non-credential PII not redacted in audit logs** | C1.1, P6 | Credential-like secrets are redacted via `CredentialRedactor`, but non-credential PII (email, phone, addresses) in tool parameters is still stored verbatim | `MCPGateway.intercept_tool_call()` |
-| **DeltaEngine `verify_chain()` is a stub** | PI1.5 | Returns `True` always — hypervisor audit trail has zero tamper evidence | `delta.py:99` |
 | **No consent management** | P2 | Fundamental Privacy criteria requirement not addressed | — |
 | **No data subject access request support** | P5 | Required for Privacy criteria compliance | — |
+
+### Resolved (formerly Critical/High)
+
+| Gap | Criteria | Resolution |
+|-----|----------|------------|
+| ~~DeltaEngine `verify_chain()` stub~~ | PI1.5 | Now performs SHA-256 chain verification (`delta.py:67-127`) |
+| ~~Kill switch placeholder~~ | CC7.4 | Now implements saga handoff with `handoff_success_count` tracking (`kill_switch.py:69-178`) |
+| ~~Audit logs store unredacted parameters~~ | C1.1 | Credential-like secrets now redacted via `CredentialRedactor` before audit persistence |
 
 ### High
 
 | Gap | Criteria | Impact | Location |
 |-----|----------|--------|----------|
-| **Kill switch placeholder** | CC7.4 | Does not terminate agent processes; `handoff_success_count` hardcoded to 0 | `kill_switch.py:86` |
 | **Detection modules unwired** | CC6.8 | 6 detection modules exist but none are integrated into enforcement lifecycle | `base.py` (multiple) |
 | **FlightRecorder hash gap** | PI1.5 | Hash covers INSERT-time state, not final verdict — tampering undetectable | `flight_recorder.py` |
 | **HMAC symmetric key risk** | C1.2 | Insider with the key can forge the entire audit chain | `audit_backends.py:61-87` |
