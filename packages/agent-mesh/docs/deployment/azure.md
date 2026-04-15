@@ -84,12 +84,14 @@ az aks create \
 
 ### Recommended Node Configuration
 
-| Component | VM Size | Min Nodes | Notes |
-|-----------|---------|-----------|-------|
-| AgentMesh Server | Standard_D4s_v5 | 2 | CPU-bound trust scoring |
-| AgentMesh Sidecar | Runs in agent pods | — | ~128 MB RAM per sidecar |
-| Redis | Azure Cache Premium P1 | 1 | Zone-redundant |
-| PostgreSQL | General Purpose D4s_v3 | 1 | Zone-redundant with HA |
+| Component | VM Size | Min Nodes | Required? |
+|-----------|---------|-----------|-----------|
+| AgentMesh Server | Standard_D4s_v5 | 2 | Yes (full cluster) / No (sidecar) |
+| AgentMesh Sidecar | Runs in agent pods | — | Yes (sidecar mode) |
+| Redis | Azure Cache Premium P1 | 1 | Optional — for shared session state |
+| PostgreSQL | General Purpose D4s_v3 | 1 | Optional — for persistent audit logs |
+
+> **Which components do I need?** For the **sidecar pattern** (one governance instance per agent pod), you only need the sidecar container and a policy ConfigMap — no Redis, no PostgreSQL, no separate server. For the **full cluster pattern** (centralized governance serving many agents), deploy all components.
 
 ---
 
@@ -160,6 +162,17 @@ az role assignment create \
 ---
 
 ## Secrets Management with Key Vault
+
+### What Secrets Go in Key Vault?
+
+| Secret | Purpose | Required? |
+|---|---|---|
+| **Ed25519 agent private keys** | Agent DID identity — signing trust handshakes | Yes, if using DID identity |
+| **TLS cert/key** | mTLS between AgentMesh components | Yes, if TLS enabled |
+| **Redis connection string** | Shared session cache for HA deployment | Only for full cluster mode |
+| **PostgreSQL credentials** | Persistent audit log storage | Only for full cluster mode |
+
+> **Sidecar-only deployments** (e.g., OpenClaw sidecar) typically need only the agent private key — or no secrets at all if you're using policy-only enforcement without DID identity.
 
 ### Create Key Vault
 

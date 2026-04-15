@@ -42,7 +42,7 @@ pip install agentmesh-lightning        # RL training governance
 ### TypeScript / Node.js
 
 ```bash
-npm install @agentmesh/sdk
+npm install @microsoft/agentmesh-sdk
 ```
 
 ### .NET
@@ -145,7 +145,7 @@ python governed_agent.py
 Create a file called `governed_agent.ts`:
 
 ```typescript
-import { PolicyEngine, AgentIdentity, AuditLogger } from "@agentmesh/sdk";
+import { PolicyEngine, AgentIdentity, AuditLogger } from "@microsoft/agentmesh-sdk";
 
 const identity = AgentIdentity.generate("my-agent", ["web_search", "read_file"]);
 

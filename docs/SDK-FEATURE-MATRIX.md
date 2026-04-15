@@ -14,11 +14,11 @@ governed agents in each ecosystem.
 | **Identity & Auth** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Trust Scoring** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Audit Logging** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **MCP Security** | ✅ | — | — | ✅ | — |
-| **Execution Rings** | ✅ | — | ✅ | — | — |
+| **MCP Security** | ✅ | ✅ | — | ✅ | ✅ |
+| **Execution Rings** | ✅ | — | ✅ | ✅ | ✅ |
 | **SRE / SLOs** | ✅ | — | ✅ | — | — |
-| **Kill Switch** | ✅ | — | — | — | — |
-| **Lifecycle Management** | ✅ | ◑ | ◑ | ◑ | — |
+| **Kill Switch** | ✅ | — | ✅ | — | — |
+| **Lifecycle Management** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Framework Integrations** | ✅ | — | ✅ | — | — |
 | **Unified CLI** | ✅ | — | — | — | — |
 | **Governance Dashboard** | ✅ | — | — | — | — |
@@ -69,7 +69,7 @@ governance stack for enterprise deployments:
 
 ### TypeScript SDK
 
-**Package:** [`@agentmesh/sdk`](https://www.npmjs.com/package/@agentmesh/sdk) ·
+**Package:** [`@microsoft/agentmesh-sdk`](https://www.npmjs.com/package/@microsoft/agentmesh-sdk) ·
 **Source:** [`packages/agent-mesh/sdks/typescript/`](../packages/agent-mesh/sdks/typescript/)
 
 | Module | Features |
@@ -78,9 +78,11 @@ governance stack for enterprise deployments:
 | `AgentIdentity` | Ed25519 key generation, DID creation, credential signing/verification |
 | `TrustEngine` | Trust score tracking, tier classification, decay |
 | `AuditLogger` | Structured audit events, JSON export |
+| `McpSecurityScanner` | Tool poisoning, typosquatting, hidden instruction, rug pull detection |
+| `LifecycleManager` | 8-state lifecycle with validated transitions and event logging |
 | `AgentMeshClient` | High-level client combining all primitives |
 
-**Roadmap:** MCP security primitives, framework middleware (Express, Fastify).
+**Roadmap:** Framework middleware (Express, Fastify), execution rings.
 
 ### .NET SDK
 
@@ -92,13 +94,14 @@ governance stack for enterprise deployments:
 | `Policy` | `PolicyEngine` with YAML policy loading, rule evaluation |
 | `Trust` | `AgentIdentity`, `IdentityRegistry`, `FileTrustStore` |
 | `Audit` | `AuditLogger`, `AuditEmitter` with structured events |
-| `Hypervisor` | `ExecutionRings` (4-tier), `SagaOrchestrator` |
+| `Hypervisor` | `ExecutionRings` (4-tier), `SagaOrchestrator`, `KillSwitch` |
+| `Lifecycle` | `LifecycleManager` with 8-state machine and validated transitions |
 | `Sre` | `SloEngine` with objectives and error budget tracking |
 | `Integration` | `GovernanceMiddleware` for ASP.NET / Agent Framework |
 | `RateLimiting` | Token bucket rate limiter |
 | `Telemetry` | OpenTelemetry integration |
 
-**Roadmap:** MCP security, kill switch, lifecycle management.
+**Roadmap:** MCP security, full lifecycle persistence.
 
 ### Rust SDK
 
@@ -113,12 +116,14 @@ governance stack for enterprise deployments:
 | `trust` | Trust scoring, tier classification, behavioral tracking |
 | `audit` | Append-only audit log with structured events |
 | `mcp` | MCP tool definition scanning, poisoning detection |
+| `rings` | 4-tier execution privilege rings with configurable permissions |
+| `lifecycle` | 8-state lifecycle manager with validated transitions |
 
 The standalone `agentmesh-mcp` crate provides MCP-specific security primitives
 (gateway, rate limiting, redaction, session management) without pulling in the
 full governance stack.
 
-**Roadmap:** Execution rings, async runtime support, framework integrations (Rig, Swarm-RS).
+**Roadmap:** Async runtime support, framework integrations (Rig, Swarm-RS), SRE primitives.
 
 ### Go SDK
 
@@ -131,9 +136,12 @@ full governance stack.
 | `identity.go` | Ed25519 identity generation, DID creation |
 | `trust.go` | Trust scoring, tier classification, behavioral events |
 | `audit.go` | Structured audit logging |
+| `mcp.go` | MCP security scanning — tool poisoning, typosquatting, hidden chars, rug pull |
+| `rings.go` | 4-tier execution privilege rings with default-deny access control |
+| `lifecycle.go` | 8-state lifecycle manager with validated transitions |
 | `client.go` | High-level client combining all primitives |
 
-**Roadmap:** MCP security, framework integrations, gRPC transport.
+**Roadmap:** Framework integrations, gRPC transport, SRE primitives.
 
 ---
 
@@ -153,7 +161,7 @@ full governance stack.
 | Language | Command |
 |----------|---------|
 | Python | `pip install agent-governance-toolkit[full]` |
-| TypeScript | `npm install @agentmesh/sdk` |
+| TypeScript | `npm install @microsoft/agentmesh-sdk` |
 | .NET | `dotnet add package Microsoft.AgentGovernance` |
 | Rust | `cargo add agentmesh` |
 | Rust (MCP only) | `cargo add agentmesh-mcp` |

@@ -1,0 +1,30 @@
+# lotl_prevention_policy.yaml
+metadata:
+  name: "Blue Team LotL Shield"
+  version: "1.1"
+  description: "Detects and blocks Living off the Land (LotL) commands and unauthorized sensitive file access."
+
+rules:
+  - id: "block-unauthorized-download-pipe"
+    action: "shell_exec"
+    condition:
+      parameter: "command"
+      # Improved Regex to reduce false positives and catch obfuscation
+      operator: "regex_match"
+      value: "(curl|wget|powershell)\\s+.*(-s|-fsSL|-enc|DownloadString).*\\|.*(bash|sh|python|iex)"
+    effect: "DENY"
+    message: "Security Violation: Potential remote code execution via piped shell script detected."
+
+  - id: "block-sensitive-system-read"
+    action: "file_read"
+    condition:
+      parameter: "path"
+      # Expanded list based on Blue Team best practices
+      operator: "in"
+      value: [
+        "/etc/shadow", "/etc/passwd", "/etc/hostname", 
+        "~/.ssh/id_rsa", "~/.aws/credentials", 
+        "/var/run/docker.sock", "/etc/kubernetes/admin.conf"
+      ]
+    effect: "DENY"
+    message: "Security Violation: Unauthorized access to critical system credentials or configuration."

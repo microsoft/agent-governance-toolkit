@@ -10,7 +10,7 @@
 **ATF Version:** 0.9.0
 **Target Maturity Level:** Senior
 **Assessment Date:** April 2026
-**Toolkit Version:** 3.0.2
+**Toolkit Version:** 3.1.0
 **Repository:** https://github.com/microsoft/agent-governance-toolkit
 
 ---

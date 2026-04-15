@@ -34,6 +34,9 @@ exclude = [
     # NIST (intermittent 404s from CI runners)
     "nist\\.gov",
 
+    # Stack Overflow (returns 404 to automated crawlers)
+    "stackoverflow\\.com",
+
     # Microsoft login / auth endpoints (require authentication)
     "login\\.microsoftonline\\.com",
     "portal\\.azure\\.com",

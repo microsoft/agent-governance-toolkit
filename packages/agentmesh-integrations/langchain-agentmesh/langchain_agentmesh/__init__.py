@@ -37,4 +37,4 @@ __all__ = [
     "TrustCallbackHandler",
 ]
 
-__version__ = "3.0.2"
+__version__ = "3.1.0"

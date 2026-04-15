@@ -30,7 +30,7 @@
 Agent Action ──► Policy Check ──► Allow / Deny ──► Audit Log    (< 0.1 ms)
 ```
 
-**Why it matters:** Prompt-based safety ("please follow the rules") has a [26.67% policy violation rate](BENCHMARKS.md) in red-team testing. AGT's kernel-level enforcement: **0.00%**.
+**Why it matters:** Prompt-based safety ("please follow the rules") has a [26.67% policy violation rate](BENCHMARKS.md) in red-team testing. AGT's policy-layer enforcement: **0.00%**.
 
 ---
 
@@ -70,7 +70,7 @@ result = evaluator.evaluate({"tool_name": "delete_file"})   # ❌ Blocked determ
 <summary><b>TypeScript</b></summary>
 
 ```typescript
-import { PolicyEngine } from "@agentmesh/sdk";
+import { PolicyEngine } from "@microsoft/agentmesh-sdk";
 
 const engine = new PolicyEngine([
   { action: "web_search", effect: "allow" },
@@ -200,8 +200,12 @@ Governance adds **< 0.1 ms per action** — roughly 10,000× faster than an LLM 
 |---|---|---|
 | Policy evaluation (1 rule) | 0.012 ms | 72K ops/sec |
 | Policy evaluation (100 rules) | 0.029 ms | 31K ops/sec |
-| Kernel enforcement | 0.091 ms | 9.3K ops/sec |
+| Policy enforcement | 0.091 ms | 9.3K ops/sec |
 | Concurrent (50 agents) | — | 35,481 ops/sec |
+
+> **Note:** These numbers measure policy evaluation only. In distributed multi-agent
+> deployments, add ~5–50ms for cryptographic verification and mesh handshake on
+> inter-agent messages. See [Limitations — Performance](docs/LIMITATIONS.md#3-performance-policy-eval-vs-end-to-end) for full breakdown.
 
 Full methodology: [BENCHMARKS.md](BENCHMARKS.md)
 
@@ -212,7 +216,7 @@ Full methodology: [BENCHMARKS.md](BENCHMARKS.md)
 | Language | Package | Command |
 |----------|---------|---------|
 | **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
-| **TypeScript** | [`@agentmesh/sdk`](packages/agent-mesh/sdks/typescript/) | `npm install @agentmesh/sdk` |
+| **TypeScript** | [`@microsoft/agentmesh-sdk`](packages/agent-mesh/sdks/typescript/) | `npm install @microsoft/agentmesh-sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 | **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
 | **Go** | [`agentmesh`](packages/agent-mesh/sdks/go/) | `go get github.com/microsoft/agent-governance-toolkit/sdks/go` |
@@ -253,6 +257,7 @@ See **[SDK Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detailed per-langua
 - [API: Agent OS](packages/agent-os/README.md) · [AgentMesh](packages/agent-mesh/README.md) · [Agent SRE](packages/agent-sre/README.md)
 
 **Compliance & Deployment**
+- [Known Limitations](docs/LIMITATIONS.md) — Honest design boundaries and recommended layered defense
 - [OWASP Compliance](docs/OWASP-COMPLIANCE.md) — Full ASI-01 through ASI-10 mapping
 - [Azure Deployment](docs/deployment/README.md) — AKS, AI Foundry, Container Apps
 - [NIST AI RMF Alignment](docs/compliance/nist-ai-rmf-alignment.md) · [EU AI Act](docs/compliance/) · [SOC 2 Mapping](docs/compliance/soc2-mapping.md)
@@ -267,6 +272,8 @@ See **[SDK Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detailed per-langua
 This toolkit provides **application-level governance** (Python middleware), not OS kernel-level isolation. The policy engine and agents run in the same process — the same trust boundary as every Python agent framework.
 
 **Production recommendation:** Run each agent in a separate container for OS-level isolation. See [Architecture — Security Boundaries](docs/ARCHITECTURE.md).
+
+> **📖 [Known Limitations & Design Boundaries](docs/LIMITATIONS.md)** — what AGT does *not* do, honest performance numbers for distributed deployments, and the recommended layered defense architecture.
 
 | Tool | Coverage |
 |------|----------|

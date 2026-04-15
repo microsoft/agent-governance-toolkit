@@ -31,12 +31,14 @@ When evaluating agent security tooling, developers often encounter [NeMo Guardra
 | **Least-privilege capability model** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Deterministic pre-execution enforcement** | ✅ < 0.1 ms | ❌ | ❌ | ❌ | ❌ |
 | **Chaos / replay testing** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **OWASP Agentic Top 10 coverage** | **10 / 10** | ~2 / 10 ¹ | ~1 / 10 ¹ | ~0 / 10 ¹ | ~1 / 10 ¹ |
+| **OWASP Agentic Top 10 coverage** | **10 / 10** ² | ~2 / 10 ¹ | ~1 / 10 ¹ | ~0 / 10 ¹ | ~1 / 10 ¹ |
 | **Framework integrations** | **12+** | 3 (LangChain, NeMo-based, custom) | 2 (LangChain, custom) | N/A (gateway) | N/A (gateway) |
 | **LLM provider routing / caching** | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **Works alongside existing tools** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 > ¹ **OWASP scoring methodology:** Each tool was assessed against the ten [OWASP Agentic Top 10 (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) risk categories. A risk is counted as "covered" only when the tool provides a mitigation that addresses the root cause of that risk category (not merely partial or indirect coverage). Scores for NeMo, Guardrails AI, LiteLLM, and Portkey are approximate because none of those tools publish explicit OWASP Agentic Top 10 mappings; they are based on a good-faith review of each tool's documented capabilities as of early 2026.
+>
+> ² **10/10 means mitigation components exist for each risk category**, not that each risk is fully eliminated. AGT provides application-layer governance — see [Known Limitations](LIMITATIONS.md) for documented gaps including hallucination detection, indirect prompt injection into reasoning, and multi-step workflow correlation.
 
 ---
 

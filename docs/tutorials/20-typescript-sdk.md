@@ -1,6 +1,6 @@
-# Tutorial 20 — TypeScript SDK (@agentmesh/sdk)
+# Tutorial 20 — TypeScript SDK (@microsoft/agentmesh-sdk)
 
-> **Package:** `@agentmesh/sdk` · **Time:** 30 minutes · **Prerequisites:** Node.js 18+
+> **Package:** `@microsoft/agentmesh-sdk` · **Time:** 30 minutes · **Prerequisites:** Node.js 18+
 
 ---
 

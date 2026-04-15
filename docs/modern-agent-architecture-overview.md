@@ -18,7 +18,7 @@ Enterprise AI is shifting from chat-based copilots to **autonomous agents** — 
 
 Current frameworks (LangChain, CrewAI, AutoGen) rely on **prompt-based safety** — asking the LLM to follow rules. That's like asking a driver to self-enforce the speed limit.
 
-**Benchmark result:** Prompt-based safety has a **26.67% policy violation rate**. AGT's kernel-level enforcement: **0.00%**.
+**Benchmark result:** Prompt-based safety has a **26.67% policy violation rate**. AGT's policy-layer enforcement: **0.00%**.
 
 ---
 
@@ -216,7 +216,7 @@ Catches: tool poisoning, typosquatting, hidden instructions, rug-pull attacks.
 pip install agent-governance-toolkit[full]
 ```
 
-Also available for: **TypeScript** (`npm install @agentmesh/sdk`), **.NET** (`dotnet add package Microsoft.AgentGovernance`), **Rust** (`cargo add agentmesh`), **Go**
+Also available for: **TypeScript** (`npm install @microsoft/agentmesh-sdk`), **.NET** (`dotnet add package Microsoft.AgentGovernance`), **Rust** (`cargo add agentmesh`), **Go**
 
 ### Step 2: Your First Governed Agent
 

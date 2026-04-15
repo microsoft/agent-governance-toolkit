@@ -8,7 +8,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="agent-tool-registry",
-    version="3.0.2",
+    version="3.1.0",
     author="Agent Tool Registry Contributors",
     description="A decentralized marketplace for agent capabilities",
     long_description=long_description,

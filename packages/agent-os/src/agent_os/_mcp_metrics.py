@@ -102,9 +102,9 @@ class MCPMetrics(NoOpMCPMetrics):
 
         try:
             if meter_provider is not None:
-                meter = meter_provider.get_meter("agent_os.mcp", version="3.0.2")
+                meter = meter_provider.get_meter("agent_os.mcp", version="3.1.0")
             else:
-                meter = _otel_metrics.get_meter("agent_os.mcp", version="3.0.2")
+                meter = _otel_metrics.get_meter("agent_os.mcp", version="3.1.0")
 
             self._decisions = meter.create_counter(
                 "mcp_decisions",

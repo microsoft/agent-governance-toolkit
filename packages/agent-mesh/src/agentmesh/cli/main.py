@@ -81,9 +81,9 @@ def init(name: str, sponsor: str, output: str, output_json: bool):
     output_path = Path(output)
     # Validate name to prevent path traversal (CWE-22)
     import re as _re
-    if not _re.match(r'^[a-zA-Z0-9_-]+$', name):
+    if not _re.match(r'^[a-zA-Z0-9._-]+$', name):
         raise click.BadParameter(
-            f"Agent name must contain only alphanumerics, hyphens, and underscores: '{name}'"
+            f"Agent name must contain only alphanumerics, hyphens, underscores, and dots: '{name}'"
         )
     agent_dir = output_path / name
 
