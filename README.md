@@ -30,7 +30,7 @@
 Agent Action ──► Policy Check ──► Allow / Deny ──► Audit Log    (< 0.1 ms)
 ```
 
-**Why it matters:** Prompt-based safety ("please follow the rules") has a [26.67% policy violation rate](BENCHMARKS.md) in red-team testing. AGT's kernel-level enforcement: **0.00%**.
+**Why it matters:** Prompt-based safety ("please follow the rules") has a [26.67% policy violation rate](BENCHMARKS.md) in red-team testing. AGT's policy-layer enforcement: **0.00%**.
 
 ---
 
@@ -200,7 +200,7 @@ Governance adds **< 0.1 ms per action** — roughly 10,000× faster than an LLM 
 |---|---|---|
 | Policy evaluation (1 rule) | 0.012 ms | 72K ops/sec |
 | Policy evaluation (100 rules) | 0.029 ms | 31K ops/sec |
-| Kernel enforcement | 0.091 ms | 9.3K ops/sec |
+| Policy enforcement | 0.091 ms | 9.3K ops/sec |
 | Concurrent (50 agents) | — | 35,481 ops/sec |
 
 > **Note:** These numbers measure policy evaluation only. In distributed multi-agent
