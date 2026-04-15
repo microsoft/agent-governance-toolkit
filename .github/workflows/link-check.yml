@@ -7,6 +7,14 @@ name: Link Check
 on:
   pull_request:
     branches: [main]
+    paths:
+      - '**/*.md'
+      - 'docs/**'
+      - '.lychee.toml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

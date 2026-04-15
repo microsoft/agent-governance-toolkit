@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: '0 6 * * *'  # Daily at 06:00 UTC
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
