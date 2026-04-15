@@ -1,103 +1,43 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
 # Production Policy: Healthcare (HIPAA)
-# Risk profile: HIGH — patient data, medical records, HIPAA-regulated
-# Philosophy: Deny by default, allow only explicitly permitted operations
+# Risk profile: HIGH
 
 version: "1.0"
-name: healthcare-hipaa
-description: >
-  HIPAA-compliant governance for healthcare AI agents. All patient data
-  access is logged, PHI patterns are blocked from output, and human
-  approval is required for any data mutation.
+name: healthcare-governance
+description: HIPAA-regulated governance with PHI filtering.
 
 rules:
-  # Read operations — allow with audit
-  - action: "read_patient_record"
-    effect: allow
-    conditions:
-      require_audit: true
-      require_purpose: true
-  - action: "search_medical_database"
-    effect: allow
-    conditions:
-      require_audit: true
-  - action: "web_search"
-    effect: allow
+  - name: block-phi-ssn
+    condition: {field: output, operator: matches, value: "\\b\\d{3}-\\d{2}-\\d{4}\\b"}
+    action: deny
+    priority: 100
+    message: "PHI: SSN pattern detected"
 
-  # Clinical support — allow with audit
-  - action: "summarize_diagnosis"
-    effect: allow
-    conditions:
-      require_audit: true
-  - action: "check_drug_interaction"
-    effect: allow
-  - action: "lookup_icd_code"
-    effect: allow
+  - name: block-phi-mrn
+    condition: {field: output, operator: matches, value: "(?i)MRN[:\\s]*\\d{6,}"}
+    action: deny
+    priority: 100
+    message: "PHI: Medical Record Number detected"
 
-  # Mutations — require human approval
-  - action: "update_patient_record"
-    effect: escalate
-    reason: "Patient record updates require clinician approval"
-  - action: "send_referral"
-    effect: escalate
-    reason: "Referrals require physician sign-off"
-  - action: "prescribe_medication"
-    effect: escalate
-    reason: "Prescriptions require licensed provider approval"
-  - action: "send_email"
-    effect: escalate
-    reason: "Outbound communication requires HIPAA review"
-  - action: "export_data"
-    effect: escalate
-    reason: "Data export requires compliance review"
+  - name: block-delete
+    condition: {field: action, operator: matches, value: "^delete_"}
+    action: deny
+    priority: 95
+    message: "Deletion prohibited in healthcare"
 
-  # Dangerous operations — deny
-  - action: "delete_patient_record"
-    effect: deny
-    reason: "Patient records cannot be deleted by agents"
-  - action: "execute_code"
-    effect: deny
-  - action: "ssh_connect"
-    effect: deny
-  - action: "deploy"
-    effect: deny
-    reason: "Agents cannot deploy in clinical environments"
+  - name: escalate-clinical
+    condition: {field: action, operator: matches, value: "patient_|clinical_|medical_"}
+    action: escalate
+    priority: 80
+    message: "Clinical data requires clinician approval"
 
-  # Default deny
-  - action: "*"
-    effect: deny
-    reason: "HIPAA: unlisted actions denied by default"
+  - name: allow-read
+    condition: {field: action, operator: matches, value: "^(read_|search_|lookup_)"}
+    action: allow
+    priority: 50
 
-content_filters:
-  blocked_patterns:
-    - '\b\d{3}-\d{2}-\d{4}\b'           # SSN
-    - '\bMRN[:\s]?\d{6,10}\b'           # Medical Record Number
-    - '\b[A-Z]\d{2}(?:\.\d{1,4})?\b'    # ICD codes in output
-    - '(?i)patient\s+name\s*[:=]\s*\w+'  # Patient names
-    - '(?i)date\s+of\s+birth\s*[:=]'     # DOB
-    - '\b(?:\d[ -]*?){13,16}\b'          # Credit cards
-
-  data_classification:
-    max_classification: RESTRICTED
-    denied_categories: ["PCI", "ITAR"]
-    required_geography: "US"
-
-escalation:
-  actions_requiring_approval:
-    - update_patient_record
-    - send_referral
-    - prescribe_medication
-    - send_email
-    - export_data
-  timeout_seconds: 600
-  default_on_timeout: deny
-  escalation_chain:
-    - attending_physician
-    - department_head
-    - compliance_officer
-
-settings:
-  require_human_approval: true
-  max_tool_calls_per_session: 30
-  log_level: "audit"
-  audit_all_decisions: true
-  retention_days: 2555    # 7 years HIPAA requirement
+defaults:
+  action: deny
+  max_tool_calls: 25

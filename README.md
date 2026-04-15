@@ -259,7 +259,7 @@ See **[SDK Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detailed per-langua
 **Compliance & Deployment**
 - [Known Limitations](docs/LIMITATIONS.md) — Honest design boundaries and recommended layered defense
 - [OWASP Compliance](docs/OWASP-COMPLIANCE.md) — Full ASI-01 through ASI-10 mapping
-- [Azure Deployment](docs/deployment/README.md) — AKS, AI Foundry, Container Apps
+- [Deployment Guides](docs/deployment/README.md) — Azure (AKS, Foundry, Container Apps), AWS (ECS/Fargate), GCP (GKE), Docker Compose
 - [NIST AI RMF Alignment](docs/compliance/nist-ai-rmf-alignment.md) · [EU AI Act](docs/compliance/) · [SOC 2 Mapping](docs/compliance/soc2-mapping.md)
 
 **Extensions**
@@ -288,6 +288,8 @@ This toolkit provides **application-level governance** (Python middleware), not 
 ## Contributing
 
 - [Contributing Guide](CONTRIBUTING.md) · [Community](COMMUNITY.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+
+**Using AGT?** Add your organization to [ADOPTERS.md](ADOPTERS.md) — it helps the project gain momentum and helps others discover real-world use cases.
 
 ## Important Notes
 
