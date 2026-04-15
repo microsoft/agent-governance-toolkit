@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import re
 from typing import Any, Callable, Optional
+from urllib.parse import quote
 
 import httpx
 
@@ -68,10 +69,15 @@ class AVPProvider:
         return None
 
     def _resolve_name(self, agent_id: str) -> Optional[str]:
-        """Resolve agent_id to an AVP agent name."""
-        if self.name_resolver:
-            return self.name_resolver(agent_id)
-        return agent_id
+        """Resolve agent_id to a sanitized AVP agent name.
+
+        Output is URL-encoded to prevent path injection when
+        interpolated into API URLs.
+        """
+        raw = self.name_resolver(agent_id) if self.name_resolver else agent_id
+        if not raw:
+            return None
+        return quote(raw, safe="")
 
     @staticmethod
     def _extract_score(data: Any) -> Optional[float]:

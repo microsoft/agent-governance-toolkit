@@ -208,6 +208,37 @@ class TestVerifyIdentity:
         assert result is False  # 0.1 < 0.3 threshold
 
 
+class TestPathInjection:
+    """Tests for URL path injection prevention."""
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_name_with_path_traversal(self, provider):
+        """Name containing ../ must be URL-encoded, not passed raw."""
+        malicious = "../../admin"
+        # quote("../../admin", safe="") → "..%2F..%2Fadmin"
+        from urllib.parse import quote
+        encoded = quote(malicious, safe="")
+        respx.get(f"{BASE}/v1/agents/verify/{encoded}").mock(
+            return_value=httpx.Response(200, json={"verified": False})
+        )
+        result = await provider.verify_identity(malicious, {})
+        assert result is False
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_name_with_slashes(self, provider):
+        """Slashes in name must not create new URL path segments."""
+        from urllib.parse import quote
+        name = "agent/../../secret"
+        encoded = quote(name, safe="")
+        respx.get(f"{BASE}/v1/agents/verify/{encoded}").mock(
+            return_value=httpx.Response(200, json={"verified": False})
+        )
+        result = await provider.verify_identity(name, {})
+        assert result is False
+
+
 class TestMalformedResponses:
     """Tests for malformed or malicious API responses."""
 
