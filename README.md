@@ -6,6 +6,7 @@
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/agent-governance-toolkit)](https://pypi.org/project/agent-governance-toolkit/)
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/OWASP-COMPLIANCE.md)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/microsoft/agent-governance-toolkit)
@@ -13,6 +14,9 @@
 > [!IMPORTANT]
 > **Public Preview** — Microsoft-signed, production-quality releases. May have breaking changes before GA.
 > [Open a GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) for feedback.
+
+> [!TIP]
+> **v3.1.0 is out!** Unified `agt` CLI, governance dashboard, quantum-safe crypto, agent lifecycle management, and shadow AI discovery. [Release notes →](RELEASE_NOTES_v3.1.0.md) · [Changelog →](CHANGELOG.md)
 
 **Runtime governance for AI agents** — deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents. Covers all **10 OWASP Agentic risks** with **9,500+ tests**.
 
@@ -247,7 +251,7 @@ See **[SDK Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detailed per-langua
 
 **Getting Started**
 - [Quick Start](QUICKSTART.md) — Zero to governed agents in 10 minutes
-- [Tutorials](docs/tutorials/) — 30 step-by-step guides
+- [Tutorials](docs/tutorials/) — 31 step-by-step guides
 
 **Architecture & Reference**
 - [SDK Feature Matrix](docs/SDK-FEATURE-MATRIX.md) — Per-language capability comparison
