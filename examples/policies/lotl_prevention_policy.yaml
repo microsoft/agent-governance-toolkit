@@ -43,7 +43,7 @@ rules:
     message: "Security Violation: Unauthorized access to critical system credentials or configuration."
 
 defaults:
-  action: "allow"
+  action: "deny"
   max_tokens: 4096
   max_tool_calls: 10
   confidence_threshold: 0.8
