@@ -33,10 +33,10 @@
 
 > *Attackers manipulate the agent's objectives via indirect prompt injection or poisoned inputs.*
 
-**Mitigation:** Agent OS enforces **policy-based action interception** at the kernel level. Every agent action passes through the policy engine before execution. Unauthorized goal changes are blocked before they reach the agent's tools.
+**Mitigation:** Agent OS enforces **policy-based action interception** at the application layer. Every agent action passes through the policy engine before execution. Unauthorized goal changes are blocked before they reach the agent's tools.
 
 - **Policy Engine** — declarative rules controlling what agents can and cannot do
-- **Action Interception** — kernel-level syscall abstraction intercepts all agent actions
+- **Action Interception** — application-layer action interception intercepts all agent actions
 - **Policy Modes** — `strict` (deny by default), `permissive` (allow by default), `audit` (log only)
 - **MCP Governance Proxy** — policy enforcement for MCP tool calls
 
