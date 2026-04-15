@@ -24,6 +24,10 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+# MSRC Case 112362:
+# Dynamic imports used by verification must stay constrained to AGT-owned
+# module namespaces. Do not widen this allowlist without a security review.
+
 ALLOWED_MODULE_PREFIXES = frozenset(
     {
         "agent_os.",
@@ -39,6 +43,7 @@ ALLOWED_MODULE_PREFIXES = frozenset(
 )
 
 EVIDENCE_SCHEMA = "agt-runtime-evidence/v1"
+MAX_POLICY_FILE_BYTES = 10 * 1024 * 1024
 
 
 def _validate_module_name(mod_name: str) -> None:
@@ -362,14 +367,23 @@ def _resolve_reported_paths(base_dir: Path, values: Any) -> list[Path]:
     if not isinstance(values, list):
         return []
 
+    trusted_base_dir = base_dir.resolve()
     resolved: list[Path] = []
+
     for value in values:
         if not isinstance(value, str):
             continue
 
         candidate = Path(value)
         if not candidate.is_absolute():
-            candidate = (base_dir / candidate).resolve()
+            candidate = trusted_base_dir / candidate
+
+        candidate = candidate.resolve()
+
+        try:
+            candidate.relative_to(trusted_base_dir)
+        except ValueError as exc:
+            raise ValueError(f"Policy path escapes evidence directory: {value}") from exc
 
         resolved.append(candidate)
 
@@ -392,6 +406,12 @@ def _load_policy_documents(policy_paths: list[Path]) -> list[dict[str, Any]]:
     documents: list[dict[str, Any]] = []
 
     for policy_path in policy_paths:
+        file_size = policy_path.stat().st_size
+        if file_size > MAX_POLICY_FILE_BYTES:
+            raise ValueError(
+                f"Policy file exceeds size limit ({MAX_POLICY_FILE_BYTES} bytes): {policy_path}"
+            )
+
         with policy_path.open("r", encoding="utf-8") as handle:
             loaded = list(yaml.safe_load_all(handle))
 
@@ -699,3 +719,4 @@ class GovernanceVerifier:
                 component=component_name,
                 error=f"Module not installed: {exc}",
             )
+            

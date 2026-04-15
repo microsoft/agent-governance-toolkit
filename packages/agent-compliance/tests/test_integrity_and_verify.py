@@ -403,6 +403,88 @@ rules:
         assert len(payload["evidence_checks"]) == 6
         assert payload["failures"] == []
 
+    def test_verify_evidence_rejects_policy_path_escape(self, tmp_path: Path):
+        outside_policy = tmp_path.parent / "outside-policy.yaml"
+        outside_policy.write_text("defaults:\n  action: deny\n", encoding="utf-8")
+
+        evidence_path = tmp_path / "agt-evidence.json"
+        evidence_path.write_text(
+            json.dumps(
+                {
+                    "schema": "agt-runtime-evidence/v1",
+                    "generated_at": "2026-04-13T12:00:00Z",
+                    "toolkit_version": "3.0.0",
+                    "deployment": {
+                        "policy_files_loaded": [str(Path("..") / outside_policy.name)],
+                        "registered_tools": ["crm_lookup"],
+                        "audit_sink": {
+                            "enabled": True,
+                            "type": "file",
+                            "target": "audit.jsonl",
+                        },
+                        "identity": {
+                            "enabled": True,
+                            "provider": "did:web",
+                        },
+                        "packages": [
+                            {"package": "agent_governance_toolkit", "version": "3.0.0"}
+                        ],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)
+
+        try:
+            verifier.verify_evidence(evidence_path, strict=True)
+            assert False, "Expected ValueError"
+        except ValueError as exc:
+            assert "escapes evidence directory" in str(exc)
+
+    def test_verify_evidence_rejects_oversized_policy_file(self, tmp_path: Path):
+        policy_rel_path = "policies/default.yaml"
+        policy_path = tmp_path / policy_rel_path
+        policy_path.parent.mkdir(parents=True, exist_ok=True)
+        policy_path.write_text("a" * (10 * 1024 * 1024 + 1), encoding="utf-8")
+
+        evidence_path = tmp_path / "agt-evidence.json"
+        evidence_path.write_text(
+            json.dumps(
+                {
+                    "schema": "agt-runtime-evidence/v1",
+                    "generated_at": "2026-04-13T12:00:00Z",
+                    "toolkit_version": "3.0.0",
+                    "deployment": {
+                        "policy_files_loaded": [policy_rel_path],
+                        "registered_tools": ["crm_lookup"],
+                        "audit_sink": {
+                            "enabled": True,
+                            "type": "file",
+                            "target": "audit.jsonl",
+                        },
+                        "identity": {
+                            "enabled": True,
+                            "provider": "did:web",
+                        },
+                        "packages": [
+                            {"package": "agent_governance_toolkit", "version": "3.0.0"}
+                        ],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)
+
+        try:
+            verifier.verify_evidence(evidence_path, strict=True)
+            assert False, "Expected ValueError"
+        except ValueError as exc:
+            assert "exceeds size limit" in str(exc)
+
 
 # ── Legacy CLI Tests ─────────────────────────────────────────
 
@@ -458,3 +540,4 @@ class TestCLI:
         result = cmd_integrity(args)
 
         assert result == 0
+        

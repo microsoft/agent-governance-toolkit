@@ -784,3 +784,4 @@ class TestPerformance:
 
         assert result.exit_code == 0
         assert elapsed < 5.0
+        
