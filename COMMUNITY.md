@@ -45,6 +45,7 @@ We welcome contributions of all kinds — code, documentation, bug reports, and 
 | [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) | Multi-language framework for building, orchestrating, and deploying AI agents |
 | [Microsoft AutoGen](https://github.com/microsoft/autogen) | Multi-agent conversation framework |
 | [OWASP Agentic Top 10](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) | Security risks for agentic applications |
+| [AgentNexus](https://github.com/kevinkaylie/AgentNexus) | Decentralized agent communication infrastructure with W3C DID resolution and multi-issuer governance attestations |
 
 ## Code of Conduct
 
