@@ -44,7 +44,7 @@ public sealed class ToolCallResult
 /// <b>Usage with Microsoft Agent Framework:</b>
 /// <code>
 /// var middleware = new GovernanceMiddleware(engine, emitter);
-/// var result = middleware.EvaluateToolCall("did:mesh:abc123", "file_write", new() { ["path"] = "/etc/config" });
+/// var result = middleware.EvaluateToolCall("did:agentmesh:abc123", "file_write", new() { ["path"] = "/etc/config" });
 /// if (!result.Allowed)
 /// {
 ///     // Block the tool call and log the reason.

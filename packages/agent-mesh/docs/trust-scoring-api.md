@@ -584,7 +584,7 @@ metrics = score.to_dict()
 The TypeScript SDK provides a simpler trust model suitable for client-side use.
 
 ```typescript
-import { TrustManager } from '@agentmesh/sdk';
+import { TrustManager } from '@microsoft/agentmesh-sdk';
 
 const manager = new TrustManager({
   initialScore: 0.5,

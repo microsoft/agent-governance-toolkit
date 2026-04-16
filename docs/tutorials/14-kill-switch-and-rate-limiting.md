@@ -1,4 +1,16 @@
-# 🛑 Tutorial 14 — Kill Switch & Rate Limiting
+# Tutorial 14 — Kill Switch & Rate Limiting
+
+> **Package:** `agentmesh-runtime` · **Time:** 20 minutes · **Prerequisites:** Python 3.11+
+
+---
+
+## What You'll Learn
+
+- Emergency termination with KillSwitch and audit trails
+- Rate limiting with per-agent token bucket enforcement
+- Ring elevation and breach detection
+
+---
 
 **Emergency controls for autonomous agents — the "big red button", rate governors, and ring-breach detection.**
 
@@ -1436,3 +1448,11 @@ print(f"HTTP: {http_status['agent_tokens']:.0f}/{http_status['agent_capacity']} 
 | **Ring Enforcement** | `RingElevationManager` | Temporary privilege escalation with TTL |
 | **Ring Enforcement** | `RingBreachDetector` | Behavioral anomaly detection with circuit breaker |
 | **Ring Enforcement** | `BreachSeverity` | 5-level severity classification (NONE→CRITICAL) |
+
+---
+
+## Next Steps
+
+- **Execution Sandboxing:** [Tutorial 06 — Execution Sandboxing](06-execution-sandboxing.md)
+- **Observability:** [Tutorial 13 — Observability & Distributed Tracing](13-observability-and-tracing.md)
+- **Agent Reliability:** [Tutorial 05 — Agent Reliability Engineering](05-agent-reliability.md)

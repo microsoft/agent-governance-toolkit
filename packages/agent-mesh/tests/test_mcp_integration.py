@@ -797,7 +797,7 @@ class TestMCPClientConnect:
         client = TrustGatedMCPClient(client_identity)
         result = await client.connect("https://mcp.example.com:8080")
         assert result is True
-        assert "https://mcp.example.com:8080" in client._connected_servers
+        assert client._connected_servers == {"https://mcp.example.com:8080"}
 
     @pytest.mark.asyncio
     async def test_connect_with_bridge_no_server_did(

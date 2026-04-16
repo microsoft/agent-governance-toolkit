@@ -119,6 +119,9 @@ class FlightRecorder:
         self._last_flush = datetime.utcnow()
         self._last_hash: Optional[str] = None
         
+        # Cache immutable trace data for content hash recomputation
+        self._trace_data: Dict[str, Dict[str, Any]] = {}
+        
         # Thread-local connections for better performance
         self._local = threading.local()
         
@@ -142,6 +145,63 @@ class FlightRecorder:
         """Compute SHA256 hash for Merkle chain."""
         content = f"{previous_hash or 'genesis'}:{data}"
         return hashlib.sha256(content.encode()).hexdigest()
+
+    def _compute_content_hash(
+        self,
+        trace_id: str,
+        timestamp: str,
+        agent_id: str,
+        tool_name: str,
+        tool_args: Optional[str],
+        policy_verdict: str,
+        violation_reason: Optional[str] = None,
+        result: Optional[str] = None,
+        execution_time_ms: Optional[float] = None,
+    ) -> str:
+        """Compute SHA-256 hash over all substantive fields for tamper detection.
+
+        Unlike ``_compute_hash`` which builds the Merkle chain and is set
+        once at INSERT time, the content hash is recomputed whenever the
+        row is updated (e.g. when a verdict changes from *pending* to
+        *allowed*).  ``verify_integrity`` uses this hash to detect
+        post-hoc field tampering.
+        """
+        data = (
+            f"{trace_id}:{timestamp}:{agent_id}:{tool_name}:{tool_args}"
+            f":{policy_verdict}:{violation_reason}:{result}:{execution_time_ms}"
+        )
+        return hashlib.sha256(data.encode()).hexdigest()
+
+    def _recompute_content_hash(
+        self,
+        trace_id: str,
+        policy_verdict: str,
+        violation_reason: Optional[str] = None,
+        result: Optional[str] = None,
+        execution_time_ms: Optional[float] = None,
+    ) -> Optional[str]:
+        """Recompute content hash using cached trace data.
+
+        Looks up the immutable fields (timestamp, agent_id, etc.) from the
+        in-memory ``_trace_data`` cache populated at ``start_trace`` time,
+        then delegates to ``_compute_content_hash`` with the updated
+        mutable fields.  Returns ``None`` if the trace_id is not in the
+        cache (e.g. recorder was re-instantiated between start and log).
+        """
+        trace = self._trace_data.get(trace_id)
+        if trace is None:
+            return None
+        return self._compute_content_hash(
+            trace_id,
+            trace['timestamp'],
+            trace['agent_id'],
+            trace['tool_name'],
+            trace['tool_args_json'],
+            policy_verdict,
+            violation_reason=violation_reason,
+            result=result,
+            execution_time_ms=execution_time_ms,
+        )
 
     def _flush_buffer(self):
         """Flush pending writes to database."""
@@ -220,7 +280,8 @@ class FlightRecorder:
                 execution_time_ms REAL,
                 metadata TEXT,
                 entry_hash TEXT,
-                previous_hash TEXT
+                previous_hash TEXT,
+                content_hash TEXT
             )
         """
         )
@@ -232,6 +293,10 @@ class FlightRecorder:
             pass  # Column already exists
         try:
             cursor.execute("ALTER TABLE audit_log ADD COLUMN previous_hash TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        try:
+            cursor.execute("ALTER TABLE audit_log ADD COLUMN content_hash TEXT")
         except sqlite3.OperationalError:
             pass  # Column already exists
 
@@ -303,19 +368,33 @@ class FlightRecorder:
         timestamp = datetime.utcnow().isoformat()
         tool_args_json = json.dumps(tool_args) if tool_args else None
         
-        # Compute hash for Merkle chain
+        # Compute hash for Merkle chain (immutable after INSERT)
         data = f"{trace_id}:{timestamp}:{agent_id}:{tool_name}:{tool_args_json}:pending"
         entry_hash = self._compute_hash(data, self._last_hash)
         previous_hash = self._last_hash
         self._last_hash = entry_hash
 
+        # Compute content hash covering all substantive fields
+        content_hash = self._compute_content_hash(
+            trace_id, timestamp, agent_id, tool_name, tool_args_json,
+            'pending',
+        )
+
+        # Cache immutable data so log_success/log_violation can recompute
+        self._trace_data[trace_id] = {
+            'timestamp': timestamp,
+            'agent_id': agent_id,
+            'tool_name': tool_name,
+            'tool_args_json': tool_args_json,
+        }
+
         self._queue_write(
             """
             INSERT INTO audit_log 
-            (trace_id, timestamp, agent_id, tool_name, tool_args, input_prompt, policy_verdict, entry_hash, previous_hash)
-            VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+            (trace_id, timestamp, agent_id, tool_name, tool_args, input_prompt, policy_verdict, entry_hash, previous_hash, content_hash)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
             """,
-            (trace_id, timestamp, agent_id, tool_name, tool_args_json, input_prompt, entry_hash, previous_hash)
+            (trace_id, timestamp, agent_id, tool_name, tool_args_json, input_prompt, entry_hash, previous_hash, content_hash)
         )
 
         return trace_id
@@ -331,14 +410,19 @@ class FlightRecorder:
             violation_reason: Human-readable explanation of why the action
                 was blocked (e.g. ``"Tool 'rm_rf' not in allowed_tools"``).
         """
+        content_hash = self._recompute_content_hash(
+            trace_id, 'blocked', violation_reason=violation_reason,
+        )
+
         self._queue_write(
             """
             UPDATE audit_log 
             SET policy_verdict = 'blocked', 
-                violation_reason = ?
+                violation_reason = ?,
+                content_hash = ?
             WHERE trace_id = ?
             """,
-            (violation_reason, trace_id)
+            (violation_reason, content_hash, trace_id)
         )
 
         self.logger.warning(f"BLOCKED: {trace_id} - {violation_reason}")
@@ -356,14 +440,20 @@ class FlightRecorder:
             simulated_result: The simulated result string returned to the
                 agent. Defaults to ``"Simulated success"`` when ``None``.
         """
+        result_val = simulated_result or "Simulated success"
+        content_hash = self._recompute_content_hash(
+            trace_id, 'shadow', result=result_val,
+        )
+
         self._queue_write(
             """
             UPDATE audit_log 
             SET policy_verdict = 'shadow', 
-                result = ?
+                result = ?,
+                content_hash = ?
             WHERE trace_id = ?
             """,
-            (simulated_result or "Simulated success", trace_id)
+            (result_val, content_hash, trace_id)
         )
 
         self.logger.info(f"SHADOW: {trace_id}")
@@ -390,15 +480,21 @@ class FlightRecorder:
             else str(result) if result else None
         )
 
+        content_hash = self._recompute_content_hash(
+            trace_id, 'allowed', result=result_str,
+            execution_time_ms=execution_time_ms,
+        )
+
         self._queue_write(
             """
             UPDATE audit_log 
             SET policy_verdict = 'allowed', 
                 result = ?,
-                execution_time_ms = ?
+                execution_time_ms = ?,
+                content_hash = ?
             WHERE trace_id = ?
             """,
-            (result_str, execution_time_ms, trace_id)
+            (result_str, execution_time_ms, content_hash, trace_id)
         )
 
         self.logger.info(f"ALLOWED: {trace_id}")
@@ -414,14 +510,19 @@ class FlightRecorder:
             trace_id: The trace ID returned by ``start_trace``.
             error: Error message describing the failure.
         """
+        content_hash = self._recompute_content_hash(
+            trace_id, 'error', violation_reason=error,
+        )
+
         self._queue_write(
             """
             UPDATE audit_log 
             SET policy_verdict = 'error', 
-                violation_reason = ?
+                violation_reason = ?,
+                content_hash = ?
             WHERE trace_id = ?
             """,
-            (error, trace_id)
+            (error, content_hash, trace_id)
         )
 
         self.logger.error(f"ERROR: {trace_id} - {error}")
@@ -574,20 +675,27 @@ class FlightRecorder:
     # ===== Tamper Detection =====
     
     def verify_integrity(self) -> Dict[str, Any]:
-        """Verify the integrity of the audit log using the Merkle hash chain.
+        """Verify the integrity of the audit log.
 
         Flushes any buffered writes, then walks the entire audit log in
-        insertion order verifying that each entry's ``previous_hash``
-        matches the ``entry_hash`` of its predecessor.
+        insertion order performing two checks for every entry:
+
+        1. **Chain integrity** – each entry's ``previous_hash`` must match
+           the ``entry_hash`` of its predecessor.
+        2. **Content integrity** – the stored ``content_hash`` must match
+           a freshly computed hash over all substantive row fields
+           (including the current ``policy_verdict``).  This detects
+           post-hoc tampering with the verdict or any other field.
 
         Returns:
             A dictionary with the following keys:
 
-            - ``valid`` (bool): ``True`` if the hash chain is intact.
+            - ``valid`` (bool): ``True`` if both checks pass for every
+              entry.
             - ``total_entries`` (int): Number of entries checked.
             - ``message`` (str): Human-readable summary (when valid).
             - ``first_tampered_id`` (int): Row ID of the first entry
-              where the chain breaks (only present when invalid).
+              where a check fails (only present when invalid).
             - ``error`` (str): Description of the integrity failure
               (only present when invalid).
 
@@ -604,7 +712,8 @@ class FlightRecorder:
         
         cursor.execute("""
             SELECT id, trace_id, timestamp, agent_id, tool_name, tool_args, 
-                   policy_verdict, entry_hash, previous_hash
+                   policy_verdict, violation_reason, result, execution_time_ms,
+                   entry_hash, previous_hash, content_hash
             FROM audit_log 
             ORDER BY id ASC
         """)
@@ -617,7 +726,7 @@ class FlightRecorder:
         expected_previous_hash = None
         
         for entry in entries:
-            # Verify previous_hash matches what we expect
+            # 1. Verify chain link (previous_hash matches predecessor)
             if entry['previous_hash'] != expected_previous_hash:
                 # First entry should have None/null previous_hash
                 if entry['id'] == 1 and entry['previous_hash'] is None:
@@ -630,13 +739,26 @@ class FlightRecorder:
                         "error": f"Hash chain broken at entry {entry['id']}: expected previous_hash {expected_previous_hash}, got {entry['previous_hash']}"
                     }
             
-            # Recompute hash and verify
-            if entry['entry_hash']:
-                data = f"{entry['trace_id']}:{entry['timestamp']}:{entry['agent_id']}:{entry['tool_name']}:{entry['tool_args']}:{entry['policy_verdict']}"
-                expected_hash = self._compute_hash(data, entry['previous_hash'])
-                
-                # Note: We only verify structure, not exact hash since UPDATE changes verdict
-                # Full verification would require storing hash at INSERT time only
+            # 2. Verify content hash (detects field tampering including verdict)
+            if entry['content_hash']:
+                expected_content = self._compute_content_hash(
+                    entry['trace_id'],
+                    entry['timestamp'],
+                    entry['agent_id'],
+                    entry['tool_name'],
+                    entry['tool_args'],
+                    entry['policy_verdict'],
+                    violation_reason=entry['violation_reason'],
+                    result=entry['result'],
+                    execution_time_ms=entry['execution_time_ms'],
+                )
+                if expected_content != entry['content_hash']:
+                    return {
+                        "valid": False,
+                        "total_entries": len(entries),
+                        "first_tampered_id": entry['id'],
+                        "error": f"Content hash mismatch at entry {entry['id']}: field tampering detected"
+                    }
             
             expected_previous_hash = entry['entry_hash']
         
@@ -658,6 +780,8 @@ class FlightRecorder:
             A list of dictionaries representing every audit log entry,
             ordered oldest-first.
         """
+        self._flush_buffer()  # Ensure all writes are committed
+
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -695,6 +819,8 @@ class FlightRecorder:
             A list of audit log entry dictionaries within the given time
             range, ordered oldest-first.
         """
+        self._flush_buffer()  # Ensure all writes are committed
+
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()

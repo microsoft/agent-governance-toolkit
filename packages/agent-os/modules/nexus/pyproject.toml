@@ -3,11 +3,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "nexus-trust-exchange"
-version = "0.1.0"
+name = "nexus_trust_exchange"
+version = "3.1.0"
 description = "Agent Trust Exchange - viral registry and communication board for AI agents (RESEARCH PROTOTYPE)"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
     { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" },
@@ -21,11 +21,11 @@ classifiers = [
 ]
 
 dependencies = [
-    "pydantic>=2.4.0",
-    "pyyaml>=6.0.0",
-    "structlog>=24.1.0",
-    "aiohttp>=3.13.3",
-    "inter-agent-trust-protocol>=0.4.0",
+    "pydantic>=2.4.0,<3.0",
+    "pyyaml>=6.0.0,<7.0",
+    "structlog>=24.1.0,<25.0",
+    "aiohttp>=3.13.3,<4.0",
+    "inter-agent-trust-protocol>=0.4.0,<1.0",
 ]
 
 [project.urls]

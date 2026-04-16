@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 pub const MAX_DELEGATION_DEPTH: u32 = 10;
 
 /// An agent's cryptographic identity (Ed25519 key pair + DID).
+#[derive(Debug)]
 pub struct AgentIdentity {
     /// Decentralised identifier, e.g. `did:agentmesh:my-agent`.
     pub did: String,
@@ -60,11 +61,7 @@ impl AgentIdentity {
     /// The child's capabilities **must** be a subset of the parent's.
     /// Delegation depth is incremented; exceeding [`MAX_DELEGATION_DEPTH`]
     /// returns an error.
-    pub fn delegate(
-        &self,
-        name: &str,
-        capabilities: Vec<String>,
-    ) -> Result<Self, IdentityError> {
+    pub fn delegate(&self, name: &str, capabilities: Vec<String>) -> Result<Self, IdentityError> {
         if self.delegation_depth >= MAX_DELEGATION_DEPTH {
             return Err(IdentityError::DelegationDepthExceeded {
                 current: self.delegation_depth,
@@ -144,9 +141,7 @@ pub enum IdentityError {
     #[error("serialization error: {0}")]
     Serialization(serde_json::Error),
 
-    #[error(
-        "maximum delegation depth ({max}) exceeded (current depth: {current})"
-    )]
+    #[error("maximum delegation depth ({max}) exceeded (current depth: {current})")]
     DelegationDepthExceeded { current: u32, max: u32 },
 
     #[error("cannot delegate capability '{capability}' — not in parent's capabilities")]
@@ -282,7 +277,8 @@ mod tests {
 
     #[test]
     fn test_delegate_creates_child_with_parent_did() {
-        let parent = AgentIdentity::generate("parent", vec!["read".into(), "write".into()]).unwrap();
+        let parent =
+            AgentIdentity::generate("parent", vec!["read".into(), "write".into()]).unwrap();
         let child = parent.delegate("child", vec!["read".into()]).unwrap();
         assert_eq!(child.parent_did, Some("did:agentmesh:parent".to_string()));
         assert_eq!(child.delegation_depth, 1);
@@ -291,7 +287,8 @@ mod tests {
 
     #[test]
     fn test_delegate_narrows_capabilities() {
-        let parent = AgentIdentity::generate("parent", vec!["read".into(), "write".into()]).unwrap();
+        let parent =
+            AgentIdentity::generate("parent", vec!["read".into(), "write".into()]).unwrap();
         let child = parent.delegate("child", vec!["read".into()]).unwrap();
         assert!(!child.capabilities.contains(&"write".to_string()));
     }
@@ -322,7 +319,9 @@ mod tests {
     fn test_delegate_max_depth_enforced() {
         let mut current = AgentIdentity::generate("root", vec!["read".into()]).unwrap();
         for i in 0..MAX_DELEGATION_DEPTH {
-            current = current.delegate(&format!("child-{}", i), vec!["read".into()]).unwrap();
+            current = current
+                .delegate(&format!("child-{}", i), vec!["read".into()])
+                .unwrap();
         }
         let result = current.delegate("one-too-many", vec!["read".into()]);
         assert!(result.is_err());

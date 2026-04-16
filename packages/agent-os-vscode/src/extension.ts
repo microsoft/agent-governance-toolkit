@@ -10,6 +10,8 @@
  */
 
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as crypto from 'crypto';
 import { PolicyEngine } from './policyEngine';
 import { CMVKClient } from './cmvkClient';
@@ -27,6 +29,44 @@ import { MetricsDashboardPanel } from './webviews/metricsDashboard/MetricsDashbo
 import { OnboardingPanel } from './webviews/onboarding/OnboardingPanel';
 import { AgentOSCompletionProvider, AgentOSHoverProvider } from './language/completionProvider';
 import { AgentOSDiagnosticProvider } from './language/diagnosticProvider';
+import { GovernanceDiagnosticProvider } from './language/governanceDiagnosticProvider';
+
+// Governance Visualization (Issue #39)
+import { GovernanceStatusBar } from './governanceStatusBar';
+
+// Governance Webview Panels — React detail panels (D1 migration)
+import { showSLODetail } from './webviews/sloDetail/SLODetailPanel';
+import { showTopologyDetail } from './webviews/topologyDetail/TopologyDetailPanel';
+import { showHubDetail } from './webviews/hubDetail/HubDetailPanel';
+import { showKernelDetail } from './webviews/kernelDetail/KernelDetailPanel';
+import { showMemoryDetail } from './webviews/memoryDetail/MemoryDetailPanel';
+import { showStatsDetail } from './webviews/statsDetail/StatsDetailPanel';
+import { showAuditDetail } from './webviews/auditDetail/AuditDetailPanel';
+import { showPolicyDetail } from './webviews/policyDetail/PolicyDetailPanel';
+
+// 3-Slot Sidebar (Sidebar Redesign)
+import { SidebarProvider } from './webviews/sidebar/SidebarProvider';
+import { GovernanceEventBus } from './webviews/sidebar/governanceEventBus';
+import { GovernanceStore } from './webviews/sidebar/GovernanceStore';
+import type { DataProviders } from './webviews/sidebar/dataAggregator';
+
+// Governance Server (Issue #39 - Browser Experience)
+import { GovernanceServer } from './server/GovernanceServer';
+
+// Export & Observability (Issue #39 - Shareable Reports)
+import { ReportGenerator, LocalStorageProvider, CredentialError } from './export';
+import { MetricsExporter } from './observability';
+
+// Backend Services
+import { createMockSLOBackend } from './mockBackend/MockSLOBackend';
+import { createMockTopologyBackend } from './mockBackend/MockTopologyBackend';
+import { createMockPolicyBackend } from './mockBackend/MockPolicyBackend';
+import { PolicyDataProvider } from './views/policyTypes';
+import { SLODataProvider } from './views/sloTypes';
+import { AgentTopologyDataProvider } from './views/topologyTypes';
+
+// Provider Factory
+import { createProviders, ProviderConfig, Providers } from './services/providerFactory';
 
 // Enterprise Features
 import { EnterpriseAuthProvider } from './enterprise/auth/ssoProvider';
@@ -43,39 +83,122 @@ let rbacManager: RBACManager;
 let cicdIntegration: CICDIntegration;
 let complianceManager: ComplianceManager;
 let diagnosticProvider: AgentOSDiagnosticProvider;
+let governanceDiagnosticProvider: GovernanceDiagnosticProvider;
+let governanceStatusBar: GovernanceStatusBar;
+let governanceServer: GovernanceServer | undefined;
+let sidebarProvider: SidebarProvider | undefined;
+let activeProviders: Providers | undefined;
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
     console.log('Agent OS extension activating...');
 
-    // Initialize core components
-    policyEngine = new PolicyEngine();
-    cmvkClient = new CMVKClient();
-    auditLogger = new AuditLogger(context);
-    statusBar = new StatusBarManager();
+    try {
+        // Initialize core components
+        console.log('Initializing core components...');
+        policyEngine = new PolicyEngine();
+        cmvkClient = new CMVKClient();
+        auditLogger = new AuditLogger(context);
+        statusBar = new StatusBarManager();
 
-    // Initialize enterprise components
-    authProvider = new EnterpriseAuthProvider(context);
-    rbacManager = new RBACManager(authProvider);
-    cicdIntegration = new CICDIntegration();
-    complianceManager = new ComplianceManager();
-    diagnosticProvider = new AgentOSDiagnosticProvider();
+        // Initialize enterprise components
+        console.log('Initializing enterprise components...');
+        authProvider = new EnterpriseAuthProvider(context);
+        rbacManager = new RBACManager(authProvider);
+        cicdIntegration = new CICDIntegration();
+        complianceManager = new ComplianceManager();
+        diagnosticProvider = new AgentOSDiagnosticProvider();
+        governanceDiagnosticProvider = new GovernanceDiagnosticProvider();
+        governanceStatusBar = new GovernanceStatusBar();
 
-    // Log RBAC initialization
-    console.log(`RBAC initialized with ${rbacManager.getAllRoles().length} roles`);
+        // Log RBAC initialization
+        console.log(`RBAC initialized with ${rbacManager.getAllRoles().length} roles`);
 
-    // Create tree data providers
-    const auditLogProvider = new AuditLogProvider(auditLogger);
-    const policiesProvider = new PoliciesProvider(policyEngine);
-    const statsProvider = new StatsProvider(auditLogger);
-    const kernelDebuggerProvider = new KernelDebuggerProvider();
-    const memoryBrowserProvider = new MemoryBrowserProvider();
+        // Create tree data providers
+        console.log('Creating tree data providers...');
+        const auditLogProvider = new AuditLogProvider(auditLogger);
+        const policiesProvider = new PoliciesProvider(policyEngine);
+        const statsProvider = new StatsProvider(auditLogger);
+        const kernelDebuggerProvider = new KernelDebuggerProvider();
+        context.subscriptions.push(kernelDebuggerProvider);
+        const memoryBrowserProvider = new MemoryBrowserProvider();
 
-    // Register tree views
-    vscode.window.registerTreeDataProvider('agent-os.auditLog', auditLogProvider);
-    vscode.window.registerTreeDataProvider('agent-os.policies', policiesProvider);
-    vscode.window.registerTreeDataProvider('agent-os.stats', statsProvider);
-    vscode.window.registerTreeDataProvider('agent-os.kernelDebugger', kernelDebuggerProvider);
-    vscode.window.registerTreeDataProvider('agent-os.memoryBrowser', memoryBrowserProvider);
+        // Tree data providers are kept as data sources but no longer registered as views.
+        // The new SidebarProvider aggregates their data into a single webview.
+
+        // Register governance visualization (Issue #39)
+        const govConfig = vscode.workspace.getConfiguration('agentOS.governance');
+        const providerConfig: ProviderConfig = {
+            pythonPath: govConfig.get<string>('pythonPath', 'python'),
+            endpoint: govConfig.get<string>('endpoint', ''),
+            refreshIntervalMs: govConfig.get<number>('refreshIntervalMs', 10000),
+        };
+
+    // Register 3-slot sidebar SYNCHRONOUSLY with empty providers so the
+    // webview view provider is available immediately — before the async
+    // createProviders() call which can block or throw.
+    const governanceEventBus = new GovernanceEventBus();
+    const emptyProviders: DataProviders = {
+        slo: { getSnapshot: async () => ({ availability: { currentPercent: 0, targetPercent: 0, errorBudgetRemainingPercent: 0, burnRate: 0 }, latency: { p50Ms: 0, p95Ms: 0, p99Ms: 0, targetMs: 0, errorBudgetRemainingPercent: 0 }, policyCompliance: { totalEvaluations: 0, violationsToday: 0, compliancePercent: 0, trend: 'stable' as const }, trustScore: { meanScore: 0, minScore: 0, agentsBelowThreshold: 0, distribution: [0, 0, 0, 0] } }) },
+        topology: { getAgents: () => [], getBridges: () => [], getDelegations: () => [] },
+        audit: auditLogger,
+        policy: { getSnapshot: async () => ({ rules: [], recentViolations: [], totalEvaluationsToday: 0, totalViolationsToday: 0 }) },
+        kernel: kernelDebuggerProvider,
+        memory: memoryBrowserProvider,
+    };
+    const governanceStore = new GovernanceStore(
+        emptyProviders,
+        governanceEventBus,
+        context.workspaceState,
+        providerConfig.refreshIntervalMs ?? 10000,
+        undefined,  // thresholdMs
+        undefined,  // liveClient — wired after createProviders resolves
+        auditLogger,
+    );
+    sidebarProvider = new SidebarProvider(
+        context.extensionUri,
+        context,
+        governanceStore,
+    );
+    context.subscriptions.push(governanceStore);
+    context.subscriptions.push(governanceEventBus);
+    context.subscriptions.push(auditLogger);
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(
+            SidebarProvider.viewType,
+            sidebarProvider,
+        )
+    );
+
+    // Async: connect live providers in background (non-blocking)
+    createProviders(providerConfig).then((providers) => {
+        activeProviders = providers;
+        context.subscriptions.push(providers);
+        governanceStore.upgradeProviders(
+            {
+                slo: providers.slo, topology: providers.topology,
+                audit: auditLogger, policy: providers.policy,
+                kernel: kernelDebuggerProvider, memory: memoryBrowserProvider,
+            },
+            providers.liveClient ?? undefined,
+            auditLogger,
+        );
+    }).catch((err) => {
+        console.warn('Agent OS: live providers unavailable, using disconnected mode:', err);
+    });
+
+    // Provider proxies — commands read from activeProviders when available,
+    // falling back to empty defaults. This avoids blocking activation.
+    const sloDataProvider: SLODataProvider = {
+        getSnapshot: () => (activeProviders?.slo ?? emptyProviders.slo).getSnapshot(),
+    };
+    const agentTopologyDataProvider: AgentTopologyDataProvider = {
+        getAgents: () => (activeProviders?.topology ?? emptyProviders.topology).getAgents(),
+        getBridges: () => (activeProviders?.topology ?? emptyProviders.topology).getBridges(),
+        getDelegations: () => (activeProviders?.topology ?? emptyProviders.topology).getDelegations(),
+    };
+    const policyDataProvider: PolicyDataProvider = {
+        getSnapshot: () => (activeProviders?.policy ?? emptyProviders.policy).getSnapshot(),
+    };
 
     // Register completion and hover providers for IntelliSense
     const completionProvider = new AgentOSCompletionProvider();
@@ -104,8 +227,18 @@ export function activate(context: vscode.ExtensionContext) {
         )
     );
 
-    // Activate diagnostic provider
+    // Activate diagnostic providers
     diagnosticProvider.activate(context);
+    governanceDiagnosticProvider.activate(context);
+
+    // Initialize governance status bar with defaults
+    const mode = vscode.workspace.getConfiguration('agentOS').get<string>('mode', 'basic');
+    const GOVERNANCE_LEVEL_MAP: Record<string, 'strict' | 'permissive' | 'audit-only'> = {
+        enterprise: 'strict',
+        enhanced: 'permissive',
+    };
+    const governanceLevel = GOVERNANCE_LEVEL_MAP[mode] ?? 'audit-only';
+    governanceStatusBar.updateGovernanceMode(governanceLevel, 0);
 
     // Register inline completion interceptor
     const completionInterceptor = vscode.languages.registerInlineCompletionItemProvider(
@@ -286,6 +419,248 @@ safe_query = "SELECT * FROM users WHERE id = ?"
     });
 
     // ========================================
+    // Register Governance Visualization Commands (Issue #39)
+    // ========================================
+
+    const refreshSLOCmd = vscode.commands.registerCommand('agent-os.refreshSLO', () => {
+        governanceStore.refreshNow();
+    });
+
+    const refreshTopologyCmd = vscode.commands.registerCommand('agent-os.refreshTopology', () => {
+        governanceStore.refreshNow();
+    });
+
+    // Governance Webview Panels — React detail panels (D1 migration)
+    const showSLOWebviewCmd = vscode.commands.registerCommand('agent-os.showSLOWebview', () => {
+        showSLODetail(context.extensionUri, governanceStore);
+    });
+
+    const showTopologyGraphCmd = vscode.commands.registerCommand('agent-os.showTopologyGraph', () => {
+        showTopologyDetail(context.extensionUri, governanceStore);
+    });
+
+    const showGovernanceHubCmd = vscode.commands.registerCommand('agent-os.showGovernanceHub', () => {
+        showHubDetail(context.extensionUri, governanceStore);
+    });
+
+    const showKernelDebuggerCmd = vscode.commands.registerCommand('agent-os.showKernelDebugger', () => {
+        showKernelDetail(context.extensionUri, governanceStore);
+    });
+
+    const showMemoryBrowserCmd = vscode.commands.registerCommand('agent-os.showMemoryBrowser', () => {
+        showMemoryDetail(context.extensionUri, governanceStore);
+    });
+
+    const showSafetyStatsCmd = vscode.commands.registerCommand('agent-os.showSafetyStats', () => {
+        showStatsDetail(context.extensionUri, governanceStore);
+    });
+
+    const showAuditDetailCmd = vscode.commands.registerCommand('agent-os.showAuditDetail', () => {
+        showAuditDetail(context.extensionUri, governanceStore);
+    });
+
+    const showPolicyDetailCmd = vscode.commands.registerCommand('agent-os.showPolicyDetail', () => {
+        showPolicyDetail(context.extensionUri, governanceStore);
+    });
+
+    // Agent Drill-Down Command (Dashboard Feature Completeness - Phase 2)
+    const showAgentDetailsCmd = vscode.commands.registerCommand(
+        'agent-os.showAgentDetails',
+        async (did: string) => {
+            const agents = agentTopologyDataProvider.getAgents();
+            const agent = agents.find(a => a.did === did);
+            if (!agent) {
+                vscode.window.showWarningMessage(`Agent not found: ${did}`);
+                return;
+            }
+
+            const ringLabels: Record<number, string> = {
+                0: 'Ring 0 (Root)',
+                1: 'Ring 1 (Trusted)',
+                2: 'Ring 2 (Standard)',
+                3: 'Ring 3 (Sandbox)',
+            };
+
+            const items: vscode.QuickPickItem[] = [
+                { label: '$(key) DID', description: agent.did },
+                { label: '$(shield) Trust Score', description: `${agent.trustScore} / 1000` },
+                { label: '$(layers) Execution Ring', description: ringLabels[agent.ring] || `Ring ${agent.ring}` },
+                { label: '$(clock) Registered', description: agent.registeredAt || 'Unknown' },
+                { label: '$(pulse) Last Activity', description: agent.lastActivity || 'Unknown' },
+                { label: '$(tools) Capabilities', description: agent.capabilities?.join(', ') || 'None' },
+            ];
+
+            await vscode.window.showQuickPick(items, {
+                title: `Agent: ${did.slice(0, 24)}...`,
+                placeHolder: 'Agent details',
+            });
+        }
+    );
+
+    // Audit CSV Export Command (Dashboard Feature Completeness - Phase 3)
+    const exportAuditCSVCmd = vscode.commands.registerCommand(
+        'agent-os.exportAuditCSV',
+        async () => {
+            const entries = auditLogger.getAll();
+            if (entries.length === 0) {
+                vscode.window.showInformationMessage('No audit entries to export');
+                return;
+            }
+
+            const csv = [
+                'Timestamp,Type,File,Language,Violation,Reason',
+                ...entries.map(e => {
+                    const entry = e as { timestamp: Date; type: string; file?: string; language?: string; violation?: string; reason?: string };
+                    return [
+                        entry.timestamp.toISOString(),
+                        entry.type,
+                        entry.file || '',
+                        entry.language || '',
+                        (entry.violation || '').replace(/,/g, ';'),
+                        (entry.reason || '').replace(/,/g, ';'),
+                    ].join(',');
+                })
+            ].join('\n');
+
+            const uri = await vscode.window.showSaveDialog({
+                defaultUri: vscode.Uri.file(`audit-log-${Date.now()}.csv`),
+                filters: { 'CSV': ['csv'] },
+            });
+
+            if (uri) {
+                await vscode.workspace.fs.writeFile(uri, Buffer.from(csv, 'utf-8'));
+                vscode.window.showInformationMessage(`Exported ${entries.length} entries to ${uri.fsPath}`);
+            }
+        }
+    );
+
+    // Browser Experience Commands (Issue #39 - Local Dev Server)
+    const openGovernanceInBrowserCmd = vscode.commands.registerCommand(
+        'agent-os.openGovernanceInBrowser',
+        async () => {
+            governanceServer = GovernanceServer.getInstance(
+                sloDataProvider,
+                agentTopologyDataProvider,
+                auditLogger,
+                policyDataProvider,
+            );
+            const port = await governanceServer.start();
+            const url = `http://localhost:${port}`;
+            vscode.env.openExternal(vscode.Uri.parse(url));
+        }
+    );
+
+    const openSLOInBrowserCmd = vscode.commands.registerCommand(
+        'agent-os.openSLOInBrowser',
+        async () => {
+            governanceServer = GovernanceServer.getInstance(
+                sloDataProvider,
+                agentTopologyDataProvider,
+                auditLogger,
+                policyDataProvider,
+            );
+            const port = await governanceServer.start();
+            const url = `http://localhost:${port}/#slo`;
+            vscode.env.openExternal(vscode.Uri.parse(url));
+        }
+    );
+
+    const openTopologyInBrowserCmd = vscode.commands.registerCommand(
+        'agent-os.openTopologyInBrowser',
+        async () => {
+            governanceServer = GovernanceServer.getInstance(
+                sloDataProvider,
+                agentTopologyDataProvider,
+                auditLogger,
+                policyDataProvider,
+            );
+            const port = await governanceServer.start();
+            const url = `http://localhost:${port}/#topology`;
+            vscode.env.openExternal(vscode.Uri.parse(url));
+        }
+    );
+
+    // Export Report Command (Issue #39 - Shareable Reports)
+    const exportReportCmd = vscode.commands.registerCommand(
+        'agent-os.exportReport',
+        async () => {
+            const config = vscode.workspace.getConfiguration('agentOS.export');
+            const localPath = config.get<string>('localPath', '');
+            const outputDir = localPath || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+            const provider = new LocalStorageProvider(outputDir);
+
+            // Zero-trust: validate on every export
+            try {
+                await provider.validateCredentials();
+            } catch (e) {
+                if (e instanceof CredentialError) {
+                    const action = await vscode.window.showErrorMessage(
+                        `Storage credentials ${e.reason}: ${e.message}`,
+                        'Configure'
+                    );
+                    if (action === 'Configure') {
+                        vscode.commands.executeCommand(
+                            'workbench.action.openSettings',
+                            `agentOS.export.${e.provider}`
+                        );
+                    }
+                    return;
+                }
+                throw e;
+            }
+
+            // Generate report
+            const reportGenerator = new ReportGenerator();
+            const sloSnapshot = await sloDataProvider.getSnapshot();
+            const agents = agentTopologyDataProvider.getAgents();
+            const bridges = agentTopologyDataProvider.getBridges();
+            const delegations = agentTopologyDataProvider.getDelegations();
+            const auditEntries = auditLogger.getAll().map(e => ({
+                timestamp: new Date(),
+                type: 'audit',
+                details: e as unknown as Record<string, unknown>
+            }));
+
+            const report = reportGenerator.generate({
+                sloSnapshot,
+                agents,
+                bridges,
+                delegations,
+                auditEvents: auditEntries,
+                timeRange: { start: new Date(Date.now() - 86400000), end: new Date() }
+            });
+
+            const result = await provider.upload(
+                report,
+                `governance-report-${Date.now()}.html`
+            );
+
+            const action = await vscode.window.showInformationMessage(
+                `Report saved: ${result.url}`,
+                'Open'
+            );
+            if (action === 'Open') {
+                vscode.env.openExternal(vscode.Uri.parse(result.url));
+            }
+        }
+    );
+
+    // ========================================
+    // Help Command
+    // ========================================
+
+    const showHelpCmd = vscode.commands.registerCommand('agent-os.showHelp', () => {
+        const panel = vscode.window.createWebviewPanel(
+            'agent-os.help', 'Agent OS Help', vscode.ViewColumn.Beside,
+            { enableScripts: false, localResourceRoots: [] },
+        );
+        const helpPath = path.join(context.extensionPath, 'HELP.md');
+        let content = '';
+        try { content = fs.readFileSync(helpPath, 'utf8'); } catch { content = '# Help\n\nHelp file not found.'; }
+        panel.webview.html = renderMarkdownHtml(content);
+    });
+
+    // ========================================
     // Register Enterprise Commands
     // ========================================
 
@@ -343,6 +718,28 @@ safe_query = "SELECT * FROM users WHERE id = ?"
         createFirstAgentCmd,
         runSafetyTestCmd,
         openDocsCmd,
+        // Governance Visualization
+        showSLOWebviewCmd,
+        showTopologyGraphCmd,
+        refreshSLOCmd,
+        refreshTopologyCmd,
+        sidebarProvider!,
+        governanceStatusBar,
+        // Governance Hub & Browser Experience
+        showGovernanceHubCmd,
+        showKernelDebuggerCmd,
+        showMemoryBrowserCmd,
+        showSafetyStatsCmd,
+        showAuditDetailCmd,
+        showPolicyDetailCmd,
+        showAgentDetailsCmd,
+        exportAuditCSVCmd,
+        openGovernanceInBrowserCmd,
+        openSLOInBrowserCmd,
+        openTopologyInBrowserCmd,
+        exportReportCmd,
+        // Help
+        showHelpCmd,
         // Enterprise Features
         signInCmd,
         signOutCmd,
@@ -368,10 +765,24 @@ safe_query = "SELECT * FROM users WHERE id = ?"
     }
 
     console.log('Agent OS extension activated - GA Release v1.0.0');
+    } catch (error) {
+        console.error('Agent OS extension activation failed:', error);
+        vscode.window.showErrorMessage(`Agent OS failed to activate: ${error}`);
+    }
 }
 
-export function deactivate() {
-    console.log('Agent OS extension deactivated');
+export async function deactivate() {
+    // Clean up governance server if running
+    if (governanceServer) {
+        await governanceServer.stop();
+        governanceServer = undefined;
+    }
+
+    // Clean up sidebar provider
+    if (sidebarProvider) {
+        sidebarProvider.dispose();
+        sidebarProvider = undefined;
+    }
 }
 
 // Helper functions
@@ -505,20 +916,21 @@ async function reviewCodeWithCMVK(code: string, language: string): Promise<void>
 function generateCMVKResultsHTML(result: any, webview: vscode.Webview): string {
     const nonce = crypto.randomBytes(16).toString('base64');
     const cspSource = webview.cspSource;
-    const consensusColor = result.consensus >= 0.8 ? '#28a745' 
+
+    const consensusColor = result.consensus >= 0.8 ? '#28a745'
         : result.consensus >= 0.5 ? '#ffc107' 
         : '#dc3545';
 
     const modelRows = result.modelResults.map((m: any) => `
         <tr>
             <td>${m.passed ? '✅' : '⚠️'}</td>
-            <td><strong>${m.model}</strong></td>
-            <td>${m.summary}</td>
+            <td><strong>${escHtml(String(m.model))}</strong></td>
+            <td>${escHtml(String(m.summary))}</td>
         </tr>
     `).join('');
 
-    const issuesList = result.issues.length > 0 
-        ? `<ul>${result.issues.map((i: string) => `<li>${i}</li>`).join('')}</ul>`
+    const issuesList = result.issues.length > 0
+        ? `<ul>${result.issues.map((i: string) => `<li>${escHtml(i)}</li>`).join('')}</ul>`
         : '<p>No issues detected</p>';
 
     return `
@@ -563,7 +975,7 @@ function generateCMVKResultsHTML(result: any, webview: vscode.Webview): string {
         <div class="section">
             <h2>Recommendations</h2>
             <div class="recommendation">
-                ${result.recommendations}
+                ${escHtml(String(result.recommendations))}
             </div>
         </div>
         ` : ''}
@@ -625,6 +1037,58 @@ async function exportAuditLog(): Promise<void> {
         await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(logs, null, 2)));
         vscode.window.showInformationMessage(`Audit log exported to ${uri.fsPath}`);
     }
+}
+
+/** Escape HTML entities for safe rendering. */
+function escHtml(s: string): string { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+/** Apply inline Markdown formatting (bold, code). */
+function inlineMdFormat(s: string): string {
+    let out = escHtml(s);
+    out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    return out.replace(/`(.+?)`/g, '<code>$1</code>');
+}
+
+/** CSS for the help panel webview. */
+const HELP_CSS = [
+    'body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);background:var(--vscode-editor-background);padding:20px;line-height:1.6}',
+    'h1{font-size:1.4em;border-bottom:1px solid var(--vscode-panel-border);padding-bottom:8px}',
+    'h2{font-size:1.2em;margin-top:24px} h3{font-size:1.05em;margin-top:16px}',
+    'table{width:100%;border-collapse:collapse;margin:12px 0}',
+    'th,td{padding:6px 10px;border:1px solid var(--vscode-panel-border);text-align:left}',
+    'th{background:var(--vscode-sideBar-background)}',
+    'code{background:var(--vscode-textCodeBlock-background);padding:2px 4px;border-radius:3px;font-family:var(--vscode-editor-font-family)}',
+    'ul{padding-left:20px;margin:8px 0} li{margin:4px 0}',
+].join('\n');
+
+/** Convert Markdown text to a simple themed HTML document. */
+function renderMarkdownHtml(md: string): string {
+    const out: string[] = [];
+    let inList = false, inTable = false;
+    function close(): void {
+        if (inList) { out.push('</ul>'); inList = false; }
+        if (inTable) { out.push('</table>'); inTable = false; }
+    }
+    for (const line of md.split('\n')) {
+        const t = line.trim();
+        if (t.startsWith('### ')) { close(); out.push(`<h3>${escHtml(t.slice(4))}</h3>`); }
+        else if (t.startsWith('## ')) { close(); out.push(`<h2>${escHtml(t.slice(3))}</h2>`); }
+        else if (t.startsWith('# ')) { close(); out.push(`<h1>${escHtml(t.slice(2))}</h1>`); }
+        else if (t.startsWith('| ')) {
+            const cells = t.split('|').filter(c => c.trim() !== '');
+            if (!cells.every(c => /^[\s-:]+$/.test(c))) {
+                const tag = !inTable ? 'th' : 'td';
+                if (!inTable) { out.push('<table>'); inTable = true; }
+                out.push('<tr>' + cells.map(c => `<${tag}>${inlineMdFormat(c.trim())}</${tag}>`).join('') + '</tr>');
+            }
+        } else if (t.startsWith('- ')) {
+            if (!inList) { out.push('<ul>'); inList = true; }
+            out.push(`<li>${inlineMdFormat(t.slice(2))}</li>`);
+        } else if (t === '') { close(); }
+        else { close(); out.push(`<p>${inlineMdFormat(t)}</p>`); }
+    }
+    close();
+    return `<!DOCTYPE html><html lang="en"><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"><style>${HELP_CSS}</style></head><body>${out.join('\n')}</body></html>`;
 }
 
 function showWelcomeMessage(): void {

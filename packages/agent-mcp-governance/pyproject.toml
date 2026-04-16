@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent_mcp_governance"
+version = "0.1.0"
+description = "Public Preview — MCP governance primitives for the Agent Governance Toolkit."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"}]
+requires-python = ">=3.10"
+dependencies = [
+    "agent-os-kernel>=3.0.0,<4.0.0",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/docs"
+Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]

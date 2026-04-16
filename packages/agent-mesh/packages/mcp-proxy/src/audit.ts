@@ -21,6 +21,7 @@ export interface AuditEvent {
   decision: 'allow' | 'deny';
   reason?: string;
   rule?: string;
+  mitigates?: string[];
   latency_ms?: number;
 }
 
@@ -89,6 +90,7 @@ export class AuditLogger {
         decision: event.decision,
         reason: event.reason,
         matched_rule: event.rule,
+        mitigates: event.mitigates,
         latency_ms: event.latency_ms,
       },
       // Extension attributes for AgentMesh

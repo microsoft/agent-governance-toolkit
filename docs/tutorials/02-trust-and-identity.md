@@ -1,5 +1,18 @@
 # Tutorial 02 — Trust and Identity
 
+> **Package:** `agentmesh-platform` · **Time:** 30 minutes · **Prerequisites:** Python 3.11+
+
+---
+
+## What You'll Learn
+
+- Ed25519 credentials and cryptographic agent identity
+- Decentralized Identifiers (DIDs) for agent verification
+- SPIFFE/SVID integration for workload identity
+- Trust scoring on a continuous 0–1000 scale
+
+---
+
 ## Building Verifiable Agent Identity and Dynamic Trust
 
 **Prerequisites:** `pip install agentmesh-platform`
@@ -682,4 +695,10 @@ entries = log.get_entries(
 | Policies | `TrustPolicy` | YAML-based declarative trust rules |
 | Audit | `AuditLog` | Tamper-evident Merkle-chained event log |
 
-**Next:** [Tutorial 03 — Policy Engine and Compliance](03-policy-engine.md)
+---
+
+## Next Steps
+
+- **Policy Engine:** [Tutorial 01 — Policy Engine](01-policy-engine.md)
+- **Framework Integrations:** [Tutorial 03 — Framework Integrations](03-framework-integrations.md)
+- **Advanced Trust:** [Tutorial 17 — Advanced Trust & Behavior Monitoring](17-advanced-trust-and-behavior.md)

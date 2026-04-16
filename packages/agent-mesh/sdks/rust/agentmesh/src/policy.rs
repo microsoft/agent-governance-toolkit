@@ -159,14 +159,17 @@ impl PolicyEngine {
 
     /// Whether a policy profile is loaded.
     pub fn is_loaded(&self) -> bool {
-        self.profile.read().unwrap().is_some()
+        self.profile
+            .read()
+            .expect("policy profile lock poisoned")
+            .is_some()
     }
 
     /// Load a policy profile from a YAML string.
     pub fn load_from_yaml(&self, yaml: &str) -> Result<(), PolicyError> {
         let profile: PolicyProfile =
             serde_yaml::from_str(yaml).map_err(PolicyError::InvalidYaml)?;
-        *self.profile.write().unwrap() = Some(profile);
+        *self.profile.write().expect("policy profile lock poisoned") = Some(profile);
         Ok(())
     }
 
@@ -185,7 +188,7 @@ impl PolicyEngine {
         action: &str,
         context: Option<&HashMap<String, serde_yaml::Value>>,
     ) -> PolicyDecision {
-        let guard = self.profile.read().unwrap();
+        let guard = self.profile.read().expect("policy profile lock poisoned");
         let profile = match guard.as_ref() {
             Some(p) => p,
             None => return PolicyDecision::Allow,
@@ -212,7 +215,11 @@ impl PolicyEngine {
                     // when the action matches a deny-list prefix (scoped deny).
                     // Actions outside the rule's scope fall through to later rules.
                     if !rule.allowed_actions.is_empty() {
-                        if rule.allowed_actions.iter().any(|a| action_matches(action, a)) {
+                        if rule
+                            .allowed_actions
+                            .iter()
+                            .any(|a| action_matches(action, a))
+                        {
                             return PolicyDecision::Allow;
                         }
                         // Only deny if action is in scope (matches a denied prefix
@@ -264,7 +271,10 @@ impl PolicyEngine {
 
     fn check_rate_limit(&self, name: &str, max_calls: u32, window: &str) -> PolicyDecision {
         let window_secs = parse_duration(window);
-        let mut counters = self.rate_counters.lock().unwrap();
+        let mut counters = self
+            .rate_counters
+            .lock()
+            .expect("rate counter lock poisoned");
         let entry = counters
             .entry(name.to_string())
             .or_insert((0, Instant::now()));

@@ -11,7 +11,7 @@ multi-vendor network of AI agents that will define enterprise operations.
 Version: 1.0.0-alpha
 """
 
-__version__ = "2.0.2"
+__version__ = "3.1.0"
 
 # Layer 1: Identity & Zero-Trust Core
 from .identity import (
@@ -143,4 +143,16 @@ __all__ = [
     # Unified Client
     "AgentMeshClient",
     "GovernanceResult",
+
+    # Trust Types (shared across integrations)
+    "AgentProfile",
+    "TrustRecord",
+    "TrustTracker",
 ]
+
+# Trust types (shared across integrations)
+from agentmesh.trust_types import (
+    AgentProfile,
+    TrustRecord,
+    TrustTracker,
+)

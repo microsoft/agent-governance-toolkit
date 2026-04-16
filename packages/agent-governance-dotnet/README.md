@@ -134,6 +134,63 @@ var limits = enforcer.GetLimits(ring);
 
 When enabled via `GovernanceOptions.EnableRings`, ring checks are automatically enforced in the middleware pipeline.
 
+### Kill Switch
+
+Terminate rogue agents immediately with an arm/disarm safety mechanism, event history, and subscriber notifications:
+
+```csharp
+using AgentGovernance.Hypervisor;
+
+var ks = new KillSwitch();
+ks.Arm();
+
+// Subscribe to kill events
+ks.OnKill += (_, evt) =>
+    Console.WriteLine($"Killed {evt.AgentId}: {evt.Reason} — {evt.Detail}");
+
+// Terminate an agent
+var killEvent = ks.Kill("did:mesh:rogue-agent", KillReason.PolicyViolation, "exceeded scope");
+
+// Review history
+foreach (var e in ks.History)
+    Console.WriteLine($"{e.Timestamp}: {e.AgentId} — {e.Reason}");
+
+ks.Disarm(); // Prevents further kills until re-armed
+```
+
+| Reason | Description |
+|--------|-------------|
+| `PolicyViolation` | Agent violated a governance policy |
+| `TrustThreshold` | Trust score dropped below threshold |
+| `ManualOverride` | Human operator triggered the kill |
+| `AnomalyDetected` | Anomalous behaviour detected |
+| `ResourceExhaustion` | Resource consumption limits exceeded |
+
+### Lifecycle Management
+
+Eight-state lifecycle machine with validated transitions, event logging, and convenience methods:
+
+```csharp
+using AgentGovernance.Lifecycle;
+
+var mgr = new LifecycleManager("did:mesh:agent-007");
+
+mgr.Activate();                          // Provisioning → Active
+mgr.Suspend("scheduled maintenance");    // Active → Suspended
+mgr.Transition(LifecycleState.Active, "maintenance done", "ops");
+mgr.Quarantine("trust breach detected"); // Active → Quarantined
+mgr.Decommission("end of life");         // Quarantined → Decommissioning
+
+// Check transition validity
+bool canActivate = mgr.CanTransition(LifecycleState.Active); // false
+
+// Review full event log
+foreach (var evt in mgr.Events)
+    Console.WriteLine($"{evt.Timestamp}: {evt.FromState} → {evt.ToState} ({evt.Reason})");
+```
+
+**Lifecycle states:** Provisioning → Active ↔ Suspended / Rotating / Degraded / Quarantined → Decommissioning → Decommissioned
+
 ### Saga Orchestrator
 
 Multi-step transaction governance with automatic compensation on failure:

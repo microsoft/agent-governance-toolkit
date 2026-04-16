@@ -149,6 +149,8 @@ def _validate_db_path(raw: str) -> str:
         # If it starts with a third slash it's the canonical file:///abs form
         if path_part.startswith("/"):
             raw = path_part  # e.g. "/etc/passwd"
+        elif len(path_part) >= 2 and path_part[0].isalpha() and path_part[1] in (":", "/"):
+            raw = path_part  # Windows drive letter: file://C:\path or file://C:/path
         else:
             # file://hostname/path — reject (remote paths not supported)
             raise ValueError(

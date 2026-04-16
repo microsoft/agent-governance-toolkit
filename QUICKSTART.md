@@ -42,7 +42,7 @@ pip install agentmesh-lightning        # RL training governance
 ### TypeScript / Node.js
 
 ```bash
-npm install @agentmesh/sdk
+npm install @microsoft/agentmesh-sdk
 ```
 
 ### .NET
@@ -71,29 +71,67 @@ agent-governance verify --badge
 Create a file called `governed_agent.py`:
 
 ```python
-from agent_os.policy import PolicyEngine, CapabilityModel, PolicyScope
-
-# Define what your agent is allowed to do
-capabilities = CapabilityModel(
-    allowed_tools=["web_search", "read_file", "send_email"],
-    blocked_tools=["execute_code", "delete_file"],
-    blocked_patterns=[r"\b\d{3}-\d{2}-\d{4}\b"],  # Block SSN patterns
-    require_human_approval=True,
-    max_tool_calls=10,
+from agent_os.policies import PolicyEvaluator, PolicyDecision
+from agent_os.policies.schema import (
+    PolicyDocument, PolicyRule, PolicyCondition,
+    PolicyAction, PolicyOperator, PolicyDefaults,
 )
 
-# Create a policy engine
-engine = PolicyEngine(capabilities=capabilities)
+# Define governance rules inline (or load from YAML — see below)
+policy = PolicyDocument(
+    name="agent-safety",
+    version="1.0",
+    description="Sample safety policy",
+    defaults=PolicyDefaults(action=PolicyAction.ALLOW),
+    rules=[
+        PolicyRule(
+            name="block-dangerous-tools",
+            condition=PolicyCondition(
+                field="tool_name",
+                operator=PolicyOperator.IN,
+                value=["execute_code", "delete_file", "shell_exec"],
+            ),
+            action=PolicyAction.DENY,
+            message="Tool is blocked by policy",
+            priority=100,
+        ),
+        PolicyRule(
+            name="block-ssn-patterns",
+            condition=PolicyCondition(
+                field="input_text",
+                operator=PolicyOperator.MATCHES,
+                value=r"\b\d{3}-\d{2}-\d{4}\b",
+            ),
+            action=PolicyAction.DENY,
+            message="SSN pattern detected in input",
+            priority=90,
+        ),
+    ],
+)
 
-# Every agent action goes through the policy engine
-result = engine.evaluate(action="web_search", input_text="latest AI news")
-print(f"Action allowed: {result.allowed}")
+evaluator = PolicyEvaluator(policies=[policy])
+
+# Allowed
+result = evaluator.evaluate({"tool_name": "web_search", "input_text": "latest AI news"})
+print(f"Action allowed: {result.allowed}")   # True
 print(f"Reason: {result.reason}")
 
-# This will be blocked
-result = engine.evaluate(action="delete_file", input_text="/etc/passwd")
-print(f"Action allowed: {result.allowed}")  # False
-print(f"Reason: {result.reason}")           # "Tool 'delete_file' is blocked"
+# Blocked — deterministically
+result = evaluator.evaluate({"tool_name": "delete_file", "input_text": "/etc/passwd"})
+print(f"Action allowed: {result.allowed}")   # False
+print(f"Reason: {result.reason}")            # "Tool is blocked by policy"
+```
+
+Or load policies from YAML:
+
+```python
+from agent_os.policies import PolicyEvaluator
+
+evaluator = PolicyEvaluator()
+evaluator.load_policies("policies/")   # loads all *.yaml files
+
+result = evaluator.evaluate({"tool_name": "web_search", "agent_id": "analyst-1"})
+print(f"Allowed: {result.allowed}")
 ```
 
 Run it:
@@ -107,7 +145,7 @@ python governed_agent.py
 Create a file called `governed_agent.ts`:
 
 ```typescript
-import { PolicyEngine, AgentIdentity, AuditLogger } from "@agentmesh/sdk";
+import { PolicyEngine, AgentIdentity, AuditLogger } from "@microsoft/agentmesh-sdk";
 
 const identity = AgentIdentity.generate("my-agent", ["web_search", "read_file"]);
 
@@ -146,19 +184,32 @@ Console.WriteLine($"Allowed: {result.Allowed}");  // False
 The toolkit integrates with all major agent frameworks. Here's a LangChain example:
 
 ```python
-from agent_os import KernelSpace
-from agent_os.policy import CapabilityModel
+from agent_os.policies import PolicyEvaluator
 
-# Initialize with governance
-kernel = KernelSpace(
-    capabilities=CapabilityModel(
-        allowed_tools=["web_search", "calculator"],
-        max_tool_calls=5,
-    )
-)
+# Load your governance policies
+evaluator = PolicyEvaluator()
+evaluator.load_policies("policies/")
 
-# Wrap your LangChain agent — every tool call is now governed
-governed_agent = kernel.wrap(your_langchain_agent)
+# Evaluate before every tool call in your framework
+decision = evaluator.evaluate({
+    "agent_id": "langchain-agent-1",
+    "tool_name": "web_search",
+    "action": "tool_call",
+})
+
+if decision.allowed:
+    # proceed with LangChain tool call
+    result = your_langchain_agent.run(...)
+else:
+    print(f"Blocked: {decision.reason}")
+```
+
+For deeper integration, use framework-specific adapters:
+
+```bash
+pip install langchain-agentmesh      # LangChain adapter
+pip install llamaindex-agentmesh     # LlamaIndex adapter
+pip install crewai-agentmesh         # CrewAI adapter
 ```
 
 Supported frameworks: **LangChain**, **OpenAI Agents SDK**, **AutoGen**, **CrewAI**,

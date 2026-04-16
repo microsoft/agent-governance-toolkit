@@ -1,0 +1,60 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+version: "1.0"
+name: "support-agent-governance"
+description: >
+  Governance policy for the Contoso Support Agent. Prevents unauthorized
+  refund processing, PII access, and account modifications while allowing
+  standard customer support operations and escalation to managers.
+
+rules:
+  - name: "block_pii_access"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "credit card,cvv,card number,payment details,full card,account number"
+    action: "deny"
+    priority: 100
+    message: "Access to payment card details and PII is prohibited by policy"
+
+  - name: "refund_limit"
+    condition:
+      field: "message"
+      operator: "regex"
+      value: "refund.*\\$\\s*([5-9][\\d,]{2,}|[1-9][\\d,]{3,})"
+    action: "deny"
+    priority: 90
+    message: "Refunds over $500 require manager approval"
+
+  - name: "block_account_modification"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "modify account,change billing,update payment method,change payment,modify billing"
+    action: "deny"
+    priority: 95
+    message: "Direct account billing modifications are not permitted"
+
+  - name: "allow_escalation"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "escalate,manager,supervisor,human agent"
+    action: "allow"
+    priority: 80
+    message: "Escalation to human manager is always permitted"
+
+  - name: "allow_support_inquiries"
+    condition:
+      field: "message"
+      operator: "contains_any"
+      value: "order,status,lookup,track,help,support,refund"
+    action: "allow"
+    priority: 50
+    message: "Standard support inquiries are permitted"
+
+defaults:
+  action: "allow"
+  max_tokens: 4096
+  max_tool_calls: 10
+  confidence_threshold: 0.8

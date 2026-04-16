@@ -1,5 +1,27 @@
 # Copilot Instructions for agent-governance-toolkit
 
+## Decision Escalation
+
+For major design changes, always ask the maintainer (@imran-siddique) before proceeding:
+- New packages or modules that change the repo structure
+- Cross-cutting changes spanning 3+ packages
+- Security model changes (identity, trust, policy engine)
+- Breaking API changes to public interfaces
+- New framework integrations or SDK additions
+- Changes to CI/CD pipeline architecture
+
+Do NOT auto-merge large feature PRs without maintainer review.
+
+## External Contribution Quality Gate
+
+When external contributors open issues or PRs proposing integration with their own project/tool/library, apply these quality checks before investing review time:
+
+- **Minimum credibility threshold**: The referenced project should have meaningful community adoption (e.g., 50+ GitHub stars, multiple contributors, evidence of production usage). One-person repos with <10 stars and no community traction do not warrant integration effort.
+- **Self-promotion filter**: Issues or PRs that primarily serve to promote the contributor's own low-profile project — rather than adding genuine value to AGT — should be deprioritized. Politely acknowledge but do not fast-track.
+- **Verify claims**: If the PR cites benchmarks, adoption numbers, or production deployments, spot-check them. Unverifiable claims are a red flag.
+- **Scope proportionality**: A small or unknown project requesting a large integration surface (new package, new dependency, new CI pipeline) is disproportionate. Suggest they contribute as an example or community link instead.
+- **Dependency risk**: Adding a dependency on an obscure package creates supply chain risk. Prefer vendored examples or optional integrations that don't add to the core dependency tree.
+
 ## PR Merge Workflow
 
 When merging PRs, follow this sequence for EACH PR (do not batch):
@@ -90,3 +112,33 @@ CI workflows use path filters so only relevant checks run per PR:
 - All ESRP config values must be in pipeline secrets, never plaintext in YAML
 - Package names must NOT start with `microsoft` or `windows` (reserved by Python team)
 - npm packages use `@microsoft` scope only
+
+## Post-Merge Review — Mandatory Follow-Up
+
+After merging ANY external contributor PR, perform these follow-up checks and fix issues immediately in a separate PR:
+
+### Security Sweep
+1. **Secrets scan** — grep new files for `sk-`, `ghp_`, `password=`, `api_key=` patterns. Placeholder keys in README instructions (e.g., `sk-...`) are OK; real-looking keys are not.
+2. **Unsafe patterns** — check for `eval()`, `exec()`, `yaml.load()` (not safe_load), `shell=True`, `pickle.load` in new non-test code. Function names containing "exec" (e.g., `tool_exec()`) are fine — only actual `exec(` calls matter.
+3. **innerHTML/XSS** — check new `.ts`/`.tsx` files for `innerHTML` without escaping. Must use `escapeHtml()` or `textContent`.
+4. **Network exposure** — check for `0.0.0.0` bindings in new code (must be `127.0.0.1` for dev servers).
+5. **Wildcard CORS** — check for `allow_origins=["*"]` in new code (must use env-driven origins).
+6. **Credential leaks in scanners** — if new security scanning code stores matched patterns, ensure values are redacted (not raw secrets in audit logs).
+
+### Build & Compatibility
+7. **License headers** — verify all new `.py`, `.ts`, `.cs`, `.rs`, `.go`, `.sh` files have the MIT copyright header.
+8. **File encoding** — all `open()` calls reading YAML/JSON/text must use `encoding="utf-8"` (prevents Windows failures).
+9. **Trailing newlines** — all new source files must end with a newline (ruff W292).
+10. **Relative links** — translated/i18n docs must adjust relative paths (e.g., `../../` prefix for files in `docs/i18n/`).
+
+### Structural Integrity
+11. **Scope verification** — confirm PR only touches files matching its description. Flag "trojan PRs" that bundle unrelated code changes in docs-only PRs.
+12. **.github/ modifications** — ANY change to `.github/workflows/` from an external contributor requires line-by-line security review. Never merge a delete-all/re-add-all workflow diff.
+13. **Mutable data structures** — if a PR adds validation (e.g., `__post_init__`), ensure the validated fields cannot be mutated post-construction (convert `list` → `tuple`). Update tests to match.
+14. **Dependency format** — `pyproject.toml` uses `license = {text = "MIT"}` (table format); `Cargo.toml` uses `license = "MIT"` (SPDX string). Do NOT mix these.
+15. **Package names** — `pyproject.toml` names must use underscores (PEP 625): `agent_governance_toolkit`, not `agent-governance-toolkit`.
+
+### CI Verification
+16. **Run CI** — confirm the CI run on the merge commit passes. If it fails, fix immediately.
+17. **Lint compliance** — new Python files must pass `ruff check --select E,F,W --ignore E501`.
+18. **Test compatibility** — if our fixes changed data types (e.g., list → tuple), update any tests that assert on the old type.

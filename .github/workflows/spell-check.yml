@@ -29,8 +29,10 @@ jobs:
             **/*.md
 
       - name: Install cspell
-        run: npm install --global cspell@8
+        run: npm install --ignore-scripts --global cspell@8.17.3
 
       - name: Check spelling
         if: steps.changed-markdown.outputs.any_changed == 'true'
-        run: cspell --config .cspell.json --no-progress ${{ steps.changed-markdown.outputs.all_changed_files }}
+        env:
+          CHANGED_FILES: ${{ steps.changed-markdown.outputs.all_changed_files }}
+        run: cspell --config .cspell.json --no-progress $CHANGED_FILES

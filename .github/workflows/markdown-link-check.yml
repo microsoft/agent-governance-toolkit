@@ -6,6 +6,9 @@ on:
       - '**/*.md'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   link-check:
     runs-on: ubuntu-latest
@@ -20,12 +23,15 @@ jobs:
           files: |
             **/*.md
 
+      - name: Write changed files list
+        if: steps.changed-files.outputs.any_changed == 'true'
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: printf '%s\n' $CHANGED_FILES > "$RUNNER_TEMP/changed-md-files.txt"
+
       - name: Run Link Checker
         if: steps.changed-files.outputs.any_changed == 'true'
         uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
         with:
-          # Configuration is defined here directly in YAML (no JSON file needed)
-          # --exclude-loopback: ignores localhost/127.0.0.1
-          # --verbose: shows details in the logs
           args: --verbose --no-progress --exclude-loopback ${{ steps.changed-files.outputs.all_changed_files }}
           fail: true

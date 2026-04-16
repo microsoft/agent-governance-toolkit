@@ -6,7 +6,7 @@ fastapi==0.115.0
 uvicorn[standard]==0.27.1
 
 # Async HTTP
-aiohttp==3.13.3
+aiohttp==3.13.4
 httpx==0.27.0
 
 # Data Validation
@@ -22,7 +22,7 @@ pydantic==2.10.3
 # aiocache>=0.12.0
 
 # Cryptography
-cryptography==46.0.6  # CVE fix: subgroup attack on SECT curves
+cryptography==46.0.7  # CVE fix: subgroup attack on SECT curves
 pynacl==1.6.2
 
 # Observability
@@ -32,7 +32,7 @@ opentelemetry-instrumentation-fastapi==0.50b0
 structlog==24.4.0
 
 # Testing
-pytest==8.4.1
+pytest==9.0.3
 pytest-asyncio==1.1.0
 pytest-cov==5.0.0
 

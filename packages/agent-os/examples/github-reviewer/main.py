@@ -472,6 +472,8 @@ import sqlite3
 def get_user(user_id):
     conn = sqlite3.connect("app.db")
     cursor = conn.cursor()
+    # ⚠️ INTENTIONALLY INSECURE — test fixtures for the policy scanner.
+    # DO NOT copy these patterns into production code.
     # SQL Injection vulnerability!
     cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
     return cursor.fetchone()
@@ -494,7 +496,7 @@ def load_data(path):
         return json.load(f)
 
 def fetch_data(url):
-    return requests.get(url, verify=False)  # SSL disabled!
+    return requests.get(url, verify=False)  # ⚠️ INTENTIONALLY INSECURE — test fixture
 '''
     }
     

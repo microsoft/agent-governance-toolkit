@@ -44,8 +44,9 @@ jobs:
         id: changes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          FILES=$(gh pr diff ${{ github.event.pull_request.number }} --name-only \
+          FILES=$(gh pr diff "$PR_NUMBER" --name-only \
             | grep -E '^packages/[^/]+/src/.*\.py$' || true)
           if [ -z "$FILES" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"

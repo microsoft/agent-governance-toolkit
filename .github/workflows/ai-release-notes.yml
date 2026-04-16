@@ -32,8 +32,10 @@ jobs:
         id: prs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          TAG="${EVENT_TAG:-$INPUT_TAG}"
           if [ -z "$TAG" ]; then
             TAG=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "")
           fi

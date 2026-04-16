@@ -35,53 +35,70 @@
   - changed-files:
       - any-glob-to-any-file: "**/tests/**"
 
-integration/flowise-agentmesh:
-  - "packages/agentmesh-integrations/flowise-agentmesh/**"
+"integration/flowise-agentmesh":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/flowise-agentmesh/**"
 
-integration/haystack-agentmesh:
-  - "packages/agentmesh-integrations/haystack-agentmesh/**"
+"integration/haystack-agentmesh":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/haystack-agentmesh/**"
 
-integration/langchain-agentmesh:
-  - "packages/agentmesh-integrations/langchain-agentmesh/**"
+"integration/langchain-agentmesh":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/langchain-agentmesh/**"
 
-integration/langflow-agentmesh:
-  - "packages/agentmesh-integrations/langflow-agentmesh/**"
+"integration/langflow-agentmesh":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/langflow-agentmesh/**"
 
-integration/langgraph-trust:
-  - "packages/agentmesh-integrations/langgraph-trust/**"
+"integration/langgraph-trust":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/langgraph-trust/**"
 
-integration/llamaindex-agentmesh:
-  - "packages/agentmesh-integrations/llamaindex-agentmesh/**"
+"integration/llamaindex-agentmesh":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/llamaindex-agentmesh/**"
 
-integration/mastra-agentmesh:
-  - "packages/agentmesh-integrations/mastra-agentmesh/**"
+"integration/mastra-agentmesh":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/mastra-agentmesh/**"
 
-integration/mcp-trust-proxy:
-  - "packages/agentmesh-integrations/mcp-trust-proxy/**"
+"integration/mcp-trust-proxy":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/mcp-trust-proxy/**"
 
-integration/nostr-wot:
-  - "packages/agentmesh-integrations/nostr-wot/**"
+"integration/nostr-wot":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/nostr-wot/**"
 
-integration/openai-agents-agentmesh:
-  - "packages/agentmesh-integrations/openai-agents-agentmesh/**"
+"integration/openai-agents-agentmesh":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/openai-agents-agentmesh/**"
 
-integration/openai-agents-trust:
-  - "packages/agentmesh-integrations/openai-agents-trust/**"
+"integration/openai-agents-trust":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/openai-agents-trust/**"
 
-integration/pydantic-ai-governance:
-  - "packages/agentmesh-integrations/pydantic-ai-governance/**"
+"integration/pydantic-ai-governance":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/pydantic-ai-governance/**"
 
-integration/a2a-protocol:
-  - "packages/agentmesh-integrations/a2a-protocol/**"
+"integration/a2a-protocol":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/a2a-protocol/**"
 
-integration/adk-agentmesh:
-  - "packages/agentmesh-integrations/adk-agentmesh/**"
+"integration/adk-agentmesh":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/adk-agentmesh/**"
 
-integration/copilot-governance:
-  - "packages/agentmesh-integrations/copilot-governance/**"
+"integration/copilot-governance":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/copilot-governance/**"
 
-integration/crewai-agentmesh:
-  - "packages/agentmesh-integrations/crewai-agentmesh/**"
+"integration/crewai-agentmesh":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/crewai-agentmesh/**"
 
-integration/dify:
-  - "packages/agentmesh-integrations/dify/**"
+"integration/dify":
+  - changed-files:
+      - any-glob-to-any-file: "packages/agentmesh-integrations/dify/**"

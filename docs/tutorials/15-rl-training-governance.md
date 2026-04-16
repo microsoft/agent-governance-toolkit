@@ -1,8 +1,20 @@
 # Tutorial 15 — RL Training Governance
 
+> **Package:** `agentmesh-lightning` · **Time:** 25 minutes · **Prerequisites:** Python 3.10+
+
+---
+
+## What You'll Learn
+
+- GovernedRunner for policy-enforced training loops
+- PolicyReward for converting violations into reward signals
+- Gym-compatible environments with governance constraints
+
+---
+
 Reinforcement-learning agents learn by trial and error — but in production
 systems those "errors" can be SQL injections, budget overruns, or
-unauthorised data access. The **agent-lightning** package lets you enforce
+unauthorised data access.The **agent-lightning** package lets you enforce
 governance constraints *during* RL training so the agent learns to be safe
 and effective from the very first episode.
 

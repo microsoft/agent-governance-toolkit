@@ -12,28 +12,34 @@ rules:
   - tool: "run_shell"
     action: deny
     reason: "Shell execution not permitted"
+    mitigates: ["ASI02", "ASI05"]
 
   - tool: "execute_command"
     action: deny
     reason: "Direct command execution not permitted"
+    mitigates: ["ASI02", "ASI05"]
 
   - tool: "eval"
     action: deny
     reason: "Code evaluation not permitted"
+    mitigates: ["ASI05"]
 
   - tool: "spawn_process"
     action: deny
     reason: "Process spawning not permitted"
+    mitigates: ["ASI02", "ASI05", "ASI10"]
 
   # === SENSITIVE FILE PROTECTION ===
 
   - tool: "read_file"
     action: allow
+    mitigates: ["ASI02", "ASI07"]
     conditions:
       - path_not_contains: [".env", ".secret", "id_rsa", ".pem", "credentials"]
 
   - tool: "write_file"
     action: allow
+    mitigates: ["ASI02"]
     conditions:
       - path_not_contains: [".env", ".secret", "id_rsa", ".pem", "/etc/", "/bin/"]
 
@@ -41,6 +47,7 @@ rules:
 
   - tool: "http_request"
     action: allow
+    mitigates: ["ASI08", "ASI09"]
     rate_limit:
       requests: 30
       per: minute
@@ -61,3 +68,4 @@ rate_limits:
   global:
     requests: 100
     per: minute
+    mitigates: ["ASI08"]

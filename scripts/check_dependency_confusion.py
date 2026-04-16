@@ -24,15 +24,16 @@ import sys
 
 # Known registered PyPI package names for this project
 REGISTERED_PACKAGES = {
-    # Core packages (on PyPI)
-    "agent-os-kernel",
-    "agentmesh-platform",
-    "agent-hypervisor",
-    "agentmesh-runtime",
-    "agent-sre",
-    "agent-governance-toolkit",
-    "agentmesh-lightning",
-    "agentmesh-marketplace",
+    # Core packages (on PyPI) — both hyphen and underscore variants
+    "agent-os-kernel", "agent_os_kernel",
+    "agentmesh-platform", "agentmesh_platform",
+    "agent-hypervisor", "agent_hypervisor",
+    "agentmesh-runtime", "agentmesh_runtime",
+    "agent-sre", "agent_sre",
+    "agent-governance-toolkit", "agent_governance_toolkit",
+    "agentmesh-lightning", "agentmesh_lightning",
+    "agentmesh-marketplace", "agentmesh_marketplace",
+    "agent-discovery", "agent_discovery",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
     "fastapi", "uvicorn", "structlog", "click", "rich", "numpy", "scipy",
@@ -57,10 +58,83 @@ REGISTERED_PACKAGES = {
     # Slack / messaging
     "slack-sdk", "slack-bolt",
     # Telemetry
-    "opentelemetry-instrumentation-fastapi",
-    # Internal cross-package references (not on PyPI)
+    "opentelemetry-instrumentation-fastapi", "opentelemetry-exporter-otlp",
+    "opentelemetry-instrumentation-httpx", "opentelemetry-instrumentation-asyncio",
+    # pyproject.toml optional-dependency group names (not real packages)
+    "dev", "cli", "all", "server", "storage", "observability",
+    "django", "websocket", "websockets", "grpc", "grpcio", "grpcio-tools",
+    "agent-os", "test", "docs", "full", "api", "otel", "protocols",
+    "runtime", "sandbox", "sre", "hypervisor", "iatp", "keywords",
+    "llm", "mcp", "hf", "huggingface", "blockchain", "web3",
+    "multi-agent", "broker-agnostic", "pubsub", "kafka", "rabbitmq",
+    "sql", "async", "nexus", "caas-core", "message-bus",
+    "ai-agents", "amb", "eval_type_backport",
+    # Integration packages / real PyPI packages used as deps
+    "hypothesis", "fakeredis", "langflow", "langgraph",
+    "agentmesh", "pydantic-ai", "haystack", "haystack-ai", "respx",
+    "langfuse", "arize", "arize-phoenix", "llamaindex", "braintrust", "helicone",
+    "datadog", "langsmith", "wandb", "mlflow", "agentops",
+    "typer", "jsonschema", "anyio", "pre-commit", "import-linter",
+    "mkdocs", "mkdocs-material", "mkdocstrings", "datasets", "sqlglot",
+    "aio-pika", "aiokafka",
+    # Cedar/OPA policy backends
+    "cedarpy", "llama-index-core", "ddtrace",
+    # Internal module references
+    "inter-agent-trust-protocol", "agent-control-plane", "cmvk",
+    "agent-tool-registry", "cedar", "opa", "huggingface_hub",
+    # APS adapter optional deps
+    "aps", "agent-passport-system",
+    # Internal cross-package references (local-only, NOT on PyPI)
+    # These are flagged as HIGH RISK if found in requirements.txt with version pins
+    # instead of path references. See dependency confusion attack vector.
     "agent-primitives", "emk",
     # With extras (base name is what matters)
+}
+
+# Local-only packages that should NEVER appear with version pins in
+# requirements.txt (they must use path references like -e ../primitives)
+LOCAL_ONLY_PACKAGES = {"agent-primitives", "emk"}
+
+# Known npm packages for this project
+REGISTERED_NPM_PACKAGES = {
+    "@microsoft/agent-os-kernel", "@microsoft/agentmesh-mcp-proxy",
+    "@microsoft/agentmesh-api", "@microsoft/agent-os-cursor",
+    "@microsoft/agentmesh-mastra", "@microsoft/agentmesh-copilot-governance",
+    "@microsoft/agent-os-copilot-extension", "@microsoft/agentos-mcp-server",
+    "@microsoft/agent-os-vscode",
+    # Common deps
+    "typescript", "tsup", "vitest", "express", "zod", "@mastra/core",
+    "@modelcontextprotocol/sdk", "ws", "commander", "chalk",
+    "@anthropic-ai/sdk", "@types/node", "@types/ws", "@types/express",
+    # Common npm dev dependencies
+    "eslint", "@typescript-eslint/parser", "@typescript-eslint/eslint-plugin",
+    "ts-jest", "@types/jest", "jest", "rimraf", "prettier",
+    "axios", "@types/vscode", "@vscode/vsce", "webpack", "webpack-cli",
+    "ts-node", "nodemon", "concurrently", "dotenv",
+    "esbuild", "@esbuild/linux-x64", "@esbuild/darwin-arm64",
+    # npm deps from extensions/copilot
+    "@octokit/webhooks", "path-to-regexp", "winston",
+    # npm deps from extensions/chrome
+    "react", "react-dom", "webextension-polyfill",
+    "@types/chrome", "@types/react", "@types/react-dom",
+    "copy-webpack-plugin", "css-loader", "eslint-plugin-react",
+    "eslint-plugin-react-hooks", "html-webpack-plugin", "style-loader",
+    "ts-loader",
+    # npm deps from extensions/mcp-server
+    "uuid", "yaml", "zod", "@types/uuid", "@vitest/coverage-v8",
+    # npm deps from mcp-proxy
+    "crypto-js",
+    # npm deps from sdks/typescript
+    "js-yaml", "@noble/ed25519",
+    # npm deps from agent-os-vscode
+    "@types/glob", "@types/mocha", "@vscode/test-electron",
+    "autoprefixer", "glob", "mocha", "postcss", "tailwindcss",
+}
+
+# Known Cargo crate names
+REGISTERED_CARGO_PACKAGES = {
+    "serde", "serde_json", "serde_yaml", "sha2", "ed25519-dalek",
+    "rand", "thiserror", "tempfile", "agentmesh",
 }
 
 # Patterns that are always safe (not package names)
@@ -170,6 +244,121 @@ def check_notebook(filepath: str) -> list[str]:
     return findings
 
 
+def check_pyproject_toml(filepath: str) -> list[str]:
+    """Check a pyproject.toml for unregistered package dependencies."""
+    findings = []
+    try:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+    except (OSError, UnicodeDecodeError):
+        return findings
+
+    registered_lower = {p.lower() for p in REGISTERED_PACKAGES}
+    # Match dependency lines like: "package>=1.0" or "package[extra]>=1.0,<2.0"
+    dep_re = re.compile(r'^[\s"]*([a-zA-Z0-9_-]+)', re.MULTILINE)
+    in_deps = False
+    in_optional = False
+    for line_num, line in enumerate(content.splitlines(), 1):
+        stripped = line.strip()
+        if stripped.startswith("[project.dependencies]"):
+            in_deps = True
+            in_optional = False
+            continue
+        if stripped.startswith("[project.optional-dependencies"):
+            in_deps = True
+            in_optional = True
+            continue
+        if stripped.startswith("[") and in_deps:
+            in_deps = False
+            in_optional = False
+            continue
+        if not in_deps:
+            continue
+        if not stripped or stripped.startswith("#"):
+            continue
+        # In optional-dependencies, lines like 'aps = ["pkg>=1.0"]' are group
+        # headers — the key (aps) is an extras name, not a package. Parse the
+        # values inside the brackets instead.
+        if in_optional and re.match(r'^[a-zA-Z0-9_-]+\s*=\s*\[', stripped):
+            # Extract package names from the bracket contents
+            bracket_content = stripped.split("[", 1)[1].rstrip("]").strip()
+            for item in bracket_content.split(","):
+                item = item.strip().strip('"').strip("'")
+                if item:
+                    base = re.split(r'[><=!~;@\s]', item)[0].strip()
+                    if base and base.lower() not in registered_lower:
+                        findings.append(
+                            f"  {filepath}:{line_num}: '{base}' may not be registered on PyPI"
+                        )
+            continue
+        m = dep_re.match(stripped.strip('"').strip("'").strip(","))
+        if m:
+            pkg = m.group(1)
+            if pkg.lower() not in registered_lower and pkg.lower() not in {
+                "python", "requires-python",
+            }:
+                severity = "HIGH RISK" if pkg.lower() in {
+                    p.lower() for p in LOCAL_ONLY_PACKAGES
+                } else ""
+                msg = f"  {filepath}:{line_num}: '{pkg}' may not be registered on PyPI"
+                if severity:
+                    msg += f" [{severity}: local-only package]"
+                findings.append(msg)
+    return findings
+
+
+def check_package_json(filepath: str) -> list[str]:
+    """Check a package.json for unregistered npm package dependencies."""
+    findings = []
+    try:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return findings
+
+    registered_lower = {p.lower() for p in REGISTERED_NPM_PACKAGES}
+    for section in ("dependencies", "devDependencies", "peerDependencies"):
+        for pkg in data.get(section, {}):
+            if pkg.lower() not in registered_lower:
+                findings.append(
+                    f"  {filepath}: npm '{pkg}' ({section}) may not be registered"
+                )
+    return findings
+
+
+def check_cargo_toml(filepath: str) -> list[str]:
+    """Check a Cargo.toml for unregistered crate dependencies."""
+    findings = []
+    try:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+    except (OSError, UnicodeDecodeError):
+        return findings
+
+    registered_lower = {p.lower() for p in REGISTERED_CARGO_PACKAGES}
+    in_deps = False
+    for line_num, line in enumerate(content.splitlines(), 1):
+        stripped = line.strip()
+        if stripped in ("[dependencies]", "[dev-dependencies]",
+                        "[build-dependencies]"):
+            in_deps = True
+            continue
+        if stripped.startswith("[") and in_deps:
+            in_deps = False
+            continue
+        if not in_deps or not stripped or stripped.startswith("#"):
+            continue
+        m = re.match(r'^([a-zA-Z0-9_-]+)\s*=', stripped)
+        if m:
+            crate = m.group(1)
+            if crate.lower() not in registered_lower:
+                findings.append(
+                    f"  {filepath}:{line_num}: crate '{crate}' "
+                    f"may not be registered on crates.io"
+                )
+    return findings
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Detect unregistered PyPI package names in pip install commands.",
@@ -199,7 +388,7 @@ def main() -> int:
     for f in files:
         all_findings.extend(check_file(f))
 
-    # --strict: additionally scan all notebooks and requirements files in the repo
+    # --strict: additionally scan all notebooks, requirements, and manifest files
     if args.strict:
         for nb in glob.glob("**/*.ipynb", recursive=True):
             if "node_modules" in nb or ".ipynb_checkpoints" in nb:
@@ -210,6 +399,21 @@ def main() -> int:
             if "node_modules" in req:
                 continue
             all_findings.extend(check_requirements_file(req))
+
+        for pyproj in glob.glob("**/pyproject.toml", recursive=True):
+            if "node_modules" in pyproj:
+                continue
+            all_findings.extend(check_pyproject_toml(pyproj))
+
+        for pkgjson in glob.glob("**/package.json", recursive=True):
+            if "node_modules" in pkgjson:
+                continue
+            all_findings.extend(check_package_json(pkgjson))
+
+        for cargo in glob.glob("**/Cargo.toml", recursive=True):
+            if "node_modules" in cargo:
+                continue
+            all_findings.extend(check_cargo_toml(cargo))
 
     if all_findings:
         print("⚠️  Potential dependency confusion detected:")

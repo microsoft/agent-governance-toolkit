@@ -1,4 +1,17 @@
-# Tutorial 20 — TypeScript SDK (@agentmesh/sdk)
+# Tutorial 20 — TypeScript SDK (@microsoft/agentmesh-sdk)
+
+> **Package:** `@microsoft/agentmesh-sdk` · **Time:** 30 minutes · **Prerequisites:** Node.js 18+
+
+---
+
+## What You'll Learn
+
+- Identity and Ed25519 DIDs in TypeScript/Node.js
+- Trust scoring and peer verification
+- Declarative policy evaluation
+- Hash-chain audit logging
+
+---
 
 Build governance-aware AI agents in TypeScript and Node.js.
 The `@microsoft/agentmesh-sdk` package provides cryptographic identity (Ed25519 DIDs),

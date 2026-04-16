@@ -128,7 +128,7 @@ class AgentIdentity(BaseModel):
         if not v or not v.strip():
             raise IdentityError("Sponsor email must not be empty")
         if "@" not in v:
-            raise IdentityError(f"Invalid sponsor email format: {v}")
+            raise IdentityError(f"Invalid sponsor email format: {v[:3]}***")
         return v
 
     @field_validator("parent_did")

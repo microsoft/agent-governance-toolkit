@@ -23,8 +23,7 @@ jobs:
       - name: Scan for unregistered pip install targets
         id: dep-check
         run: |
-          # Find all pip install commands and check package names
-          python scripts/check_dependency_confusion.py \
+          python scripts/check_dependency_confusion.py --strict \
             $(find . -name "*.md" -o -name "*.py" -o -name "*.ts" -o -name "*.txt" -o -name "*.yaml" -o -name "*.svg" -o -name "*.ipynb" \
               | grep -v node_modules | grep -v .git | grep -v __pycache__ | grep -v .venv) \
             > dep-confusion-report.txt 2>&1 || true
@@ -69,13 +68,13 @@ jobs:
 
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
         with:
           name: weekly-security-audit
           path: |
             weekly-security-report.json
             dep-confusion-report.txt
-          retention-days: 90
+          retention-days: 180
 
   weak-crypto-check:
     name: Weak Cryptography Scan
@@ -109,4 +108,292 @@ jobs:
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           else
             echo "✅ No pickle deserialization in production code" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ── MSRC-111178 regression check ──────────────────────────────────────
+  # Ensures the pull_request_target RCE fix (PR #303, #353) is never reverted.
+  workflow-security-check:
+    name: Workflow Security Regression Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Check pull_request_target safety
+        run: |
+          echo "### Workflow Security Check (MSRC-111178)" >> "$GITHUB_STEP_SUMMARY"
+          FAIL=0
+
+          # No workflow should checkout HEAD ref on pull_request_target
+          HEAD_REFS=$(grep -rn 'ref:.*head\.sha\|ref:.*head_sha' .github/workflows/*.yml \
+            | grep -v '#' | grep -v 'workflow_run' || true)
+          if [ -n "$HEAD_REFS" ]; then
+            echo "🔴 CRITICAL: pull_request_target workflow checks out HEAD ref:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$HEAD_REFS" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            FAIL=1
+          else
+            echo "✅ No HEAD ref checkout in pull_request_target workflows" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # All pull_request_target checkouts must have persist-credentials: false
+          for f in .github/workflows/ai-*.yml; do
+            if grep -q "pull_request_target" "$f" && grep -q "actions/checkout" "$f"; then
+              if ! grep -q "persist-credentials: false" "$f"; then
+                echo "⚠️ $f: checkout missing persist-credentials: false" >> "$GITHUB_STEP_SUMMARY"
+                FAIL=1
+              fi
+            fi
+          done
+
+          if [ "$FAIL" -eq 0 ]; then
+            echo "✅ All pull_request_target workflows are safe" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $FAIL
+
+  # ── CI injection check ────────────────────────────────────────────────
+  # Detects github.event.* expressions injected directly into run: blocks
+  expression-injection-check:
+    name: Expression Injection Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Check for unsafe expression interpolation
+        run: |
+          echo "### Expression Injection Check" >> "$GITHUB_STEP_SUMMARY"
+          FAIL=0
+
+          # Patterns that should NEVER appear directly in run: blocks
+          UNSAFE_PATTERNS=(
+            'github\.event\.issue\.title'
+            'github\.event\.issue\.body'
+            'github\.event\.pull_request\.title'
+            'github\.event\.pull_request\.body'
+            'github\.event\.comment\.body'
+            'github\.event\.discussion\.title'
+            'github\.event\.discussion\.body'
+            'steps\.[^.]*\.outputs\.all_changed_files'
+          )
+
+          for pattern in "${UNSAFE_PATTERNS[@]}"; do
+            # Find ${{ pattern }} in run: blocks (not in env: blocks which are safe)
+            MATCHES=$(grep -rn "\${{.*${pattern}" .github/workflows/*.yml \
+              | grep -v "env:" | grep -v "#" || true)
+            if [ -n "$MATCHES" ]; then
+              echo "⚠️ Potential injection: \`${pattern}\` in run: block:" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              echo "$MATCHES" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              FAIL=1
+            fi
+          done
+
+          if [ "$FAIL" -eq 0 ]; then
+            echo "✅ No unsafe expression interpolation found" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ── Docker and infrastructure check ───────────────────────────────────
+  docker-security-check:
+    name: Docker & Infrastructure Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Check Dockerfiles for root user
+        run: |
+          echo "### Docker Security Check" >> "$GITHUB_STEP_SUMMARY"
+
+          # Check for containers running as root
+          ROOT_DOCKERFILES=()
+          while IFS= read -r dockerfile; do
+            if ! grep -q "^USER " "$dockerfile"; then
+              ROOT_DOCKERFILES+=("$dockerfile")
+            fi
+          done < <(find . -name "Dockerfile*" -not -path "*/node_modules/*" -not -path "*/.git/*")
+
+          if [ ${#ROOT_DOCKERFILES[@]} -gt 0 ]; then
+            echo "⚠️ Dockerfiles running as root (${#ROOT_DOCKERFILES[@]}):" >> "$GITHUB_STEP_SUMMARY"
+            for df in "${ROOT_DOCKERFILES[@]}"; do
+              echo "  - \`$df\`" >> "$GITHUB_STEP_SUMMARY"
+            done
+          else
+            echo "✅ All Dockerfiles define a non-root USER" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Check for wildcard CORS
+        run: |
+          CORS=$(grep -rn 'allow_origins.*\[.*"\*"' --include="*.py" packages/ \
+            | grep -v test_ | grep -v example || true)
+          if [ -n "$CORS" ]; then
+            echo "⚠️ Wildcard CORS found:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$CORS" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No wildcard CORS in production code" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Check for hardcoded passwords
+        run: |
+          PASSWORDS=$(grep -rn 'PASSWORD.*=.*["\x27]' --include="*.yml" --include="*.yaml" \
+            packages/ docker-compose*.yml \
+            | grep -vi 'CHANGE_ME\|example\|template\|\${' || true)
+          if [ -n "$PASSWORDS" ]; then
+            echo "⚠️ Potential hardcoded passwords:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$PASSWORDS" | sed 's/=.*/=***REDACTED***/' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No hardcoded passwords found" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Check for 0.0.0.0 bindings
+        run: |
+          BINDINGS=$(grep -rn 'host.*=.*"0\.0\.0\.0"\|default.*"0\.0\.0\.0"' --include="*.py" packages/ \
+            | grep -v test_ | grep -v example || true)
+          if [ -n "$BINDINGS" ]; then
+            echo "⚠️ Services binding to 0.0.0.0:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$BINDINGS" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No all-interface bindings in production code" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ── XSS and unsafe DOM check ──────────────────────────────────────────
+  xss-check:
+    name: XSS & Unsafe DOM Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Check for innerHTML without escaping
+        run: |
+          echo "### XSS & Unsafe DOM Check" >> "$GITHUB_STEP_SUMMARY"
+
+          # innerHTML in TypeScript (excluding test files and node_modules)
+          INNERHTML=$(grep -rn 'innerHTML' --include="*.ts" --include="*.tsx" packages/ \
+            | grep -v node_modules | grep -v test | grep -v "\.d\.ts" \
+            | grep -v "escHtml\|escapeHtml\|esc(" || true)
+          if [ -n "$INNERHTML" ]; then
+            echo "⚠️ innerHTML usage without visible escaping:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$INNERHTML" | head -20 >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No unescaped innerHTML in TypeScript" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Check for unsafe Python patterns
+        run: |
+          # eval/exec in production code
+          EVALS=$(grep -rn 'eval(\|exec(' --include="*.py" packages/ \
+            | grep -v test_ | grep -v security_skills | grep -v "# " \
+            | grep -v scanner | grep -v detect | grep -v "example" || true)
+          if [ -n "$EVALS" ]; then
+            echo "⚠️ eval/exec in production code:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$EVALS" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No eval/exec in production code" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # yaml.load (not safe_load)
+          YAML_UNSAFE=$(grep -rn 'yaml\.load(' --include="*.py" packages/ \
+            | grep -v safe_load | grep -v test_ | grep -v "# " | grep -v scanner || true)
+          if [ -n "$YAML_UNSAFE" ]; then
+            echo "⚠️ Unsafe yaml.load() found:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$YAML_UNSAFE" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No unsafe yaml.load() in production code" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # shell=True in subprocess
+          SHELL_TRUE=$(grep -rn 'shell=True' --include="*.py" packages/ \
+            | grep -v test_ | grep -v "# " | grep -v scanner || true)
+          if [ -n "$SHELL_TRUE" ]; then
+            echo "⚠️ subprocess shell=True found:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$SHELL_TRUE" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No shell=True in production code" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ── Action pinning check ──────────────────────────────────────────────
+  action-pinning-check:
+    name: Action SHA Pinning Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Check all actions are SHA-pinned
+        run: |
+          echo "### Action SHA Pinning Check" >> "$GITHUB_STEP_SUMMARY"
+
+          # Find uses: lines that reference external actions without SHA
+          UNPINNED=$(grep -rn "uses:" .github/workflows/*.yml \
+            | grep -v "./" | grep -v "#" \
+            | grep -vE "@[a-f0-9]{40}" || true)
+          if [ -n "$UNPINNED" ]; then
+            echo "⚠️ Unpinned actions found:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$UNPINNED" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ All external actions are SHA-pinned" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ── Supply chain version pinning check ────────────────────────────────
+  version-pinning-check:
+    name: Version Pinning Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Check pyproject.toml upper bounds
+        run: |
+          echo "### Version Pinning Compliance" >> "$GITHUB_STEP_SUMMARY"
+
+          # Find >= without < upper bound in pyproject.toml
+          UNBOUNDED=$(grep -rn '>=.*"' --include="pyproject.toml" packages/ \
+            | grep -v '<' | grep -v '#' | grep -v 'requires-python' || true)
+          if [ -n "$UNBOUNDED" ]; then
+            echo "⚠️ Dependencies without upper bounds:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$UNBOUNDED" | head -20 >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ All pyproject.toml deps have upper bounds" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Check Docker image pinning
+        run: |
+          LATEST=$(grep -rn ':latest' --include="*.yml" --include="*.yaml" \
+            --include="Dockerfile*" packages/ docker-compose*.yml \
+            | grep -v '#' | grep -v node_modules || true)
+          if [ -n "$LATEST" ]; then
+            echo "⚠️ Docker images using :latest tag:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$LATEST" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No :latest Docker image tags" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Check license field format (PyPI compliance)
+        run: |
+          # Cargo.toml must use bare string, pyproject.toml must use table
+          CARGO_BAD=$(grep -rn 'license = {' --include="Cargo.toml" packages/ || true)
+          PYPI_BAD=$(grep -rn '^license = "' --include="pyproject.toml" packages/ || true)
+          if [ -n "$CARGO_BAD" ] || [ -n "$PYPI_BAD" ]; then
+            echo "⚠️ License format issues:" >> "$GITHUB_STEP_SUMMARY"
+            [ -n "$CARGO_BAD" ] && echo "Cargo.toml should use bare string: $CARGO_BAD" >> "$GITHUB_STEP_SUMMARY"
+            [ -n "$PYPI_BAD" ] && echo "pyproject.toml should use table: $PYPI_BAD" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ License fields correctly formatted" >> "$GITHUB_STEP_SUMMARY"
           fi

@@ -15,9 +15,17 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened]
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'notebooks/**'
   schedule:
     - cron: "0 6 * * 1" # Weekly Monday 6:00 UTC
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

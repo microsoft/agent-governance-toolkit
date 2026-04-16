@@ -1,0 +1,100 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-discovery"
+version = "0.1.0"
+description = "Shadow AI agent discovery and inventory for the Agent Governance Toolkit"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
+]
+maintainers = [
+    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
+]
+keywords = [
+    "ai",
+    "agents",
+    "discovery",
+    "inventory",
+    "shadow-ai",
+    "governance",
+    "security",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "pydantic>=2.5.0,<3.0",
+    "click>=8.1.0,<9.0",
+    "rich>=13.0.0,<14.0",
+    "structlog>=24.1.0,<26.0",
+    "pyyaml>=6.0,<7.0",
+]
+
+[project.optional-dependencies]
+github = [
+    "httpx>=0.27.0,<1.0",
+]
+agentmesh = [
+    "agentmesh_platform>=3.0.0,<4.0",
+]
+all = [
+    "agent-discovery[github,agentmesh]",
+]
+dev = [
+    "pytest>=7.4.0,<9.0",
+    "pytest-asyncio>=0.23.0,<2.0",
+    "pytest-cov>=4.1.0,<6.0",
+    "ruff>=0.1.0,<1.0",
+    "mypy>=1.8.0,<2.0",
+    "httpx>=0.27.0,<1.0",
+]
+
+[project.scripts]
+agent-discovery = "agent_discovery.cli.main:main"
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agent-discovery"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_discovery"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true

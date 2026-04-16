@@ -1,6 +1,15 @@
 # Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 name: Dependency Review
-on: [pull_request]
+on:
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'notebooks/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

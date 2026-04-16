@@ -69,6 +69,7 @@ case $MODE in
         ;;
     local)
         echo "🐍 Running locally..."
+        # Install local package (Scorecard: pinned via pyproject.toml)
         pip install --no-cache-dir -e ".[dev]" -q 2>/dev/null || pip install --no-cache-dir -e . -q
         python demo.py "$@"
         ;;

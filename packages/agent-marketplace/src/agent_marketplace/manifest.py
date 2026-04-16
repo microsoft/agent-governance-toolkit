@@ -62,6 +62,10 @@ class PluginManifest(BaseModel):
         None, description="Minimum AgentMesh version required"
     )
     signature: Optional[str] = Field(None, description="Base64-encoded Ed25519 signature")
+    organization: Optional[str] = Field(
+        None,
+        description="Owning organization (None = global/shared plugin)",
+    )
 
     @field_validator("name")
     @classmethod

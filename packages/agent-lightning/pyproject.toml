@@ -1,13 +1,13 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=68.0,<69.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agentmesh-lightning"
-version = "3.0.0"
+name = "agentmesh_lightning"
+version = "3.1.0"
 description = "Public Preview — Agent-Lightning RL integration for the Agent Governance Toolkit: governed training with policy enforcement"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
@@ -32,8 +32,8 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-agent-os = ["agent-os-kernel>=1.0.0"]
-dev = ["pytest>=7.0", "pytest-cov"]
+agent-os = ["agent-os-kernel>=2.0.0,<4.0"]
+dev = ["pytest>=7.0,<8.0", "pytest-cov"]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"

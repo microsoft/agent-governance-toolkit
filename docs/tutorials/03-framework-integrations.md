@@ -1,7 +1,20 @@
 # Tutorial 03 — Wrapping AI Frameworks with Governance
 
+> **Package:** `agent-os-kernel` · **Time:** 25 minutes · **Prerequisites:** Python 3.10+
+
+---
+
+## What You'll Learn
+
+- Govern LangChain agents with policy-aware wrappers
+- Govern CrewAI multi-agent workflows
+- Govern AutoGen conversational agents
+- Govern OpenAI Agents and Google ADK pipelines
+
+---
+
 Every adapter in Agent OS follows the same pattern: **create a policy, create a
-kernel, wrap the framework object, use the governed object as normal**.  The
+kernel, wrap the framework object, use the governed object as normal**.The
 kernel sits between your code and the LLM framework—intercepting calls,
 enforcing limits, blocking disallowed tools, and logging everything.
 
@@ -594,10 +607,18 @@ class GovernedMyAgent:
         # Execute the real framework call
         result = self._original.run(prompt, **kwargs)
 
-        # Post-execution validation (drift detection, output scanning)
-        valid, reason = self._kernel.post_execute(self._ctx, result)
-        if not valid:
-            raise PolicyViolationError(reason)
+        # Post-execution: drift detection and checkpointing.
+        # post_execute() always returns (True, None) — it records drift
+        # scores on ctx but does not block.  Check scores explicitly:
+        self._kernel.post_execute(self._ctx, result)
+
+        if self._ctx._drift_scores:
+            latest = self._ctx._drift_scores[-1]
+            if latest > self._kernel.policy.drift_threshold:
+                raise PolicyViolationError(
+                    f"Drift {latest:.2f} exceeds threshold "
+                    f"{self._kernel.policy.drift_threshold}"
+                )
 
         return result
 
@@ -666,6 +687,10 @@ kernel.on(GovernanceEventType.POLICY_VIOLATION, lambda data: (
 kernel.on(GovernanceEventType.TOOL_CALL_BLOCKED, lambda data: (
     log_blocked_tool(data["tool_name"], data["reason"])
 ))
+
+# Note: event listeners are observational only (logging, alerting,
+# metrics).  emit() wraps callbacks in try/except, so exceptions
+# raised inside a listener are silently swallowed.
 
 governed = kernel.wrap(my_agent)
 ```
@@ -744,8 +769,8 @@ violations route to the same handler, and the audit trail is unified.
 
 ## Next Steps
 
-- [Tutorial 01 — Getting Started](./01-getting-started.md)
-- [Tutorial 02 — Policy Configuration](./02-policy-configuration.md)
+- [Tutorial 01 — Policy Engine](./01-policy-engine.md)
+- [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md)
 - [OWASP Compliance Mapping](../OWASP-COMPLIANCE.md)
 - [API Reference — `BaseIntegration`](../../packages/agent-os/src/agent_os/integrations/base.py)
 - [All 22+ adapters](../../packages/agent-os/src/agent_os/integrations/)

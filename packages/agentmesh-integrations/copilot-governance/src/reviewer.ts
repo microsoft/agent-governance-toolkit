@@ -17,7 +17,7 @@
  * - SSRF-vulnerable URL handling
  * - Missing agent behavior monitoring
  *
- * Each finding is mapped to relevant OWASP Agentic Top-10 risk IDs.
+ * Each finding is mapped to relevant OWASP Agentic Security Initiative Top 10 (ASI 2026) risk IDs.
  *
  * Rules 8–14 are based on patterns discovered during external security
  * researcher reports and subsequent codebase-wide audits.
@@ -45,7 +45,7 @@ const RULES: Rule[] = [
     ruleId: "missing-governance-middleware",
     title: "No governance middleware detected",
     severity: "high",
-    owaspRisks: ["AT07", "AT08"],
+    owaspRisks: ["ASI02", "ASI01"],
     detect(source) {
       const hasGovernance =
         /governanceMiddleware|governance_middleware|GovernancePolicy|apply_governance/i.test(source);
@@ -75,7 +75,7 @@ const RULES: Rule[] = [
     ruleId: "unguarded-tool-execution",
     title: "Direct tool execution without policy check",
     severity: "high",
-    owaspRisks: ["AT07", "AT08"],
+    owaspRisks: ["ASI02", "ASI01"],
     detect(source) {
       // Look for .execute( calls not preceded by a governance/policy check
       const hasDirectExecute = /\.execute\s*\(/.test(source);
@@ -101,7 +101,7 @@ const RULES: Rule[] = [
     ruleId: "missing-audit-logging",
     title: "No audit logging detected",
     severity: "high",
-    owaspRisks: ["AT09"],
+    owaspRisks: ["ASI09", "ASI11"],
     detect(source) {
       const hasAudit =
         /auditMiddleware|audit_middleware|audit\.record|AuditLog|audit_log|hash_chain/i.test(
@@ -130,7 +130,7 @@ const RULES: Rule[] = [
     ruleId: "missing-pii-redaction",
     title: "No PII redaction configured",
     severity: "medium",
-    owaspRisks: ["AT06"],
+    owaspRisks: ["ASI03"],
     detect(source) {
       const hasPii =
         /piiFields|pii_fields|redact_pii|REDACTED|pii_redact/i.test(source);
@@ -156,7 +156,7 @@ const RULES: Rule[] = [
     ruleId: "missing-trust-verification",
     title: "No trust score verification for agent-to-agent calls",
     severity: "medium",
-    owaspRisks: ["AT07", "AT08"],
+    owaspRisks: ["ASI07", "ASI03"],
     detect(source) {
       const hasTrust =
         /trustGate|trust_gate|TrustConfig|minTrustScore|min_trust_score|getTrustScore/i.test(
@@ -187,7 +187,7 @@ const RULES: Rule[] = [
     ruleId: "no-tool-allowlist",
     title: "No tool allow-list or deny-list configured",
     severity: "medium",
-    owaspRisks: ["AT08"],
+    owaspRisks: ["ASI01", "ASI02"],
     detect(source) {
       const hasAllowlist =
         /allowedTools|allowed_tools|blockedTools|blocked_tools|tool_allowlist|tool_denylist/i.test(
@@ -217,7 +217,7 @@ const RULES: Rule[] = [
     ruleId: "no-prompt-injection-guards",
     title: "No prompt-injection input filters configured",
     severity: "medium",
-    owaspRisks: ["AT01"],
+    owaspRisks: ["ASI01"],
     detect(source) {
       const hasPatterns =
         /blockedPatterns|blocked_patterns|prompt.?injection|content.?filter/i.test(source);
@@ -250,7 +250,7 @@ const RULES: Rule[] = [
     ruleId: "stub-security-implementation",
     title: "Security function appears to be a stub (always returns True/success)",
     severity: "critical",
-    owaspRisks: ["AT02", "AT07"],
+    owaspRisks: ["ASI02", "ASI03"],
     detect(source) {
       // Python: def verify/validate/authenticate that just returns True
       const stubPattern =
@@ -284,7 +284,7 @@ const RULES: Rule[] = [
     ruleId: "hardcoded-security-denylist",
     title: "Hardcoded security deny-list found in source code",
     severity: "high",
-    owaspRisks: ["AT01", "AT08"],
+    owaspRisks: ["ASI01", "ASI04"],
     detect(source) {
       // Look for inline lists of SQL keywords, dangerous commands, PII patterns
       const hardcodedLists =
@@ -314,7 +314,7 @@ const RULES: Rule[] = [
     ruleId: "unsafe-deserialization",
     title: "pickle.loads() called without integrity verification",
     severity: "critical",
-    owaspRisks: ["AT02", "AT07"],
+    owaspRisks: ["ASI05", "ASI02"],
     detect(source) {
       const hasPickleLoad = /pickle\.loads?\s*\(/.test(source);
       if (!hasPickleLoad) return null;
@@ -342,7 +342,7 @@ const RULES: Rule[] = [
     ruleId: "unbounded-collection",
     title: "Security-sensitive collection has no size limit",
     severity: "medium",
-    owaspRisks: ["AT05"],
+    owaspRisks: ["ASI08"],
     detect(source) {
       // Look for dicts/lists used for caching, rate-limiting, session tracking
       // that grow without eviction
@@ -374,7 +374,7 @@ const RULES: Rule[] = [
     ruleId: "missing-circuit-breaker",
     title: "External service calls lack circuit breaker pattern",
     severity: "medium",
-    owaspRisks: ["AT05", "AT10"],
+    owaspRisks: ["ASI08", "ASI10"],
     detect(source) {
       const hasExternalCall =
         /httpx\.|aiohttp\.|requests\.|fetch\(|urllib|invoke_tool|call_tool/i.test(source);
@@ -406,7 +406,7 @@ const RULES: Rule[] = [
     ruleId: "ssrf-vulnerable-url",
     title: "URL from untrusted input used without SSRF guard",
     severity: "high",
-    owaspRisks: ["AT02", "AT07"],
+    owaspRisks: ["ASI02", "ASI05"],
     detect(source) {
       const hasUrlFromInput =
         /(?:server_url|endpoint|url|base_url)\s*[:=].*(?:args|params|request|input|config)/i.test(
@@ -439,7 +439,7 @@ const RULES: Rule[] = [
     ruleId: "no-behavior-monitoring",
     title: "No agent behavior monitoring or anomaly detection",
     severity: "medium",
-    owaspRisks: ["AT03", "AT08"],
+    owaspRisks: ["ASI10", "ASI11"],
     detect(source) {
       const hasMonitor =
         /BehaviorMonitor|behavior_monitor|anomaly_detect|RogueDetect|quarantine|AgentMetrics/i.test(

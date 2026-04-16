@@ -12,23 +12,28 @@ rules:
   - tool: "run_shell"
     action: deny
     reason: "Shell execution prohibited per security policy SOC2-CC6.1"
+    mitigates: ["ASI02", "ASI05"]
 
   - tool: "execute_command"
     action: deny
     reason: "Command execution prohibited"
+    mitigates: ["ASI02", "ASI05"]
 
   - tool: "eval"
     action: deny
     reason: "Dynamic code evaluation prohibited"
+    mitigates: ["ASI05"]
 
   - tool: "spawn_process"
     action: deny
     reason: "Process spawning prohibited"
+    mitigates: ["ASI02", "ASI05", "ASI10"]
 
   # === SENSITIVE DATA PROTECTION ===
 
   - tool: "read_file"
     action: allow
+    mitigates: ["ASI02", "ASI07"]
     conditions:
       # Block access to sensitive file types
       - path_not_contains: 
@@ -50,6 +55,7 @@ rules:
 
   - tool: "write_file"
     action: allow
+    mitigates: ["ASI02"]
     conditions:
       - path_not_contains:
         - ".env"
@@ -66,11 +72,13 @@ rules:
   - tool: "delete_file"
     action: deny
     reason: "File deletion requires manual approval"
+    mitigates: ["ASI02"]
 
   # === DATABASE OPERATIONS ===
 
   - tool: "query_database"
     action: allow
+    mitigates: ["ASI02", "ASI05"]
     conditions:
       # Block destructive queries
       - argument_not_matches:
@@ -83,6 +91,7 @@ rules:
 
   - tool: "http_request"
     action: allow
+    mitigates: ["ASI08", "ASI09"]
     rate_limit:
       requests: 20
       per: minute
@@ -114,9 +123,11 @@ rate_limits:
   global:
     requests: 200
     per: minute
+    mitigates: ["ASI08"]
 
 # Audit settings
 audit:
+  mitigates: ["ASI09", "ASI10"]
   # Log all tool calls (not just violations)
   log_all: true
   # Include argument values (may contain sensitive data)

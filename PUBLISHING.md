@@ -161,11 +161,17 @@ Publishing uses the ADO pipeline (`pipelines/esrp-publish.yml` with target `nuge
 
 ### Policy
 
-The Rust crate is published to [crates.io](https://crates.io) via `cargo publish`
-in the ADO pipeline (`pipelines/esrp-publish.yml` with target `rust`).
+The Rust crate is published to [crates.io](https://crates.io) via **ESRP Release**
+using the ADO pipeline (`pipelines/esrp-publish.yml` with target `rust`).
+All crates are published under the official
+[`microsoft-oss-releases`](https://crates.io/users/microsoft-oss-releases) account.
 
-> **Note:** ESRP does not currently support crates.io. Publishing uses a
-> crates.io API token stored as `CRATES_IO_TOKEN` in ADO pipeline variables.
+- Personal `cargo publish` with `CARGO_REGISTRY_TOKEN` is **not** used
+- ESRP handles code signing, malware scanning, and code archival
+- Crates must be packaged as `.crate` files via `cargo package`
+
+> **To yank a crate**, file an IcM incident with the ESRP Release team.
+> Programmatic yanking is not currently supported.
 
 ### Published Packages
 
@@ -175,8 +181,9 @@ in the ADO pipeline (`pipelines/esrp-publish.yml` with target `rust`).
 
 ### Prerequisites
 
-- A crates.io API token stored as `CRATES_IO_TOKEN` (secret) in ADO pipeline variables
-- The token must belong to an account that owns the `agentmesh` crate
+- ESRP Release onboarding completed (same as PyPI/npm)
+- Crate is published under the `microsoft-oss-releases` crates.io account
+- No additional secrets needed beyond the shared ESRP configuration
 
 ### Building Locally
 
@@ -314,7 +321,7 @@ The unified ESRP pipeline (`pipelines/esrp-publish.yml`) supports these targets:
 | `pypi` | PyPI | ESRP Release |
 | `npm` | npmjs.com (`@microsoft`) | ESRP Release |
 | `nuget` | NuGet.org | DotNetCoreCLI push |
-| `rust` | crates.io | `cargo publish` |
+| `rust` | crates.io | ESRP Release |
 | `go` | proxy.golang.org | Git tag |
 | `all` | All of the above | — |
 

@@ -33,7 +33,7 @@ class TestCLI:
         result = runner.invoke(app, ["--version"])
         
         assert result.exit_code == 0
-        assert "1.0.0" in result.output
+        assert "3.1.0" in result.output
     
     def test_init_command(self, runner):
         """Test init command creates agent scaffold."""

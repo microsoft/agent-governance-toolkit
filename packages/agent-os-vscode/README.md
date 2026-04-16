@@ -62,6 +62,50 @@ Real-time monitoring of agent activity:
 - **CI/CD Integration**: GitHub Actions, GitLab CI, Jenkins, Azure Pipelines
 - **Compliance Frameworks**: SOC 2, GDPR, HIPAA, PCI DSS templates
 
+## What's New in v1.1.0
+
+### Governance Visualization Hub
+Unified dashboard for real-time governance monitoring:
+- **SLO Dashboard** -- Availability, latency P50/P95/P99, policy compliance, trust scores with error budgets and burn rates
+- **Agent Topology** -- Force-directed graph of agent mesh, trust rings, bridge status, delegation chains
+- **Audit Stream** -- Filterable event log with drill-down
+- **3-Slot Sidebar** -- Configurable panel system with 8 available views, panel picker for slot assignment
+- **Scanning Mode** -- Auto-rotates visual focus through slots (4s cadence), pauses on hover/focus, respects prefers-reduced-motion
+- **Priority Engine** -- Auto-reorders slots by health urgency in Auto mode (critical > warning > healthy)
+- **Attention Toggle** -- Manual/Auto switch in sidebar header; manual locks to user config
+- **Browser Experience** -- Open dashboard in external browser via local server
+
+### Server Security Hardening
+The Governance Server that powers the browser dashboard includes defense-in-depth security controls:
+- **Session token authentication** -- WebSocket connections require a cryptographically random token generated per server session. Connections without a valid token are rejected with close code 4001.
+- **Rate limiting** -- HTTP requests are limited to 100 per minute per client IP. Excess requests receive HTTP 429 with `Retry-After` header.
+- **Local asset bundling** -- D3.js and Chart.js vendored locally (no CDN dependency). Eliminates supply-chain risk from external script loading.
+- **Content Security Policy (CSP)** -- Restricts script execution to nonce-only (`'nonce-...'`). No CDN allowlisting, no `unsafe-eval`. WebSocket connect-src explicitly scoped to `ws://127.0.0.1:*`.
+- **HTML escaping** -- Shared `escapeHtml` utility applied to all dynamic data in innerHTML assignments across legacy panels. Prevents XSS from agent DIDs, policy names, and audit data.
+- **Loopback-only binding** -- Server binds exclusively to `127.0.0.1`. Remote connections are structurally impossible.
+- **Python path validation** -- Rejects shell metacharacters before subprocess spawn to prevent command injection.
+- **Dependency pinning** -- Production dependencies (axios, ws) pinned to exact versions for reproducible builds.
+
+For the full security model, threat analysis, and accepted risks, see [SECURITY.md](SECURITY.md).
+
+### Live Governance Data
+The extension automatically detects and starts [agent-failsafe](https://pypi.org/project/agent-failsafe/) to populate dashboards with real governance data:
+- On first activation, the extension checks for `agent-failsafe` and offers to install it if missing (`pip install agent-failsafe[server]`)
+- Once installed, a local REST server starts automatically on `127.0.0.1:9377` — no manual configuration required
+- SLO dashboard, agent topology, and audit stream populate with live policy compliance, fleet health, and audit events
+- Status bar shows connection state: Live (green), Stale (yellow), Disconnected (red)
+- All REST responses validated with type checking, size caps, and string truncation
+- Advanced: override with `agentOS.governance.endpoint` to connect to an existing server
+
+### Policy Diagnostics
+- Real-time governance rule validation on Python/TypeScript/YAML files
+- Code actions: safe alternatives for flagged patterns
+- Status bar with governance mode and execution ring indicator
+
+### Report Export
+- Export governance snapshot as self-contained HTML report
+- Metrics exporter pushes dashboard data to configured observability endpoints
+
 ## Quick Start
 
 1. Install from VS Code Marketplace
@@ -155,6 +199,15 @@ Share policies via `.vscode/agent-os.json`:
 | `Agent OS: Setup CI/CD Integration` | Generate CI/CD configuration |
 | `Agent OS: Check Compliance` | Run compliance validation |
 | `Agent OS: Sign In (Enterprise)` | Enterprise SSO authentication |
+| `Agent OS: SLO Dashboard (Visual)` | Rich webview SLO dashboard |
+| `Agent OS: Agent Topology Graph` | Force-directed agent topology graph |
+| `Agent OS: Refresh SLO Data` | Refresh SLO metrics |
+| `Agent OS: Refresh Agent Topology` | Refresh topology data |
+| `Agent OS: Open Governance Hub` | Unified governance dashboard |
+| `Agent OS: Open SLO Dashboard in Browser` | SLO dashboard in external browser |
+| `Agent OS: Open Topology Graph in Browser` | Topology graph in external browser |
+| `Agent OS: Open Governance Hub in Browser` | Governance Hub in external browser |
+| `Agent OS: Export Governance Report` | Export HTML governance report |
 
 ## Configuration
 
@@ -170,6 +223,12 @@ Open Settings (Ctrl+,) and search for "Agent OS":
 | `agentOS.diagnostics.enabled` | true | Real-time diagnostics |
 | `agentOS.enterprise.sso.enabled` | false | Enterprise SSO |
 | `agentOS.enterprise.compliance.framework` | - | Default compliance framework |
+| `agentOS.export.localPath` | "" | Local directory for exported reports |
+| `agentOS.observability.endpoint` | "" | Metrics push endpoint (OTEL compatible) |
+| `agentOS.diagnostics.severity` | "warning" | Minimum diagnostic severity |
+| `agentOS.governance.pythonPath` | "python" | Python interpreter with agent-failsafe installed |
+| `agentOS.governance.endpoint` | "" | Override: connect to existing agent-failsafe server (auto-start if empty) |
+| `agentOS.governance.refreshIntervalMs` | 10000 | Polling interval for governance data (minimum 5000ms) |
 
 ## Pricing
 
@@ -179,12 +238,16 @@ Open Settings (Ctrl+,) and search for "Agent OS":
 | **Pro** | $9/mo | Unlimited CMVK, 90-day audit, priority support |
 | **Enterprise** | Custom | Self-hosted, SSO, RBAC, compliance reports |
 
-## Privacy
+## Privacy and Security
 
 - **Local-first**: Policy checks run entirely in the extension
 - **No network**: Basic mode never sends code anywhere
 - **Opt-in CMVK**: You choose when to use cloud verification
+- **Loopback server**: The browser dashboard server binds to `127.0.0.1` only and requires session token authentication
+- **No telemetry**: The Governance Server does not send data to external endpoints unless you explicitly configure an observability endpoint
 - **Open source**: Inspect the code yourself
+
+See [SECURITY.md](SECURITY.md) for the full server security model and threat analysis.
 
 ## Requirements
 

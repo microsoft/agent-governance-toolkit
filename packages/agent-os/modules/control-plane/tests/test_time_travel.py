@@ -385,5 +385,130 @@ class TestFlightRecorderTimeTravel:
         assert events[0]["agent_id"] == "test-agent"
 
 
+class TestFlightRecorderVerdictTamperDetection:
+    """Regression tests for audit chain integrity (verdict tamper detection).
+
+    The FlightRecorder must detect post-hoc modifications to verdict fields
+    via the ``content_hash`` stored alongside each audit entry.
+    """
+
+    def test_verdict_tamper_detected_after_success(self):
+        """Tampering with verdict from 'allowed' to 'blocked' must be caught."""
+        import sqlite3
+
+        fr = FlightRecorder(
+            db_path=tempfile.NamedTemporaryFile(suffix=".db", delete=False).name,
+            enable_batching=False,
+        )
+
+        # 1. Start trace (verdict=pending)
+        trace_id = fr.start_trace("agent-1", "web_search", {"q": "hello"})
+
+        # 2. Log success (verdict=allowed)
+        fr.log_success(trace_id, result="10 results", execution_time_ms=100.0)
+
+        # 3. Verify integrity passes
+        result = fr.verify_integrity()
+        assert result["valid"], f"Expected valid before tamper: {result}"
+
+        # 4. Manually tamper with verdict in SQLite
+        conn = sqlite3.connect(fr.db_path)
+        conn.execute(
+            "UPDATE audit_log SET policy_verdict = 'blocked' WHERE trace_id = ?",
+            (trace_id,),
+        )
+        conn.commit()
+        conn.close()
+
+        # 5. Verify integrity now FAILS
+        result = fr.verify_integrity()
+        assert not result["valid"], f"Expected integrity failure after tamper: {result}"
+        assert "tamper" in result["error"].lower() or "mismatch" in result["error"].lower()
+
+    def test_verdict_tamper_detected_after_violation(self):
+        """Tampering with verdict from 'blocked' to 'allowed' must be caught."""
+        import sqlite3
+
+        fr = FlightRecorder(
+            db_path=tempfile.NamedTemporaryFile(suffix=".db", delete=False).name,
+            enable_batching=False,
+        )
+
+        trace_id = fr.start_trace("agent-2", "delete_file", {"path": "/etc/passwd"})
+        fr.log_violation(trace_id, "dangerous operation")
+
+        assert fr.verify_integrity()["valid"]
+
+        # Tamper: flip blocked -> allowed
+        conn = sqlite3.connect(fr.db_path)
+        conn.execute(
+            "UPDATE audit_log SET policy_verdict = 'allowed' WHERE trace_id = ?",
+            (trace_id,),
+        )
+        conn.commit()
+        conn.close()
+
+        result = fr.verify_integrity()
+        assert not result["valid"], f"Expected failure after blocked->allowed tamper: {result}"
+
+    def test_result_tamper_detected(self):
+        """Tampering with the result field must also be caught."""
+        import sqlite3
+
+        fr = FlightRecorder(
+            db_path=tempfile.NamedTemporaryFile(suffix=".db", delete=False).name,
+            enable_batching=False,
+        )
+
+        trace_id = fr.start_trace("agent-3", "query_db", {"sql": "SELECT 1"})
+        fr.log_success(trace_id, result="1 row returned")
+
+        assert fr.verify_integrity()["valid"]
+
+        # Tamper: change the result
+        conn = sqlite3.connect(fr.db_path)
+        conn.execute(
+            "UPDATE audit_log SET result = 'all rows deleted' WHERE trace_id = ?",
+            (trace_id,),
+        )
+        conn.commit()
+        conn.close()
+
+        result = fr.verify_integrity()
+        assert not result["valid"], f"Expected failure after result tamper: {result}"
+
+    def test_interleaved_traces_integrity(self):
+        """Interleaved start_trace/log calls must not break integrity."""
+        fr = FlightRecorder(
+            db_path=tempfile.NamedTemporaryFile(suffix=".db", delete=False).name,
+            enable_batching=False,
+        )
+
+        t1 = fr.start_trace("agent-a", "tool-1", {"x": 1})
+        t2 = fr.start_trace("agent-b", "tool-2", {"y": 2})
+        fr.log_success(t1, result="ok1")
+        fr.log_violation(t2, "blocked by policy")
+
+        t3 = fr.start_trace("agent-c", "tool-3")
+        fr.log_success(t3, result="ok3")
+
+        result = fr.verify_integrity()
+        assert result["valid"], f"Interleaved traces should pass: {result}"
+        assert result["total_entries"] == 3
+
+    def test_untampered_pending_entry_valid(self):
+        """A trace that is never resolved (stays pending) should pass integrity."""
+        fr = FlightRecorder(
+            db_path=tempfile.NamedTemporaryFile(suffix=".db", delete=False).name,
+            enable_batching=False,
+        )
+
+        fr.start_trace("agent-4", "slow_tool", {"timeout": 9999})
+        # Never call log_success/log_violation — entry stays pending
+
+        result = fr.verify_integrity()
+        assert result["valid"], f"Pending entry should be valid: {result}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

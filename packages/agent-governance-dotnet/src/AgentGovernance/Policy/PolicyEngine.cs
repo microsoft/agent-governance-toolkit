@@ -87,7 +87,7 @@ public sealed class PolicyEngine
     /// Evaluates an agent request against all loaded policies.
     /// </summary>
     /// <param name="agentDid">
-    /// The decentralised identifier of the agent making the request (e.g., "did:mesh:abc123").
+    /// The decentralised identifier of the agent making the request (e.g., "did:agentmesh:abc123").
     /// This is injected into the evaluation context as <c>agent_did</c>.
     /// </param>
     /// <param name="context">

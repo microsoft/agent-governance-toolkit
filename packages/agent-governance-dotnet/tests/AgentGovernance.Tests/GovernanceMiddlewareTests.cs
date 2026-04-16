@@ -32,7 +32,7 @@ rules:
 ";
         var middleware = CreateMiddleware(yaml);
 
-        var result = middleware.EvaluateToolCall("did:mesh:agent1", "rm");
+        var result = middleware.EvaluateToolCall("did:agentmesh:agent1", "rm");
 
         Assert.False(result.Allowed);
         Assert.Contains("deny", result.Reason, StringComparison.OrdinalIgnoreCase);
@@ -51,7 +51,7 @@ rules: []
 ";
         var middleware = CreateMiddleware(yaml);
 
-        var result = middleware.EvaluateToolCall("did:mesh:agent1", "file_read");
+        var result = middleware.EvaluateToolCall("did:agentmesh:agent1", "file_read");
 
         Assert.True(result.Allowed);
         Assert.NotNull(result.AuditEntry);
@@ -79,7 +79,7 @@ rules:
         var events = new List<GovernanceEvent>();
         emitter.OnAll(e => events.Add(e));
 
-        middleware.EvaluateToolCall("did:mesh:test", "delete");
+        middleware.EvaluateToolCall("did:agentmesh:test", "delete");
 
         // Should emit both a ToolCallBlocked and PolicyViolation event.
         Assert.Contains(events, e => e.Type == GovernanceEventType.ToolCallBlocked);
@@ -97,7 +97,7 @@ rules: []
 ";
         var middleware = CreateMiddleware(yaml);
 
-        var result = middleware.EvaluateToolCall("did:mesh:test", "my_tool",
+        var result = middleware.EvaluateToolCall("did:agentmesh:test", "my_tool",
             new Dictionary<string, object> { ["path"] = "/tmp/file.txt" });
 
         Assert.Equal("my_tool", result.AuditEntry.Data["tool_name"]);
@@ -118,7 +118,7 @@ rules:
 ";
         var middleware = CreateMiddleware(yaml);
 
-        var result = middleware.EvaluateToolCall("did:mesh:test", "read",
+        var result = middleware.EvaluateToolCall("did:agentmesh:test", "read",
             new Dictionary<string, object> { ["path"] = "/etc/secrets" });
 
         Assert.False(result.Allowed);
@@ -135,7 +135,7 @@ rules: []
 ";
         var middleware = CreateMiddleware(yaml);
 
-        var result = middleware.EvaluateToolCall("did:mesh:test", "anything");
+        var result = middleware.EvaluateToolCall("did:agentmesh:test", "anything");
 
         Assert.NotNull(result.PolicyDecision);
         Assert.False(result.PolicyDecision!.Allowed);

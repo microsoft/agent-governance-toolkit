@@ -17,6 +17,7 @@ export interface PolicyRule {
   reason?: string;
   conditions?: PolicyCondition[];
   rate_limit?: { requests: number; per: string };
+  mitigates?: string[];
 }
 
 export interface PolicyCondition {
@@ -40,6 +41,7 @@ export interface PolicyDecision {
   allowed: boolean;
   reason?: string;
   matchedRule?: string;
+  mitigatedRisks?: string[];
 }
 
 // Built-in policies
@@ -62,9 +64,9 @@ const BUILTIN_POLICY_DEFS: Record<string, Policy> = {
     version: '1.0',
     mode: 'enforce',
     rules: [
-      { tool: 'run_shell', action: 'deny', reason: 'Shell execution blocked' },
-      { tool: 'execute_command', action: 'deny', reason: 'Command execution blocked' },
-      { tool: 'eval', action: 'deny', reason: 'Eval blocked' },
+      { tool: 'run_shell', action: 'deny', reason: 'Shell execution blocked', mitigates: ['ASI02', 'ASI05'] },
+      { tool: 'execute_command', action: 'deny', reason: 'Command execution blocked', mitigates: ['ASI02', 'ASI05'] },
+      { tool: 'eval', action: 'deny', reason: 'Eval blocked', mitigates: ['ASI05'] },
       { tool: '*', action: 'allow' },
     ],
   },
@@ -82,8 +84,8 @@ const BUILTIN_POLICY_DEFS: Record<string, Policy> = {
     version: '1.0',
     mode: 'enforce',
     rules: [
-      { tool: 'run_shell', action: 'deny', reason: 'Shell execution blocked' },
-      { tool: 'execute_command', action: 'deny', reason: 'Command execution blocked' },
+      { tool: 'run_shell', action: 'deny', reason: 'Shell execution blocked', mitigates: ['ASI02', 'ASI05'] },
+      { tool: 'execute_command', action: 'deny', reason: 'Command execution blocked', mitigates: ['ASI02', 'ASI05'] },
       { tool: 'write_file', action: 'allow', rate_limit: { requests: 10, per: 'minute' } },
       { tool: '*', action: 'allow' },
     ],
@@ -151,6 +153,7 @@ export function evaluatePolicy(
         allowed: rule.action === 'allow',
         reason: rule.reason,
         matchedRule: rule.tool,
+        mitigatedRisks: rule.mitigates ? [...rule.mitigates] : undefined,
       };
     }
   }

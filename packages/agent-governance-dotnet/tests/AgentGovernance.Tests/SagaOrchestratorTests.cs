@@ -17,14 +17,14 @@ public class SagaOrchestratorTests
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "step-1",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = async ct => { log.Add("exec-1"); return "result-1"; },
             Compensate = async ct => { log.Add("undo-1"); }
         });
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "step-2",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = async ct => { log.Add("exec-2"); return "result-2"; },
             Compensate = async ct => { log.Add("undo-2"); }
         });
@@ -47,21 +47,21 @@ public class SagaOrchestratorTests
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "step-1",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = async ct => { log.Add("exec-1"); return null; },
             Compensate = async ct => { log.Add("undo-1"); }
         });
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "step-2",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = async ct => { log.Add("exec-2"); return null; },
             Compensate = async ct => { log.Add("undo-2"); }
         });
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "step-3",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = ct => throw new InvalidOperationException("boom"),
             Compensate = async ct => { log.Add("undo-3"); }
         });
@@ -83,14 +83,14 @@ public class SagaOrchestratorTests
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "step-1",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = async ct => null,
             Compensate = ct => throw new Exception("undo failed")
         });
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "step-2",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = ct => throw new Exception("fail")
         });
 
@@ -110,7 +110,7 @@ public class SagaOrchestratorTests
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "slow-step",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Timeout = TimeSpan.FromMilliseconds(50),
             Execute = async ct => { await Task.Delay(5000, ct); return null; }
         });
@@ -130,7 +130,7 @@ public class SagaOrchestratorTests
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "step-1",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = async ct => null
         });
 
@@ -141,7 +141,7 @@ public class SagaOrchestratorTests
             orchestrator.AddStep(saga, new SagaStep
             {
                 ActionId = "late",
-                AgentDid = "did:mesh:a",
+                AgentDid = "did:agentmesh:a",
                 Execute = async ct => null
             }));
     }

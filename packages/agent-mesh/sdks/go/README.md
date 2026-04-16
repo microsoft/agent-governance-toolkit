@@ -1,6 +1,6 @@
 # AgentMesh Go SDK
 
-Go SDK for the AgentMesh governance framework — identity, trust scoring, policy evaluation, and tamper-evident audit logging.
+Go SDK for the AgentMesh governance framework — identity, trust scoring, policy evaluation, tamper-evident audit logging, MCP security scanning, execution privilege rings, and agent lifecycle management.
 
 ## Install
 
@@ -96,6 +96,70 @@ Unified governance client combining all modules.
 |---|---|
 | `NewClient(agentID, ...Option)` | Create a full client |
 | `(*AgentMeshClient).ExecuteWithGovernance(action, params)` | Run action through governance pipeline |
+
+### MCP Security (`mcp.go`)
+
+Detects tool poisoning, typosquatting, hidden instructions, and rug-pull patterns in MCP tool definitions.
+
+| Function / Method | Description |
+|---|---|
+| `NewMcpSecurityScanner()` | Create a new MCP security scanner |
+| `(*McpSecurityScanner).Scan(tool)` | Scan a single tool definition |
+| `(*McpSecurityScanner).ScanAll(tools)` | Scan multiple tool definitions |
+
+```go
+scanner := agentmesh.NewMcpSecurityScanner()
+result := scanner.Scan(agentmesh.McpToolDefinition{
+    Name:        "search",
+    Description: "Search the web.",
+})
+fmt.Printf("Safe: %v, Risk: %d\n", result.Safe, result.RiskScore)
+```
+
+### Execution Rings (`rings.go`)
+
+Privilege ring model for agent access control (Ring 0 = Admin … Ring 3 = Sandboxed).
+
+| Function / Method | Description |
+|---|---|
+| `NewRingEnforcer()` | Create a ring enforcer |
+| `(*RingEnforcer).Assign(agentID, ring)` | Place an agent in a ring |
+| `(*RingEnforcer).GetRing(agentID)` | Get an agent's ring |
+| `(*RingEnforcer).CheckAccess(agentID, action)` | Check if action is allowed |
+| `(*RingEnforcer).SetRingPermissions(ring, actions)` | Configure ring permissions |
+
+```go
+enforcer := agentmesh.NewRingEnforcer()
+enforcer.SetRingPermissions(agentmesh.RingStandard, []string{"data.read", "data.write"})
+enforcer.Assign("agent-1", agentmesh.RingStandard)
+fmt.Println(enforcer.CheckAccess("agent-1", "data.read")) // true
+```
+
+### Lifecycle (`lifecycle.go`)
+
+Eight-state lifecycle model with validated transitions.
+
+States: `provisioning` → `active` → `suspended` / `rotating` / `degraded` / `quarantined` → `decommissioning` → `decommissioned`
+
+| Function / Method | Description |
+|---|---|
+| `NewLifecycleManager(agentID)` | Create a lifecycle manager (starts provisioning) |
+| `(*LifecycleManager).State()` | Get current state |
+| `(*LifecycleManager).Events()` | Get transition history |
+| `(*LifecycleManager).Transition(to, reason, by)` | Perform a validated transition |
+| `(*LifecycleManager).CanTransition(to)` | Check if transition is valid |
+| `(*LifecycleManager).Activate(reason)` | Convenience: move to active |
+| `(*LifecycleManager).Suspend(reason)` | Convenience: move to suspended |
+| `(*LifecycleManager).Quarantine(reason)` | Convenience: move to quarantined |
+| `(*LifecycleManager).Decommission(reason)` | Convenience: start decommissioning |
+
+```go
+lm := agentmesh.NewLifecycleManager("agent-1")
+lm.Activate("provisioned")
+lm.Suspend("maintenance window")
+lm.Activate("maintenance complete")
+fmt.Println(lm.State()) // active
+```
 
 ## License
 

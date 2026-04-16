@@ -18,7 +18,7 @@ Components:
     - agent-lightning: RL training governance
 """
 
-__version__ = "1.1.0"
+__version__ = "3.1.0"
 
 # Re-export core components for convenience
 try:
@@ -31,4 +31,14 @@ try:
 except ImportError:
     pass
 
-from agent_compliance.supply_chain import SupplyChainGuard, SupplyChainFinding, SupplyChainConfig  # noqa: F401
+from agent_compliance.supply_chain import (  # noqa: F401
+    SupplyChainGuard,
+    SupplyChainFinding,
+    SupplyChainConfig,
+)
+from agent_compliance.prompt_defense import (  # noqa: F401
+    PromptDefenseEvaluator,
+    PromptDefenseConfig,
+    PromptDefenseFinding,
+    PromptDefenseReport,
+)

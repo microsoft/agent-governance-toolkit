@@ -63,7 +63,7 @@ public static class Jwk
         var publicKey = Base64UrlDecode(x);
         var did = jwk.TryGetValue("kid", out var kid) && !string.IsNullOrWhiteSpace(kid)
             ? kid
-            : $"did:mesh:{Convert.ToHexString(publicKey[..4]).ToLowerInvariant()}";
+            : $"did:agentmesh:{Convert.ToHexString(publicKey[..4]).ToLowerInvariant()}";
 
         return new AgentIdentity(did, publicKey);
     }

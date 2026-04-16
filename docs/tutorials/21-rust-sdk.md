@@ -2,6 +2,8 @@
 
 # Tutorial 21 — Rust SDK (`agentmesh` crate)
 
+> **Package:** `agentmesh` crate · **Time:** 30 minutes · **Prerequisites:** Rust 1.75+
+
 Full agent governance in Rust — policy evaluation, trust scoring, hash-chain
 audit logging, and Ed25519 agent identity. The `agentmesh` crate provides the
 same governance primitives as the Python, TypeScript, and .NET SDKs with Rust's

@@ -90,7 +90,7 @@ public class ExecutionRingsAdvancedTests
 public class AgentIdentityAdvancedTests
 {
     [Fact]
-    public void Create_GeneratesDid() => Assert.StartsWith("did:mesh:", AgentIdentity.Create("test").Did);
+    public void Create_GeneratesDid() => Assert.StartsWith("did:agentmesh:", AgentIdentity.Create("test").Did);
 
     [Fact]
     public void Create_DifferentNames_DifferentPrefixes()
@@ -98,7 +98,7 @@ public class AgentIdentityAdvancedTests
         // DIDs have random component, but the first 8 hex chars are deterministic from name.
         var id1 = AgentIdentity.Create("agent-a");
         var id2 = AgentIdentity.Create("agent-b");
-        Assert.NotEqual(id1.Did[..17], id2.Did[..17]); // "did:mesh:" + 8 hex chars
+        Assert.NotEqual(id1.Did[..17], id2.Did[..17]); // "did:agentmesh:" + 8 hex chars
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public class FileTrustStoreAdvancedTests
     public void GetScore_Unknown_ReturnsDefault()
     {
         var f = Path.Combine(Path.GetTempPath(), $"trust-{Guid.NewGuid()}.json");
-        try { using var s = new FileTrustStore(f, defaultScore: 500); Assert.Equal(500, s.GetScore("did:mesh:x")); }
+        try { using var s = new FileTrustStore(f, defaultScore: 500); Assert.Equal(500, s.GetScore("did:agentmesh:x")); }
         finally { File.Delete(f); }
     }
 
@@ -159,8 +159,8 @@ public class FileTrustStoreAdvancedTests
         try
         {
             using var s = new FileTrustStore(f, decayRate: 0);
-            s.SetScore("did:mesh:a", 2000); Assert.InRange(s.GetScore("did:mesh:a"), 999, 1001);
-            s.SetScore("did:mesh:b", -100); Assert.InRange(s.GetScore("did:mesh:b"), -1, 1);
+            s.SetScore("did:agentmesh:a", 2000); Assert.InRange(s.GetScore("did:agentmesh:a"), 999, 1001);
+            s.SetScore("did:agentmesh:b", -100); Assert.InRange(s.GetScore("did:agentmesh:b"), -1, 1);
         }
         finally { File.Delete(f); }
     }
@@ -169,7 +169,7 @@ public class FileTrustStoreAdvancedTests
     public void PositiveSignal_Increases()
     {
         var f = Path.Combine(Path.GetTempPath(), $"trust-{Guid.NewGuid()}.json");
-        try { using var s = new FileTrustStore(f, defaultScore: 500); s.RecordPositiveSignal("did:mesh:a", 50); Assert.True(s.GetScore("did:mesh:a") > 500); }
+        try { using var s = new FileTrustStore(f, defaultScore: 500); s.RecordPositiveSignal("did:agentmesh:a", 50); Assert.True(s.GetScore("did:agentmesh:a") > 500); }
         finally { File.Delete(f); }
     }
 
@@ -177,7 +177,7 @@ public class FileTrustStoreAdvancedTests
     public void NegativeSignal_Decreases()
     {
         var f = Path.Combine(Path.GetTempPath(), $"trust-{Guid.NewGuid()}.json");
-        try { using var s = new FileTrustStore(f, defaultScore: 500); s.RecordNegativeSignal("did:mesh:a", 100); Assert.True(s.GetScore("did:mesh:a") < 500); }
+        try { using var s = new FileTrustStore(f, defaultScore: 500); s.RecordNegativeSignal("did:agentmesh:a", 100); Assert.True(s.GetScore("did:agentmesh:a") < 500); }
         finally { File.Delete(f); }
     }
 
@@ -185,7 +185,7 @@ public class FileTrustStoreAdvancedTests
     public void Remove_ReturnsDefault()
     {
         var f = Path.Combine(Path.GetTempPath(), $"trust-{Guid.NewGuid()}.json");
-        try { using var s = new FileTrustStore(f, defaultScore: 500); s.SetScore("did:mesh:a", 800); s.Remove("did:mesh:a"); Assert.Equal(500, s.GetScore("did:mesh:a")); }
+        try { using var s = new FileTrustStore(f, defaultScore: 500); s.SetScore("did:agentmesh:a", 800); s.Remove("did:agentmesh:a"); Assert.Equal(500, s.GetScore("did:agentmesh:a")); }
         finally { File.Delete(f); }
     }
 
@@ -195,8 +195,8 @@ public class FileTrustStoreAdvancedTests
         var f = Path.Combine(Path.GetTempPath(), $"trust-{Guid.NewGuid()}.json");
         try
         {
-            using (var s = new FileTrustStore(f, decayRate: 0)) { s.SetScore("did:mesh:p", 777); s.Flush(); }
-            using (var s2 = new FileTrustStore(f, decayRate: 0)) { Assert.InRange(s2.GetScore("did:mesh:p"), 776, 778); }
+            using (var s = new FileTrustStore(f, decayRate: 0)) { s.SetScore("did:agentmesh:p", 777); s.Flush(); }
+            using (var s2 = new FileTrustStore(f, decayRate: 0)) { Assert.InRange(s2.GetScore("did:agentmesh:p"), 776, 778); }
         }
         finally { File.Delete(f); }
     }
@@ -217,15 +217,15 @@ public class GovernanceMetricsAdvancedTests
     public void RecordDecision_DoesNotThrow()
     {
         using var m = new GovernanceMetrics();
-        m.RecordDecision(true, "did:mesh:a", "tool", 0.01);
-        m.RecordDecision(false, "did:mesh:a", "tool", 0.01, rateLimited: true);
+        m.RecordDecision(true, "did:agentmesh:a", "tool", 0.01);
+        m.RecordDecision(false, "did:agentmesh:a", "tool", 0.01, rateLimited: true);
     }
 
     [Fact]
     public void RecordDecision_ManyRecords_NoError()
     {
         using var m = new GovernanceMetrics();
-        for (int i = 0; i < 10_000; i++) m.RecordDecision(i % 2 == 0, $"did:mesh:a-{i % 10}", "tool", 0.01);
+        for (int i = 0; i < 10_000; i++) m.RecordDecision(i % 2 == 0, $"did:agentmesh:a-{i % 10}", "tool", 0.01);
     }
 
     [Fact]
@@ -353,8 +353,8 @@ rules:
   - name: allow-search
     condition: ""tool_name == 'search'""
     action: allow");
-        Assert.True(k.EvaluateToolCall("did:mesh:a", "search").Allowed);
-        Assert.False(k.EvaluateToolCall("did:mesh:a", "delete").Allowed);
+        Assert.True(k.EvaluateToolCall("did:agentmesh:a", "search").Allowed);
+        Assert.False(k.EvaluateToolCall("did:agentmesh:a", "delete").Allowed);
     }
 
     [Fact]
@@ -365,7 +365,7 @@ rules:
 default_action: deny");
         var violations = new List<GovernanceEvent>();
         k.OnEvent(GovernanceEventType.PolicyViolation, evt => violations.Add(evt));
-        k.EvaluateToolCall("did:mesh:a", "bad_tool");
+        k.EvaluateToolCall("did:agentmesh:a", "bad_tool");
         Assert.Single(violations);
     }
 
@@ -381,8 +381,8 @@ rules:
     action: allow");
         var events = new List<GovernanceEvent>();
         k.OnAllEvents(evt => events.Add(evt));
-        k.EvaluateToolCall("did:mesh:a", "read");
-        k.EvaluateToolCall("did:mesh:a", "write");
+        k.EvaluateToolCall("did:agentmesh:a", "read");
+        k.EvaluateToolCall("did:agentmesh:a", "write");
         Assert.True(events.Count >= 2);
     }
 
@@ -395,7 +395,7 @@ rules:
             File.WriteAllText(tempFile, @"name: file-policy
 default_action: allow");
             var k = new GovernanceKernel(new GovernanceOptions { PolicyPaths = new() { tempFile } });
-            Assert.True(k.EvaluateToolCall("did:mesh:a", "any").Allowed);
+            Assert.True(k.EvaluateToolCall("did:agentmesh:a", "any").Allowed);
         }
         finally { File.Delete(tempFile); }
     }

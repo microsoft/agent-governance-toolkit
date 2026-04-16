@@ -190,6 +190,7 @@ export class MCPProxy {
       decision: decision.allowed ? 'allow' : 'deny',
       reason: decision.reason,
       rule: decision.matchedRule,
+      mitigates: decision.mitigatedRisks,
     });
 
     if (!decision.allowed && this.options.mode === 'enforce') {

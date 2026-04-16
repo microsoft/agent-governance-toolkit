@@ -43,7 +43,7 @@ class GCResult:
 class RetentionPolicy:
     """Configuration for what to retain after GC."""
 
-    delta_retention_days: int = 90
+    delta_retention_days: int = 180
     hash_retention: str = "permanent"
     liability_snapshot: bool = True
 

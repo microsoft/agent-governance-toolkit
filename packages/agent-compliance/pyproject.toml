@@ -1,13 +1,13 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=68.0,<83.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent-governance-toolkit"
-version = "3.0.0"
+name = "agent_governance_toolkit"
+version = "3.1.0"
 description = "Public Preview — Unified installer and runtime policy enforcement for the Agent Governance Toolkit"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
@@ -33,19 +33,23 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "agent-os-kernel>=1.0.0",
-    "agentmesh-platform>=1.0.0",
-    "pydantic>=2.4.0",
+    "pydantic>=2.4.0,<3.0",
+    "pyyaml>=6.0,<7.0",
+    "click>=8.0,<9.0",
 ]
 
 [project.optional-dependencies]
-runtime = ["agentmesh-runtime>=2.0.0"]
-sre = ["agent-sre>=1.0.0"]
+kernel = ["agent-os-kernel>=2.0.0,<4.0"]
+mesh = ["agentmesh-platform>=2.0.0,<4.0"]
+runtime = ["agentmesh-runtime>=2.0.0,<3.0"]
+sre = ["agent-sre>=1.0.0,<2.0"]
 opa = []
-cedar = ["cedarpy>=4.0.0"]
+cedar = ["cedarpy>=4.0.0,<5.0"]
 full = [
-    "agentmesh-runtime>=2.0.0",
-    "agent-sre>=1.0.0",
+    "agent-os-kernel>=2.0.0,<4.0",
+    "agentmesh-platform>=2.0.0,<4.0",
+    "agentmesh-runtime>=2.0.0,<3.0",
+    "agent-sre>=1.0.0,<2.0",
 ]
 
 [project.urls]
@@ -62,3 +66,4 @@ Repository = "https://github.com/microsoft/agent-governance-toolkit"
 agent-governance-toolkit = "agent_compliance.cli.main:main"
 agent-governance = "agent_compliance.cli.main:main"
 agent-compliance = "agent_compliance.cli.main:main"
+agt = "agent_compliance.cli.agt:main"

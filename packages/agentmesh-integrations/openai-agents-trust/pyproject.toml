@@ -3,11 +3,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "openai-agents-trust"
-version = "0.1.0"
+name = "openai_agents_trust"
+version = "3.1.0"
 description = "Trust & governance layer for OpenAI Agents SDK — policy enforcement, trust-gated handoffs, and hash-chained audit trails"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
     { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" },
@@ -26,13 +26,13 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "openai-agents>=0.1.0",
+    "openai-agents>=0.1.0,<1.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.21",
+    "pytest>=7.0,<8.0",
+    "pytest-asyncio>=0.21,<1.0",
 ]
 
 [project.urls]

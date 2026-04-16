@@ -1,4 +1,16 @@
-# 🛡️ Tutorial 06 — Execution Sandboxing
+# Tutorial 06 — Execution Sandboxing
+
+> **Package:** `agentmesh-runtime` · **Time:** 30 minutes · **Prerequisites:** Python 3.11+
+
+---
+
+## What You'll Learn
+
+- 4-tier privilege ring model for agent isolation
+- Resource limits and capability guards
+- Termination control and kill switch integration
+
+---
 
 **Isolate AI agents at runtime using privilege rings, saga transactions, and kill switches.**
 

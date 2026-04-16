@@ -79,7 +79,7 @@ rules:
     action: deny
     enabled: false
 ");
-        var decision = engine.Evaluate("did:mesh:a", new Dictionary<string, object>
+        var decision = engine.Evaluate("did:agentmesh:a", new Dictionary<string, object>
         {
             ["tool_name"] = "test"
         });
@@ -110,7 +110,7 @@ rules:
                 }
             }
         };
-        var decision = engine.Evaluate("did:mesh:a", context);
+        var decision = engine.Evaluate("did:agentmesh:a", context);
         Assert.True(decision.Allowed);
     }
 
@@ -130,7 +130,7 @@ rules:
         {
             ["request"] = new Dictionary<string, object>()
         };
-        var decision = engine.Evaluate("did:mesh:a", context);
+        var decision = engine.Evaluate("did:agentmesh:a", context);
         Assert.True(decision.Allowed);
     }
 
@@ -153,7 +153,7 @@ rules:
     condition: ""{condition}""
     action: allow
 ");
-        var decision = engine.Evaluate("did:mesh:a", new Dictionary<string, object>
+        var decision = engine.Evaluate("did:agentmesh:a", new Dictionary<string, object>
         {
             ["value"] = value
         });
@@ -172,7 +172,7 @@ rules:
     condition: ""tool_name in allowed_tools""
     action: allow
 ");
-        var decision = engine.Evaluate("did:mesh:a", new Dictionary<string, object>
+        var decision = engine.Evaluate("did:agentmesh:a", new Dictionary<string, object>
         {
             ["tool_name"] = "file_read",
             ["allowed_tools"] = new List<object> { "file_read", "file_list", "search" }
@@ -192,7 +192,7 @@ rules:
     condition: ""tool_name in allowed_tools""
     action: allow
 ");
-        var decision = engine.Evaluate("did:mesh:a", new Dictionary<string, object>
+        var decision = engine.Evaluate("did:agentmesh:a", new Dictionary<string, object>
         {
             ["tool_name"] = "file_read",
             ["allowed_tools"] = "file_read,file_list,search"
@@ -212,7 +212,7 @@ rules:
     condition: ""tool_name in allowed_tools""
     action: allow
 ");
-        var decision = engine.Evaluate("did:mesh:a", new Dictionary<string, object>
+        var decision = engine.Evaluate("did:agentmesh:a", new Dictionary<string, object>
         {
             ["tool_name"] = "rm_rf",
             ["allowed_tools"] = new List<object> { "file_read", "file_list" }
@@ -232,14 +232,14 @@ rules:
     condition: ""tool_name == 'file_write' and risk_level == 'low'""
     action: allow
 ");
-        var allowed = engine.Evaluate("did:mesh:a", new Dictionary<string, object>
+        var allowed = engine.Evaluate("did:agentmesh:a", new Dictionary<string, object>
         {
             ["tool_name"] = "file_write",
             ["risk_level"] = "low"
         });
         Assert.True(allowed.Allowed);
 
-        var denied = engine.Evaluate("did:mesh:a", new Dictionary<string, object>
+        var denied = engine.Evaluate("did:agentmesh:a", new Dictionary<string, object>
         {
             ["tool_name"] = "file_write",
             ["risk_level"] = "high"
@@ -259,9 +259,9 @@ rules:
     condition: ""tool_name == 'read' or tool_name == 'list'""
     action: allow
 ");
-        Assert.True(engine.Evaluate("did:mesh:a", new Dictionary<string, object> { ["tool_name"] = "read" }).Allowed);
-        Assert.True(engine.Evaluate("did:mesh:a", new Dictionary<string, object> { ["tool_name"] = "list" }).Allowed);
-        Assert.False(engine.Evaluate("did:mesh:a", new Dictionary<string, object> { ["tool_name"] = "write" }).Allowed);
+        Assert.True(engine.Evaluate("did:agentmesh:a", new Dictionary<string, object> { ["tool_name"] = "read" }).Allowed);
+        Assert.True(engine.Evaluate("did:agentmesh:a", new Dictionary<string, object> { ["tool_name"] = "list" }).Allowed);
+        Assert.False(engine.Evaluate("did:agentmesh:a", new Dictionary<string, object> { ["tool_name"] = "write" }).Allowed);
     }
 
     // ── PolicyEngine management ─────────────────────────────────────
@@ -286,7 +286,7 @@ rules:
     public void Evaluate_NoPolicies_DefaultsToAllow()
     {
         var engine = new PolicyEngine();
-        var decision = engine.Evaluate("did:mesh:a", new Dictionary<string, object>());
+        var decision = engine.Evaluate("did:agentmesh:a", new Dictionary<string, object>());
         Assert.True(decision.Allowed);
     }
 
@@ -302,7 +302,7 @@ rules:
     condition: ""true""
     action: allow
 ");
-        var decision = engine.Evaluate("did:mesh:a", new Dictionary<string, object>());
+        var decision = engine.Evaluate("did:agentmesh:a", new Dictionary<string, object>());
         Assert.True(decision.EvaluationMs >= 0);
     }
 
@@ -315,11 +315,11 @@ name: agent-check
 default_action: deny
 rules:
   - name: specific-agent
-    condition: ""agent_did == 'did:mesh:special'""
+    condition: ""agent_did == 'did:agentmesh:special'""
     action: allow
 ");
-        Assert.True(engine.Evaluate("did:mesh:special", new Dictionary<string, object>()).Allowed);
-        Assert.False(engine.Evaluate("did:mesh:other", new Dictionary<string, object>()).Allowed);
+        Assert.True(engine.Evaluate("did:agentmesh:special", new Dictionary<string, object>()).Allowed);
+        Assert.False(engine.Evaluate("did:agentmesh:other", new Dictionary<string, object>()).Allowed);
     }
 
     // ── Conflict resolution strategies ──────────────────────────────
@@ -345,7 +345,7 @@ rules:
     priority: 1
 ");
         var ctx = new Dictionary<string, object> { ["tool_name"] = "test" };
-        Assert.False(engine.Evaluate("did:mesh:a", ctx).Allowed);
+        Assert.False(engine.Evaluate("did:agentmesh:a", ctx).Allowed);
     }
 
     [Fact]
@@ -369,7 +369,7 @@ rules:
     priority: 1
 ");
         var ctx = new Dictionary<string, object> { ["tool_name"] = "test" };
-        Assert.True(engine.Evaluate("did:mesh:a", ctx).Allowed);
+        Assert.True(engine.Evaluate("did:agentmesh:a", ctx).Allowed);
     }
 
     [Fact]
@@ -389,7 +389,7 @@ rules:
     priority: 100
 ");
         var ctx = new Dictionary<string, object> { ["tool_name"] = "test" };
-        var decision = engine.Evaluate("did:mesh:a", ctx);
+        var decision = engine.Evaluate("did:agentmesh:a", ctx);
         Assert.False(decision.Allowed);
         Assert.Equal("high-pri-deny", decision.MatchedRule);
     }
@@ -415,7 +415,7 @@ rules:
     action: allow
 ");
         var ctx = new Dictionary<string, object> { ["tool_name"] = "test" };
-        Assert.True(engine.Evaluate("did:mesh:a", ctx).Allowed);
+        Assert.True(engine.Evaluate("did:agentmesh:a", ctx).Allowed);
     }
 
     [Fact]
@@ -431,7 +431,7 @@ rules:
     action: rate_limit
     limit: ""10/minute""
 ");
-        var decision = engine.Evaluate("did:mesh:a", new Dictionary<string, object>
+        var decision = engine.Evaluate("did:agentmesh:a", new Dictionary<string, object>
         {
             ["tool_name"] = "api_call"
         });

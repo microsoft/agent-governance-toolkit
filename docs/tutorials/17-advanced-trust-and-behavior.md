@@ -1,5 +1,9 @@
 # Tutorial 17 — Advanced Trust & Behavior Monitoring
 
+> **Package:** `agentmesh-platform` · **Time:** 35 minutes · **Prerequisites:** Python 3.11+
+
+---
+
 ## Dynamic Trust Management Through Observed Behavior
 
 **Prerequisites:** `pip install agentmesh-platform`

@@ -424,11 +424,13 @@ class TestAuditTrailIntegration:
                 [VFSChange(path=f"/doc{i}", operation="add", content_hash=f"h{i}")],
             )
 
-        assert session.delta_engine.verify_chain() is True
+        valid, error = session.delta_engine.verify_chain()
+        assert valid is True
 
-        # Tamper with a delta — Public Preview doesn't detect tampering
+        # Tamper with a delta — chain verification now detects tampering
         session.delta_engine._deltas[5].agent_did = "did:mesh:tampered"
-        assert session.delta_engine.verify_chain() is True
+        valid, error = session.delta_engine.verify_chain()
+        assert valid is False
 
     async def test_hash_chain_root_deterministic(self):
         """Same session with same deltas produces consistent audit log roots."""

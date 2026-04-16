@@ -21,7 +21,7 @@ export interface ReviewFinding {
   line?: number;
   /** Suggested fix or code snippet. */
   suggestion?: string;
-  /** Related OWASP Agentic Top-10 risk IDs, e.g. ["AT08"]. */
+  /** Related OWASP ASI 2026 risk IDs, e.g. ["ASI01"]. */
   owaspRisks: string[];
 }
 

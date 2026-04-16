@@ -12,7 +12,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import yaml
 from rich.console import Console
@@ -45,7 +45,7 @@ class SecurityFinding:
 def scan_config(config_path: Path, single_server: Optional[str] = None) -> List[SecurityFinding]:
     """Scan MCP configuration for potential security risks."""
     findings = []
-    
+
     try:
         if config_path.suffix in [".yaml", ".yml"]:
             with open(config_path) as f:
@@ -58,11 +58,11 @@ def scan_config(config_path: Path, single_server: Optional[str] = None) -> List[
         return findings
 
     mcp_servers = config.get("mcpServers", {})
-    
+
     for name, server in mcp_servers.items():
         if single_server and name != single_server:
             continue
-            
+
         # 1. Environment Variable Check
         env = server.get("env", {})
         for key in env.keys():
@@ -89,7 +89,7 @@ def get_fingerprints(config_path: Path) -> Dict[str, str]:
     """Generate fingerprints for all tools in the config."""
     # Simulated fingerprinting
     import hashlib
-    
+
     try:
         with open(config_path) as f:
             if config_path.suffix in [".yaml", ".yml"]:
@@ -106,7 +106,7 @@ def get_fingerprints(config_path: Path) -> Dict[str, str]:
         args = str(server.get("args", []))
         h = hashlib.sha256(f"{cmd}{args}".encode()).hexdigest()[:16]
         fingerprints[name] = h
-        
+
     return fingerprints
 
 
@@ -116,7 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="mcp-scan",
         description="Agent OS MCP Security Scanner - Analyze MCP configs for risks"
     )
-    
+
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # -- scan ---------------------------------------------------------------
@@ -162,7 +162,7 @@ def main(argv: List[str] | None = None) -> int:
     try:
         if args.command == "scan":
             findings = scan_config(config_path, args.server)
-            
+
             if args.severity:
                 findings = [f for f in findings if f.severity == args.severity or f.severity == "critical"]
 
@@ -180,23 +180,23 @@ def main(argv: List[str] | None = None) -> int:
                     table.add_row(f.server, f"[{sev_color}]{f.severity.upper()}[/{sev_color}]", f.category, f.message)
 
                 console.print(table)
-            
+
             return 1 if any(f.severity == "critical" for f in findings) else 0
 
         elif args.command == "fingerprint":
             fingerprints = get_fingerprints(config_path)
-            
+
             if args.compare:
                 with open(args.compare) as f:
                     saved = json.load(f)
-                
+
                 diffs = {}
                 for name, h in fingerprints.items():
                     if name not in saved:
                         diffs[name] = "new"
                     elif saved[name] != h:
                         diffs[name] = "changed"
-                
+
                 if output_format == "json":
                     print(json.dumps({"current": fingerprints, "diffs": diffs}, indent=2))
                 else:
@@ -205,7 +205,7 @@ def main(argv: List[str] | None = None) -> int:
                         print(f"  {name}: {status}")
                     if not diffs:
                         print("  Identical fingerprints.")
-            
+
             elif args.output:
                 with open(args.output, "w") as f:
                     json.dump(fingerprints, f, indent=2)
@@ -213,7 +213,7 @@ def main(argv: List[str] | None = None) -> int:
                     print(f"Fingerprints saved to {args.output}")
                 else:
                     print(json.dumps({"status": "success", "file": args.output}, indent=2))
-            
+
             else:
                 if output_format == "json":
                     print(json.dumps(fingerprints, indent=2))
@@ -224,7 +224,7 @@ def main(argv: List[str] | None = None) -> int:
         elif args.command == "report":
             findings = scan_config(config_path)
             fingerprints = get_fingerprints(config_path)
-            
+
             report = {
                 "config": str(config_path),
                 "summary": {
@@ -236,7 +236,7 @@ def main(argv: List[str] | None = None) -> int:
                 "findings": [f.to_dict() for f in findings],
                 "fingerprints": fingerprints
             }
-            
+
             if output_format == "json" or getattr(args, "format", "markdown") == "json":
                 print(json.dumps(report, indent=2))
             else:

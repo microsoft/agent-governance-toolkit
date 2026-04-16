@@ -31,7 +31,7 @@ rules:
     public void Evaluate_NoPoliciesLoaded_AllowsByDefault()
     {
         var engine = new PolicyEngine();
-        var decision = engine.Evaluate("did:mesh:test", new Dictionary<string, object>());
+        var decision = engine.Evaluate("did:agentmesh:test", new Dictionary<string, object>());
 
         Assert.True(decision.Allowed);
         Assert.Equal("allow", decision.Action);
@@ -43,7 +43,7 @@ rules:
         var engine = new PolicyEngine();
         engine.LoadYaml(DenyPolicy);
 
-        var decision = engine.Evaluate("did:mesh:test",
+        var decision = engine.Evaluate("did:agentmesh:test",
             new Dictionary<string, object> { ["tool_name"] = "rm" });
 
         Assert.False(decision.Allowed);
@@ -57,7 +57,7 @@ rules:
         var engine = new PolicyEngine();
         engine.LoadYaml(DenyPolicy);
 
-        var decision = engine.Evaluate("did:mesh:test",
+        var decision = engine.Evaluate("did:agentmesh:test",
             new Dictionary<string, object> { ["tool_name"] = "read" });
 
         Assert.True(decision.Allowed);
@@ -71,7 +71,7 @@ rules:
         var engine = new PolicyEngine();
         engine.LoadYaml(DenyPolicy);
 
-        var decision = engine.Evaluate("did:mesh:test",
+        var decision = engine.Evaluate("did:agentmesh:test",
             new Dictionary<string, object> { ["tool_name"] = "write" });
 
         Assert.True(decision.Allowed);
@@ -84,7 +84,7 @@ rules:
         var engine = new PolicyEngine();
         engine.LoadYaml(DenyPolicy);
 
-        var decision = engine.Evaluate("did:mesh:test",
+        var decision = engine.Evaluate("did:agentmesh:test",
             new Dictionary<string, object> { ["tool_name"] = "unknown_tool" });
 
         Assert.False(decision.Allowed);
@@ -104,7 +104,7 @@ rules: []
         var engine = new PolicyEngine();
         engine.LoadYaml(yaml);
 
-        var decision = engine.Evaluate("did:mesh:test",
+        var decision = engine.Evaluate("did:agentmesh:test",
             new Dictionary<string, object> { ["tool_name"] = "anything" });
 
         Assert.True(decision.Allowed);
@@ -126,7 +126,7 @@ rules:
         var engine = new PolicyEngine();
         engine.LoadYaml(yaml);
 
-        var decision = engine.Evaluate("did:mesh:test",
+        var decision = engine.Evaluate("did:agentmesh:test",
             new Dictionary<string, object>
             {
                 ["tool_name"] = "rm",
@@ -165,7 +165,7 @@ rules:
         var engine = new PolicyEngine();
         engine.LoadYaml(DenyPolicy);
 
-        var decision = engine.Evaluate("did:mesh:test",
+        var decision = engine.Evaluate("did:agentmesh:test",
             new Dictionary<string, object> { ["tool_name"] = "rm" });
 
         Assert.True(decision.EvaluationMs >= 0);
@@ -180,7 +180,7 @@ name: agent-check
 default_action: allow
 rules:
   - name: block-specific-agent
-    condition: ""agent_did == 'did:mesh:blocked'""
+    condition: ""agent_did == 'did:agentmesh:blocked'""
     action: deny
     priority: 10
 ";
@@ -188,12 +188,12 @@ rules:
         engine.LoadYaml(yaml);
 
         // Should match the blocked agent.
-        var decision1 = engine.Evaluate("did:mesh:blocked",
+        var decision1 = engine.Evaluate("did:agentmesh:blocked",
             new Dictionary<string, object> { ["tool_name"] = "anything" });
         Assert.False(decision1.Allowed);
 
         // Should not match a different agent.
-        var decision2 = engine.Evaluate("did:mesh:other",
+        var decision2 = engine.Evaluate("did:agentmesh:other",
             new Dictionary<string, object> { ["tool_name"] = "anything" });
         Assert.True(decision2.Allowed);
     }

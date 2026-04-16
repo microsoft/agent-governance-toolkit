@@ -1,0 +1,43 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Production Policy: Financial Services (SOX/PCI)
+# Risk profile: HIGH
+
+version: "1.0"
+name: financial-governance
+description: SOX/PCI-regulated governance with PCI data filtering.
+
+rules:
+  - name: block-pci-credit-card
+    condition: {field: output, operator: matches, value: "\\b(?:\\d[ -]*?){13,16}\\b"}
+    action: deny
+    priority: 100
+    message: "PCI: Credit card number detected"
+
+  - name: block-pii-ssn
+    condition: {field: output, operator: matches, value: "\\b\\d{3}-\\d{2}-\\d{4}\\b"}
+    action: deny
+    priority: 100
+    message: "PII: SSN pattern detected"
+
+  - name: block-execute-code
+    condition: {field: action, operator: eq, value: execute_code}
+    action: deny
+    priority: 95
+    message: "Code execution prohibited"
+
+  - name: escalate-transaction
+    condition: {field: action, operator: matches, value: "transfer_|payment_|trade_"}
+    action: escalate
+    priority: 85
+    message: "Financial transactions require compliance approval"
+
+  - name: allow-read
+    condition: {field: action, operator: matches, value: "^(read_|search_|lookup_|calculate)"}
+    action: allow
+    priority: 50
+
+defaults:
+  action: deny
+  max_tool_calls: 30

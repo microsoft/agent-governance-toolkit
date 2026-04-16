@@ -4,7 +4,7 @@ import { describe, it, expect } from "vitest";
 import { reviewCode, formatReviewResult } from "../src/reviewer";
 import { validatePolicy, formatPolicyValidation } from "../src/policy-validator";
 import { handleAgentRequest, parseYamlLite } from "../src/agent";
-import { OWASP_AGENTIC_RISKS, getOwaspRisks, formatOwaspRisks } from "../src/owasp";
+import { OWASP_AGENTIC_RISKS, getOwaspRisks, formatOwaspRisks, LEGACY_AT_TO_ASI } from "../src/owasp";
 
 // ---------------------------------------------------------------------------
 // reviewCode
@@ -241,26 +241,54 @@ describe("validatePolicy", () => {
 // ---------------------------------------------------------------------------
 
 describe("owasp", () => {
-  it("exports OWASP_AGENTIC_RISKS with expected keys", () => {
-    expect(OWASP_AGENTIC_RISKS["AT01"]).toBeDefined();
-    expect(OWASP_AGENTIC_RISKS["AT08"]).toBeDefined();
+  it("exports OWASP_AGENTIC_RISKS with all ASI 2026 keys", () => {
+    expect(OWASP_AGENTIC_RISKS["ASI01"]).toBeDefined();
+    expect(OWASP_AGENTIC_RISKS["ASI02"]).toBeDefined();
+    expect(OWASP_AGENTIC_RISKS["ASI03"]).toBeDefined();
+    expect(OWASP_AGENTIC_RISKS["ASI04"]).toBeDefined();
+    expect(OWASP_AGENTIC_RISKS["ASI05"]).toBeDefined();
+    expect(OWASP_AGENTIC_RISKS["ASI06"]).toBeDefined();
+    expect(OWASP_AGENTIC_RISKS["ASI07"]).toBeDefined();
+    expect(OWASP_AGENTIC_RISKS["ASI08"]).toBeDefined();
+    expect(OWASP_AGENTIC_RISKS["ASI09"]).toBeDefined();
+    expect(OWASP_AGENTIC_RISKS["ASI10"]).toBeDefined();
+    expect(OWASP_AGENTIC_RISKS["ASI11"]).toBeDefined();
   });
 
-  it("getOwaspRisks returns matching risks", () => {
+  it("getOwaspRisks returns matching risks for ASI IDs", () => {
+    const risks = getOwaspRisks(["ASI01", "ASI08"]);
+    expect(risks).toHaveLength(2);
+    expect(risks[0].id).toBe("ASI01");
+  });
+
+  it("getOwaspRisks resolves legacy AT IDs via backward-compat mapping", () => {
     const risks = getOwaspRisks(["AT01", "AT08"]);
     expect(risks).toHaveLength(2);
-    expect(risks[0].id).toBe("AT01");
+    expect(risks[0].id).toBe("ASI01");
+    expect(risks[1].id).toBe("ASI01"); // AT08 → ASI01
   });
 
   it("getOwaspRisks skips unknown IDs", () => {
-    const risks = getOwaspRisks(["AT01", "UNKNOWN"]);
+    const risks = getOwaspRisks(["ASI01", "UNKNOWN"]);
     expect(risks).toHaveLength(1);
   });
 
-  it("formatOwaspRisks returns a non-empty string for valid IDs", () => {
+  it("LEGACY_AT_TO_ASI maps all known AT IDs", () => {
+    expect(LEGACY_AT_TO_ASI["AT01"]).toBe("ASI01");
+    expect(LEGACY_AT_TO_ASI["AT06"]).toBe("ASI03");
+    expect(LEGACY_AT_TO_ASI["AT09"]).toBe("ASI09");
+  });
+
+  it("formatOwaspRisks returns a non-empty string for valid ASI IDs", () => {
+    const md = formatOwaspRisks(["ASI01", "ASI08"]);
+    expect(md).toContain("ASI01");
+    expect(md).toContain("ASI08");
+    expect(md).toContain("https://");
+  });
+
+  it("formatOwaspRisks works with legacy AT IDs", () => {
     const md = formatOwaspRisks(["AT01", "AT08"]);
-    expect(md).toContain("AT01");
-    expect(md).toContain("AT08");
+    expect(md).toContain("ASI01");
     expect(md).toContain("https://");
   });
 
@@ -394,8 +422,8 @@ describe("handleAgentRequest", () => {
         messages: [{ role: "user", content: "@governance owasp" }],
       })
     );
-    expect(output).toContain("AT01");
-    expect(output).toContain("AT08");
+    expect(output).toContain("ASI01");
+    expect(output).toContain("ASI08");
   });
 
   it("uses help fallback for explicit help command", async () => {

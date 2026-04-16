@@ -532,7 +532,7 @@ print(f"At risk: {report['at_risk_agents']}")
 ### Example 6: Using the TypeScript SDK
 
 ```typescript
-import { TrustManager } from '@agentmesh/sdk';
+import { TrustManager } from '@microsoft/agentmesh-sdk';
 
 const manager = new TrustManager({
   initialScore: 0.5,

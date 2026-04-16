@@ -1,4 +1,17 @@
-# Agent Reliability Engineering
+# Tutorial 05 — Agent Reliability Engineering
+
+> **Package:** `agent-sre` · **Time:** 30 minutes · **Prerequisites:** Python 3.10+
+
+---
+
+## What You'll Learn
+
+- SLOs and error budgets for autonomous agents
+- Circuit breakers and automatic recovery
+- Chaos testing for agent resilience
+- Cost controls and rogue agent detection
+
+---
 
 Site Reliability Engineering (SRE) practices adapted for autonomous AI agents —
 rogue detection, circuit breakers, SLOs, chaos testing, and cost controls.

@@ -26,7 +26,7 @@ public enum IdentityStatus
 /// Uses HMAC-SHA256 as a portable signing mechanism for .NET 8.0 compatibility.
 /// When targeting .NET 9.0+, this should be migrated to the native
 /// <c>System.Security.Cryptography.Ed25519</c> API for proper Ed25519 support.
-/// The DID format follows the AgentMesh convention: <c>did:mesh:{unique-id}</c>.
+/// The DID format follows the AgentMesh convention: <c>did:agentmesh:{unique-id}</c>.
 /// </para>
 /// </summary>
 /// <remarks>
@@ -47,7 +47,7 @@ public sealed class AgentIdentity
     private const int KeySizeBytes = 32;
 
     /// <summary>
-    /// The decentralised identifier for this agent (e.g., "did:mesh:a1b2c3d4").
+    /// The decentralised identifier for this agent (e.g., "did:agentmesh:a1b2c3d4").
     /// </summary>
     public string Did { get; }
 
@@ -135,7 +135,7 @@ public sealed class AgentIdentity
 
     /// <summary>
     /// Creates a new agent identity with a freshly generated key pair.
-    /// The DID is derived from the agent name using the <c>did:mesh:</c> method.
+    /// The DID is derived from the agent name using the <c>did:agentmesh:</c> method.
     /// </summary>
     /// <param name="name">A human-readable name for the agent (used to derive the DID).</param>
     /// <returns>A new <see cref="AgentIdentity"/> with both public and private keys.</returns>
@@ -145,7 +145,7 @@ public sealed class AgentIdentity
 
         // Generate a deterministic-format DID from the name + random component.
         var uniqueId = GenerateUniqueId(name);
-        var did = $"did:mesh:{uniqueId}";
+        var did = $"did:agentmesh:{uniqueId}";
 
         // Generate a random 32-byte private key.
         var privateKey = RandomNumberGenerator.GetBytes(KeySizeBytes);

@@ -61,3 +61,13 @@ temp/
 # Git
 .git/
 .gitignore
+
+# Security: exclude secrets from build context
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.crt
+secrets/
+*.token

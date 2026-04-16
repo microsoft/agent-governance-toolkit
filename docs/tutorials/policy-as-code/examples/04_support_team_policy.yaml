@@ -1,0 +1,38 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+version: "1.0"
+name: support-team-policy
+description: Rules for the customer support team's agent
+
+rules:
+  - name: allow-send-email
+    condition:
+      field: tool_name
+      operator: eq
+      value: send_email
+    action: allow
+    priority: 90
+    message: "Support team: our agent needs to email customers"
+
+  - name: block-write-file
+    condition:
+      field: tool_name
+      operator: eq
+      value: write_file
+    action: deny
+    priority: 80
+    message: "Support team: our agent does not need to write files"
+
+  - name: block-delete-database
+    condition:
+      field: tool_name
+      operator: eq
+      value: delete_database
+    action: deny
+    priority: 100
+    message: "Support team: deleting databases is never allowed"
+
+defaults:
+  action: allow
+  max_tool_calls: 20

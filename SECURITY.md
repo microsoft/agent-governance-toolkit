@@ -13,6 +13,31 @@ please review the latest guidance for Microsoft repositories at
 
 <!-- END MICROSOFT SECURITY.MD BLOCK -->
 
+## Security Contact
+
+To report a vulnerability, email **secure@microsoft.com**. You will receive acknowledgement
+within 24 hours and a detailed response within 72 hours indicating next steps.
+
+## Supported Versions
+
+| Version | Supported          |
+|---------|--------------------|
+| 2.1.x   | :white_check_mark: |
+| 2.0.x   | :white_check_mark: |
+| < 2.0   | :x:                |
+
+## Disclosure Policy
+
+We follow a **90-day coordinated disclosure** timeline. After a vulnerability is
+reported and confirmed, we will:
+
+1. Acknowledge receipt within **24 hours**.
+2. Provide a fix or mitigation within **90 days**.
+3. Coordinate public disclosure with the reporter after the fix is released.
+
+If a fix requires more than 90 days, we will negotiate an extended timeline with
+the reporter before any public disclosure.
+
 ## Security Advisories
 
 ### CostGuard Organization Kill Switch Bypass (Fixed in v2.1.0)

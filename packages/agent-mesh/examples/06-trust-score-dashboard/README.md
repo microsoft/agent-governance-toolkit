@@ -2,6 +2,13 @@
 
 A Streamlit dashboard for monitoring agent trust networks, credential lifecycles, protocol traffic, and compliance posture across an AgentMesh deployment.
 
+> **Production starting point.** This dashboard uses simulated data out of
+> the box but is designed to plug into the live
+> [`agentmesh.dashboard.DashboardAPI`](../../src/agentmesh/dashboard/api.py)
+> backend. Replace the data generators with `DashboardAPI` calls for
+> real-time monitoring. For a fleet-level overview (shadow agents, lifecycle,
+> policy feed), see [`demo/governance-dashboard/`](../../../../demo/governance-dashboard/).
+
 ## What It Does
 
 This example launches an interactive dashboard with five tabs:

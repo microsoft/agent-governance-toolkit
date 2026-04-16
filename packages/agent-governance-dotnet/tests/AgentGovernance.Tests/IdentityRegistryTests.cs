@@ -36,7 +36,7 @@ public class IdentityRegistryTests
     {
         var registry = new IdentityRegistry();
 
-        Assert.Throws<KeyNotFoundException>(() => registry.Get("did:mesh:unknown"));
+        Assert.Throws<KeyNotFoundException>(() => registry.Get("did:agentmesh:unknown"));
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public class IdentityRegistryTests
         var registry = new IdentityRegistry();
 
         Assert.Throws<KeyNotFoundException>(() =>
-            registry.Revoke("did:mesh:unknown", "reason"));
+            registry.Revoke("did:agentmesh:unknown", "reason"));
     }
 
     [Fact]

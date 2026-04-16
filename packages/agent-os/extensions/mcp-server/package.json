@@ -1,7 +1,7 @@
 {
   "name": "@microsoft/agentos-mcp-server",
-  "version": "1.0.1",
-  "description": "Public Preview — AgentOS MCP Server for Claude Desktop: Build, deploy, and manage policy-compliant autonomous agents",
+  "version": "3.1.0",
+  "description": "Public Preview \u2014 AgentOS MCP Server for Claude Desktop: Build, deploy, and manage policy-compliant autonomous agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -41,19 +41,19 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
     "uuid": "13.0.0",
-    "winston": "3.11.0",
+    "winston": "3.19.0",
     "yaml": "2.8.3",
     "zod": "4.3.6"
   },
   "devDependencies": {
-    "@types/node": "25.4.0",
+    "@types/node": "25.6.0",
     "@types/uuid": "11.0.0",
-    "@typescript-eslint/eslint-plugin": "8.58.0",
-    "@typescript-eslint/parser": "8.57.0",
-    "@vitest/coverage-v8": "4.1.2",
-    "eslint": "10.0.3",
+    "@typescript-eslint/eslint-plugin": "8.58.2",
+    "@typescript-eslint/parser": "8.58.0",
+    "@vitest/coverage-v8": "4.1.4",
+    "eslint": "10.2.0",
     "typescript": "6.0.2",
-    "vitest": "4.1.2"
+    "vitest": "4.1.4"
   },
   "files": [
     "dist",

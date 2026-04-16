@@ -95,7 +95,7 @@ public sealed class GovernanceOptions
 ///     ConflictStrategy = ConflictResolutionStrategy.DenyOverrides
 /// });
 ///
-/// var result = kernel.EvaluateToolCall("did:mesh:abc123", "file_write", new() { ["path"] = "/etc" });
+/// var result = kernel.EvaluateToolCall("did:agentmesh:abc123", "file_write", new() { ["path"] = "/etc" });
 /// if (!result.Allowed)
 /// {
 ///     Console.WriteLine($"Blocked: {result.Reason}");

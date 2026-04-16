@@ -9,6 +9,8 @@
 
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
+import { escapeHtml } from '../../utils/escapeHtml';
+
 interface WorkflowNode {
     id: string;
     type: 'start' | 'end' | 'action' | 'condition' | 'loop' | 'parallel';
@@ -616,7 +618,9 @@ ${functionDefs}
 
     private _getHtmlForWebview() {
         const nonce = crypto.randomBytes(16).toString('base64');
-        const cspSource = this._panel.webview.cspSource;
+        const webview = this._panel.webview;
+        const cspSource = webview.cspSource;
+
         const nodeTypesJson = JSON.stringify(WorkflowDesignerPanel.nodeTypes);
         const workflowJson = JSON.stringify(this._workflow);
 
@@ -624,6 +628,7 @@ ${functionDefs}
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- SECURITY: 'unsafe-inline' for styles required by VS Code theme CSS variable injection. Scripts nonce-gated. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${cspSource} https:; font-src ${cspSource};">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Workflow Designer</title>
@@ -939,6 +944,15 @@ ${functionDefs}
         let connectingFrom = null;
         const KEYBOARD_MOVE_STEP = 20;
 
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         // Render palette
         const palette = document.getElementById('palette');
         nodeTypes.forEach(nt => {
@@ -950,10 +964,10 @@ ${functionDefs}
             item.setAttribute('role', 'listitem');
             item.setAttribute('aria-label', 'Add ' + nt.label + ' node. ' + nt.description);
             item.innerHTML = \`
-                <span class="palette-icon">\${nt.icon}</span>
+                <span class="palette-icon">\${escapeHtml(nt.icon)}</span>
                 <div class="palette-info">
-                    <h4>\${nt.label}</h4>
-                    <p>\${nt.description}</p>
+                    <h4>\${escapeHtml(nt.label)}</h4>
+                    <p>\${escapeHtml(nt.description)}</p>
                 </div>
             \`;
             item.addEventListener('dragstart', e => {
@@ -995,10 +1009,10 @@ ${functionDefs}
                 
                 div.innerHTML = \`
                     <div class="node-header">
-                        <span class="node-icon">\${icon}</span>
-                        <span class="node-label">\${node.label}</span>
+                        <span class="node-icon">\${escapeHtml(icon)}</span>
+                        <span class="node-label">\${escapeHtml(node.label)}</span>
                     </div>
-                    \${node.policy ? \`<div class="node-policy">🛡️ \${node.policy}</div>\` : ''}
+                    \${node.policy ? \`<div class="node-policy">🛡️ \${escapeHtml(node.policy)}</div>\` : ''}
                     <div class="node-connectors">
                         \${node.type !== 'start' ? '<div class="connector input" data-connector="input"></div>' : ''}
                         \${node.type !== 'end' ? '<div class="connector output" data-connector="output"></div>' : ''}
@@ -1131,22 +1145,22 @@ ${functionDefs}
             const nodeType = nodeTypes.find(t => t.type === node.type);
             
             panel.innerHTML = \`
-                <h3>\${node.label} Properties</h3>
+                <h3>\${escapeHtml(node.label)} Properties</h3>
                 <div class="property-group">
                     <label>Label</label>
-                    <input type="text" id="prop-label" value="\${node.label}">
+                    <input type="text" id="prop-label" value="\${escapeHtml(node.label)}">
                 </div>
                 \${node.type === 'action' && nodeType?.actions ? \`
                 <div class="property-group">
                     <label>Action Type</label>
                     <select id="prop-action">
-                        \${nodeType.actions.map(a => \`<option value="\${a}" \${node.config.action === a ? 'selected' : ''}>\${a}</option>\`).join('')}
+                        \${nodeType.actions.map(a => \`<option value="\${escapeHtml(a)}" \${node.config.action === a ? 'selected' : ''}>\${escapeHtml(a)}</option>\`).join('')}
                     </select>
                 </div>
                 \` : ''}
                 <div class="property-group">
                     <label>Description</label>
-                    <textarea id="prop-description">\${node.config.description || ''}</textarea>
+                    <textarea id="prop-description">\${escapeHtml(node.config.description || '')}</textarea>
                 </div>
                 <div class="property-group">
                     <label>Policy</label>
@@ -1159,7 +1173,7 @@ ${functionDefs}
                 </div>
                 \${node.type !== 'start' && node.type !== 'end' ? \`
                 <div class="property-group">
-                    <button class="secondary delete-btn" data-node-id="\${node.id}" style="width:100%">🗑️ Delete Node</button>
+                    <button class="secondary delete-btn" data-node-id="\${escapeHtml(node.id)}" style="width:100%">🗑️ Delete Node</button>
                 </div>
                 \` : ''}
             \`;

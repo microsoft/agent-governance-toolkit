@@ -16,7 +16,7 @@ public sealed class RateLimiter
     /// Checks whether a call is permitted under the rate limit and records it if so.
     /// </summary>
     /// <param name="key">
-    /// A composite key identifying the rate-limit scope (e.g., "did:mesh:abc123:file_write").
+    /// A composite key identifying the rate-limit scope (e.g., "did:agentmesh:abc123:file_write").
     /// </param>
     /// <param name="maxCalls">Maximum number of calls allowed within the window.</param>
     /// <param name="window">The sliding time window duration.</param>

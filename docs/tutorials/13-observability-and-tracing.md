@@ -1,4 +1,17 @@
-# 📡 Tutorial 13 — Observability & Distributed Tracing
+# Tutorial 13 — Observability & Distributed Tracing
+
+> **Package:** `agentmesh-runtime` · **Time:** 30 minutes · **Prerequisites:** Python 3.11+
+
+---
+
+## What You'll Learn
+
+- Causal trace IDs for hierarchical event tracking
+- Event bus for structured, immutable event streaming
+- Prometheus metrics and ring-level collectors
+- OpenTelemetry-compatible span export
+
+---
 
 **Instrument autonomous agents with structured events, causal trace IDs, Prometheus metrics, and OpenTelemetry-compatible span export.**
 
@@ -859,4 +872,8 @@ Here's where to go next:
 
 ---
 
-*Part of the [Agent Governance Toolkit](../../README.md) tutorial series.*
+## Next Steps
+
+- **Kill Switch:** [Tutorial 14 — Kill Switch & Rate Limiting](14-kill-switch-and-rate-limiting.md)
+- **Agent Reliability:** [Tutorial 05 — Agent Reliability Engineering](05-agent-reliability.md)
+- **Saga Orchestration:** [Tutorial 11 — Saga Orchestration](11-saga-orchestration.md)

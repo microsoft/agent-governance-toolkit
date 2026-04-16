@@ -1,0 +1,29 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+version: "1.0"
+name: global-security-policy
+description: Company-wide rules set by the security team
+
+rules:
+  - name: block-delete-database
+    condition:
+      field: tool_name
+      operator: eq
+      value: delete_database
+    action: deny
+    priority: 100
+    message: "Company policy: no agent may delete databases"
+
+  - name: block-send-email
+    condition:
+      field: tool_name
+      operator: eq
+      value: send_email
+    action: deny
+    priority: 90
+    message: "Company policy: agents may not send emails without controls"
+
+defaults:
+  action: allow
+  max_tool_calls: 10

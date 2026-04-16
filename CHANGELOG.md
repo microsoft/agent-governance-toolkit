@@ -11,14 +11,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [3.1.0] - 2026-04-11
+
+### Added
+- **Unified `agt` CLI** with plugin discovery, doctor command, and 79 tests (#924)
+- **Governance Dashboard** — real-time agent fleet visibility (#925)
+- **Agent Lifecycle Management** — provisioning to decommission (#923)
+- **Agent Discovery Package** — shadow AI discovery & inventory (#921)
+- **Quantum-Safe Signing** — ML-DSA-65 alongside Ed25519 (#927)
+- **Vendor Independence Enforcement** across all core packages
+- **OWASP ASI 2026 Taxonomy Migration** with reference architecture
+- **PromptDefenseEvaluator** — 12-vector prompt audit (#854)
+- **EU AI Act Risk Classifier** (`agentmesh.governance.EUAIActRiskClassifier`) — structured risk classification per Article 6 and Annex III, with Art. 6(1) Annex I safety-component path, Art. 6(3) exemptions, GDPR Art. 4(4) profiling override, and configurable YAML categories for regulatory updates (#756)
+
 ### Security
-- **Hardened CLI Error Handling** — standardized sanitized JSON error output across all 7 ecosystem tools to prevent internal information disclosure (CWE-209).
-- **Audit Log Whitelisting** — implemented strict key-whitelisting in `agentmesh audit` JSON output to prevent accidental leakage of sensitive agent internal state.
-- **CLI Input Validation** — added regex-based validation for agent identifiers (DIDs/names) in registration and verification commands to prevent injection attacks.
+- Patched dependency verification bypass and trust handshake DID forgery (#920)
+- **Hardened CLI Error Handling** — standardized sanitized JSON error output across all 7 ecosystem tools to prevent internal information disclosure (CWE-209)
+- **Audit Log Whitelisting** — implemented strict key-whitelisting in `agentmesh audit` JSON output to prevent accidental leakage of sensitive agent internal state
+- **CLI Input Validation** — added regex-based validation for agent identifiers (DIDs/names) in registration and verification commands to prevent injection attacks
+
+### Fixed
+- Repo hygiene: MIT headers, compliance disclaimers, dependency confusion, network bindings (#926)
+- CI: pyyaml added to agent-compliance direct dependencies
+- Code samples updated to v3 API
+- Various dependency bumps (cryptography, path-to-regexp, etc.)
 
 ### Documentation
-- Updated `QUICKSTART.md` and `Tutorial 04 — Audit & Compliance` with secure JSON error handling examples and schema details.
-- Added "Secure Error Handling" sections to primary documentation to guide users on interpreting sanitized machine-readable outputs.
+- Modern Agent Architecture overview for enterprise sharing
+- NIST AI RMF 1.0 alignment assessment
+- MCP governance consolidated into docs/compliance/
+- Policy-as-code tutorial chapter 4
+- Added `EUAIActRiskClassifier` usage example and API docs to `packages/agent-mesh/README.md`
+- Updated `QUICKSTART.md` and `Tutorial 04 — Audit & Compliance` with secure JSON error handling examples and schema details
+- Added "Secure Error Handling" sections to primary documentation to guide users on interpreting sanitized machine-readable outputs
+
+### Added
+- Added optional runtime evidence mode for `agt verify` with `--evidence` and `--strict`.
+
+
+## [3.0.2] - 2026-04-02
+
+### Security
+- Comprehensive security audit remediation (29 findings fixed)
+- CI injection prevention: moved all github.event expressions to env blocks
+- Supply chain hardening: dependency confusion fixes, npm lockfiles, Dockerfile pinning
+- Docker/infra: removed hardcoded passwords, wildcard CORS, added .dockerignore exclusions
+- Code quality: XSS prevention in VS Code webviews, Rust panic safety
+- Version pinning compliance across all pyproject.toml and Cargo.toml files
+- Extended dependency confusion detection script coverage
+
+## [3.0.1] - 2026-04-01
+
+### Added
+- Rust SDK (`agentmesh` crate) for native governance integration
+- Go SDK module for policy, trust, audit, and identity
+- Trust report CLI command (`agentmesh trust report`)
+- Secret scanning workflow (Gitleaks)
+- 4 new fuzz targets (prompt injection, MCP scanner, sandbox, trust scoring)
+- Dependabot coverage expanded to 13 ecosystems (+ cargo, gomod, nuget, docker)
+- 7 new tutorials (Rust SDK, Go SDK, delegation chains, budgets, security, SBOM, MCP scan)
+- ESRP Release publishing for Rust crates (crates.io)
+- Entra Agent ID adapter for managed identity integration
+- Secure code generation templates with AST validation
+- SBOM generation (SPDX/CycloneDX) with Ed25519 artifact signing
+- Tenant isolation checklist and private endpoint deployment examples
+
+### Fixed
+- ADO build failures: shebang position (TS18026), Express 5 type narrowing (TS2345)
+- NuGetCommand@2 → DotNetCoreCLI@2 for Ubuntu 24.04 compatibility
+- path-to-regexp ReDoS vulnerability (8.3.0 → 8.4.0)
+- Python 3.10 CI matrix exclusions for packages requiring >=3.11
+- TypeScript eslint peer dependency conflicts resolved
+- Rust crate dependency pins (rand 0.8, sha2 0.10, thiserror 1)
+- Ruff lint errors in agent-sre (E741, F401, E401)
+- Policy provider test mock contract alignment
+- Dify integration removed from CI (archived package)
+- Notebook dependency scanner regex hardened
+
+### Changed
+- PUBLISHING.md rewritten with full Microsoft compliance policies (MCR, ESRP, Conda, PMC)
+- Branch protection: 13 required status checks, dismiss stale reviews, squash-only merges
+- README updated with 5 SDK languages, 20+ framework integrations, security tooling table
 
 
 ## [3.0.0] - 2026-03-26
@@ -125,7 +199,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **TypeScript SDK full parity** (— PolicyEngine + AgentIdentity) — rich policy evaluation with 4 conflict resolution strategies, expression evaluator, rate limiting, YAML/JSON policy documents, Ed25519 identity with lifecycle/delegation/JWK/JWKS/DID export, IdentityRegistry with cascade revocation. 136 tests passing. (#269)
-- **@agentmesh/sdk 1.0.0** — TypeScript package now publish-ready with `exports` field, `prepublishOnly` build hook, correct `repository.directory`, MIT license.
+- **@microsoft/agentmesh-sdk 1.0.0** — TypeScript package now publish-ready with `exports` field, `prepublishOnly` build hook, correct `repository.directory`, MIT license.
 - **Multi-language README** — root README now surfaces Python (PyPI), TypeScript (npm), and .NET (NuGet) install sections, badges, quickstart code, and a multi-SDK packages table.
 - **Multi-language QUICKSTART** — getting started guide now covers all three SDKs with code examples.
 - **Semantic Kernel + Azure AI Foundry** added to framework integration table.
@@ -183,7 +257,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 pip install agent-governance-toolkit[full]
 
 # TypeScript
-npm install @agentmesh/sdk
+npm install @microsoft/agentmesh-sdk
 
 # .NET
 dotnet add package Microsoft.AgentGovernance

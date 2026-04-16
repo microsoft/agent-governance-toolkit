@@ -238,3 +238,9 @@ Before submitting your integration PR:
 - Review existing integrations in `packages/agentmesh-integrations/`
 - Open a [discussion](https://github.com/microsoft/agent-governance-toolkit/discussions) for design questions
 - Tag `@microsoft/agent-governance-team` for integration review
+
+## Data Model Conventions
+
+- **`@dataclass`** — Use for internal value objects that don't cross serialization boundaries (policy rules, evaluation results, internal state).
+- **`pydantic.BaseModel`** — Use for models that cross serialization boundaries (API request/response models, configs loaded from YAML/JSON, manifests).
+- **Don't mix** — within a single module, use one pattern consistently.

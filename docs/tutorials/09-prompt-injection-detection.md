@@ -1,6 +1,19 @@
 # Tutorial 09 — Prompt Injection Detection & Input Security
 
-Prompt injection is the #1 threat to AI agent systems. An attacker crafts
+> **Package:** `agent-os-kernel` · **Time:** 30 minutes · **Prerequisites:** Python 3.10+
+
+---
+
+## What You'll Learn
+
+- 7 attack types and detection strategies
+- MemoryGuard for protecting stored context
+- ConversationGuardian for multi-agent dialogue safety
+- Red-teaming with AdversarialEvaluator
+
+---
+
+Prompt injection is the #1 threat to AI agent systems.An attacker crafts
 input that overrides the agent's instructions—exfiltrating data, calling
 forbidden tools, or breaking safety guardrails entirely. Unlike traditional
 web attacks that target _code_, prompt injections target _intent_.
@@ -1066,3 +1079,11 @@ assert report.risk_score == 0.0, f"Gaps found: {report.failed} attacks succeeded
 | Adversarial tests | `packages/agent-os/tests/test_adversarial.py` |
 | Conversation guardian tests | `packages/agent-os/tests/test_conversation_guardian.py` |
 | Escalation tests | `packages/agent-os/tests/test_escalation.py` |
+
+---
+
+## Next Steps
+
+- **MCP Security:** [Tutorial 07 — MCP Security Gateway](07-mcp-security-gateway.md)
+- **Plugin Marketplace:** [Tutorial 10 — Plugin Marketplace](10-plugin-marketplace.md)
+- **Agent Reliability:** [Tutorial 05 — Agent Reliability Engineering](05-agent-reliability.md)

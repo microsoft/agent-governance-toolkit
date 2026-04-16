@@ -20,8 +20,16 @@ from agent_marketplace.marketplace_policy import (
     ComplianceResult,
     MCPServerPolicy,
     MarketplacePolicy,
+    OrgMarketplacePolicy,
     evaluate_plugin_compliance,
     load_marketplace_policy,
+)
+from agent_marketplace.quality_scoring import (
+    PluginQualityProfile,
+    QualityBadge,
+    QualityDimension,
+    QualityScore,
+    QualityStore,
 )
 from agent_marketplace.registry import PluginRegistry
 from agent_marketplace.schema_adapters import (
@@ -43,6 +51,24 @@ from agent_marketplace.trust_tiers import (
     get_tier_config,
     get_trust_tier,
 )
+from agent_marketplace.quality_assessment import (
+    AssessmentDimension,
+    AssessmentGrade,
+    DimensionResult,
+    QualityAssessmentReport,
+    QualityAssessor,
+)
+from agent_marketplace.usage_trust import (
+    UsageSignals,
+    UsageTrustAdjustment,
+    UsageTrustScorer,
+)
+from agent_marketplace.workflow_bundle import (
+    BundleComponent,
+    BundleRegistry,
+    ComponentType,
+    WorkflowBundle,
+)
 
 __all__ = [
     "ClaudePluginManifest",
@@ -53,13 +79,19 @@ __all__ = [
     "MCPServerPolicy",
     "MarketplaceError",
     "MarketplacePolicy",
+    "OrgMarketplacePolicy",
     "PluginInstaller",
     "PluginManifest",
+    "PluginQualityProfile",
     "PluginRegistry",
     "PluginSigner",
     "PluginTrustConfig",
     "PluginTrustStore",
     "PluginType",
+    "QualityBadge",
+    "QualityDimension",
+    "QualityScore",
+    "QualityStore",
     "TRUST_TIERS",
     "adapt_to_canonical",
     "compute_initial_score",
@@ -74,4 +106,19 @@ __all__ = [
     "load_marketplace_policy",
     "save_manifest",
     "verify_signature",
+    # Quality Assessment (v3.0.2+)
+    "AssessmentDimension",
+    "AssessmentGrade",
+    "DimensionResult",
+    "QualityAssessmentReport",
+    "QualityAssessor",
+    # Usage Trust (v3.0.2+)
+    "UsageSignals",
+    "UsageTrustAdjustment",
+    "UsageTrustScorer",
+    # Workflow Bundles (v3.0.2+)
+    "BundleComponent",
+    "BundleRegistry",
+    "ComponentType",
+    "WorkflowBundle",
 ]

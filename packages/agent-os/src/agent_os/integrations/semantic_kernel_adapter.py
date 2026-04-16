@@ -598,7 +598,13 @@ class GovernedSemanticKernel:
             plan = await planner.create_plan(goal, **kwargs)
         else:
             # Use default sequential planner if available
-            from semantic_kernel.planners import SequentialPlanner
+            try:
+                from semantic_kernel.planners import SequentialPlanner
+            except ImportError:
+                raise ImportError(
+                    "semantic-kernel is required for planning. "
+                    "Install it with: pip install semantic-kernel"
+                )
             planner = SequentialPlanner(self._kernel)
             plan = await planner.create_plan(goal, **kwargs)
 

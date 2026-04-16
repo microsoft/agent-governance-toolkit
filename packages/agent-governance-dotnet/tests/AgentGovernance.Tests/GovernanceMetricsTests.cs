@@ -44,7 +44,7 @@ public class GovernanceMetricsTests : IDisposable
         allowedBefore = allowedAfter;
         blockedBefore = blockedAfter;
 
-        _metrics.RecordDecision(allowed: true, "did:mesh:test", "file_read", 0.05);
+        _metrics.RecordDecision(allowed: true, "did:agentmesh:test", "file_read", 0.05);
         listener.RecordObservableInstruments();
 
         Assert.Equal(1, policyAfter - policyBefore);
@@ -74,7 +74,7 @@ public class GovernanceMetricsTests : IDisposable
         // Capture baseline AFTER listener processes any existing measurements
         blockedBefore = blockedAfter;
 
-        _metrics.RecordDecision(allowed: false, "did:mesh:test", "shell_exec", 0.02);
+        _metrics.RecordDecision(allowed: false, "did:agentmesh:test", "shell_exec", 0.02);
         listener.RecordObservableInstruments();
 
         Assert.Equal(1, blockedAfter - blockedBefore);
@@ -99,7 +99,7 @@ public class GovernanceMetricsTests : IDisposable
 
         rateBefore = rateAfter;
 
-        _metrics.RecordDecision(allowed: false, "did:mesh:test", "api_call", 0.01, rateLimited: true);
+        _metrics.RecordDecision(allowed: false, "did:agentmesh:test", "api_call", 0.01, rateLimited: true);
         listener.RecordObservableInstruments();
 
         Assert.Equal(1, rateAfter - rateBefore);
@@ -136,7 +136,7 @@ public class GovernanceMetricsTests : IDisposable
             }
         });
 
-        _metrics.RecordDecision(allowed: true, "did:mesh:test", "search", 0.087);
+        _metrics.RecordDecision(allowed: true, "did:agentmesh:test", "search", 0.087);
 
         Assert.Equal(0.087, latency, precision: 5);
     }
@@ -148,7 +148,7 @@ public class GovernanceMetricsTests : IDisposable
 
         _metrics.RegisterTrustScoreGauge(() => new[]
         {
-            new Measurement<double>(850.0, new KeyValuePair<string, object?>("agent_id", "did:mesh:test"))
+            new Measurement<double>(850.0, new KeyValuePair<string, object?>("agent_id", "did:agentmesh:test"))
         });
 
         using var listener = new MeterListener();

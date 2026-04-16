@@ -14,6 +14,7 @@ rules:
   
   - tool: "read_file"
     action: allow
+    mitigates: ["ASI02", "ASI07"]
     conditions:
       - path_not_contains: [".env", ".secret", "credentials", "password", ".key"]
     reason: "Read-only file access permitted"
@@ -35,22 +36,27 @@ rules:
   - tool: "write_file"
     action: deny
     reason: "Write operations not permitted in strict mode"
+    mitigates: ["ASI02"]
 
   - tool: "delete_file"
     action: deny
     reason: "Delete operations not permitted"
+    mitigates: ["ASI02"]
 
   - tool: "run_shell"
     action: deny
     reason: "Shell execution blocked"
+    mitigates: ["ASI02", "ASI05"]
 
   - tool: "execute_command"
     action: deny
     reason: "Command execution blocked"
+    mitigates: ["ASI02", "ASI05"]
 
   - tool: "eval"
     action: deny
     reason: "Code evaluation blocked"
+    mitigates: ["ASI05"]
 
   # === CATCH-ALL ===
   
@@ -63,6 +69,7 @@ rate_limits:
   global:
     requests: 50
     per: minute
+    mitigates: ["ASI08"]
   per_tool:
     read_file:
       requests: 20
