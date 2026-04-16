@@ -16,7 +16,7 @@
 
 Every governed agent system must answer a deceptively simple question: _"Can you prove you're compliant?"_  Not "do you think you are," but **prove** — with cryptographic attestations, coverage grades, and audit-ready reports that satisfy both your engineering team and your compliance officer.
 
-The `agent-compliance` package turns governance from a claim into evidence. It verifies that every OWASP ASI 2026 control is installed, grades your coverage, generates signed attestation records, validates source integrity against tamper-proof manifests, and gates agent promotion through lifecycle stages.
+The `agent-compliance` package turns governance from a claim into evidence. In basic mode it verifies that OWASP ASI 2026 control components are installed. In evidence mode it validates a runtime evidence manifest from a live deployment, grades your coverage, generates signed attestation records, validates source integrity against tamper-proof manifests, and gates agent promotion through lifecycle stages.
 
 **Prerequisites:** `pip install agent-governance-toolkit[full]`
 **Modules:** `agent_compliance.verify`, `agent_compliance.integrity`, `agent_compliance.promotion`
@@ -98,7 +98,7 @@ Governance Verification Summary
 Result: PASSED (10/10 controls present)
 ```
 
-That's it. `GovernanceVerifier` imports each control module, checks for the expected component, and produces a signed `GovernanceAttestation` with SHA-256 hash, coverage percentage, letter grade, and badge URL.
+That's it. In basic mode, `GovernanceVerifier` imports each control module, checks for the expected component, and produces a signed `GovernanceAttestation` with SHA-256 hash, coverage percentage, letter grade, and badge URL. In evidence mode, it also validates a runtime evidence manifest with loaded policy files, deny semantics, registered tools, audit sink configuration, identity state, and package versions.
 
 ---
 
@@ -123,36 +123,50 @@ The verifier checks 10 controls from the OWASP Agentic Security Initiatives (ASI
 
 ### 3.2 Verification Logic
 
-Each control is checked by attempting to import its module and access its component:
+Basic mode checks whether each control module and component is importable:
 
-```python
-from agent_compliance.verify import GovernanceVerifier, ControlResult
+    from agent_compliance.verify import GovernanceVerifier, ControlResult
 
-verifier = GovernanceVerifier()
-attestation = verifier.verify()
+    verifier = GovernanceVerifier()
+    attestation = verifier.verify()
 
-# Inspect individual control results
-for control in attestation.controls:
-    status = "✅" if control.present else "❌"
-    print(f"{status} {control.control_id}: {control.name}")
-    print(f"   Module: {control.module}")
-    print(f"   Component: {control.component}")
-    if control.error:
-        print(f"   Error: {control.error}")
-```
+    # Inspect individual control results
+    for control in attestation.controls:
+        status = "✅" if control.present else "❌"
+        print(f"{status} {control.control_id}: {control.name}")
+        print(f"   Module: {control.module}")
+        print(f"   Component: {control.component}")
+        if control.error:
+            print(f"   Error: {control.error}")
 
 Behind the scenes, `_check_control()` does a straightforward import check:
 
-```
-For each (control_id, spec) in OWASP_ASI_CONTROLS:
-  1. Import spec["module"]
-  2. Check hasattr(module, spec["check"])
-  3. Return ControlResult(present=True/False)
-```
+    For each (control_id, spec) in OWASP_ASI_CONTROLS:
+      1. Import spec["module"]
+      2. Check hasattr(module, spec["check"])
+      3. Return ControlResult(present=True/False)
 
 If the module can't be imported or the component doesn't exist, the control is marked as missing — no exceptions are raised.
 
-### 3.3 Custom Controls
+### 3.3 Evidence Mode
+
+Evidence mode validates a runtime evidence manifest emitted by the deployment:
+
+    agt verify --evidence ./agt-evidence.json
+    agt verify --evidence ./agt-evidence.json --strict
+
+The evidence manifest records:
+
+- loaded policy files
+- deny rule or deny-by-default semantics
+- registered tools
+- audit sink configuration
+- identity state
+- package/version manifest
+
+`--strict` fails when runtime evidence is missing or weak.
+
+### 3.4 Custom Controls
 
 You can extend the verifier with your own controls. Pass a custom control dictionary to check organization-specific governance components:
 
@@ -797,6 +811,12 @@ agent-governance verify --json
 
 # Markdown badge only
 agent-governance verify --badge
+
+# Runtime evidence manifest
+agent-governance verify --evidence ./agt-evidence.json
+
+# Strict evidence mode
+agent-governance verify --evidence ./agt-evidence.json --strict
 ```
 
 **Exit codes:**
@@ -1063,7 +1083,7 @@ Badge: ![Governance](https://img.shields.io/badge/governance-100%25-brightgreen)
 | Promotion gates | `PromotionGate` | Named check function with severity (blocker/warning) |
 | Promotion checker | `PromotionChecker` | Evaluates 9 built-in gates for level transitions |
 | Promotion report | `PromotionReport` | Aggregate pass/fail with blocker list |
-| CLI verify | `agent-governance verify` | `--json`, `--badge` flags; exit code 0/1 |
+| CLI verify | `agent-governance verify` | `--json`, `--badge`, `--evidence`, `--strict` flags; exit code 0/1 |
 | CLI integrity | `agent-governance integrity` | `--generate`, `--manifest`, `--json` flags |
 
 ---

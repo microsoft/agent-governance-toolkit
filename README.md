@@ -49,6 +49,12 @@ agt doctor
 
 # 3. Verify OWASP compliance
 agt verify
+
+# 4. Verify runtime evidence, when available
+agt verify --evidence ./agt-evidence.json
+
+# 5. Fail CI on weak runtime evidence
+agt verify --evidence ./agt-evidence.json --strict
 ```
 
 Then govern your first action:
@@ -167,6 +173,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 | [LangGraph](https://github.com/langchain-ai/langgraph) / [LangChain](https://github.com/langchain-ai/langchain) | Adapter |
 | [CrewAI](https://github.com/crewAIInc/crewAI) | Adapter |
 | [OpenAI Agents SDK](https://github.com/openai/openai-agents-python) | Middleware |
+| [pi-mono](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) | TypeScript SDK Integration |
 | [Google ADK](https://github.com/google/adk-python) | Adapter |
 | [LlamaIndex](https://github.com/run-llama/llama_index) | Middleware |
 | [Haystack](https://github.com/deepset-ai/haystack) | Pipeline |

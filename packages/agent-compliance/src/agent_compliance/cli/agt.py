@@ -1,17 +1,19 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+
 """
-AGT ΓÇö Unified CLI for the Agent Governance Toolkit.
+AGT — Unified CLI for the Agent Governance Toolkit.
 
 Single entry point that namespaces all governance commands:
+
     agt verify          OWASP ASI compliance verification
     agt integrity       Module integrity checks
     agt lint-policy     Policy file linting
     agt doctor          Diagnose installation health
     agt version         Show installed package versions
 
-Plugin subcommands from other AGT packages are discovered
-via the ``agt.commands`` entry-point group.
+Plugin subcommands from other AGT packages are discovered via the
+``agt.commands`` entry-point group.
 """
 
 from __future__ import annotations
@@ -21,14 +23,10 @@ from typing import Any, Dict, Optional
 
 import click
 
-# ---------------------------------------------------------------------------
-# Optional rich ΓÇö degrade gracefully if not installed
-# ---------------------------------------------------------------------------
-
 try:
+    from rich import box as _rich_box
     from rich.console import Console as _RichConsole
     from rich.table import Table as _RichTable
-    from rich import box as _rich_box
 
     _console = _RichConsole()
     _console_err = _RichConsole(stderr=True)
@@ -48,11 +46,6 @@ def _print(msg: str, *, style: str = "", err: bool = False) -> None:
         print(msg, file=sys.stderr if err else sys.stdout)
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _get_package_version(package_name: str) -> Optional[str]:
     """Return installed version via importlib.metadata, or None."""
     try:
@@ -66,6 +59,7 @@ def _get_package_version(package_name: str) -> Optional[str]:
 def _discover_plugins() -> Dict[str, click.Command]:
     """Discover plugin commands from the ``agt.commands`` entry-point group."""
     plugins: Dict[str, click.Command] = {}
+
     try:
         if sys.version_info >= (3, 10):
             from importlib.metadata import entry_points
@@ -83,21 +77,15 @@ def _discover_plugins() -> Dict[str, click.Command]:
                 if isinstance(obj, click.Command):
                     plugins[ep.name] = obj
                 elif callable(obj):
-                    # Adapter: callable that returns a click command
                     result = obj()
                     if isinstance(result, click.Command):
                         plugins[ep.name] = result
             except Exception:
-                # Plugin failed to load ΓÇö silently skip; `doctor` will report it
                 pass
     except Exception:
         pass
+
     return plugins
-
-
-# ---------------------------------------------------------------------------
-# Global context object
-# ---------------------------------------------------------------------------
 
 
 class AgtContext:
@@ -109,16 +97,11 @@ class AgtContext:
         verbose: bool = False,
         quiet: bool = False,
         no_color: bool = False,
-    ):
+    ) -> None:
         self.output_json = output_json
         self.verbose = verbose
         self.quiet = quiet
         self.no_color = no_color
-
-
-# ---------------------------------------------------------------------------
-# Root group
-# ---------------------------------------------------------------------------
 
 
 class AgtGroup(click.Group):
@@ -131,6 +114,7 @@ class AgtGroup(click.Group):
     def _ensure_plugins(self) -> None:
         if self._plugins_loaded:
             return
+
         self._plugins_loaded = True
         for name, cmd in _discover_plugins().items():
             if name not in self.commands:
@@ -155,22 +139,28 @@ class AgtGroup(click.Group):
     prog_name="agt",
 )
 @click.pass_context
-def cli(ctx: click.Context, output_json: bool, verbose: bool, quiet: bool, no_color: bool) -> None:
+def cli(
+    ctx: click.Context,
+    output_json: bool,
+    verbose: bool,
+    quiet: bool,
+    no_color: bool,
+) -> None:
     """
-    AGT ΓÇö Agent Governance Toolkit CLI.
+    AGT — Agent Governance Toolkit CLI.
 
     Unified command-line interface for governing AI agents.
 
     \b
     Quick start:
-        agt verify              Check OWASP ASI compliance
-        agt doctor              Diagnose installation health
-        agt lint-policy ./dir   Lint policy files
-        agt integrity           Verify module integrity
+      agt verify              Check OWASP ASI compliance
+      agt doctor              Diagnose installation health
+      agt lint-policy ./dir   Lint policy files
+      agt integrity           Verify module integrity
 
     \b
-    Plugin commands from installed AGT packages (mesh, sre, etc.)
-    are auto-discovered and appear below when installed.
+    Plugin commands from installed AGT packages are auto-discovered and appear
+    below when installed.
     """
     ctx.ensure_object(dict)
     ctx.obj = AgtContext(
@@ -181,21 +171,38 @@ def cli(ctx: click.Context, output_json: bool, verbose: bool, quiet: bool, no_co
     )
 
 
-# ---------------------------------------------------------------------------
-# Built-in commands
-# ---------------------------------------------------------------------------
-
-
 @cli.command()
 @click.option("--badge", is_flag=True, default=False, help="Output markdown badge only.")
+@click.option(
+    "--evidence",
+    "evidence_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=str),
+    default=None,
+    help="Path to runtime evidence JSON/YAML.",
+)
+@click.option(
+    "--strict",
+    is_flag=True,
+    default=False,
+    help="Fail if runtime evidence shows weak or missing governance setup.",
+)
 @click.pass_obj
-def verify(ctx_obj: AgtContext, badge: bool) -> None:
+def verify(
+    ctx_obj: AgtContext,
+    badge: bool,
+    evidence_path: str | None,
+    strict: bool,
+) -> None:
     """Run OWASP ASI 2026 governance verification."""
     try:
         from agent_compliance.verify import GovernanceVerifier
 
         verifier = GovernanceVerifier()
-        attestation = verifier.verify()
+
+        if evidence_path:
+            attestation = verifier.verify_evidence(evidence_path=evidence_path, strict=strict)
+        else:
+            attestation = verifier.verify()
 
         if ctx_obj.output_json:
             click.echo(attestation.to_json())
@@ -206,6 +213,7 @@ def verify(ctx_obj: AgtContext, badge: bool) -> None:
 
         if not attestation.passed:
             raise SystemExit(1)
+
     except SystemExit:
         raise
     except Exception as e:
@@ -215,11 +223,18 @@ def verify(ctx_obj: AgtContext, badge: bool) -> None:
 
 @cli.command()
 @click.option("--manifest", type=click.Path(), default=None, help="Path to integrity.json manifest.")
-@click.option("--generate", type=click.Path(), default=None, metavar="OUTPUT_PATH", help="Generate manifest at path.")
+@click.option(
+    "--generate",
+    type=click.Path(),
+    default=None,
+    metavar="OUTPUT_PATH",
+    help="Generate manifest at path.",
+)
 @click.pass_obj
 def integrity(ctx_obj: AgtContext, manifest: Optional[str], generate: Optional[str]) -> None:
     """Verify or generate module integrity manifest."""
     import json as json_mod
+    import os
 
     try:
         if generate and manifest:
@@ -231,15 +246,25 @@ def integrity(ctx_obj: AgtContext, manifest: Optional[str], generate: Optional[s
         if generate:
             verifier = IntegrityVerifier()
             result = verifier.generate_manifest(generate)
+
             if ctx_obj.output_json:
-                click.echo(json_mod.dumps({"status": "ok", "path": generate, "files": len(result["files"]), "functions": len(result["functions"])}, indent=2))
+                click.echo(
+                    json_mod.dumps(
+                        {
+                            "status": "ok",
+                            "path": generate,
+                            "files": len(result["files"]),
+                            "functions": len(result["functions"]),
+                        },
+                        indent=2,
+                    )
+                )
             else:
                 click.echo(f"Manifest written to {generate}")
-                click.echo(f"  Files hashed: {len(result['files'])}")
-                click.echo(f"  Functions hashed: {len(result['functions'])}")
-            return
+                click.echo(f" Files hashed: {len(result['files'])}")
+                click.echo(f" Functions hashed: {len(result['functions'])}")
 
-        import os
+            return
 
         if manifest and not os.path.exists(manifest):
             _print(f"Error: manifest file not found: {manifest}", style="red", err=True)
@@ -255,6 +280,7 @@ def integrity(ctx_obj: AgtContext, manifest: Optional[str], generate: Optional[s
 
         if not report.passed:
             raise SystemExit(1)
+
     except SystemExit:
         raise
     except Exception as e:
@@ -280,24 +306,24 @@ def lint_policy(ctx_obj: AgtContext, path: str, strict: bool) -> None:
         else:
             for msg in result.messages:
                 click.echo(msg)
+
             if result.messages:
                 click.echo()
+
             click.echo(result.summary())
 
         if strict and result.warnings:
             raise SystemExit(1)
+
         if not result.passed:
             raise SystemExit(1)
+
     except SystemExit:
         raise
     except Exception as e:
         _handle_error(e, ctx_obj.output_json)
         raise SystemExit(1)
 
-
-# ---------------------------------------------------------------------------
-# Doctor command
-# ---------------------------------------------------------------------------
 
 _AGT_PACKAGES = [
     ("agent_governance_toolkit", "Agent Governance Toolkit", "Meta-package & compliance CLI"),
@@ -314,33 +340,27 @@ _AGT_PACKAGES = [
 @cli.command()
 @click.pass_obj
 def doctor(ctx_obj: AgtContext) -> None:
-    """Diagnose AGT installation health.
-
-    Checks installed packages, versions, Python compatibility,
-    and plugin registration status.
-    """
+    """Diagnose AGT installation health."""
     import json as json_mod
     import platform
+    from pathlib import Path
 
     py_version = platform.python_version()
     results: list[Dict[str, Any]] = []
 
     for pkg_name, display_name, description in _AGT_PACKAGES:
         ver = _get_package_version(pkg_name)
-        results.append({
-            "package": pkg_name,
-            "name": display_name,
-            "description": description,
-            "installed": ver is not None,
-            "version": ver,
-        })
+        results.append(
+            {
+                "package": pkg_name,
+                "name": display_name,
+                "description": description,
+                "installed": ver is not None,
+                "version": ver,
+            }
+        )
 
-    # Check for plugin registrations
     plugins = _discover_plugins()
-
-    # Check config files
-    from pathlib import Path
-
     config_locations = [
         Path.cwd() / "agentmesh.yaml",
         Path.cwd() / "policies",
@@ -358,8 +378,7 @@ def doctor(ctx_obj: AgtContext) -> None:
         click.echo(json_mod.dumps(report, indent=2))
         return
 
-    # Rich table output
-    _print(f"\n≡ƒ⌐║ AGT Doctor ΓÇö Python {py_version}", style="bold blue")
+    _print(f"\n🩺 AGT Doctor — Python {py_version}", style="bold blue")
     _print("")
 
     installed_count = sum(1 for r in results if r["installed"])
@@ -377,8 +396,8 @@ def doctor(ctx_obj: AgtContext) -> None:
         table.add_column("Description", style="dim")
 
         for r in results:
-            status = "[green]Γ£ô installed[/green]" if r["installed"] else "[dim]┬╖ not installed[/dim]"
-            ver = r["version"] or "ΓÇö"
+            status = "[green]✓ installed[/green]" if r["installed"] else "[dim]· not installed[/dim]"
+            ver = r["version"] or "—"
             table.add_row(r["package"], ver, status, r["description"])
 
         _console.print(table)
@@ -386,57 +405,57 @@ def doctor(ctx_obj: AgtContext) -> None:
         click.echo("Installed Packages:")
         click.echo("-" * 70)
         for r in results:
-            status = "Γ£ô" if r["installed"] else "┬╖"
-            ver = r["version"] or "ΓÇö"
-            click.echo(f"  {status} {r['package']:30s} {ver:12s} {r['description']}")
+            status = "✓" if r["installed"] else "·"
+            ver = r["version"] or "—"
+            click.echo(f" {status} {r['package']:30s} {ver:12s} {r['description']}")
 
-    _print(f"\n  {installed_count}/{total_count} packages installed", style="bold")
+    _print(f"\n {installed_count}/{total_count} packages installed", style="bold")
 
-    # Plugins
     if plugins:
-        _print(f"\n  Plugin commands: {', '.join(sorted(plugins.keys()))}", style="green")
+        _print(f"\n Plugin commands: {', '.join(sorted(plugins.keys()))}", style="green")
     else:
-        _print("\n  No plugin commands registered (install AGT packages with [full] extras)", style="dim")
+        _print("\n No plugin commands registered (install AGT packages with [full] extras)", style="dim")
 
-    # Config files
-    _print("\n  Config files:", style="bold")
+    _print("\n Config files:", style="bold")
     for path_str, exists in config_found.items():
-        icon = "Γ£ô" if exists else "┬╖"
-        _print(f"    {icon} {path_str}")
+        icon = "✓" if exists else "·"
+        _print(f" {icon} {path_str}")
 
     _print("")
-
-
-# ---------------------------------------------------------------------------
-# Error handling
-# ---------------------------------------------------------------------------
 
 
 def _handle_error(e: Exception, output_json: bool = False) -> None:
     """Centralized error handler."""
     import json as json_mod
+    import os
 
     is_known = isinstance(
-        e, (IOError, ValueError, KeyError, PermissionError, FileNotFoundError)
+        e,
+        (IOError, ValueError, KeyError, PermissionError, FileNotFoundError),
     )
 
     if output_json:
         err_type = "ValidationError" if is_known else "InternalError"
         err_msg = str(e) if is_known else "An internal error occurred"
-        click.echo(json_mod.dumps({"status": "error", "message": err_msg, "type": err_type}, indent=2))
+        click.echo(
+            json_mod.dumps(
+                {
+                    "status": "error",
+                    "message": err_msg,
+                    "type": err_type,
+                },
+                indent=2,
+            )
+        )
+        return
+
+    if is_known:
+        _print(f"Error: {e}", style="red", err=True)
     else:
-        if is_known:
-            _print(f"Error: {e}", style="red", err=True)
-        else:
-            _print("Error: An internal error occurred", style="red", err=True)
-            import os
-            if os.environ.get("AGENTOS_DEBUG"):
-                _print(f"  {e}", style="dim", err=True)
+        _print("Error: An internal error occurred", style="red", err=True)
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
+    if os.environ.get("AGENTOS_DEBUG"):
+        _print(f" {e}", style="dim", err=True)
 
 
 def main() -> None:
@@ -446,3 +465,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    

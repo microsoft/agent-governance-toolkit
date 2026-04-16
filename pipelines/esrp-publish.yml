@@ -113,12 +113,15 @@ parameters:
 #   ESRP_CLIENT_ID, ESRP_OWNERS, ESRP_APPROVERS
 #
 # Note: ESRP_DOMAIN_TENANT_ID was removed from pipeline variables due to
-# cyclical reference. The Microsoft corporate tenant ID is a well-known
-# public value used as the ESRP default.
+# cyclical reference. The ESRP cert lives in the PME (Partner Managed
+# Engineering) tenant, not the Microsoft corporate tenant. If
+# ESRP_DOMAIN_TENANT_ID still exists in ADO pipeline variables, DELETE
+# IT — it causes a cyclical variable expansion warning that confuses
+# log triage.
 # -------------------------------------------------------
 
 variables:
-  MICROSOFT_TENANT_ID: '72f988bf-86f1-41af-91ab-2d7cd011db47'
+  MICROSOFT_TENANT_ID: '975f013f-7f24-47e8-a7d3-abc4752bf346'
 
 pool:
   vmImage: ubuntu-latest
@@ -353,16 +356,24 @@ stages:
     jobs:
       - job: PublishNuGet
         displayName: 'ESRP Sign + NuGet Push'
+        pool:
+          vmImage: windows-latest  # ESRP Code Signing requires Windows agent
         steps:
+          - task: UseDotNet@2
+            inputs:
+              packageType: 'sdk'
+              version: '${{ parameters.dotnetVersion }}'
+            displayName: 'Use .NET SDK ${{ parameters.dotnetVersion }}'
+
           - task: DownloadPipelineArtifact@2
             inputs:
               artifact: 'nuget-unsigned'
-              targetPath: '$(Pipeline.Workspace)/nuget-unsigned'
+              targetPath: '$(Pipeline.Workspace)\nuget-unsigned'
             displayName: 'Download unsigned NuGet artifacts'
 
-          - script: |
-              echo "=== Unsigned packages ==="
-              ls -la $(Pipeline.Workspace)/nuget-unsigned/
+          - powershell: |
+              Write-Host "=== Unsigned packages ==="
+              Get-ChildItem "$(Pipeline.Workspace)\nuget-unsigned" -Recurse
             displayName: 'List unsigned packages'
 
           # Step 1: Sign the .nupkg with ESRP Code Signing
@@ -374,7 +385,7 @@ stages:
               AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
               AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
               AuthCertName: '$(ESRP_CERT_IDENTIFIER)'
-              FolderPath: '$(Pipeline.Workspace)/nuget-unsigned'
+              FolderPath: '$(Pipeline.Workspace)\nuget-unsigned'
               Pattern: '*.nupkg'
               signConfigType: 'inlineSignParams'
               inlineOperation: |
@@ -395,16 +406,16 @@ stages:
                   }
                 ]
 
-          - script: |
-              echo "=== Signed packages ==="
-              ls -la $(Pipeline.Workspace)/nuget-unsigned/
+          - powershell: |
+              Write-Host "=== Signed packages ==="
+              Get-ChildItem "$(Pipeline.Workspace)\nuget-unsigned" -Recurse
             displayName: 'List signed packages'
 
           # Step 2: Push signed package to NuGet.org
-          - script: |
-              dotnet nuget push "$(Pipeline.Workspace)/nuget-unsigned/**/*.nupkg" \
-                --source https://api.nuget.org/v3/index.json \
-                --api-key "$NUGET_API_KEY" \
+          - powershell: |
+              dotnet nuget push "$(Pipeline.Workspace)\nuget-unsigned\*.nupkg" `
+                --source https://api.nuget.org/v3/index.json `
+                --api-key "$env:NUGET_API_KEY" `
                 --skip-duplicate
             env:
               NUGET_API_KEY: $(NUGET_API_KEY)

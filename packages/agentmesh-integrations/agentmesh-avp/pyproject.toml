@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0,<69.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentmesh_avp"
+version = "0.1.0"
+description = "Agent Veil Protocol integration for AgentMesh trust engine"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+dependencies = [
+    "agentmesh>=0.1.0,<1.0",
+    "httpx>=0.27.0,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0,<8.0",
+    "pytest-asyncio>=0.21,<1.0",
+    "respx>=0.20,<1.0",
+]
+
+[project.urls]
+Homepage = "https://agentveil.dev"
+SDK = "https://github.com/creatorrmode-lead/avp-sdk"

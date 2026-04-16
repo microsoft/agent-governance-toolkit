@@ -1,30 +1,40 @@
 # lotl_prevention_policy.yaml
-metadata:
-  name: "Blue Team LotL Shield"
-  version: "1.1"
-  description: "Detects and blocks Living off the Land (LotL) commands and unauthorized sensitive file access."
+#
+# ⚠️  IMPORTANT: This is a SAMPLE configuration provided as a starting point.
+# You MUST review, customize, and extend these rules for your specific
+# use case before deploying to production. Microsoft does not guarantee
+# that these rules are comprehensive or sufficient for your security
+# requirements.
+
+version: "1.1"
+name: "blue-team-lotl-shield"
+description: >
+  Detects and blocks Living off the Land (LotL) commands and
+  unauthorized sensitive file access.
+
+disclaimer: >
+  This is a sample configuration. It is NOT exhaustive and should be
+  customized for your specific security requirements.
 
 rules:
-  - id: "block-unauthorized-download-pipe"
-    action: "shell_exec"
+  - name: "block-unauthorized-download-pipe"
     condition:
-      parameter: "command"
-      # Improved Regex to reduce false positives and catch obfuscation
-      operator: "regex_match"
+      field: "command"
+      operator: "matches"
       value: "(curl|wget|powershell)\\s+.*(-s|-fsSL|-enc|DownloadString).*\\|.*(bash|sh|python|iex)"
-    effect: "DENY"
+    action: "deny"
+    priority: 200
     message: "Security Violation: Potential remote code execution via piped shell script detected."
 
-  - id: "block-sensitive-system-read"
-    action: "file_read"
+  - name: "block-sensitive-system-read"
     condition:
-      parameter: "path"
-      # Expanded list based on Blue Team best practices
+      field: "path"
       operator: "in"
       value: [
-        "/etc/shadow", "/etc/passwd", "/etc/hostname", 
-        "~/.ssh/id_rsa", "~/.aws/credentials", 
+        "/etc/shadow", "/etc/passwd", "/etc/hostname",
+        "~/.ssh/id_rsa", "~/.aws/credentials",
         "/var/run/docker.sock", "/etc/kubernetes/admin.conf"
       ]
-    effect: "DENY"
+    action: "deny"
+    priority: 200
     message: "Security Violation: Unauthorized access to critical system credentials or configuration."

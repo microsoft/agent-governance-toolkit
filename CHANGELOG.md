@@ -46,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated `QUICKSTART.md` and `Tutorial 04 — Audit & Compliance` with secure JSON error handling examples and schema details
 - Added "Secure Error Handling" sections to primary documentation to guide users on interpreting sanitized machine-readable outputs
 
+### Added
+- Added optional runtime evidence mode for `agt verify` with `--evidence` and `--strict`.
+
 
 ## [3.0.2] - 2026-04-02
 

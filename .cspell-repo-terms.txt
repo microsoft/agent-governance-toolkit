@@ -22,6 +22,7 @@ kanish
 Landlock
 LangChain
 LangGraph
+lawcontinue
 LlamaIndex
 manylinux
 markdown
