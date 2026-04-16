@@ -50,7 +50,7 @@ public sealed class GovernanceEvent
     public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;
 
     /// <summary>
-    /// The decentralised identifier of the agent involved (e.g., "did:mesh:abc123").
+    /// The decentralised identifier of the agent involved (e.g., "did:agentmesh:abc123").
     /// </summary>
     public required string AgentId { get; init; }
 

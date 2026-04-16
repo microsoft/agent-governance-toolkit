@@ -42,7 +42,7 @@ public class JwkTests
 
         var restored = Jwk.FromJwk(jwk);
 
-        Assert.StartsWith("did:mesh:", restored.Did);
+        Assert.StartsWith("did:agentmesh:", restored.Did);
     }
 
     [Fact]

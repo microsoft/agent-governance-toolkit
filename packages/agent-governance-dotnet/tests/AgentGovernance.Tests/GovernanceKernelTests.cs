@@ -51,7 +51,7 @@ rules:
         var kernel = new GovernanceKernel();
         kernel.LoadPolicyFromYaml(TestPolicy);
 
-        var result = kernel.EvaluateToolCall("did:mesh:test", "read");
+        var result = kernel.EvaluateToolCall("did:agentmesh:test", "read");
         Assert.True(result.Allowed);
     }
 
@@ -61,7 +61,7 @@ rules:
         var kernel = new GovernanceKernel();
         kernel.LoadPolicyFromYaml(TestPolicy);
 
-        var result = kernel.EvaluateToolCall("did:mesh:test", "write");
+        var result = kernel.EvaluateToolCall("did:agentmesh:test", "write");
         Assert.False(result.Allowed);
     }
 
@@ -74,7 +74,7 @@ rules:
         GovernanceEvent? received = null;
         kernel.OnEvent(GovernanceEventType.ToolCallBlocked, e => received = e);
 
-        kernel.EvaluateToolCall("did:mesh:test", "write");
+        kernel.EvaluateToolCall("did:agentmesh:test", "write");
 
         Assert.NotNull(received);
         Assert.Equal(GovernanceEventType.ToolCallBlocked, received!.Type);
@@ -89,8 +89,8 @@ rules:
         var events = new List<GovernanceEvent>();
         kernel.OnAllEvents(e => events.Add(e));
 
-        kernel.EvaluateToolCall("did:mesh:test", "read");
-        kernel.EvaluateToolCall("did:mesh:test", "write");
+        kernel.EvaluateToolCall("did:agentmesh:test", "read");
+        kernel.EvaluateToolCall("did:agentmesh:test", "write");
 
         Assert.True(events.Count >= 2);
     }

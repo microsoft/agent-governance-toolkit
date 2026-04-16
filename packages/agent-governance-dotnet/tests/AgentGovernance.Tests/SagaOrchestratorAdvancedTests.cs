@@ -17,7 +17,7 @@ public class SagaOrchestratorAdvancedTests
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "flaky",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             MaxAttempts = 2,
             Execute = async ct =>
             {
@@ -42,7 +42,7 @@ public class SagaOrchestratorAdvancedTests
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "always-fails",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             MaxAttempts = 2,
             Execute = ct => { attempts++; throw new Exception("fail"); }
         });
@@ -62,13 +62,13 @@ public class SagaOrchestratorAdvancedTests
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "step-1",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = async ct => { log.Add("exec-1"); return null; }
         });
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "step-2-fails",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = ct => throw new Exception("boom")
         });
 
@@ -87,13 +87,13 @@ public class SagaOrchestratorAdvancedTests
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "step-1",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = async ct => { executed++; cts.Cancel(); return null; }
         });
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "step-2",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Timeout = TimeSpan.FromMilliseconds(100),
             Execute = async ct => { ct.ThrowIfCancellationRequested(); return null; }
         });
@@ -114,7 +114,7 @@ public class SagaOrchestratorAdvancedTests
             orchestrator.AddStep(saga, new SagaStep
             {
                 ActionId = $"step-{i}",
-                AgentDid = "did:mesh:a",
+                AgentDid = "did:agentmesh:a",
                 Execute = async ct => { Interlocked.Increment(ref completed); return null; }
             });
         }
@@ -136,7 +136,7 @@ public class SagaOrchestratorAdvancedTests
             orchestrator.AddStep(saga, new SagaStep
             {
                 ActionId = $"step-{idx}",
-                AgentDid = "did:mesh:a",
+                AgentDid = "did:agentmesh:a",
                 Execute = idx == 5
                     ? ct => throw new Exception("mid-fail")
                     : async ct => null,
@@ -169,7 +169,7 @@ public class SagaOrchestratorAdvancedTests
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "s1",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = async ct => "the-result"
         });
         await orchestrator.ExecuteAsync(saga);
@@ -185,7 +185,7 @@ public class SagaOrchestratorAdvancedTests
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "bad",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = ct => throw new InvalidOperationException("Something went wrong")
         });
         await orchestrator.ExecuteAsync(saga);
@@ -211,21 +211,21 @@ public class SagaOrchestratorAdvancedTests
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "s1",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = async ct => null,
             Compensate = ct => throw new Exception("undo fail")
         });
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "s2",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = async ct => null,
             Compensate = ct => throw new Exception("undo fail 2")
         });
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "s3-boom",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = ct => throw new Exception("exec fail")
         });
 
@@ -245,14 +245,14 @@ public class SagaOrchestratorAdvancedTests
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "s1",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Execute = async ct => "ok",
             Compensate = async ct => { compensated = true; }
         });
         orchestrator.AddStep(saga, new SagaStep
         {
             ActionId = "s2-slow",
-            AgentDid = "did:mesh:a",
+            AgentDid = "did:agentmesh:a",
             Timeout = TimeSpan.FromMilliseconds(50),
             Execute = async ct => { await Task.Delay(5000, ct); return null; }
         });

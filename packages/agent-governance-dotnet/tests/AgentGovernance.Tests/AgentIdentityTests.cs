@@ -12,7 +12,7 @@ public class AgentIdentityTests
     {
         var identity = AgentIdentity.Create("test-agent");
 
-        Assert.StartsWith("did:mesh:", identity.Did);
+        Assert.StartsWith("did:agentmesh:", identity.Did);
         Assert.NotNull(identity.PublicKey);
         Assert.NotNull(identity.PrivateKey);
         Assert.Equal(32, identity.PublicKey.Length);
@@ -102,7 +102,7 @@ public class AgentIdentityTests
     [Fact]
     public void Sign_WithoutPrivateKey_ThrowsInvalidOperationException()
     {
-        var identity = new AgentIdentity("did:mesh:test", new byte[32]);
+        var identity = new AgentIdentity("did:agentmesh:test", new byte[32]);
 
         Assert.Throws<InvalidOperationException>(() =>
             identity.Sign("test"u8.ToArray()));

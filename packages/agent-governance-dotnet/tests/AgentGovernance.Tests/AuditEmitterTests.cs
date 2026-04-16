@@ -15,11 +15,11 @@ public class AuditEmitterTests
 
         emitter.On(GovernanceEventType.PolicyCheck, e => received = e);
 
-        emitter.Emit(GovernanceEventType.PolicyCheck, "did:mesh:test", "session-1");
+        emitter.Emit(GovernanceEventType.PolicyCheck, "did:agentmesh:test", "session-1");
 
         Assert.NotNull(received);
         Assert.Equal(GovernanceEventType.PolicyCheck, received!.Type);
-        Assert.Equal("did:mesh:test", received.AgentId);
+        Assert.Equal("did:agentmesh:test", received.AgentId);
         Assert.Equal("session-1", received.SessionId);
     }
 
@@ -31,7 +31,7 @@ public class AuditEmitterTests
 
         emitter.On(GovernanceEventType.PolicyCheck, e => received = e);
 
-        emitter.Emit(GovernanceEventType.PolicyViolation, "did:mesh:test", "session-1");
+        emitter.Emit(GovernanceEventType.PolicyViolation, "did:agentmesh:test", "session-1");
 
         Assert.Null(received);
     }
@@ -44,9 +44,9 @@ public class AuditEmitterTests
 
         emitter.OnAll(e => events.Add(e));
 
-        emitter.Emit(GovernanceEventType.PolicyCheck, "did:mesh:test", "s1");
-        emitter.Emit(GovernanceEventType.PolicyViolation, "did:mesh:test", "s2");
-        emitter.Emit(GovernanceEventType.ToolCallBlocked, "did:mesh:test", "s3");
+        emitter.Emit(GovernanceEventType.PolicyCheck, "did:agentmesh:test", "s1");
+        emitter.Emit(GovernanceEventType.PolicyViolation, "did:agentmesh:test", "s2");
+        emitter.Emit(GovernanceEventType.ToolCallBlocked, "did:agentmesh:test", "s3");
 
         Assert.Equal(3, events.Count);
     }
@@ -61,7 +61,7 @@ public class AuditEmitterTests
         emitter.On(GovernanceEventType.DriftDetected, _ => callCount++);
         emitter.On(GovernanceEventType.DriftDetected, _ => callCount++);
 
-        emitter.Emit(GovernanceEventType.DriftDetected, "did:mesh:test", "session-1");
+        emitter.Emit(GovernanceEventType.DriftDetected, "did:agentmesh:test", "session-1");
 
         Assert.Equal(3, callCount);
     }
@@ -77,7 +77,7 @@ public class AuditEmitterTests
         var evt = new GovernanceEvent
         {
             Type = GovernanceEventType.CheckpointCreated,
-            AgentId = "did:mesh:test",
+            AgentId = "did:agentmesh:test",
             SessionId = "session-42",
             PolicyName = "test-policy",
             Data = new Dictionary<string, object> { ["key"] = "value" }
@@ -86,7 +86,7 @@ public class AuditEmitterTests
         emitter.Emit(evt);
 
         Assert.NotNull(received);
-        Assert.Equal("did:mesh:test", received!.AgentId);
+        Assert.Equal("did:agentmesh:test", received!.AgentId);
         Assert.Equal("session-42", received.SessionId);
         Assert.Equal("test-policy", received.PolicyName);
         Assert.Equal("value", received.Data["key"]);
@@ -102,7 +102,7 @@ public class AuditEmitterTests
         emitter.On(GovernanceEventType.PolicyCheck, _ => secondHandlerCalled = true);
 
         // Should not throw.
-        emitter.Emit(GovernanceEventType.PolicyCheck, "did:mesh:test", "session-1");
+        emitter.Emit(GovernanceEventType.PolicyCheck, "did:agentmesh:test", "session-1");
 
         Assert.True(secondHandlerCalled);
     }
@@ -155,14 +155,14 @@ public class AuditEmitterTests
         var evt = new GovernanceEvent
         {
             Type = GovernanceEventType.PolicyViolation,
-            AgentId = "did:mesh:test",
+            AgentId = "did:agentmesh:test",
             SessionId = "s-1",
             PolicyName = "my-policy"
         };
 
         var str = evt.ToString();
         Assert.Contains("PolicyViolation", str);
-        Assert.Contains("did:mesh:test", str);
+        Assert.Contains("did:agentmesh:test", str);
         Assert.Contains("my-policy", str);
     }
 }

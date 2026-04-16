@@ -8,7 +8,7 @@ namespace AgentGovernance.Tests;
 
 public class LifecycleManagerTests
 {
-    private const string AgentId = "did:mesh:lifecycle-test";
+    private const string AgentId = "did:agentmesh:lifecycle-test";
 
     [Fact]
     public void NewManager_StartsInProvisioning()
