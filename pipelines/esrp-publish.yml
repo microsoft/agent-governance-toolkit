@@ -113,14 +113,15 @@ parameters:
 #   ESRP_CLIENT_ID, ESRP_OWNERS, ESRP_APPROVERS
 #
 # Note: ESRP_DOMAIN_TENANT_ID was removed from pipeline variables due to
-# cyclical reference. The Microsoft corporate tenant ID is a well-known
-# public value used as the ESRP default. If ESRP_DOMAIN_TENANT_ID still
-# exists in ADO pipeline variables, DELETE IT — it causes a cyclical
-# variable expansion warning that confuses log triage.
+# cyclical reference. The ESRP cert lives in the PME (Partner Managed
+# Engineering) tenant, not the Microsoft corporate tenant. If
+# ESRP_DOMAIN_TENANT_ID still exists in ADO pipeline variables, DELETE
+# IT — it causes a cyclical variable expansion warning that confuses
+# log triage.
 # -------------------------------------------------------
 
 variables:
-  MICROSOFT_TENANT_ID: '72f988bf-86f1-41af-91ab-2d7cd011db47'
+  MICROSOFT_TENANT_ID: '975f013f-7f24-47e8-a7d3-abc4752bf346'
 
 pool:
   vmImage: ubuntu-latest
