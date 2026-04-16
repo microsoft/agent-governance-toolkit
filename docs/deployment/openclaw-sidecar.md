@@ -293,19 +293,23 @@ For a basic policy-enforcement sidecar, **no secrets are required** — just the
 
 ## Sidecar API Endpoints
 
-The governance sidecar exposes these endpoints on port **8081**:
+The governance sidecar exposes these endpoints on port **8081** (all verified working against v3.1.0):
 
 | Endpoint | Method | Purpose |
 |---|---|---|
+| `/` | GET | Root info (name, version, docs link) |
 | `/health` | GET | Health check (use as liveness probe) |
 | `/ready` | GET | Readiness check (use as readiness probe) |
 | `/api/v1/metrics` | GET | Governance metrics (checks, violations, latency) |
 | `/api/v1/detect/injection` | POST | Scan text for prompt injection |
 | `/api/v1/detect/injection/batch` | POST | Batch prompt injection scan |
 | `/api/v1/execute` | POST | Execute an action through the governance kernel |
-| `/docs` | GET | OpenAPI/Swagger documentation |
+| `/api/v1/audit/injections` | GET | Recent injection audit log entries |
+| `/docs` | GET | Interactive OpenAPI/Swagger documentation |
 
-### Example: Scan for prompt injection before tool execution
+> **Tip:** Visit `http://localhost:8081/docs` for interactive Swagger UI where you can try all endpoints directly in the browser.
+
+### Example: Scan for prompt injection
 
 ```bash
 curl -X POST http://localhost:8081/api/v1/detect/injection \
@@ -316,28 +320,69 @@ curl -X POST http://localhost:8081/api/v1/detect/injection \
     "sensitivity": "balanced"
   }'
 
-# Response:
+# Response (verified):
 # {
 #   "is_injection": true,
 #   "threat_level": "high",
-#   "confidence": 0.95,
-#   "matched_patterns": ["ignore.*previous.*instructions"],
-#   "explanation": "Direct instruction override attempt detected"
+#   "injection_type": "direct_override",
+#   "confidence": 0.9,
+#   "matched_patterns": ["direct_override:ignore\\s+(all\\s+)?previous\\s+instructions"],
+#   "explanation": "Detected direct_override (high threat, 90% confidence) from 1 signal(s)"
 # }
 ```
 
-### Example: Execute an action through the governance kernel
+Safe input returns:
+
+```bash
+curl -X POST http://localhost:8081/api/v1/detect/injection \
+  -H "Content-Type: application/json" \
+  -d '{"text": "What is the weather in Seattle?", "source": "user_input"}'
+
+# Response: {"is_injection": false, "threat_level": "none", "confidence": 0.0, ...}
+```
+
+### Example: Execute a governed action
 
 ```bash
 curl -X POST http://localhost:8081/api/v1/execute \
   -H "Content-Type: application/json" \
   -d '{
     "action": "shell:ls",
-    "params": {"args": ["-la", "/workspace"]},
+    "params": {"args": ["-la"]},
     "agent_id": "openclaw-agent-1",
-    "policies": ["allow-safe-shell"]
+    "policies": []
   }'
+
+# Response (verified):
+# {"success": true, "data": {"status": "executed", "action": "shell:ls", "result": "Action 'shell:ls' executed successfully"}, ...}
 ```
+
+### Example: Check metrics
+
+```bash
+curl http://localhost:8081/api/v1/metrics
+
+# Response: {"total_checks": 0, "violations": 0, "approvals": 0, "blocked": 0, "avg_latency_ms": 0.0}
+```
+
+### Example: Audit log
+
+```bash
+curl http://localhost:8081/api/v1/audit/injections?limit=10
+
+# Response: {"records": [...], "total": 5}
+```
+
+### Running without Docker
+
+You can also run the sidecar directly with Python — no Docker required:
+
+```bash
+pip install agent-os-kernel
+python -m agent_os.server --host 127.0.0.1 --port 8081
+```
+
+A smoke test script is available at [`demo/openclaw-governed/test-sidecar.sh`](../../demo/openclaw-governed/test-sidecar.sh) — it tests all 8 API endpoints.
 
 ---
 
