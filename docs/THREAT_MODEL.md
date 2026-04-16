@@ -182,6 +182,15 @@ AGT reduces risk but does not eliminate it. The main residual risks are:
   hold across tasks within a session — accumulated permissions may exceed
   what the current task requires — see
   [Limitations §8](LIMITATIONS.md#8-credential-persistence-gap)
+- **Physical AI scope**: AGT governs software agents, not physical actuators,
+  hardware interlocks, or real-time control loops — see
+  [Limitations §10](LIMITATIONS.md#10-physical-ai-and-embodied-agent-governance)
+- **Streaming data**: AGT evaluates policies per-action, not continuously over
+  data streams — data freshness and quality are not assured — see
+  [Limitations §11](LIMITATIONS.md#11-streaming-data-and-real-time-assurance)
+- **DID method inconsistency**: Python/.NET use `did:mesh:*` while TS/Rust/Go
+  use `did:agentmesh:*` — cross-SDK policy rules must account for both — see
+  [Limitations §12](LIMITATIONS.md#12-did-method-inconsistency-across-sdks)
 
 ## Configuration Bypass Vectors
 

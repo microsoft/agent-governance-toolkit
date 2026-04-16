@@ -244,6 +244,95 @@ dashboard shows "governed" status, but no rules are enforced.
 
 > *This risk was identified in external red-team analysis by [Periculo](https://www.periculo.co.uk/cyber-security-blog/red-teaming-the-microsoft-agent-governance-toolkit-15-bypass-vectors).*
 
+## 10. Physical AI and Embodied Agent Governance
+
+AGT governs **software agents** that call tools via APIs, MCP, or inter-agent
+protocols. It does **not** provide governance primitives specific to **physical
+agents** (robots, drones, autonomous vehicles, industrial actuators).
+
+**What this means in practice:**
+
+- ✅ AGT can govern the *software decision layer* of a robotic agent (e.g.,
+  blocking an API call to arm a mechanism)
+- ❌ AGT does **not** provide hardware kill switches, force-limiting, or actuator
+  safety interlocks
+- ❌ AGT does **not** model physical world state, collision boundaries, or
+  safety zones
+- ❌ AGT does **not** address latency requirements for real-time control loops
+  (typically <10ms) — policy evaluation at <0.1ms is fast enough, but the
+  full governance stack (identity, trust, audit) may not be
+
+**Example gap:** A warehouse robot governed by AGT has its `move_to_location`
+call approved by policy, but the target location is occupied by a human. AGT
+has no spatial awareness to detect this.
+
+**Mitigations available today:**
+- Use AGT's policy engine for the *decision layer* — blocking unsafe commands
+  before they reach the actuator layer
+- Combine AGT with domain-specific robot safety frameworks (e.g., ROS 2 Safety
+  Controller, ISO 10218 / ISO 15066 compliance layers)
+- Use **execution rings** to isolate physical actuator calls in Ring 0 with
+  human-in-the-loop approval
+
+**Status:** Physical AI governance is out of scope for AGT's current roadmap.
+We welcome community contributions exploring this space.
+
+## 11. Streaming Data and Real-Time Assurance
+
+AGT evaluates policies **per-action at invocation time**. It does not provide
+continuous assurance over **streaming data**, real-time sensor feeds, or
+long-running data pipelines.
+
+**What this means in practice:**
+
+- ✅ AGT can govern an agent's decision to *subscribe* to a data stream
+- ❌ AGT does **not** inspect individual messages within an active stream
+- ❌ AGT does **not** guarantee data freshness, completeness, or consistency
+  in streaming contexts
+- ❌ AGT does **not** detect stale or poisoned data arriving via a governed
+  stream after the initial subscription was approved
+
+**Example gap:** An agent subscribes to a real-time market data feed (permitted
+by policy). The feed starts returning stale data due to an upstream outage.
+AGT logs the subscription as approved but has no visibility into data quality
+degradation.
+
+**Mitigations available today:**
+- Use **SRE SLOs** to monitor data freshness and error rates at the stream level
+- Use **circuit breakers** to halt agent actions when upstream data quality
+  degrades
+- Implement application-level stream validation in your agent code
+
+## 12. DID Method Inconsistency Across SDKs
+
+AGT uses two DID (Decentralized Identifier) method prefixes across its SDKs:
+
+| SDK | DID Format | Example |
+|-----|-----------|---------|
+| Python | `did:mesh:*` | `did:mesh:a7f3b2c1...` |
+| .NET | `did:mesh:*` | `did:mesh:a7f3b2c1...` |
+| TypeScript | `did:agentmesh:*` | `did:agentmesh:analyst:abc123` |
+| Rust | `did:agentmesh:*` | `did:agentmesh:agent_id` |
+| Go | `did:agentmesh:*` | `did:agentmesh:agent_id` |
+
+**What this means in practice:**
+
+- Both formats use the same cryptographic primitives (Ed25519) and are
+  functionally equivalent
+- Cross-SDK agent interactions work if both sides parse the DID correctly
+- Policy rules that match on DID prefix (e.g., `did:mesh:*`) will not match
+  agents using `did:agentmesh:*` and vice versa
+
+**Mitigations available today:**
+- Use wildcard DID matching in policies (e.g., `did:*`) to match both formats
+- Normalize DIDs at your application boundary before passing to the policy engine
+- When building cross-SDK systems, use the same SDK family for identity
+  generation
+
+**What we're building:**
+- DID method standardization to `did:agentmesh:*` across all SDKs (planned for v4.0)
+- Migration tooling to update existing identity registries
+
 ---
 
 *This document is maintained alongside the codebase. If you find a limitation
