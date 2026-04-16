@@ -258,7 +258,8 @@ See **[SDK Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detailed per-langua
 
 **Getting Started**
 - [Quick Start](QUICKSTART.md) — Zero to governed agents in 10 minutes
-- [Tutorials](docs/tutorials/) — 31 step-by-step guides
+- [Tutorials](docs/tutorials/) — 31 numbered tutorials + 7-chapter Policy-as-Code deep dive
+- [FAQ](docs/FAQ.md) — Technical Q&A for customers, partners, and evaluators
 
 **Architecture & Reference**
 - [SDK Feature Matrix](docs/SDK-FEATURE-MATRIX.md) — Per-language capability comparison
