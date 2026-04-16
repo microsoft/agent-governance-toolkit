@@ -39,6 +39,12 @@ We welcome contributions of all kinds — code, documentation, bug reports, and 
 - Look for issues labeled [`good first issue`](https://github.com/microsoft/agent-governance-toolkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) if you're new to the project
 - Check [`help wanted`](https://github.com/microsoft/agent-governance-toolkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) for issues where we'd especially appreciate contributions
 
+## Blog & Articles
+
+| Article | Author | Topic |
+|---------|--------|-------|
+| [From Chatbot to Autonomous Agent: A Governance Maturity Model](packages/agent-mesh/docs/blog/governance-maturity-model.md) | @lawcontinue | Governance maturity framework for AI agent deployments |
+
 ## Related Projects
 
 | Project | Description |
