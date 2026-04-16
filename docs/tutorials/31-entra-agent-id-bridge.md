@@ -1,4 +1,4 @@
-# Tutorial 28 — Bridging AGT Identity with Microsoft Entra Agent ID
+# Tutorial 31 — Bridging AGT Identity with Microsoft Entra Agent ID
 
 > **Level:** Advanced · **Time:** 45 min · **Prerequisites:** Tutorial 02 (Trust & Identity), Azure subscription with Entra ID
 

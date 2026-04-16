@@ -273,4 +273,4 @@ Some actions are too risky to decide with automation alone. In the main series,
 the next planned topic is **approval workflows**.
 
 **Previous:** [Chapter 3 — Rate Limiting](03-rate-limiting.md)
-**Next:** Chapter 5 — Approval Workflows (coming soon)
+**Next:** [Chapter 5 — Approval Workflows](05-approval-workflows.md)
