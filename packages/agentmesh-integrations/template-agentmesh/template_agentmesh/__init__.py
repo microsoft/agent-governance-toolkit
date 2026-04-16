@@ -4,7 +4,7 @@
 template-agentmesh: Starter template for AgentMesh trust integrations.
 
 Copy this package and rename it for your target agent framework.
-See Tutorial 28 (docs/tutorials/build-custom-integration.md) for the full walkthrough.
+See Tutorial 28 (docs/tutorials/28-build-custom-integration.md) for the full walkthrough.
 
 Components:
 - AgentProfile: Agent identity with capabilities and trust score

@@ -27,7 +27,7 @@ dev = ["pytest>=7.0"]
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
 Repository = "https://github.com/microsoft/agent-governance-toolkit"
-Documentation = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/tutorials/build-custom-integration.md"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/tutorials/28-build-custom-integration.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["template_agentmesh"]

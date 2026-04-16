@@ -1,4 +1,4 @@
-# Tutorial 28 — Bridging AGT Identity with Microsoft Entra Agent ID
+# Tutorial 31 — Bridging AGT Identity with Microsoft Entra Agent ID
 
 > **Level:** Advanced · **Time:** 45 min · **Prerequisites:** Tutorial 02 (Trust & Identity), Azure subscription with Entra ID
 
@@ -10,7 +10,7 @@ AGT and Entra Agent ID solve different parts of the agent governance problem:
 
 | Concern | AGT | Entra Agent ID / Agent365 |
 |---------|-----|---------------------------|
-| **Identity format** | `did:mesh:{hash}` (Ed25519) | Entra object ID (AAD) |
+| **Identity format** | `did:agentmesh:{hash}` (Ed25519) | Entra object ID (AAD) |
 | **Policy enforcement** | Runtime — per-tool-call | Directory — Conditional Access |
 | **Credential lifecycle** | Short-lived (15 min TTL), auto-rotated | OAuth 2.0 tokens, managed identity |
 | **Trust scoring** | Behavioral 0–1000 score | N/A (binary active/suspended) |
@@ -64,7 +64,7 @@ AGT and Entra Agent ID solve different parts of the agent governance problem:
 
 | Responsibility | Component | Details |
 |---|---|---|
-| **Agent DID creation** | `AgentIdentity.create()` | Ed25519 keypair + `did:mesh:{hash}` |
+| **Agent DID creation** | `AgentIdentity.create()` | Ed25519 keypair + `did:agentmesh:{hash}` |
 | **Runtime policy** | `PolicyEngine` | Per-tool-call allow/deny with rules |
 | **Trust scoring** | `TrustEngine` | Behavioral 0–1000 score with decay |
 | **Tool-call governance** | `GovernanceMiddleware` | Rate limiting, injection detection, audit |
@@ -125,7 +125,7 @@ identity = AgentIdentity.create(
     sponsor="alice@contoso.com",
     capabilities=["read:customer-data", "write:reports"],
 )
-print(f"AGT DID: {identity.did}")  # did:mesh:a7f3b2c1...
+print(f"AGT DID: {identity.did}")  # did:agentmesh:a7f3b2c1...
 
 # 4. Register the bridge mapping
 #    The entra_object_id comes from your Entra Agent ID provisioning
@@ -157,7 +157,7 @@ entra_agent = EntraAgentID.from_environment(agent_did=identity.did)
 # Get the DID ↔ Entra mapping
 mapping = entra_agent.to_did_mapping()
 # {
-#   "agent_did": "did:mesh:a7f3b2c1...",
+#   "agent_did": "did:agentmesh:a7f3b2c1...",
 #   "entra": {
 #     "tenant_id": "your-tenant-id",
 #     "client_id": "your-client-id"
@@ -237,7 +237,7 @@ Keep AGT and Entra states in sync:
 ```python
 # When Entra suspends an agent → suspend in AGT
 registry.suspend_agent(
-    agent_did="did:mesh:a7f3b2c1...",
+    agent_did="did:agentmesh:a7f3b2c1...",
     reason="Entra Conditional Access violation"
 )
 
@@ -247,7 +247,7 @@ registry.suspend_agent(
 # { "disabledByMicrosoftStatus": "DisabledDueToViolationOfServicesAgreement" }
 
 # When sponsor re-approves → reactivate
-registry.reactivate_agent(agent_did="did:mesh:a7f3b2c1...")
+registry.reactivate_agent(agent_did="did:agentmesh:a7f3b2c1...")
 ```
 
 ### Audit Correlation
@@ -258,7 +258,7 @@ AGT audit events include the Entra object ID for cross-system correlation:
 # AGT audit record
 audit_record = entra_identity.to_audit_record()
 # {
-#   "agent_did": "did:mesh:a7f3b2c1...",
+#   "agent_did": "did:agentmesh:a7f3b2c1...",
 #   "entra_object_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
 #   "tenant_id": "your-tenant-id",
 #   "sponsor_email": "alice@contoso.com",
@@ -307,17 +307,17 @@ def verify_tool_call(agent_did: str, tool_name: str, params: dict) -> bool:
 | **Agent365 native integration** | Not yet tested | Agent365 sees Entra Agent ID — AGT bridge maps the DID; should work but needs validation |
 | **Bidirectional lifecycle sync** | One-way (manual) | Use Azure Event Grid or Logic Apps to sync Entra state changes → AGT kill switch |
 | **Entra bridge in non-Python SDKs** | Python-only | TS, .NET, Rust, Go SDKs need `EntraAgentRegistry` and `EntraAgentID` ported |
-| **DID format inconsistency** | `did:mesh:*` (Python, .NET) vs `did:agentmesh:*` (TS, Rust, Go) | Both formats work; standardization planned for v4.0 |
+| **DID format inconsistency** | `did:agentmesh:*` (Python, .NET) vs `did:agentmesh:*` (TS, Rust, Go) | Both formats work; standardization planned for v4.0 |
 | **Cryptographic token verification** | Claim-level only | Add `azure-identity` for JWKS-based signature verification |
 
 ## Platform Independence Note
 
 While this tutorial focuses on Microsoft Entra, AGT's identity layer is platform-independent. The same bridging pattern applies to:
 
-- **AWS IAM Identity Center** — map `did:mesh:*` ↔ IAM role ARN
-- **Google Cloud Workload Identity** — map `did:mesh:*` ↔ service account email
-- **Okta Workforce Identity** — map `did:mesh:*` ↔ Okta user/app ID
-- **SPIFFE/SPIRE** — map `did:mesh:*` ↔ SPIFFE ID (see [identity docs](../../packages/agent-mesh/docs/identity.md))
+- **AWS IAM Identity Center** — map `did:agentmesh:*` ↔ IAM role ARN
+- **Google Cloud Workload Identity** — map `did:agentmesh:*` ↔ service account email
+- **Okta Workforce Identity** — map `did:agentmesh:*` ↔ Okta user/app ID
+- **SPIFFE/SPIRE** — map `did:agentmesh:*` ↔ SPIFFE ID (see [identity docs](../../packages/agent-mesh/docs/identity.md))
 
 AGT's `EntraAgentRegistry` pattern can be adapted for any enterprise IdP. We welcome community contributions for AWS, GCP, and Okta adapters.
 

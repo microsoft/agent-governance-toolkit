@@ -195,7 +195,7 @@ The AgentMesh README counts only its own production-merged or PyPI-published int
 │  Agent Governance Toolkit Identity Layer                  │
 │                                                           │
 │  ┌────────────────────────────────────────────────────┐  │
-│  │  AgentIdentity (DID: did:mesh:<agent-name>)         │  │
+│  │  AgentIdentity (DID: did:agentmesh:<agent-name>)         │  │
 │  │  ├── Ed25519 keypair (signing/verification)         │  │
 │  │  ├── Human sponsor (alice@company.com)              │  │
 │  │  ├── Capabilities (["read:data", "write:reports"])  │  │
@@ -337,8 +337,6 @@ In sidecar deployments, the governance sidecar can be updated independently of t
 | VS Code Extension | ✅ Available | `agent-os-vscode` package |
 | Azure Monitor | ✅ Available | OpenTelemetry + Prometheus metrics export |
 | Microsoft Entra Agent ID | ✅ Available | DID ↔ Entra identity bridge with Managed Identity support |
-| Microsoft Defender | 🔄 Planned | Integration for threat detection alignment |
-| Foundry Control Plane | 🔄 Planned | Deeper fleet governance integration |
 
 ### Published Package Ecosystem
 
@@ -444,7 +442,7 @@ Agent A                    TrustBridge                    Agent B
 
 Key controls:
 
-- **DID-based identity** — Every agent gets a `did:mesh:` identifier with Ed25519 keypair
+- **DID-based identity** — Every agent gets a `did:agentmesh:` identifier with Ed25519 keypair
 - **Ed25519 challenge-response** — Cryptographic proof the peer owns the claimed DID
 - **Registry-backed verification** — Peer must be registered and active
 - **Trust scoring** — Dynamic trust scores (0–1000) with behavioral decay

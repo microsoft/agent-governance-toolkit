@@ -144,7 +144,7 @@ from typing import Any
 class AgentProfile:
     """Identity and trust state for a governed agent."""
 
-    did: str                                # Decentralized identifier (did:mesh:...)
+    did: str                                # Decentralized identifier (did:agentmesh:...)
     name: str
     capabilities: list[str] = field(default_factory=list)
     trust_score: int = 500                  # 0-1000 scale
@@ -161,7 +161,7 @@ class AgentProfile:
         return any(c in self.capabilities for c in required)
 ```
 
-This mirrors `crewai-agentmesh`. The `did` field uses the `did:mesh:` format
+This mirrors `crewai-agentmesh`. The `did` field uses the `did:agentmesh:` format
 defined by AgentMesh. Trust scores use the 0-1000 integer scale used across
 the toolkit.
 
@@ -343,14 +343,14 @@ from myframework_agentmesh import AgentProfile, ActionGuard, TrustTracker, Actio
 
 
 def test_allow_action_above_threshold():
-    agent = AgentProfile(did="did:mesh:a1", name="Alpha", trust_score=700)
+    agent = AgentProfile(did="did:agentmesh:a1", name="Alpha", trust_score=700)
     guard = ActionGuard(min_trust_score=500)
     result = guard.check(agent, "search")
     assert result.allowed
 
 
 def test_block_action_below_threshold():
-    agent = AgentProfile(did="did:mesh:a1", name="Alpha", trust_score=300)
+    agent = AgentProfile(did="did:agentmesh:a1", name="Alpha", trust_score=300)
     guard = ActionGuard(min_trust_score=500)
     result = guard.check(agent, "search")
     assert not result.allowed
@@ -358,7 +358,7 @@ def test_block_action_below_threshold():
 
 
 def test_sensitive_action_requires_higher_trust():
-    agent = AgentProfile(did="did:mesh:a1", name="Alpha", trust_score=600)
+    agent = AgentProfile(did="did:agentmesh:a1", name="Alpha", trust_score=600)
     guard = ActionGuard(
         min_trust_score=500,
         sensitive_actions={"delete_record": 800},
@@ -368,7 +368,7 @@ def test_sensitive_action_requires_higher_trust():
 
 
 def test_blocked_action_always_denied():
-    agent = AgentProfile(did="did:mesh:a1", name="Alpha", trust_score=1000)
+    agent = AgentProfile(did="did:agentmesh:a1", name="Alpha", trust_score=1000)
     guard = ActionGuard(blocked_actions=["drop_table"])
     result = guard.check(agent, "drop_table")
     assert not result.allowed
@@ -377,7 +377,7 @@ def test_blocked_action_always_denied():
 
 def test_capability_check():
     agent = AgentProfile(
-        did="did:mesh:a1", name="Alpha",
+        did="did:agentmesh:a1", name="Alpha",
         capabilities=["read"], trust_score=700,
     )
     guard = ActionGuard(min_trust_score=500)
@@ -386,7 +386,7 @@ def test_capability_check():
 
 
 def test_suspended_agent_blocked():
-    agent = AgentProfile(did="did:mesh:a1", name="Alpha", trust_score=900, status="suspended")
+    agent = AgentProfile(did="did:agentmesh:a1", name="Alpha", trust_score=900, status="suspended")
     guard = ActionGuard(min_trust_score=500)
     result = guard.check(agent, "search")
     assert not result.allowed
@@ -394,7 +394,7 @@ def test_suspended_agent_blocked():
 
 
 def test_trust_tracker_adjusts_scores():
-    agent = AgentProfile(did="did:mesh:a1", name="Alpha", trust_score=500)
+    agent = AgentProfile(did="did:agentmesh:a1", name="Alpha", trust_score=500)
     tracker = TrustTracker(reward=10, penalty=50)
 
     tracker.record_success(agent, "search")
@@ -403,14 +403,14 @@ def test_trust_tracker_adjusts_scores():
     tracker.record_failure(agent, "search")
     assert agent.trust_score == 460
 
-    history = tracker.get_history("did:mesh:a1")
+    history = tracker.get_history("did:agentmesh:a1")
     assert len(history) == 2
     assert history[0]["outcome"] == "success"
     assert history[1]["outcome"] == "failure"
 
 
 def test_trust_score_clamped():
-    agent = AgentProfile(did="did:mesh:a1", name="Alpha", trust_score=995)
+    agent = AgentProfile(did="did:agentmesh:a1", name="Alpha", trust_score=995)
     tracker = TrustTracker(reward=10, penalty=50)
     tracker.record_success(agent, "search")
     assert agent.trust_score == 1000  # Clamped at max
@@ -422,12 +422,12 @@ def test_trust_score_clamped():
 
 def test_action_result_serialization():
     result = ActionResult(
-        allowed=True, agent_did="did:mesh:a1",
+        allowed=True, agent_did="did:agentmesh:a1",
         action="search", trust_score=700,
     )
     d = result.to_dict()
     assert d["allowed"] is True
-    assert d["agent_did"] == "did:mesh:a1"
+    assert d["agent_did"] == "did:agentmesh:a1"
     assert "timestamp" in d
 ```
 
@@ -785,7 +785,7 @@ policy = GovernancePolicy(
 )
 
 agent_profile = AgentProfile(
-    did="did:mesh:deployer",
+    did="did:agentmesh:deployer",
     name="Deployer",
     capabilities=["deploy", "rollback"],
     trust_score=750,
@@ -831,7 +831,7 @@ to match the toolkit version on acceptance.
 - [ ] Zero hard runtime deps on the target framework (preferred)
 - [ ] Tests pass without the target framework SDK installed
 - [ ] `__init__.py` exports all public types in `__all__`
-- [ ] Uses `did:mesh:` format for agent identifiers
+- [ ] Uses `did:agentmesh:` format for agent identifiers
 - [ ] Trust scores use 0-1000 integer scale
 - [ ] Gate returns a result dataclass with `allowed`, `reason`, and `trust_score`
 - [ ] Kernel adapter extends `BaseIntegration` with `wrap()`/`unwrap()`
