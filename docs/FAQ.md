@@ -507,6 +507,88 @@ Key controls:
 
 ---
 
+## 11. Is AGT geared towards Foundry agents or any agent type?
+
+**Short answer:** Any agent type. AGT is framework-agnostic and vendor-independent by design — the core packages (`agent-os-kernel`, `agentmesh-platform`, etc.) have zero vendor dependencies.
+
+It works with Azure AI Foundry, AWS Bedrock, Google ADK, LangChain, CrewAI, AutoGen, OpenAI Agents, OpenClaw, and 20+ other frameworks. See the full list in the [README](../README.md#works-with-your-stack).
+
+### How It Works
+
+AGT follows an **adapter pattern**: core governance packages are vendor-neutral (pydantic + cryptography only), while framework-specific integrations are published as separate packages. This means:
+
+- **Foundry agents** get native middleware integration (`GovernancePolicyMW`, `CapabilityGuardMW`, `AuditTrailMW`) — governance is invisible and automatic.
+- **Non-Foundry agents** (LangChain, CrewAI, OpenClaw, etc.) use adapters or the sidecar HTTP API — 2–3 lines of code.
+- The **governance capabilities are identical** regardless of framework — policy enforcement, identity verification, audit logging, trust scoring.
+
+See the [Independence & Dependency Policy](../INDEPENDENCE.md) for the full vendor-neutrality matrix and the [SDK Integration Types FAQ](#3-what-is-the-practical-impact-of-the-different-sdk-integration-types) for framework-by-framework details.
+
+---
+
+## 12. What is the relationship between AGT and Agent 365?
+
+**Short answer:** They operate at different layers and are complementary. Agent 365 is the M365 control plane for fleet management; AGT is runtime governance middleware for per-action policy enforcement.
+
+### Layer Comparison
+
+| Aspect | Agent Governance Toolkit | Agent 365 |
+|--------|------------------------|-----------| 
+| **What it is** | Runtime governance middleware | M365 control plane |
+| **Scope** | Per-action enforcement inside each agent | Tenant-level fleet governance |
+| **Where it runs** | In-process middleware or sidecar alongside each agent | Centralized Azure / M365 service |
+| **What it does** | Intercepts every tool call, enforces policy, verifies identity, audits | Agent registry, Entra Agent ID, lifecycle management, admin dashboards, Defender + Purview integration |
+| **Latency** | Sub-millisecond (<0.1ms p99) | Dashboard / API-level |
+| **Works with** | Any framework, any cloud, any runtime | M365 tenant boundary |
+| **License** | Open-source (MIT) | M365 licensed service |
+
+### How to Think About It
+
+- **Agent 365** answers: *"Which agents are allowed to exist in my org and what data can they access?"*
+- **AGT** answers: *"Should this specific agent be allowed to execute this specific tool call right now?"*
+
+Agent 365 manages the fleet from the admin center. AGT enforces policy inside each agent's runtime. They are complementary — not competing.
+
+There is no formal integration between them today. AGT is an open-source MIT project; Agent 365 is a licensed M365 service.
+
+---
+
+## 13. How is AGT different from DLP and communication compliance policies?
+
+**Short answer:** DLP and communication compliance govern **content** (sensitive data in messages, prompts, responses). AGT governs **actions** (tool calls, API invocations, code execution, inter-agent messages). They are complementary layers.
+
+### Comparison
+
+| | DLP / Communication Compliance | AGT |
+|---|---|---|
+| **What it governs** | *Content* — sensitive data in messages, prompts, responses | *Actions* — tool calls, API invocations, code execution, inter-agent messages |
+| **When it acts** | After content is generated (inspects text) | Before execution (intercepts the action) |
+| **Enforcement model** | Pattern matching on sensitive information types (SITs), regex, classifiers | Deterministic policy rules on action metadata (tool name, agent identity, trust score, parameters) |
+| **Example** | Blocks a message containing a credit card number | Blocks an agent from calling `delete_database` even if the content contains no sensitive data |
+| **Scope** | M365 workloads (Exchange, Teams, Copilot, extending to agents) | Any runtime, any cloud, any framework |
+
+### The Gap DLP Does Not Cover
+
+An agent can do dangerous things **without ever touching sensitive content**. For example:
+
+- Calling `execute_code("rm -rf /")` — no PII, but destructive
+- Invoking a privileged API with valid but unauthorized parameters — no sensitive data patterns to match
+- Sending inter-agent messages that coordinate a multi-step attack — each message is individually benign
+
+DLP won't catch any of these because there's no sensitive content to flag. AGT's policy engine evaluates the **action itself** (tool name, parameters, agent identity, trust score) and blocks it deterministically in <0.1ms.
+
+### Where They Overlap
+
+Both can block prompt injection. DLP uses content classifiers; AGT uses a dedicated [PromptInjectionDetector](../packages/agent-os/src/agent_os/prompt_injection.py) with 7 attack-type detection. In practice you'd want both layers — DLP for data classification + AGT for action governance.
+
+### Bottom Line
+
+DLP and communication compliance are **data-layer controls**. AGT is an **action-layer controls**. A fully governed agent needs both:
+
+- **DLP** ensures sensitive data doesn't leak
+- **AGT** ensures the agent doesn't do things it shouldn't
+
+---
+
 ## Appendix: Quick Reference — All Packages
 
 | Package | PyPI | Purpose |
