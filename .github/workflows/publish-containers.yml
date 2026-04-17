@@ -1,0 +1,130 @@
+name: Publish Container Images
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      component:
+        description: "Component to build and publish"
+        required: true
+        type: choice
+        options:
+          - trust-engine
+          - policy-server
+          - audit-collector
+          - api-gateway
+          - governance-sidecar
+          - all
+      tag:
+        description: "Image tag (default: latest)"
+        required: false
+        default: "latest"
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/microsoft/agentmesh
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: trust-engine
+            dockerfile: packages/agent-mesh/docker/Dockerfile
+            context: .
+            port: 8443
+          - component: policy-server
+            dockerfile: packages/agent-mesh/docker/Dockerfile
+            context: .
+            port: 8444
+          - component: audit-collector
+            dockerfile: packages/agent-mesh/docker/Dockerfile
+            context: .
+            port: 8445
+          - component: api-gateway
+            dockerfile: packages/agent-mesh/docker/Dockerfile
+            context: .
+            port: 8446
+          - component: governance-sidecar
+            dockerfile: packages/agent-os/Dockerfile.sidecar
+            context: packages/agent-os
+            port: 8081
+
+    # Filter: build all on release, or only the selected component on dispatch
+    if: >-
+      github.event_name == 'release' ||
+      github.event.inputs.component == 'all' ||
+      github.event.inputs.component == matrix.component
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # Strip 'v' prefix from release tag (v3.2.0 → 3.2.0)
+            TAG="${{ github.event.release.tag_name }}"
+            TAG="${TAG#v}"
+          else
+            TAG="${{ github.event.inputs.tag || 'latest' }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Image tag: $TAG"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}
+          tags: |
+            type=raw,value=${{ steps.tag.outputs.tag }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            type=sha,prefix=
+
+      - name: Build and push
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198e19c816612b # v6.18.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            COMPONENT=${{ matrix.component }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}
+          subject-digest: ${{ steps.meta.outputs.digest || '' }}
+          push-to-registry: true
+        continue-on-error: true
+
+      - name: Verify image
+        run: |
+          echo "=== Verifying ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }} ==="
+          docker pull ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }}
+          docker run --rm ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }} python -c "print('Image OK')"
