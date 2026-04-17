@@ -719,4 +719,3 @@ class GovernanceVerifier:
                 component=component_name,
                 error=f"Module not installed: {exc}",
             )
-            
