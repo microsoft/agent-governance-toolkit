@@ -5,9 +5,12 @@ first policy rule to production-grade observability. Each tutorial includes
 runnable code examples, API reference tables, and cross-references to related
 guides.
 
-> **New here?** Start with [Tutorial 01 — Policy Engine](01-policy-engine.md),
-> then follow the numbered sequence. Each tutorial builds on concepts from
-> earlier ones.
+> **New here?** Try the [2-hour hands-on workshop](../workshop/README.md) first —
+> it covers policy, trust, and audit with guided labs. Then work through the
+> numbered tutorials for deeper dives.
+>
+> Already comfortable with the basics? Start with
+> [Tutorial 01 — Policy Engine](01-policy-engine.md) and follow the numbered sequence.
 
 ---
 
