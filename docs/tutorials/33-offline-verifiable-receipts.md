@@ -26,6 +26,7 @@ the public key.
 | [§4 Cedar Composition](#4--composing-with-cedar-policies) | Bind the policy decision to the receipt |
 | [§5 Two-Layer Integrity](#5--two-layer-integrity-receipts-plus-audit-log) | AGT `AuditLog` and receipt chain together |
 | [§6 Cross-Implementation](#6--cross-implementation-interoperability) | Verifying receipts produced by other implementations |
+| [§7 SLSA Provenance](#7--emitting-receipts-as-slsa-provenance) | Emitting receipts as a byproduct in SLSA provenance |
 | [CI/CD Integration](#cicd-integration) | Gating merges on chain verification |
 | [Cross-Reference](#cross-reference) | Related tutorials |
 
@@ -122,6 +123,45 @@ Three invariants bind the format to verifiability:
 Everything else (trust tier semantics, policy identifier conventions, tool
 naming) is delegated to the implementation. The wire format is the stable
 contract.
+
+### Receipt Lifecycle
+
+```text
+  ┌──────────────────┐
+  │  Policy check    │  Cedar evaluates principal / action / resource
+  └────────┬─────────┘
+           │ decision: allow | deny
+           ▼
+  ┌──────────────────┐
+  │  Mint receipt    │  tool_name, policy_id, timestamp, trust_tier…
+  └────────┬─────────┘
+           │ parent_receipt_hash from previous receipt in chain
+           ▼
+  ┌──────────────────┐
+  │  JCS canonical   │  RFC 8785: sort keys, strip whitespace, NFC strings
+  └────────┬─────────┘
+           │ deterministic payload bytes
+           ▼
+  ┌──────────────────┐
+  │  Ed25519 sign    │  RFC 8032: fixed-size signature, deterministic
+  └────────┬─────────┘
+           │ signature attached to payload
+           ▼
+  ┌──────────────────┐
+  │  Store / emit    │  JSONL file, AuditLog, SLSA byproduct, Rekor entry
+  └────────┬─────────┘
+           │ any party with the public key
+           ▼
+  ┌──────────────────┐
+  │  Verify offline  │  npx @veritasacta/verify
+  └──────────────────┘
+```
+
+Each step takes the receipt state and produces the next state deterministically.
+The inputs that change (policy, tool call, parent hash) are captured at mint
+time; the transformations after that are byte-exact across implementations.
+This determinism is why a receipt minted by one implementation verifies
+against any other conformant verifier.
 
 ---
 
@@ -298,7 +338,35 @@ Tutorial 08 covered Cedar as a policy backend. A decision receipt captures
 the Cedar evaluation result so the decision is auditable independently of
 the Cedar engine state at audit time.
 
-The composition shape:
+A Cedar policy that might produce the decision recorded in the receipt:
+
+```cedar
+// Read-only tools allowed for evidenced-tier agents
+permit(
+    principal,
+    action in [Action::"file_system:read_file", Action::"web_search"],
+    resource
+) when {
+    context.trust_tier == "evidenced"
+};
+
+// Destructive tools denied unless institutional tier
+forbid(
+    principal,
+    action in [Action::"shell_exec", Action::"delete_file"],
+    resource
+) unless {
+    context.trust_tier == "institutional"
+};
+```
+
+The policy is evaluated against the principal (the agent), the action
+(the tool call), and the resource (what it targets). The `context` object
+carries per-call state like `trust_tier`. Tutorial 08 covers the full Cedar
+schema generator for MCP tool calls, including the WASM bindings available
+in [cedar-policy/cedar-for-agents](https://github.com/cedar-policy/cedar-for-agents).
+
+The composition shape at the integration boundary:
 
 ```python
 # tutorial_33/04_cedar_composition.py
@@ -426,6 +494,75 @@ invariants in [The Receipt Format](#the-receipt-format): JCS canonical
 payload, Ed25519 signature, SHA-256 parent hash. Anything beyond that
 (storage layout, key management, trust tier semantics) is implementation
 choice and not part of the verifiable contract.
+
+### Neutral anchoring primitives
+
+Offline signature verification establishes receipt integrity. Cross-organization
+verification benefits from anchoring the receipt hash in a neutral registry
+that neither party controls. Two primitives in the existing supply-chain
+security ecosystem fit naturally:
+
+- **[Sigstore Rekor](https://github.com/sigstore/rekor)** provides a public
+  transparency log that receipt hashes can be registered in, with inclusion
+  proofs for offline verification. Receipts ride the log as DSSE envelopes;
+  a working proof-of-concept pattern is described at
+  [sigstore/rekor#2798](https://github.com/sigstore/rekor/issues/2798).
+- **[in-toto attestations](https://github.com/in-toto/attestation)** define
+  the predicate types that receipts can carry on. The proposal to formalize
+  Decision Receipts as a standard in-toto predicate is at
+  [in-toto/attestation#549](https://github.com/in-toto/attestation/pull/549).
+
+A verifier running `@veritasacta/verify` checks Ed25519 signature and chain
+integrity. A verifier with access to a Rekor log additionally checks that
+the receipt was registered before a stated time, giving tamper-evident
+ordering that survives if the producer's signing key is later rotated or
+compromised.
+
+---
+
+## 7 — Emitting Receipts as SLSA Provenance
+
+When an AI agent is itself the builder (running `npm install`, `npm build`,
+`npm test` as tool calls in Claude Code, Cursor, or a similar host), the
+receipt chain is the per-step build log for that session. SLSA provenance
+v1 has the extension point to carry this: the `byproducts` field on the
+provenance predicate.
+
+A draft SLSA build type for agent-produced commits,
+[refs.arewm.com/agent-commit/v0.1](https://refs.arewm.com/agent-commit/v0.1),
+captures agent identity (model, runtime, tools), sandbox policy, subagent
+delegation, and eBPF-observed runtime behavior (network, filesystem,
+process). A decision receipt chain fits the byproduct slot naturally:
+
+```json
+{
+  "name": "decision-receipts",
+  "mediaType": "application/vnd.acta.receipts+json",
+  "annotations": {
+    "spec": "draft-farley-acta-signed-receipts-01",
+    "chain": [
+      { "receipt_id": "rcpt-3f2a9c81", "tool_name": "Bash", "decision": "allow", "...": "..." }
+    ],
+    "verifier": "npx @veritasacta/verify"
+  }
+}
+```
+
+The eBPF byproducts record *what the observer saw happening*. Decision
+receipts record *what the agent explicitly authorized*. Both attach to the
+same subject and are signed by the same builder identity, giving an
+independent second channel of evidence. A verifier can:
+
+1. Check the SLSA provenance signature (does this attestation really come
+   from the builder?)
+2. Walk the receipt chain inside the byproduct (was each tool call
+   authorized by the declared policy, and is the chain intact?)
+3. Cross-reference the observation byproducts (does what the observer saw
+   match what the agent authorized?)
+
+For discussion of how decision receipts compose with SLSA provenance for
+agent-built software, see [slsa-framework/slsa#1594](https://github.com/slsa-framework/slsa/issues/1594)
+and [slsa-framework/slsa#1606](https://github.com/slsa-framework/slsa/issues/1606).
 
 ---
 
