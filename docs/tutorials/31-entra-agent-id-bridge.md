@@ -242,9 +242,9 @@ registry.suspend_agent(
 )
 
 # When AGT kill switch fires → disable in Entra
-# (This requires Graph API — not yet built into AGT)
-# POST https://graph.microsoft.com/v1.0/applications/{entra_object_id}
-# { "disabledByMicrosoftStatus": "DisabledDueToViolationOfServicesAgreement" }
+# Use Graph API: PATCH /servicePrincipals/{entra_object_id}
+# with { "accountEnabled": false }
+# (Requires Directory.ReadWrite.All or Application.ReadWrite.All permission)
 
 # When sponsor re-approves → reactivate
 registry.reactivate_agent(agent_did="did:agentmesh:a7f3b2c1...")
@@ -299,13 +299,58 @@ def verify_tool_call(agent_did: str, tool_name: str, params: dict) -> bool:
     return True
 ```
 
+## Step 6 — Group Membership Sync via Graph API
+
+Automatically map Entra group memberships to AGT capabilities:
+
+```python
+from agentmesh.identity.entra_graph import EntraGraphClient, build_group_scope_map
+
+# 1. Get a Graph API token (via managed identity, workload identity, etc.)
+token = entra_agent.get_agent_token(scope="https://graph.microsoft.com/.default")
+
+# 2. Create the Graph client
+graph_client = EntraGraphClient(access_token=token)
+
+# 3. Define group-to-capability mapping (keyed by Entra group object ID)
+group_scope_map = build_group_scope_map({
+    "aaaaaaaa-1111-2222-3333-444444444444": ["read:customer-data", "read:reports"],
+    "bbbbbbbb-1111-2222-3333-444444444444": ["write:reports", "export:csv"],
+})
+
+# 4. Sync — fetches groups from Graph, maps to capabilities, preserves manual caps
+capabilities = registry.sync_group_memberships(
+    agent_did=identity.did,
+    graph_client=graph_client,
+    group_scope_map=group_scope_map,
+)
+print(f"Updated capabilities: {capabilities}")
+# ['export:csv', 'manual:cap', 'read:customer-data', 'read:reports', 'write:reports']
+```
+
+> **Note:** The Graph API call requires `GroupMember.Read.All` or `Directory.Read.All` permission on the Entra application. Group sync only updates AGT **capabilities** — Entra API **scopes** remain unchanged.
+
+## Step 7 — Validate Bridge Configuration
+
+Before going to production, validate the bridge mapping is complete:
+
+```python
+valid, issues = registry.validate_bridge_configuration(agent_did=identity.did)
+if not valid:
+    print(f"Bridge configuration issues: {issues}")
+    # e.g., ['Missing entra_app_id — Agent365 may not resolve the agent']
+else:
+    print("Bridge configuration OK — ready for enterprise deployment")
+```
+
 ## Known Gaps and Limitations
 
 | Gap | Status | Workaround |
 |-----|--------|------------|
-| **Graph API provisioning** | Not in AGT | Create Entra Agent ID via Azure Portal or Graph API, then register mapping in AGT |
-| **Agent365 native integration** | Not yet tested | Agent365 sees Entra Agent ID — AGT bridge maps the DID; should work but needs validation |
+| **Graph API group membership sync** | ✅ Built | `EntraGraphClient.get_group_memberships()` + `EntraAgentRegistry.sync_group_memberships()` — maps Entra groups to AGT capabilities |
+| **Agent365 native integration** | Configuration validated | `EntraAgentRegistry.validate_bridge_configuration()` checks bridge mapping completeness; end-to-end Agent365 testing pending |
 | **Bidirectional lifecycle sync** | One-way (manual) | Use Azure Event Grid or Logic Apps to sync Entra state changes → AGT kill switch |
+| **Graph API service principal disable** | Not in AGT | Use Graph API directly: `PATCH /servicePrincipals/{id}` with `accountEnabled: false` |
 | **Entra bridge in non-Python SDKs** | Python-only | TS, .NET, Rust, Go SDKs need `EntraAgentRegistry` and `EntraAgentID` ported |
 | **DID format inconsistency** | `did:agentmesh:*` (Python, .NET) vs `did:agentmesh:*` (TS, Rust, Go) | Both formats work; standardization planned for v4.0 |
 | **Cryptographic token verification** | Claim-level only | Add `azure-identity` for JWKS-based signature verification |

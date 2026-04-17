@@ -12,11 +12,17 @@ Requires: azure-identity (optional dependency)
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from agentmesh.identity.entra_graph import EntraGraphClient
+
+logger = logging.getLogger(__name__)
 
 
 class EntraAgentStatus(str, Enum):
@@ -279,6 +285,95 @@ class EntraAgentRegistry:
     def get_audit_log(self) -> list[dict[str, Any]]:
         """Return the full audit log."""
         return list(self._audit_log)
+
+    # -- Graph API integration (Issue #1173) -----------------------------------
+
+    def sync_group_memberships(
+        self,
+        agent_did: str,
+        graph_client: "EntraGraphClient",
+        group_scope_map: dict[str, list[str]],
+    ) -> list[str]:
+        """
+        Sync Entra group memberships to AGT capabilities for an agent.
+
+        Fetches the agent's group memberships from Microsoft Graph API,
+        maps them to AGT capabilities using ``group_scope_map``, and
+        updates the agent's capabilities (preserving manually assigned ones).
+
+        Args:
+            agent_did: The agent's AgentMesh DID.
+            graph_client: An authenticated ``EntraGraphClient`` instance.
+            group_scope_map: Mapping of Entra group object IDs to lists
+                of AGT capability strings.
+
+        Returns:
+            The updated list of capabilities.
+
+        Raises:
+            KeyError: If the agent is not registered.
+            GraphAPIError: If the Graph API call fails.
+        """
+        from agentmesh.identity.entra_graph import sync_memberships_to_capabilities
+
+        identity = self._agents.get(agent_did)
+        if not identity:
+            raise KeyError(f"Agent {agent_did!r} not found in registry")
+
+        groups = graph_client.get_group_memberships(identity.entra_object_id)
+
+        new_caps = sync_memberships_to_capabilities(
+            groups=groups,
+            group_scope_map=group_scope_map,
+            preserve_existing=identity.capabilities,
+        )
+
+        identity.capabilities = new_caps
+        self._log_event("sync_group_memberships", identity, {
+            "groups_found": len(groups),
+            "capabilities_after": new_caps,
+        })
+        return new_caps
+
+    # -- Bridge validation (Issue #1174) ---------------------------------------
+
+    def validate_bridge_configuration(
+        self, agent_did: str
+    ) -> tuple[bool, list[str]]:
+        """
+        Validate that an agent's Entra bridge configuration is complete.
+
+        Checks that all required fields for enterprise identity bridging
+        are populated. This validates the **configuration** (not live
+        connectivity to Entra or Agent365).
+
+        Returns:
+            Tuple of (valid, issues) where issues is a list of problems found.
+        """
+        identity = self._agents.get(agent_did)
+        if not identity:
+            return False, [f"Agent {agent_did!r} not found in registry"]
+
+        issues: list[str] = []
+
+        if not identity.entra_object_id:
+            issues.append("Missing entra_object_id")
+        if not identity.tenant_id:
+            issues.append("Missing tenant_id")
+        if not identity.sponsor_email:
+            issues.append("Missing sponsor_email (required for Agent365)")
+        if not identity.agent_did:
+            issues.append("Missing agent_did")
+        if identity.status != EntraAgentStatus.ACTIVE:
+            issues.append(
+                f"Agent status is {identity.status.value}, expected active"
+            )
+        if not identity.entra_app_id:
+            issues.append(
+                "Missing entra_app_id — Agent365 may not resolve the agent"
+            )
+
+        return (len(issues) == 0, issues)
 
     def _log_event(
         self,
