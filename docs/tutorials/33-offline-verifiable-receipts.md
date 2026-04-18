@@ -495,6 +495,43 @@ payload, Ed25519 signature, SHA-256 parent hash. Anything beyond that
 (storage layout, key management, trust tier semantics) is implementation
 choice and not part of the verifiable contract.
 
+### Two identity-binding modes
+
+The four implementations above share the receipt wire format but make
+different choices about what identity the signature binds to. Both choices
+are correct for different threat models; pick the one that matches your
+deployment.
+
+**Operator-signed mode** (used by `protect-mcp`, `protect-mcp-adk`,
+`sb-runtime`). The signing key belongs to the supervisor hook on the
+operator side: a Claude Code hook, a Google ADK plugin, an OS-level
+sandbox. The receipt proves "the operator evaluated this tool call under
+this policy and produced this decision." Sufficient for:
+
+- Internal audit where the operator IS the authority being audited
+- Regulator evidence where the regulator trusts the operator's attestation
+- Single-tenant compliance where all parties fall under one trust boundary
+
+**Authority-chain-referenced mode** (used by `asqav` / APS governance
+hook). In addition to the operator's signature, the receipt references
+a delegation-chain root that proves which principal (human owner, parent
+agent, delegated authority) authorized the agent to take the evaluated
+action. The receipt proves operator-evaluated AND
+principal-authorized. Required for:
+
+- Cross-organization agent commerce where the verifier does not trust the
+  operator's attestation alone
+- Regulated multi-tenant environments where principal identity matters
+  (e.g., EU AI Act Article 50 transparency requirements)
+- Use cases where the agent's authority to act is itself a separately
+  auditable property (see the related proposal for authority-chain
+  attestation as a SLSA byproduct at
+  [arewm/refs.arewm.com#1](https://github.com/arewm/refs.arewm.com/issues/1))
+
+Both modes verify against `@veritasacta/verify` and produce the same
+outer receipt structure; the difference is whether an optional
+`delegation_chain_root` field is present in the payload.
+
 ### Neutral anchoring primitives
 
 Offline signature verification establishes receipt integrity. Cross-organization
