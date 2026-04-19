@@ -13,12 +13,12 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from agentmesh.governance.policy import Policy, PolicyEngine, PolicyDecision
+from agentmesh.governance.policy import PolicyDecision, PolicyEngine
 from agentmesh.governance.policy_evaluator import PolicyEvaluator
 from agentmesh.governance.trust_policy import TrustPolicy
 from agentmesh.server import create_base_app, run_server
@@ -35,7 +35,7 @@ POLICY_DIR = os.getenv("AGENTMESH_POLICY_DIR", "/etc/agentmesh/policies")
 # Loaded policy state
 _engine: PolicyEngine = PolicyEngine()
 _trust_policies: list[TrustPolicy] = []
-_trust_evaluator: Optional[PolicyEvaluator] = None
+_trust_evaluator: PolicyEvaluator | None = None
 _loaded_count: int = 0
 
 
@@ -94,15 +94,15 @@ async def startup() -> None:
 class EvaluateRequest(BaseModel):
     agent_did: str = Field(..., description="DID of the acting agent")
     action: str = Field(..., description="Action being performed")
-    resource: Optional[str] = Field(None, description="Target resource")
+    resource: str | None = Field(None, description="Target resource")
     context: dict[str, Any] = Field(default_factory=dict, description="Additional context")
 
 
 class EvaluateResponse(BaseModel):
     decision: str = Field(..., description="allow, deny, warn, or require_approval")
-    matched_rule: Optional[str] = None
+    matched_rule: str | None = None
     reason: str = ""
-    policy_name: Optional[str] = None
+    policy_name: str | None = None
 
 
 class TrustEvaluateRequest(BaseModel):
@@ -112,7 +112,7 @@ class TrustEvaluateRequest(BaseModel):
 class TrustEvaluateResponse(BaseModel):
     allowed: bool
     action: str
-    rule_name: Optional[str] = None
+    rule_name: str | None = None
     reason: str = ""
 
 

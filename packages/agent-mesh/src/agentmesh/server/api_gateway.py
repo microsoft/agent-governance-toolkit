@@ -11,14 +11,13 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any
 
 import httpx
 from fastapi import HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from agentmesh.services.rate_limiter import RateLimiter
 from agentmesh.server import create_base_app, run_server
+from agentmesh.services.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 

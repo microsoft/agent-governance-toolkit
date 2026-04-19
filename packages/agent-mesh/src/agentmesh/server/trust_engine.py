@@ -10,15 +10,15 @@ Wraps agentmesh.trust (TrustHandshake, TrustBridge, CapabilityRegistry).
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from agentmesh.identity.agent_id import AgentIdentity, AgentDID, IdentityRegistry
-from agentmesh.trust.handshake import TrustHandshake, HandshakeChallenge, HandshakeResponse
-from agentmesh.trust.capability import CapabilityRegistry, CapabilityGrant
+from agentmesh.identity.agent_id import AgentDID, AgentIdentity, IdentityRegistry
 from agentmesh.server import create_base_app, run_server
+from agentmesh.trust.capability import CapabilityRegistry
+from agentmesh.trust.handshake import HandshakeChallenge, HandshakeResponse, TrustHandshake
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,9 @@ _pending_challenges: dict[str, tuple[TrustHandshake, HandshakeChallenge]] = {}
 
 
 class ChallengeRequest(BaseModel):
-    agent_did: str = Field(..., description="DID of the agent requesting a challenge (did:mesh:...)")
+    agent_did: str = Field(
+        ..., description="DID of the agent requesting a challenge (did:mesh:...)"
+    )
 
 
 class ChallengeResponse(BaseModel):
@@ -62,15 +64,17 @@ class VerifyResponse(BaseModel):
     trust_score: int = 0
     trust_level: str = ""
     peer_did: str = ""
-    rejection_reason: Optional[str] = None
+    rejection_reason: str | None = None
 
 
 class RegisterAgentRequest(BaseModel):
     name: str = Field(..., description="Human-readable agent name")
     public_key: str = Field(..., description="Base64-encoded Ed25519 public key")
     sponsor_email: str = Field(..., description="Human sponsor email")
-    description: Optional[str] = None
-    did_unique_id: Optional[str] = Field(None, description="Custom unique ID; auto-generated if omitted")
+    description: str | None = None
+    did_unique_id: str | None = Field(
+        None, description="Custom unique ID; auto-generated if omitted"
+    )
 
 
 class GrantCapabilityRequest(BaseModel):

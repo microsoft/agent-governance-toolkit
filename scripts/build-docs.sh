@@ -35,7 +35,8 @@ cp docs/adr/*.md "$SITE_DOCS/adr/"
 # Reference
 cp BENCHMARKS.md "$SITE_DOCS/reference/benchmarks.md"
 cp docs/COMPARISON.md "$SITE_DOCS/reference/comparison.md"
-cp docs/nist-rfi-mapping.md "$SITE_DOCS/reference/nist-rfi-mapping.md"
+[ -f docs/nist-rfi-mapping.md ] && cp docs/nist-rfi-mapping.md "$SITE_DOCS/reference/nist-rfi-mapping.md"
+[ -f docs/compliance/nist-rfi-2026-00206.md ] && cp docs/compliance/nist-rfi-2026-00206.md "$SITE_DOCS/reference/nist-rfi-mapping.md"
 cp CHANGELOG.md "$SITE_DOCS/reference/changelog.md"
 cp CONTRIBUTING.md "$SITE_DOCS/reference/contributing.md"
 

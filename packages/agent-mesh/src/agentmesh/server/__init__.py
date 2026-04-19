@@ -17,7 +17,6 @@ import time
 from typing import Any
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 
 COMPONENT = os.getenv("AGENTMESH_COMPONENT", "unknown")
 VERSION = "0.3.0"

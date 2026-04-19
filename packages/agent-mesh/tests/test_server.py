@@ -7,7 +7,9 @@ Uses FastAPI TestClient for synchronous HTTP testing of all four servers.
 """
 
 import pytest
-from fastapi.testclient import TestClient
+
+fastapi = pytest.importorskip("fastapi", reason="fastapi not installed (optional [server] extra)")
+from fastapi.testclient import TestClient  # noqa: E402
 
 
 # ── Trust Engine Tests ───────────────────────────────────────────────

@@ -33,9 +33,9 @@ def main() -> None:
         component = os.getenv("AGENTMESH_COMPONENT")
 
     if component not in COMPONENTS or not component:
-        print(f"Usage: python -m agentmesh.server <component>")
-        print(f"   or: AGENTMESH_COMPONENT=<component> python -m agentmesh.server")
-        print(f"Components: {', '.join(COMPONENTS)}")
+        print("Usage: python -m agentmesh.server <component>")
+        print("   or: AGENTMESH_COMPONENT=<component> python -m agentmesh.server")
+        print("Components:", ", ".join(COMPONENTS))
         sys.exit(1)
 
     module_path, func_name = COMPONENTS[component]

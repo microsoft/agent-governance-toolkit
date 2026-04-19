@@ -12,14 +12,13 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-from agentmesh.governance.audit import AuditEntry
-from agentmesh.services.audit import AuditService
 from agentmesh.governance.audit_backends import FileAuditSink
 from agentmesh.server import create_base_app, run_server
+from agentmesh.services.audit import AuditService
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +32,7 @@ RETENTION_DAYS = int(os.getenv("AGENTMESH_AUDIT_RETENTION_DAYS", "90"))
 
 # Service instance
 _audit_service = AuditService()
-_file_sink: Optional[FileAuditSink] = None
+_file_sink: FileAuditSink | None = None
 
 
 @app.on_event("startup")
@@ -43,7 +42,10 @@ async def startup() -> None:
     if data_path.exists() or data_path.parent.exists():
         data_path.mkdir(parents=True, exist_ok=True)
         _file_sink = FileAuditSink(audit_dir=data_path)
-        logger.info("Audit persistence enabled at %s (retention: %d days)", data_path, RETENTION_DAYS)
+        logger.info(
+            "Audit persistence enabled at %s (retention: %d days)",
+            data_path, RETENTION_DAYS,
+        )
     else:
         logger.warning("Audit data dir %s not available — running in-memory only", AUDIT_DATA_DIR)
 
@@ -55,12 +57,12 @@ class LogEntryRequest(BaseModel):
     event_type: str = Field(..., description="Type of event (agent_action, policy_decision, etc.)")
     agent_did: str = Field(..., description="DID of the acting agent")
     action: str = Field(..., description="Action performed")
-    resource: Optional[str] = None
-    target_did: Optional[str] = None
+    resource: str | None = None
+    target_did: str | None = None
     data: dict[str, Any] = Field(default_factory=dict)
     outcome: str = Field(default="success")
-    policy_decision: Optional[str] = None
-    trace_id: Optional[str] = None
+    policy_decision: str | None = None
+    trace_id: str | None = None
 
 
 class LogEntryResponse(BaseModel):
@@ -74,8 +76,8 @@ class BatchLogRequest(BaseModel):
 
 
 class QueryParams(BaseModel):
-    agent_did: Optional[str] = None
-    event_type: Optional[str] = None
+    agent_did: str | None = None
+    event_type: str | None = None
     limit: int = Field(default=100, ge=1, le=1000)
 
 
