@@ -1,8 +1,20 @@
-# Integrating with sb-runtime
+# Integrating sb-runtime (a Veritas Acta receipt format implementation)
 
-Deploy [sb-runtime](https://github.com/ScopeBlind/sb-runtime) as a Ring 2/3 governance backend inside the Agent Governance Toolkit: a single Rust binary that combines Cedar policy evaluation, Landlock + seccomp sandboxing, and Ed25519-signed decision receipts.
+This guide documents deploying [sb-runtime](https://github.com/ScopeBlind/sb-runtime) as a Ring 2/3 governance backend inside the Agent Governance Toolkit. sb-runtime is one implementation of the Veritas Acta receipt format ([draft-farley-acta-signed-receipts](https://datatracker.ietf.org/doc/draft-farley-acta-signed-receipts/)); the longer-lived object is the receipt format itself, not the specific signer.
 
-> **TL;DR** — sb-runtime is a Veritas Acta-conformant runtime backend. It evaluates Cedar policies for each governed action (Ring 2), optionally sandboxes the action with Landlock + seccomp (Ring 3), and emits a signed decision receipt external auditors can verify without trusting the operator or the backend. Drop-in alternative to OpenShell for teams that want "Cedar + kernel sandbox + receipts" as one unit rather than assembling them separately.
+> **TL;DR.** The Veritas Acta receipt format is the portable artifact. Any signer that emits receipts in that format, and any verifier that reads them (reference: [`@veritasacta/verify`](https://github.com/VeritasActa/verify)), participates in the same evidence graph. sb-runtime is one such signer: a single Rust binary that bundles Cedar policy evaluation, optional Landlock + seccomp sandboxing (Ring 3), and Ed25519-signed receipts. Operators already standardizing on [nono](https://github.com/always-further/nono) as the Linux sandbox primitive can compose the two: nono provides the sandbox layer, sb-runtime runs in `--ring 2` mode contributing only Cedar + receipt signing. The receipt produced is byte-identical either way.
+
+---
+
+## sb-runtime's role in the Veritas Acta receipt model
+
+This guide focuses on sb-runtime specifically, but the architectural object that matters for AGT is the receipt format, not the signer. Three backends map cleanly to the AGT integration model:
+
+- **sb-runtime** is a self-contained Cedar + sandbox + receipts binary. It is the right choice when operators want all three layers delivered as one unit, particularly for constrained deployments (edge, CI, developer workstations) where a Docker/k3s dependency is disproportionate.
+- **nono** is the recommended Linux sandbox primitive for operators whose architecture puts the sandbox layer ahead of the receipts layer, or who are already standardizing on it. An sb-runtime deployment can delegate the sandbox layer to nono entirely and keep only Cedar + receipt signing local (see [Composing sb-runtime with nono](#composing-sb-runtime-with-nono) below).
+- **OpenShell** remains the coarser-grained container-based alternative for teams already running Docker/k3s infrastructure. Receipt format compatibility is equivalent in principle; a receipt-emitting OpenShell path is not yet upstream.
+
+All three paths emit receipts in the same format and verify with the same tooling. The [AGT Integration Profile](https://github.com/VeritasActa/agt-integration-profile) normatively maps AGT primitives to the receipt format regardless of signer choice.
 
 ---
 
@@ -169,7 +181,7 @@ Both rings produce receipts in the same Veritas Acta format; the `payload.ring` 
 
 ## Policy Layering Example
 
-sb-runtime can be deployed alone or composed with nono / OpenShell for defense-in-depth. A single agent action passes through layers:
+sb-runtime can be deployed alone, or composed with nono (recommended for Linux deployments that want a dedicated sandbox primitive) or OpenShell (for container-based infrastructure) as outer defense-in-depth layers. A single agent action passes through layers:
 
 ```
 Agent: "I want to POST to https://api.github.com/repos/org/repo/issues"
@@ -250,13 +262,47 @@ Receipts themselves are audit-grade; the metrics are for operational observabili
 
 ---
 
+## Composing sb-runtime with nono
+
+For Linux deployments where [nono](https://github.com/always-further/nono) is the preferred sandbox primitive, the two compose naturally. sb-runtime contributes Cedar evaluation + receipt signing; nono contributes the kernel-level sandbox.
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│  Host                                                          │
+│                                                                │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  nono (sandbox layer)                                     │ │
+│  │    Landlock + Seatbelt capabilities, syscall restrictions │ │
+│  │                                                           │ │
+│  │   ┌────────────────────────────────────────────────────┐ │ │
+│  │   │  sb-runtime (--ring 2, sandbox-external)            │ │ │
+│  │   │    Cedar policy evaluation                          │ │ │
+│  │   │    Receipt signing (JCS + Ed25519)                  │ │ │
+│  │   │    Agent process (Claude, Codex, custom, etc.)      │ │ │
+│  │   └────────────────────────────────────────────────────┘ │ │
+│  └──────────────────────────────────────────────────────────┘ │
+└───────────────────────────────────────────────────────────────┘
+```
+
+In this composition, sb-runtime runs in `--ring 2` mode (policy + receipts, no internal sandbox) so there is no overlap with nono's kernel sandbox. The receipt produced is byte-identical to a Ring 2 receipt from a standalone sb-runtime deployment; the only difference is that the process lives inside a nono capability set rather than inside sb-runtime's own Landlock + seccomp layer.
+
+Operators adopting this pattern:
+
+1. Install nono and define the sandbox policy (the file/network/syscall capabilities the agent process needs). See [nono documentation](https://nono.sh/) for the capability model.
+2. Run sb-runtime with `--ring 2` rather than `--ring 3`. Ring 3 would duplicate sandbox work that nono is already doing.
+3. Receipts land in the configured `--receipts-dir`. They verify with `@veritasacta/verify` regardless of which sandbox layer wrapped the process, because the sandbox choice is not part of the receipt's trust boundary: the receipt attests the Cedar decision and the signer identity, not the sandbox configuration.
+
+This composition is the recommended path for operators who already trust nono's sandbox model and want Veritas Acta-conformant decision receipts layered on top. The provider shim (`packages/agent-runtime/sb_runtime_agt`, landing in a follow-up PR) exposes this composition as a first-class option alongside the standalone sb-runtime path.
+
+---
+
 ## FAQ
 
 **Q: Does sb-runtime replace OpenShell?**
 Not necessarily. OpenShell is a container-based runtime; sb-runtime is a single-binary runtime. They solve the same problem at different deployment tiers. A team that already has OpenShell in production can run sb-runtime alongside as a Ring 3 backend for specific high-assurance workflows, or use it standalone for edge / CI / developer environments where container infrastructure is disproportionate.
 
 **Q: What about nono?**
-[nono](https://github.com/always-further/nono) is a capability-based sandboxing library (kernel-native primitives: Landlock, Seatbelt). sb-runtime uses similar primitives internally but exposes them as a single binary wrapped with Cedar + receipts. nono is the right choice when a team is building their own sandbox orchestration; sb-runtime is the right choice when a team wants Cedar + Landlock + receipts delivered as one unit.
+[nono](https://github.com/always-further/nono) is the recommended Linux sandbox primitive for Veritas Acta deployments. Its capability-based model (Landlock on Linux, Seatbelt on macOS) is more mature and more battle-tested than sb-runtime's own built-in sandbox, which is a convenience for single-binary deployments rather than a competing abstraction. For operators whose deployment pattern is "sandbox first, receipts layered on top", running sb-runtime in `--ring 2` mode inside a nono sandbox is the recommended path. The composition is documented in [Composing sb-runtime with nono](#composing-sb-runtime-with-nono) above.
 
 **Q: Does sb-runtime work on macOS / Windows?**
 v0.1 ships Cedar policy + signed receipts on all platforms; Landlock-based Ring 3 is Linux x86_64 only. macOS Seatbelt support and Windows AppContainer support are tracked in sb-runtime issues [#3](https://github.com/ScopeBlind/sb-runtime/issues/3) and [#4](https://github.com/ScopeBlind/sb-runtime/issues/4). Linux aarch64 explicitly refuses to run Ring 3 rather than silently weakening the sandbox; tracked in [#1](https://github.com/ScopeBlind/sb-runtime/issues/1).
