@@ -473,7 +473,7 @@ accountability that does not depend on trusting the operator.
 ## 6 — Cross-Implementation Interoperability
 
 Receipts are most useful when the verifier is not the same code that
-produced them. Today the format is implemented by at least four independent
+produced them. Today the format is implemented by at least five independent
 codebases:
 
 | Implementation | Language | Role |
@@ -482,6 +482,7 @@ codebases:
 | `protect-mcp-adk` | Python | Google ADK plugin |
 | `sb-runtime` | Rust | OS-level sandbox wrapper (Landlock + seccomp) |
 | `asqav` / APS governance hook | Python | CrewAI / LangChain governance adapter |
+| [`signet`](https://github.com/Prismer-AI/signet) | Rust / Python (PyO3) / TypeScript (WASM) | Agent tool-call signing with bilateral co-signing and delegation chains |
 
 A receipt produced by any of these verifies against the others using the
 shared [IETF draft](https://datatracker.ietf.org/doc/draft-farley-acta-signed-receipts/)
@@ -489,7 +490,7 @@ format. The single canonical verifier CLI,
 [`@veritasacta/verify`](https://www.npmjs.com/package/@veritasacta/verify),
 accepts receipts from any of them.
 
-If you are writing a fifth implementation, the wire contract is the three
+If you are writing a sixth implementation, the wire contract is the three
 invariants in [The Receipt Format](#the-receipt-format): JCS canonical
 payload, Ed25519 signature, SHA-256 parent hash. Anything beyond that
 (storage layout, key management, trust tier semantics) is implementation
@@ -497,13 +498,13 @@ choice and not part of the verifiable contract.
 
 ### Two identity-binding modes
 
-The four implementations above share the receipt wire format but make
+The five implementations above share the receipt wire format but make
 different choices about what identity the signature binds to. Both choices
 are correct for different threat models; pick the one that matches your
 deployment.
 
 **Operator-signed mode** (used by `protect-mcp`, `protect-mcp-adk`,
-`sb-runtime`). The signing key belongs to the supervisor hook on the
+`sb-runtime`, `signet` v1/v2). The signing key belongs to the supervisor hook on the
 operator side: a Claude Code hook, a Google ADK plugin, an OS-level
 sandbox. The receipt proves "the operator evaluated this tool call under
 this policy and produced this decision." Sufficient for:
@@ -513,7 +514,7 @@ this policy and produced this decision." Sufficient for:
 - Single-tenant compliance where all parties fall under one trust boundary
 
 **Authority-chain-referenced mode** (used by `asqav` / APS governance
-hook). In addition to the operator's signature, the receipt references
+hook, `signet` v4). In addition to the operator's signature, the receipt references
 a delegation-chain root that proves which principal (human owner, parent
 agent, delegated authority) authorized the agent to take the evaluated
 action. The receipt proves operator-evaluated AND
