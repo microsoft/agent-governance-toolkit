@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sb_runtime_agentmesh"
+version = "0.1.0"
+description = "Public Preview - sb-runtime governance skill with signed receipts (Veritas Acta format)"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [{ name = "Tom Farley (ScopeBlind)", email = "tommy@scopeblind.com" }]
+dependencies = [
+    "pyyaml>=6.0,<7.0",
+    "cryptography>=41.0,<47.0",
+]
+
+[project.optional-dependencies]
+agentmesh = ["agentmesh-platform>=3.0,<4.0"]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/integrations/sb-runtime.md"
+"sb-runtime source" = "https://github.com/ScopeBlind/sb-runtime"
+"Veritas Acta draft" = "https://datatracker.ietf.org/doc/draft-farley-acta-signed-receipts/"
+
+[project.scripts]
+sb-runtime-governance = "sb_runtime_agentmesh.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["sb_runtime_agentmesh"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
