@@ -10,7 +10,7 @@ Last updated: March 21, 2026
 
 | Organization | Submission | Type | Status | Document |
 |-------------|-----------|------|--------|----------|
-| **AAIF** | [aaif/technical-committee#1](https://github.com/aaif/technical-committee/issues/1) | Project Proposal | Closed (will re-submit after public release) | [AAIF-PROPOSAL.md](./AAIF-PROPOSAL.md) |
+| **AAIF** | [aaif/technical-committee#1](https://github.com/aaif/technical-committee/issues/1) | Project Proposal | Ready for re-submission | [AAIF-PROPOSAL.md](./AAIF-PROPOSAL.md) |
 | **LF AI & Data** | [lfai/proposing-projects#102](https://github.com/lfai/proposing-projects/pull/102) | Sandbox Proposal | Open | [LFAI-PROPOSAL.md](./LFAI-PROPOSAL.md) |
 | **CoSAI/OASIS WS4** | [cosai-oasis/ws4#42](https://github.com/cosai-oasis/ws4-secure-design-agentic-systems/issues/42) | RFC | Open | [COSAI-WS4-PROPOSAL.md](./COSAI-WS4-PROPOSAL.md) |
 | **OWASP ASI** | [GenAI-Security-Project#2](https://github.com/GenAI-Security-Project/GenAI-Agent-Security-Initiative/pull/2) | Code Samples PR | Open | [OWASP-ASI-PROPOSAL.md](./OWASP-ASI-PROPOSAL.md) |
