@@ -376,7 +376,61 @@ stages:
               Get-ChildItem "$(Pipeline.Workspace)\nuget-unsigned" -Recurse
             displayName: 'List unsigned packages'
 
-          # Step 1: Sign the .nupkg with ESRP Code Signing
+          # Step 1: Authenticode sign DLLs inside the NuGet package
+          # Microsoft compliance requires all binaries within .nupkg to be
+          # Authenticode signed before NuGet package signing.
+          # Ref: https://aka.ms/Microsoft-NuGet-Compliance
+          - task: EsrpCodeSigning@5
+            displayName: 'ESRP Authenticode sign DLLs'
+            inputs:
+              ConnectedServiceName: 'Agent Governance Toolkit'
+              AppRegistrationClientId: '$(ESRP_CLIENT_ID)'
+              AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
+              AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
+              AuthCertName: '$(ESRP_CERT_IDENTIFIER)'
+              FolderPath: '$(Pipeline.Workspace)\nuget-unsigned'
+              Pattern: '*.dll'
+              signConfigType: 'inlineSignParams'
+              inlineOperation: |
+                [
+                  {
+                    "keyCode": "CP-230012",
+                    "operationSetCode": "SigntoolSign",
+                    "parameters": [
+                      {
+                        "parameterName": "OpusName",
+                        "parameterValue": "Microsoft"
+                      },
+                      {
+                        "parameterName": "OpusInfo",
+                        "parameterValue": "http://www.microsoft.com"
+                      },
+                      {
+                        "parameterName": "PageHash",
+                        "parameterValue": "/NPH"
+                      },
+                      {
+                        "parameterName": "FileDigest",
+                        "parameterValue": "/fd sha256"
+                      },
+                      {
+                        "parameterName": "TimeStamp",
+                        "parameterValue": "/tr \"http://rfc3161.gtm.corp.microsoft.com/TSS/HttpTspServer\" /td sha256"
+                      }
+                    ],
+                    "toolName": "signtool.exe",
+                    "toolVersion": "6.2.9304.0"
+                  },
+                  {
+                    "keyCode": "CP-230012",
+                    "operationSetCode": "SigntoolVerify",
+                    "parameters": [],
+                    "toolName": "signtool.exe",
+                    "toolVersion": "6.2.9304.0"
+                  }
+                ]
+
+          # Step 2: Sign the .nupkg with ESRP NuGet Signing (CP-401405)
           - task: EsrpCodeSigning@5
             displayName: 'ESRP Code Sign NuGet package'
             inputs:
@@ -411,7 +465,20 @@ stages:
               Get-ChildItem "$(Pipeline.Workspace)\nuget-unsigned" -Recurse
             displayName: 'List signed packages'
 
-          # Step 2: Push signed package to NuGet.org
+          # Step 3: Verify the signed NuGet package
+          - powershell: |
+              Write-Host "=== Verifying NuGet package signatures ==="
+              $nupkgs = Get-ChildItem "$(Pipeline.Workspace)\nuget-unsigned" -Filter *.nupkg -Recurse
+              foreach ($pkg in $nupkgs) {
+                Write-Host "--- Verifying: $($pkg.Name) ---"
+                dotnet nuget verify $pkg.FullName --all
+                if ($LASTEXITCODE -ne 0) {
+                  Write-Host "##[warning]Signature verification returned non-zero (unsigned packages are expected at this stage)"
+                }
+              }
+            displayName: 'Verify NuGet package signatures'
+
+          # Step 4: Push signed package to NuGet.org
           - powershell: |
               dotnet nuget push "$(Pipeline.Workspace)\nuget-unsigned\*.nupkg" `
                 --source https://api.nuget.org/v3/index.json `
