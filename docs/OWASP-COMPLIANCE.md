@@ -168,23 +168,24 @@ ai_bom = {
 
 > *Agents collaborate without adequate authentication, confidentiality, or validation.*
 
-**Mitigation:** AgentMesh provides **IATP (Inter-Agent Trust Protocol)** — a purpose-built secure communication layer for multi-agent systems.
+**Mitigation:** AgentMesh provides **IATP (Inter-Agent Trust Protocol)** and **E2E encrypted channels** using the Signal protocol (X3DH + Double Ratchet) for secure multi-agent communication.
 
 - **IATP Sign/Verify** — cryptographic trust attestations for every message
-- **Encrypted Channels** — all inter-agent communication is encrypted
+- **E2E Encrypted Channels** — Signal protocol (X3DH key agreement + Double Ratchet) provides per-message forward secrecy and post-compromise security
+- **Trust-Gated Encryption** — `EncryptedTrustBridge` requires successful trust handshake before encrypted channel establishment
 - **Trust Scoring at Connection** — agents evaluated before communication is established
 - **Reputation System** — ongoing trust tracking with decay and penalty
-- **Mutual Authentication** — both sides must prove identity via challenge-response
+- **Mutual Authentication** — both sides must prove identity via Ed25519 challenge-response
 
 ```python
-# Sign a trust attestation
-attestation = iatp_sign(agent_id="sender", claim="data_verified", evidence={...})
+from agentmesh.encryption.bridge import EncryptedTrustBridge
 
-# Verify before acting on inter-agent message
-is_valid = iatp_verify(attestation, expected_signer="sender")
+bridge = EncryptedTrustBridge(agent_did="did:mesh:alice", key_manager=keys)
+channel = await bridge.open_secure_channel("did:mesh:bob", bob_bundle)
+ciphertext = channel.send(b"governed action")  # E2E encrypted
 ```
 
-**Component:** [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — IATP protocol, trust scoring, handshake service
+**Component:** [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — IATP protocol, trust scoring, E2E encryption ([Tutorial 32](tutorials/32-e2e-encrypted-messaging.md))
 
 ---
 
