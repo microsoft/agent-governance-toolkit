@@ -12,8 +12,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -21,6 +19,9 @@ concurrency:
 
 jobs:
   build:
+    permissions:
+      pages: write
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -30,7 +31,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install MkDocs Material
-        run: pip install -r site/requirements.txt
+        run: pip install mkdocs-material==9.7.6 mkdocs-minify-plugin==0.8.0
 
       - name: Copy source docs
         run: bash scripts/build-docs.sh
@@ -49,6 +50,9 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
     runs-on: ubuntu-latest
     needs: build
     steps:
