@@ -34,7 +34,7 @@
 Agent Action ──► Policy Check ──► Allow / Deny ──► Audit Log    (< 0.1 ms)
 ```
 
-**Why it matters:** Prompt-based safety ("please follow the rules") has a [26.67% policy violation rate](BENCHMARKS.md) in red-team testing. AGT's policy-layer enforcement: **0.00%**.
+**Why it matters:** Prompt-based safety ("please follow the rules") has a [26.67% policy violation rate](BENCHMARKS.md) in red-team testing. AGT's deterministic application-layer enforcement: **0.00%**.
 
 ---
 

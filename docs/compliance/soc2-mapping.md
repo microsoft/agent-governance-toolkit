@@ -17,7 +17,7 @@
 
 The Agent Governance Toolkit provides runtime governance infrastructure that addresses SOC 2 Type II controls across Security, Availability, and Processing Integrity criteria. The toolkit's strongest coverage is in **Security** (CC1–CC9), where the policy engine, RBAC, cryptographic identity, execution rings, and audit logging provide a defense-in-depth enforcement stack. **Availability** (A1) is well-supported through circuit breakers, SLO enforcement, and chaos testing primitives. **Processing Integrity** (PI1) benefits from deterministic policy evaluation, Merkle audit chains, and input validation — though several audit chain implementations have integrity defects.
 
-**Confidentiality** (C1) has partial coverage through egress controls, PII pattern detection, credential redaction in audit logs, and cryptographic identity — but lacks at-rest encryption and key rotation. Credential-like secrets (API keys, tokens, connection strings, JWTs, etc.) are redacted before audit persistence via `CredentialRedactor`, but non-credential PII (email, phone, addresses) is not yet redacted in audit entries. **Privacy** (P1–P8) is the largest gap area: the toolkit detects only 2 PII patterns (SSN, credit card) for tool-call blocking, has no consent management, no data subject access request support, and no retention enforcement. Organizations deploying this toolkit in SOC 2 scope must supplement Privacy controls with external tooling.
+**Confidentiality** (C1) has partial coverage through egress controls, PII pattern detection, cryptographic identity, and credential redaction on the MCP gateway audit path — but still lacks comprehensive audit-log PII minimization, at-rest encryption, and key rotation. **Privacy** (P1–P8) is the largest gap area: the toolkit detects only 2 built-in PII patterns (SSN, credit card) on tool inputs, has no consent management, no data subject access request support, and no retention enforcement. Organizations deploying this toolkit in SOC 2 scope must supplement Privacy controls with external tooling.
 
 > **Important**: This mapping documents what the toolkit provides as infrastructure. SOC 2 Type II requires evidence of **operating effectiveness over a review period** — policies followed, controls monitored, exceptions investigated. The toolkit provides the enforcement mechanisms; the operating procedures, organizational policies, and evidence collection are the deployer's responsibility. "Partial" coverage means the toolkit provides building blocks but does not satisfy the control independently.
 
@@ -29,8 +29,8 @@ The Agent Governance Toolkit provides runtime governance infrastructure that add
 |----------|----------|----------------------|--------------|
 | **Security** (CC1–CC9) | ⚠️ Partial | Policy engine, RBAC, DID identity, execution rings, audit logging, MCP security scanning, kill switch | Detection modules unwired from enforcement |
 | **Availability** (A1) | ⚠️ Partial | Circuit breakers, SLO/error budgets, chaos testing framework, sub-millisecond enforcement | Chaos engine framework-only, no health check endpoints, rate limiter unwired |
-| **Processing Integrity** (PI1) | ⚠️ Partial | Merkle audit chain, Delta audit chain (SHA-256 verified), policy validation, input sanitization, drift detection | 2 of 4 audit chain implementations have integrity defects, `post_execute()` never blocks |
-| **Confidentiality** (C1) | ⚠️ Partial | Ed25519 identity, HMAC-SHA256 signing, egress policy, PII/secret detection, credential redaction in audit logs | Symmetric HMAC keys, no at-rest encryption, non-credential PII not redacted in audit entries |
+| **Processing Integrity** (PI1) | ⚠️ Partial | Merkle audit chain, policy validation, input sanitization, drift detection | 3 of 4 audit chain implementations have integrity defects, `post_execute()` never blocks |
+| **Confidentiality** (C1) | ⚠️ Partial | Ed25519 identity, HMAC-SHA256 signing, egress policy, PII/secret detection, MCP audit credential redaction | Symmetric HMAC keys, no at-rest encryption, incomplete audit-log PII minimization |
 | **Privacy** (P1–P8) | ❌ Gap | 2 PII regex patterns, blocked patterns, retention_days schema field | No consent management, no DSAR, no data minimization, retention not enforced |
 
 **0 of 5 criteria fully covered. 4 partially addressed. 1 gap.**
@@ -312,15 +312,15 @@ assert policy.is_allowed("api.openai.com")              # Allowed
 - [ ] **HMAC uses symmetric keys** (C1.2): Any insider with the HMAC key can forge the entire audit chain. No external commitment (Merkle root anchoring to a timestamping service) or asymmetric signing prevents full chain rewrite.
 - [ ] **No at-rest encryption** (C1.1): Audit logs, policy documents, and configuration files are stored in plaintext. No encryption for data at rest.
 - [ ] **No key rotation mechanism** (C1.2): No mechanism for rotating Ed25519 keys, HMAC secrets, or SPIFFE certificates on a schedule.
-- [x] **~~Audit logs store unredacted parameters~~** (C1.1): **Resolved for credentials.** `MCPGateway.intercept_tool_call()` now applies `CredentialRedactor.redact_data_structure(params)` before creating `AuditEntry` records. This redacts API keys, tokens, connection strings, JWTs, PEM keys, Bearer tokens, and other credential patterns. **Remaining gap:** Non-credential PII (email addresses, phone numbers, physical addresses) in tool parameters is not redacted before audit persistence. The structured audit log no longer exposes raw parameters via `logger.info()` — only agent ID, tool name, allowed/denied, and reason are logged at INFO level.
+- [ ] **Audit redaction is partial, not comprehensive** (C1.1): `mcp_gateway.py` now redacts credential-like secrets before persisted audit storage via `CredentialRedactor`, but broad PII minimization remains incomplete. Built-in PII detection still covers only SSN and credit card patterns on tool inputs, so non-credential PII can still flow into logs on some paths.
 - [ ] **Only 2 PII patterns** (C1.1): SSN and credit card number. No email, phone, IP address, JWT token, or other sensitive data patterns.
 - [ ] **`retention_days` not enforced** (C1.3): The schema field exists but no code preserves or deletes logs based on this value. A deployer can set `retention_days: 1` without validation error.
 - [ ] **No TLS enforcement** (C1.2): Network encryption deferred entirely to deployment configuration.
 
 ### Recommended Controls
 
-1. **Add `GovernancePolicy.redact_audit_pii` flag** for pattern-based PII redaction of `AuditEntry.parameters` before persistence (credential redaction already exists via `CredentialRedactor`).
-2. Expand PII patterns to cover the OWASP-recommended set (email, phone, IP address — JWT tokens are already handled by `CredentialRedactor`).
+1. **Expand audit redaction beyond credentials** so persisted audit payloads also minimize non-credential PII before storage.
+2. Expand PII patterns to cover the OWASP-recommended set (email, phone, IP address, JWT tokens).
 3. Implement asymmetric signing for audit entries to prevent insider forgery.
 4. Add key rotation tooling for Ed25519 and HMAC credentials.
 5. Enforce `retention_days` at runtime with actual log deletion and archival.
@@ -357,13 +357,13 @@ assert policy.is_allowed("api.openai.com")              # Allowed
 - [ ] **No retention enforcement** (P4): `retention_days` field exists in the policy schema but no code preserves or deletes data based on this value. Default is 90 days with minimum 1 — there is no floor enforcement.
 - [ ] **Only 2 PII patterns** (P6): SSN (`\b\d{3}-\d{2}-\d{4}\b`) and credit card number regex in `mcp_gateway.py:34-42`. No detection for email addresses, phone numbers, IP addresses, physical addresses, dates of birth, or other PII categories.
 - [ ] **No output PII scanning** (P6): PII patterns check tool *input* arguments only. LLM response text is not scanned — an agent can freely output personal data in its responses.
-- [ ] **Audit logs record non-credential PII** (P6): Credential-like secrets are redacted via `CredentialRedactor` before audit persistence, but non-credential PII (email, phone, addresses) in tool arguments is still stored verbatim in `AuditEntry`. PII in tool arguments can become PII in audit logs.
+- [ ] **Audit-log PII minimization is incomplete** (P6): The MCP gateway redacts credential-like secrets before persisted audit storage, but broader PII classes are not comprehensively minimized across audit paths. PII in tool arguments can still propagate into logs when it does not match the built-in credential patterns.
 - [ ] **No privacy notice mechanism** (P1): No feature generates or delivers privacy notices to end users interacting with governed agents.
 - [ ] **No privacy impact assessment tooling** (P8): No DPIA/PIA workflow or template generation.
 
 ### Recommended Controls
 
-1. **Implement audit PII redaction** — extend `CredentialRedactor` or add a dedicated PII redactor for `AuditEntry.parameters` before persistence (credential redaction already exists; this covers the remaining non-credential PII gap).
+1. **Broaden audit parameter minimization** — extend current credential redaction to cover a wider PII set before persistence. This remains the highest-leverage single fix.
 2. Expand PII detection from 2 patterns to the OWASP-recommended set (email, phone, IP, JWT, passport, driver's license numbers).
 3. Apply PII scanning to LLM outputs via `post_execute()` or a dedicated output interceptor.
 4. Deploy dedicated privacy management tooling (e.g., OneTrust, BigID, Transcend) for consent, DSAR, and data mapping.
@@ -445,7 +445,8 @@ All gaps consolidated and rated by severity for remediation prioritization.
 
 | Gap | Criteria | Impact | Location |
 |-----|----------|--------|----------|
-| **Non-credential PII not redacted in audit logs** | C1.1, P6 | Credential-like secrets are redacted via `CredentialRedactor`, but non-credential PII (email, phone, addresses) in tool parameters is still stored verbatim | `MCPGateway.intercept_tool_call()` |
+| **Audit-log PII minimization is incomplete** | C1.1, P6 | Credential-like secrets are redacted on the MCP gateway path, but broader PII minimization remains incomplete across audit data | `mcp_gateway.py`, `credential_redactor.py` |
+| **DeltaEngine `verify_chain()` is a stub** | PI1.5 | Returns `True` always — hypervisor audit trail has zero tamper evidence | `delta.py:99` |
 | **No consent management** | P2 | Fundamental Privacy criteria requirement not addressed | — |
 | **No data subject access request support** | P5 | Required for Privacy criteria compliance | — |
 

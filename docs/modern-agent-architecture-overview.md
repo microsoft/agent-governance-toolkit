@@ -18,7 +18,7 @@ Enterprise AI is shifting from chat-based copilots to **autonomous agents** — 
 
 Current frameworks (LangChain, CrewAI, AutoGen) rely on **prompt-based safety** — asking the LLM to follow rules. That's like asking a driver to self-enforce the speed limit.
 
-**Benchmark result:** Prompt-based safety has a **26.67% policy violation rate**. AGT's policy-layer enforcement: **0.00%**.
+**Benchmark result:** Prompt-based safety has a **26.67% policy violation rate**. AGT's deterministic application-layer enforcement: **0.00%**.
 
 ---
 
@@ -61,9 +61,9 @@ AGT provides **runtime governance infrastructure** — it sits between your agen
 ╚══════════════════════════════════════════════════════════════════════╝
 ```
 
-### How It Works: The Kernel Analogy
+### How It Works: The Operating-System Analogy
 
-Think of AGT like a **Linux kernel for AI agents**:
+Think of AGT as an **operating-system-inspired governance layer for AI agents**:
 
 | OS Concept | AGT Equivalent | What It Does |
 |-----------|----------------|--------------|
@@ -74,7 +74,9 @@ Think of AGT like a **Linux kernel for AI agents**:
 | Audit logs | **Flight Recorder** | Append-only, hash-chained audit trail |
 | Certificate Authority | **AgentMesh Identity** | Ed25519 cryptographic agent credentials |
 
-**Key insight:** Current frameworks ask LLMs to *decide* whether to follow rules. AGT inverts this: **the kernel decides, the LLM computes.**
+**Key insight:** Current frameworks ask LLMs to *decide* whether to follow rules. AGT inverts this: **the policy layer decides, the LLM computes.**
+
+> **Scope note:** This is an architectural analogy, not a claim of OS-level isolation. AGT enforces policy at the application layer and composes with container or VM isolation for stronger runtime boundaries.
 
 ---
 

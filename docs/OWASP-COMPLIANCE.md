@@ -23,7 +23,7 @@
 | ASI-09 | Human-Agent Trust Exploitation | ✅ Covered | Agent OS — Approval Workflows |
 | ASI-10 | Rogue Agents | ✅ Covered | Agent Runtime — Kill Switch + Ring Isolation |
 
-**10 of 10 risks covered.** Full coverage achieved with AI-BOM v2.0 closing the supply chain gap.
+**Mappings in place for all 10 risk categories.** Coverage is provided through the combined governance stack; deployers should pair these controls with the layered defenses described in `docs/LIMITATIONS.md` for production use.
 
 ---
 
@@ -36,7 +36,7 @@
 **Mitigation:** Agent OS enforces **policy-based action interception** at the application layer. Every agent action passes through the policy engine before execution. Unauthorized goal changes are blocked before they reach the agent's tools.
 
 - **Policy Engine** — declarative rules controlling what agents can and cannot do
-- **Action Interception** — application-layer action interception intercepts all agent actions
+- **Action Interception** — governance middleware intercepts agent actions before execution
 - **Policy Modes** — `strict` (deny by default), `permissive` (allow by default), `audit` (log only)
 - **MCP Governance Proxy** — policy enforcement for MCP tool calls
 
@@ -292,7 +292,7 @@ child = identity.delegate(
 
 | Framework | Status |
 |-----------|--------|
-| [OWASP Agentic Top 10 (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) | 10/10 covered |
+| [OWASP Agentic Top 10 (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) | Mappings in place across all 10 categories |
 | [NIST AI RMF](https://www.nist.gov/artificial-intelligence/ai-risk-management-framework) | Govern, Map, Measure, Manage functions addressed |
 | [NIST AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) | Agent identity (IATP), authentication, audit trails |
 | [Singapore MGF for Agentic AI](https://www.imda.gov.sg/-/media/imda/files/about/emerging-tech-and-research/artificial-intelligence/mgf-for-agentic-ai.pdf) | Zero-trust, accountability, oversight layers |

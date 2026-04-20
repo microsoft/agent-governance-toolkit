@@ -1,0 +1,46 @@
+# Ignore Python bytecode, test artifacts, dev tools
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+
+# Ignore non-Python packages
+packages/agent-mesh/sdks/
+packages/agent-mesh/packages/
+packages/agent-mesh/services/
+packages/agent-mesh/charts/
+packages/agent-mesh/dashboards/
+packages/agent-mesh/deployments/
+packages/agent-mesh/notebooks/
+packages/agent-mesh/tutorials/
+packages/agent-mesh/examples/
+packages/agent-mesh/docs/
+packages/agent-mesh/proto/
+packages/agent-mesh/integrations/
+packages/agent-mesh/assets/
+packages/agent-mesh/dist/
+packages/agent-mesh/tests/
+
+# Ignore other top-level packages (only agent-mesh needed)
+packages/agent-os/
+packages/agent-hypervisor/
+packages/agent-sre/
+packages/agent-compliance/
+packages/agent-runtime/
+packages/agent-lightning/
+packages/agent-governance-dotnet/
+packages/agentmesh-integrations/
+
+# Ignore repo metadata
+.git/
+.github/
+docs/
+examples/
+pipelines/
+research/
+node_modules/
+*.md
+LICENSE

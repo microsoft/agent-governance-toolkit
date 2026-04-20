@@ -52,7 +52,7 @@ The chart deploys four core components:
 | Parameter                          | Description            | Default                    |
 |------------------------------------|------------------------|----------------------------|
 | `trustEngine.replicas`             | Replica count          | `2`                        |
-| `trustEngine.image.repository`     | Image repository       | `agentmesh/trust-engine`   |
+| `trustEngine.image.repository`     | Image repository       | `ghcr.io/microsoft/agentmesh/trust-engine`   |
 | `trustEngine.service.port`         | Service port           | `8443`                     |
 | `trustEngine.resources.requests.cpu` | CPU request          | `100m`                     |
 | `trustEngine.resources.requests.memory` | Memory request    | `256Mi`                    |
@@ -64,7 +64,7 @@ The chart deploys four core components:
 | Parameter                           | Description                 | Default                    |
 |-------------------------------------|-----------------------------|----------------------------|
 | `policyServer.replicas`             | Replica count               | `2`                        |
-| `policyServer.image.repository`     | Image repository            | `agentmesh/policy-server`  |
+| `policyServer.image.repository`     | Image repository            | `ghcr.io/microsoft/agentmesh/policy-server`  |
 | `policyServer.service.port`         | Service port                | `8444`                     |
 | `policyServer.policyMountPath`      | Policy YAML mount path      | `/etc/agentmesh/policies`  |
 
@@ -73,7 +73,7 @@ The chart deploys four core components:
 | Parameter                              | Description             | Default                        |
 |----------------------------------------|-------------------------|--------------------------------|
 | `auditCollector.replicas`              | Replica count           | `1`                            |
-| `auditCollector.image.repository`      | Image repository        | `agentmesh/audit-collector`    |
+| `auditCollector.image.repository`      | Image repository        | `ghcr.io/microsoft/agentmesh/audit-collector`    |
 | `auditCollector.service.port`          | Service port            | `8445`                         |
 | `auditCollector.persistence.enabled`   | Enable persistent storage | `true`                       |
 | `auditCollector.persistence.size`      | PVC size                | `10Gi`                         |
@@ -84,7 +84,7 @@ The chart deploys four core components:
 | Parameter                          | Description             | Default                    |
 |------------------------------------|-------------------------|----------------------------|
 | `apiGateway.replicas`              | Replica count           | `2`                        |
-| `apiGateway.image.repository`      | Image repository        | `agentmesh/api-gateway`    |
+| `apiGateway.image.repository`      | Image repository        | `ghcr.io/microsoft/agentmesh/api-gateway`    |
 | `apiGateway.service.type`          | Service type            | `LoadBalancer`             |
 | `apiGateway.service.port`          | Service port            | `443`                      |
 | `apiGateway.rateLimitPerMinute`    | Rate limit (req/min)    | `1000`                     |

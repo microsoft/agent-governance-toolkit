@@ -67,7 +67,7 @@ trustEngine:
   replicas: 2
   image:
     # -- Container image repository (string)
-    repository: agentmesh/trust-engine
+    repository: ghcr.io/microsoft/agentmesh/trust-engine
     # -- Image tag; defaults to global.imageTag when empty (string)
     tag: ""
     # -- Image pull policy: Always, IfNotPresent, or Never (string)
@@ -129,7 +129,7 @@ policyServer:
   replicas: 2
   image:
     # -- Container image repository (string)
-    repository: agentmesh/policy-server
+    repository: ghcr.io/microsoft/agentmesh/policy-server
     # -- Image tag; defaults to global.imageTag when empty (string)
     tag: ""
     # -- Image pull policy: Always, IfNotPresent, or Never (string)
@@ -193,7 +193,7 @@ auditCollector:
   replicas: 1
   image:
     # -- Container image repository (string)
-    repository: agentmesh/audit-collector
+    repository: ghcr.io/microsoft/agentmesh/audit-collector
     # -- Image tag; defaults to global.imageTag when empty (string)
     tag: ""
     # -- Image pull policy: Always, IfNotPresent, or Never (string)
@@ -267,7 +267,7 @@ apiGateway:
   replicas: 2
   image:
     # -- Container image repository (string)
-    repository: agentmesh/api-gateway
+    repository: ghcr.io/microsoft/agentmesh/api-gateway
     # -- Image tag; defaults to global.imageTag when empty (string)
     tag: ""
     # -- Image pull policy: Always, IfNotPresent, or Never (string)

@@ -1,0 +1,23 @@
+# These files are copied from source by scripts/build-docs.sh at build time.
+# Only index pages and the landing page are committed.
+quickstart.md
+architecture.md
+glossary.md
+tutorials/[0-9]*.md
+tutorials/README.md
+deployment/README.md
+deployment/azure-*.md
+deployment/openclaw-*.md
+deployment/private-*.md
+security/threat-model.md
+security/owasp-compliance.md
+security/scanning.md
+security/tenant-isolation.md
+adr/0*.md
+adr/README.md
+reference/benchmarks.md
+reference/comparison.md
+reference/nist-rfi-mapping.md
+reference/changelog.md
+reference/contributing.md
+packages/agent-*.md

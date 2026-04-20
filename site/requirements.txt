@@ -1,0 +1,4 @@
+# Pinned dependencies for MkDocs documentation site build.
+# Update versions periodically and re-run `pip install -r site/requirements.txt`.
+mkdocs-material==9.7.6
+mkdocs-minify-plugin==0.8.0

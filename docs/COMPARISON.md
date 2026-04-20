@@ -31,7 +31,7 @@ When evaluating agent security tooling, developers often encounter [NeMo Guardra
 | **Least-privilege capability model** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Deterministic pre-execution enforcement** | ✅ < 0.1 ms | ❌ | ❌ | ❌ | ❌ |
 | **Chaos / replay testing** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **OWASP Agentic Top 10 coverage** | **10 / 10** ² | ~2 / 10 ¹ | ~1 / 10 ¹ | ~0 / 10 ¹ | ~1 / 10 ¹ |
+| **OWASP Agentic Top 10 mapping** | **10 / 10 categories mapped** | ~2 / 10 ¹ | ~1 / 10 ¹ | ~0 / 10 ¹ | ~1 / 10 ¹ |
 | **Framework integrations** | **12+** | 3 (LangChain, NeMo-based, custom) | 2 (LangChain, custom) | N/A (gateway) | N/A (gateway) |
 | **LLM provider routing / caching** | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **Works alongside existing tools** | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -134,7 +134,7 @@ Agent Action Layer (Agent Governance Toolkit)
 
 These two layers are **complementary, not competing**. A fully governed agentic system typically needs both:
 
-1. **Agent Governance Toolkit** — enforces *what agents do* before every tool call, spawn, or API invocation, with cryptographic identity, privilege rings, SRE reliability, and full OWASP Agentic Top 10 coverage.
+1. **Agent Governance Toolkit** — enforces *what agents do* before every tool call, spawn, or API invocation, with cryptographic identity, privilege rings, SRE reliability, and mappings across all 10 OWASP Agentic Top 10 categories.
 2. **An output validator** (Guardrails AI, NeMo) — ensures the LLM's *words* conform to the format and safety rules you need.
 3. **An LLM gateway** (LiteLLM, Portkey) — routes, caches, and observes the underlying model calls.
 

@@ -16,6 +16,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+
+# ── Windows UTF-8 console fix ──────────────────────────────────────────
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # Allow running from the repo root without installing the packages.
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "packages" / "agent-os" / "src"))

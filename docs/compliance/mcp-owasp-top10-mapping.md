@@ -69,7 +69,7 @@ safe_output = redactor.redact(tool_response)
 - **Tool Allow-List** — declarative list of permitted tool names; deny-by-default
 - **Capability Sandbox** — agents receive scoped capability grants (read, write, execute, network)
 - **MCP Sliding Rate Limiter** — per-agent, per-tool rate limits prevent abuse of granted capabilities
-- **Policy Engine** — kernel-level interception of all tool calls with `strict`, `permissive`, and `audit` modes
+- **Policy Engine** — application-layer interception of all tool calls with `strict`, `permissive`, and `audit` modes
 - **Delegation Narrowing** — child agent capabilities must be a subset of parent
 
 ```python
@@ -378,7 +378,7 @@ Three MCP risks have partial coverage today with planned enhancements targeting 
 | Framework | Status |
 |-----------|--------|
 | [OWASP MCP Top 10 (2025 Beta)](https://owasp.org/www-project-mcp-top-10/) | 7/10 covered, 3 partial (roadmap) |
-| [OWASP Agentic Top 10 (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) | 10/10 covered — see [OWASP-COMPLIANCE.md](../OWASP-COMPLIANCE.md) |
+| [OWASP Agentic Top 10 (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) | Mappings in place across all 10 categories — see [OWASP-COMPLIANCE.md](../OWASP-COMPLIANCE.md) |
 | OWASP MCP Security Cheat Sheet (§1–§12) | 11/12 covered — §11 (Consent UI) out of scope for server-side SDKs |
 | [NIST AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) | Agent identity (IATP), authentication, audit trails |
 | [EU AI Act (Aug 2026)](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai) | Risk classification, audit trails, human oversight |
