@@ -29,6 +29,25 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 5. Update documentation if your change affects public APIs
 6. Submit a pull request with a clear description of the changes
 
+### Attribution & Prior Art
+
+**All contributions must properly attribute prior work.** This is a hard requirement, not a suggestion.
+
+- If your contribution implements functionality similar to an existing open-source project, you **must** credit that project in your PR description and in code comments or documentation where the pattern is used.
+- Copying or closely adapting architecture, API design, CLI conventions, or documentation from another project without attribution is not acceptable, even if the code is rewritten.
+- When in doubt, cite the prior art. Over-attribution is always better than under-attribution.
+- PRs found to contain uncredited derivatives of other open-source work will be closed.
+
+**Examples of what requires attribution:**
+- Adapting a sandboxing approach from another security tool
+- Using an algorithm or protocol design described in another project's docs
+- Mirroring CLI flags, config schema, or architectural patterns from a known project
+
+**How to attribute:**
+- In your PR description: list related projects under "Prior art / related projects"
+- In code: add a comment like `# Approach adapted from <project> (<license>)`
+- In documentation: include a "Prior art" or "Acknowledgments" section
+
 ### Development Setup
 
 ```bash

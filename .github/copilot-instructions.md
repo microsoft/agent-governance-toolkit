@@ -16,6 +16,8 @@ Do NOT auto-merge large feature PRs without maintainer review.
 
 When external contributors open issues or PRs proposing integration with their own project/tool/library, apply these quality checks before investing review time:
 
+- **Attribution & prior art check**: If the PR implements functionality similar to an existing open-source project, verify it credits that project explicitly. Check the "Prior art" section in the PR template. If the PR mirrors patterns from a known project (architecture, CLI conventions, config schema, API design) without attribution, **request changes immediately** and do not merge until attribution is added. Uncredited derivatives of community work will be closed.
+- **Timeline verification**: For PRs that arrive shortly after a community member proposes similar functionality in an issue, verify the PR author isn't racing to submit an uncredited copy of the proposed approach. Check issue discussion history for prior art.
 - **Minimum credibility threshold**: The referenced project should have meaningful community adoption (e.g., 50+ GitHub stars, multiple contributors, evidence of production usage). One-person repos with <10 stars and no community traction do not warrant integration effort.
 - **Self-promotion filter**: Issues or PRs that primarily serve to promote the contributor's own low-profile project — rather than adding genuine value to AGT — should be deprioritized. Politely acknowledge but do not fast-track.
 - **Verify claims**: If the PR cites benchmarks, adoption numbers, or production deployments, spot-check them. Unverifiable claims are a red flag.
@@ -42,7 +44,8 @@ NEVER merge a PR without thorough code review. CI passing is NOT sufficient.
 Before approving or merging ANY PR, verify ALL of the following:
 
 1. **Read the actual diff** — don't rely on PR description alone
-2. **Dependency confusion scan** — check every `pip install`, `npm install`, `cargo add` command in docs/code for unregistered package names. The registered names are:
+2. **Attribution & prior art** — check if the PR implements patterns similar to known open-source projects. If it does, verify proper attribution exists in the PR description and code. Check whether the PR arrived shortly after a community member proposed similar work in an issue — if so, verify the contributor isn't submitting an uncredited derivative. **PRs without proper attribution will not be merged.**
+3. **Dependency confusion scan** — check every `pip install`, `npm install`, `cargo add` command in docs/code for unregistered package names. The registered names are:
    - **PyPI:** `agent-os-kernel`, `agentmesh-platform`, `agent-hypervisor`, `agentmesh-runtime`, `agent-sre`, `agent-governance-toolkit`, `agentmesh-lightning`, `agentmesh-marketplace`
    - **PyPI (local-only, not published):** `agent-governance-dotnet`, `agentmesh-integrations`, `agent-primitives`, `emk`
    - **PyPI (common deps):** `streamlit`, `plotly`, `pandas`, `networkx`, `aioredis`, `pypdf`, `spacy`, `slack-sdk`, `docker`, `langchain-openai`
