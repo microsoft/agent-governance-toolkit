@@ -393,7 +393,7 @@ if __name__ == "__main__":
 query = "SELECT * FROM users WHERE id = " + user_input
 
 # Test 2: Hardcoded Secret - WILL BE BLOCKED  
-api_key = "sk-EXAMPLE-NOT-A-REAL-KEY-replace-with-your-own"
+api_key = "sk-REPLACE-WITH-YOUR-KEY"
 
 # Test 3: Destructive Command - WILL BE BLOCKED
 import os

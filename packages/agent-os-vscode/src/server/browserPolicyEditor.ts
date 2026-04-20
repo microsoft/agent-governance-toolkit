@@ -322,7 +322,7 @@ export function buildPolicyEditorScript(): string {
                 var scenarios = [
                     { name: 'SQL Injection', input: "query = 'SELECT * FROM users WHERE id = ' + user_input" },
                     { name: 'File Deletion', input: 'rm -rf /tmp/important' },
-                    { name: 'Hardcoded Secret', input: "api_key = 'sk-1234567890abcdef'" },
+                    { name: 'Hardcoded Secret', input: "api_key = 'EXAMPLE_KEY_PLACEHOLDER'" },
                     { name: 'Safe Operation', input: 'const result = await db.query("SELECT * FROM users WHERE id = ?", [userId])' }
                 ];
 

@@ -479,7 +479,7 @@ policies:
         const testCases = [
             { name: 'SQL Injection', code: "query = 'SELECT * FROM users WHERE id = ' + user_input" },
             { name: 'File Deletion', code: 'rm -rf /tmp/important' },
-            { name: 'Hardcoded Secret', code: "api_key = 'sk-1234567890abcdef'" },
+            { name: 'Hardcoded Secret', code: "api_key = 'EXAMPLE_KEY_PLACEHOLDER'" },
             { name: 'Safe Operation', code: 'const result = await db.query("SELECT * FROM users WHERE id = ?", [userId])' }
         ];
 
