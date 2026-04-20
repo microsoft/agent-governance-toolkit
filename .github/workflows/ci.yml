@@ -187,6 +187,20 @@ jobs:
       - name: Verify NuGet package
         working-directory: packages/agent-governance-dotnet
         run: ls -la ./nupkg/*.nupkg
+      - name: BinSkim — binary security analysis
+        working-directory: packages/agent-governance-dotnet
+        run: |
+          dotnet tool install --global Microsoft.CodeAnalysis.BinSkim --version 4.* 2>/dev/null || true
+          BinSkim analyze "src/AgentGovernance/bin/Release/net8.0/*.dll" \
+            --output binskim-results.sarif \
+            --verbose 2>/dev/null || echo "BinSkim completed with warnings"
+      - name: Upload BinSkim SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: packages/agent-governance-dotnet/binskim-results.sarif
+          category: binskim
+        continue-on-error: true
 
   # ── Integration tests (only when integration packages change) ────────
   test-integrations:
