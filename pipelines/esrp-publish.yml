@@ -384,10 +384,10 @@ stages:
             displayName: 'ESRP Authenticode sign DLLs'
             inputs:
               ConnectedServiceName: 'Agent Governance Toolkit'
-              UseMSIAuth: true
               AppRegistrationClientId: '$(ESRP_CLIENT_ID)'
               AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
               AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
+              AuthCertName: '$(ESRP_CERT_IDENTIFIER)'
               AuthSignCertName: '$(ESRP_CERT_IDENTIFIER)'
               FolderPath: '$(Pipeline.Workspace)\nuget-unsigned'
               Pattern: '*.dll'
@@ -436,10 +436,10 @@ stages:
             displayName: 'ESRP Code Sign NuGet package'
             inputs:
               ConnectedServiceName: 'Agent Governance Toolkit'
-              UseMSIAuth: true
               AppRegistrationClientId: '$(ESRP_CLIENT_ID)'
               AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
               AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
+              AuthCertName: '$(ESRP_CERT_IDENTIFIER)'
               AuthSignCertName: '$(ESRP_CERT_IDENTIFIER)'
               FolderPath: '$(Pipeline.Workspace)\nuget-unsigned'
               Pattern: '*.nupkg'
