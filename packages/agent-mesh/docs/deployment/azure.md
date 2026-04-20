@@ -55,6 +55,26 @@ Deploying AgentMesh on Microsoft Azure using AKS, Managed Identity, Key Vault, a
 - **kubectl** configured for your AKS cluster
 - **Helm 3.x** for chart-based deployment
 
+## Container Images
+
+All AgentMesh container images are published to GitHub Container Registry (GHCR) and support `linux/amd64` and `linux/arm64`:
+
+| Component | Image | Port |
+|-----------|-------|------|
+| Trust Engine | `ghcr.io/microsoft/agentmesh/trust-engine` | 8443 |
+| Policy Server | `ghcr.io/microsoft/agentmesh/policy-server` | 8444 |
+| Audit Collector | `ghcr.io/microsoft/agentmesh/audit-collector` | 8445 |
+| API Gateway | `ghcr.io/microsoft/agentmesh/api-gateway` | 8446 |
+| Governance Sidecar | `ghcr.io/microsoft/agentmesh/governance-sidecar` | 8081 |
+
+```bash
+# Pull images (use specific version tags in production)
+docker pull ghcr.io/microsoft/agentmesh/trust-engine:latest
+docker pull ghcr.io/microsoft/agentmesh/governance-sidecar:latest
+```
+
+> **Using your own ACR?** Mirror the images: `az acr import --name <your-acr> --source ghcr.io/microsoft/agentmesh/trust-engine:latest`
+
 ---
 
 ## AKS Cluster Setup
