@@ -191,7 +191,7 @@ stages:
             - task: EsrpRelease@11
               displayName: 'ESRP Publish ${{ pkg.name }} to PyPI'
               inputs:
-                connectedservicename: '$(ESRP_SERVICE_CONNECTION)'
+                connectedservicename: 'Agent Governance Toolkit'
                 usemanagedidentity: true
                 keyvaultname: '$(ESRP_KEYVAULT_NAME)'
                 signcertname: '$(ESRP_CERT_IDENTIFIER)'
@@ -280,7 +280,7 @@ stages:
           - task: EsrpRelease@11
             displayName: 'ESRP Publish to npm'
             inputs:
-              connectedservicename: '$(ESRP_SERVICE_CONNECTION)'
+              connectedservicename: 'Agent Governance Toolkit'
               usemanagedidentity: true
               keyvaultname: '$(ESRP_KEYVAULT_NAME)'
               signcertname: '$(ESRP_CERT_IDENTIFIER)'
@@ -383,7 +383,7 @@ stages:
           - task: EsrpCodeSigning@5
             displayName: 'ESRP Authenticode sign DLLs'
             inputs:
-              ConnectedServiceName: '$(ESRP_SERVICE_CONNECTION)'
+              ConnectedServiceName: 'Agent Governance Toolkit'
               UseMSIAuth: true
               AppRegistrationClientId: '$(ESRP_CLIENT_ID)'
               AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
@@ -435,7 +435,7 @@ stages:
           - task: EsrpCodeSigning@5
             displayName: 'ESRP Code Sign NuGet package'
             inputs:
-              ConnectedServiceName: '$(ESRP_SERVICE_CONNECTION)'
+              ConnectedServiceName: 'Agent Governance Toolkit'
               UseMSIAuth: true
               AppRegistrationClientId: '$(ESRP_CLIENT_ID)'
               AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
@@ -559,7 +559,7 @@ stages:
           - task: EsrpRelease@11
             displayName: 'ESRP Publish to crates.io'
             inputs:
-              connectedservicename: '$(ESRP_SERVICE_CONNECTION)'
+              connectedservicename: 'Agent Governance Toolkit'
               usemanagedidentity: true
               keyvaultname: '$(ESRP_KEYVAULT_NAME)'
               signcertname: '$(ESRP_CERT_IDENTIFIER)'
