@@ -15,6 +15,7 @@ WORKDIR /app
 
 # Copy agent-os package source (context is repo root)
 COPY packages/agent-os/pyproject.toml ./
+COPY packages/agent-os/README.md ./
 COPY packages/agent-os/src/ ./src/
 COPY packages/agent-os/modules/ ./modules/
 

@@ -32,6 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy package source from repo root context
 COPY packages/agent-mesh/pyproject.toml ./
+COPY packages/agent-mesh/README.md ./
 COPY packages/agent-mesh/src/ ./src/
 
 # Install the package with server extras (fastapi + uvicorn)
