@@ -61,16 +61,25 @@ jobs:
             context: .
             port: 8081
 
-    # Build all on release, or filter by selected component on dispatch
-    if: >-
-      github.event_name == 'release' ||
-      github.event.inputs.component == 'all' ||
-      github.event.inputs.component == matrix.component
-
     steps:
+      - name: Check if this component should build
+        id: check
+        run: |
+          EVENT="${{ github.event_name }}"
+          SELECTED="${{ github.event.inputs.component }}"
+          CURRENT="${{ matrix.component }}"
+          if [ "$EVENT" = "release" ] || [ "$SELECTED" = "all" ] || [ "$SELECTED" = "$CURRENT" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping $CURRENT (selected: $SELECTED)"
+          fi
+
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        if: steps.check.outputs.skip != 'true'
 
       - name: Set image tag
+        if: steps.check.outputs.skip != 'true'
         id: tag
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
@@ -83,9 +92,11 @@ jobs:
           echo "Image tag: $TAG"
 
       - name: Set up Docker Buildx
+        if: steps.check.outputs.skip != 'true'
         uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
       - name: Log in to GHCR
+        if: steps.check.outputs.skip != 'true'
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: ${{ env.REGISTRY }}
@@ -93,6 +104,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata
+        if: steps.check.outputs.skip != 'true'
         id: meta
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
         with:
@@ -103,6 +115,7 @@ jobs:
             type=sha,prefix=
 
       - name: Build and push
+        if: steps.check.outputs.skip != 'true'
         id: build
         uses: docker/build-push-action@263435318d21b8e681c14492fe198e19c816612b # v6.18.0
         with:
@@ -118,6 +131,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Attest build provenance
+        if: steps.check.outputs.skip != 'true'
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}
@@ -126,6 +140,7 @@ jobs:
         continue-on-error: true
 
       - name: Summary
+        if: steps.check.outputs.skip != 'true'
         run: |
           echo "### ✅ Published \`${{ matrix.component }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
