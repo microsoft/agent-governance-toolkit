@@ -2,7 +2,7 @@
 
 Master index of all external proposals, PRs, and issues submitted by the Agent Governance Toolkit project.
 
-Last updated: March 21, 2026
+Last updated: April 20, 2026
 
 ---
 
@@ -12,6 +12,7 @@ Last updated: March 21, 2026
 |-------------|-----------|------|--------|----------|
 | **AAIF** | [The-AI-Alliance/community#58](https://github.com/The-AI-Alliance/community/issues/58) | Project Proposal | Open | [AAIF-PROPOSAL.md](./AAIF-PROPOSAL.md) |
 | **LF AI & Data** | [lfai/proposing-projects#104](https://github.com/lfai/proposing-projects/pull/104) | Sandbox Proposal | Open | [LFAI-PROPOSAL.md](./LFAI-PROPOSAL.md) |
+| **OpenSSF AI/ML WG** | [ossf/ai-ml-security#47](https://github.com/ossf/ai-ml-security/issues/47) | Collaboration Proposal | Open | — |
 | **CoSAI/OASIS WS4** | [cosai-oasis/ws4#42](https://github.com/cosai-oasis/ws4-secure-design-agentic-systems/issues/42) | RFC | Open | [COSAI-WS4-PROPOSAL.md](./COSAI-WS4-PROPOSAL.md) |
 | **OWASP ASI** | [GenAI-Security-Project#2](https://github.com/GenAI-Security-Project/GenAI-Agent-Security-Initiative/pull/2) | Code Samples PR | Open | [OWASP-ASI-PROPOSAL.md](./OWASP-ASI-PROPOSAL.md) |
 
