@@ -191,7 +191,7 @@ stages:
             - task: EsrpRelease@11
               displayName: 'ESRP Publish ${{ pkg.name }} to PyPI'
               inputs:
-                connectedservicename: 'Agent Governance Toolkit'
+                connectedservicename: '$(ESRP_SERVICE_CONNECTION)'
                 usemanagedidentity: true
                 keyvaultname: '$(ESRP_KEYVAULT_NAME)'
                 signcertname: '$(ESRP_CERT_IDENTIFIER)'
@@ -280,7 +280,7 @@ stages:
           - task: EsrpRelease@11
             displayName: 'ESRP Publish to npm'
             inputs:
-              connectedservicename: 'Agent Governance Toolkit'
+              connectedservicename: '$(ESRP_SERVICE_CONNECTION)'
               usemanagedidentity: true
               keyvaultname: '$(ESRP_KEYVAULT_NAME)'
               signcertname: '$(ESRP_CERT_IDENTIFIER)'
@@ -383,11 +383,11 @@ stages:
           - task: EsrpCodeSigning@5
             displayName: 'ESRP Authenticode sign DLLs'
             inputs:
-              ConnectedServiceName: 'Agent Governance Toolkit'
+              ConnectedServiceName: '$(ESRP_SERVICE_CONNECTION)'
+              UseMSIAuth: true
               AppRegistrationClientId: '$(ESRP_CLIENT_ID)'
               AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
               AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
-              AuthCertName: '$(ESRP_AUTH_CERT_NAME)'
               AuthSignCertName: '$(ESRP_CERT_IDENTIFIER)'
               FolderPath: '$(Pipeline.Workspace)\nuget-unsigned'
               Pattern: '*.dll'
@@ -435,11 +435,11 @@ stages:
           - task: EsrpCodeSigning@5
             displayName: 'ESRP Code Sign NuGet package'
             inputs:
-              ConnectedServiceName: 'Agent Governance Toolkit'
+              ConnectedServiceName: '$(ESRP_SERVICE_CONNECTION)'
+              UseMSIAuth: true
               AppRegistrationClientId: '$(ESRP_CLIENT_ID)'
               AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
               AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
-              AuthCertName: '$(ESRP_AUTH_CERT_NAME)'
               AuthSignCertName: '$(ESRP_CERT_IDENTIFIER)'
               FolderPath: '$(Pipeline.Workspace)\nuget-unsigned'
               Pattern: '*.nupkg'
@@ -559,7 +559,7 @@ stages:
           - task: EsrpRelease@11
             displayName: 'ESRP Publish to crates.io'
             inputs:
-              connectedservicename: 'Agent Governance Toolkit'
+              connectedservicename: '$(ESRP_SERVICE_CONNECTION)'
               usemanagedidentity: true
               keyvaultname: '$(ESRP_KEYVAULT_NAME)'
               signcertname: '$(ESRP_CERT_IDENTIFIER)'
