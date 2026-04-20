@@ -431,7 +431,7 @@ class PostgresSink:
 
 
 # Use it
-sink = PostgresSink(dsn="postgresql://user:pass@localhost/agents")
+sink = PostgresSink(dsn=os.environ["DATABASE_URL"])  # e.g., postgresql://user:***@host/agents
 audit = AuditLog(sink=sink)
 ```
 

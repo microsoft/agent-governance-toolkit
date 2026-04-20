@@ -100,7 +100,7 @@ Create `.env` in your deployed backend:
 ```env
 # GitHub App Configuration
 GITHUB_APP_ID=your_app_id
-GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
+GITHUB_PRIVATE_KEY="$(cat /path/to/private-key.pem)"
 GITHUB_WEBHOOK_SECRET=your_webhook_secret
 GITHUB_CLIENT_ID=your_client_id
 GITHUB_CLIENT_SECRET=your_client_secret
