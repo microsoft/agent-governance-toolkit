@@ -5,9 +5,10 @@ Deploy OpenClaw as an autonomous agent with the Agent Governance Toolkit as a si
 > [!WARNING]
 > **Known limitations — read before deploying:**
 > - OpenClaw does **not** natively call the governance sidecar. Your orchestration layer must call the sidecar HTTP API explicitly before executing tools.
-> - The sidecar container image is **not published** to a public registry — you must build from source.
 > - The docker-compose example in this doc is for illustration. For a working local demo, use [`demo/openclaw-governed/`](../../demo/openclaw-governed/).
 > - See [Roadmap](#roadmap) for the full list of unimplemented features.
+
+> **Container images** are published to `ghcr.io/microsoft/agentmesh/`. See [Container Images](../../packages/agent-mesh/docs/deployment/azure.md#container-images) for the full list.
 
 > **See also:** [Deployment Overview](README.md) | [AKS Deployment](../../packages/agent-mesh/docs/deployment/azure.md) | [OpenShell Integration](../integrations/openshell.md)
 

@@ -10,12 +10,12 @@ on:
         required: true
         type: choice
         options:
+          - all
           - trust-engine
           - policy-server
           - audit-collector
           - api-gateway
           - governance-sidecar
-          - all
       tag:
         description: "Image tag (default: latest)"
         required: false
@@ -30,11 +30,6 @@ env:
 
 jobs:
   build-push:
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -63,10 +58,10 @@ jobs:
             port: 8446
           - component: governance-sidecar
             dockerfile: packages/agent-os/Dockerfile.sidecar
-            context: packages/agent-os
+            context: .
             port: 8081
 
-    # Filter: build all on release, or only the selected component on dispatch
+    # Build all on release, or filter by selected component on dispatch
     if: >-
       github.event_name == 'release' ||
       github.event.inputs.component == 'all' ||
@@ -79,7 +74,6 @@ jobs:
         id: tag
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
-            # Strip 'v' prefix from release tag (v3.2.0 → 3.2.0)
             TAG="${{ github.event.release.tag_name }}"
             TAG="${TAG#v}"
           else
@@ -109,6 +103,7 @@ jobs:
             type=sha,prefix=
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@263435318d21b8e681c14492fe198e19c816612b # v6.18.0
         with:
           context: ${{ matrix.context }}
@@ -126,12 +121,18 @@ jobs:
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}
-          subject-digest: ${{ steps.meta.outputs.digest || '' }}
+          subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
         continue-on-error: true
 
-      - name: Verify image
+      - name: Summary
         run: |
-          echo "=== Verifying ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }} ==="
-          docker pull ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }}
-          docker run --rm ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }} python -c "print('Image OK')"
+          echo "### ✅ Published \`${{ matrix.component }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | \`${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Digest | \`${{ steps.build.outputs.digest }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Platforms | linux/amd64, linux/arm64 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pull: \`docker pull ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
