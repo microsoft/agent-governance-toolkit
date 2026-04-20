@@ -16,6 +16,8 @@
 
 > ⭐ **If this project helps you, please star it!** It helps others discover AgentMesh integrations.
 
+> ⚠️ **Community Extensions** — Packages in this directory are community-contributed and maintained. They are reviewed by Microsoft maintainers but are NOT part of the core Agent Governance Toolkit. See [GOVERNANCE.md](../../GOVERNANCE.md) for the core vs extension boundary.
+
 > 🔗 **Part of the Agent Ecosystem** — [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) (identity & trust) · [Agent OS](https://github.com/microsoft/agent-governance-toolkit) (governance) · [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) (reliability)
 
 [Integrations](#available-integrations) • [Quick Start](#quick-start) • [Contributing](#contributing-a-new-integration) • [AgentMesh Core](https://github.com/microsoft/agent-governance-toolkit)
