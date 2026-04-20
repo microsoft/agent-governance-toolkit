@@ -65,7 +65,7 @@ class TestRiskScorer:
         agent = _make_agent(
             status=AgentStatus.SHADOW,
             agent_type="autogen",
-            first_seen_at=datetime.now(timezone.utc) - timedelta(days=365),
+            first_seen_at=datetime.now(timezone.utc) - timedelta(days=366),
         )
         risk = self.scorer.score(agent)
         assert risk.score <= 100.0

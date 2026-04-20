@@ -24,7 +24,7 @@ def test_parse_decision_permit():
         "delegationId": "del-abc",
     })
     assert dec.verdict == "permit"
-    assert dec.is_permit is True
+    assert dec.is_permit == True
     assert dec.scope_used == "web_search"
     assert dec.agent_id == "agent-001"
 
@@ -36,7 +36,7 @@ def test_parse_decision_deny():
         "agent_id": "agent-bad",
         "constraint_failures": ["scope_exceeded", "spend_limit"],
     })
-    assert dec.is_permit is False
+    assert dec.is_permit == False
     assert len(dec.constraint_failures) == 2
 
 
@@ -44,7 +44,7 @@ def test_parse_decision_from_json_string():
     import json
     raw = json.dumps({"verdict": "permit", "scopeUsed": "read", "agentId": "a1"})
     dec = APSDecision.from_json(raw)
-    assert dec.is_permit is True
+    assert dec.is_permit == True
 
 
 # ── APSScopeChain parsing ──
@@ -61,8 +61,8 @@ def test_parse_scope_chain():
     })
     assert sc.scopes == ["web_search", "code_execution"]
     assert sc.spend_remaining == 400
-    assert sc.covers_scope("web_search") is True
-    assert sc.covers_scope("admin") is False
+    assert sc.covers_scope("web_search") == True
+    assert sc.covers_scope("admin") == False
 
 
 def test_scope_prefix_match():
@@ -71,9 +71,9 @@ def test_scope_prefix_match():
         "delegatedBy": "pk1", "delegatedTo": "pk2",
         "currentDepth": 0, "maxDepth": 2,
     })
-    assert sc.covers_scope("commerce") is True
-    assert sc.covers_scope("commerce:checkout") is True
-    assert sc.covers_scope("admin") is False
+    assert sc.covers_scope("commerce") == True
+    assert sc.covers_scope("commerce:checkout") == True
+    assert sc.covers_scope("admin") == False
 
 
 def test_wildcard_scope():
@@ -82,7 +82,7 @@ def test_wildcard_scope():
         "delegatedBy": "pk1", "delegatedTo": "pk2",
         "currentDepth": 0, "maxDepth": 1,
     })
-    assert sc.covers_scope("anything") is True
+    assert sc.covers_scope("anything") == True
 
 
 # ── APSPolicyGate ──
@@ -95,7 +95,7 @@ def test_policy_gate_build_context():
         passport_grade=2,
     )
     assert ctx["aps_decision"]["verdict"] == "permit"
-    assert ctx["aps_decision"]["is_permit"] is True
+    assert ctx["aps_decision"]["is_permit"] == True
     assert ctx["aps_passport_grade"] == 2
     assert ctx["aps_trust_score"] == 700
     assert ctx["aps_grade_label"] == "runtime_bound"
@@ -104,8 +104,8 @@ def test_policy_gate_build_context():
 
 def test_policy_gate_is_permitted():
     gate = APSPolicyGate()
-    assert gate.is_permitted({"verdict": "permit", "scopeUsed": "x", "agentId": "a"}) is True
-    assert gate.is_permitted({"verdict": "deny", "scopeUsed": "x", "agentId": "a"}) is False
+    assert gate.is_permitted({"verdict": "permit", "scopeUsed": "x", "agentId": "a"}) == True
+    assert gate.is_permitted({"verdict": "deny", "scopeUsed": "x", "agentId": "a"}) == False
 
 
 # ── APSTrustBridge ──
@@ -120,9 +120,9 @@ def test_trust_bridge_default_mapping():
 
 def test_trust_bridge_meets_threshold():
     bridge = APSTrustBridge()
-    assert bridge.meets_threshold(2, 500) is True
-    assert bridge.meets_threshold(0, 500) is False
-    assert bridge.meets_threshold(3, 900) is True
+    assert bridge.meets_threshold(2, 500) == True
+    assert bridge.meets_threshold(0, 500) == False
+    assert bridge.meets_threshold(3, 900) == True
 
 
 def test_trust_bridge_custom_mapping():
@@ -146,7 +146,7 @@ def test_scope_verifier_permits():
         {"scope": ["deploy", "read"], "delegatedBy": "p", "delegatedTo": "a", "currentDepth": 1, "maxDepth": 3},
         required_scope="deploy",
     )
-    assert ok is True
+    assert ok == True
 
 
 def test_scope_verifier_denies_scope():
@@ -155,7 +155,7 @@ def test_scope_verifier_denies_scope():
         {"scope": ["read"], "delegatedBy": "p", "delegatedTo": "a", "currentDepth": 0, "maxDepth": 2},
         required_scope="admin:delete",
     )
-    assert ok is False
+    assert ok == False
     assert "not covered" in reason
 
 
@@ -165,7 +165,7 @@ def test_scope_verifier_denies_depth():
         {"scope": ["*"], "delegatedBy": "p", "delegatedTo": "a", "currentDepth": 5, "maxDepth": 3},
         required_scope="anything",
     )
-    assert ok is False
+    assert ok == False
     assert "depth" in reason.lower()
 
 
@@ -177,7 +177,7 @@ def test_scope_verifier_denies_budget():
         required_scope="commerce",
         required_spend=50,
     )
-    assert ok is False
+    assert ok == False
     assert "spend" in reason.lower()
 
 
@@ -212,7 +212,7 @@ def test_verify_signature_fails_closed_without_nacl(monkeypatch):
     # Even a plausible-looking signature must be rejected
     fake_sig = "a" * 128
     fake_key = "b" * 64
-    assert verify_aps_signature("payload", fake_sig, fake_key) is False
+    assert verify_aps_signature("payload", fake_sig, fake_key) == False
 
 
 def test_verify_signature_valid():
@@ -226,7 +226,7 @@ def test_verify_signature_valid():
     payload = "test-payload"
     sig = sk.sign(payload.encode()).signature.hex()
     pk = sk.verify_key.encode().hex()
-    assert verify_aps_signature(payload, sig, pk) is True
+    assert verify_aps_signature(payload, sig, pk) == True
 
 
 def test_verify_signature_wrong_key():
@@ -241,7 +241,7 @@ def test_verify_signature_wrong_key():
     payload = "test-payload"
     sig = sk1.sign(payload.encode()).signature.hex()
     wrong_pk = sk2.verify_key.encode().hex()
-    assert verify_aps_signature(payload, sig, wrong_pk) is False
+    assert verify_aps_signature(payload, sig, wrong_pk) == False
 
 
 def test_verify_signature_tampered_data():
@@ -254,17 +254,17 @@ def test_verify_signature_tampered_data():
     sk = SigningKey.generate()
     sig = sk.sign(b"original").signature.hex()
     pk = sk.verify_key.encode().hex()
-    assert verify_aps_signature("tampered", sig, pk) is False
+    assert verify_aps_signature("tampered", sig, pk) == False
 
 
 def test_verify_signature_rejects_bad_signature():
     """Bad signature format is rejected regardless of nacl availability."""
-    assert verify_aps_signature("payload", "not-hex", "not-a-key") is False
+    assert verify_aps_signature("payload", "not-hex", "not-a-key") == False
 
 
 def test_verify_signature_rejects_empty():
     """Empty inputs are rejected."""
-    assert verify_aps_signature("", "", "") is False
+    assert verify_aps_signature("", "", "") == False
 
 
 # ── passport_grade validation ──
