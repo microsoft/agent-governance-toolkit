@@ -13,13 +13,12 @@ LABEL description="Agent Governance Toolkit — governance sidecar for autonomou
 
 WORKDIR /app
 
-# Copy all source (modules/ is needed for full [full] install)
-COPY pyproject.toml ./
-COPY src/ ./src/
-COPY modules/ ./modules/
+# Copy agent-os package source (context is repo root)
+COPY packages/agent-os/pyproject.toml ./
+COPY packages/agent-os/src/ ./src/
+COPY packages/agent-os/modules/ ./modules/
 
-RUN pip install --no-cache-dir -e ".[full]" && \
-    rm -rf /root/.cache
+RUN pip install --no-cache-dir ".[full]"
 
 # Create non-root user
 RUN useradd -m -s /bin/bash sidecar

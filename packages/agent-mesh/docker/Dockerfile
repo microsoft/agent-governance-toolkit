@@ -35,8 +35,7 @@ COPY packages/agent-mesh/pyproject.toml ./
 COPY packages/agent-mesh/src/ ./src/
 
 # Install the package with server extras (fastapi + uvicorn)
-RUN pip install --no-cache-dir -e ".[server]" && \
-    rm -rf /root/.cache
+RUN pip install --no-cache-dir ".[server]"
 
 # Create non-root user
 RUN useradd -m -s /bin/bash -u 1000 agentmesh
