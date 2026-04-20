@@ -30,6 +30,11 @@ env:
 
 jobs:
   build-push:
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     runs-on: ubuntu-latest
     permissions:
       contents: read

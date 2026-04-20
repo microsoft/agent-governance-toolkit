@@ -85,7 +85,7 @@ class MTLSIdentityVerifier:
             .public_key(signing_key.public_key())
             .serial_number(x509.random_serial_number())
             .not_valid_before(now)
-            .not_valid_after(now + timedelta(days=365))
+            .not_valid_after(now + timedelta(days=366))
             .add_extension(
                 x509.SubjectAlternativeName([
                     x509.UniformResourceIdentifier(did_str),
