@@ -52,7 +52,7 @@
     "@typescript-eslint/parser": "8.59.0",
     "@vitest/coverage-v8": "4.1.4",
     "eslint": "10.2.0",
-    "typescript": "6.0.2",
+    "typescript": "6.0.3",
     "vitest": "4.1.4"
   },
   "files": [
