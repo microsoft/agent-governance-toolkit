@@ -1,6 +1,6 @@
 [project]
 name = "carbon_auditor_swarm"
-version = "3.1.0"
+version = "3.1.1"
 description = "Autonomous auditing system for the Voluntary Carbon Market (VCM)"
 license = {text = "MIT"}
 readme = "README.md"

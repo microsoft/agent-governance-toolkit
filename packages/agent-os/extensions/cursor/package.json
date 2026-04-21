@@ -2,7 +2,7 @@
   "name": "@microsoft/agent-os-cursor",
   "displayName": "Agent OS for Cursor - The AI IDE with a Safety Kernel",
   "description": "Kernel-level safety for Cursor AI. Block destructive operations, verify AI suggestions with multi-model review, and audit all Composer actions. The safest AI IDE experience.",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "publisher": "agent-os",
   "author": "Microsoft Corporation",
   "license": "MIT",

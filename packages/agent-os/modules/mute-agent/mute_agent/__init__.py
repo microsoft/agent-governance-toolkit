@@ -13,7 +13,7 @@ Consolidated Stack:
 - caas: Context-as-a-Service layer
 """
 
-__version__ = "3.1.0"
+__version__ = "3.1.1"
 
 # Core components
 from .core.reasoning_agent import ReasoningAgent

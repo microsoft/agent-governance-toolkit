@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent_hypervisor"
-version = "3.1.0"
+version = "3.1.1"
 description = "Public Preview — Agent Hypervisor: Runtime supervisor for multi-agent Shared Sessions with Execution Rings, Joint Liability, Saga Orchestration, and hash-chained audit trails"
 readme = "README.md"
 license = {text = "MIT"}

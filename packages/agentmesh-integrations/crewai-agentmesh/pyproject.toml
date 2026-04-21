@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "crewai_agentmesh"
-version = "3.1.0"
+version = "3.1.1"
 description = "AgentMesh trust layer for CrewAI — trust-verified crew member selection and capability-gated task assignment"
 readme = "README.md"
 license = {text = "MIT"}

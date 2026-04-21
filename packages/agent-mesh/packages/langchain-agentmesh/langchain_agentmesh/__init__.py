@@ -11,7 +11,7 @@ from langchain_agentmesh.trust import TrustHandshake, TrustVerificationResult
 from langchain_agentmesh.tools import TrustGatedTool, TrustedToolExecutor
 from langchain_agentmesh.callbacks import TrustCallbackHandler
 
-__version__ = "3.1.0"
+__version__ = "3.1.1"
 
 __all__ = [
     # Identity

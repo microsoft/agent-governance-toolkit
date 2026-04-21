@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentmesh_marketplace"
-version = "3.1.0"
+version = "3.1.1"
 description = "Plugin marketplace for the Agent Governance Toolkit — discover, install, verify, and manage plugins"
 readme = "README.md"
 license = {text = "MIT"}

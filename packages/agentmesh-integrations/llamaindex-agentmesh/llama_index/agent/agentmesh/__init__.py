@@ -38,4 +38,4 @@ __all__ = [
     "DataAccessPolicy",
 ]
 
-__version__ = "3.1.0"
+__version__ = "3.1.1"

@@ -13,4 +13,4 @@ Dependencies:
 - agent-tool-registry: Tool registration and discovery
 """
 
-__version__ = "3.1.0"
+__version__ = "3.1.1"
