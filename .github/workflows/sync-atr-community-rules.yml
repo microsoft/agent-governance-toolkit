@@ -55,7 +55,7 @@ jobs:
         id: atr
         run: |
           set -euo pipefail
-          npm install --no-save --no-package-lock agent-threat-rules@latest --silent
+          npm install --no-save --no-package-lock agent-threat-rules@2.0.12 --silent
           ATR_VERSION=$(node -p "require('./node_modules/agent-threat-rules/package.json').version")
           echo "version=$ATR_VERSION" >> "$GITHUB_OUTPUT"
           echo "Pulled agent-threat-rules@$ATR_VERSION"
