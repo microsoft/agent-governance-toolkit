@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@octokit/webhooks": "14.2.0",
-    "axios": "1.15.1",
+    "axios": "1.15.2",
     "dotenv": "17.4.2",
     "express": "5.2.1",
     "path-to-regexp": "8.4.2",
