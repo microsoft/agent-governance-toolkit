@@ -13,8 +13,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Header, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from agentmesh.registry.store import AgentRecord, InMemoryRegistryStore, RegistryStore
