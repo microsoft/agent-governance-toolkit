@@ -11,7 +11,7 @@ multi-vendor network of AI agents that will define enterprise operations.
 Version: 1.0.0-alpha
 """
 
-__version__ = "3.1.0"
+__version__ = "3.1.1"
 
 # Layer 1: Identity & Zero-Trust Core
 from .identity import (

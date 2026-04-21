@@ -12,6 +12,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [3.1.1] - 2026-04-21
+
+### Added
+- **E2E Encrypted Agent Messaging** — Signal protocol (X3DH + Double Ratchet) for agent-to-agent channels with per-message forward secrecy (#1222, #1223, #1224, #1226)
+  - `agentmesh.encryption.x3dh` — X3DH key agreement using Ed25519 identity keys
+  - `agentmesh.encryption.ratchet` — Double Ratchet with ChaCha20-Poly1305 encryption
+  - `agentmesh.encryption.channel` — SecureChannel high-level send/receive API
+  - `agentmesh.encryption.bridge` — EncryptedTrustBridge gates channels on trust verification
+  - 61 tests across all encryption modules
+- **GitHub Pages documentation site** — MkDocs Material at microsoft.github.io/agent-governance-toolkit (#1186)
+- **BinSkim binary security analysis** for .NET SDK in CI (#1245)
+- **Customer FAQ** — 13 technical Q&As for customers, partners, and evaluators (#1171, #1185)
+- **Tutorial 32** — E2E Encrypted Agent Messaging (#1227)
+- **Tutorial 33** — Offline-Verifiable Decision Receipts (#1197)
+- **Entra Agent ID bridge tutorial** — DID ↔ Entra identity integration (#1166)
+- **Chaos testing tutorial** for AI agents with Agent SRE (#1184)
+- **ISO 42001 alignment assessment** (#1183)
+- **sb-runtime governance skill** — signed decision receipts with Veritas Acta format (#1203)
+- **Physical attestation example** — cold chain sensor governance receipts (#1168)
+- **protect-mcp governed example** — Cedar policies + signed receipts (#1159)
+- **Container images** — GHCR publishing for AgentMesh components (#1192)
+- **.NET SDK**: MCP security namespace, kill switch, lifecycle management (#1021, #1065)
+- **Go SDK**: MCP security, execution rings, lifecycle management (#1066)
+- **Rust SDK**: Execution rings and lifecycle management (#1067)
+- **Graph API group membership sync** for Entra Agent ID bridge (#1191)
+- **Workshop materials** — 2-hour AI agent governance session (#1195)
+
+### Security
+- Address all 106 open code scanning alerts (#1211)
+- Address 14 code scanning alerts (#1211)
+- Remove hardcoded credentials flagged by generic secret scanning (#1217)
+- Upgrade axios to 1.15.0 for CVE-2026-40175, CVE-2025-62718 (#966)
+- Address 6 Dependabot security vulnerabilities (#1212)
+- Resolve CodeQL syntax errors (#1213)
+- Harden new packages against audit findings (#944)
+- XSS, curl|bash, CORS, PII leak, path traversal fixes (#945)
+
+### Fixed
+- **ESRP NuGet signing** — add AuthCertName for cert-based auth, fix Windows agent requirement (#1022, #1207, #1208, #1210, #1214, #1232, #1233)
+- **CI path filters** — docs-only PRs drop from ~14 checks to ~4 (#1019)
+- **CI concurrency groups** — cancel stale duplicate runs on branch updates (#1019)
+- Remove pi-mono integration breaking dependency scan (#1190)
+- Fix lint errors in encryption modules (#1248)
+- Add mkdocs-minify-plugin to dep scan allowlist (#1247)
+- Align lotl_prevention_policy.yaml with PolicyDocument schema
+- Standardize DID method to did:agentmesh across all SDKs (#1170)
+- Downgrade rand 0.9.3 to 0.8.5 for ed25519-dalek compatibility (#1178)
+- Fix container publish workflow matrix issues (#1239, #1240, #1241, #1243)
+- Rewrite production policy examples to valid PolicyDocument schema (#1011)
+
+### Documentation
+- **OpenClaw sidecar** — comprehensive rewrite with verified API examples and working demo (#1163, #1164, #1167)
+- v3.1.0 release announcement in README with PyPI badge (#1019)
+- OWASP ASI-07 updated with Signal protocol E2E encryption (#1242)
+- Governance Maturity Model blog post (#1182)
+- Blog post comparing AI agent governance approaches (#1193)
+- GOVERNANCE.md, MAINTAINERS.md, ROADMAP.md for foundation submission (#1215)
+- Attribution & prior art policy (#1219)
+- Sync audit redaction wording with current code (#1014)
+- Address external critic gaps in limitations and threat model (#1017, #1025)
+
+### Dependencies
+- Bump 25+ dependencies across Python, TypeScript, .NET, and Rust packages
+
+
 ## [3.1.0] - 2026-04-11
 
 ### Added

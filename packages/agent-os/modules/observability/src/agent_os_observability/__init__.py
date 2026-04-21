@@ -15,7 +15,7 @@ from agent_os_observability.metrics import KernelMetrics, metrics_endpoint
 from agent_os_observability.dashboards import get_grafana_dashboard
 from agent_os_observability.server import MetricsServer, create_fastapi_router
 
-__version__ = "3.1.0"
+__version__ = "3.1.1"
 __all__ = [
     "KernelTracer",
     "trace_operation",

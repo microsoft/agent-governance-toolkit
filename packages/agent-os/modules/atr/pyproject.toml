@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent_tool_registry"
-version = "3.1.0"
+version = "3.1.1"
 description = "A decentralized marketplace for agent capabilities - The Hands of AI Agents"
 readme = "README.md"
 requires-python = ">=3.9"

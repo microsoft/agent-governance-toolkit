@@ -46,7 +46,7 @@ Installation:
 
 from __future__ import annotations
 
-__version__ = "3.1.0"
+__version__ = "3.1.1"
 __author__ = "Microsoft Corporation"
 __license__ = "MIT"
 

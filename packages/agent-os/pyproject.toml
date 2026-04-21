@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent_os_kernel"
-version = "3.1.0"
+version = "3.1.1"
 description = "Public Preview — A kernel architecture for governing autonomous AI agents with Nexus Trust Exchange"
 readme = "README.md"
 license = {text = "MIT"}

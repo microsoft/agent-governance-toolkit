@@ -350,7 +350,7 @@ try:
 except ImportError:
     _HF_AVAILABLE = False
 
-__version__ = "3.1.0"  # Bump for kernel architecture features
+__version__ = "3.1.1"  # Bump for kernel architecture features
 __author__ = "Microsoft Corporation"
 
 __all__ = [

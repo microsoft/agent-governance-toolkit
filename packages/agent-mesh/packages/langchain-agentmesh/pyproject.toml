@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "langchain_agentmesh"
-version = "3.1.0"
+version = "3.1.1"
 description = "AgentMesh trust layer integration for LangChain - cryptographic identity and trust verification for AI agents"
 readme = "README.md"
 license = {text = "Apache-2.0"}
