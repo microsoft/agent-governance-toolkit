@@ -33,16 +33,17 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 ### Repository Routing
 
 This repo is a monorepo. Choosing the right path up front makes review much faster.
-The layout is also evolving: some language implementations may move from shared directories into
-standalone top-level directories at the repository root over time. The first approved example is
-`agent-governance-dotnet/`, with `agent-governance-golang/` anticipated as a future sibling when
-that SDK moves. Treat the paths below as the current layout, not a permanent architecture promise.
+The layout is also evolving: some language implementations now use standalone top-level directories
+at the repository root. For contributor routing, treat `agent-governance-dotnet/` as the canonical
+.NET home and `agent-governance-golang/` as the matching sibling pattern for Go. Treat the paths
+below as contributor-routing guidance rather than a promise that every legacy path remains the long-
+term home for that language.
 
 | If your change is about... | Start here |
 |----------------------------|------------|
 | Core governance/runtime behavior | `packages/` |
-| Current shared SDK implementations | `packages/agent-mesh/sdks/` or `packages/agent-governance-dotnet/` while those SDKs still live in the shared layout |
-| Standalone language implementations | Reserved root-level paths such as `agent-governance-dotnet/`, future `agent-governance-golang/`, or other `agent-governance-*` siblings when present |
+| Current shared SDK implementations | `packages/agent-mesh/sdks/` and other languages that still live in the shared layout |
+| Standalone language implementations | `agent-governance-dotnet/`, `agent-governance-golang/`, or other `agent-governance-*` siblings at the repository root |
 | Tutorials, architecture, package docs | `docs/` |
 | Runnable framework integrations | `examples/` |
 | Interactive or live demos | `demo/` |
@@ -53,8 +54,8 @@ If a directory contains an `AGENTS.md` file, read it before you start. It captur
 commands, boundaries, and review expectations for that area.
 If a standalone top-level language directory exists for the implementation you are changing, prefer
 that directory over an older shared path unless maintainers tell you to keep work in the legacy
-location. For the approved .NET standalone migration, root-level contributor guidance should point
-to `agent-governance-dotnet/` as the destination path once it is introduced.
+location. For the approved .NET standalone migration, contributor guidance should point to
+`agent-governance-dotnet/` as the canonical path, not `packages/agent-governance-dotnet/`.
 
 ### Attribution & Prior Art
 
@@ -139,12 +140,12 @@ This is a mono-repo with ten packages today:
 | `agentmesh-marketplace` | `packages/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
 | `agentmesh-lightning` | `packages/agent-lightning/` | RL training governance with governed runners and policy rewards |
 | `agent-hypervisor` | `packages/agent-hypervisor/` | Runtime infrastructure and capability management |
-| `agent-governance-dotnet` | `packages/agent-governance-dotnet/` | .NET framework integration for agent governance |
+| `agent-governance-dotnet` | `packages/agent-governance-dotnet/` | Legacy shared-layout .NET implementation during migration to the root-level standalone path |
 | `agentmesh-integrations` | `packages/agentmesh-integrations/` | Framework integrations and extension library |
 
-Standalone language SDKs may also live at the repository root as that migration lands. The first
-planned example is `agent-governance-dotnet/`; `agent-governance-golang/` is the anticipated next
-sibling when Go gets a standalone top-level home.
+Contributor routing for the standalone .NET SDK should use `agent-governance-dotnet/` at the
+repository root as the canonical path. Legacy shared-layout references such as
+`packages/agent-governance-dotnet/` are migration context, not the target-state path.
 
 ### Coding Guidelines
 

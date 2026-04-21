@@ -12,10 +12,9 @@ Use this file for repository-wide routing. When you enter a subdirectory that ha
 ## Repository Layout Status
 
 This routing reflects the repo **as it exists today** while reserving room for approved language
-SDK migrations. Some language implementations may move from shared subdirectories into
-**standalone top-level directories** at the repository root. The first planned example is
-`agent-governance-dotnet/`, with `agent-governance-golang/` expected as a future sibling when that
-SDK gets a standalone home.
+SDK migrations. Language SDKs may live in **standalone top-level directories** at the repository
+root. For contributor routing, treat `agent-governance-dotnet/` as the canonical .NET home, with
+`agent-governance-golang/` as the matching sibling pattern for Go and future standalone SDKs.
 
 Treat current paths as a **point-in-time representation**, not a permanent architecture promise.
 When a standalone top-level implementation exists for a language, changes for that language should
@@ -26,8 +25,8 @@ go there rather than into `packages/` or an older shared SDK path.
 | Area | Path | Use it for |
 |------|------|------------|
 | Core Python packages | `packages/*/` | Runtime code, policy engines, trust, SRE, compliance |
-| Current shared SDK paths | `packages/agent-mesh/sdks/`, `packages/agent-governance-dotnet/` | Public SDK APIs and language-specific packaging that still live in the shared layout today |
-| Standalone language implementations | Reserved root-level paths such as `agent-governance-dotnet/`, future `agent-governance-golang/`, and other `agent-governance-*` siblings when present | Top-level language-specific implementations once a language SDK has moved to a standalone repo-root home |
+| Current shared SDK paths | `packages/agent-mesh/sdks/` | Public SDK APIs and language-specific packaging that still live in the shared layout today |
+| Standalone language implementations | `agent-governance-dotnet/`, `agent-governance-golang/`, and other `agent-governance-*` siblings | Top-level language-specific implementations at the repository root; use these as the canonical contributor-facing paths |
 | Docs site | `docs/` | Reference docs, tutorials, architecture, package pages |
 | Runnable examples | `examples/` | Self-contained integrations and worked examples |
 | Interactive demos | `demo/` | Live demos, dashboards, real-service walkthroughs |
@@ -42,10 +41,10 @@ go there rather than into `packages/` or an older shared SDK path.
 3. Put marketing or ecosystem references in docs only after the integration is real, attributable,
    and useful to users.
 4. Keep `.github/` changes separate from feature work; they require extra security review.
-5. If both a legacy shared path and a new standalone top-level path exist, prefer the standalone
+5. If both a legacy shared path and a standalone top-level path exist, prefer the standalone
    top-level path for new work unless maintainers say otherwise. For the approved .NET migration,
-   that means contributor guidance should target `agent-governance-dotnet/` once the root
-   directory exists.
+   that means contributor guidance should target `agent-governance-dotnet/` as the canonical path,
+   not `packages/agent-governance-dotnet/`.
 
 ## OSS Contribution Expectations
 
