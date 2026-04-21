@@ -143,6 +143,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 </details>
 
 > **Full walkthrough:** [QUICKSTART.md](QUICKSTART.md) — zero to governed agents in 10 minutes with YAML policies, OPA/Rego, and Cedar support.
+> 🌍 Also available in: [日本語](QUICKSTART.ja.md) | [简体中文](QUICKSTART.zh-CN.md)
 
 ---
 

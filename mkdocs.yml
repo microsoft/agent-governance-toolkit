@@ -149,3 +149,8 @@ nav:
     - NIST RFI Mapping: reference/nist-rfi-mapping.md
     - Changelog: reference/changelog.md
     - Contributing: reference/contributing.md
+  - 🌍 Languages:
+    - 日本語 README: i18n/README.ja.md
+    - 日本語 クイックスタート: i18n/QUICKSTART.ja.md
+    - 简体中文 README: i18n/README.zh-CN.md
+    - 简体中文 快速入门: i18n/QUICKSTART.zh-CN.md
