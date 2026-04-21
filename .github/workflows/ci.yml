@@ -196,7 +196,7 @@ jobs:
             --verbose 2>/dev/null || echo "BinSkim completed with warnings"
       - name: Upload BinSkim SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: packages/agent-governance-dotnet/binskim-results.sarif
           category: binskim
