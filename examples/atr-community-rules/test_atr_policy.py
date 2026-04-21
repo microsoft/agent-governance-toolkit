@@ -122,3 +122,81 @@ class TestKnownGoodInputsAllowed:
         assert result.action == "allow", (
             f"Expected allow for normal tool description, got {result.action}"
         )
+
+
+# -------------------------------------------------------------------------
+# CVE-linked coverage (added 2026-04)
+#
+# The curated policy includes three rules covering the April 2026
+# disclosure cluster. These tests verify that exploitation payloads supplied
+# via a `tool_args` context field are denied, and that benign `tool_args`
+# values (e.g. a normal API path) are allowed.
+# -------------------------------------------------------------------------
+
+
+class TestCVECoverageDenied:
+    """Exploit payloads from the April 2026 disclosure cluster must be blocked."""
+
+    def test_flowise_rce_override_config_child_process(
+        self, evaluator: PolicyEvaluator
+    ) -> None:
+        """ATR-00210: Flowise overrideConfig with child_process RCE payload (CVE-2025-59528)."""
+        context = {
+            "tool_args": (
+                '{"overrideConfig":{"javascriptFunction":"return '
+                'require(\\"child_process\\").execSync(\\"id\\").toString()"}}'
+            )
+        }
+        result = evaluator.evaluate(context)
+        assert result.action == "deny", (
+            f"Expected deny for Flowise RCE payload, got {result.action}"
+        )
+
+    def test_mcp_nginx_ui_privileged_tool_invocation(
+        self, evaluator: PolicyEvaluator
+    ) -> None:
+        """ATR-00211: Nginx UI MCP privileged tool invocation (CVE-2026-33032)."""
+        context = {
+            "tool_args": 'POST /api/mcp/tools/execute_shell {"cmd":"id"}'
+        }
+        result = evaluator.evaluate(context)
+        assert result.action == "deny", (
+            f"Expected deny for MCP auth-bypass tool call, got {result.action}"
+        )
+
+    def test_mcp_atlassian_traversal_authorized_keys(
+        self, evaluator: PolicyEvaluator
+    ) -> None:
+        """ATR-00212: mcp-atlassian path traversal to authorized_keys (CVE-2026-27825)."""
+        context = {
+            "tool_args": (
+                '{"attachment_filename":"../../../../home/mcp/.ssh/authorized_keys",'
+                '"content":"ssh-ed25519 AAAA..."}'
+            )
+        }
+        result = evaluator.evaluate(context)
+        assert result.action == "deny", (
+            f"Expected deny for mcp-atlassian traversal, got {result.action}"
+        )
+
+
+class TestCVECoverageAllowed:
+    """Benign tool_args must not trigger the CVE rules."""
+
+    def test_benign_api_list_call(self, evaluator: PolicyEvaluator) -> None:
+        """Normal list endpoint call without attack markers."""
+        context = {"tool_args": "GET /api/v1/chatflows list"}
+        result = evaluator.evaluate(context)
+        assert result.action == "allow", (
+            f"Expected allow for benign API call, got {result.action}"
+        )
+
+    def test_benign_attachment_filename(self, evaluator: PolicyEvaluator) -> None:
+        """Legitimate attachment filename without traversal."""
+        context = {
+            "tool_args": '{"attachment_filename":"report-2026-04.pdf","content":"..."}'
+        }
+        result = evaluator.evaluate(context)
+        assert result.action == "allow", (
+            f"Expected allow for benign attachment filename, got {result.action}"
+        )
