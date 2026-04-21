@@ -8,6 +8,16 @@
 > messaging in the Agent Governance Toolkit. All SDK implementations (Python,
 > TypeScript, Rust, .NET, Go) MUST conform to this specification.
 
+> [!IMPORTANT]
+> **Independent Design Statement.** This specification is an independent,
+> clean-room design built entirely from published, freely-licensed standards
+> (see [Section 3](#3-standards-foundation) and [Appendix A](#appendix-a--intellectual-property-and-prior-art)).
+> No proprietary protocols, third-party source code, or patented algorithms
+> were used. Every cryptographic operation references an IETF RFC or a
+> CC0-licensed specification. Implementers should follow this spec and the
+> referenced standards only — do not reference, copy, or derive from any
+> third-party implementation.
+
 ---
 
 ## Table of Contents
@@ -30,6 +40,9 @@
 16. [Security Considerations](#16-security-considerations)
 17. [Test Vectors](#17-test-vectors)
 18. [References](#18-references)
+- [Appendix A — Intellectual Property and Prior Art](#appendix-a--intellectual-property-and-prior-art)
+- [Appendix B — Recommended Cryptographic Libraries](#appendix-b--recommended-cryptographic-libraries)
+- [Appendix C — Tutorial and Demo Roadmap](#appendix-c--tutorial-and-demo-roadmap)
 
 ---
 
@@ -885,3 +898,131 @@ Canonical JSON serialization of each frame type will be provided at
 7. [RFC 9420 — MLS](https://www.rfc-editor.org/rfc/rfc9420)
 8. [W3C DID Core Specification](https://www.w3.org/TR/did-core/)
 9. [SPIFFE/SVID Specification](https://spiffe.io/docs/latest/spiffe-about/spiffe-concepts/)
+
+---
+
+## Appendix A — Intellectual Property and Prior Art
+
+### A.1 Clean-Room Design Statement
+
+This specification and all implementations derived from it are the result of
+an **independent, clean-room design process**. The design is based exclusively
+on:
+
+1. **Published IETF RFCs** — freely implementable internet standards
+2. **CC0-licensed Signal Foundation specifications** — explicitly placed in
+   the public domain by their authors
+3. **W3C specifications** — published under royalty-free licensing terms
+4. **Original design work** by the Agent Governance Toolkit team for
+   agent-specific features (KNOCK protocol, governance integration,
+   registry API, relay semantics)
+
+No proprietary protocols, patented algorithms, or third-party source code
+were used in creating this specification.
+
+### A.2 Standards Licensing
+
+| Standard | License | Freely implementable? |
+|----------|---------|----------------------|
+| Signal X3DH | CC0 (public domain) | ✅ Yes — explicitly |
+| Signal Double Ratchet | CC0 (public domain) | ✅ Yes — explicitly |
+| RFC 7748 (X25519) | IETF BCP 78 | ✅ Yes — IETF standards |
+| RFC 5869 (HKDF) | IETF BCP 78 | ✅ Yes — IETF standards |
+| RFC 8439 (ChaCha20-Poly1305) | IETF BCP 78 | ✅ Yes — IETF standards |
+| RFC 8032 (Ed25519) | IETF BCP 78 | ✅ Yes — IETF standards |
+| RFC 9420 (MLS) | IETF BCP 78 | ✅ Yes — IETF standards |
+| W3C DID Core | W3C Document License | ✅ Yes — royalty-free |
+| SPIFFE/SVID | Apache 2.0 | ✅ Yes |
+
+### A.3 Prior Art Acknowledgment
+
+The concepts of end-to-end encrypted messaging, store-and-forward relay,
+and agent registry are well-established in the field. This specification
+acknowledges the following as prior art in the general domain:
+
+- **Signal Protocol** (Open Whisper Systems / Signal Foundation) — the
+  foundational work on X3DH and Double Ratchet, published as CC0
+- **Matrix Protocol** (matrix.org) — federated messaging with E2E encryption
+- **XMPP/Jabber** (IETF) — extensible messaging with various encryption extensions
+- **MLS** (IETF RFC 9420) — group messaging key agreement
+
+This specification does not claim novelty in the cryptographic primitives.
+The novel contribution is the **combination of these well-known primitives
+with agent-specific governance** (policy-gated sessions, intent-carrying
+handshakes, trust-scored identities, deterministic audit trails) — which
+is original work by the AGT team.
+
+### A.4 Implementation Guidelines for Contributors
+
+To maintain clean-room integrity:
+
+1. **DO** implement from this spec and the referenced RFCs/standards only
+2. **DO** use audited, published cryptographic libraries (see Appendix B)
+3. **DO** write original code — do not copy from any third-party implementation
+4. **DO** cite this spec as the design source in code comments
+5. **DO NOT** reference, browse, or reverse-engineer any third-party SDK,
+   relay, or registry implementation while implementing
+6. **DO NOT** copy wire formats, API schemas, or frame structures from any
+   existing implementation — use only what is defined in this document
+7. **DO NOT** use any code, pseudocode, or algorithms from sources other
+   than the RFCs and CC0 specifications listed in Section 18
+
+---
+
+## Appendix B — Recommended Cryptographic Libraries
+
+Implementations MUST use audited, well-known cryptographic libraries.
+Custom crypto implementations are prohibited.
+
+### Python
+
+| Primitive | Library | License | Notes |
+|-----------|---------|---------|-------|
+| X25519, Ed25519 | [PyNaCl](https://pynacl.readthedocs.io/) (libsodium) | Apache 2.0 | Already an AGT dependency |
+| HKDF, ChaCha20-Poly1305 | [cryptography](https://cryptography.io/) | Apache 2.0 / BSD | Already an AGT dependency |
+
+### TypeScript / JavaScript
+
+| Primitive | Library | License | Notes |
+|-----------|---------|---------|-------|
+| X25519, Ed25519 | [@noble/curves](https://github.com/paulmillr/noble-curves) | MIT | Audited, zero deps |
+| ChaCha20-Poly1305 | [@noble/ciphers](https://github.com/paulmillr/noble-ciphers) | MIT | Audited, zero deps |
+| HKDF, SHA-256, HMAC | [@noble/hashes](https://github.com/paulmillr/noble-hashes) | MIT | Audited, zero deps |
+
+### Rust
+
+| Primitive | Library | License | Notes |
+|-----------|---------|---------|-------|
+| X25519 | [x25519-dalek](https://crates.io/crates/x25519-dalek) | BSD-3-Clause | Widely used |
+| Ed25519 | [ed25519-dalek](https://crates.io/crates/ed25519-dalek) | BSD-3-Clause | Already an AGT dependency |
+| ChaCha20-Poly1305 | [chacha20poly1305](https://crates.io/crates/chacha20poly1305) | MIT / Apache 2.0 | RustCrypto project |
+| HKDF | [hkdf](https://crates.io/crates/hkdf) | MIT / Apache 2.0 | RustCrypto project |
+
+### .NET
+
+| Primitive | Library | License | Notes |
+|-----------|---------|---------|-------|
+| X25519, Ed25519, ChaCha20-Poly1305, HKDF | [libsodium-core](https://github.com/tabrath/libsodium-core) or [NSec](https://nsec.rocks/) | MIT | libsodium bindings for .NET |
+
+### Go
+
+| Primitive | Library | License | Notes |
+|-----------|---------|---------|-------|
+| X25519, Ed25519, HKDF, ChaCha20-Poly1305 | [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto) | BSD-3-Clause | Go standard extended library |
+
+---
+
+## Appendix C — Tutorial and Demo Roadmap
+
+Once this spec is implemented, the following documentation will be provided:
+
+| Document | Purpose |
+|----------|---------|
+| **Tutorial: E2E Encrypted Agent Messaging** | Step-by-step guide with code in all 5 languages |
+| **Tutorial: KNOCK Protocol and Intent-Based Sessions** | How to use governance-gated session establishment |
+| **Tutorial: Deploying Relay + Registry** | Docker Compose + Helm chart quickstart |
+| **Demo: Two-Agent Encrypted Conversation** | Runnable example with Alice and Bob agents |
+| **Demo: Multi-Agent Task Delegation** | KNOCK → encrypted channel → task handoff → audit trail |
+| **Demo: Offline Agent Delivery** | Agent sends while peer is offline, relay delivers on reconnect |
+| **API Reference: Registry REST API** | OpenAPI spec for the registry service |
+| **API Reference: Relay WebSocket Protocol** | Frame-by-frame documentation with examples |
