@@ -3,8 +3,8 @@ site_description: Governance, trust, identity, and compliance for AI agents
 site_url: https://microsoft.github.io/agent-governance-toolkit
 repo_url: https://github.com/microsoft/agent-governance-toolkit
 repo_name: microsoft/agent-governance-toolkit
-edit_uri: edit/main/site/docs/
-docs_dir: site/docs
+edit_uri: edit/main/docs/
+docs_dir: docs
 
 theme:
   name: material
@@ -117,6 +117,13 @@ nav:
     - Security Hardening: tutorials/25-security-hardening.md
     - SBOM & Signing: tutorials/26-sbom-and-signing.md
     - MCP Scan CLI: tutorials/27-mcp-scan-cli.md
+    - Build Custom Integration: tutorials/28-build-custom-integration.md
+    - Agent Discovery: tutorials/29-agent-discovery.md
+    - Agent Lifecycle: tutorials/30-agent-lifecycle.md
+    - Entra Agent ID Bridge: tutorials/31-entra-agent-id-bridge.md
+    - Chaos Testing Agents: tutorials/32-chaos-testing-agents.md
+    - E2E Encrypted Messaging: tutorials/32-e2e-encrypted-messaging.md
+    - Offline Verifiable Receipts: tutorials/33-offline-verifiable-receipts.md
   - Deployment:
     - Overview: deployment/index.md
     - Azure Container Apps: deployment/azure-container-apps.md
@@ -134,6 +141,8 @@ nav:
     - "ADR-0002: Four Execution Rings": adr/0002-use-four-execution-rings-for-runtime-privilege.md
     - "ADR-0003: IATP Handshake 200ms": adr/0003-keep-iatp-handshake-within-200ms.md
     - "ADR-0004: Deterministic Policy": adr/0004-keep-policy-evaluation-deterministic.md
+    - "ADR-0005: Liveness Attestation": adr/0005-add-liveness-attestation-to-trust-handshake.md
+    - "ADR-0006: Constitutional Constraints": adr/0006-constitutional-constraint-layer-as-community-extension.md
   - Reference:
     - Benchmarks: reference/benchmarks.md
     - Comparison: reference/comparison.md
