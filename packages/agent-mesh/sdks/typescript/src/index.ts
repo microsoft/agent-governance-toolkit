@@ -12,6 +12,18 @@ export type { McpScanResult, McpThreat, McpToolDefinition } from './mcp';
 export { LifecycleManager, LifecycleState } from './lifecycle';
 export type { LifecycleEvent } from './lifecycle';
 
+// E2E Encryption (AgentMesh Wire Protocol v1.0)
+export {
+  X3DHKeyManager, generateX25519KeyPair, ed25519ToX25519,
+  DoubleRatchet,
+  SecureChannel,
+} from './encryption';
+export type {
+  X25519KeyPair, PreKeyBundle, X3DHResult,
+  MessageHeader, EncryptedMessage, RatchetState,
+  ChannelEstablishment,
+} from './encryption';
+
 export {
   ConflictResolutionStrategy,
   PolicyScope,
