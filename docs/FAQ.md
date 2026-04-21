@@ -162,7 +162,7 @@ All types deliver the same governance capabilities — policy enforcement, ident
 | TypeScript | `@microsoft/agentmesh-sdk` | ✅ Published on npm |
 | .NET | `Microsoft.AgentGovernance` | ✅ Published on NuGet |
 | Rust | `agentmesh` crate | ✅ Published on crates.io |
-| Go | `github.com/microsoft/agent-governance-toolkit/sdks/go` | ✅ Module available |
+| Go | `github.com/microsoft/agent-governance-toolkit/agent-governance-golang` | ✅ Module available |
 
 ### AgentMesh Framework Integrations (6)
 

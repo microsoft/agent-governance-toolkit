@@ -12,7 +12,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-npm_%40agentmesh%2Fsdk-blue?logo=typescript)](../../packages/agent-mesh/sdks/typescript/)
 [![.NET 8.0+](https://img.shields.io/badge/.NET_8.0+-NuGet-blue?logo=dotnet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
 [![Rust](https://img.shields.io/badge/Rust-crates.io-orange?logo=rust)](../../packages/agent-mesh/sdks/rust/agentmesh/)
-[![Go](https://img.shields.io/badge/Go-module-00ADD8?logo=go)](../../packages/agent-mesh/sdks/go/)
+[![Go](https://img.shields.io/badge/Go-module-00ADD8?logo=go)](../../agent-governance-golang/)
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../../docs/OWASP-COMPLIANCE.md)
 [![OpenSSF Best Practices](https://img.shields.io/cii/percentage/12085?label=OpenSSF%20Best%20Practices&logo=opensourcesecurity)](https://www.bestpractices.dev/projects/12085)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
@@ -88,7 +88,7 @@ pip install agentmesh-lightning        # 強化学習トレーニングガバナ
 - **[.NET SDK](../../packages/agent-governance-dotnet/README.md)** — 完全な OWASP カバレッジを備えた NuGet パッケージ
 - **[Rust SDK](../../packages/agent-mesh/sdks/rust/agentmesh/README.md)** — ポリシー、トラスト、監査、ID、MCP ガバナンスプリミティブを備えた crates.io クレート
 - **[Rust MCP SDK](../../packages/agent-mesh/sdks/rust/agentmesh-mcp/README.md)** — MCP ガバナンスおよびセキュリティプリミティブのスタンドアロン crates.io クレート
-- **[Go SDK](../../packages/agent-mesh/sdks/go/README.md)** — ポリシー、トラスト、監査、ID 機能を備えた Go モジュール
+- **[Go SDK](../../agent-governance-golang/README.md)** — ポリシー、トラスト、監査、ID 機能を備えた Go モジュール
 - **[チュートリアル](../../docs/tutorials/)** — ポリシー、ID、統合、コンプライアンス、SRE、サンドボックスのステップバイステップガイド
 - **[Azure デプロイ](../../docs/deployment/README.md)** — AKS、Azure AI Foundry、Container Apps、OpenClaw サイドカー
 - **[NVIDIA OpenShell 統合](../../docs/integrations/openshell.md)** — サンドボックス分離とガバナンスインテリジェンスの統合
@@ -196,7 +196,7 @@ assert!(result.allowed);
 ### ポリシーの適用 — Go
 
 ```go
-import agentmesh "github.com/microsoft/agent-governance-toolkit/sdks/go"
+import agentmesh "github.com/microsoft/agent-governance-toolkit/agent-governance-golang"
 
 client, _ := agentmesh.NewClient("my-agent",
     agentmesh.WithPolicyRules([]agentmesh.PolicyRule{
@@ -289,7 +289,7 @@ decision = engine.evaluate("did:mesh:agent-1", {"tool_name": "analyze"})
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 | **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
 | **Rust MCP** | [`agentmesh-mcp`](https://crates.io/crates/agentmesh-mcp) | `cargo add agentmesh-mcp` |
-| **Go** | [`agentmesh`](../../packages/agent-mesh/sdks/go/) | `go get github.com/microsoft/agent-governance-toolkit/sdks/go` |
+| **Go** | [`agentmesh`](../../agent-governance-golang/) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
 ### Python パッケージ (PyPI)
 

@@ -128,8 +128,8 @@ full governance stack.
 
 ### Go SDK
 
-**Module:** `github.com/microsoft/agent-governance-toolkit/sdks/go` ·
-**Source:** [`packages/agent-mesh/sdks/go/`](../packages/agent-mesh/sdks/go/)
+**Module:** `github.com/microsoft/agent-governance-toolkit/agent-governance-golang` ·
+**Source:** [`agent-governance-golang/`](../agent-governance-golang/)
 
 | File | Features |
 |------|----------|
@@ -166,7 +166,7 @@ full governance stack.
 | .NET | `dotnet add package Microsoft.AgentGovernance` |
 | Rust | `cargo add agentmesh` |
 | Rust (MCP only) | `cargo add agentmesh-mcp` |
-| Go | `go get github.com/microsoft/agent-governance-toolkit/sdks/go` |
+| Go | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
 ---
 

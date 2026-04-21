@@ -194,7 +194,7 @@ pip install agent-governance-toolkit[full]    # Python
 dotnet add package Microsoft.AgentGovernance  # .NET
 npm install @microsoft/agentmesh-sdk                    # TypeScript
 cargo add agentmesh                           # Rust
-go get github.com/microsoft/agent-governance-toolkit/sdks/go  # Go
+go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang  # Go
 ```
 
 ## More Resources
