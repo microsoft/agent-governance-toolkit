@@ -25,3 +25,10 @@ export {
   SecureChannel,
   type ChannelEstablishment,
 } from "./channel";
+
+export {
+  MeshClient,
+  type MeshClientOptions,
+  type MeshSession,
+  type WebSocketFactory,
+} from "./mesh-client";
