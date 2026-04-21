@@ -20,8 +20,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 from agentmesh.encryption.channel import ChannelEstablishment, SecureChannel
 from agentmesh.encryption.x3dh import InMemoryPreKeyStore, PreKeyBundle, PreKeyStore, X3DHKeyManager
