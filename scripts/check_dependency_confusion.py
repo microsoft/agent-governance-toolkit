@@ -75,7 +75,7 @@ REGISTERED_PACKAGES = {
     "langfuse", "arize", "arize-phoenix", "llamaindex", "braintrust", "helicone",
     "datadog", "langsmith", "wandb", "mlflow", "agentops",
     "typer", "jsonschema", "anyio", "pre-commit", "import-linter",
-    "mkdocs", "mkdocs-material", "mkdocstrings", "datasets", "sqlglot",
+    "mkdocs", "mkdocs-material", "mkdocs-minify-plugin", "mkdocstrings", "datasets", "sqlglot",
     "aio-pika", "aiokafka",
     # Cedar/OPA policy backends
     "cedarpy", "llama-index-core", "ddtrace",

@@ -27,7 +27,7 @@ anthropic==0.39.0  # For Claude API integration
 # =============================================================================
 # Testing and Development
 # =============================================================================
-pytest==8.4.1
+pytest==9.0.3
 pytest-asyncio==1.1.0
 
 # =============================================================================
@@ -40,7 +40,7 @@ jupyter==1.1.1  # For interactive notebooks
 
 # LangChain Integration
 langchain==0.3.14  # For LangChain integration
-langchain-core==1.2.11  # CVE fix: SSRF via image_url token counting
+langchain-core==1.2.28  # CVE fix: SSRF, path traversal, f-string validation
 
 # Distributed Computing (uncomment as needed)
 # ray>=2.8.0  # For distributed execution

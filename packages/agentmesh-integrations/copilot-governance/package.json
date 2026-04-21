@@ -40,7 +40,7 @@
   "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agentmesh-integrations/copilot-governance",
   "devDependencies": {
     "@types/node": "20.0.0",
-    "tsup": "8.0.0",
+    "tsup": "8.5.1",
     "typescript": "5.7.3",
     "vitest": "3.0.5"
   }

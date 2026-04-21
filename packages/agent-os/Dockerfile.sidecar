@@ -6,20 +6,20 @@
 # Build:  docker build -t agentmesh/governance-sidecar:0.3.0 -f Dockerfile.sidecar .
 # Run:    docker run -p 8081:8081 agentmesh/governance-sidecar:0.3.0
 
-FROM python:3.14-slim
+FROM python:3.14-slim@sha256:bc389f7dfcb21413e72a28f491985326994795e34d2b86c8ae2f417b4e7818aa
 
 LABEL maintainer="Microsoft Corporation"
 LABEL description="Agent Governance Toolkit — governance sidecar for autonomous AI agents"
 
 WORKDIR /app
 
-# Copy all source (modules/ is needed for full [full] install)
-COPY pyproject.toml ./
-COPY src/ ./src/
-COPY modules/ ./modules/
+# Copy agent-os package source (context is repo root)
+COPY packages/agent-os/pyproject.toml ./
+COPY packages/agent-os/README.md ./
+COPY packages/agent-os/src/ ./src/
+COPY packages/agent-os/modules/ ./modules/
 
-RUN pip install --no-cache-dir -e ".[full]" && \
-    rm -rf /root/.cache
+RUN pip install --no-cache-dir ".[full]"
 
 # Create non-root user
 RUN useradd -m -s /bin/bash sidecar

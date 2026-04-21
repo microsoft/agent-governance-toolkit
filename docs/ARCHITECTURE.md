@@ -4,6 +4,14 @@
 
 The Agent Governance Toolkit provides **deterministic application-layer interception** — every agent action is evaluated against policy **before execution**, at sub-millisecond latency. For high-security environments, composes with container/VM isolation for defense-in-depth.
 
+## Video Walkthrough Series
+
+Community video series covering the toolkit architecture:
+
+1. [Agent OS & Policy Engine](https://www.youtube.com/watch?v=jq-3FWk5KlI)
+2. [Agent Mesh & Trust Layer](https://www.youtube.com/watch?v=pCJWqCWpXRI)
+3. [Agent SRE & Observability](https://youtu.be/5Rey8lzgVvs)
+
 ## System Architecture
 
 ```

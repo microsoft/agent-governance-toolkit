@@ -55,6 +55,7 @@ guides.
 | 16 | [Protocol Bridges](16-protocol-bridges.md) | A2A, MCP proxy, IATP attestation, trust-gated communication | `agentmesh-platform` |
 | 17 | [Advanced Trust & Behavior](17-advanced-trust-and-behavior.md) | Behavior monitoring, reward engine, trust policies, shadow mode | `agentmesh-platform` |
 | 31 | [Entra Agent ID Bridge](31-entra-agent-id-bridge.md) | Bridge DID identity with Microsoft Entra Agent ID, Conditional Access, sponsor accountability | `agentmesh-platform` |
+| 32 | [E2E Encrypted Messaging](32-e2e-encrypted-messaging.md) | Signal protocol (X3DH + Double Ratchet), SecureChannel, trust-gated encryption | `agentmesh-platform` |
 
 ## Ecosystem
 
@@ -161,12 +162,13 @@ A self-contained sub-series progressing from basic allow/deny rules to productio
 ### 🤖 "I'm building multi-agent systems"
 
 1. [02 — Trust & Identity](02-trust-and-identity.md) → agent credentials
-2. [23 — Delegation Chains](23-delegation-chains.md) → scope narrowing and delegation
-3. [16 — Protocol Bridges](16-protocol-bridges.md) → cross-protocol communication
-4. [11 — Saga Orchestration](11-saga-orchestration.md) → multi-step workflows
-5. [12 — Liability & Attribution](12-liability-and-attribution.md) → who's responsible
-6. [17 — Advanced Trust & Behavior](17-advanced-trust-and-behavior.md) → dynamic trust
-7. [24 — Cost & Token Budgets](24-cost-and-token-budgets.md) → control agent spend
+2. [32 — E2E Encrypted Messaging](32-e2e-encrypted-messaging.md) → encrypted agent channels
+3. [23 — Delegation Chains](23-delegation-chains.md) → scope narrowing and delegation
+4. [16 — Protocol Bridges](16-protocol-bridges.md) → cross-protocol communication
+5. [11 — Saga Orchestration](11-saga-orchestration.md) → multi-step workflows
+6. [12 — Liability & Attribution](12-liability-and-attribution.md) → who's responsible
+7. [17 — Advanced Trust & Behavior](17-advanced-trust-and-behavior.md) → dynamic trust
+8. [24 — Cost & Token Budgets](24-cost-and-token-budgets.md) → control agent spend
 
 ### 🔎 "I need to find all agents in my org"
 

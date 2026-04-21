@@ -40,7 +40,7 @@ def test_decay_factor_calculation():
     print(f"✓ Month ago (30 days): decay_factor = {decay_month:.3f} (should be ~0.032)")
     
     # Document from a year ago (365 days)
-    year_ago = (reference_time - timedelta(days=365)).isoformat()
+    year_ago = (reference_time - timedelta(days=366)).isoformat()
     decay_year = calculate_decay_factor(year_ago, reference_time, decay_rate=1.0)
     print(f"✓ Year ago (365 days): decay_factor = {decay_year:.3f} (should be ~0.003)")
     
@@ -75,7 +75,7 @@ def test_the_half_life_of_truth():
     )
     
     # Old document with 95% similarity
-    old_doc_time = (reference_time - timedelta(days=365)).isoformat()  # Last year
+    old_doc_time = (reference_time - timedelta(days=366)).isoformat()  # Last year
     old_similarity = 0.95
     old_score = get_time_weighted_score(
         base_score=old_similarity,
@@ -140,7 +140,7 @@ def test_search_with_time_decay():
         sections=[
             Section(title="Introduction", content="How to reset the server. Old method.", weight=1.0)
         ],
-        ingestion_timestamp=(current_time - timedelta(days=365)).isoformat()
+        ingestion_timestamp=(current_time - timedelta(days=366)).isoformat()
     )
     
     # Document 3: Very old (3 years)

@@ -12,7 +12,7 @@
 
 ARG PYTHON_VERSION=3.11
 
-FROM python:${PYTHON_VERSION}-slim AS base
+FROM python:${PYTHON_VERSION}-slim@sha256:233de06753d30d120b1a3ce359d8d3be8bda78524cd8f520c99883bfe33964cf AS base
 
 LABEL maintainer="Microsoft Corporation"
 LABEL org.opencontainers.image.source="https://github.com/microsoft/agent-governance-toolkit"
@@ -32,11 +32,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy package source from repo root context
 COPY packages/agent-mesh/pyproject.toml ./
+COPY packages/agent-mesh/README.md ./
 COPY packages/agent-mesh/src/ ./src/
 
 # Install the package with server extras (fastapi + uvicorn)
-RUN pip install --no-cache-dir -e ".[server]" && \
-    rm -rf /root/.cache
+RUN pip install --no-cache-dir ".[server]"
 
 # Create non-root user
 RUN useradd -m -s /bin/bash -u 1000 agentmesh

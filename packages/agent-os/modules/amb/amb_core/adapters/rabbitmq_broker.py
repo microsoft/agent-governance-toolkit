@@ -3,6 +3,7 @@
 """RabbitMQ broker adapter for AMB."""
 
 import asyncio
+import os
 import uuid
 from typing import Dict, List, Optional
 
@@ -28,14 +29,15 @@ class RabbitMQBroker(BrokerAdapter):
     and direct exchanges for request-response patterns.
     """
 
-    def __init__(self, url: str = "amqp://guest:guest@localhost/"):
+    def __init__(self, url: str = ""):
         """
         Initialize RabbitMQ broker.
         
         Args:
-            url: RabbitMQ connection URL
+            url: RabbitMQ connection URL. If empty, reads from
+                 RABBITMQ_URL environment variable (default: amqp://localhost/).
         """
-        self.url = url
+        self.url = url or os.environ.get("RABBITMQ_URL", "amqp://localhost/")
         self._connection: Optional[AbstractConnection] = None
         self._channel: Optional[AbstractChannel] = None
         self._subscriptions: Dict[str, AbstractQueue] = {}

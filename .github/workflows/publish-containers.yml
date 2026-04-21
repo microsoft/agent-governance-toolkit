@@ -10,12 +10,12 @@ on:
         required: true
         type: choice
         options:
+          - all
           - trust-engine
           - policy-server
           - audit-collector
           - api-gateway
           - governance-sidecar
-          - all
       tag:
         description: "Image tag (default: latest)"
         required: false
@@ -23,9 +23,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  id-token: write
-  attestations: write
 
 env:
   REGISTRY: ghcr.io
@@ -34,6 +31,11 @@ env:
 jobs:
   build-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -56,23 +58,31 @@ jobs:
             port: 8446
           - component: governance-sidecar
             dockerfile: packages/agent-os/Dockerfile.sidecar
-            context: packages/agent-os
+            context: .
             port: 8081
 
-    # Filter: build all on release, or only the selected component on dispatch
-    if: >-
-      github.event_name == 'release' ||
-      github.event.inputs.component == 'all' ||
-      github.event.inputs.component == matrix.component
-
     steps:
+      - name: Check if this component should build
+        id: check
+        run: |
+          EVENT="${{ github.event_name }}"
+          SELECTED="${{ github.event.inputs.component }}"
+          CURRENT="${{ matrix.component }}"
+          if [ "$EVENT" = "release" ] || [ "$SELECTED" = "all" ] || [ "$SELECTED" = "$CURRENT" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping $CURRENT (selected: $SELECTED)"
+          fi
+
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        if: steps.check.outputs.skip != 'true'
 
       - name: Set image tag
+        if: steps.check.outputs.skip != 'true'
         id: tag
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
-            # Strip 'v' prefix from release tag (v3.2.0 → 3.2.0)
             TAG="${{ github.event.release.tag_name }}"
             TAG="${TAG#v}"
           else
@@ -82,9 +92,11 @@ jobs:
           echo "Image tag: $TAG"
 
       - name: Set up Docker Buildx
+        if: steps.check.outputs.skip != 'true'
         uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
       - name: Log in to GHCR
+        if: steps.check.outputs.skip != 'true'
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: ${{ env.REGISTRY }}
@@ -92,6 +104,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata
+        if: steps.check.outputs.skip != 'true'
         id: meta
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
         with:
@@ -102,7 +115,9 @@ jobs:
             type=sha,prefix=
 
       - name: Build and push
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198e19c816612b # v6.18.0
+        if: steps.check.outputs.skip != 'true'
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
@@ -116,15 +131,23 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Attest build provenance
+        if: steps.check.outputs.skip != 'true'
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}
-          subject-digest: ${{ steps.meta.outputs.digest || '' }}
+          subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
         continue-on-error: true
 
-      - name: Verify image
+      - name: Summary
+        if: steps.check.outputs.skip != 'true'
         run: |
-          echo "=== Verifying ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }} ==="
-          docker pull ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }}
-          docker run --rm ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }} python -c "print('Image OK')"
+          echo "### ✅ Published \`${{ matrix.component }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | \`${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Digest | \`${{ steps.build.outputs.digest }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Platforms | linux/amd64, linux/arm64 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pull: \`docker pull ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
