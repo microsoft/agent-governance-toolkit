@@ -238,7 +238,7 @@ import (
     "log"
     "os"
 
-    agentmesh "github.com/microsoft/agent-governance-toolkit/sdks/go"
+    agentmesh "github.com/microsoft/agent-governance-toolkit/agent-governance-golang"
 )
 
 func main() {
@@ -489,7 +489,7 @@ gh attestation verify dist/artifact.whl \
 | Publish workflow | `.github/workflows/publish.yml` |
 | Ed25519 identity (TS) | `packages/agent-mesh/sdks/typescript/src/identity.ts` |
 | Ed25519 identity (Rust) | `packages/agent-mesh/sdks/rust/agentmesh/src/identity.rs` |
-| Ed25519 identity (Go) | `packages/agent-mesh/sdks/go/identity.go` |
+| Ed25519 identity (Go) | `agent-governance-golang/identity.go` |
 
 ---
 

@@ -224,20 +224,20 @@ and tags the module.
 
 | Package | Module Path | Directory |
 |---------|-------------|-----------|
-| AgentMesh Go SDK | `github.com/microsoft/agent-governance-toolkit/sdks/go` | `packages/agent-mesh/sdks/go` |
+| AgentMesh Go SDK | `github.com/microsoft/agent-governance-toolkit/agent-governance-golang` | `agent-governance-golang` |
 
 ### Tag Format
 
 Go modules in subdirectories require a tag prefixed with the module's path:
 
 ```
-packages/agent-mesh/sdks/go/v0.1.0
+agent-governance-golang/v0.1.0
 ```
 
 ### Building & Testing Locally
 
 ```bash
-cd packages/agent-mesh/sdks/go
+cd agent-governance-golang
 go build ./...
 go vet ./...
 go test -v -race ./...
@@ -249,7 +249,7 @@ After pushing a tag:
 
 ```bash
 GOPROXY=https://proxy.golang.org GO111MODULE=on \
-  go get github.com/microsoft/agent-governance-toolkit/sdks/go@v0.1.0
+  go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang@v0.1.0
 ```
 
 ---

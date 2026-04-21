@@ -86,7 +86,7 @@ updates:
 
   # Go
   - package-ecosystem: "gomod"
-    directory: "/packages/agent-mesh/sdks/go"
+    directory: "/agent-governance-golang"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

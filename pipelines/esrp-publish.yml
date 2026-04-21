@@ -595,22 +595,22 @@ stages:
 
           - script: |
               go build ./...
-            workingDirectory: 'packages/agent-mesh/sdks/go'
+            workingDirectory: 'agent-governance-golang'
             displayName: 'Build Go module'
 
           - script: |
               go vet ./...
-            workingDirectory: 'packages/agent-mesh/sdks/go'
+            workingDirectory: 'agent-governance-golang'
             displayName: 'Vet Go module'
 
           - script: |
               go test -v -race -coverprofile=coverage.out ./...
-            workingDirectory: 'packages/agent-mesh/sdks/go'
+            workingDirectory: 'agent-governance-golang'
             displayName: 'Run tests with coverage'
 
           - task: PublishPipelineArtifact@1
             inputs:
-              targetPath: 'packages/agent-mesh/sdks/go/coverage.out'
+              targetPath: 'agent-governance-golang/coverage.out'
               artifact: 'go-coverage'
               publishLocation: 'pipeline'
             displayName: 'Publish coverage artifact'
@@ -633,7 +633,7 @@ stages:
             displayName: 'Use Go ${{ parameters.goVersion }}'
 
           - script: |
-              MODULE_PATH="packages/agent-mesh/sdks/go"
+              MODULE_PATH="agent-governance-golang"
               VERSION=$(grep '^// Version:' ${MODULE_PATH}/doc.go 2>/dev/null | awk '{print $3}' || echo "")
               if [ -z "$VERSION" ]; then
                 echo "##[warning]No version found in doc.go — skipping tag"

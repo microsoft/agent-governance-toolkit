@@ -7,7 +7,7 @@ Ed25519 cryptographic identity, trust scoring, declarative policy evaluation,
 and hash-chain audit logging — all in a single `go get`.
 
 > **Target runtime:** Go 1.21+
-> **Module:** `github.com/microsoft/agent-governance-toolkit/sdks/go`
+> **Module:** `github.com/microsoft/agent-governance-toolkit/agent-governance-golang`
 > **Package:** `agentmesh`
 
 ---
@@ -41,7 +41,7 @@ and hash-chain audit logging — all in a single `go get`.
 ## Installation
 
 ```bash
-go get github.com/microsoft/agent-governance-toolkit/sdks/go
+go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang
 ```
 
 The module has a single external dependency — `gopkg.in/yaml.v3` for YAML
@@ -49,7 +49,7 @@ policy parsing.
 
 ```bash
 # Verify the install
-go list -m github.com/microsoft/agent-governance-toolkit/sdks/go
+go list -m github.com/microsoft/agent-governance-toolkit/agent-governance-golang
 ```
 
 ---
@@ -63,7 +63,7 @@ package main
 
 import (
     "fmt"
-    agentmesh "github.com/microsoft/agent-governance-toolkit/sdks/go"
+    agentmesh "github.com/microsoft/agent-governance-toolkit/agent-governance-golang"
 )
 
 func main() {
@@ -566,7 +566,7 @@ import (
     "fmt"
     "log"
 
-    agentmesh "github.com/microsoft/agent-governance-toolkit/sdks/go"
+    agentmesh "github.com/microsoft/agent-governance-toolkit/agent-governance-golang"
 )
 
 func main() {
@@ -649,15 +649,15 @@ Audit JSON: [{"timestamp":"2025-07-15T10:30:00Z","agent_id":"did:agentmesh:resea
 
 | Component | Location |
 |-----------|----------|
-| Client + options | `packages/agent-mesh/sdks/go/client.go` |
-| Type definitions | `packages/agent-mesh/sdks/go/types.go` |
-| `PolicyEngine` | `packages/agent-mesh/sdks/go/policy.go` |
-| `TrustManager` | `packages/agent-mesh/sdks/go/trust.go` |
-| `AuditLogger` | `packages/agent-mesh/sdks/go/audit.go` |
-| `AgentIdentity` | `packages/agent-mesh/sdks/go/identity.go` |
-| Conflict resolution | `packages/agent-mesh/sdks/go/conflict.go` |
-| Metrics | `packages/agent-mesh/sdks/go/metrics.go` |
-| Tests | `packages/agent-mesh/sdks/go/*_test.go` |
+| Client + options | `agent-governance-golang/client.go` |
+| Type definitions | `agent-governance-golang/types.go` |
+| `PolicyEngine` | `agent-governance-golang/policy.go` |
+| `TrustManager` | `agent-governance-golang/trust.go` |
+| `AuditLogger` | `agent-governance-golang/audit.go` |
+| `AgentIdentity` | `agent-governance-golang/identity.go` |
+| Conflict resolution | `agent-governance-golang/conflict.go` |
+| Metrics | `agent-governance-golang/metrics.go` |
+| Tests | `agent-governance-golang/*_test.go` |
 
 ---
 
@@ -665,7 +665,7 @@ Audit JSON: [{"timestamp":"2025-07-15T10:30:00Z","agent_id":"did:agentmesh:resea
 
 - **Run the tests** to see the SDK in action:
   ```bash
-  cd packages/agent-mesh/sdks/go
+  cd agent-governance-golang
   go test ./...
   ```
 - **Load YAML policies** from the repository's `policies/` directory

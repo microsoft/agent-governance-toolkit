@@ -2,11 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
   schedule:
-    - cron: '0 6 * * *'  # Daily at 06:00 UTC
+    - cron: "0 6 * * *" # Daily at 06:00 UTC
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -58,7 +58,7 @@ jobs:
             rust:
               - 'packages/agent-mesh/sdks/rust/**'
             go:
-              - 'packages/agent-mesh/sdks/go/**'
+              - 'agent-governance-golang/**'
             docs-only:
               - '**/*.md'
               - 'notebooks/**'
@@ -71,7 +71,16 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [agent-os, agent-mesh, agent-hypervisor, agent-sre, agent-compliance, agent-runtime, agent-lightning]
+        package:
+          [
+            agent-os,
+            agent-mesh,
+            agent-hypervisor,
+            agent-sre,
+            agent-compliance,
+            agent-runtime,
+            agent-lightning,
+          ]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -90,8 +99,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [agent-os, agent-mesh, agent-hypervisor, agent-sre, agent-compliance, agent-runtime, agent-lightning]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        package:
+          [
+            agent-os,
+            agent-mesh,
+            agent-hypervisor,
+            agent-sre,
+            agent-compliance,
+            agent-runtime,
+            agent-lightning,
+          ]
+        python-version: [ "3.10", "3.11", "3.12", "3.13" ]
         exclude:
           - package: agent-mesh
             python-version: "3.10"
@@ -125,7 +143,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [agent-os, agent-mesh, agent-hypervisor, agent-sre, agent-compliance, agent-runtime, agent-lightning]
+        package:
+          [
+            agent-os,
+            agent-mesh,
+            agent-hypervisor,
+            agent-sre,
+            agent-compliance,
+            agent-runtime,
+            agent-lightning,
+          ]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -183,7 +210,8 @@ jobs:
         run: dotnet test --configuration Release --verbosity normal --no-build
       - name: Pack NuGet
         working-directory: packages/agent-governance-dotnet
-        run: dotnet pack src/AgentGovernance/AgentGovernance.csproj --configuration Release --no-build --output ./nupkg
+        run: dotnet pack src/AgentGovernance/AgentGovernance.csproj --configuration
+          Release --no-build --output ./nupkg
       - name: Verify NuGet package
         working-directory: packages/agent-governance-dotnet
         run: ls -la ./nupkg/*.nupkg
@@ -205,7 +233,8 @@ jobs:
   # ── Integration tests (only when integration packages change) ────────
   test-integrations:
     needs: changes
-    if: needs.changes.outputs.integrations == 'true' || needs.changes.outputs.python == 'true' || github.event_name == 'schedule'
+    if: needs.changes.outputs.integrations == 'true' || needs.changes.outputs.python
+      == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -356,7 +385,8 @@ jobs:
   # ── TypeScript integration tests (only when TS files change) ─────────
   test-integrations-ts:
     needs: changes
-    if: needs.changes.outputs.typescript == 'true' || github.event_name == 'schedule'
+    if: needs.changes.outputs.typescript == 'true' || github.event_name ==
+      'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -385,7 +415,8 @@ jobs:
   # ── npm package build + test (only when TS files change) ──────────────
   build-npm:
     needs: changes
-    if: needs.changes.outputs.typescript == 'true' || github.event_name == 'schedule'
+    if: needs.changes.outputs.typescript == 'true' || github.event_name ==
+      'schedule'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -408,7 +439,8 @@ jobs:
           node-version: "20"
       - name: Install dependencies
         working-directory: ${{ matrix.path }}
-        run: npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps --ignore-scripts
+        run: npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps
+          --ignore-scripts
       - name: Build ${{ matrix.name }}
         working-directory: ${{ matrix.path }}
         run: npm run build
@@ -442,13 +474,13 @@ jobs:
         with:
           go-version: "1.22"
       - name: Build
-        working-directory: packages/agent-mesh/sdks/go
+        working-directory: agent-governance-golang
         run: go build ./...
       - name: Test
-        working-directory: packages/agent-mesh/sdks/go
+        working-directory: agent-governance-golang
         run: go test ./...
       - name: Vet
-        working-directory: packages/agent-mesh/sdks/go
+        working-directory: agent-governance-golang
         run: go vet ./...
 
   # ── CI Gate — required status check that handles skipped jobs ────────
@@ -458,7 +490,22 @@ jobs:
   # success. Configure this as the single required status check.
   ci-complete:
     if: always()
-    needs: [changes, lint, test, build-pypi, security, test-dotnet, test-integrations, dependency-scan, workflow-security, test-integrations-ts, build-npm, build-rust, build-go]
+    needs:
+      [
+        changes,
+        lint,
+        test,
+        build-pypi,
+        security,
+        test-dotnet,
+        test-integrations,
+        dependency-scan,
+        workflow-security,
+        test-integrations-ts,
+        build-npm,
+        build-rust,
+        build-go,
+      ]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results

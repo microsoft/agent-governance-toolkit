@@ -128,7 +128,7 @@ assert!(result.allowed);
 <summary><b>Go</b></summary>
 
 ```go
-import agentmesh "github.com/microsoft/agent-governance-toolkit/sdks/go"
+import agentmesh "github.com/microsoft/agent-governance-toolkit/agent-governance-golang"
 
 client, _ := agentmesh.NewClient("my-agent",
     agentmesh.WithPolicyRules([]agentmesh.PolicyRule{
@@ -231,7 +231,7 @@ Full methodology: [BENCHMARKS.md](BENCHMARKS.md)
 | **TypeScript** | [`@microsoft/agentmesh-sdk`](packages/agent-mesh/sdks/typescript/) | `npm install @microsoft/agentmesh-sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 | **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
-| **Go** | [`agentmesh`](packages/agent-mesh/sdks/go/) | `go get github.com/microsoft/agent-governance-toolkit/sdks/go` |
+| **Go** | [`agent-governance-toolkit`](agent-governance-golang/) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
 All 5 SDKs implement core governance (policy, identity, trust, audit). Python has the full stack.
 See **[SDK Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detailed per-language coverage.
