@@ -23,11 +23,43 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 ### Pull Requests
 
 1. Fork the repository and create a feature branch from `main`
-2. Make your changes in the appropriate package directory under `packages/`
-3. Add or update tests as needed
-4. Ensure all tests pass: `pytest`
-5. Update documentation if your change affects public APIs
-6. Submit a pull request with a clear description of the changes
+2. Read the nearest `AGENTS.md` before changing code in that area
+3. Make your changes in the appropriate package or top-level directory
+4. Add or update tests as needed
+5. Ensure all tests pass: `pytest`
+6. Update documentation if your change affects public APIs
+7. Submit a pull request with a clear description of the changes
+
+### Repository Routing
+
+This repo is a monorepo. Choosing the right path up front makes review much faster.
+The layout is also evolving: some language implementations may move from shared directories into
+standalone top-level directories over time. Treat the paths below as the current layout, not a
+permanent architecture promise.
+
+| If your change is about... | Start here |
+|----------------------------|------------|
+| Core governance/runtime behavior | `packages/` |
+| Current shared SDK implementations | `packages/agent-mesh/sdks/` or `packages/agent-governance-dotnet/` |
+| Standalone language implementations | `agent-governance-*/` when present |
+| Tutorials, architecture, package docs | `docs/` |
+| Runnable framework integrations | `examples/` |
+| Interactive or live demos | `demo/` |
+| Azure DevOps publishing/release automation | `pipelines/` |
+| GitHub Actions, PR automation, templates | `.github/` |
+
+If a directory contains an `AGENTS.md` file, read it before you start. It captures local
+commands, boundaries, and review expectations for that area.
+If a standalone top-level language directory exists for the implementation you are changing, prefer
+that directory over an older shared path unless maintainers tell you to keep work in the legacy
+location.
+
+### Choose the Smallest Correct Surface
+
+- Prefer a docs update when the request is informational.
+- Prefer an `examples/` contribution when proving a new external integration.
+- Prefer `packages/agentmesh-integrations/` when the integration is reusable and maintained.
+- Propose a core package change only when the functionality clearly belongs in AGT long-term.
 
 ### Attribution & Prior Art
 
@@ -47,6 +79,38 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 - In your PR description: list related projects under "Prior art / related projects"
 - In code: add a comment like `# Approach adapted from <project> (<license>)`
 - In documentation: include a "Prior art" or "Acknowledgments" section
+
+### External Integrations and Related Projects
+
+We welcome integrations, but we review them as product decisions, not just code submissions.
+
+- If you are proposing support for your own project, explain why AGT users benefit from it.
+- Start with the smallest useful contribution shape: docs mention, example, integration package,
+  then core-package change.
+- Include adoption context when requesting a large integration surface. Small or brand-new projects
+  are usually better introduced through examples than through core dependencies.
+- New dependencies must be justified, pinned correctly, and appropriate for the part of the repo
+  they are entering.
+- "Related project" PRs may be closed if they read primarily as promotion rather than user value.
+
+When in doubt, open an issue or discussion first and describe:
+
+1. the user problem
+2. the external project involved
+3. why the change belongs in AGT
+4. whether the first version can live in docs or examples
+
+### AI-Assisted Contributions
+
+AI-assisted contributions are welcome, but they are held to the same standards as any other PR.
+
+- Review, understand, and stand behind every line you submit.
+- Verify that generated code and docs match the current repository state.
+- Disclose meaningful AI assistance in the PR description when it materially shaped the change.
+- Do not use AI to launder unattributed derivative work from other projects.
+- Generated code still needs tests, docs updates, and security review where appropriate.
+- Maintainers may ask contributors to narrow scope, split commits, or rewrite generated changes
+  that are too broad or insufficiently understood.
 
 ### Development Setup
 
@@ -251,6 +315,8 @@ Before submitting your integration PR:
 - [ ] Code follows PEP 8 and uses type hints
 - [ ] No secrets or credentials committed
 - [ ] Dependencies are pinned to specific versions
+- [ ] Prior art and related projects are credited in the PR description
+- [ ] The contribution shape is appropriate (example vs integration package vs core package)
 
 ### Questions?
 
