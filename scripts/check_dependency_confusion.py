@@ -125,7 +125,7 @@ REGISTERED_NPM_PACKAGES = {
     # npm deps from mcp-proxy
     "crypto-js",
     # npm deps from sdks/typescript
-    "js-yaml", "@noble/ed25519",
+    "js-yaml", "@noble/ed25519", "@noble/ciphers", "@noble/curves", "@noble/hashes",
     # npm deps from agent-os-vscode
     "@types/glob", "@types/mocha", "@vscode/test-electron",
     "autoprefixer", "glob", "mocha", "postcss", "tailwindcss",
