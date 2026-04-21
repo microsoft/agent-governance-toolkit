@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass
 
 from agentmesh.encryption.ratchet import DoubleRatchet, EncryptedMessage
-from agentmesh.encryption.x3dh import PreKeyBundle, X3DHKeyManager, X3DHResult
+from agentmesh.encryption.x3dh import PreKeyBundle, X3DHKeyManager
 
 logger = logging.getLogger(__name__)
 

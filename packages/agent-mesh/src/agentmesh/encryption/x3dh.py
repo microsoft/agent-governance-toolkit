@@ -12,7 +12,6 @@ Reference: https://signal.org/docs/specifications/x3dh/
 from __future__ import annotations
 
 import logging
-import os
 import secrets
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -324,8 +323,6 @@ class X3DHKeyManager:
     @staticmethod
     def _verify_signed_pre_key(bundle: PreKeyBundle) -> None:
         """Verify the signed pre-key signature against the identity key."""
-        from nacl.signing import VerifyKey
-
         # Convert X25519 identity key back to Ed25519 is not directly possible,
         # so we verify using the signature which was created with Ed25519.
         # The bundle must carry enough info to verify. For now, we verify
