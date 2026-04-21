@@ -17,11 +17,13 @@ export {
   X3DHKeyManager, generateX25519KeyPair, ed25519ToX25519,
   DoubleRatchet,
   SecureChannel,
+  MeshClient,
 } from './encryption';
 export type {
   X25519KeyPair, PreKeyBundle, X3DHResult,
   MessageHeader, EncryptedMessage, RatchetState,
   ChannelEstablishment,
+  MeshClientOptions, MeshSession, WebSocketFactory,
 } from './encryption';
 
 export {
