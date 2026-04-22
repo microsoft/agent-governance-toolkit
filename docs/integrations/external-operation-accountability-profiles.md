@@ -57,6 +57,29 @@ accountability statement is structurally complete and independently reviewable.
 Such a statement may reference AGT runtime evidence as supporting material, but
 it does not replace AGT evidence verification.
 
+## Security and Responsibility Boundaries
+
+External operation-accountability profiles are not AGT runtime features and are
+not AGT evidence-verification mechanisms.
+
+Before AGT runtime evidence is referenced from an external accountability
+statement, users should verify the authenticity and integrity of that evidence
+using the appropriate AGT verification mechanisms, where applicable. External
+profile validation should not be used as a substitute for AGT evidence
+verification.
+
+External mapping adapters, validators, storage systems, and downstream
+registries are outside the AGT runtime trust boundary. Users are responsible
+for securing those components, including their signing keys, dependency chain,
+transport path, and validation environment.
+
+Third-party reference implementations should be treated as examples only. Users
+should audit any external implementation and its dependencies before using it in
+production or compliance-sensitive environments.
+
+For AGT-specific receipt and evidence-verification concepts, see
+[Tutorial 33 — Offline-Verifiable Decision Receipts](../tutorials/33-offline-verifiable-receipts.md).
+
 ## Mapping Concept
 
 | AGT-side concept | External accountability concept |
