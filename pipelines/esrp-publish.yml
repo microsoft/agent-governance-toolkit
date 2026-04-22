@@ -98,7 +98,7 @@ parameters:
         path: packages/agent-mesh/services/api
       - name: agentmesh-mcp-proxy
         path: packages/agent-mesh/packages/mcp-proxy
-      - name: agentmesh-sdk
+      - name: agent-governance-sdk
         path: packages/agent-mesh/sdks/typescript
       - name: agent-os-copilot-extension
         path: packages/agent-os/extensions/copilot
@@ -495,7 +495,7 @@ stages:
             displayName: 'Push signed package to NuGet.org'
 
   # =======================================================
-  # RUST (crates.io) — agentmesh + agentmesh-mcp crates
+  # RUST (crates.io) — agent-governance + agent-governance-mcp crates
   # =======================================================
   - stage: Build_Rust
     displayName: 'Build & Test Rust Crates'
@@ -524,7 +524,7 @@ stages:
 
           - script: |
               mkdir -p $(Pipeline.Workspace)/rust-packages
-              for CRATE in agentmesh agentmesh-mcp; do
+              for CRATE in agent-governance agent-governance-mcp; do
                 echo "=== Packaging $CRATE ==="
                 cargo package -p $CRATE --allow-dirty
               done
@@ -547,7 +547,7 @@ stages:
     condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'rust'), eq('${{ parameters.target }}', 'all')))
     jobs:
       - job: PublishCrates
-        displayName: 'ESRP Publish agentmesh + agentmesh-mcp to crates.io'
+        displayName: 'ESRP Publish agent-governance + agent-governance-mcp to crates.io'
         steps:
           - task: DownloadPipelineArtifact@2
             inputs:
@@ -654,3 +654,4 @@ stages:
                 echo "Tagged ${TAG} — Go module proxy will index automatically"
               fi
             displayName: 'Tag Go module for proxy indexing'
+

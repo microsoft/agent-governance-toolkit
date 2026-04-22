@@ -424,7 +424,7 @@ jobs:
         include:
           - name: agentmesh-mcp-proxy
             path: packages/agent-mesh/packages/mcp-proxy
-          - name: agentmesh-sdk
+          - name: agent-governance-sdk
             path: packages/agent-mesh/sdks/typescript
           - name: agentmesh-api
             path: packages/agent-mesh/services/api
@@ -517,3 +517,4 @@ jobs:
             exit 1
           fi
           echo "All jobs passed or were correctly skipped"
+
