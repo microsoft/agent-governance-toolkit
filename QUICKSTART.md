@@ -71,17 +71,33 @@ agent-governance verify --badge
 Create a file called `governed_agent.py`:
 
 ```python
-from agent_os.policies import PolicyEvaluator, PolicyDecision
+from agent_os.policies import PolicyEvaluator
 from agent_os.policies.schema import (
     PolicyDocument, PolicyRule, PolicyCondition,
     PolicyAction, PolicyOperator, PolicyDefaults,
 )
 
-# Define governance rules inline (or load from YAML — see below)
+# --- Step 1: Define your agent's tools ---
+
+def web_search(query: str) -> str:
+    """Simulated web search tool."""
+    return f"Results for: {query}"
+
+def delete_file(path: str) -> str:
+    """Dangerous tool — should be blocked by policy."""
+    return f"Deleted: {path}"
+
+TOOLS = {
+    "web_search": web_search,
+    "delete_file": delete_file,
+}
+
+# --- Step 2: Define governance policies ---
+
 policy = PolicyDocument(
     name="agent-safety",
     version="1.0",
-    description="Sample safety policy",
+    description="Safety policy for the research agent",
     defaults=PolicyDefaults(action=PolicyAction.ALLOW),
     rules=[
         PolicyRule(
@@ -89,10 +105,10 @@ policy = PolicyDocument(
             condition=PolicyCondition(
                 field="tool_name",
                 operator=PolicyOperator.IN,
-                value=["execute_code", "delete_file", "shell_exec"],
+                value=["delete_file", "shell_exec", "execute_code"],
             ),
             action=PolicyAction.DENY,
-            message="Tool is blocked by policy",
+            message="Tool is blocked by safety policy",
             priority=100,
         ),
         PolicyRule(
@@ -103,7 +119,7 @@ policy = PolicyDocument(
                 value=r"\b\d{3}-\d{2}-\d{4}\b",
             ),
             action=PolicyAction.DENY,
-            message="SSN pattern detected in input",
+            message="SSN pattern detected — blocked",
             priority=90,
         ),
     ],
@@ -111,18 +127,77 @@ policy = PolicyDocument(
 
 evaluator = PolicyEvaluator(policies=[policy])
 
-# Allowed
-result = evaluator.evaluate({"tool_name": "web_search", "input_text": "latest AI news"})
-print(f"Action allowed: {result.allowed}")   # True
-print(f"Reason: {result.reason}")
+# --- Step 3: Build a governed agent ---
 
-# Blocked — deterministically
-result = evaluator.evaluate({"tool_name": "delete_file", "input_text": "/etc/passwd"})
-print(f"Action allowed: {result.allowed}")   # False
-print(f"Reason: {result.reason}")            # "Tool is blocked by policy"
+class GovernedAgent:
+    """A simple agent that checks policy before every tool call."""
+
+    def __init__(self, name, tools, evaluator):
+        self.name = name
+        self.tools = tools
+        self.evaluator = evaluator
+
+    def call_tool(self, tool_name: str, params: dict) -> str:
+        # Policy check BEFORE execution
+        decision = self.evaluator.evaluate({
+            "tool_name": tool_name,
+            "input_text": str(params),
+            "agent_id": self.name,
+        })
+
+        if not decision.allowed:
+            print(f"  ✗ BLOCKED: {decision.reason}")
+            return f"[BLOCKED] {decision.reason}"
+
+        # Execute the tool
+        print(f"  ✓ ALLOWED: {tool_name}")
+        tool_fn = self.tools[tool_name]
+        return tool_fn(**params)
+
+# --- Step 4: Run it ---
+
+agent = GovernedAgent("research-agent", TOOLS, evaluator)
+
+print("Agent: searching the web...")
+result = agent.call_tool("web_search", {"query": "latest AI governance news"})
+print(f"  Result: {result}\n")
+
+print("Agent: trying to delete a file...")
+result = agent.call_tool("delete_file", {"path": "/etc/passwd"})
+print(f"  Result: {result}\n")
+
+print("Agent: searching with SSN in query...")
+result = agent.call_tool("web_search", {"query": "lookup 123-45-6789"})
+print(f"  Result: {result}")
 ```
 
-Or load policies from YAML:
+Run it:
+
+```bash
+python governed_agent.py
+```
+
+Expected output:
+
+```
+Agent: searching the web...
+  ✓ ALLOWED: web_search
+  Result: Results for: latest AI governance news
+
+Agent: trying to delete a file...
+  ✗ BLOCKED: Tool is blocked by safety policy
+  Result: [BLOCKED] Tool is blocked by safety policy
+
+Agent: searching with SSN in query...
+  ✗ BLOCKED: SSN pattern detected — blocked
+  Result: [BLOCKED] SSN pattern detected — blocked
+```
+
+The governance layer intercepts **every tool call** before execution — the agent never gets to run `delete_file` or leak PII.
+
+### Load Policies from YAML
+
+For production, define policies in YAML files instead of inline code:
 
 ```python
 from agent_os.policies import PolicyEvaluator
@@ -132,12 +207,6 @@ evaluator.load_policies("policies/")   # loads all *.yaml files
 
 result = evaluator.evaluate({"tool_name": "web_search", "agent_id": "analyst-1"})
 print(f"Allowed: {result.allowed}")
-```
-
-Run it:
-
-```bash
-python governed_agent.py
 ```
 
 ### Your First Governed Agent — TypeScript
