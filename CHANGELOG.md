@@ -12,7 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
-## [3.1.1] - 2026-04-21
+## [3.2.0] - 2026-04-22
+
+### Added
+- **AgentMesh Wire Protocol v1.0** specification (`docs/specs/AGENTMESH-WIRE-1.0.md`)
+- **TypeScript E2E Encryption** — X3DH + Double Ratchet + SecureChannel ported to `@microsoft/agentmesh-sdk`
+- **MeshClient** — high-level relay transport with plaintext peers, KNOCK pending queue, wsFactory hook
+- **Registry Service** — first-party agent registry with pre-key bundles, discovery, presence, reputation
+- **Relay Service** — store-and-forward WebSocket relay with 72h TTL offline inbox
+- Clean-room IP statement and recommended crypto libraries (Appendix A-B of wire spec)
+
+### Fixed
+- CI lint errors in encryption modules
+- Dependency scan allowlist for mkdocs-minify-plugin## [3.1.1] - 2026-04-21
 
 ### Added
 - **E2E Encrypted Agent Messaging** — Signal protocol (X3DH + Double Ratchet) for agent-to-agent channels with per-message forward secrecy (#1222, #1223, #1224, #1226)
