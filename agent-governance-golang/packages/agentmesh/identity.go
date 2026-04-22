@@ -9,9 +9,9 @@ import (
 
 // AgentIdentity holds an agent's DID and Ed25519 key pair.
 type AgentIdentity struct {
-	DID          string              `json:"did"`
-	PublicKey    ed25519.PublicKey    `json:"public_key"`
-	Capabilities []string            `json:"capabilities,omitempty"`
+	DID          string            `json:"did"`
+	PublicKey    ed25519.PublicKey `json:"public_key"`
+	Capabilities []string          `json:"capabilities,omitempty"`
 	privateKey   ed25519.PrivateKey
 }
 
