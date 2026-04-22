@@ -11,7 +11,7 @@
 import { x25519 } from "@noble/curves/ed25519";
 import { chacha20poly1305 } from "@noble/ciphers/chacha";
 import { hkdf } from "@noble/hashes/hkdf";
-import { sha256 } from "@noble/hashes/sha256";
+import { sha256 } from "@noble/hashes/sha2";
 import { hmac } from "@noble/hashes/hmac";
 import { randomBytes } from "@noble/ciphers/webcrypto";
 

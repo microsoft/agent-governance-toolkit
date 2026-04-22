@@ -18,7 +18,7 @@ import {
 } from "../src/encryption";
 
 function makeManager(): X3DHKeyManager {
-  const priv = ed25519.utils.randomPrivateKey();
+  const priv = ed25519.utils.randomSecretKey();
   const pub = ed25519.getPublicKey(priv);
   return new X3DHKeyManager(priv, pub);
 }
@@ -68,7 +68,7 @@ describe("X25519KeyPair", () => {
   });
 
   test("ed25519 to x25519 conversion", () => {
-    const priv = ed25519.utils.randomPrivateKey();
+    const priv = ed25519.utils.randomSecretKey();
     const pub = ed25519.getPublicKey(priv);
     const kp = ed25519ToX25519(priv, pub);
     expect(kp.privateKey.length).toBe(32);
