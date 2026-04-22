@@ -16,7 +16,7 @@
 > [Open a GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) for feedback.
 
 > [!TIP]
-> **v3.2.0 is out!** E2E encrypted agent messaging (Signal protocol), Wire Protocol spec, registry + relay services, MeshClient transport. [Release notes →](RELEASE_NOTES_v3.2.0.md) · [Changelog →](CHANGELOG.md)
+> **v3.2.1 is out!** Patch: encryption exports fix for npm package. E2E encrypted agent messaging (Signal protocol), Wire Protocol spec, registry + relay services. [Changelog →](CHANGELOG.md)
 
 **Runtime governance for AI agents** — deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents. Covers all **10 OWASP Agentic risks** with **9,500+ tests**.
 

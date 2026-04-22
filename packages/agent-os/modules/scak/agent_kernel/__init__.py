@@ -16,7 +16,7 @@ Reference Implementations:
 - memory_manager.py: Lesson lifecycle management
 """
 
-__version__ = "3.2.0"
+__version__ = "3.2.1"
 
 from .kernel import SelfCorrectingAgentKernel
 from .models import (
