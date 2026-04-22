@@ -87,6 +87,20 @@ SEO link-building attempts. Common patterns:
 Action: close with a short note ("We don't accept sponsored content or paid placements") or
 close without comment. Do not modify repo content to accommodate these requests.
 
+## Version Bumps
+
+When bumping the monorepo version (e.g. `3.2.0` → `3.2.1`):
+
+- **DO** bump version strings in: `pyproject.toml`, `package.json`, `Cargo.toml`, `*.csproj`,
+  `__init__.py`, and `README.md` banner.
+- **DO NOT** bulk-replace version strings inside `package-lock.json` — transitive dependencies
+  may share the same version number (e.g. `import-local@3.2.0`, `istanbul-reports@3.2.0`) and
+  will get corrupted into non-existent versions. Instead, bump only `package.json`, then
+  regenerate the lockfile with `npm install --legacy-peer-deps`.
+- **DO NOT** bulk-replace inside `CHANGELOG.md` or `RELEASE_NOTES_*.md` — those are historical.
+- After bumping, verify with: `Select-String -Path package-lock.json -Pattern '"<new-version>"'`
+  and confirm only the SDK's own entries appear, not transitive deps.
+
 ## Validation
 
 - Run the narrowest existing tests for the paths you touched.
