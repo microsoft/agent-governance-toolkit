@@ -43,7 +43,7 @@ Extensions are community-maintained and clearly separated from core.
 | `packages/agent-compliance/` | Microsoft maintainers | Maintainer approval required |
 | `packages/agent-runtime/` | Microsoft maintainers | Maintainer approval required |
 | `packages/agent-marketplace/` | Microsoft maintainers | Maintainer approval required |
-| `packages/agent-governance-dotnet/` | Microsoft maintainers | Maintainer approval required |
+| `agent-governance-dotnet/` | Microsoft maintainers | Maintainer approval required |
 | `packages/agentmesh-integrations/` | Community + maintainers | Maintainer review, community may author |
 | `docs/integrations/` | Community + maintainers | Maintainer review, community may author |
 | `docs/adr/` | Community + maintainers | Maintainer review for proposed ADRs |

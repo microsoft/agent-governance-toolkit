@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-`packages/agent-governance-dotnet/` contains the .NET SDK for Agent Governance Toolkit:
+`agent-governance-dotnet/` contains the .NET SDK for Agent Governance Toolkit:
 policy enforcement, execution rings, trust, SRE controls, MCP security, lifecycle management,
 and auditability for .NET applications.
 

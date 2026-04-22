@@ -1206,10 +1206,10 @@ tutorials for deeper conceptual coverage:
 ## Next Steps
 
 1. **Run the tests** — The SDK includes comprehensive tests in
-   `packages/agent-governance-dotnet/tests/`. Run them with:
+   `agent-governance-dotnet/tests/`. Run them with:
 
    ```bash
-   dotnet test packages/agent-governance-dotnet/AgentGovernance.sln
+   dotnet test agent-governance-dotnet/AgentGovernance.sln
    ```
 
 2. **Write your first policy** — Create a YAML file under `policies/` with
@@ -1236,5 +1236,5 @@ tutorials for deeper conceptual coverage:
    ```
 
 6. **Read the OWASP coverage** — The
-   [.NET SDK README](../../packages/agent-governance-dotnet/README.md) maps
+   [.NET SDK README](../../agent-governance-dotnet/README.md) maps
    each OWASP Agentic AI Top 10 risk to the SDK's mitigation.

@@ -181,15 +181,15 @@ jobs:
           echo 'alias nuget="mono /usr/local/bin/nuget.exe"' >> ~/.bashrc
 
       - name: Build .NET SDK
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: dotnet build --configuration Release
 
       - name: Test .NET SDK
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: dotnet test --configuration Release --no-build
 
       - name: Pack NuGet package
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: dotnet pack src/AgentGovernance/AgentGovernance.csproj --configuration Release --no-build --output ./nupkg
 
       # ----------------------------------------------------------------
@@ -207,7 +207,7 @@ jobs:
           ESRP_CERT_IDENTIFIER: ${{ secrets.ESRP_CERT_IDENTIFIER }}
         run: |
           echo "Submitting DLLs for Authenticode signing via ESRP..."
-          find packages/agent-governance-dotnet -name '*.dll' -path '*/Release/*' | head -20
+          find agent-governance-dotnet -name '*.dll' -path '*/Release/*' | head -20
           # TODO: Replace this block with actual ESRP signing invocation once
           # PRSS certificates are generated and uploaded to Key Vault.
           # Until then, fail to prevent publishing unsigned assemblies.
@@ -229,7 +229,7 @@ jobs:
           exit 1
 
       - name: Validate NuGet package metadata
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: |
           echo "=== Validating Microsoft NuGet compliance ==="
           for pkg in ./nupkg/*.nupkg; do
@@ -242,17 +242,17 @@ jobs:
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
-          subject-path: packages/agent-governance-dotnet/nupkg/*.nupkg
+          subject-path: agent-governance-dotnet/nupkg/*.nupkg
 
       - name: Attest symbol package provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
-          subject-path: packages/agent-governance-dotnet/nupkg/*.snupkg
+          subject-path: agent-governance-dotnet/nupkg/*.snupkg
         continue-on-error: true
 
       - name: Publish to NuGet
         if: ${{ env.ESRP_CONFIGURED == 'true' }}
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |

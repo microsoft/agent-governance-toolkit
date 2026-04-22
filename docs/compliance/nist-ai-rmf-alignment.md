@@ -114,7 +114,7 @@ validation, versioning, conflict resolution, and multiple backend support.
 | Shared/cross-project policies | `packages/agent-os/src/agent_os/policies/shared.py` | `SharedPolicyEvaluator` |
 | AgentMesh policy engine | `packages/agent-mesh/src/agentmesh/governance/policy.py:317` | `PolicyEngine` |
 | AgentMesh policy evaluator | `packages/agent-mesh/src/agentmesh/governance/policy_evaluator.py:33` | `PolicyEvaluator` |
-| .NET policy engine | `packages/agent-governance-dotnet/src/AgentGovernance/Policy/PolicyEngine.cs:16` | `PolicyEngine` |
+| .NET policy engine | `agent-governance-dotnet/src/AgentGovernance/Policy/PolicyEngine.cs:16` | `PolicyEngine` |
 | TypeScript MCP policy engine | `packages/agent-os/extensions/mcp-server/src/services/policy-engine.ts:208` | `PolicyEngine` |
 | VS Code policy engine | `packages/agent-os-vscode/src/policyEngine.ts:51` | `PolicyEngine` |
 | Contextual policy engine | `packages/agent-os/src/agent_os/execution_context_policy.py:62` | `ContextualPolicyEngine` |
@@ -417,7 +417,7 @@ agent tutorials demonstrate PHI protection patterns.
 | SLO spec | `packages/agent-sre/src/agent_sre/slo/spec.py:51` | `SLOSpec`, `ErrorBudgetPolicy` |
 | SLO dashboard | `packages/agent-sre/src/agent_sre/slo/dashboard.py:73` | `SLODashboard`, `SLOSnapshot` |
 | SLO validator | `packages/agent-sre/src/agent_sre/slo/validator.py:33` | `SLODiff` |
-| .NET SLO engine | `packages/agent-governance-dotnet/src/AgentGovernance/Sre/SloEngine.cs` | `ErrorBudgetPolicy`, `ErrorBudgetTracker` |
+| .NET SLO engine | `agent-governance-dotnet/src/AgentGovernance/Sre/SloEngine.cs` | `ErrorBudgetPolicy`, `ErrorBudgetTracker` |
 | SLO VS Code panel | `packages/agent-os-vscode/src/views/sloDashboardView.ts:38` | `SLODashboardProvider` |
 | Trust score (AgentMesh) | `packages/agent-mesh/src/agentmesh/governance/` | 0–1000 scale, 5 tiers |
 | Shift-left metrics | `packages/agent-os/src/agent_os/shift_left_metrics.py` | `ShiftLeftTracker`, `ViolationStage`, `ViolationRecord` |
@@ -523,13 +523,13 @@ whether those measurements are themselves effective.
 | Circuit breaker (SRE) | `packages/agent-sre/src/agent_sre/cascade/circuit_breaker.py:90` | `CircuitBreaker` (trip/open/half-open) |
 | Circuit breaker (incidents) | `packages/agent-sre/src/agent_sre/incidents/circuit_breaker.py:59` | `CircuitBreaker`, `CircuitBreakerRegistry` |
 | Circuit breaker (Agent OS) | `packages/agent-os/src/agent_os/_circuit_breaker_impl.py:82` | `CircuitBreaker`, `CascadeDetector` |
-| .NET circuit breaker | `packages/agent-governance-dotnet/src/AgentGovernance/Sre/CircuitBreaker.cs:62` | `CircuitBreaker` |
+| .NET circuit breaker | `agent-governance-dotnet/src/AgentGovernance/Sre/CircuitBreaker.cs:62` | `CircuitBreaker` |
 | Kill switch | `packages/agent-hypervisor/src/hypervisor/security/kill_switch.py:69` | `KillSwitch.kill()` — 6 kill reasons |
 | Rate limiter (hypervisor) | `packages/agent-hypervisor/src/hypervisor/security/rate_limiter.py:86` | `AgentRateLimiter` |
 | Rate limiter (Agent Mesh) | `packages/agent-mesh/src/agentmesh/services/rate_limiter.py:93` | `RateLimiter` |
 | Rate limiter (MCP sliding) | `packages/agent-os/src/agent_os/mcp_sliding_rate_limiter.py:17` | `MCPSlidingRateLimiter` |
 | Rate limiter (TypeScript) | `packages/agent-mesh/packages/mcp-proxy/src/rate-limiter.ts:19` | `RateLimiter` |
-| .NET rate limiter | `packages/agent-governance-dotnet/src/AgentGovernance/RateLimiting/RateLimiter.cs:11` | `RateLimiter` |
+| .NET rate limiter | `agent-governance-dotnet/src/AgentGovernance/RateLimiting/RateLimiter.cs:11` | `RateLimiter` |
 | Approval workflow | `packages/agent-os/extensions/mcp-server/src/services/approval-workflow.ts:18` | `ApprovalWorkflow` — quorum, expiration |
 | Saga orchestrator | `packages/agent-hypervisor/saga/orchestrator.py` | `SagaOrchestrator` — rollback compensation |
 | Reversibility registry | `packages/agent-hypervisor/reversibility/registry.py` | Undo/rollback registry |
