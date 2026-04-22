@@ -34,7 +34,7 @@
 Agent Action ──► Policy Check ──► Allow / Deny ──► Audit Log    (< 0.1 ms)
 ```
 
-**Why it matters:** Prompt-based safety ("please follow the rules") has a [26.67% policy violation rate](BENCHMARKS.md) in red-team testing. AGT's deterministic application-layer enforcement: **0.00%**.
+**Why it matters:** Prompt-based safety ("please follow the rules") has a [26.67% policy violation rate](docs/BENCHMARKS.md) in red-team testing. AGT's deterministic application-layer enforcement: **0.00%**.
 
 ---
 
@@ -143,7 +143,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 </details>
 
 > **Full walkthrough:** [QUICKSTART.md](QUICKSTART.md) — zero to governed agents in 10 minutes with YAML policies, OPA/Rego, and Cedar support.
-> 🌍 Also available in: [日本語](QUICKSTART.ja.md) | [简体中文](QUICKSTART.zh-CN.md)
+> 🌍 Also available in: [日本語](docs/i18n/QUICKSTART.ja.md) | [简体中文](docs/i18n/QUICKSTART.zh-CN.md)
 
 ---
 
@@ -151,7 +151,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 
 | Capability | What It Does | Links |
 |---|---|---|
-| **Policy Engine** | Every action evaluated before execution — sub-millisecond, deterministic. Supports YAML, OPA/Rego, and Cedar policies | [Agent OS](packages/agent-os/) · [Benchmarks](BENCHMARKS.md) |
+| **Policy Engine** | Every action evaluated before execution — sub-millisecond, deterministic. Supports YAML, OPA/Rego, and Cedar policies | [Agent OS](packages/agent-os/) · [Benchmarks](docs/BENCHMARKS.md) |
 | **Zero-Trust Identity** | Ed25519 + quantum-safe ML-DSA-65 credentials, trust scoring (0–1000), SPIFFE/SVID | [AgentMesh](packages/agent-mesh/) |
 | **Execution Sandboxing** | 4-tier privilege rings, saga orchestration, kill switch | [Runtime](packages/agent-runtime/) · [Hypervisor](packages/agent-hypervisor/) |
 | **Agent SRE** | SLOs, error budgets, replay debugging, chaos engineering, circuit breakers | [Agent SRE](packages/agent-sre/) |
@@ -219,7 +219,7 @@ Governance adds **< 0.1 ms per action** — roughly 10,000× faster than an LLM 
 > deployments, add ~5–50ms for cryptographic verification and mesh handshake on
 > inter-agent messages. See [Limitations — Performance](docs/LIMITATIONS.md#3-performance-policy-eval-vs-end-to-end) for full breakdown.
 
-Full methodology: [BENCHMARKS.md](BENCHMARKS.md)
+Full methodology: [BENCHMARKS.md](docs/BENCHMARKS.md)
 
 ---
 
@@ -300,9 +300,9 @@ This toolkit provides **application-level governance** (Python middleware), not 
 
 ## Contributing
 
-- [Contributing Guide](CONTRIBUTING.md) · [Community](COMMUNITY.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+- [Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
-**Using AGT?** Add your organization to [ADOPTERS.md](ADOPTERS.md) — it helps the project gain momentum and helps others discover real-world use cases.
+**Using AGT?** Add your organization to [ADOPTERS.md](docs/ADOPTERS.md) — it helps the project gain momentum and helps others discover real-world use cases.
 
 ## Important Notes
 
