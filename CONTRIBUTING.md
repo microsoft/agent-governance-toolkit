@@ -41,9 +41,10 @@ term home for that language.
 
 | If your change is about... | Start here |
 |----------------------------|------------|
-| Core governance/runtime behavior | `packages/` |
+| Published first-party Python packages | `agent-governance-python/` |
+| Core governance/runtime behavior and Python apps | `packages/` |
 | Current shared SDK implementations | `packages/agent-mesh/sdks/` and other languages that still live in the shared layout |
-| Standalone language implementations | `agent-governance-dotnet/`, `agent-governance-golang/`, or other `agent-governance-*` siblings at the repository root |
+| Standalone language implementations | `agent-governance-python/`, `agent-governance-dotnet/`, `agent-governance-golang/`, or other `agent-governance-*` siblings at the repository root |
 | Tutorials, architecture, package docs | `docs/` |
 | Runnable framework integrations | `examples/` |
 | Interactive or live demos | `demo/` |
@@ -54,8 +55,9 @@ If a directory contains an `AGENTS.md` file, read it before you start. It captur
 commands, boundaries, and review expectations for that area.
 If a standalone top-level language directory exists for the implementation you are changing, prefer
 that directory over an older shared path unless maintainers tell you to keep work in the legacy
-location. For the standalone .NET SDK, contributor guidance should point to
-`agent-governance-dotnet/` as the canonical path.
+location. For published Python package work, contributor guidance should point to
+`agent-governance-python/` as the canonical path. For the standalone .NET SDK, use
+`agent-governance-dotnet/`.
 
 ### Choose the Smallest Correct Surface
 
@@ -123,6 +125,8 @@ git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agent-governance-toolkit
 
 # Install in development mode
+pip install -e "agent-governance-python/agent-primitives[dev]"
+pip install -e "agent-governance-python/agent-mcp-governance[dev]"
 pip install -e "packages/agent-os[dev]"
 pip install -e "packages/agent-mesh[dev]"
 pip install -e "packages/agent-runtime[dev]"
@@ -181,11 +185,14 @@ This repo includes these core packages and standalone SDKs today:
 | `agentmesh-marketplace` | `packages/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
 | `agentmesh-lightning` | `packages/agent-lightning/` | RL training governance with governed runners and policy rewards |
 | `agent-hypervisor` | `packages/agent-hypervisor/` | Runtime infrastructure and capability management |
+| `agent-primitives` | `agent-governance-python/agent-primitives/` | Shared foundational Python primitives package |
+| `agent-mcp-governance` | `agent-governance-python/agent-mcp-governance/` | Published MCP governance facade for Python consumers |
 | `agent-governance-dotnet` | `agent-governance-dotnet/` | Standalone .NET SDK for agent governance |
 | `agentmesh-integrations` | `packages/agentmesh-integrations/` | Framework integrations and extension library |
 
-Contributor routing for the standalone .NET SDK should use `agent-governance-dotnet/` at the
-repository root as the canonical path.
+Contributor routing for first-party published Python packages should use `agent-governance-python/`
+at the repository root as the canonical path. The standalone .NET SDK should use
+`agent-governance-dotnet/`.
 
 ### Coding Guidelines
 
@@ -203,7 +210,7 @@ All contributions that add or change functionality **must** include correspondin
 - **Security patches** — Add tests verifying the vulnerability is mitigated.
 
 Tests are run automatically via CI on every pull request. The test matrix covers
-Python 3.10–3.12 across all four core packages. PRs will not be merged until
+Python 3.10–3.13 across the core packages in `packages/`. PRs will not be merged until
 all required CI checks pass.
 
 Run tests locally with:

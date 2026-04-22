@@ -8,7 +8,7 @@ Extracted to Layer 1 to allow proper dependency layering.
 """
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -38,7 +38,7 @@ class FailureTrace(BaseModel):
     chain_of_thought: List[str] = Field(default_factory=list, description="Agent's reasoning steps")
     failed_action: Dict[str, Any] = Field(..., description="The action that failed")
     error_details: str = Field(..., description="Detailed error information")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -65,7 +65,7 @@ class AgentFailure(BaseModel):
     agent_id: str = Field(..., description="Unique identifier for the agent")
     failure_type: FailureType = Field(..., description="Type of failure")
     severity: FailureSeverity = Field(default=FailureSeverity.MEDIUM)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     error_message: str = Field(..., description="Error message from the failure")
     context: Dict[str, Any] = Field(default_factory=dict, description="Additional context")
     stack_trace: Optional[str] = Field(None, description="Stack trace if available")

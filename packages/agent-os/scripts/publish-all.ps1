@@ -41,7 +41,7 @@ Write-Host ""
 
 # Package registry - dependencies first, then dependents
 $AllPackages = @(
-    @{ Name = "agent-primitives";           Dir = "modules/primitives" }
+    @{ Name = "agent-primitives";           Dir = "..\..\agent-governance-python\agent-primitives" }
     @{ Name = "cmvk";                       Dir = "modules/cmvk" }
     @{ Name = "caas-core";                  Dir = "modules/caas" }
     @{ Name = "emk";                        Dir = "modules/emk" }

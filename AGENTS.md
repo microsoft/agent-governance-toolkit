@@ -24,9 +24,10 @@ go there rather than into `packages/` or an older shared SDK path.
 
 | Area | Path | Use it for |
 |------|------|------------|
-| Core Python packages | `packages/*/` | Runtime code, policy engines, trust, SRE, compliance |
+| Published Python packages | `agent-governance-python/` | First-party reusable Python packages and SDK surfaces meant for direct external consumption |
+| Python runtime and product code | `packages/*/` | Runtime code, applications, policy engines, trust, SRE, compliance, and other Python product surfaces that have not moved into the standalone package home |
 | Current shared SDK paths | `packages/agent-mesh/sdks/` | Public SDK APIs and language-specific packaging that still live in the shared layout today |
-| Standalone language implementations | `agent-governance-dotnet/`, `agent-governance-golang/`, and other `agent-governance-*` siblings | Top-level language-specific implementations at the repository root; use these as the canonical contributor-facing paths |
+| Standalone language implementations | `agent-governance-python/`, `agent-governance-dotnet/`, `agent-governance-golang/`, and other `agent-governance-*` siblings | Top-level language-specific implementations at the repository root; use these as the canonical contributor-facing paths |
 | Docs site | `docs/` | Reference docs, tutorials, architecture, package pages |
 | Runnable examples | `examples/` | Self-contained integrations and worked examples |
 | Interactive demos | `demo/` | Live demos, dashboards, real-service walkthroughs |
@@ -42,8 +43,9 @@ go there rather than into `packages/` or an older shared SDK path.
    and useful to users.
 4. Keep `.github/` changes separate from feature work; they require extra security review.
 5. If both a legacy shared path and a standalone top-level path exist, prefer the standalone
-   top-level path for new work unless maintainers say otherwise. For .NET, contributor guidance
-   should target `agent-governance-dotnet/` as the canonical path.
+   top-level path for new work unless maintainers say otherwise. For Python package work, use
+   `agent-governance-python/` as the canonical package home; for .NET, use
+   `agent-governance-dotnet/`.
 
 ## OSS Contribution Expectations
 

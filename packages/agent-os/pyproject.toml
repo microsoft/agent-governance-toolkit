@@ -43,6 +43,7 @@ classifiers = [
 
 # Core dependencies (minimal - just what's needed for kernel)
 dependencies = [
+    "agent_primitives>=3.2.0,<4.0",
     "pydantic>=2.4.0,<3.0",
     "rich>=13.0.0,<16.0"
 ]
@@ -126,8 +127,6 @@ agent-os = "agent_os.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = [
     "src/agent_os",
-    # Layer 1 – Primitives
-    "modules/primitives/agent_primitives",
     "modules/cmvk/src/cmvk",
     "modules/caas/src/caas",
     "modules/emk/emk",
@@ -150,7 +149,6 @@ packages = [
 # Without this, hatch preserves intermediate dirs (e.g. control-plane/src/).
 [tool.hatch.build.targets.wheel.sources]
 "src" = ""
-"modules/primitives" = ""
 "modules/cmvk/src" = ""
 "modules/caas/src" = ""
 "modules/emk" = ""

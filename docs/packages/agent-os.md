@@ -406,7 +406,7 @@ agent-os/
 
 | Module | Layer | PyPI Package | Description | Status |
 |--------|-------|-------------|-------------|--------|
-| [`primitives`](modules/primitives/) | 1 | `agent-primitives` | Base failure types, severity levels | ✅ Stable |
+| [`primitives`](../../agent-governance-python/agent-primitives/) | 1 | `agent-primitives` | Base failure types, severity levels | ✅ Stable |
 | [`cmvk`](modules/cmvk/) | 1 | `cmvk` | Verification, drift detection | ✅ Stable |
 | [`emk`](modules/emk/) | 1 | `emk` | Episodic memory kernel (append-only ledger) | ✅ Stable |
 | [`caas`](modules/caas/) | 1 | `caas-core` | Context-as-a-Service, RAG pipeline | ✅ Stable |
