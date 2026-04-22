@@ -88,7 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OWASP ASI-07 updated with Signal protocol E2E encryption (#1242)
 - Governance Maturity Model blog post (#1182)
 - Blog post comparing AI agent governance approaches (#1193)
-- GOVERNANCE.md, MAINTAINERS.md, ROADMAP.md for foundation submission (#1215)
+- docs/GOVERNANCE.md, docs/MAINTAINERS.md, docs/ROADMAP.md for foundation submission (#1215)
 - Attribution & prior art policy (#1219)
 - Sync audit redaction wording with current code (#1014)
 - Address external critic gaps in limitations and threat model (#1017, #1025)
@@ -175,7 +175,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Notebook dependency scanner regex hardened
 
 ### Changed
-- PUBLISHING.md rewritten with full Microsoft compliance policies (MCR, ESRP, Conda, PMC)
+- docs/PUBLISHING.md rewritten with full Microsoft compliance policies (MCR, ESRP, Conda, PMC)
 - Branch protection: 13 required status checks, dismiss stale reviews, squash-only merges
 - README updated with 5 SDK languages, 20+ framework integrations, security tooling table
 
@@ -247,7 +247,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ESRP Release ADO pipeline for npm publishing (`pipelines/npm-publish.yml`)
 - npm build + pack job in GitHub Actions publish workflow
 - Community preview disclaimers across all READMEs, release notes, and package descriptions
-- `PUBLISHING.md` guide covering PyPI, npm, and NuGet publishing requirements
+- `docs/PUBLISHING.md` guide covering PyPI, npm, and NuGet publishing requirements
 - `agent-runtime` re-export wrapper package (`src/agent_runtime/__init__.py`)
 - `releases/RELEASE_NOTES_v2.2.0.md`
 - `create_policies_from_config()` API — load security policies from YAML config files
@@ -293,7 +293,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GitHub Copilot Extension** — agent governance code review extension for Copilot.
 - **Observability integrations** — Prometheus, OpenTelemetry, PagerDuty, Grafana (#49).
 - **NIST RFI mapping** — question-by-question mapping to NIST AI Agent Security RFI 2026-00206 (#29).
-- **Performance benchmarks** — published BENCHMARKS.md with p50/p99 latency, throughput at 50 concurrent agents (#231).
+- **Performance benchmarks** — published docs/BENCHMARKS.md with p50/p99 latency, throughput at 50 concurrent agents (#231).
 - **6 comprehensive governance tutorials** — policy engine, trust & identity, framework integrations, audit & compliance, agent reliability, execution sandboxing (#187).
 - **Azure deployment guides** — AKS, Azure AI Foundry, Container Apps, OpenClaw sidecar.
 
@@ -305,12 +305,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **.NET NuGet metadata** enhanced — Authors, License, RepositoryUrl, Tags, ReadmeFile in csproj.
 - All example install strings updated from `ai-agent-compliance[full]` to `agent-governance[full]`.
 - Demo fixed: legacy `agent-hypervisor` path → `agent-runtime`.
-- BENCHMARKS.md: fixed stale "VADP version" reference.
+- docs/BENCHMARKS.md: fixed stale "VADP version" reference.
 
 ### Fixed
 
 - Demo fixed: legacy `agent-hypervisor` path → `agent-runtime`.
-- BENCHMARKS.md: fixed stale "VADP version" reference.
+- docs/BENCHMARKS.md: fixed stale "VADP version" reference.
 - **.NET bug sweep** — thread safety, error surfacing, caching, disposal fixes (#252).
 - **Behavioral anomaly detection** implemented in RingBreachDetector.
 - **CLI edge case tests** and input validation for agent-compliance (#234).
