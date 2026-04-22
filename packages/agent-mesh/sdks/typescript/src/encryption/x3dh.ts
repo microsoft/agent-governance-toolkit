@@ -11,10 +11,10 @@
  * Reference: https://signal.org/docs/specifications/x3dh/ (CC0)
  */
 
-import { x25519, ed25519 } from "@noble/curves/ed25519";
-import { hkdf } from "@noble/hashes/hkdf";
-import { sha256, sha512 } from "@noble/hashes/sha2";
-import { randomBytes } from "@noble/ciphers/utils";
+import { x25519, ed25519 } from "@noble/curves/ed25519.js";
+import { hkdf } from "@noble/hashes/hkdf.js";
+import { sha256, sha512 } from "@noble/hashes/sha2.js";
+import { randomBytes } from "@noble/ciphers/utils.js";
 
 const X3DH_INFO = new TextEncoder().encode("AgentMesh_X3DH_v1");
 const KEY_LEN = 32;

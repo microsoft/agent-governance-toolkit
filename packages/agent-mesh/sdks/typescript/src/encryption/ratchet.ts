@@ -8,12 +8,12 @@
  * Reference: https://signal.org/docs/specifications/doubleratchet/ (CC0)
  */
 
-import { x25519 } from "@noble/curves/ed25519";
-import { chacha20poly1305 } from "@noble/ciphers/chacha";
-import { hkdf } from "@noble/hashes/hkdf";
-import { sha256 } from "@noble/hashes/sha2";
-import { hmac } from "@noble/hashes/hmac";
-import { randomBytes } from "@noble/ciphers/utils";
+import { x25519 } from "@noble/curves/ed25519.js";
+import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
+import { hkdf } from "@noble/hashes/hkdf.js";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { hmac } from "@noble/hashes/hmac.js";
+import { randomBytes } from "@noble/ciphers/utils.js";
 
 const KDF_INFO_RATCHET = new TextEncoder().encode("AgentMesh_Ratchet_v1");
 const NONCE_LEN = 12;
