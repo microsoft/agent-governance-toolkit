@@ -27,6 +27,7 @@ The envelope is small (~1-3 KB), JCS-canonical, and verifiable offline with a si
 4. The envelope is Ed25519-signed and JCS-canonicalized with timestamp bound into the signature
 5. A second party verifies the envelope offline using only the public key and the canonical schema
 6. A tampered envelope is rejected by the verifier with the reason surfaced
+7. A stale envelope (older than `max_age_seconds`) is rejected by the freshness check, demonstrating replay defence
 
 ## Install
 
@@ -42,7 +43,7 @@ The Cognitive Attestation primitive used here is a small self-contained implemen
 python getting_started.py
 ```
 
-Expected output: an AGT-style policy decision, then a signed Cognitive Attestation envelope, then a passing offline verification, then a tamper rejection that explicitly reports detection.
+Expected output: an AGT-style policy decision, signed envelope, passing offline verification, tamper rejection with reason, and a replay rejection when the envelope is verified 10 minutes after signing against a 300-second freshness window.
 
 ## How it composes
 

@@ -161,19 +161,65 @@ def sign_envelope(unsigned: dict[str, Any], sk: Ed25519PrivateKey) -> dict[str, 
     return signed
 
 
-def verify_envelope(signed: dict[str, Any]) -> bool:
+def verify_envelope(
+    signed: dict[str, Any],
+    max_age_seconds: int | None = 300,
+    now: datetime | None = None,
+) -> tuple[bool, str]:
+    """Verify signature AND (optionally) freshness.
+
+    Returns (ok, reason). On success, reason is "ok". On failure, reason is
+    one of: "signature_invalid", "envelope_expired", "envelope_not_yet_valid",
+    "timestamp_malformed", "missing_signature", "missing_pubkey".
+
+    Set max_age_seconds=None to disable freshness checking (signature-only
+    verification, not recommended for live traffic).
+    """
     import base64
     from cryptography.exceptions import InvalidSignature
 
+    # Signature check
+    if "signature_b64" not in signed:
+        return False, "missing_signature"
+    if "signer_pubkey_hex" not in signed:
+        return False, "missing_pubkey"
     to_verify = {k: v for k, v in signed.items() if k not in {"signature_b64"}}
     canonical = canonicalize_jcs(to_verify)
-    sig = base64.b64decode(signed["signature_b64"])
-    pk = Ed25519PublicKey.from_public_bytes(bytes.fromhex(signed["signer_pubkey_hex"]))
     try:
+        sig = base64.b64decode(signed["signature_b64"])
+        pk = Ed25519PublicKey.from_public_bytes(
+            bytes.fromhex(signed["signer_pubkey_hex"])
+        )
         pk.verify(sig, canonical)
-        return True
     except InvalidSignature:
-        return False
+        return False, "signature_invalid"
+    except Exception:
+        return False, "signature_invalid"
+
+    # Freshness check (replay defence). An envelope older than max_age_seconds
+    # is rejected even with a valid signature, because the signed timestamp
+    # lets the verifier distinguish a new legitimate envelope from a replay
+    # of an old one.
+    if max_age_seconds is not None:
+        ts_str = signed.get("timestamp")
+        if not ts_str:
+            return False, "timestamp_malformed"
+        try:
+            # Accept "...Z" and "...+00:00" forms
+            ts_str_norm = ts_str.replace("Z", "+00:00")
+            ts = datetime.fromisoformat(ts_str_norm)
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            return False, "timestamp_malformed"
+        current = now or datetime.now(timezone.utc)
+        age = (current - ts).total_seconds()
+        if age > max_age_seconds:
+            return False, "envelope_expired"
+        if age < -max_age_seconds:
+            return False, "envelope_not_yet_valid"
+
+    return True, "ok"
 
 
 # ---------------------------------------------------------------------------
@@ -281,15 +327,30 @@ def main() -> None:
     print(f"Signature (b64):         {signed['signature_b64'][:40]}...")
     print(f"Features attested:       {len(signed['feature_activations'])}")
 
-    # Step 7: offline verification
-    ok = verify_envelope(signed)
-    print(f"\nOffline verification: {'PASS' if ok else 'FAIL'}")
+    # Step 7: offline verification (signature + freshness)
+    ok, reason = verify_envelope(signed)
+    print(f"\nOffline verification: {'PASS' if ok else f'FAIL ({reason})'}")
 
     # Step 8: tamper check
     tampered = json.loads(json.dumps(signed))
     tampered["feature_activations"][0]["activation_statistic"] = 0.99
-    ok2 = verify_envelope(tampered)
-    print(f"Tamper detection:     {'PASS (tampering detected, envelope rejected)' if not ok2 else 'FAIL (tampering not detected, envelope accepted)'}")
+    ok2, reason2 = verify_envelope(tampered)
+    if not ok2:
+        print(f"Tamper detection:     PASS (tampering detected, envelope rejected, reason={reason2})")
+    else:
+        print("Tamper detection:     FAIL (tampering not detected, envelope accepted)")
+
+    # Step 9: freshness / replay defence
+    import copy
+    from datetime import timedelta
+    stale = copy.deepcopy(signed)
+    # Simulate verifying the same valid envelope 10 minutes later (>300s default)
+    later = datetime.now(timezone.utc) + timedelta(minutes=10)
+    ok3, reason3 = verify_envelope(stale, max_age_seconds=300, now=later)
+    if not ok3 and reason3 == "envelope_expired":
+        print(f"Replay defence:       PASS (stale envelope rejected, reason={reason3})")
+    else:
+        print(f"Replay defence:       FAIL (ok={ok3}, reason={reason3})")
 
 
 if __name__ == "__main__":
