@@ -68,6 +68,12 @@ public sealed class PolicyDecision
     /// <summary>
     /// Creates a default "allowed" decision (used when no rules match and default is allow).
     /// </summary>
+    public static PolicyDecision AllowDefault(double evaluationMs = 0)
+        => AllowDefault(DateTime.UtcNow, evaluationMs);
+
+    /// <summary>
+    /// Creates a default "allowed" decision with an explicit evaluation timestamp.
+    /// </summary>
     public static PolicyDecision AllowDefault(DateTime evaluatedAt, double evaluationMs = 0) => new()
     {
         Allowed = true,
@@ -79,6 +85,12 @@ public sealed class PolicyDecision
 
     /// <summary>
     /// Creates a default "denied" decision (used when no rules match and default is deny).
+    /// </summary>
+    public static PolicyDecision DenyDefault(double evaluationMs = 0)
+        => DenyDefault(DateTime.UtcNow, evaluationMs);
+
+    /// <summary>
+    /// Creates a default "denied" decision with an explicit evaluation timestamp.
     /// </summary>
     public static PolicyDecision DenyDefault(DateTime evaluatedAt, double evaluationMs = 0) => new()
     {
