@@ -210,7 +210,7 @@ All contributions that add or change functionality **must** include correspondin
 - **Security patches** — Add tests verifying the vulnerability is mitigated.
 
 Tests are run automatically via CI on every pull request. The test matrix covers
-Python 3.10–3.13 across the core packages in `packages/`. PRs will not be merged until
+Python 3.10–3.12 across all four core packages. PRs will not be merged until
 all required CI checks pass.
 
 Run tests locally with:
