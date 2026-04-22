@@ -455,3 +455,10 @@ FodyWeavers.xsd
 .env
 .env.*
 _site/
+
+# Build artifacts and caches
+dist/
+.hypothesis/
+.pytest_cache/
+.ruff_cache/
+_site/
