@@ -67,10 +67,10 @@ pip install agentmesh-lightning        # 强化学习训练治理
 ### 📚 文档
 
 - **[快速入门](../../QUICKSTART.md)** — 在 10 分钟内从零开始构建受治理的代理 (Python · TypeScript · .NET · Rust · Go)
-- **[TypeScript SDK](../../packages/agent-mesh/sdks/typescript/README.md)** — 提供身份、信任、策略与审计功能的 npm 包
-- **[.NET SDK](../../agent-governance-dotnet/README.md)** — 提供完整 OWASP 覆盖的 NuGet 包
-- **[Rust SDK](../../packages/agent-mesh/sdks/rust/agentmesh/README.md)** — crates.io 上的库，包含策略、信任、审计及 Ed25519 身份
-- **[Go SDK](../../agent-governance-golang/README.md)** — 提供策略、信任、审计与身份功能的 Go 模块
+- **[TypeScript 包](../../packages/agent-mesh/sdks/typescript/README.md)** — 提供身份、信任、策略与审计功能的 npm 包
+- **[.NET 包](../../agent-governance-dotnet/README.md)** — 提供完整 OWASP 覆盖的 NuGet 包
+- **[Rust crate](../../packages/agent-mesh/sdks/rust/agentmesh/README.md)** — crates.io 上的库，包含策略、信任、审计及 Ed25519 身份
+- **[Go 模块](../../agent-governance-golang/README.md)** — 提供策略、信任、审计与身份功能的 Go 模块
 - **[教程](../../docs/tutorials/)** — 涵盖策略、身份、集成、合规、SRE 与沙箱的分步指南
 - **[Azure 部署](../../docs/deployment/README.md)** — 支持 AKS, Azure AI Foundry, Container Apps, OpenClaw 边车
 - **[NVIDIA OpenShell 集成](../../docs/integrations/openshell.md)** — 将沙箱隔离与治理智能相结合

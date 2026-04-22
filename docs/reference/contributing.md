@@ -42,7 +42,7 @@ term home for that language.
 | If your change is about... | Start here |
 |----------------------------|------------|
 | Core governance/runtime behavior | `packages/` |
-| Current shared SDK implementations | `packages/agent-mesh/sdks/` and other languages that still live in the shared layout |
+| Current shared language package implementations | `packages/agent-mesh/sdks/` and other languages that still live in the shared layout |
 | Standalone language implementations | `agent-governance-dotnet/`, `agent-governance-golang/`, or other `agent-governance-*` siblings at the repository root |
 | Tutorials, architecture, package docs | `docs/` |
 | Runnable framework integrations | `examples/` |
@@ -54,8 +54,8 @@ If a directory contains an `AGENTS.md` file, read it before you start. It captur
 commands, boundaries, and review expectations for that area.
 If a standalone top-level language directory exists for the implementation you are changing, prefer
 that directory over an older shared path unless maintainers tell you to keep work in the legacy
-location. For the standalone .NET SDK, contributor guidance should point to
-`agent-governance-dotnet/` as the canonical path.
+location. For the approved .NET standalone migration, contributor guidance should point to
+`agent-governance-dotnet/` as the canonical path, not `packages/agent-governance-dotnet/`.
 
 ### Attribution & Prior Art
 
@@ -92,10 +92,8 @@ pip install -e "packages/agent-compliance[dev]"
 pip install -e "packages/agent-marketplace[dev]"  # installs agentmesh-marketplace
 pip install -e "packages/agent-lightning[dev]"
 pip install -e "packages/agent-hypervisor[dev]"
+pip install -e "packages/agent-governance-dotnet[dev]"
 pip install -e "packages/agentmesh-integrations[dev]"
-
-# Restore the standalone .NET SDK when working in that path
-dotnet restore agent-governance-dotnet/AgentGovernance.sln
 
 # Run tests
 pytest
@@ -105,7 +103,7 @@ pytest
 
 If you prefer a containerized development environment, use the root Docker
 configuration. The image includes Python 3.11, Node.js 22, the core editable
-Python packages in this monorepo, and the TypeScript SDK dependencies.
+Python packages in this monorepo, and the TypeScript package dependencies.
 
 ```bash
 # Build and start the development container
@@ -130,7 +128,7 @@ docker compose --profile dashboard up --build dashboard
 
 ### Package Structure
 
-This repo includes these core packages and standalone SDKs today:
+This is a mono-repo with ten packages today:
 
 | Package | Directory | Description |
 |---------|-----------|-------------|
@@ -142,11 +140,12 @@ This repo includes these core packages and standalone SDKs today:
 | `agentmesh-marketplace` | `packages/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
 | `agentmesh-lightning` | `packages/agent-lightning/` | RL training governance with governed runners and policy rewards |
 | `agent-hypervisor` | `packages/agent-hypervisor/` | Runtime infrastructure and capability management |
-| `agent-governance-dotnet` | `agent-governance-dotnet/` | Standalone .NET SDK for agent governance |
+| `agent-governance-dotnet` | `agent-governance-dotnet/` | Standalone .NET package for agent governance |
 | `agentmesh-integrations` | `packages/agentmesh-integrations/` | Framework integrations and extension library |
 
-Contributor routing for the standalone .NET SDK should use `agent-governance-dotnet/` at the
-repository root as the canonical path.
+Contributor routing for the standalone .NET package should use `agent-governance-dotnet/` at the
+repository root as the canonical path. Legacy shared-layout references such as
+`packages/agent-governance-dotnet/` are migration context, not the target-state path.
 
 ### Coding Guidelines
 

@@ -261,8 +261,8 @@ agent-governance integrity --manifest integrity.json
 | What | Where |
 |------|-------|
 | Full API reference (Python) | [packages/agent-os/README.md](packages/agent-os/README.md) |
-| TypeScript SDK docs | [packages/agent-mesh/sdks/typescript/README.md](packages/agent-mesh/sdks/typescript/README.md) |
-| .NET SDK docs | [agent-governance-dotnet/README.md](../agent-governance-dotnet/README.md) |
+| TypeScript package docs | [packages/agent-mesh/sdks/typescript/README.md](packages/agent-mesh/sdks/typescript/README.md) |
+| .NET package docs | [agent-governance-dotnet/README.md](../agent-governance-dotnet/README.md) |
 | OWASP coverage map | [docs/OWASP-COMPLIANCE.md](docs/OWASP-COMPLIANCE.md) |
 | Framework integrations | [packages/agent-os/src/agent_os/integrations/](packages/agent-os/src/agent_os/integrations/) |
 | Example applications | [packages/agent-os/examples/](packages/agent-os/examples/) |

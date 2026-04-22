@@ -44,8 +44,8 @@ Every agent receives a globally unique `did:mesh:<fingerprint>` identifier deriv
 | DID generation | `agent-mesh/identity/agent_id.py` — `AgentDID.generate()` |
 | Identity registry | `agent-mesh/identity/agent_id.py` — `IdentityRegistry` |
 | Enterprise AAD binding | `agent-mesh/identity/entra.py` — `EntraAgentIdentity` |
-| .NET SDK | `AgentGovernance/Trust/AgentIdentity.cs` — `Create()` |
-| Rust SDK | `agentmesh/src/identity.rs` — `AgentIdentity::generate()` |
+| .NET package | `AgentGovernance/Trust/AgentIdentity.cs` — `Create()` |
+| Rust crate | `agentmesh/src/identity.rs` — `AgentIdentity::generate()` |
 
 #### I-2: Credential Binding — ✅ FULLY MET
 
@@ -328,7 +328,7 @@ Degradation mechanisms exist but are not unified under a single autonomy control
 | D-3 | PII/PHI Protection | Regex-only detection | Integrate ML-based NER (e.g., Presidio) |
 | D-5 | Data Lineage | Execution-trace only | Add dataset-level provenance tracking |
 | R-5 | Graceful Degradation | Scattered fallback mechanisms | Create unified AutonomyController |
-| — | .NET SDK | HMAC fallback instead of Ed25519 | Implement full Ed25519 asymmetric signing |
+| — | .NET package | HMAC fallback instead of Ed25519 | Implement full Ed25519 asymmetric signing |
 
 ---
 

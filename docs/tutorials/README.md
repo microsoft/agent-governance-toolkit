@@ -66,14 +66,14 @@ guides.
 | 15 | [RL Training Governance](15-rl-training-governance.md) | GovernedRunner, PolicyReward, Gym-compatible environments | `agentmesh-lightning` |
 | 18 | [Compliance Verification](18-compliance-verification.md) | Governance grading, regulatory frameworks, attestation | `agent-governance-toolkit` |
 
-## Multi-Language SDKs
+## Multi-Language Packages
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
-| 19 | [.NET SDK](19-dotnet-sdk.md) | GovernanceKernel, policy, rings, saga, SLO, OpenTelemetry in C# | `Microsoft.AgentGovernance` |
-| 20 | [TypeScript SDK](20-typescript-sdk.md) | Identity, trust, policy, audit in TypeScript/Node.js | `@microsoft/agentmesh-sdk` |
-| 21 | [Rust SDK](21-rust-sdk.md) | Policy, trust, audit, identity with `agentmesh` crate | `agentmesh` |
-| 22 | [Go SDK](22-go-sdk.md) | Policy, trust, audit, identity with Go module | `agentmesh` |
+| 19 | [.NET package](19-dotnet-sdk.md) | GovernanceKernel, policy, rings, saga, SLO, OpenTelemetry in C# | `Microsoft.AgentGovernance` |
+| 20 | [TypeScript package](20-typescript-sdk.md) | Identity, trust, policy, audit in TypeScript/Node.js | `@microsoft/agentmesh-sdk` |
+| 21 | [Rust crate](21-rust-sdk.md) | Policy, trust, audit, identity with `agentmesh` crate | `agentmesh` |
+| 22 | [Go module](22-go-sdk.md) | Policy, trust, audit, identity with Go module | `agentmesh` |
 
 ## Delegation & Cost Control
 

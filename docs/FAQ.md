@@ -150,15 +150,15 @@ All types deliver the same governance capabilities — policy enforcement, ident
 
 **Short answer:** The numbers refer to different things:
 
-- **5 language SDKs** — Python, TypeScript, .NET, Rust, Go
+- **5 language packages/modules** — Python, TypeScript, .NET, Rust, Go
 - **6 production framework integrations** (for AgentMesh specifically) — Dify, LlamaIndex, Agent-Lightning, LangGraph, OpenAI Agents, Haystack
 - **12+ framework integrations** (for the full toolkit) — includes all 6 above plus Microsoft Agent Framework, Semantic Kernel, AutoGen, LangChain, CrewAI, Google ADK, PydanticAI, and more
 
-### Language SDKs (5)
+### Language Packages / Modules (5)
 
 | Language | Package | Status |
 |----------|---------|--------|
-| Python | `agent-governance-toolkit[full]` | ✅ Full-featured, primary SDK |
+| Python | `agent-governance-toolkit[full]` | ✅ Full-featured, primary package |
 | TypeScript | `@microsoft/agentmesh-sdk` | ✅ Published on npm |
 | .NET | `Microsoft.AgentGovernance` | ✅ Published on NuGet |
 | Rust | `agentmesh` crate | ✅ Published on crates.io |

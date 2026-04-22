@@ -538,7 +538,7 @@ whether those measurements are themselves effective.
 breakers (with trip/open/half-open state machine) prevent cascade failures; kill
 switches provide immediate agent termination for six enumerated risk categories;
 rate limiters (sliding window, token bucket) control throughput across all
-language SDKs. Approval workflows with quorum requirements add human oversight.
+language packages. Approval workflows with quorum requirements add human oversight.
 Saga orchestrators enable compensating transactions to roll back multi-step
 operations upon failure.
 

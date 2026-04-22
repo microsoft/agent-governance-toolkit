@@ -136,10 +136,10 @@ The toolkit uses Dependabot to monitor dependencies across **13 ecosystems**:
 |-----------|-------------|-------|
 | Python (pip) | `requirements/*.txt` | Core packages |
 | Python (pip) | `packages/*/requirements.txt` | Per-package |
-| Node.js (npm) | `packages/*/package.json` | TypeScript SDK |
-| .NET (NuGet) | `*.csproj` | .NET SDK |
-| Rust (Cargo) | `Cargo.toml` | Rust SDK |
-| Go (modules) | `go.mod` | Go SDK |
+| Node.js (npm) | `packages/*/package.json` | TypeScript package |
+| .NET (NuGet) | `*.csproj` | .NET package |
+| Rust (Cargo) | `Cargo.toml` | Rust crate |
+| Go (modules) | `go.mod` | Go module |
 | GitHub Actions | `.github/workflows/*.yml` | CI/CD |
 | Docker | `Dockerfile` | Container images |
 

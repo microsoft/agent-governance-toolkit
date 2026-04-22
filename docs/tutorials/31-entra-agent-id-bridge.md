@@ -351,7 +351,7 @@ else:
 | **Agent365 native integration** | Configuration validated | `EntraAgentRegistry.validate_bridge_configuration()` checks bridge mapping completeness; end-to-end Agent365 testing pending |
 | **Bidirectional lifecycle sync** | One-way (manual) | Use Azure Event Grid or Logic Apps to sync Entra state changes → AGT kill switch |
 | **Graph API service principal disable** | Not in AGT | Use Graph API directly: `PATCH /servicePrincipals/{id}` with `accountEnabled: false` |
-| **Entra bridge in non-Python SDKs** | Python-only | TS, .NET, Rust, Go SDKs need `EntraAgentRegistry` and `EntraAgentID` ported |
+| **Entra bridge in non-Python language packages** | Python-only | TS, .NET, Rust, and Go packages need `EntraAgentRegistry` and `EntraAgentID` ported |
 | **DID format inconsistency** | `did:agentmesh:*` (Python, .NET) vs `did:agentmesh:*` (TS, Rust, Go) | Both formats work; standardization planned for v4.0 |
 | **Cryptographic token verification** | Claim-level only | Add `azure-identity` for JWKS-based signature verification |
 

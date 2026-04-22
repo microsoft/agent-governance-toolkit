@@ -164,7 +164,7 @@ A CycloneDX SBOM includes:
 Use the toolkit's Ed25519 identity system to sign any artifact — release
 binaries, SBOMs, policy files, or audit logs.
 
-### §3.1 Signing with the TypeScript SDK
+### §3.1 Signing with the TypeScript package
 
 ```typescript
 import { AgentIdentity } from '@microsoft/agentmesh-sdk';
@@ -200,7 +200,7 @@ console.log('Signature:', Buffer.from(signature).toString('hex').slice(0, 32) + 
 console.log('Signer DID:', signer.did);
 ```
 
-### §3.2 Signing with the Rust SDK
+### §3.2 Signing with the Rust crate
 
 ```rust
 use agentmesh::AgentIdentity;
@@ -229,7 +229,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### §3.3 Signing with the Go SDK
+### §3.3 Signing with the Go module
 
 ```go
 package main
@@ -274,7 +274,7 @@ func main() {
 
 ## Verifying Signatures
 
-### §4.1 Verification with the TypeScript SDK
+### §4.1 Verification with the TypeScript package
 
 ```typescript
 import { AgentIdentity } from '@microsoft/agentmesh-sdk';
@@ -305,7 +305,7 @@ if (valid) {
 }
 ```
 
-### §4.2 Verification with the Go SDK
+### §4.2 Verification with the Go module
 
 ```go
 // Load signer's public identity

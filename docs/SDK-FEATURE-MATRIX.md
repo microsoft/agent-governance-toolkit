@@ -1,9 +1,9 @@
-# SDK Feature Matrix
+# Language Package Feature Matrix
 
 > **Last updated:** April 2026 · AGT v3.1.0
 
-The Agent Governance Toolkit ships SDKs in **5 languages**. Python is the primary
-implementation; other SDKs provide the core governance primitives needed to build
+The Agent Governance Toolkit ships language packages in **5 languages**. Python is the primary
+implementation; the other language packages provide the core governance primitives needed to build
 governed agents in each ecosystem.
 
 ## Quick Comparison
@@ -31,9 +31,9 @@ governed agents in each ecosystem.
 
 ## Detailed Breakdown
 
-### Core Governance (all 5 SDKs)
+### Core Governance (all 5 language packages)
 
-Every SDK implements the four foundational governance primitives. These are sufficient
+Every language package implements the four foundational governance primitives. These are sufficient
 to build governed agents in any language:
 
 | Primitive | What It Does | Python | TS | .NET | Rust | Go |
@@ -60,7 +60,7 @@ governance stack for enterprise deployments:
 | **Cedar Policies** | `agent-os` | Evaluate policies via Cedar (Amazon Verified Permissions) |
 | **20+ Framework Adapters** | `agentmesh-integrations` | LangChain, CrewAI, AutoGen, OpenAI Agents, Google ADK, etc. |
 
-### TypeScript SDK
+### TypeScript package
 
 **Package:** [`@microsoft/agentmesh-sdk`](https://www.npmjs.com/package/@microsoft/agentmesh-sdk) ·
 **Source:** [`packages/agent-mesh/sdks/typescript/`](../packages/agent-mesh/sdks/typescript/)
@@ -77,7 +77,7 @@ governance stack for enterprise deployments:
 
 **Roadmap:** Framework middleware (Express, Fastify), execution rings.
 
-### .NET SDK
+### .NET package
 
 **Package:** [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) ·
 **Source:** [`agent-governance-dotnet/`](../agent-governance-dotnet/)
@@ -97,7 +97,7 @@ governance stack for enterprise deployments:
 
 **Roadmap:** Native asymmetric Ed25519 signing once the target runtime supports it broadly, plus full lifecycle persistence.
 
-### Rust SDK
+### Rust crate
 
 **Crate:** [`agentmesh`](https://crates.io/crates/agentmesh) +
 [`agentmesh-mcp`](https://crates.io/crates/agentmesh-mcp) ·
@@ -119,7 +119,7 @@ full governance stack.
 
 **Roadmap:** Async runtime support, framework integrations (Rig, Swarm-RS), SRE primitives.
 
-### Go SDK
+### Go module
 
 **Module:** `github.com/microsoft/agent-governance-toolkit/agent-governance-golang` ·
 **Source:** [`agent-governance-golang/`](../agent-governance-golang/)

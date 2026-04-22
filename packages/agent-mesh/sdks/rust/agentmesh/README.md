@@ -1,12 +1,12 @@
-# AgentMesh Rust SDK
+# AgentMesh Rust crate
 
-Rust SDK for the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit) — policy evaluation, trust scoring, hash-chain audit logging, and Ed25519 agent identity.
+Rust crate for the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit) — policy evaluation, trust scoring, hash-chain audit logging, and Ed25519 agent identity.
 
 > **Public Preview** — APIs may change before 1.0.
 
 ## Install
 
-### Full SDK
+### Full crate
 
 ```bash
 cargo add agentmesh

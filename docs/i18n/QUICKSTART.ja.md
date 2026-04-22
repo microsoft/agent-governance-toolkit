@@ -210,8 +210,8 @@ agent-governance integrity --manifest integrity.json
 | 内容 | リンク |
 |------|--------|
 | 完全なAPIリファレンス (Python) | [packages/agent-os/README.md](packages/agent-os/README.md) |
-| TypeScript SDK ドキュメント | [packages/agent-mesh/sdks/typescript/README.md](packages/agent-mesh/sdks/typescript/README.md) |
-| .NET SDK ドキュメント | [agent-governance-dotnet/README.md](../../agent-governance-dotnet/README.md) |
+| TypeScript パッケージ ドキュメント | [packages/agent-mesh/sdks/typescript/README.md](packages/agent-mesh/sdks/typescript/README.md) |
+| .NET パッケージ ドキュメント | [agent-governance-dotnet/README.md](agent-governance-dotnet/README.md) |
 | OWASP カバレッジマップ | [docs/OWASP-COMPLIANCE.md](docs/OWASP-COMPLIANCE.md) |
 | フレームワーク統合 | [packages/agent-os/src/agent_os/integrations/](packages/agent-os/src/agent_os/integrations/) |
 | サンプルアプリケーション | [packages/agent-os/examples/](packages/agent-os/examples/) |

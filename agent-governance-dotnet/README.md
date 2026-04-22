@@ -1,4 +1,4 @@
-# Microsoft.AgentGovernance — .NET SDK
+# Microsoft.AgentGovernance — .NET package
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -134,7 +134,7 @@ byte[] signature = identity.Sign("important data");
 bool valid = identity.Verify(Encoding.UTF8.GetBytes("important data"), signature);
 ```
 
-> **Note:** the .NET 8 SDK now matches the Python identity shape much more closely, but native asymmetric Ed25519 signing is still a runtime-limited gap until the SDK can target the appropriate framework support.
+> **Note:** the .NET 8 package now matches the Python identity shape much more closely, but native asymmetric Ed25519 signing is still a runtime-limited gap until the package can target the appropriate framework support.
 
 ### Execution Rings (Runtime)
 
@@ -429,7 +429,7 @@ See the [MAF adapter](../packages/agent-os/src/agent_os/integrations/maf_adapter
 
 ## OWASP Agentic AI Top 10 Coverage
 
-The .NET SDK addresses all 10 OWASP categories:
+The .NET package addresses all 10 OWASP categories:
 
 | Risk | Mitigation |
 |------|-----------|
@@ -446,7 +446,7 @@ The .NET SDK addresses all 10 OWASP categories:
 
 ## Contributing
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md). The .NET SDK follows the same contribution process as the Python packages.
+See [CONTRIBUTING.md](../CONTRIBUTING.md). The .NET package follows the same contribution process as the Python packages.
 
 ## License
 

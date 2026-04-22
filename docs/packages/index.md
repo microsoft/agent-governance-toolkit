@@ -16,7 +16,7 @@ AGT provides 12 packages covering every layer of agent governance.
 +------------------+     +------------------+     +------------------+
         |                        |                        |
 +------------------+     +------------------+     +------------------+
-| Agent Lightning  |     | Agent Hypervisor |     |   SDK Packages   |
+| Agent Lightning  |     | Agent Hypervisor |     | Language + Tools |
 |  High-perf       |     |  HW isolation    |     |  .NET, TS, Rust  |
 |  orchestration   |     |  for workloads   |     |  Go, VS Code     |
 +------------------+     +------------------+     +------------------+
@@ -35,9 +35,9 @@ AGT provides 12 packages covering every layer of agent governance.
 | [Agent Lightning](agent-lightning.md) | High-performance orchestration | `pip install agent-lightning` |
 | [Agent Hypervisor](agent-hypervisor.md) | Hardware-level workload isolation | `pip install agent-hypervisor` |
 
-## SDK Packages
+## Language Packages & Tooling
 
 | Package | Language | Install |
 |---------|---------|---------|
-| [.NET SDK](dotnet-sdk.md) | C# / .NET | `dotnet add package Microsoft.AgentGovernance` |
+| [.NET package](dotnet-sdk.md) | C# / .NET | `dotnet add package Microsoft.AgentGovernance` |
 | [VS Code Extension](agent-os-vscode.md) | VS Code | Install from marketplace |

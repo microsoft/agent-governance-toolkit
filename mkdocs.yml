@@ -86,7 +86,7 @@ nav:
     - Agent Marketplace: packages/agent-marketplace.md
     - Agent Lightning: packages/agent-lightning.md
     - Agent Hypervisor: packages/agent-hypervisor.md
-    - .NET SDK: packages/dotnet-sdk.md
+    - .NET package: packages/dotnet-sdk.md
     - VS Code Extension: packages/agent-os-vscode.md
   - Tutorials:
     - Overview: tutorials/index.md
@@ -108,10 +108,10 @@ nav:
     - Protocol Bridges: tutorials/16-protocol-bridges.md
     - Advanced Trust: tutorials/17-advanced-trust-and-behavior.md
     - Compliance Verification: tutorials/18-compliance-verification.md
-    - .NET SDK: tutorials/19-dotnet-sdk.md
-    - TypeScript SDK: tutorials/20-typescript-sdk.md
-    - Rust SDK: tutorials/21-rust-sdk.md
-    - Go SDK: tutorials/22-go-sdk.md
+    - .NET package: tutorials/19-dotnet-sdk.md
+    - TypeScript package: tutorials/20-typescript-sdk.md
+    - Rust crate: tutorials/21-rust-sdk.md
+    - Go module: tutorials/22-go-sdk.md
     - Delegation Chains: tutorials/23-delegation-chains.md
     - Cost & Token Budgets: tutorials/24-cost-and-token-budgets.md
     - Security Hardening: tutorials/25-security-hardening.md
@@ -146,7 +146,6 @@ nav:
   - Reference:
     - Benchmarks: reference/benchmarks.md
     - Comparison: reference/comparison.md
-    - External Operation Accountability Profiles: integrations/external-operation-accountability-profiles.md
     - NIST RFI Mapping: reference/nist-rfi-mapping.md
     - Changelog: reference/changelog.md
     - Contributing: reference/contributing.md

@@ -307,9 +307,9 @@ if scan_result.safe:
 
 ---
 
-## Multi-Language SDK Coverage
+## Multi-Language Package Coverage
 
-MCP governance components are available across five language SDKs:
+MCP governance components are available across five language packages:
 
 | Component | Python | .NET | TypeScript | Rust | Go |
 |-----------|--------|------|-----------|------|-----|
@@ -329,7 +329,7 @@ Each SDK includes a standalone governance package for MCP-only adoption:
 | .NET | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` | `Microsoft.AgentGovernance` |
 | TypeScript | `@microsoft/agentmesh-mcp-governance` | `@microsoft/agentmesh-sdk` |
 | Rust | `agentmesh-mcp` | `agentmesh` |
-| Go | `mcp-governance-go` | `agentmesh` Go SDK |
+| Go | `mcp-governance-go` | `agentmesh` Go module |
 
 ---
 

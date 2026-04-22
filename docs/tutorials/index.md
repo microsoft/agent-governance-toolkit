@@ -40,11 +40,11 @@
 | 23 | [Delegation Chains](23-delegation-chains.md) | Agent-to-agent authorization |
 | 24 | [Cost & Token Budgets](24-cost-and-token-budgets.md) | Resource governance |
 
-## SDK Guides
+## Language Package Guides
 
 | # | Tutorial | What you'll learn |
 |---|---------|------------------|
-| 19 | [.NET SDK](19-dotnet-sdk.md) | Agent governance in C# / .NET |
-| 20 | [TypeScript SDK](20-typescript-sdk.md) | Agent governance in TypeScript |
-| 21 | [Rust SDK](21-rust-sdk.md) | Agent governance in Rust |
-| 22 | [Go SDK](22-go-sdk.md) | Agent governance in Go |
+| 19 | [.NET package](19-dotnet-sdk.md) | Agent governance in C# / .NET |
+| 20 | [TypeScript package](20-typescript-sdk.md) | Agent governance in TypeScript |
+| 21 | [Rust crate](21-rust-sdk.md) | Agent governance in Rust |
+| 22 | [Go module](22-go-sdk.md) | Agent governance in Go |

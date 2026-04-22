@@ -1,4 +1,4 @@
-# Microsoft.AgentGovernance — .NET SDK
+# Microsoft.AgentGovernance — .NET package
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -429,7 +429,7 @@ See the [MAF adapter](../../packages/agent-os/src/agent_os/integrations/maf_adap
 
 ## OWASP Agentic AI Top 10 Coverage
 
-The .NET SDK addresses all 10 OWASP categories:
+The .NET package addresses all 10 OWASP categories:
 
 | Risk | Mitigation |
 |------|-----------|
@@ -446,7 +446,7 @@ The .NET SDK addresses all 10 OWASP categories:
 
 ## Contributing
 
-See [CONTRIBUTING.md](../../CONTRIBUTING.md). The .NET SDK follows the same contribution process as the Python packages.
+See [CONTRIBUTING.md](../../CONTRIBUTING.md). The .NET package follows the same contribution process as the Python packages.
 
 ## License
 

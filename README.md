@@ -239,8 +239,8 @@ Full methodology: [BENCHMARKS.md](docs/BENCHMARKS.md)
 | **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
 | **Go** | [`agent-governance-toolkit`](agent-governance-golang/) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
-All 5 SDKs implement core governance (policy, identity, trust, audit). Python has the full stack.
-See **[SDK Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detailed per-language coverage.
+All 5 language packages implement core governance (policy, identity, trust, audit). Python has the full stack.
+See **[Language Package Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detailed per-language coverage.
 
 <details>
 <summary><b>Individual Python packages</b></summary>
@@ -269,7 +269,7 @@ See **[SDK Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detailed per-langua
 - [FAQ](docs/FAQ.md) — Technical Q&A for customers, partners, and evaluators
 
 **Architecture & Reference**
-- [SDK Feature Matrix](docs/SDK-FEATURE-MATRIX.md) — Per-language capability comparison
+- [Language Package Feature Matrix](docs/SDK-FEATURE-MATRIX.md) — Per-language capability comparison
 - [Architecture](docs/ARCHITECTURE.md) — System design, security model, trust scoring
 - [Architecture Decisions](docs/adr/README.md) — ADR log
 - [Threat Model](docs/THREAT_MODEL.md) — Trust boundaries and STRIDE analysis

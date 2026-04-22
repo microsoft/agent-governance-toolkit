@@ -1,12 +1,12 @@
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
-# Tutorial 21 — Rust SDK (`agentmesh` crate)
+# Tutorial 21 — Rust crate (`agentmesh`)
 
 > **Package:** `agentmesh` crate · **Time:** 30 minutes · **Prerequisites:** Rust 1.75+
 
 Full agent governance in Rust — policy evaluation, trust scoring, hash-chain
 audit logging, and Ed25519 agent identity. The `agentmesh` crate provides the
-same governance primitives as the Python, TypeScript, and .NET SDKs with Rust's
+same governance primitives as the Python packages, TypeScript package, and .NET package with Rust's
 zero-cost abstractions and memory safety guarantees.
 
 > **Target runtime:** Rust 1.75+ (2021 edition)
@@ -685,17 +685,17 @@ Chain valid: true
 
 ## Cross-Reference
 
-| Rust SDK Feature | Python Equivalent | Tutorial |
+| Rust crate feature | Python Equivalent | Tutorial |
 |------------------|-------------------|----------|
 | `PolicyEngine` | `agent_os.policy` | [Tutorial 01 — Policy Engine](./01-policy-engine.md) |
 | `TrustManager` | `agent_os.trust` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
 | `AuditLogger` | `agent_os.audit` | [Tutorial 04 — Audit & Compliance](./04-audit-and-compliance.md) |
 | `AgentIdentity` | `agent_os.identity` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
-| `AgentMeshClient` | `AgentMeshClient` | [Tutorial 20 — TypeScript SDK](./20-typescript-sdk.md) |
+| `AgentMeshClient` | `AgentMeshClient` | [Tutorial 20 — TypeScript package](./20-typescript-sdk.md) |
 
-> **Note:** The Rust SDK wraps all governance features into a single `agentmesh`
+> **Note:** The Rust crate wraps all governance features into a single `agentmesh`
 > crate, while the Python implementation splits them across separate `agent_os.*`
-> modules. Policy YAML files work identically across all SDKs.
+> modules. Policy YAML files work identically across all language packages.
 
 ---
 
@@ -716,7 +716,7 @@ Chain valid: true
 
 ## Next Steps
 
-- **Run the tests** to see the SDK in action:
+- **Run the tests** to see the crate in action:
   ```bash
   cd packages/agent-mesh/sdks/rust/agentmesh
   cargo test
@@ -727,5 +727,5 @@ Chain valid: true
   process restarts
 - **Verify audit chains** in your CI/CD pipeline — call `audit.verify()` as a
   post-deployment check
-- **Explore the TypeScript SDK** tutorial ([Tutorial 20](./20-typescript-sdk.md))
+- **Explore the TypeScript package** tutorial ([Tutorial 20](./20-typescript-sdk.md))
   for equivalent patterns in TypeScript

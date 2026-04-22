@@ -4,7 +4,7 @@
 > **Public Preview** — This npm package is a Microsoft-signed public preview release.
 > APIs may change before GA.
 
-TypeScript SDK for [AgentMesh](../../README.md) — a governance-first framework for multi-agent systems.
+TypeScript package for [AgentMesh](../../README.md) — a governance-first framework for multi-agent systems.
 
 Provides agent identity (Ed25519 DIDs), trust scoring, policy evaluation, hash-chain audit logging, and a unified `AgentMeshClient`.
 

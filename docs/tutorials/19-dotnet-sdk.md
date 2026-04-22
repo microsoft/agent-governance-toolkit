@@ -1,14 +1,14 @@
-# Tutorial 19 — .NET SDK (Microsoft.AgentGovernance)
+# Tutorial 19 — .NET package (Microsoft.AgentGovernance)
 
 > **Package:** `Microsoft.AgentGovernance` · **Time:** 30 minutes · **Prerequisites:** .NET 8.0+
 
 ---
 
-Full agent governance in C# / .NET 8 — policy engine, execution rings,
+Full agent governance in C# / .NET 8 — the same policy engine, execution rings,
 circuit breakers, prompt injection detection, SLO tracking, saga orchestration,
-rate limiting, zero-trust identity, and OpenTelemetry metrics with most of the
-Python SDK's core surface, packaged as a single NuGet library with **zero external
-dependencies beyond YamlDotNet**.
+rate limiting, zero-trust identity, and OpenTelemetry metrics you get from the
+Python packages, packaged as a single NuGet library with **zero external dependencies
+beyond YamlDotNet**.
 
 > **Target runtime:** .NET 8.0+
 > **NuGet package:** `Microsoft.AgentGovernance` (v2.1.0)
@@ -21,13 +21,13 @@ dependencies beyond YamlDotNet**.
 |---------|-------|
 | [Quick Start](#quick-start) | GovernanceKernel in 10 lines of C# |
 | [GovernanceKernel](#governancekernel) | Configuration, policy loading, evaluation |
-| [PolicyEngine](#policyengine) | YAML/JSON rules, condition expressions, 4 conflict strategies |
+| [PolicyEngine](#policyengine) | YAML rules, condition expressions, 4 conflict strategies |
 | [RingEnforcer](#ringenforcer) | 4-tier privilege model (Ring 0–3) |
 | [SagaOrchestrator](#sagaorchestrator) | Multi-step transactions with compensation |
 | [CircuitBreaker](#circuitbreaker) | Three-state protection (Closed / Open / HalfOpen) |
 | [SloEngine](#sloengine) | SLO tracking with error budgets and burn rate alerts |
 | [PromptInjectionDetector](#promptinjectiondetector) | 7 attack types, sensitivity tuning |
-| [AgentIdentity](#agentidentity) | DID-based identity, delegation, JWK/JWKS, compatibility signing |
+| [AgentIdentity](#agentidentity) | DID-based identity with HMAC-SHA256 signing |
 | [Rate Limiting](#rate-limiting) | Sliding window rate limiter |
 | [OpenTelemetry Metrics](#opentelemetry-metrics) | Built-in `System.Diagnostics.Metrics` instrumentation |
 | [Semantic Kernel Integration](#semantic-kernel-integration) | Using with Microsoft Semantic Kernel |
@@ -140,22 +140,6 @@ kernel.LoadPolicyFromYaml("""
         action: allow
         priority: 10
     """);
-
-// Load from JSON when policies are distributed in API/config payloads
-kernel.LoadPolicyFromJson("""
-    {
-      "name": "json-inline-policy",
-      "default_action": "deny",
-      "rules": [
-        {
-          "name": "allow-status",
-          "condition": "tool_name == 'status'",
-          "action": "allow",
-          "priority": 5
-        }
-      ]
-    }
-    """);
 ```
 
 ### Evaluating tool calls
@@ -204,10 +188,10 @@ using var kernel = new GovernanceKernel(options);
 
 ## PolicyEngine
 
-The `PolicyEngine` loads one or more YAML or JSON policy documents, evaluates
-agent requests against all loaded rules, and resolves conflicts when multiple
-rules match. It is **thread-safe** — policies are stored in a lock-protected
-list and evaluation is side-effect free.
+The `PolicyEngine` loads one or more YAML policy documents, evaluates agent
+requests against all loaded rules, and resolves conflicts when multiple rules
+match. It is **thread-safe** — policies are stored in a lock-protected list and
+evaluation is side-effect free.
 
 ### Policy YAML syntax
 
@@ -215,7 +199,7 @@ list and evaluation is side-effect free.
 apiVersion: governance.toolkit/v1
 name: production-security
 description: Production security policy
-scope: global                     # global | tenant | organization | agent
+scope: global                     # global | tenant | agent
 default_action: deny
 
 rules:
@@ -860,27 +844,23 @@ Console.WriteLine(result.Allowed); // false
 
 ## AgentIdentity
 
-DID-based agent identity with sponsor metadata, delegated capability narrowing,
-JWK/JWKS export, DID document export, and .NET 8 compatibility signing. The DID
-format follows the AgentMesh convention: `did:mesh:{unique-id}`.
+DID-based agent identity with cryptographic signing using HMAC-SHA256 (.NET 8
+compatibility fallback). The DID format follows the AgentMesh convention:
+`did:mesh:{unique-id}`.
 
-> **Runtime note:** the .NET SDK now mirrors the Python identity shape closely,
-> but native asymmetric `Ed25519` signing remains the main runtime-limited gap on
-> .NET 8. The current signing path is intentionally explicit and compatibility-focused.
+> **Migration note:** .NET 9+ introduces native `Ed25519` support. The current
+> HMAC-SHA256 scheme is a symmetric fallback — migrate to Ed25519 for proper
+> asymmetric signing in production cross-agent trust scenarios.
 
 ### Creating an identity
 
 ```csharp
 using AgentGovernance.Trust;
 
-var identity = AgentIdentity.Create(
-    "research-assistant",
-    sponsor: "alice@contoso.com",
-    capabilities: new[] { "read:*", "write" });
+var identity = AgentIdentity.Create("research-assistant");
 Console.WriteLine(identity.Did);       // "did:mesh:a7f3b2c1..."
 Console.WriteLine(identity.PublicKey.Length);  // 32 bytes
 Console.WriteLine(identity.PrivateKey!.Length); // 32 bytes
-Console.WriteLine(identity.SponsorEmail); // "alice@contoso.com"
 ```
 
 The DID is derived from the agent name (SHA-256 prefix) combined with random
@@ -892,6 +872,7 @@ bytes, ensuring uniqueness even for agents with the same name.
 using System.Text;
 
 // Sign a string message
+#pragma warning disable CS0618 // HMAC-SHA256 fallback
 byte[] signature = identity.Sign("important governance data");
 
 // Verify the signature
@@ -904,17 +885,7 @@ Console.WriteLine(valid); // true
 // Sign raw bytes
 byte[] data = Encoding.UTF8.GetBytes("binary payload");
 byte[] sig = identity.Sign(data);
-```
-
-### Delegation, JWKS, and DID document export
-
-```csharp
-var child = identity.Delegate("report-writer", new[] { "read:*" });
-Console.WriteLine(child.ParentDid);         // parent DID
-Console.WriteLine(child.DelegationDepth);   // 1
-
-var jwks = identity.ToJwks();
-var didDocument = identity.ToDIDDocument();
+#pragma warning restore CS0618
 ```
 
 ### Verification-only identities
@@ -934,12 +905,14 @@ var verifierOnly = new AgentIdentity(
 ### Static cross-agent verification
 
 ```csharp
+#pragma warning disable CS0618
 bool valid = AgentIdentity.VerifySignature(
     publicKey: signerIdentity.PublicKey,
     data: Encoding.UTF8.GetBytes("shared data"),
     signature: receivedSignature,
-    privateKey: signerIdentity.PrivateKey  // required for the current .NET 8 compatibility signing path
+    privateKey: signerIdentity.PrivateKey  // required for HMAC; not needed with Ed25519
 );
+#pragma warning restore CS0618
 ```
 
 ### File-backed trust store
@@ -1048,7 +1021,7 @@ var result = kernel.EvaluateToolCall("did:mesh:agent", "http_request");
 
 ## OpenTelemetry Metrics
 
-The SDK includes built-in instrumentation using `System.Diagnostics.Metrics` —
+The package includes built-in instrumentation using `System.Diagnostics.Metrics` —
 the .NET standard for metrics that works with any OpenTelemetry-compatible
 exporter (Prometheus, Azure Monitor, Datadog, etc.).
 
@@ -1131,7 +1104,7 @@ using var meterProvider = Sdk.CreateMeterProviderBuilder()
 
 ## Semantic Kernel Integration
 
-The .NET SDK works seamlessly with
+The .NET package works seamlessly with
 [Microsoft Semantic Kernel](https://github.com/microsoft/semantic-kernel) as a
 pre-execution governance filter.
 
@@ -1216,7 +1189,7 @@ var result = govKernel.EvaluateToolCall(
 
 ## Cross-reference: Python tutorials
 
-Every feature in the .NET SDK has an equivalent in the Python SDK. Use these
+Every feature in the .NET package has an equivalent in the Python packages. Use these
 tutorials for deeper conceptual coverage:
 
 | .NET Feature | Python Tutorial | Notes |
@@ -1232,7 +1205,7 @@ tutorials for deeper conceptual coverage:
 
 ## Next Steps
 
-1. **Run the tests** — The SDK includes comprehensive tests in
+1. **Run the tests** — The package includes comprehensive tests in
    `agent-governance-dotnet/tests/`. Run them with:
 
    ```bash
@@ -1263,5 +1236,5 @@ tutorials for deeper conceptual coverage:
    ```
 
 6. **Read the OWASP coverage** — The
-   [.NET SDK README](../../agent-governance-dotnet/README.md) maps
-   each OWASP Agentic AI Top 10 risk to the SDK's mitigation.
+   [.NET package README](../../agent-governance-dotnet/README.md) maps
+   each OWASP Agentic AI Top 10 risk to the package's mitigation.

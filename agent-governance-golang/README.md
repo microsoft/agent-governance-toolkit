@@ -1,6 +1,6 @@
-# AgentMesh Go SDK
+# AgentMesh Go module
 
-Go SDK for the AgentMesh governance framework — identity, trust scoring, policy evaluation, tamper-evident audit logging, MCP security scanning, execution privilege rings, and agent lifecycle management.
+Go module for the AgentMesh governance framework — identity, trust scoring, policy evaluation, tamper-evident audit logging, MCP security scanning, execution privilege rings, and agent lifecycle management.
 
 ## Install
 

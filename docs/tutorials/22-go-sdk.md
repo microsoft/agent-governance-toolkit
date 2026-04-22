@@ -1,6 +1,6 @@
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
-# Tutorial 22 — Go SDK (`agentmesh` module)
+# Tutorial 22 — Go module (`agentmesh`)
 
 Build governance-aware AI agents in Go. The `agentmesh` module provides
 Ed25519 cryptographic identity, trust scoring, declarative policy evaluation,
@@ -631,16 +631,16 @@ Audit JSON: [{"timestamp":"2025-07-15T10:30:00Z","agent_id":"did:agentmesh:resea
 
 ## Cross-Reference
 
-| Go SDK Feature | Python Equivalent | Tutorial |
+| Go module feature | Python Equivalent | Tutorial |
 |----------------|-------------------|----------|
 | `PolicyEngine` | `agent_os.policy` | [Tutorial 01 — Policy Engine](./01-policy-engine.md) |
 | `TrustManager` | `agent_os.trust` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
 | `AuditLogger` | `agent_os.audit` | [Tutorial 04 — Audit & Compliance](./04-audit-and-compliance.md) |
 | `AgentIdentity` | `agent_os.identity` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
-| `AgentMeshClient` | `AgentMeshClient` | [Tutorial 20 — TypeScript SDK](./20-typescript-sdk.md) |
+| `AgentMeshClient` | `AgentMeshClient` | [Tutorial 20 — TypeScript package](./20-typescript-sdk.md) |
 
-> **Note:** The Go SDK uses a 0.0–1.0 trust scale with three tiers, while the
-> Rust SDK uses 0–1000 with five tiers. Both use the same governance concepts
+> **Note:** The Go module uses a 0.0–1.0 trust scale with three tiers, while the
+> Rust crate uses 0–1000 with five tiers. Both use the same governance concepts
 > and YAML policy format.
 
 ---
@@ -663,7 +663,7 @@ Audit JSON: [{"timestamp":"2025-07-15T10:30:00Z","agent_id":"did:agentmesh:resea
 
 ## Next Steps
 
-- **Run the tests** to see the SDK in action:
+- **Run the tests** to see the module in action:
   ```bash
   cd agent-governance-golang
   go test ./...
@@ -673,6 +673,6 @@ Audit JSON: [{"timestamp":"2025-07-15T10:30:00Z","agent_id":"did:agentmesh:resea
   restarts
 - **Verify audit chains** in your CI/CD pipeline — call `Verify()` as a
   post-deployment check
-- **Explore the Rust SDK** tutorial ([Tutorial 21](./21-rust-sdk.md)) for the
+- **Explore the Rust crate** tutorial ([Tutorial 21](./21-rust-sdk.md)) for the
   Rust equivalent
 - **Read the Python tutorials** (01–04) for detailed governance concepts

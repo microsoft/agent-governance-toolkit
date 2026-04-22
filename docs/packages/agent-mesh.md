@@ -614,7 +614,7 @@ classifier = EUAIActRiskClassifier(config_path="my_updated_annex_iii.yaml")
 | Quarter | Milestone |
 |---------|-----------|
 | **Q1 2026** | ✅ Core trust layer, identity, governance engine, 6 framework integrations |
-| **Q2 2026** | ✅ TypeScript SDK, Go SDK, lifecycle management, quantum-safe ML-DSA-65 signing, governance dashboard |
+| **Q2 2026** | ✅ TypeScript package, Go module, lifecycle management, quantum-safe ML-DSA-65 signing, governance dashboard |
 | **Q3 2026** | AI Card spec contribution, CNCF Sandbox application |
 | **Q4 2026** | Managed cloud service (AgentMesh Cloud), SOC2 Type II |
 

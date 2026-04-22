@@ -1,4 +1,4 @@
-# AgentMesh MCP Rust SDK
+# AgentMesh MCP Rust crate
 
 Standalone Rust crate for the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit) MCP governance/security surface — response scanning, message signing, session authentication, credential redaction, rate limiting, tool metadata scanning, gateway decisions, and categorical metrics.
 
