@@ -187,3 +187,144 @@ def receipt_hash(envelope: Mapping[str, Any]) -> str:
     """
     digest = hashlib.sha256(_canonicalize(envelope)).digest()
     return _b64url(digest)
+
+
+
+# ------------------------------------------------------------------ #
+# Bilateral receipt extension (pre-execution + post-execution)         #
+# Reference: docs/proposals/verifiable-compliance-receipts.md          #
+# ------------------------------------------------------------------ #
+
+
+def sign_authorization(
+    payload: Mapping[str, Any],
+    signer: Signer,
+    previous_receipt_hash: Optional[str] = None,
+) -> dict:
+    """Sign a pre-execution authorization receipt.
+
+    Like sign_receipt() but marks the envelope as phase='authorization'.
+    The authorization proves the policy was evaluated BEFORE the action ran.
+    Seal with seal_result() after the tool call completes.
+    """
+    final_payload = dict(payload)
+    final_payload["phase"] = "authorization"
+    final_payload.setdefault(
+        "issued_at",
+        datetime.now(timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z"),
+    )
+    if previous_receipt_hash is not None:
+        final_payload["previousReceiptHash"] = previous_receipt_hash
+
+    canonical = _canonicalize(final_payload)
+    authorization_hash = "sha256:" + hashlib.sha256(canonical).hexdigest()
+    signature = signer.private_key.sign(canonical)
+
+    return {
+        "payload": final_payload,
+        "authorization": {
+            "hash": authorization_hash,
+            "sig": _b64url(signature),
+        },
+        "signature": {
+            "alg": "EdDSA",
+            "kid": signer.kid,
+            "sig": _b64url(signature),
+        },
+        "bilateral": True,
+        "result": None,
+    }
+
+
+def seal_result(
+    envelope: dict,
+    signer: Signer,
+    result_data: Mapping[str, Any],
+) -> dict:
+    """Seal a bilateral receipt with post-execution result data.
+
+    Binds the actual outcome to the authorization. The result_signature
+    covers both authorization_hash and result_hash, proving:
+      1. The authorization existed before execution
+      2. The result was produced after execution
+      3. Both were signed by the same key
+    """
+    if not envelope.get("bilateral"):
+        raise ValueError("Cannot seal a non-bilateral receipt")
+    if envelope.get("result") is not None:
+        raise ValueError("Receipt already sealed")
+
+    result_canonical = _canonicalize(result_data)
+    result_hash = "sha256:" + hashlib.sha256(result_canonical).hexdigest()
+    auth_hash = envelope["authorization"]["hash"]
+
+    binding = f"{auth_hash}:{result_hash}".encode("utf-8")
+    result_signature = signer.private_key.sign(binding)
+
+    sealed_at = (
+        datetime.now(timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
+
+    envelope["result"] = {
+        "hash": result_hash,
+        "sig": _b64url(result_signature),
+        "sealed_at": sealed_at,
+        "data": result_data,
+    }
+    return envelope
+
+
+def verify_bilateral_receipt(
+    envelope: Mapping[str, Any],
+    public_key: Ed25519PublicKey,
+) -> dict:
+    """Verify both authorization and result signatures.
+
+    Returns {valid, authorization_valid, result_valid, bilateral}.
+    Falls back to verify_receipt() for non-bilateral envelopes.
+    """
+    if not envelope.get("bilateral"):
+        std_valid = verify_receipt(envelope, public_key)
+        return {
+            "valid": std_valid,
+            "authorization_valid": std_valid,
+            "result_valid": None,
+            "bilateral": False,
+        }
+
+    auth_valid = False
+    payload = envelope.get("payload")
+    sig_section = envelope.get("signature", {})
+
+    if payload and sig_section.get("sig"):
+        canonical = _canonicalize(payload)
+        try:
+            public_key.verify(_b64url_decode(sig_section["sig"]), canonical)
+            auth_valid = True
+        except InvalidSignature:
+            auth_valid = False
+
+    result = envelope.get("result")
+    result_valid = None
+
+    if result is not None and result.get("sig"):
+        auth_hash = envelope.get("authorization", {}).get("hash", "")
+        result_hash = result.get("hash", "")
+        binding = f"{auth_hash}:{result_hash}".encode("utf-8")
+        try:
+            public_key.verify(_b64url_decode(result["sig"]), binding)
+            result_valid = True
+        except InvalidSignature:
+            result_valid = False
+
+    overall = auth_valid and (result_valid is not False)
+    return {
+        "valid": overall,
+        "authorization_valid": auth_valid,
+        "result_valid": result_valid,
+        "bilateral": True,
+    }
