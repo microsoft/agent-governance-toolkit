@@ -7,11 +7,21 @@ namespace AgentGovernance.Trust;
 
 /// <summary>
 /// A thread-safe registry for managing <see cref="AgentIdentity"/> instances.
-/// Supports registration, lookup, revocation, and querying of agent identities.
+/// Supports registration, lookup, sponsor indexing, trust checks, and cascade revocation.
 /// </summary>
 public sealed class IdentityRegistry
 {
-    private readonly ConcurrentDictionary<string, RegistryEntry> _identities = new();
+    private readonly ConcurrentDictionary<string, AgentIdentity> _identities = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _bySponsor = new(StringComparer.OrdinalIgnoreCase);
+    private readonly bool _requireAttestation;
+
+    /// <summary>
+    /// Creates a new registry.
+    /// </summary>
+    public IdentityRegistry(bool requireAttestation = false)
+    {
+        _requireAttestation = requireAttestation;
+    }
 
     /// <summary>
     /// Returns the number of registered identities.
@@ -21,89 +31,111 @@ public sealed class IdentityRegistry
     /// <summary>
     /// Registers an agent identity in the registry.
     /// </summary>
-    /// <param name="identity">The identity to register.</param>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="identity"/> is <c>null</c>.</exception>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when an identity with the same DID is already registered.
-    /// </exception>
     public void Register(AgentIdentity identity)
     {
         ArgumentNullException.ThrowIfNull(identity);
 
-        var entry = new RegistryEntry(identity);
-        if (!_identities.TryAdd(identity.Did, entry))
+        if (_requireAttestation && !identity.AttestationVerified)
+        {
+            throw new InvalidOperationException(
+                $"Identity '{identity.Did}' cannot be registered until attestation is verified.");
+        }
+
+        if (!_identities.TryAdd(identity.Did, identity))
         {
             throw new InvalidOperationException(
                 $"An identity with DID '{identity.Did}' is already registered.");
         }
+
+        var sponsorIndex = _bySponsor.GetOrAdd(
+            identity.SponsorEmail,
+            _ => new ConcurrentDictionary<string, byte>(StringComparer.Ordinal));
+        sponsorIndex.TryAdd(identity.Did, 0);
     }
 
     /// <summary>
     /// Retrieves an agent identity by its DID.
     /// </summary>
-    /// <param name="did">The decentralised identifier to look up.</param>
-    /// <returns>The registered <see cref="AgentIdentity"/>.</returns>
-    /// <exception cref="KeyNotFoundException">
-    /// Thrown when no identity with the specified DID is registered.
-    /// </exception>
     public AgentIdentity Get(string did)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(did);
-
-        if (_identities.TryGetValue(did, out var entry))
+        if (TryGet(did, out var identity) && identity is not null)
         {
-            return entry.Identity;
+            return identity;
         }
 
         throw new KeyNotFoundException($"No identity registered with DID '{did}'.");
     }
 
     /// <summary>
-    /// Revokes an agent identity by its DID.
+    /// Attempts to retrieve an identity without throwing.
     /// </summary>
-    /// <param name="did">The DID of the identity to revoke.</param>
-    /// <param name="reason">The reason for revocation.</param>
-    /// <exception cref="KeyNotFoundException">
-    /// Thrown when no identity with the specified DID is registered.
-    /// </exception>
+    public bool TryGet(string did, out AgentIdentity? identity)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(did);
+        return _identities.TryGetValue(AgentIdentity.NormalizeDid(did), out identity);
+    }
+
+    /// <summary>
+    /// Returns all identities for the given sponsor.
+    /// </summary>
+    public IReadOnlyList<AgentIdentity> GetBySponsor(string sponsorEmail)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sponsorEmail);
+
+        if (!_bySponsor.TryGetValue(sponsorEmail, out var dids))
+        {
+            return Array.Empty<AgentIdentity>();
+        }
+
+        return dids.Keys
+            .Select(Get)
+            .OrderBy(identity => identity.Did, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Returns whether the registry trusts a given DID.
+    /// </summary>
+    public bool IsTrusted(string did)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(did);
+        return TryGet(did, out var identity)
+            && identity is not null
+            && identity.IsActive()
+            && (!_requireAttestation || identity.AttestationVerified);
+    }
+
+    /// <summary>
+    /// Revokes an identity and any delegated children registered beneath it.
+    /// </summary>
     public void Revoke(string did, string reason)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(did);
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
 
-        if (!_identities.TryGetValue(did, out var entry))
-        {
-            throw new KeyNotFoundException($"No identity registered with DID '{did}'.");
-        }
+        var identity = Get(did);
+        identity.Revoke(reason);
 
-        entry.Identity.Revoke();
-        entry.RevocationReason = reason;
+        var children = _identities.Values
+            .Where(candidate => string.Equals(candidate.ParentDid, identity.Did, StringComparison.Ordinal))
+            .Select(candidate => candidate.Did)
+            .ToList();
+
+        foreach (var childDid in children)
+        {
+            Revoke(childDid, $"Parent revoked: {reason}");
+        }
     }
 
     /// <summary>
     /// Returns all identities that are currently active.
     /// </summary>
-    /// <returns>A read-only list of active agent identities.</returns>
     public IReadOnlyList<AgentIdentity> ListActive()
     {
         return _identities.Values
-            .Where(e => e.Identity.IsActive())
-            .Select(e => e.Identity)
-            .ToList()
-            .AsReadOnly();
-    }
-
-    /// <summary>
-    /// Internal registry entry wrapping an identity with optional revocation metadata.
-    /// </summary>
-    private sealed class RegistryEntry
-    {
-        public AgentIdentity Identity { get; }
-        public string? RevocationReason { get; set; }
-
-        public RegistryEntry(AgentIdentity identity)
-        {
-            Identity = identity;
-        }
+            .Where(identity => identity.IsActive())
+            .OrderBy(identity => identity.Did, StringComparer.Ordinal)
+            .ToList();
     }
 }

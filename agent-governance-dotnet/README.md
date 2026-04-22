@@ -71,14 +71,14 @@ rules:
 
 ### Policy Engine
 
-YAML-based policy rules with conditions, priorities, and four conflict resolution strategies:
+YAML and JSON policy rules with conditions, priorities, rich decision metadata, and four conflict resolution strategies:
 
 | Strategy | Behaviour |
 |----------|-----------|
 | `DenyOverrides` | Any deny wins |
 | `AllowOverrides` | Any allow wins |
 | `PriorityFirstMatch` | Highest priority rule wins |
-| `MostSpecificWins` | Agent > Tenant > Global scope |
+| `MostSpecificWins` | Agent > Organization > Tenant > Global scope |
 
 ### Rate Limiting
 
@@ -92,17 +92,23 @@ bool allowed = limiter.TryAcquire("agent:tool_key", maxCalls: 100, TimeSpan.From
 
 ### Zero-Trust Identity
 
-DID-based agent identity with cryptographic signing (HMAC-SHA256, Ed25519 migration path for .NET 9+):
+DID-based agent identity with sponsor metadata, delegation, JWK/JWKS export, DID document export, and .NET 8 compatibility signing:
 
 ```csharp
 using AgentGovernance.Trust;
 
-var identity = AgentIdentity.Create("research-assistant");
-// identity.Did → "did:mesh:a7f3b2c1..."
+var identity = AgentIdentity.Create(
+    "research-assistant",
+    sponsor: "alice@contoso.com",
+    capabilities: new[] { "read:*", "write" });
+var child = identity.Delegate("report-writer", new[] { "read:*" });
+var jwks = identity.ToJwks();
 
 byte[] signature = identity.Sign("important data");
 bool valid = identity.Verify(Encoding.UTF8.GetBytes("important data"), signature);
 ```
+
+> **Note:** the .NET 8 SDK now matches the Python identity shape much more closely, but native asymmetric Ed25519 signing is still a runtime-limited gap until the SDK can target the appropriate framework support.
 
 ### Execution Rings (Runtime)
 

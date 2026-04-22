@@ -12,7 +12,7 @@ public class IdentityRegistryTests
     public void Register_And_Get_RoundTrips()
     {
         var registry = new IdentityRegistry();
-        var identity = AgentIdentity.Create("agent-alpha");
+        var identity = AgentIdentity.Create("agent-alpha", sponsor: "owner@example.com");
 
         registry.Register(identity);
         var retrieved = registry.Get(identity.Did);
@@ -36,7 +36,20 @@ public class IdentityRegistryTests
     {
         var registry = new IdentityRegistry();
 
-        Assert.Throws<KeyNotFoundException>(() => registry.Get("did:agentmesh:unknown"));
+        Assert.Throws<KeyNotFoundException>(() => registry.Get("did:mesh:unknown"));
+    }
+
+    [Fact]
+    public void TryGet_AcceptsLegacyDidFormat()
+    {
+        var registry = new IdentityRegistry();
+        var identity = AgentIdentity.Create("agent-alpha");
+        registry.Register(identity);
+
+        Assert.True(registry.TryGet(
+            identity.Did.Replace("did:mesh:", "did:agentmesh:", StringComparison.Ordinal),
+            out var retrieved));
+        Assert.Same(identity, retrieved);
     }
 
     [Fact]
@@ -50,6 +63,27 @@ public class IdentityRegistryTests
 
         Assert.Equal(IdentityStatus.Revoked, identity.Status);
         Assert.False(identity.IsActive());
+        Assert.Equal("Compromised key", identity.RevocationReason);
+    }
+
+    [Fact]
+    public void Revoke_CascadesToDelegatedChildren()
+    {
+        var registry = new IdentityRegistry();
+        var parent = AgentIdentity.Create(
+            "parent",
+            sponsor: "owner@example.com",
+            capabilities: new[] { "read", "write" });
+        var child = parent.Delegate("child", new[] { "read" });
+
+        registry.Register(parent);
+        registry.Register(child);
+
+        registry.Revoke(parent.Did, "security incident");
+
+        Assert.Equal(IdentityStatus.Revoked, parent.Status);
+        Assert.Equal(IdentityStatus.Revoked, child.Status);
+        Assert.Equal("Parent revoked: security incident", child.RevocationReason);
     }
 
     [Fact]
@@ -58,7 +92,7 @@ public class IdentityRegistryTests
         var registry = new IdentityRegistry();
 
         Assert.Throws<KeyNotFoundException>(() =>
-            registry.Revoke("did:agentmesh:unknown", "reason"));
+            registry.Revoke("did:mesh:unknown", "reason"));
     }
 
     [Fact]
@@ -112,5 +146,51 @@ public class IdentityRegistryTests
 
         var actives = registry.ListActive();
         Assert.Empty(actives);
+    }
+
+    [Fact]
+    public void GetBySponsor_ReturnsAllSponsorIdentities()
+    {
+        var registry = new IdentityRegistry();
+        var a = AgentIdentity.Create("a", sponsor: "owner@example.com");
+        var b = AgentIdentity.Create("b", sponsor: "owner@example.com");
+        var c = AgentIdentity.Create("c", sponsor: "other@example.com");
+
+        registry.Register(a);
+        registry.Register(b);
+        registry.Register(c);
+
+        var owned = registry.GetBySponsor("owner@example.com");
+
+        Assert.Equal(2, owned.Count);
+        Assert.Contains(a, owned);
+        Assert.Contains(b, owned);
+        Assert.DoesNotContain(c, owned);
+    }
+
+    [Fact]
+    public void IsTrusted_RequiresActiveIdentity()
+    {
+        var registry = new IdentityRegistry();
+        var identity = AgentIdentity.Create("trusted");
+        registry.Register(identity);
+
+        Assert.True(registry.IsTrusted(identity.Did));
+
+        identity.Suspend();
+        Assert.False(registry.IsTrusted(identity.Did));
+    }
+
+    [Fact]
+    public void Register_RequiresAttestation_WhenConfigured()
+    {
+        var registry = new IdentityRegistry(requireAttestation: true);
+        var unverified = AgentIdentity.Create("plain");
+        var verified = AgentIdentity.Create("verified", attestationVerified: true);
+
+        Assert.Throws<InvalidOperationException>(() => registry.Register(unverified));
+
+        registry.Register(verified);
+        Assert.True(registry.IsTrusted(verified.Did));
     }
 }

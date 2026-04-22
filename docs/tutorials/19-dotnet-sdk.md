@@ -4,11 +4,11 @@
 
 ---
 
-Full agent governance in C# / .NET 8 — the same policy engine, execution rings,
+Full agent governance in C# / .NET 8 — policy engine, execution rings,
 circuit breakers, prompt injection detection, SLO tracking, saga orchestration,
-rate limiting, zero-trust identity, and OpenTelemetry metrics you get from the
-Python SDK, packaged as a single NuGet library with **zero external dependencies
-beyond YamlDotNet**.
+rate limiting, zero-trust identity, and OpenTelemetry metrics with most of the
+Python SDK's core surface, packaged as a single NuGet library with **zero external
+dependencies beyond YamlDotNet**.
 
 > **Target runtime:** .NET 8.0+
 > **NuGet package:** `Microsoft.AgentGovernance` (v2.1.0)
@@ -21,13 +21,13 @@ beyond YamlDotNet**.
 |---------|-------|
 | [Quick Start](#quick-start) | GovernanceKernel in 10 lines of C# |
 | [GovernanceKernel](#governancekernel) | Configuration, policy loading, evaluation |
-| [PolicyEngine](#policyengine) | YAML rules, condition expressions, 4 conflict strategies |
+| [PolicyEngine](#policyengine) | YAML/JSON rules, condition expressions, 4 conflict strategies |
 | [RingEnforcer](#ringenforcer) | 4-tier privilege model (Ring 0–3) |
 | [SagaOrchestrator](#sagaorchestrator) | Multi-step transactions with compensation |
 | [CircuitBreaker](#circuitbreaker) | Three-state protection (Closed / Open / HalfOpen) |
 | [SloEngine](#sloengine) | SLO tracking with error budgets and burn rate alerts |
 | [PromptInjectionDetector](#promptinjectiondetector) | 7 attack types, sensitivity tuning |
-| [AgentIdentity](#agentidentity) | DID-based identity with HMAC-SHA256 signing |
+| [AgentIdentity](#agentidentity) | DID-based identity, delegation, JWK/JWKS, compatibility signing |
 | [Rate Limiting](#rate-limiting) | Sliding window rate limiter |
 | [OpenTelemetry Metrics](#opentelemetry-metrics) | Built-in `System.Diagnostics.Metrics` instrumentation |
 | [Semantic Kernel Integration](#semantic-kernel-integration) | Using with Microsoft Semantic Kernel |
@@ -140,6 +140,22 @@ kernel.LoadPolicyFromYaml("""
         action: allow
         priority: 10
     """);
+
+// Load from JSON when policies are distributed in API/config payloads
+kernel.LoadPolicyFromJson("""
+    {
+      "name": "json-inline-policy",
+      "default_action": "deny",
+      "rules": [
+        {
+          "name": "allow-status",
+          "condition": "tool_name == 'status'",
+          "action": "allow",
+          "priority": 5
+        }
+      ]
+    }
+    """);
 ```
 
 ### Evaluating tool calls
@@ -188,10 +204,10 @@ using var kernel = new GovernanceKernel(options);
 
 ## PolicyEngine
 
-The `PolicyEngine` loads one or more YAML policy documents, evaluates agent
-requests against all loaded rules, and resolves conflicts when multiple rules
-match. It is **thread-safe** — policies are stored in a lock-protected list and
-evaluation is side-effect free.
+The `PolicyEngine` loads one or more YAML or JSON policy documents, evaluates
+agent requests against all loaded rules, and resolves conflicts when multiple
+rules match. It is **thread-safe** — policies are stored in a lock-protected
+list and evaluation is side-effect free.
 
 ### Policy YAML syntax
 
@@ -199,7 +215,7 @@ evaluation is side-effect free.
 apiVersion: governance.toolkit/v1
 name: production-security
 description: Production security policy
-scope: global                     # global | tenant | agent
+scope: global                     # global | tenant | organization | agent
 default_action: deny
 
 rules:
@@ -844,23 +860,27 @@ Console.WriteLine(result.Allowed); // false
 
 ## AgentIdentity
 
-DID-based agent identity with cryptographic signing using HMAC-SHA256 (.NET 8
-compatibility fallback). The DID format follows the AgentMesh convention:
-`did:mesh:{unique-id}`.
+DID-based agent identity with sponsor metadata, delegated capability narrowing,
+JWK/JWKS export, DID document export, and .NET 8 compatibility signing. The DID
+format follows the AgentMesh convention: `did:mesh:{unique-id}`.
 
-> **Migration note:** .NET 9+ introduces native `Ed25519` support. The current
-> HMAC-SHA256 scheme is a symmetric fallback — migrate to Ed25519 for proper
-> asymmetric signing in production cross-agent trust scenarios.
+> **Runtime note:** the .NET SDK now mirrors the Python identity shape closely,
+> but native asymmetric `Ed25519` signing remains the main runtime-limited gap on
+> .NET 8. The current signing path is intentionally explicit and compatibility-focused.
 
 ### Creating an identity
 
 ```csharp
 using AgentGovernance.Trust;
 
-var identity = AgentIdentity.Create("research-assistant");
+var identity = AgentIdentity.Create(
+    "research-assistant",
+    sponsor: "alice@contoso.com",
+    capabilities: new[] { "read:*", "write" });
 Console.WriteLine(identity.Did);       // "did:mesh:a7f3b2c1..."
 Console.WriteLine(identity.PublicKey.Length);  // 32 bytes
 Console.WriteLine(identity.PrivateKey!.Length); // 32 bytes
+Console.WriteLine(identity.SponsorEmail); // "alice@contoso.com"
 ```
 
 The DID is derived from the agent name (SHA-256 prefix) combined with random
@@ -872,7 +892,6 @@ bytes, ensuring uniqueness even for agents with the same name.
 using System.Text;
 
 // Sign a string message
-#pragma warning disable CS0618 // HMAC-SHA256 fallback
 byte[] signature = identity.Sign("important governance data");
 
 // Verify the signature
@@ -885,7 +904,17 @@ Console.WriteLine(valid); // true
 // Sign raw bytes
 byte[] data = Encoding.UTF8.GetBytes("binary payload");
 byte[] sig = identity.Sign(data);
-#pragma warning restore CS0618
+```
+
+### Delegation, JWKS, and DID document export
+
+```csharp
+var child = identity.Delegate("report-writer", new[] { "read:*" });
+Console.WriteLine(child.ParentDid);         // parent DID
+Console.WriteLine(child.DelegationDepth);   // 1
+
+var jwks = identity.ToJwks();
+var didDocument = identity.ToDIDDocument();
 ```
 
 ### Verification-only identities
@@ -905,14 +934,12 @@ var verifierOnly = new AgentIdentity(
 ### Static cross-agent verification
 
 ```csharp
-#pragma warning disable CS0618
 bool valid = AgentIdentity.VerifySignature(
     publicKey: signerIdentity.PublicKey,
     data: Encoding.UTF8.GetBytes("shared data"),
     signature: receivedSignature,
-    privateKey: signerIdentity.PrivateKey  // required for HMAC; not needed with Ed25519
+    privateKey: signerIdentity.PrivateKey  // required for the current .NET 8 compatibility signing path
 );
-#pragma warning restore CS0618
 ```
 
 ### File-backed trust store

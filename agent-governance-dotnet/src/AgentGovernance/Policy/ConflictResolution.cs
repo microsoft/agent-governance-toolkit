@@ -43,8 +43,11 @@ public enum PolicyScope
     /// <summary>Applies to agents within a specific tenant.</summary>
     Tenant = 1,
 
+    /// <summary>Applies to agents within a specific organization.</summary>
+    Organization = 2,
+
     /// <summary>Applies to a specific agent.</summary>
-    Agent = 2
+    Agent = 3
 }
 
 /// <summary>
@@ -145,6 +148,7 @@ public static class PolicyConflictResolver
         return value?.ToLowerInvariant() switch
         {
             "tenant" => PolicyScope.Tenant,
+            "organization" => PolicyScope.Organization,
             "agent" => PolicyScope.Agent,
             _ => PolicyScope.Global
         };

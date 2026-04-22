@@ -17,7 +17,18 @@ public class JwkTests
 
         Assert.Equal("OKP", jwk["kty"]);
         Assert.Equal("Ed25519", jwk["crv"]);
+        Assert.Equal($"{identity.Did}#{identity.VerificationKeyId}", jwk["kid"]);
         Assert.NotEmpty(jwk["x"]);
+    }
+
+    [Fact]
+    public void ToJwk_WithPrivateKey_EmitsPrivateComponent()
+    {
+        var identity = AgentIdentity.Create("test-agent");
+
+        var jwk = identity.ToJwk(includePrivate: true);
+
+        Assert.Contains("d", jwk.Keys);
     }
 
     [Fact]
@@ -25,24 +36,37 @@ public class JwkTests
     {
         var original = AgentIdentity.Create("test-agent");
         var jwk = original.ToJwk();
-        jwk["kid"] = original.Did;
 
         var restored = Jwk.FromJwk(jwk);
 
         Assert.Equal(original.Did, restored.Did);
         Assert.Equal(original.PublicKey, restored.PublicKey);
         Assert.Null(restored.PrivateKey);
+        Assert.Equal(original.VerificationKeyId, restored.VerificationKeyId);
     }
 
     [Fact]
-    public void FromJwk_WithoutKid_GeneratesDid()
+    public void FromJwk_WithPrivateKey_RestoresSigningMaterial()
     {
-        var identity = AgentIdentity.Create("test-agent");
-        var jwk = identity.ToJwk();
+        var original = AgentIdentity.Create("test-agent");
+        var jwk = original.ToJwk(includePrivate: true);
 
         var restored = Jwk.FromJwk(jwk);
 
-        Assert.StartsWith("did:agentmesh:", restored.Did);
+        Assert.NotNull(restored.PrivateKey);
+        Assert.True(restored.Verify("payload"u8.ToArray(), restored.Sign("payload")));
+    }
+
+    [Fact]
+    public void FromJwk_WithoutKid_GeneratesCanonicalDid()
+    {
+        var identity = AgentIdentity.Create("test-agent");
+        var jwk = identity.ToJwk();
+        jwk.Remove("kid");
+
+        var restored = Jwk.FromJwk(jwk);
+
+        Assert.StartsWith("did:mesh:", restored.Did);
     }
 
     [Fact]
@@ -98,18 +122,27 @@ public class JwkTests
     [Fact]
     public void Base64Url_RoundTrip_ViaJwk()
     {
-        // Verify base64url encoding works correctly through ToJwk/FromJwk roundtrip.
         var identity = AgentIdentity.Create("b64-test");
         var jwk = identity.ToJwk();
-        jwk["kid"] = identity.Did;
 
         var restored = Jwk.FromJwk(jwk);
         Assert.Equal(identity.PublicKey, restored.PublicKey);
 
-        // The 'x' value should not contain standard base64 padding or unsafe chars.
         Assert.DoesNotContain("+", jwk["x"]);
         Assert.DoesNotContain("/", jwk["x"]);
         Assert.DoesNotContain("=", jwk["x"]);
+    }
+
+    [Fact]
+    public void ToJwks_RoundTripsIdentity()
+    {
+        var identity = AgentIdentity.Create("jwks-agent");
+        var jwks = identity.ToJwks();
+
+        var restored = Jwk.FromJwks(jwks, $"{identity.Did}#{identity.VerificationKeyId}");
+
+        Assert.Equal(identity.Did, restored.Did);
+        Assert.Equal(identity.VerificationKeyId, restored.VerificationKeyId);
     }
 
     [Fact]
@@ -119,22 +152,27 @@ public class JwkTests
 
         var doc = identity.ToDIDDocument();
 
-        Assert.Equal("https://www.w3.org/ns/did/v1", doc["@context"]);
+        var context = Assert.IsType<List<object>>(doc["@context"]);
+        Assert.Single(context);
+        Assert.Equal("https://www.w3.org/ns/did/v1", context[0]);
         Assert.Equal(identity.Did, doc["id"]);
-        Assert.NotNull(doc["verificationMethod"]);
-        Assert.NotNull(doc["authentication"]);
 
-        var methods = (List<object>)doc["verificationMethod"];
+        var methods = Assert.IsType<List<object>>(doc["verificationMethod"]);
         Assert.Single(methods);
 
-        var method = (Dictionary<string, object>)methods[0];
-        Assert.Equal($"{identity.Did}#key-1", method["id"]);
+        var method = Assert.IsType<Dictionary<string, object>>(methods[0]);
+        Assert.Equal($"{identity.Did}#{identity.VerificationKeyId}", method["id"]);
         Assert.Equal("JsonWebKey2020", method["type"]);
         Assert.Equal(identity.Did, method["controller"]);
 
-        var authList = (List<object>)doc["authentication"];
+        var authList = Assert.IsType<List<object>>(doc["authentication"]);
         Assert.Single(authList);
-        Assert.Equal($"{identity.Did}#key-1", authList[0]);
+        Assert.Equal($"{identity.Did}#{identity.VerificationKeyId}", authList[0]);
+
+        var serviceList = Assert.IsType<List<object>>(doc["service"]);
+        Assert.Single(serviceList);
+        var service = Assert.IsType<Dictionary<string, object>>(serviceList[0]);
+        Assert.Equal("AgentMeshIdentity", service["type"]);
     }
 
     [Fact]

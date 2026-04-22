@@ -315,7 +315,7 @@ name: agent-check
 default_action: deny
 rules:
   - name: specific-agent
-    condition: ""agent_did == 'did:agentmesh:special'""
+    condition: ""agent_did == 'did:mesh:special'""
     action: allow
 ");
         Assert.True(engine.Evaluate("did:agentmesh:special", new Dictionary<string, object>()).Allowed);

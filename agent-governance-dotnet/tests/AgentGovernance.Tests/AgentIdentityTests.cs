@@ -1,4 +1,5 @@
-// Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 
 using AgentGovernance.Trust;
 using Xunit;
@@ -10,13 +11,24 @@ public class AgentIdentityTests
     [Fact]
     public void Create_GeneratesValidIdentity()
     {
-        var identity = AgentIdentity.Create("test-agent");
+        var identity = AgentIdentity.Create("test-agent", sponsor: "owner@example.com");
 
-        Assert.StartsWith("did:agentmesh:", identity.Did);
+        Assert.StartsWith("did:mesh:", identity.Did);
+        Assert.Equal("test-agent", identity.Name);
+        Assert.Equal("owner@example.com", identity.SponsorEmail);
+        Assert.NotEmpty(identity.VerificationKeyId);
         Assert.NotNull(identity.PublicKey);
         Assert.NotNull(identity.PrivateKey);
         Assert.Equal(32, identity.PublicKey.Length);
         Assert.Equal(32, identity.PrivateKey!.Length);
+    }
+
+    [Fact]
+    public void Create_UsesFallbackSponsor_WhenNotProvided()
+    {
+        var identity = AgentIdentity.Create("agent alpha");
+
+        Assert.Equal("agent-alpha@agentmesh.dev", identity.SponsorEmail);
     }
 
     [Fact]
@@ -25,8 +37,15 @@ public class AgentIdentityTests
         var id1 = AgentIdentity.Create("agent-alpha");
         var id2 = AgentIdentity.Create("agent-beta");
 
-        // DIDs should be different (they contain random components).
         Assert.NotEqual(id1.Did, id2.Did);
+    }
+
+    [Fact]
+    public void NormalizeDid_AcceptsLegacyPrefix()
+    {
+        Assert.Equal(
+            "did:mesh:test-agent",
+            AgentIdentity.NormalizeDid("did:agentmesh:test-agent"));
     }
 
     [Fact]
@@ -39,7 +58,7 @@ public class AgentIdentityTests
         var sig2 = identity.Sign(data);
 
         Assert.Equal(sig1, sig2);
-        Assert.Equal(32, sig1.Length); // HMAC-SHA256 produces 32-byte output.
+        Assert.Equal(32, sig1.Length);
     }
 
     [Fact]
@@ -80,7 +99,6 @@ public class AgentIdentityTests
         var data = "some data"u8.ToArray();
         var signature = identity.Sign(data);
 
-        // Flip a byte in the signature.
         var tampered = (byte[])signature.Clone();
         tampered[0] ^= 0xFF;
         Assert.False(identity.Verify(data, tampered));
@@ -89,7 +107,6 @@ public class AgentIdentityTests
     [Fact]
     public void Verify_VerificationOnlyIdentity_ThrowsInvalidOperationException()
     {
-        // An identity with no private key cannot verify in HMAC mode — throws to make the limitation explicit.
         var identity = AgentIdentity.Create("full");
         var verifyOnly = new AgentIdentity(identity.Did, identity.PublicKey);
 
@@ -102,7 +119,7 @@ public class AgentIdentityTests
     [Fact]
     public void Sign_WithoutPrivateKey_ThrowsInvalidOperationException()
     {
-        var identity = new AgentIdentity("did:agentmesh:test", new byte[32]);
+        var identity = new AgentIdentity("did:mesh:test", new byte[32]);
 
         Assert.Throws<InvalidOperationException>(() =>
             identity.Sign("test"u8.ToArray()));
@@ -128,6 +145,80 @@ public class AgentIdentityTests
 
         Assert.Throws<InvalidOperationException>(() =>
             AgentIdentity.VerifySignature(identity.PublicKey, data, signature));
+    }
+
+    [Fact]
+    public void HasCapability_SupportsExactAndPrefixWildcard()
+    {
+        var identity = AgentIdentity.Create(
+            "capability-agent",
+            capabilities: new[] { "read:*", "write" });
+
+        Assert.True(identity.HasCapability("read:users"));
+        Assert.True(identity.HasCapability("write"));
+        Assert.False(identity.HasCapability("admin"));
+    }
+
+    [Fact]
+    public void Delegate_CreatesChildWithNarrowedCapabilities()
+    {
+        var parent = AgentIdentity.Create(
+            "parent",
+            sponsor: "owner@example.com",
+            capabilities: new[] { "read", "write", "execute" });
+
+        var child = parent.Delegate("child", new[] { "read" });
+
+        Assert.Equal(parent.Did, child.ParentDid);
+        Assert.Equal(1, child.DelegationDepth);
+        Assert.Equal(new[] { "read" }, child.Capabilities);
+        Assert.Equal(parent.SponsorEmail, child.SponsorEmail);
+    }
+
+    [Fact]
+    public void Delegate_RejectsCapabilityNotInParent()
+    {
+        var parent = AgentIdentity.Create(
+            "parent",
+            sponsor: "owner@example.com",
+            capabilities: new[] { "read" });
+
+        Assert.Throws<InvalidOperationException>(() =>
+            parent.Delegate("child", new[] { "read", "write" }));
+    }
+
+    [Fact]
+    public void GetEffectiveCapabilities_IntersectsDelegationChain()
+    {
+        var registry = new IdentityRegistry();
+        var root = AgentIdentity.Create(
+            "root",
+            sponsor: "owner@example.com",
+            capabilities: new[] { "read", "write", "execute" });
+        var child = root.Delegate("child", new[] { "read", "write" });
+        var leaf = child.Delegate("leaf", new[] { "read" });
+
+        registry.Register(root);
+        registry.Register(child);
+        registry.Register(leaf);
+
+        Assert.Equal(new[] { "read" }, leaf.GetEffectiveCapabilities(registry));
+    }
+
+    [Fact]
+    public void VerifyDelegationChain_ValidChain_ReturnsTrue()
+    {
+        var registry = new IdentityRegistry();
+        var root = AgentIdentity.Create(
+            "root",
+            sponsor: "owner@example.com",
+            capabilities: new[] { "read", "write" });
+        var child = root.Delegate("child", new[] { "read" });
+
+        registry.Register(root);
+        registry.Register(child);
+
+        Assert.True(AgentIdentity.VerifyDelegationChain(child, registry));
     }
 
     [Fact]

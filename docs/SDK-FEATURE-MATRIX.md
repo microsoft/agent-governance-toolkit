@@ -11,7 +11,7 @@ governed agents in each ecosystem.
 | Capability | Python | TypeScript | .NET | Rust | Go |
 |---|:---:|:---:|:---:|:---:|:---:|
 | **Policy Engine** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Identity & Auth** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Identity & Auth** | ✅ | ✅ | ◑ | ✅ | ✅ |
 | **Trust Scoring** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Audit Logging** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **MCP Security** | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -39,7 +39,7 @@ to build governed agents in any language:
 | Primitive | What It Does | Python | TS | .NET | Rust | Go |
 |---|---|---|---|---|---|---|
 | Policy evaluation | Evaluate actions against rules before execution | `PolicyEvaluator` | `PolicyEngine` | `PolicyEngine` | `PolicyEngine` | `PolicyEngine` |
-| Agent identity | Cryptographic credentials (Ed25519) | `AgentIdentity` | `AgentIdentity` | `AgentIdentity` | `Identity` | `Identity` |
+| Agent identity | Cryptographic credentials | `AgentIdentity` | `AgentIdentity` | `AgentIdentity` (.NET 8 compatibility signing, delegation, JWK/JWKS, DID docs) | `Identity` | `Identity` |
 | Trust scoring | 0–1000 score based on behavior | `TrustEngine` | `TrustEngine` | `TrustStore` | `TrustEngine` | `TrustEngine` |
 | Audit logging | Append-only action log | `AuditLogger` | `AuditLogger` | `AuditLogger` | `AuditLogger` | `AuditLogger` |
 
@@ -50,15 +50,8 @@ governance stack for enterprise deployments:
 
 | Capability | Package | Description |
 |---|---|---|
-| **Execution Rings** | `agent-hypervisor` | 4-tier privilege model (Ring 0–3) with resource limits |
-| **Saga Orchestration** | `agent-hypervisor` | Multi-step workflows with compensating actions |
-| **Kill Switch** | `agent-hypervisor` | Instant agent termination for non-compliance |
-| **SRE / SLOs** | `agent-sre` | Service level objectives, error budgets, chaos testing |
-| **Circuit Breakers** | `agent-sre` | Automatic throttling when error thresholds exceeded |
 | **Replay Debugging** | `agent-sre` | Deterministic replay of agent sessions |
-| **MCP Security Scanner** | `agent-os` | Detect tool poisoning, typosquatting, hidden instructions |
 | **Shadow AI Discovery** | `agent-discovery` | Find unregistered agents in processes, configs, repos |
-| **Lifecycle Management** | `agentmesh` | Provisioning → rotation → orphan detection → decommission |
 | **Governance Dashboard** | `demo/` | Real-time fleet visibility (Streamlit) |
 | **Unified CLI (`agt`)** | `agent-compliance` | `agt verify`, `agt doctor`, `agt lint-policy` |
 | **Prompt Defense** | `agent-compliance` | 12-vector prompt injection audit |
@@ -91,8 +84,8 @@ governance stack for enterprise deployments:
 
 | Namespace | Features |
 |-----------|----------|
-| `Policy` | `PolicyEngine` with YAML policy loading, rule evaluation |
-| `Trust` | `AgentIdentity`, `IdentityRegistry`, `FileTrustStore` |
+| `Policy` | `PolicyEngine` with YAML/JSON policy loading, organization scope, and richer decision metadata |
+| `Trust` | `AgentIdentity`, `IdentityRegistry`, `FileTrustStore`, delegation helpers, JWK/JWKS, DID document export |
 | `Audit` | `AuditLogger`, `AuditEmitter` with structured events |
 | `Hypervisor` | `ExecutionRings` (4-tier), `SagaOrchestrator`, `KillSwitch` |
 | `Lifecycle` | `LifecycleManager` with 8-state machine and validated transitions |
@@ -102,7 +95,7 @@ governance stack for enterprise deployments:
 | `Telemetry` | OpenTelemetry integration |
 | `Mcp` | `McpSecurityScanner` (poisoning, typosquatting, hidden instructions, rug pull, schema abuse, cross-server), `McpResponseSanitizer`, `McpCredentialRedactor`, `McpGateway` |
 
-**Roadmap:** Full lifecycle persistence.
+**Roadmap:** Native asymmetric Ed25519 signing once the target runtime supports it broadly, plus full lifecycle persistence.
 
 ### Rust SDK
 

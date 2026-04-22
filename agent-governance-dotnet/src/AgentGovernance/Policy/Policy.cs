@@ -1,23 +1,28 @@
-// Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
 namespace AgentGovernance.Policy;
 
 /// <summary>
-/// Represents a complete governance policy document loaded from YAML.
-/// A policy contains metadata and an ordered list of <see cref="PolicyRule"/> entries
-/// that are evaluated against agent requests.
+/// Represents a complete governance policy document loaded from YAML or JSON.
 /// </summary>
 public sealed class Policy
 {
-    /// <summary>
-    /// Supported API versions for policy schema validation.
-    /// </summary>
     private static readonly HashSet<string> SupportedApiVersions = new(StringComparer.OrdinalIgnoreCase)
     {
         "governance.toolkit/v1"
+    };
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
     };
 
     /// <summary>
@@ -58,9 +63,6 @@ public sealed class Policy
     /// <summary>
     /// Deserializes a <see cref="Policy"/> from a YAML string.
     /// </summary>
-    /// <param name="yaml">The YAML content representing a policy document.</param>
-    /// <returns>A new <see cref="Policy"/> instance.</returns>
-    /// <exception cref="ArgumentException">Thrown when the YAML is invalid or the API version is unsupported.</exception>
     public static Policy FromYaml(string yaml)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(yaml);
@@ -70,20 +72,59 @@ public sealed class Policy
             .IgnoreUnmatchedProperties()
             .Build();
 
-        var raw = deserializer.Deserialize<YamlPolicyDocument>(yaml)
+        var raw = deserializer.Deserialize<PolicyDocument>(yaml)
             ?? throw new ArgumentException("Failed to parse YAML policy document.");
+        return FromDocument(raw);
+    }
 
-        // Validate API version.
+    /// <summary>
+    /// Deserializes a <see cref="Policy"/> from a JSON string.
+    /// </summary>
+    public static Policy FromJson(string json)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(json);
+
+        var raw = JsonSerializer.Deserialize<PolicyDocument>(json, JsonOptions)
+            ?? throw new ArgumentException("Failed to parse JSON policy document.");
+        return FromDocument(raw);
+    }
+
+    /// <summary>
+    /// Loads a <see cref="Policy"/> from a YAML file on disk.
+    /// </summary>
+    public static Policy FromYamlFile(string path)
+    {
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException($"Policy file not found: '{path}'", path);
+        }
+
+        var yaml = File.ReadAllText(path, System.Text.Encoding.UTF8);
+        return FromYaml(yaml);
+    }
+
+    /// <summary>
+    /// Loads a <see cref="Policy"/> from a JSON file on disk.
+    /// </summary>
+    public static Policy FromJsonFile(string path)
+    {
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException($"Policy file not found: '{path}'", path);
+        }
+
+        var json = File.ReadAllText(path, System.Text.Encoding.UTF8);
+        return FromJson(json);
+    }
+
+    private static Policy FromDocument(PolicyDocument raw)
+    {
         var apiVersion = raw.ApiVersion ?? "governance.toolkit/v1";
         if (!SupportedApiVersions.Contains(apiVersion))
         {
             throw new ArgumentException(
-                $"Unsupported policy API version: '{apiVersion}'. " +
-                $"Supported: {string.Join(", ", SupportedApiVersions)}");
+                $"Unsupported policy API version: '{apiVersion}'. Supported: {string.Join(", ", SupportedApiVersions)}");
         }
-
-        var scope = PolicyConflictResolver.ParseScope(raw.Scope);
-        var defaultAction = ParseDefaultAction(raw.DefaultAction);
 
         var rules = new List<PolicyRule>();
         if (raw.Rules is not null)
@@ -110,33 +151,12 @@ public sealed class Policy
             Version = raw.Version ?? "1.0",
             Name = raw.Name ?? throw new ArgumentException("Policy must have a 'name'."),
             Description = raw.Description,
-            Scope = scope,
-            DefaultAction = defaultAction,
+            Scope = PolicyConflictResolver.ParseScope(raw.Scope),
+            DefaultAction = ParseDefaultAction(raw.DefaultAction),
             Rules = rules
         };
     }
 
-    /// <summary>
-    /// Loads a <see cref="Policy"/> from a YAML file on disk.
-    /// </summary>
-    /// <param name="path">Absolute or relative path to the YAML policy file.</param>
-    /// <returns>A new <see cref="Policy"/> instance.</returns>
-    /// <exception cref="FileNotFoundException">Thrown when the file does not exist.</exception>
-    public static Policy FromYamlFile(string path)
-    {
-        if (!File.Exists(path))
-        {
-            throw new FileNotFoundException($"Policy file not found: '{path}'", path);
-        }
-
-        var yaml = File.ReadAllText(path);
-        return FromYaml(yaml);
-    }
-
-    /// <summary>
-    /// Parses the default_action field from YAML into a <see cref="PolicyAction"/>.
-    /// Defaults to <see cref="PolicyAction.Deny"/> when not specified.
-    /// </summary>
     private static PolicyAction ParseDefaultAction(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -147,36 +167,69 @@ public sealed class Policy
         return PolicyRule.ParseAction(value);
     }
 
-    // ── Internal YAML deserialization models ──────────────────────────────
-
-    /// <summary>
-    /// Internal model for YAML deserialization of a policy document.
-    /// Uses snake_case naming convention via YamlDotNet.
-    /// </summary>
-    internal sealed class YamlPolicyDocument
+    internal sealed class PolicyDocument
     {
         [YamlMember(Alias = "apiVersion", ApplyNamingConventions = false)]
+        [JsonPropertyName("apiVersion")]
         public string? ApiVersion { get; set; }
+
+        [YamlMember(Alias = "version")]
+        [JsonPropertyName("version")]
         public string? Version { get; set; }
+
+        [YamlMember(Alias = "name")]
+        [JsonPropertyName("name")]
         public string? Name { get; set; }
+
+        [YamlMember(Alias = "description")]
+        [JsonPropertyName("description")]
         public string? Description { get; set; }
+
+        [YamlMember(Alias = "scope")]
+        [JsonPropertyName("scope")]
         public string? Scope { get; set; }
+
+        [YamlMember(Alias = "default_action")]
+        [JsonPropertyName("default_action")]
         public string? DefaultAction { get; set; }
-        public List<YamlRuleDocument>? Rules { get; set; }
+
+        [YamlMember(Alias = "rules")]
+        [JsonPropertyName("rules")]
+        public List<RuleDocument>? Rules { get; set; }
     }
 
-    /// <summary>
-    /// Internal model for YAML deserialization of a policy rule.
-    /// </summary>
-    internal sealed class YamlRuleDocument
+    internal sealed class RuleDocument
     {
+        [YamlMember(Alias = "name")]
+        [JsonPropertyName("name")]
         public string? Name { get; set; }
+
+        [YamlMember(Alias = "description")]
+        [JsonPropertyName("description")]
         public string? Description { get; set; }
+
+        [YamlMember(Alias = "condition")]
+        [JsonPropertyName("condition")]
         public string? Condition { get; set; }
+
+        [YamlMember(Alias = "action")]
+        [JsonPropertyName("action")]
         public string? Action { get; set; }
+
+        [YamlMember(Alias = "priority")]
+        [JsonPropertyName("priority")]
         public int? Priority { get; set; }
+
+        [YamlMember(Alias = "enabled")]
+        [JsonPropertyName("enabled")]
         public bool? Enabled { get; set; }
+
+        [YamlMember(Alias = "approvers")]
+        [JsonPropertyName("approvers")]
         public List<string>? Approvers { get; set; }
+
+        [YamlMember(Alias = "limit")]
+        [JsonPropertyName("limit")]
         public string? Limit { get; set; }
     }
 }
