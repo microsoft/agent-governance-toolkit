@@ -261,4 +261,4 @@ assert_eq!(mgr.events().len(), 3);
 
 ## License
 
-See repository root [LICENSE](../../../../LICENSE).
+See repository root [LICENSE](../../LICENSE).

@@ -514,12 +514,12 @@ stages:
 
           - script: |
               cargo build --release --workspace
-            workingDirectory: 'packages/agent-mesh/sdks/rust'
+            workingDirectory: 'agent-governance-rust'
             displayName: 'Build all crates'
 
           - script: |
               cargo test --release --workspace
-            workingDirectory: 'packages/agent-mesh/sdks/rust'
+            workingDirectory: 'agent-governance-rust'
             displayName: 'Run all tests'
 
           - script: |
@@ -531,7 +531,7 @@ stages:
               echo "=== Packaged crates ==="
               ls -la target/package/*.crate
               cp target/package/*.crate $(Pipeline.Workspace)/rust-packages/
-            workingDirectory: 'packages/agent-mesh/sdks/rust'
+            workingDirectory: 'agent-governance-rust'
             displayName: 'Package all crates'
 
           - task: PublishPipelineArtifact@1
