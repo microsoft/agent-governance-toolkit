@@ -313,7 +313,7 @@ class PolicyChecker:
         """Check all staged git files for violations."""
         try:
             result = subprocess.run(
-                ['git', 'diff', '--cached', '--name-only'],
+                ['git', 'diff', '--cached', '--name-only'],  # noqa: S607 — known CLI tool path
                 capture_output=True, text=True, check=True
             )
             files = [f for f in result.stdout.strip().split('\n') if f]

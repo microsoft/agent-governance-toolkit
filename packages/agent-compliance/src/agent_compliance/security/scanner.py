@@ -343,8 +343,8 @@ class SecurityScanner:
             return
 
         try:
-            result = subprocess.run(
-                ["detect-secrets", "scan", str(self.plugin_dir), "--all-files"],
+            result = subprocess.run(  # noqa: S603 — trusted subprocess in security scanner
+                ["detect-secrets", "scan", str(self.plugin_dir), "--all-files"],  # noqa: S607 — known CLI tool path
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -435,7 +435,7 @@ class SecurityScanner:
                 else:
                     cmd.extend(["--file", str(req_file)])
 
-                result = subprocess.run(
+                result = subprocess.run(  # noqa: S603 — trusted subprocess in security scanner
                     cmd,
                     capture_output=True,
                     text=True,
@@ -496,8 +496,8 @@ class SecurityScanner:
 
         try:
             # Need to run in plugin directory
-            result = subprocess.run(
-                ["npm", "audit", "--json"],
+            result = subprocess.run(  # noqa: S603 — trusted subprocess in security scanner
+                ["npm", "audit", "--json"],  # noqa: S607 — known CLI tool path
                 cwd=self.plugin_dir,
                 capture_output=True,
                 text=True,
@@ -556,8 +556,8 @@ class SecurityScanner:
             return
 
         try:
-            result = subprocess.run(
-                ["bandit", "-r", str(self.plugin_dir), "-f", "json", "-ll"],
+            result = subprocess.run(  # noqa: S603 — trusted subprocess in security scanner
+                ["bandit", "-r", str(self.plugin_dir), "-f", "json", "-ll"],  # noqa: S607 — known CLI tool path
                 capture_output=True,
                 text=True,
                 timeout=60,
@@ -730,7 +730,7 @@ class SecurityScanner:
     def _tool_available(self, tool_name: str) -> bool:
         """Check if a security tool is available."""
         try:
-            subprocess.run(
+            subprocess.run(  # noqa: S603 — trusted subprocess in security scanner
                 [tool_name, "--version"],
                 capture_output=True,
                 timeout=5,

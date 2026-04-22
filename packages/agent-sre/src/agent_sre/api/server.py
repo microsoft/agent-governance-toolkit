@@ -142,17 +142,17 @@ app = create_app()
 
 
 def _get_dashboard() -> SLODashboard:
-    assert _dashboard is not None, "Dashboard not initialised"
+    assert _dashboard is not None, "Dashboard not initialised"  # noqa: S101 — startup validation assertion
     return _dashboard
 
 
 def _get_cost_guard() -> CostGuard:
-    assert _cost_guard is not None, "CostGuard not initialised"
+    assert _cost_guard is not None, "CostGuard not initialised"  # noqa: S101 — startup validation assertion
     return _cost_guard
 
 
 def _get_incident_detector() -> IncidentDetector:
-    assert _incident_detector is not None, "IncidentDetector not initialised"
+    assert _incident_detector is not None, "IncidentDetector not initialised"  # noqa: S101 — startup validation assertion
     return _incident_detector
 
 

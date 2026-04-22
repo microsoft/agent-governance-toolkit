@@ -274,7 +274,7 @@ class LangSmithExporter:
             payload["tags"] = run.tags
 
         data = json.dumps(payload).encode()
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310 — LangSmith API endpoint URL
             url,
             data=data,
             headers={
@@ -284,7 +284,7 @@ class LangSmithExporter:
             method="POST",
         )
         try:
-            urllib.request.urlopen(req)
+            urllib.request.urlopen(req)  # noqa: S310 — LangSmith API endpoint URL
         except Exception as e:
             logger.warning(f"Failed to create run in LangSmith: {e}")
 
@@ -303,7 +303,7 @@ class LangSmithExporter:
             payload["error"] = run.error
 
         data = json.dumps(payload).encode()
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310 — LangSmith API endpoint URL
             url,
             data=data,
             headers={
@@ -313,7 +313,7 @@ class LangSmithExporter:
             method="PATCH",
         )
         try:
-            urllib.request.urlopen(req)
+            urllib.request.urlopen(req)  # noqa: S310 — LangSmith API endpoint URL
         except Exception as e:
             logger.warning(f"Failed to update run in LangSmith: {e}")
 
@@ -330,7 +330,7 @@ class LangSmithExporter:
             "comment": feedback.comment,
         }
         data = json.dumps(payload).encode()
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310 — LangSmith API endpoint URL
             url,
             data=data,
             headers={
@@ -340,7 +340,7 @@ class LangSmithExporter:
             method="POST",
         )
         try:
-            urllib.request.urlopen(req)
+            urllib.request.urlopen(req)  # noqa: S310 — LangSmith API endpoint URL
         except Exception as e:
             logger.warning(f"Failed to send feedback to LangSmith: {e}")
 

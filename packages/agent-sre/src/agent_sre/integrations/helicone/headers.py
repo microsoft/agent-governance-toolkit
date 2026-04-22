@@ -220,7 +220,7 @@ class HeliconeLogger:
 
         url = f"{self._base_url}/v1/request/{helicone_id}/feedback"
         data = json.dumps({"rating": rating, "comment": comment}).encode()
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310 — Helicone API endpoint URL
             url,
             data=data,
             headers={
@@ -230,7 +230,7 @@ class HeliconeLogger:
             method="POST",
         )
         try:
-            urllib.request.urlopen(req)
+            urllib.request.urlopen(req)  # noqa: S310 — Helicone API endpoint URL
         except Exception as e:
             logger.warning(f"Failed to send feedback to Helicone: {e}")
 

@@ -278,7 +278,7 @@ def discover_agents(root_dir: str = ".") -> list[AgentConfig]:
     if agents_dir.exists():
         try:
             configs.append(parser.parse_directory(str(agents_dir)))
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort config loading
             pass
 
     # Check root agents.md
@@ -288,7 +288,7 @@ def discover_agents(root_dir: str = ".") -> list[AgentConfig]:
             try:
                 config = parser._parse_agents_md(agents_md)
                 configs.append(config)
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort config loading
                 pass
 
     return configs

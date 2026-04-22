@@ -308,8 +308,8 @@ class SupplyChainGuard:
         try:
             if ecosystem == "pypi":
                 url = f"https://pypi.org/pypi/{package}/{version}/json"
-                req = urllib.request.Request(url, headers={"Accept": "application/json"})
-                with urllib.request.urlopen(req, timeout=10) as resp:
+                req = urllib.request.Request(url, headers={"Accept": "application/json"})  # noqa: S310 — URL from configured registry endpoint
+                with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310 — URL from configured registry endpoint
                     data = json.loads(resp.read().decode())
                 upload_time_str = data.get("urls", [{}])[0].get("upload_time_iso_8601")
                 if not upload_time_str:
@@ -322,8 +322,8 @@ class SupplyChainGuard:
 
             elif ecosystem == "npm":
                 url = f"https://registry.npmjs.org/{package}"
-                req = urllib.request.Request(url, headers={"Accept": "application/json"})
-                with urllib.request.urlopen(req, timeout=10) as resp:
+                req = urllib.request.Request(url, headers={"Accept": "application/json"})  # noqa: S310 — URL from configured registry endpoint
+                with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310 — URL from configured registry endpoint
                     data = json.loads(resp.read().decode())
                 time_entry = data.get("time", {}).get(version)
                 if time_entry:

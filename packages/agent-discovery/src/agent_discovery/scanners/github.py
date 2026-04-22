@@ -181,7 +181,7 @@ class GitHubScanner(BaseScanner):
                         )
                     )
                     agents.append(agent)
-            except Exception:
+            except Exception:  # noqa: S110
                 pass  # file doesn't exist, skip
 
         # Check requirements.txt / pyproject.toml for agent deps
@@ -228,7 +228,7 @@ class GitHubScanner(BaseScanner):
                                 )
                             )
                             agents.append(agent)
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
 
         return agents

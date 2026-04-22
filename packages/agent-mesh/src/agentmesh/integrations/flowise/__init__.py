@@ -221,10 +221,10 @@ class TrustGatedFlowiseClient:
         status_code = 0
 
         try:
-            req = urllib.request.Request(
+            req = urllib.request.Request(  # noqa: S310 — Flowise API endpoint URL
                 url, data=data, headers=headers, method="POST"
             )
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 — Flowise API endpoint URL
                 status_code = resp.status
                 result = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as e:

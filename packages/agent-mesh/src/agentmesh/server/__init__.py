@@ -60,7 +60,7 @@ def run_server(app: FastAPI, default_port: int) -> None:
     """Run uvicorn with env-configurable host/port."""
     import uvicorn
 
-    host = os.getenv("HOST", "0.0.0.0")
+    host = os.getenv("HOST", "0.0.0.0")  # noqa: S104 — intentional: server bind-all for container deployment
     port = int(os.getenv("PORT", str(default_port)))
     log_level = os.getenv("LOG_LEVEL", "info").lower()
     uvicorn.run(app, host=host, port=port, log_level=log_level)

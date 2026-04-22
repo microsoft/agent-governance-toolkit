@@ -80,9 +80,9 @@ def _discover_plugins() -> Dict[str, click.Command]:
                     result = obj()
                     if isinstance(result, click.Command):
                         plugins[ep.name] = result
-            except Exception:
+            except Exception:  # noqa: S110 — plugin load failures are non-critical
                 pass
-    except Exception:
+    except Exception:  # noqa: S110 — plugin discovery failures are non-critical
         pass
 
     return plugins

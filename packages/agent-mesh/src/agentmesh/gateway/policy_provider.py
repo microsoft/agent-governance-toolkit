@@ -51,9 +51,8 @@ class PolicyProviderHandler:
         if self.audit_logger is not None:
             try:
                 self.audit_logger.log(agent_id, action, decision_label)
-            except Exception:
+            except Exception:  # noqa: S110 — intentional silent catch for audit logging
                 pass
-
         return {
             "allowed": allowed,
             "decision": decision_label,

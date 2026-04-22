@@ -172,14 +172,14 @@ class OPABackend:
         )
         url = f"{self._opa_url}/v1/data/{path_parts}"
         payload = json.dumps({"input": context}).encode()
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310 — OPA server URL from configuration
             url,
             data=payload,
             headers={"Content-Type": "application/json"},
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # noqa: S310 — OPA server URL from configuration
                 body = json.loads(resp.read().decode())
                 result_value = body.get("result", False)
                 allowed = bool(result_value)
@@ -231,7 +231,7 @@ class OPABackend:
             self._query,
         ]
         try:
-            proc = subprocess.run(
+            proc = subprocess.run(  # noqa: S603 — trusted subprocess for OPA policy engine
                 cmd,
                 input=input_json,
                 capture_output=True,
@@ -547,7 +547,7 @@ class CedarBackend:
                 cmd.extend(["--schema", self._schema_path])
 
             try:
-                proc = subprocess.run(
+                proc = subprocess.run(  # noqa: S603 — trusted subprocess for Cedar policy engine
                     cmd,
                     capture_output=True,
                     text=True,

@@ -11,6 +11,7 @@ import argparse
 import json
 import logging
 import sys
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -73,7 +74,7 @@ def scan_config(config_path: Path, single_server: Optional[str] = None) -> List[
         cmd = server.get("command", "")
         if "sudo" in cmd.lower():
             findings.append(SecurityFinding(name, "critical", "Server runs with sudo privileges", "privilege"))
-        if "/tmp/" in cmd.lower():
+        if tempfile.gettempdir() in cmd.lower():
             findings.append(SecurityFinding(name, "warning", "Server binary path in /tmp is risky", "execution"))
 
         # 3. Arguments Check

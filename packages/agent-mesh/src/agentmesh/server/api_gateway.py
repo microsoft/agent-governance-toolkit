@@ -132,7 +132,7 @@ async def proxy(request: Request, path: str) -> Response:
         )
 
     # Forward the request
-    assert _client is not None
+    assert _client is not None  # noqa: S101 — startup validation assertion
     upstream_url = f"{upstream_base}{full_path}"
 
     try:

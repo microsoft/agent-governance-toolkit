@@ -255,7 +255,7 @@ class CedarEvaluator:
                 cmd.extend(["--schema", self.schema_path])
 
             try:
-                proc = subprocess.run(
+                proc = subprocess.run(  # noqa: S603 — trusted subprocess for Cedar policy engine
                     cmd,
                     capture_output=True,
                     text=True,

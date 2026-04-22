@@ -239,7 +239,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     if staged and not files:
         import subprocess as _sp
         result = _sp.run(
-            ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+            ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],  # noqa: S607 — known CLI tool path
             capture_output=True, text=True,
         )
         files = [f for f in result.stdout.strip().split("\n") if f]

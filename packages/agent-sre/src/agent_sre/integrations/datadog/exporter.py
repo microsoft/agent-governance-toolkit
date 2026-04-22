@@ -243,7 +243,7 @@ class DatadogExporter:
             }],
         }
         data = json.dumps(payload).encode()
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310 — Datadog API endpoint URL
             url,
             data=data,
             headers={
@@ -253,7 +253,7 @@ class DatadogExporter:
             method="POST",
         )
         try:
-            urllib.request.urlopen(req)
+            urllib.request.urlopen(req)  # noqa: S310 — Datadog API endpoint URL
         except Exception as e:
             logger.warning(f"Failed to send metric to Datadog: {e}")
 
@@ -270,7 +270,7 @@ class DatadogExporter:
             "tags": event.tags,
         }
         data = json.dumps(payload).encode()
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310 — Datadog API endpoint URL
             url,
             data=data,
             headers={
@@ -280,7 +280,7 @@ class DatadogExporter:
             method="POST",
         )
         try:
-            urllib.request.urlopen(req)
+            urllib.request.urlopen(req)  # noqa: S310 — Datadog API endpoint URL
         except Exception as e:
             logger.warning(f"Failed to send event to Datadog: {e}")
 

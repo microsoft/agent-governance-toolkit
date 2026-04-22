@@ -39,7 +39,7 @@ class EvalCriterion(Enum):
 class Verdict(Enum):
     """Judge verdict."""
 
-    PASS = "pass"
+    PASS = "pass"  # noqa: S105 — not a password, evaluation result constant
     FAIL = "fail"
     PARTIAL = "partial"
     ABSTAIN = "abstain"

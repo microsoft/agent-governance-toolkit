@@ -358,5 +358,5 @@ class LifecycleManager:
             for item in data:
                 agent = ManagedAgent.model_validate(item)
                 self._agents[agent.agent_id] = agent
-        except (json.JSONDecodeError, Exception):
+        except Exception:  # noqa: S110 — intentional silent catch for state file load
             pass
