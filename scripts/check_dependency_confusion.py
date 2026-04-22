@@ -100,6 +100,7 @@ REGISTERED_NPM_PACKAGES = {
     "@microsoft/agent-os-kernel", "@microsoft/agentmesh-mcp-proxy",
     "@microsoft/agentmesh-api", "@microsoft/agent-os-cursor",
     "@microsoft/agentmesh-mastra", "@microsoft/agentmesh-copilot-governance",
+    "@microsoft/agentmesh-sdk",
     "@microsoft/agent-os-copilot-extension", "@microsoft/agentos-mcp-server",
     "@microsoft/agent-os-vscode",
     # Common deps
@@ -120,6 +121,8 @@ REGISTERED_NPM_PACKAGES = {
     "copy-webpack-plugin", "css-loader", "eslint-plugin-react",
     "eslint-plugin-react-hooks", "html-webpack-plugin", "style-loader",
     "ts-loader",
+    # Community integration SDKs
+    "@mariozechner/pi-coding-agent",
     # npm deps from extensions/mcp-server
     "uuid", "yaml", "zod", "@types/uuid", "@vitest/coverage-v8",
     # npm deps from mcp-proxy
