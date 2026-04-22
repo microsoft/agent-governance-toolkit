@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "agentmesh"
-version = "3.1.0"
+version = "3.2.1"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -21,7 +21,7 @@ dependencies = [
 
 [[package]]
 name = "agentmesh-mcp"
-version = "3.1.0"
+version = "3.2.1"
 dependencies = [
  "base64",
  "hmac",
