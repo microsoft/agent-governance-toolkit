@@ -33,13 +33,8 @@ jobs:
       - name: Install MkDocs Material
         run: pip install mkdocs-material==9.7.6 mkdocs-minify-plugin==0.8.0
 
-      - name: Copy source docs
-        run: bash scripts/build-docs.sh
-
       - name: Build docs
         run: mkdocs build --config-file mkdocs.yml --site-dir _site
-        env:
-          SITE_URL: https://microsoft.github.io/agent-governance-toolkit
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
