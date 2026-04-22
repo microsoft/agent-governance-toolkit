@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>AgentGovernance</RootNamespace>
+    <AssemblyName>AgentGovernance</AssemblyName>
+    <Version>3.2.1</Version>
+    <Description>Agent Governance Toolkit — .NET SDK for policy enforcement, rate limiting, zero-trust identity, OpenTelemetry metrics, and audit logging for autonomous AI agents. Compatible with Microsoft Agent Framework and Semantic Kernel.</Description>
+    <PackageId>Microsoft.AgentGovernance</PackageId>
+    <Authors>Microsoft</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/microsoft/agent-governance-toolkit</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/microsoft/agent-governance-toolkit.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>agent;governance;policy;security;owasp;ai;trust;identity</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+
+    <!-- XML documentation for IntelliSense in consuming projects -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\icon.png" Pack="true" PackagePath="\" />
+    <None Include="..\..\..\NOTICE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="17.0.1" />
+  </ItemGroup>
+
+</Project>

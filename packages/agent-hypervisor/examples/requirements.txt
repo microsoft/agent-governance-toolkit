@@ -1,1 +1,1 @@
-agent-hypervisor>=2.2.0
+agent-hypervisor>=3.2.0

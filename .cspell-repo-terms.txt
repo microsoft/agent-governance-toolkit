@@ -69,3 +69,7 @@ httpx
 lawcontinue
 Permissioned
 ufeff
+agentveil
+EigenTrust
+IPFS
+sybil

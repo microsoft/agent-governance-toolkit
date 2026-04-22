@@ -288,11 +288,9 @@ class NetworkTrustEngine:
             for cb in self._on_regime_change:
                 try:
                     cb(alert)
-                except Exception:
+                except Exception:  # noqa: S110 — intentional silent catch for decay alert callback
                     pass
             return alert
-
-        return None
 
     # -- Callbacks ------------------------------------------------------------
 

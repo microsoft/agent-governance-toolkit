@@ -11,12 +11,10 @@
  * Reference: https://signal.org/docs/specifications/x3dh/ (CC0)
  */
 
-import { x25519 } from "@noble/curves/ed25519";
-import { edwardsToMontgomeryPriv, edwardsToMontgomeryPub } from "@noble/curves/ed25519";
+import { x25519, ed25519 } from "@noble/curves/ed25519";
 import { hkdf } from "@noble/hashes/hkdf";
-import { sha256 } from "@noble/hashes/sha256";
-import { ed25519 } from "@noble/curves/ed25519";
-import { randomBytes } from "@noble/ciphers/webcrypto";
+import { sha256, sha512 } from "@noble/hashes/sha2";
+import { randomBytes } from "@noble/ciphers/utils";
 
 const X3DH_INFO = new TextEncoder().encode("AgentMesh_X3DH_v1");
 const KEY_LEN = 32;
@@ -60,8 +58,13 @@ export function ed25519ToX25519(
     throw new Error("ed25519Private must be 32 or 64 bytes");
   }
   const priv32 = ed25519Private.length === 64 ? ed25519Private.slice(0, 32) : ed25519Private;
-  const privateKey = edwardsToMontgomeryPriv(priv32);
-  const publicKey = edwardsToMontgomeryPub(ed25519Public);
+  // Ed25519 seed → SHA-512 → first 32 bytes → clamp per RFC 7748 §5
+  const h = sha512(priv32);
+  const privateKey = h.slice(0, 32);
+  privateKey[0] &= 248;
+  privateKey[31] &= 127;
+  privateKey[31] |= 64;
+  const publicKey = x25519.getPublicKey(privateKey);
   return { privateKey, publicKey };
 }
 

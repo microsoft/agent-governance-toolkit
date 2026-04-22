@@ -366,13 +366,13 @@ class AlertManager:
             req_headers = {"Content-Type": "application/json"}
             if headers:
                 req_headers.update(headers)
-            req = urllib.request.Request(
+            req = urllib.request.Request(  # noqa: S310 — alert webhook URL from configuration
                 url,
                 data=data,
                 headers=req_headers,
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310 — alert webhook URL from configuration
                 return DeliveryResult(
                     channel_name=channel_name,
                     success=True,

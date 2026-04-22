@@ -24,7 +24,7 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 
 1. Fork the repository and create a feature branch from `main`
 2. Read the nearest `AGENTS.md` before changing code in that area
-3. Make your changes in the appropriate package or top-level directory
+3. Make your changes in the appropriate package or top-level directory for that part of the repo
 4. Add or update tests as needed
 5. Ensure all tests pass: `pytest`
 6. Update documentation if your change affects public APIs
@@ -33,15 +33,17 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 ### Repository Routing
 
 This repo is a monorepo. Choosing the right path up front makes review much faster.
-The layout is also evolving: some language implementations may move from shared directories into
-standalone top-level directories over time. Treat the paths below as the current layout, not a
-permanent architecture promise.
+The layout is also evolving: some language implementations now use standalone top-level directories
+at the repository root. For contributor routing, treat `agent-governance-dotnet/` as the canonical
+.NET home and `agent-governance-golang/` as the matching sibling pattern for Go. Treat the paths
+below as contributor-routing guidance rather than a promise that every legacy path remains the long-
+term home for that language.
 
 | If your change is about... | Start here |
 |----------------------------|------------|
 | Core governance/runtime behavior | `packages/` |
-| Current shared SDK implementations | `packages/agent-mesh/sdks/` or `packages/agent-governance-dotnet/` |
-| Standalone language implementations | `agent-governance-*/` when present |
+| Current shared SDK implementations | `packages/agent-mesh/sdks/` and other languages that still live in the shared layout |
+| Standalone language implementations | `agent-governance-dotnet/`, `agent-governance-golang/`, or other `agent-governance-*` siblings at the repository root |
 | Tutorials, architecture, package docs | `docs/` |
 | Runnable framework integrations | `examples/` |
 | Interactive or live demos | `demo/` |
@@ -52,7 +54,8 @@ If a directory contains an `AGENTS.md` file, read it before you start. It captur
 commands, boundaries, and review expectations for that area.
 If a standalone top-level language directory exists for the implementation you are changing, prefer
 that directory over an older shared path unless maintainers tell you to keep work in the legacy
-location.
+location. For the standalone .NET SDK, contributor guidance should point to
+`agent-governance-dotnet/` as the canonical path.
 
 ### Choose the Smallest Correct Surface
 
@@ -128,8 +131,10 @@ pip install -e "packages/agent-compliance[dev]"
 pip install -e "packages/agent-marketplace[dev]"  # installs agentmesh-marketplace
 pip install -e "packages/agent-lightning[dev]"
 pip install -e "packages/agent-hypervisor[dev]"
-pip install -e "packages/agent-governance-dotnet[dev]"
 pip install -e "packages/agentmesh-integrations[dev]"
+
+# Restore the standalone .NET SDK when working in that path
+dotnet restore agent-governance-dotnet/AgentGovernance.sln
 
 # Run tests
 pytest
@@ -164,7 +169,7 @@ docker compose --profile dashboard up --build dashboard
 
 ### Package Structure
 
-This is a mono-repo with ten packages:
+This repo includes these core packages and standalone SDKs today:
 
 | Package | Directory | Description |
 |---------|-----------|-------------|
@@ -176,8 +181,11 @@ This is a mono-repo with ten packages:
 | `agentmesh-marketplace` | `packages/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
 | `agentmesh-lightning` | `packages/agent-lightning/` | RL training governance with governed runners and policy rewards |
 | `agent-hypervisor` | `packages/agent-hypervisor/` | Runtime infrastructure and capability management |
-| `agent-governance-dotnet` | `packages/agent-governance-dotnet/` | .NET framework integration for agent governance |
+| `agent-governance-dotnet` | `agent-governance-dotnet/` | Standalone .NET SDK for agent governance |
 | `agentmesh-integrations` | `packages/agentmesh-integrations/` | Framework integrations and extension library |
+
+Contributor routing for the standalone .NET SDK should use `agent-governance-dotnet/` at the
+repository root as the canonical path.
 
 ### Coding Guidelines
 

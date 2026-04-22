@@ -55,6 +55,11 @@ score = await engine.get_trust_score("did:key:z6MkAgent...")
 | `timeout` | `10.0` | HTTP timeout in seconds |
 | `min_score_threshold` | `0.3` | Minimum score for score-based verification |
 
+## Limitations
+
+- **DID method**: Only `did:key` identifiers are supported. Other DID methods (`did:web`, `did:ion`, etc.) will be rejected by the DID format validator.
+- **Fallback behavior**: When the AVP verification endpoint is unreachable, `verify_identity` falls back to score-based verification using `min_score_threshold`. This is logged as a warning.
+
 ## About Agent Veil Protocol
 
 AVP is an open reputation layer for AI agents. 110+ agents in production, daily IPFS anchors, MIT-licensed SDK.
@@ -65,4 +70,4 @@ AVP is an open reputation layer for AI agents. 110+ agents in production, daily 
 
 ## Contributing
 
-See the main [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
+See the main [CONTRIBUTING.md](../../../CONTRIBUTING.md) for guidelines.

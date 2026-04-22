@@ -307,7 +307,7 @@ class RiskScorer:
                         "new_level": score.risk_level,
                         "score": score.total_score,
                     })
-                except Exception:
+                except Exception:  # noqa: S110 — intentional silent catch for risk callback
                     pass
 
         # Alert on threshold breach
@@ -320,7 +320,7 @@ class RiskScorer:
                         "score": score.total_score,
                         "action": "immediate_review_required",
                     })
-                except Exception:
+                except Exception:  # noqa: S110 — intentional silent catch for alert callback
                     pass
 
     def on_alert(self, callback: Callable) -> None:

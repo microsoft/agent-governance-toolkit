@@ -160,7 +160,7 @@ class OPAEvaluator:
         url = f"{self.opa_url}/v1/data/{safe_path}"
 
         payload = json.dumps({"input": input_data}).encode("utf-8")
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310 — OPA server URL from configuration
             url,
             data=payload,
             headers={"Content-Type": "application/json"},
@@ -168,7 +168,7 @@ class OPAEvaluator:
         )
 
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
+            with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:  # noqa: S310 — OPA server URL from configuration
                 body = json.loads(resp.read().decode("utf-8"))
                 result_value = body.get("result", False)
                 allowed = bool(result_value) if isinstance(result_value, (bool, int)) else result_value is not None
@@ -225,7 +225,7 @@ class OPAEvaluator:
         cmd.append(query)
 
         try:
-            proc = subprocess.run(
+            proc = subprocess.run(  # noqa: S603 — trusted subprocess for OPA policy engine
                 cmd,
                 input=input_json,
                 capture_output=True,

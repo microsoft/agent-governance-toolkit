@@ -31,7 +31,7 @@ packages/agent-sre/
 packages/agent-compliance/
 packages/agent-runtime/
 packages/agent-lightning/
-packages/agent-governance-dotnet/
+agent-governance-dotnet/
 packages/agentmesh-integrations/
 
 # Ignore repo metadata

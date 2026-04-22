@@ -45,7 +45,7 @@ jobs:
               - 'scripts/**'
               - 'requirements/**'
             dotnet:
-              - 'packages/agent-governance-dotnet/**'
+              - 'agent-governance-dotnet/**'
             typescript:
               - 'packages/agent-mesh/sdks/typescript/**'
               - 'packages/agent-os/extensions/**'
@@ -203,20 +203,20 @@ jobs:
         with:
           dotnet-version: "8.0.x"
       - name: Build .NET SDK
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: dotnet build --configuration Release --verbosity quiet
       - name: Test .NET SDK
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: dotnet test --configuration Release --verbosity normal --no-build
       - name: Pack NuGet
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: dotnet pack src/AgentGovernance/AgentGovernance.csproj --configuration
           Release --no-build --output ./nupkg
       - name: Verify NuGet package
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: ls -la ./nupkg/*.nupkg
       - name: BinSkim — binary security analysis
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: |
           dotnet tool install --global Microsoft.CodeAnalysis.BinSkim --version 4.* 2>/dev/null || true
           BinSkim analyze "src/AgentGovernance/bin/Release/net8.0/*.dll" \
@@ -224,9 +224,9 @@ jobs:
             --verbose 2>/dev/null || echo "BinSkim completed with warnings"
       - name: Upload BinSkim SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.35.2
         with:
-          sarif_file: packages/agent-governance-dotnet/binskim-results.sarif
+          sarif_file: agent-governance-dotnet/binskim-results.sarif
           category: binskim
         continue-on-error: true
 

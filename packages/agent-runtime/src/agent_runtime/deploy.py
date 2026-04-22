@@ -87,7 +87,7 @@ class DockerDeployer:
     def _run(self, args: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
         cmd = [self._docker] + args
         logger.debug("Running: %s", " ".join(cmd))
-        return subprocess.run(cmd, capture_output=True, text=True, check=check, timeout=60)
+        return subprocess.run(cmd, capture_output=True, text=True, check=check, timeout=60)  # noqa: S603 — trusted subprocess in deployment script
 
     def deploy(self, agent_id: str, image: str, config: GovernanceConfig,
                port: int = 0, env: dict[str, str] | None = None, **kwargs: Any) -> DeploymentResult:
@@ -103,7 +103,7 @@ class DockerDeployer:
             "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges",
             "--read-only",
-            "--tmpfs", "/tmp:rw,noexec,nosuid",
+            "--tmpfs", "/tmp:rw,noexec,nosuid",  # noqa: S108 — Docker tmpfs mount specification, not a hardcoded path
             # Governance config as env vars
             "-e", f"AGT_POLICY_PATH={config.policy_path}",
             "-e", f"AGT_TRUST_LEVEL={config.trust_level}",
@@ -214,7 +214,7 @@ class KubernetesDeployer:
             cmd.extend(["--context", self._context])
         cmd.extend(args)
         logger.debug("Running: %s", " ".join(cmd))
-        return subprocess.run(cmd, capture_output=True, text=True, check=check, timeout=120)
+        return subprocess.run(cmd, capture_output=True, text=True, check=check, timeout=120)  # noqa: S603 — trusted subprocess in deployment script
 
     def _build_pod_manifest(self, agent_id: str, image: str, config: GovernanceConfig) -> dict[str, Any]:
         return {
@@ -260,7 +260,7 @@ class KubernetesDeployer:
                             "requests": {"cpu": "100m", "memory": "256Mi"},
                             "limits": {"cpu": "500m", "memory": "512Mi"},
                         },
-                        "volumeMounts": [{"name": "tmp", "mountPath": "/tmp"}],
+                        "volumeMounts": [{"name": "tmp", "mountPath": "/tmp"}],  # noqa: S108 — Docker container path specification
                     },
                 ],
                 "volumes": [{"name": "tmp", "emptyDir": {"sizeLimit": "100Mi"}}],

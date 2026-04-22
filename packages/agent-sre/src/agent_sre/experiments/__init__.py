@@ -140,7 +140,7 @@ class Experiment:
         if self.status != ExperimentStatus.RUNNING:
             return self.variants[0].name
 
-        r = random.random()
+        r = random.random()  # noqa: S311 — non-cryptographic use for experiment randomization
         cumulative = 0.0
         for v in self.variants:
             cumulative += v.weight

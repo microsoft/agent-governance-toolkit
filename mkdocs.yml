@@ -86,7 +86,7 @@ nav:
     - Agent Marketplace: packages/agent-marketplace.md
     - Agent Lightning: packages/agent-lightning.md
     - Agent Hypervisor: packages/agent-hypervisor.md
-    - .NET SDK: packages/agent-governance-dotnet.md
+    - .NET SDK: packages/dotnet-sdk.md
     - VS Code Extension: packages/agent-os-vscode.md
   - Tutorials:
     - Overview: tutorials/index.md
@@ -146,6 +146,7 @@ nav:
   - Reference:
     - Benchmarks: reference/benchmarks.md
     - Comparison: reference/comparison.md
+    - External Operation Accountability Profiles: integrations/external-operation-accountability-profiles.md
     - NIST RFI Mapping: reference/nist-rfi-mapping.md
     - Changelog: reference/changelog.md
     - Contributing: reference/contributing.md

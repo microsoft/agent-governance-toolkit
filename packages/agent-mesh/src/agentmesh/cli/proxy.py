@@ -185,7 +185,7 @@ rules: []
         logger.info("Agent DID: %s", self.identity.did)
 
         # Start target MCP server as subprocess
-        self.target_process = subprocess.Popen(
+        self.target_process = subprocess.Popen(  # noqa: S603 — trusted subprocess in CLI proxy
             self.target_command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,

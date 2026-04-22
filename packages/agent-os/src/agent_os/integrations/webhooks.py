@@ -90,10 +90,10 @@ class WebhookNotifier:
 
         for attempt in range(config.retry_count):
             try:
-                req = urllib.request.Request(
+                req = urllib.request.Request(  # noqa: S310 — webhook URL from configuration
                     config.url, data=payload, headers=headers, method="POST"
                 )
-                with urllib.request.urlopen(req, timeout=config.timeout) as resp:
+                with urllib.request.urlopen(req, timeout=config.timeout) as resp:  # noqa: S310 — webhook URL from configuration
                     last_status = resp.status
                     record = DeliveryRecord(
                         url=config.url,

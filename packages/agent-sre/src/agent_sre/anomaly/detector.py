@@ -26,7 +26,7 @@ class AnomalyType(Enum):
     THROUGHPUT_DROP = "throughput_drop"
     ERROR_RATE_SURGE = "error_rate_surge"
     UNUSUAL_TOOL_SEQUENCE = "unusual_tool_sequence"
-    TOKEN_USAGE_SPIKE = "token_usage_spike"
+    TOKEN_USAGE_SPIKE = "token_usage_spike"  # noqa: S105 — not a password, anomaly type constant name
     API_CALL_VOLUME = "api_call_volume"
     OUTPUT_DRIFT = "output_drift"
     RESOURCE_EXHAUSTION = "resource_exhaustion"

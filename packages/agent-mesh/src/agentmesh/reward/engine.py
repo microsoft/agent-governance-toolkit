@@ -317,7 +317,7 @@ class RewardEngine:
         for callback in self._revocation_callbacks:
             try:
                 callback(agent_did, reason)
-            except Exception:
+            except Exception:  # noqa: S110 — intentional silent catch for revocation callback
                 pass
 
     def on_revocation(self, callback: Callable) -> None:

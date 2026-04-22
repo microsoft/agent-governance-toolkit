@@ -119,7 +119,7 @@ def _get_processes_windows() -> list[dict[str, str]]:
     """Get process info on Windows using WMIC."""
     try:
         result = subprocess.run(
-            ["wmic", "process", "get", "ProcessId,CommandLine", "/format:csv"],
+            ["wmic", "process", "get", "ProcessId,CommandLine", "/format:csv"],  # noqa: S607 — known CLI tool path in process scanner
             capture_output=True,
             text=True,
             timeout=30,
@@ -141,7 +141,7 @@ def _get_processes_unix() -> list[dict[str, str]]:
     """Get process info on Unix using ps."""
     try:
         result = subprocess.run(
-            ["ps", "aux"],
+            ["ps", "aux"],  # noqa: S607 — known CLI tool path in process scanner
             capture_output=True,
             text=True,
             timeout=30,

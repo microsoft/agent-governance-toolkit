@@ -608,7 +608,7 @@ class MCPSecurityScanner:
                             if keyword in decoded_lower:
                                 is_suspicious = True
                                 break
-                    except Exception:
+                    except Exception:  # noqa: S110 — best-effort base64 decode check
                         pass
                     if not is_suspicious:
                         # Long base64 in a tool description is suspicious regardless

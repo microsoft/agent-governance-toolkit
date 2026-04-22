@@ -12,7 +12,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
-## [3.1.1] - 2026-04-21
+## [3.2.1] - 2026-04-22
+
+### Fixed
+- **TypeScript SDK**: Fixed build compatibility with TypeScript 6.0 — encryption modules (X3DHKeyManager, MeshClient, SecureChannel, DoubleRatchet) now correctly exported from npm package
+- **TypeScript SDK**: Fixed `@noble/hashes` import paths (`sha256` → `sha2` module rename)
+- **TypeScript SDK**: Replaced removed `edwardsToMontgomeryPriv/Pub` with manual SHA-512 + RFC 7748 clamping
+- **TypeScript SDK**: Added Jest `moduleNameMapper` + `transformIgnorePatterns` for ESM `@noble/*` packages
+
+## [3.2.0] - 2026-04-22
+
+### Added
+- **AgentMesh Wire Protocol v1.0** specification (`docs/specs/AGENTMESH-WIRE-1.0.md`)
+- **TypeScript E2E Encryption** — X3DH + Double Ratchet + SecureChannel ported to `@microsoft/agentmesh-sdk`
+- **MeshClient** — high-level relay transport with plaintext peers, KNOCK pending queue, wsFactory hook
+- **Registry Service** — first-party agent registry with pre-key bundles, discovery, presence, reputation
+- **Relay Service** — store-and-forward WebSocket relay with 72h TTL offline inbox
+- Clean-room IP statement and recommended crypto libraries (Appendix A-B of wire spec)
+
+### Fixed
+- CI lint errors in encryption modules
+- Dependency scan allowlist for mkdocs-minify-plugin## [3.1.1] - 2026-04-21
 
 ### Added
 - **E2E Encrypted Agent Messaging** — Signal protocol (X3DH + Double Ratchet) for agent-to-agent channels with per-message forward secrecy (#1222, #1223, #1224, #1226)
@@ -229,7 +249,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Community preview disclaimers across all READMEs, release notes, and package descriptions
 - `PUBLISHING.md` guide covering PyPI, npm, and NuGet publishing requirements
 - `agent-runtime` re-export wrapper package (`src/agent_runtime/__init__.py`)
-- `RELEASE_NOTES_v2.2.0.md`
+- `releases/RELEASE_NOTES_v2.2.0.md`
 - `create_policies_from_config()` API — load security policies from YAML config files
 - `SQLPolicyConfig` dataclass and `load_sql_policy_config()` for structured policy loading
 - 10 sample policy configs in `examples/policies/` (sql-safety, sql-strict, sql-readonly, sandbox-safety, prompt-injection-safety, mcp-security, semantic-policy, pii-detection, conversation-guardian, cli-security-rules)

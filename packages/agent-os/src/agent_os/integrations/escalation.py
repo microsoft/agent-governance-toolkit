@@ -255,7 +255,7 @@ class WebhookApprovalBackend(ApprovalBackend):
                 },
                 default=str,
             ).encode()
-            req = urllib.request.Request(
+            req = urllib.request.Request(  # noqa: S310 — webhook URL from configuration
                 self._webhook_url,
                 data=payload,
                 headers={**self._headers, "Content-Type": "application/json"},

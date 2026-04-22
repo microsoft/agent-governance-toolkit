@@ -11,21 +11,22 @@ Use this file for repository-wide routing. When you enter a subdirectory that ha
 
 ## Repository Layout Status
 
-This routing reflects the repo **as it exists today**. Some language implementations may move from
-shared subdirectories into **standalone top-level directories** over time (for example,
-`agent-governance-golang/`).
+This routing reflects the repo **as it exists today** while reserving room for approved language
+SDK migrations. Language SDKs may live in **standalone top-level directories** at the repository
+root. For contributor routing, treat `agent-governance-dotnet/` as the canonical .NET home, with
+`agent-governance-golang/` as the matching sibling pattern for Go and future standalone SDKs.
 
 Treat current paths as a **point-in-time representation**, not a permanent architecture promise.
-When a standalone top-level implementation exists, changes for that language should go there rather
-than into `packages/` or an older shared SDK path.
+When a standalone top-level implementation exists for a language, changes for that language should
+go there rather than into `packages/` or an older shared SDK path.
 
 ## Where Changes Belong
 
 | Area | Path | Use it for |
 |------|------|------------|
 | Core Python packages | `packages/*/` | Runtime code, policy engines, trust, SRE, compliance |
-| Current shared SDK paths | `packages/agent-mesh/sdks/`, `packages/agent-governance-dotnet/` | Public SDK APIs, parity work, language-specific packaging in the current layout |
-| Standalone language implementations | `agent-governance-*/` | Top-level language-specific implementations as they are introduced |
+| Current shared SDK paths | `packages/agent-mesh/sdks/` | Public SDK APIs and language-specific packaging that still live in the shared layout today |
+| Standalone language implementations | `agent-governance-dotnet/`, `agent-governance-golang/`, and other `agent-governance-*` siblings | Top-level language-specific implementations at the repository root; use these as the canonical contributor-facing paths |
 | Docs site | `docs/` | Reference docs, tutorials, architecture, package pages |
 | Runnable examples | `examples/` | Self-contained integrations and worked examples |
 | Interactive demos | `demo/` | Live demos, dashboards, real-service walkthroughs |
@@ -40,8 +41,9 @@ than into `packages/` or an older shared SDK path.
 3. Put marketing or ecosystem references in docs only after the integration is real, attributable,
    and useful to users.
 4. Keep `.github/` changes separate from feature work; they require extra security review.
-5. If both a legacy shared path and a new standalone top-level path exist, prefer the standalone
-   top-level path for new work unless maintainers say otherwise.
+5. If both a legacy shared path and a standalone top-level path exist, prefer the standalone
+   top-level path for new work unless maintainers say otherwise. For .NET, contributor guidance
+   should target `agent-governance-dotnet/` as the canonical path.
 
 ## OSS Contribution Expectations
 
@@ -70,6 +72,34 @@ Ask a maintainer before proceeding with:
 - Never weaken security defaults, trust thresholds, or review requirements.
 - Do not mix unrelated changes into docs-only or example-only PRs.
 - Preserve honesty in docs: document shipped behavior, not aspirational behavior.
+
+## Spam / SEO Outreach Filtering
+
+Close or ignore PRs, issues, and discussions that are thinly disguised product placements or
+SEO link-building attempts. Common patterns:
+
+- Offers of "paid collaboration" to insert a product mention into docs, README, or blog posts
+- PRs that add a product/service link to a resources or ecosystem list with no real integration
+- Issues framed as feature requests that are actually product placements ("Add support for X")
+- Generic flattery about the project followed by a pitch to include an unrelated tool
+- No code contribution, no tests, no integration — just a link or brand mention
+
+Action: close with a short note ("We don't accept sponsored content or paid placements") or
+close without comment. Do not modify repo content to accommodate these requests.
+
+## Version Bumps
+
+When bumping the monorepo version (e.g. `3.2.0` → `3.2.1`):
+
+- **DO** bump version strings in: `pyproject.toml`, `package.json`, `Cargo.toml`, `*.csproj`,
+  `__init__.py`, and `README.md` banner.
+- **DO NOT** bulk-replace version strings inside `package-lock.json` — transitive dependencies
+  may share the same version number (e.g. `import-local@3.2.0`, `istanbul-reports@3.2.0`) and
+  will get corrupted into non-existent versions. Instead, bump only `package.json`, then
+  regenerate the lockfile with `npm install --legacy-peer-deps`.
+- **DO NOT** bulk-replace inside `CHANGELOG.md` or `RELEASE_NOTES_*.md` — those are historical.
+- After bumping, verify with: `Select-String -Path package-lock.json -Pattern '"<new-version>"'`
+  and confirm only the SDK's own entries appear, not transitive deps.
 
 ## Validation
 

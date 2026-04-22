@@ -46,9 +46,9 @@ class EntraAgentID:
             f"{cls.IMDS_URL}/instance/compute"
             f"?api-version={cls.IMDS_API_VERSION}"
         )
-        req = Request(instance_url, headers={"Metadata": "true"})
+        req = Request(instance_url, headers={"Metadata": "true"})  # noqa: S310 — Entra ID endpoint URL
         try:
-            with urlopen(req, timeout=2) as resp:
+            with urlopen(req, timeout=2) as resp:  # noqa: S310 — Entra ID endpoint URL
                 compute = json.loads(resp.read().decode())
         except (URLError, HTTPError) as exc:
             raise RuntimeError(
@@ -66,9 +66,9 @@ class EntraAgentID:
             f"?api-version={cls.IMDS_IDENTITY_VERSION}"
             f"&resource=https://management.azure.com/"
         )
-        tok_req = Request(token_url, headers={"Metadata": "true"})
+        tok_req = Request(token_url, headers={"Metadata": "true"})  # noqa: S310 — Entra ID endpoint URL
         try:
-            with urlopen(tok_req, timeout=5) as resp:
+            with urlopen(tok_req, timeout=5) as resp:  # noqa: S310 — Entra ID endpoint URL
                 token_data = json.loads(resp.read().decode())
         except (URLError, HTTPError) as exc:
             raise RuntimeError(
@@ -157,9 +157,9 @@ class EntraAgentID:
             f"&resource={resource}"
             f"&client_id={self.client_id}"
         )
-        req = Request(token_url, headers={"Metadata": "true"})
+        req = Request(token_url, headers={"Metadata": "true"})  # noqa: S310 — Entra ID endpoint URL
         try:
-            with urlopen(req, timeout=5) as resp:
+            with urlopen(req, timeout=5) as resp:  # noqa: S310 — Entra ID endpoint URL
                 data = json.loads(resp.read().decode())
             return data["access_token"]
         except (URLError, HTTPError, KeyError) as exc:

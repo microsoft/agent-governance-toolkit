@@ -221,7 +221,7 @@ class SQLiteMeasurementStore(MeasurementStore):
     @contextmanager
     def _connect(self) -> Generator[sqlite3.Connection, None, None]:
         if self._in_memory:
-            assert self._mem_conn is not None
+            assert self._mem_conn is not None  # noqa: S101 — data integrity assertion
             with self._mem_lock:
                 yield self._mem_conn
                 self._mem_conn.commit()

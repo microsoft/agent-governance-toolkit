@@ -218,7 +218,7 @@ class PluginSandbox:
                 minimal_env[key] = val
 
         try:
-            proc = subprocess.run(
+            proc = subprocess.run(  # noqa: S603 — trusted subprocess in sandbox execution
                 [self._python, "-c", runner_code],
                 input=json.dumps(envelope),
                 capture_output=True,

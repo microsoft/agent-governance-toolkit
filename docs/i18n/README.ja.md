@@ -85,7 +85,7 @@ pip install agentmesh-lightning        # 強化学習トレーニングガバナ
 
 - **[クイックスタート](../../QUICKSTART.md)** — ゼロからガバナンス付きエージェントを10分で構築（Python · TypeScript · .NET · Rust · Go）
 - **[TypeScript SDK](../../packages/agent-mesh/sdks/typescript/README.md)** — ID、トラスト、ポリシー、監査機能を備えた npm パッケージ
-- **[.NET SDK](../../packages/agent-governance-dotnet/README.md)** — 完全な OWASP カバレッジを備えた NuGet パッケージ
+- **[.NET SDK](../../agent-governance-dotnet/README.md)** — 完全な OWASP カバレッジを備えた NuGet パッケージ
 - **[Rust SDK](../../packages/agent-mesh/sdks/rust/agentmesh/README.md)** — ポリシー、トラスト、監査、ID、MCP ガバナンスプリミティブを備えた crates.io クレート
 - **[Rust MCP SDK](../../packages/agent-mesh/sdks/rust/agentmesh-mcp/README.md)** — MCP ガバナンスおよびセキュリティプリミティブのスタンドアロン crates.io クレート
 - **[Go SDK](../../agent-governance-golang/README.md)** — ポリシー、トラスト、監査、ID 機能を備えた Go モジュール
