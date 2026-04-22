@@ -1,5 +1,5 @@
 [workspace]
-members = ["agentmesh", "agentmesh-mcp"]
+members = ["agent-governance", "agent-governance-mcp"]
 resolver = "2"
 
 [workspace.package]

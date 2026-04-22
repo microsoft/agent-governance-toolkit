@@ -42,7 +42,7 @@ pip install agentmesh-lightning        # RL training governance
 ### TypeScript / Node.js
 
 ```bash
-npm install @microsoft/agentmesh-sdk
+npm install @microsoft/agent-governance-sdk
 ```
 
 ### .NET
@@ -214,7 +214,7 @@ print(f"Allowed: {result.allowed}")
 Create a file called `governed_agent.ts`:
 
 ```typescript
-import { PolicyEngine, AgentIdentity, AuditLogger } from "@microsoft/agentmesh-sdk";
+import { PolicyEngine, AgentIdentity, AuditLogger } from "@microsoft/agent-governance-sdk";
 
 const identity = AgentIdentity.generate("my-agent", ["web_search", "read_file"]);
 
@@ -341,3 +341,4 @@ agent-governance integrity --manifest integrity.json
 ---
 
 *Based on the initial quickstart contribution by [@davidequarracino](https://github.com/davidequarracino) ([#106](https://github.com/microsoft/agent-governance-toolkit/pull/106), [#108](https://github.com/microsoft/agent-governance-toolkit/pull/108)).*
+
