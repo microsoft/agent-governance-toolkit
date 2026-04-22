@@ -27,7 +27,7 @@ _AZURE_IMDS_URL = (
     "http://169.254.169.254/metadata/identity/oauth2/token"
 )
 _AWS_METADATA_URL = "http://169.254.169.254/latest/meta-data/iam"
-_AWS_TOKEN_URL = "http://169.254.169.254/latest/api/token"
+_AWS_TOKEN_URL = "http://169.254.169.254/latest/api/token"  # noqa: S105 — not a password, AWS metadata token endpoint URL constant
 _GCP_METADATA_URL = (
     "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts"
 )
@@ -125,10 +125,10 @@ class EntraManagedIdentity(ManagedIdentityAdapter):
             params += f"&client_id={self.client_id}"
 
         url = self._imds_url + params
-        request = Request(url, headers={"Metadata": "true"})
+        request = Request(url, headers={"Metadata": "true"})  # noqa: S310 — cloud metadata endpoint URL
 
         try:
-            with urlopen(request, timeout=5) as resp:
+            with urlopen(request, timeout=5) as resp:  # noqa: S310 — cloud metadata endpoint URL
                 data = json.loads(resp.read().decode())
         except (URLError, OSError, json.JSONDecodeError) as exc:
             raise IdentityError(
@@ -184,13 +184,13 @@ class AWSIAMIdentity(ManagedIdentityAdapter):
 
     def _get_imds_token(self) -> str:
         """Acquire an IMDSv2 session token."""
-        request = Request(
+        request = Request(  # noqa: S310 — cloud metadata endpoint URL
             self._token_url,
             method="PUT",
             headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"},
         )
         try:
-            with urlopen(request, timeout=5) as resp:
+            with urlopen(request, timeout=5) as resp:  # noqa: S310 — cloud metadata endpoint URL
                 return resp.read().decode()
         except (URLError, OSError) as exc:
             raise IdentityError(
@@ -207,12 +207,12 @@ class AWSIAMIdentity(ManagedIdentityAdapter):
 
         # Discover role name
         role_url = f"{self._metadata_url}/security-credentials/"
-        request = Request(
+        request = Request(  # noqa: S310 — cloud metadata endpoint URL
             role_url,
             headers={"X-aws-ec2-metadata-token": imds_token},
         )
         try:
-            with urlopen(request, timeout=5) as resp:
+            with urlopen(request, timeout=5) as resp:  # noqa: S310 — cloud metadata endpoint URL
                 role_name = resp.read().decode().strip()
         except (URLError, OSError) as exc:
             raise IdentityError(
@@ -221,12 +221,12 @@ class AWSIAMIdentity(ManagedIdentityAdapter):
 
         # Fetch credentials for role
         creds_url = f"{self._metadata_url}/security-credentials/{role_name}"
-        request = Request(
+        request = Request(  # noqa: S310 — cloud metadata endpoint URL
             creds_url,
             headers={"X-aws-ec2-metadata-token": imds_token},
         )
         try:
-            with urlopen(request, timeout=5) as resp:
+            with urlopen(request, timeout=5) as resp:  # noqa: S310 — cloud metadata endpoint URL
                 data = json.loads(resp.read().decode())
         except (URLError, OSError, json.JSONDecodeError) as exc:
             raise IdentityError(
@@ -292,10 +292,10 @@ class GCPWorkloadIdentity(ManagedIdentityAdapter):
             f"{self._metadata_url}/{self.service_account}"
             f"/token?scopes={scope}"
         )
-        request = Request(url, headers={"Metadata-Flavor": "Google"})
+        request = Request(url, headers={"Metadata-Flavor": "Google"})  # noqa: S310 — cloud metadata endpoint URL
 
         try:
-            with urlopen(request, timeout=5) as resp:
+            with urlopen(request, timeout=5) as resp:  # noqa: S310 — cloud metadata endpoint URL
                 data = json.loads(resp.read().decode())
         except (URLError, OSError, json.JSONDecodeError) as exc:
             raise IdentityError(

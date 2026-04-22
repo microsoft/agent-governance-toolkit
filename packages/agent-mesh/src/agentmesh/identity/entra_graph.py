@@ -114,19 +114,19 @@ class EntraGraphClient:
 
     def _get(self, url: str) -> dict[str, Any]:
         """Execute a GET request against Graph API."""
-        req = Request(url, headers={
+        req = Request(url, headers={  # noqa: S310 — Microsoft Graph API URL
             "Authorization": f"Bearer {self._token}",
             "Accept": "application/json",
             "ConsistencyLevel": "eventual",
         })
         try:
-            with urlopen(req, timeout=self._timeout) as resp:
+            with urlopen(req, timeout=self._timeout) as resp:  # noqa: S310 — Microsoft Graph API URL
                 return json.loads(resp.read().decode())
         except HTTPError as exc:
             body = ""
             try:
                 body = exc.read().decode()[:500]
-            except Exception:
+            except Exception:  # noqa: S110 — intentional silent catch for error body read
                 pass
             raise GraphAPIError(
                 f"Graph API returned {exc.code}: {body}",

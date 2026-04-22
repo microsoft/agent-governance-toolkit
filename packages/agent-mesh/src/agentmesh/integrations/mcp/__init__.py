@@ -421,7 +421,7 @@ class TrustGatedMCPClient:
             logger.warning("Rejected server URL with missing host: %s", server_url)
             return False
         # Block common internal/loopback targets
-        _blocked_hosts = {"localhost", "127.0.0.1", "::1", "0.0.0.0", "169.254.169.254"}
+        _blocked_hosts = {"localhost", "127.0.0.1", "::1", "0.0.0.0", "169.254.169.254"}  # noqa: S104 — intentional: server bind-all for container deployment
         if parsed.hostname.lower() in _blocked_hosts:
             logger.warning("Rejected internal/loopback server URL: %s", server_url)
             return False
