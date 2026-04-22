@@ -82,7 +82,7 @@ from __future__ import annotations
 
 from typing import Any
 
-__version__ = "3.2.1"
+__version__ = "3.2.2"
 __author__ = "Microsoft Corporation"
 __email__ = "agentgovtoolkit@microsoft.com"
 __license__ = "MIT"

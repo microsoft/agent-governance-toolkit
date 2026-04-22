@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp_trust_server"
-version = "3.2.1"
+version = "3.2.2"
 description = "MCP server exposing AgentMesh trust management tools for Claude, GPT, and other AI agents"
 readme = "README.md"
 license = {text = "Apache-2.0"}

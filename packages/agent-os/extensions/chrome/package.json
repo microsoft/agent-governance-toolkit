@@ -1,6 +1,6 @@
 {
   "name": "agentos-browser-extension",
-  "version": "3.2.1",
+  "version": "3.2.2",
   "description": "AgentOS - Safe AI Agents for GitHub, Jira & More",
   "private": true,
   "scripts": {

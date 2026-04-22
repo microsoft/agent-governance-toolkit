@@ -16,4 +16,4 @@ Tools:
 - get_identity: Get this agent's identity info
 """
 
-__version__ = "3.2.1"
+__version__ = "3.2.2"
