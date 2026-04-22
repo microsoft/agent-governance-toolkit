@@ -115,7 +115,7 @@ def retry_with_backoff(
             if not _is_transient(exc) or attempt == max_retries:
                 raise
             last_exc = exc
-            delay = min(base_delay * (2 ** attempt) + random.uniform(0, 1), max_delay)
+            delay = min(base_delay * (2 ** attempt) + random.uniform(0, 1), max_delay)  # noqa: S311 — non-cryptographic use for request jitter
             logger.warning(
                 "Retry %d/%d for %s after %s (delay=%.2fs)",
                 attempt + 1,

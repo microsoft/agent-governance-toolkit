@@ -95,8 +95,8 @@ def _get_diff_stats(
         Tuple of (file paths, total insertions, total deletions).
     """
     try:
-        result = subprocess.run(
-            ["git", "diff", "--numstat", base_branch],
+        result = subprocess.run(  # noqa: S603 — trusted subprocess in scope guard
+            ["git", "diff", "--numstat", base_branch],  # noqa: S607 — known CLI tool path
             cwd=repo_path,
             capture_output=True,
             text=True,

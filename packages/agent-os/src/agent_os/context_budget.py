@@ -301,5 +301,5 @@ class ContextScheduler:
         for handler in self._signal_handlers[signal]:
             try:
                 handler(agent_id, signal)
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort signal handler invocation
                 pass

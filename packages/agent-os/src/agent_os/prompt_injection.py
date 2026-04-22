@@ -601,8 +601,8 @@ class PromptInjectionDetector:
                             f"base64_payload:{keyword}",
                         ))
                         break
-            except Exception:
-                pass  # Not valid base64 — skip
+            except Exception:  # noqa: S110 — Not valid base64, skip
+                pass
 
         return findings
 

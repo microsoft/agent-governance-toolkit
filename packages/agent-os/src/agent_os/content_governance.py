@@ -24,7 +24,7 @@ class ContentDimension(str, Enum):
 
 class QualityGate(str, Enum):
     """Content quality gate decisions."""
-    PASS = "pass"
+    PASS = "pass"  # noqa: S105 — not a password, evaluation result constant
     WARN = "warn"
     FAIL = "fail"
 

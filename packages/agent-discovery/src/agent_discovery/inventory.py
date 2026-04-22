@@ -136,7 +136,7 @@ class AgentInventory:
             for item in data:
                 agent = DiscoveredAgent.model_validate(item)
                 self._agents[agent.fingerprint] = agent
-        except (json.JSONDecodeError, Exception):
+        except Exception:  # noqa: S110
             pass  # start fresh if corrupt
 
     def summary(self) -> dict[str, Any]:
