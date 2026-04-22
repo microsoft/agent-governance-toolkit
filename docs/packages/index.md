@@ -1,6 +1,6 @@
 # Packages
 
-AGT provides 11 packages covering every layer of agent governance.
+AGT provides 12 packages covering every layer of agent governance.
 
 ```
 +------------------+     +------------------+     +------------------+
@@ -39,5 +39,5 @@ AGT provides 11 packages covering every layer of agent governance.
 
 | Package | Language | Install |
 |---------|---------|---------|
-| [.NET SDK](dotnet-sdk.md) | C# / .NET | `dotnet add package AgentGovernance` |
+| [.NET SDK](dotnet-sdk.md) | C# / .NET | `dotnet add package Microsoft.AgentGovernance` |
 | [VS Code Extension](agent-os-vscode.md) | VS Code | Install from marketplace |

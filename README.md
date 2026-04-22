@@ -97,6 +97,7 @@ engine.evaluate("shell_exec"); // "deny"
 
 ```csharp
 using AgentGovernance;
+using AgentGovernance.Extensions.ModelContextProtocol;
 using AgentGovernance.Policy;
 
 var kernel = new GovernanceKernel(new GovernanceOptions
@@ -107,6 +108,10 @@ var kernel = new GovernanceKernel(new GovernanceOptions
 var result = kernel.EvaluateToolCall("did:mesh:agent-1", "web_search",
     new() { ["query"] = "latest AI news" });
 // result.Allowed == true
+
+builder.Services
+    .AddMcpServer()
+    .WithGovernance(options => options.PolicyPaths.Add("policies/mcp.yaml"));
 ```
 
 </details>
@@ -230,6 +235,7 @@ Full methodology: [BENCHMARKS.md](docs/BENCHMARKS.md)
 | **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
 | **TypeScript** | [`@microsoft/agentmesh-sdk`](packages/agent-mesh/sdks/typescript/) | `npm install @microsoft/agentmesh-sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
+| **.NET MCP** | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` | `dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol` |
 | **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
 | **Go** | [`agent-governance-toolkit`](agent-governance-golang/) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 

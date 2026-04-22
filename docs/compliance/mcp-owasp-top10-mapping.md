@@ -326,7 +326,7 @@ Each SDK includes a standalone governance package for MCP-only adoption:
 | Language | Standalone Package | Full Package |
 |----------|--------------------|-------------|
 | Python | `agent-mcp-governance` | `agent-governance-toolkit` |
-| .NET | `Microsoft.AgentGovernance.Mcp` | `Microsoft.AgentGovernance` |
+| .NET | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` | `Microsoft.AgentGovernance` |
 | TypeScript | `@microsoft/agentmesh-mcp-governance` | `@microsoft/agentmesh-sdk` |
 | Rust | `agentmesh-mcp` | `agentmesh` |
 | Go | `mcp-governance-go` | `agentmesh` Go SDK |

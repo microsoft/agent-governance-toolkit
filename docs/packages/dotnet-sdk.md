@@ -15,6 +15,12 @@ Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-govern
 dotnet add package Microsoft.AgentGovernance
 ```
 
+For Model Context Protocol servers built with the official C# SDK:
+
+```bash
+dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol
+```
+
 ## Quick Start
 
 ```csharp
@@ -48,7 +54,9 @@ if (!result.Allowed)
 ## Policy File (YAML)
 
 ```yaml
+apiVersion: governance.toolkit/v1
 version: "1.0"
+name: default-governance-policy
 default_action: deny
 rules:
   - name: allow-read-tools
@@ -66,6 +74,24 @@ rules:
     action: rate_limit
     limit: "100/minute"
 ```
+
+## Model Context Protocol Integration
+
+`Microsoft.AgentGovernance.Extensions.ModelContextProtocol` adds one-call governance to `IMcpServerBuilder`, including policy evaluation, MCP tool-definition scanning, fallback tool-call governance, and response sanitization.
+
+```csharp
+using AgentGovernance.Extensions.ModelContextProtocol;
+
+builder.Services
+    .AddMcpServer()
+    .WithGovernance(options =>
+    {
+        options.PolicyPaths.Add("policies/mcp.yaml");
+        options.DefaultAgentId = "did:mcp:server";
+    });
+```
+
+`WithGovernance(...)` wraps the final MCP `ToolCollection`, so it works with tools registered before or after the governance extension is added.
 
 ## Features
 

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>AgentGovernance.Extensions.ModelContextProtocol</RootNamespace>
+    <AssemblyName>AgentGovernance.Extensions.ModelContextProtocol</AssemblyName>
+    <Version>3.2.0</Version>
+    <Description>Public Preview companion package for Microsoft.AgentGovernance that adds one-call governance to ModelContextProtocol C# servers via IMcpServerBuilder.WithGovernance(...).</Description>
+    <PackageId>Microsoft.AgentGovernance.Extensions.ModelContextProtocol</PackageId>
+    <Authors>Microsoft</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/microsoft/agent-governance-toolkit</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/microsoft/agent-governance-toolkit.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>agent;governance;mcp;modelcontextprotocol;dotnet;security;policy</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\icon.png" Pack="true" PackagePath="\" />
+    <None Include="..\..\..\NOTICE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgentGovernance\AgentGovernance.csproj" />
+    <PackageReference Include="ModelContextProtocol" Version="1.2.0" />
+  </ItemGroup>
+
+</Project>

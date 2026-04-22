@@ -297,7 +297,7 @@ stages:
               domaintenantid: '$(MICROSOFT_TENANT_ID)'
 
   # =======================================================
-  # NUGET — Microsoft.AgentGovernance
+  # NUGET — Microsoft.AgentGovernance packages
   # =======================================================
   - stage: Build_NuGet
     displayName: 'Build & Test .NET SDK'
@@ -337,10 +337,14 @@ stages:
                 --configuration Release \
                 --no-build \
                 --output ./nupkg
+              dotnet pack src/AgentGovernance.Extensions.ModelContextProtocol/AgentGovernance.Extensions.ModelContextProtocol.csproj \
+                --configuration Release \
+                --no-build \
+                --output ./nupkg
               echo "=== Packed NuGet artifacts ==="
               ls -la ./nupkg/
             workingDirectory: 'agent-governance-dotnet'
-            displayName: 'Pack NuGet package'
+            displayName: 'Pack NuGet packages'
 
           - task: PublishPipelineArtifact@1
             inputs:
