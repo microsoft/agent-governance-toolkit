@@ -17,6 +17,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+from datetime import datetime, timezone
+
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
     Ed25519PublicKey,
@@ -30,6 +32,14 @@ from cryptography.hazmat.primitives.serialization import (
 
 # ---------------------------------------------------------------------------
 # RFC 8785 JCS canonicalization (minimal subset sufficient for this envelope)
+# ---------------------------------------------------------------------------
+# NOTE: This is a MINIMAL JCS implementation that covers the field types used
+# in this example envelope. It does not implement the full RFC 8785 edge
+# cases (Unicode normalization, certain IEEE 754 special values, etc.).
+# Production code should use a fully-tested JCS library such as `jcs` on PyPI
+# or the reference implementation at github.com/cyberphone/json-canonicalization.
+# The APS SDK at github.com/aeoess/agent-passport-system ships a spec-conformant
+# implementation used for all real signatures.
 # ---------------------------------------------------------------------------
 
 def canonicalize_jcs(value: Any) -> bytes:
@@ -88,16 +98,30 @@ def build_envelope(
     features: list[FeatureActivation],
     dictionary_ref: str,
     signer_role: str = "agent",
+    timestamp: str | None = None,
 ) -> dict[str, Any]:
-    """Build the unsigned envelope (canonical form, ready to sign)."""
+    """Build the unsigned envelope (canonical form, ready to sign).
+
+    The `timestamp` field is included in the canonical form and therefore
+    in the signature. This prevents replay of a valid envelope into a
+    different point in time: any attempt to reuse a previously-signed
+    envelope will still carry the original timestamp, which a verifier
+    can reject against freshness policy.
+    """
     action_bytes = canonicalize_jcs(action)
     action_ref = "sha256:" + hashlib.sha256(action_bytes).hexdigest()
 
-    # Canonical sort: (feature_id, activation_statistic) as spec requires
+    # Canonical sort: (feature_id, activation_statistic). This order is
+    # required by the Cognitive Attestation spec (Zenodo 10.5281/zenodo.19646276,
+    # Section 3.2) so that two independently-produced envelopes over the
+    # same feature set produce identical canonical bytes.
     sorted_features = sorted(
         features,
         key=lambda f: (f.feature_id, f.activation_statistic),
     )
+
+    if timestamp is None:
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     envelope = {
         "spec_version": "1.0",
@@ -112,6 +136,7 @@ def build_envelope(
             for f in sorted_features
         ],
         "signer_role": signer_role,
+        "timestamp": timestamp,
     }
     canonical = canonicalize_jcs(envelope)
     envelope["canonical_hash"] = "sha256:" + hashlib.sha256(canonical).hexdigest()
@@ -156,7 +181,15 @@ def verify_envelope(signed: dict[str, Any]) -> bool:
 # ---------------------------------------------------------------------------
 
 def evaluate_policy(action: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
-    """Minimal policy check. In production, use agent-governance-toolkit."""
+    """Minimal policy check for demonstration purposes ONLY.
+
+    This is NOT a substitute for the AGT policy engine. It intentionally
+    implements only exact-match tool name rules so this example is fully
+    self-contained and does not pull AGT as a heavy dependency. Real
+    deployments MUST replace this with `agent-governance-toolkit`'s
+    policy engine, which supports regex matches, nested conditions,
+    temporal rules, obligations, and the full AGT rule schema.
+    """
     tool = action.get("tool", "")
     for rule in policy.get("rules", []):
         match = rule.get("match", {}).get("tool", {})
@@ -256,7 +289,7 @@ def main() -> None:
     tampered = json.loads(json.dumps(signed))
     tampered["feature_activations"][0]["activation_statistic"] = 0.99
     ok2 = verify_envelope(tampered)
-    print(f"Tamper detection:     {'PASS (rejected)' if not ok2 else 'FAIL (accepted)'}")
+    print(f"Tamper detection:     {'PASS (tampering detected, envelope rejected)' if not ok2 else 'FAIL (tampering not detected, envelope accepted)'}")
 
 
 if __name__ == "__main__":
