@@ -90,7 +90,7 @@ public class ExecutionRingsAdvancedTests
 public class AgentIdentityAdvancedTests
 {
     [Fact]
-    public void Create_GeneratesDid() => Assert.StartsWith("did:agentmesh:", AgentIdentity.Create("test").Did);
+    public void Create_GeneratesDid() => Assert.StartsWith("did:mesh:", AgentIdentity.Create("test").Did);
 
     [Fact]
     public void Create_DifferentNames_DifferentPrefixes()
@@ -98,7 +98,7 @@ public class AgentIdentityAdvancedTests
         // DIDs have random component, but the first 8 hex chars are deterministic from name.
         var id1 = AgentIdentity.Create("agent-a");
         var id2 = AgentIdentity.Create("agent-b");
-        Assert.NotEqual(id1.Did[..17], id2.Did[..17]); // "did:agentmesh:" + 8 hex chars
+        Assert.NotEqual(id1.Did[..13], id2.Did[..13]); // "did:mesh:" + deterministic prefix
     }
 
     [Fact]

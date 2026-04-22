@@ -8,7 +8,7 @@ namespace AgentGovernance.Trust;
 
 /// <summary>
 /// Provides peer verification capabilities using challenge-response protocols.
-/// Verifies that a peer possesses the private key corresponding to its claimed identity.
+/// Verifies that a peer possesses the signing key corresponding to its claimed identity.
 /// </summary>
 public static class TrustVerifier
 {
@@ -24,8 +24,8 @@ public static class TrustVerifier
     /// </summary>
     /// <param name="peerId">The expected DID of the peer being verified.</param>
     /// <param name="peerIdentity">
-    /// The <see cref="AgentIdentity"/> of the peer. Must have a private key
-    /// for signing the challenge (HMAC-SHA256 fallback mode).
+    /// The <see cref="AgentIdentity"/> of the peer. Must have signing key material
+    /// available for the .NET 8 compatibility implementation.
     /// </param>
     /// <returns><c>true</c> if the peer's identity is verified; otherwise <c>false</c>.</returns>
     /// <exception cref="ArgumentException">
@@ -35,9 +35,9 @@ public static class TrustVerifier
     /// Thrown when <paramref name="peerIdentity"/> is <c>null</c>.
     /// </exception>
     /// <remarks>
-    /// ⚠️ <b>SECURITY WARNING (CWE-327):</b> This method uses HMAC-SHA256 as a compatibility
-    /// fallback. In HMAC mode, the verifier must have access to the peer's private key.
-    /// Migrate to Ed25519 on .NET 9+ for proper asymmetric challenge-response verification.
+    /// On .NET 8 this verifier uses the SDK's compatibility signing implementation.
+    /// When the SDK grows native asymmetric signing support, the verifier can switch
+    /// without changing the public API.
     /// </remarks>
     public static bool VerifyPeer(string peerId, AgentIdentity peerIdentity)
     {
@@ -45,7 +45,7 @@ public static class TrustVerifier
         ArgumentNullException.ThrowIfNull(peerIdentity);
 
         // Step 1: Verify the claimed DID matches.
-        if (peerIdentity.Did != peerId)
+        if (peerIdentity.Did != AgentIdentity.NormalizeDid(peerId))
         {
             return false;
         }
@@ -63,9 +63,7 @@ public static class TrustVerifier
         byte[] signature;
         try
         {
-#pragma warning disable CS0618 // Intentional use of deprecated Sign() for HMAC fallback path
             signature = peerIdentity.Sign(challenge);
-#pragma warning restore CS0618
         }
         catch (InvalidOperationException)
         {
@@ -75,9 +73,7 @@ public static class TrustVerifier
         // Step 5: Verify the signature.
         try
         {
-#pragma warning disable CS0618 // Intentional use of deprecated Verify() for HMAC fallback path
             return peerIdentity.Verify(challenge, signature);
-#pragma warning restore CS0618
         }
         catch (InvalidOperationException)
         {

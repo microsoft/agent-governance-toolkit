@@ -1,4 +1,5 @@
-// Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 
 using System.Diagnostics;
 
@@ -8,15 +9,13 @@ namespace AgentGovernance.Policy;
 /// Main governance policy evaluation engine. Loads one or more <see cref="Policy"/>
 /// documents, evaluates agent requests against all loaded rules, and resolves
 /// conflicts when multiple rules match.
-/// <para>
-/// This class is thread-safe. Policies are stored in a lock-protected list and
-/// evaluation is side-effect free.
-/// </para>
 /// </summary>
 public sealed class PolicyEngine
 {
     private readonly List<Policy> _policies = new();
-    private readonly object _lock = new();
+    private readonly object _policyLock = new();
+    private readonly object _rateLimitLock = new();
+    private readonly Dictionary<string, RateLimitWindow> _rateLimits = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The conflict resolution strategy to use when multiple rules match.
@@ -28,13 +27,11 @@ public sealed class PolicyEngine
     /// <summary>
     /// Loads a pre-parsed <see cref="Policy"/> into the engine.
     /// </summary>
-    /// <param name="policy">The policy to load.</param>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="policy"/> is <c>null</c>.</exception>
     public void LoadPolicy(Policy policy)
     {
         ArgumentNullException.ThrowIfNull(policy);
 
-        lock (_lock)
+        lock (_policyLock)
         {
             _policies.Add(policy);
         }
@@ -43,30 +40,41 @@ public sealed class PolicyEngine
     /// <summary>
     /// Parses a YAML string into a <see cref="Policy"/> and loads it into the engine.
     /// </summary>
-    /// <param name="yaml">YAML content representing a policy document.</param>
     public void LoadYaml(string yaml)
     {
-        var policy = Policy.FromYaml(yaml);
-        LoadPolicy(policy);
+        LoadPolicy(Policy.FromYaml(yaml));
+    }
+
+    /// <summary>
+    /// Parses a JSON string into a <see cref="Policy"/> and loads it into the engine.
+    /// </summary>
+    public void LoadJson(string json)
+    {
+        LoadPolicy(Policy.FromJson(json));
     }
 
     /// <summary>
     /// Loads a policy from a YAML file on disk.
     /// </summary>
-    /// <param name="path">Path to the YAML policy file.</param>
     public void LoadYamlFile(string path)
     {
-        var policy = Policy.FromYamlFile(path);
-        LoadPolicy(policy);
+        LoadPolicy(Policy.FromYamlFile(path));
+    }
+
+    /// <summary>
+    /// Loads a policy from a JSON file on disk.
+    /// </summary>
+    public void LoadJsonFile(string path)
+    {
+        LoadPolicy(Policy.FromJsonFile(path));
     }
 
     /// <summary>
     /// Returns a read-only snapshot of all loaded policies.
     /// </summary>
-    /// <returns>An immutable list of loaded policies.</returns>
     public IReadOnlyList<Policy> ListPolicies()
     {
-        lock (_lock)
+        lock (_policyLock)
         {
             return _policies.ToList().AsReadOnly();
         }
@@ -77,34 +85,31 @@ public sealed class PolicyEngine
     /// </summary>
     public void ClearPolicies()
     {
-        lock (_lock)
+        lock (_policyLock)
         {
             _policies.Clear();
+        }
+
+        lock (_rateLimitLock)
+        {
+            _rateLimits.Clear();
         }
     }
 
     /// <summary>
     /// Evaluates an agent request against all loaded policies.
     /// </summary>
-    /// <param name="agentDid">
-    /// The decentralised identifier of the agent making the request (e.g., "did:agentmesh:abc123").
-    /// This is injected into the evaluation context as <c>agent_did</c>.
-    /// </param>
-    /// <param name="context">
-    /// A dictionary of contextual values for condition evaluation.
-    /// Common keys include <c>tool_name</c>, <c>action.type</c>, etc.
-    /// </param>
-    /// <returns>
-    /// A <see cref="PolicyDecision"/> representing the outcome.
-    /// If no policies are loaded, the request is allowed by default.
-    /// </returns>
     public PolicyDecision Evaluate(string agentDid, Dictionary<string, object> context)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(agentDid);
+        ArgumentNullException.ThrowIfNull(context);
+
+        var normalizedDid = AgentGovernance.Trust.AgentIdentity.NormalizeDid(agentDid);
+        var evaluatedAt = DateTime.UtcNow;
         var sw = Stopwatch.StartNew();
 
-        // Snapshot policies under lock.
         List<Policy> snapshot;
-        lock (_lock)
+        lock (_policyLock)
         {
             snapshot = _policies.ToList();
         }
@@ -112,16 +117,14 @@ public sealed class PolicyEngine
         if (snapshot.Count == 0)
         {
             sw.Stop();
-            return PolicyDecision.AllowDefault(sw.Elapsed.TotalMilliseconds);
+            return PolicyDecision.AllowDefault(evaluatedAt, sw.Elapsed.TotalMilliseconds);
         }
 
-        // Inject agent DID into context so rules can reference it.
         var evalContext = new Dictionary<string, object>(context, StringComparer.OrdinalIgnoreCase)
         {
-            ["agent_did"] = agentDid
+            ["agent_did"] = normalizedDid
         };
 
-        // Collect all candidate decisions from all policies.
         var candidates = new List<CandidateDecision>();
         PolicyAction lastDefaultAction = PolicyAction.Deny;
 
@@ -138,7 +141,7 @@ public sealed class PolicyEngine
 
                 if (rule.Evaluate(evalContext))
                 {
-                    var decision = PolicyDecision.FromRule(rule, sw.Elapsed.TotalMilliseconds);
+                    var decision = CreateDecisionFromRule(policy, rule, evaluatedAt, sw.Elapsed.TotalMilliseconds);
                     candidates.Add(new CandidateDecision(rule, decision, policy.Scope));
                 }
             }
@@ -147,31 +150,110 @@ public sealed class PolicyEngine
         sw.Stop();
         var elapsed = sw.Elapsed.TotalMilliseconds;
 
-        // No rules matched — return the default action.
         if (candidates.Count == 0)
         {
             return lastDefaultAction == PolicyAction.Allow
-                ? PolicyDecision.AllowDefault(elapsed)
-                : PolicyDecision.DenyDefault(elapsed);
+                ? PolicyDecision.AllowDefault(evaluatedAt, elapsed)
+                : PolicyDecision.DenyDefault(evaluatedAt, elapsed);
         }
 
-        // Resolve conflicts and return the winning decision.
         var resolved = PolicyConflictResolver.Resolve(candidates, ConflictStrategy);
-        if (resolved is not null)
+        if (resolved is null)
         {
-            // Update evaluation time to include conflict resolution.
-            return new PolicyDecision
-            {
-                Allowed = resolved.Allowed,
-                Action = resolved.Action,
-                MatchedRule = resolved.MatchedRule,
-                Reason = resolved.Reason,
-                Approvers = resolved.Approvers,
-                RateLimited = resolved.RateLimited,
-                EvaluationMs = elapsed
-            };
+            return PolicyDecision.DenyDefault(evaluatedAt, elapsed);
         }
 
-        return PolicyDecision.DenyDefault(elapsed);
+        return new PolicyDecision
+        {
+            Allowed = resolved.Allowed,
+            Action = resolved.Action,
+            MatchedRule = resolved.MatchedRule,
+            PolicyName = resolved.PolicyName,
+            Reason = resolved.Reason,
+            Approvers = resolved.Approvers,
+            RateLimited = resolved.RateLimited,
+            RateLimitReset = resolved.RateLimitReset,
+            EvaluatedAt = evaluatedAt,
+            EvaluationMs = elapsed,
+            Metadata = resolved.Metadata
+        };
     }
+
+    private PolicyDecision CreateDecisionFromRule(Policy policy, PolicyRule rule, DateTime evaluatedAt, double evaluationMs)
+    {
+        DateTime? rateLimitReset = null;
+        string? reason = null;
+
+        if (rule.Action == PolicyAction.RateLimit && !string.IsNullOrWhiteSpace(rule.Limit))
+        {
+            rateLimitReset = ReserveRateLimitWindow(policy.Name, rule.Name, rule.Limit!, out var exceeded);
+            reason = exceeded
+                ? $"Rate limit exceeded for rule '{rule.Name}': {rule.Limit}."
+                : $"Matched rate-limit rule '{rule.Name}' ({rule.Limit}).";
+        }
+
+        var decision = PolicyDecision.FromRule(
+            rule,
+            policy.Name,
+            evaluatedAt,
+            evaluationMs,
+            rateLimitReset);
+
+        return reason is null
+            ? decision
+            : new PolicyDecision
+            {
+                Allowed = decision.Allowed,
+                Action = decision.Action,
+                MatchedRule = decision.MatchedRule,
+                PolicyName = decision.PolicyName,
+                Reason = reason,
+                Approvers = decision.Approvers,
+                RateLimited = decision.RateLimited,
+                RateLimitReset = decision.RateLimitReset,
+                EvaluatedAt = decision.EvaluatedAt,
+                EvaluationMs = decision.EvaluationMs,
+                Metadata = decision.Metadata
+            };
+    }
+
+    private DateTime ReserveRateLimitWindow(string policyName, string ruleName, string limit, out bool exceeded)
+    {
+        var (maxCount, window) = ParseLimit(limit);
+        var key = $"{policyName}:{ruleName}";
+        var now = DateTime.UtcNow;
+
+        lock (_rateLimitLock)
+        {
+            if (!_rateLimits.TryGetValue(key, out var state) || now >= state.ResetAt)
+            {
+                state = new RateLimitWindow(0, now.Add(window));
+            }
+
+            state = state with { Count = state.Count + 1 };
+            _rateLimits[key] = state;
+            exceeded = state.Count > maxCount;
+            return state.ResetAt;
+        }
+    }
+
+    private static (int Count, TimeSpan Window) ParseLimit(string limit)
+    {
+        var parts = limit.Split('/', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2 || !int.TryParse(parts[0], out var count) || count <= 0)
+        {
+            throw new ArgumentException($"Invalid rate limit expression '{limit}'.", nameof(limit));
+        }
+
+        return parts[1].ToLowerInvariant() switch
+        {
+            "second" => (count, TimeSpan.FromSeconds(1)),
+            "minute" => (count, TimeSpan.FromMinutes(1)),
+            "hour" => (count, TimeSpan.FromHours(1)),
+            "day" => (count, TimeSpan.FromDays(1)),
+            _ => throw new ArgumentException($"Unsupported rate limit window '{parts[1]}'.", nameof(limit))
+        };
+    }
+
+    private sealed record RateLimitWindow(int Count, DateTime ResetAt);
 }

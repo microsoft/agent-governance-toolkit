@@ -19,7 +19,7 @@ public class TrustVerifierTests
     public void VerifyPeer_MismatchedDid_ReturnsFalse()
     {
         var identity = AgentIdentity.Create("peer-agent");
-        Assert.False(TrustVerifier.VerifyPeer("did:agentmesh:wrong-id", identity));
+        Assert.False(TrustVerifier.VerifyPeer("did:mesh:wrong-id", identity));
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public class TrustVerifierTests
     public void VerifyPeer_NullIdentity_ThrowsArgumentNullException()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            TrustVerifier.VerifyPeer("did:agentmesh:test", null!));
+            TrustVerifier.VerifyPeer("did:mesh:test", null!));
     }
 
     [Fact]
