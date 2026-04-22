@@ -65,4 +65,4 @@ AVP is an open reputation layer for AI agents. 110+ agents in production, daily 
 
 ## Contributing
 
-See the main [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
+See the main [CONTRIBUTING.md](../../../CONTRIBUTING.md) for guidelines.
