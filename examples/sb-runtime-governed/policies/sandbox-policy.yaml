@@ -1,0 +1,40 @@
+apiVersion: governance.toolkit/v1
+# Shared policy exercised across all three sandbox-layer scenarios in this
+# example. The claim this policy lets us demonstrate is architectural:
+# the SAME policy produces SEMANTICALLY-EQUIVALENT receipts regardless of
+# whether the sandbox is sb-runtime's own Landlock+seccomp, nono, or
+# OpenShell. The receipt envelope carries the sandbox_backend choice so
+# an auditor can see which layer wrapped the process, but verification
+# of the signature + policy digest is identical across all three.
+rules:
+  - name: block-destructive-shell
+    condition: {field: action, operator: matches, value: "shell:(rm|dd|mkfs|shutdown|reboot|kill)"}
+    action: deny
+    priority: 100
+    message: Destructive shell command blocked
+  - name: block-metadata-endpoint
+    condition: {field: action, operator: contains, value: "169.254.169.254"}
+    action: deny
+    priority: 100
+    message: Cloud metadata endpoint blocked
+  - name: block-system-writes
+    condition: {field: action, operator: matches, value: "file:write:/(etc|usr|root|var/log)"}
+    action: deny
+    priority: 95
+    message: Writes to system directories blocked
+  - name: allow-workspace-read
+    condition: {field: action, operator: matches, value: "^file:read:/(workspace|tmp)"}
+    action: allow
+    priority: 90
+  - name: allow-workspace-write
+    condition: {field: action, operator: matches, value: "^file:write:/(workspace|tmp)"}
+    action: allow
+    priority: 85
+  - name: allow-safe-shell
+    condition: {field: action, operator: in, value: ["shell:ls","shell:cat","shell:grep","shell:python","shell:pip","shell:git","shell:curl"]}
+    action: allow
+    priority: 80
+  - name: allow-github-api
+    condition: {field: action, operator: matches, value: "^http:(GET|POST):api\\.github\\.com"}
+    action: allow
+    priority: 80
