@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-//! # AgentMesh Rust SDK
+//! # Agent Governance Rust SDK
 //!
 //! Rust SDK for the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
 //! — policy evaluation, trust scoring, hash-chain audit logging, and Ed25519 agent identity.
@@ -9,7 +9,7 @@
 //! ## Quick Start
 //!
 //! ```rust
-//! use agentmesh::AgentMeshClient;
+//! use agent_governance::AgentMeshClient;
 //!
 //! let client = AgentMeshClient::new("my-agent")
 //!     .expect("failed to create client");
