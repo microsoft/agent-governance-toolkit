@@ -8,7 +8,7 @@
  */
 
 import { ed25519 } from "@noble/curves/ed25519";
-import { randomBytes } from "@noble/ciphers/webcrypto";
+import { randomBytes } from "@noble/ciphers/utils";
 import {
   X3DHKeyManager,
   generateX25519KeyPair,
