@@ -146,6 +146,7 @@ nav:
   - Reference:
     - Benchmarks: reference/benchmarks.md
     - Comparison: reference/comparison.md
+    - External Operation Accountability Profiles: integrations/external-operation-accountability-profiles.md
     - NIST RFI Mapping: reference/nist-rfi-mapping.md
     - Changelog: reference/changelog.md
     - Contributing: reference/contributing.md
