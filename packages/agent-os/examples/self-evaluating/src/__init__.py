@@ -8,7 +8,7 @@ including polymorphic output, universal signal bus, agent brokerage, orchestrati
 constraint engineering, evaluation engineering, and more.
 """
 
-__version__ = "3.1.1"
+__version__ = "3.2.0"
 
 # Core agent modules
 from .agent import (
