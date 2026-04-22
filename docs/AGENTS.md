@@ -24,6 +24,10 @@ package pages, and integration guides.
 - Use repo-relative links that work from the current document location.
 - Match existing tone: technical, direct, and evidence-based.
 - Keep package names, CLI commands, and install snippets aligned with the actual repo.
+- When documenting repo layout, treat standalone language SDKs at the repository root as a valid
+  first-party pattern. Use `agent-governance-dotnet/` as the canonical .NET path and
+  `agent-governance-golang/` as the matching sibling pattern, and avoid framing
+  `packages/agent-governance-dotnet/` as the target-state location.
 - When documenting third-party integrations, explain whether they are examples, adapters,
   or maintained first-party surfaces.
 
