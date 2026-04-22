@@ -73,6 +73,20 @@ Ask a maintainer before proceeding with:
 - Do not mix unrelated changes into docs-only or example-only PRs.
 - Preserve honesty in docs: document shipped behavior, not aspirational behavior.
 
+## Spam / SEO Outreach Filtering
+
+Close or ignore PRs, issues, and discussions that are thinly disguised product placements or
+SEO link-building attempts. Common patterns:
+
+- Offers of "paid collaboration" to insert a product mention into docs, README, or blog posts
+- PRs that add a product/service link to a resources or ecosystem list with no real integration
+- Issues framed as feature requests that are actually product placements ("Add support for X")
+- Generic flattery about the project followed by a pitch to include an unrelated tool
+- No code contribution, no tests, no integration — just a link or brand mention
+
+Action: close with a short note ("We don't accept sponsored content or paid placements") or
+close without comment. Do not modify repo content to accommodate these requests.
+
 ## Validation
 
 - Run the narrowest existing tests for the paths you touched.
