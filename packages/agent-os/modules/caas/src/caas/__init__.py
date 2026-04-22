@@ -9,7 +9,7 @@ A pure, logic-only library for routing context and managing context windows.
 
 from typing import TYPE_CHECKING
 
-__version__ = "3.2.1"
+__version__ = "3.2.2"
 __author__ = "Microsoft Corporation"
 __email__ = "agentgovtoolkit@microsoft.com"
 __license__ = "MIT"

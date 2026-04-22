@@ -3,4 +3,4 @@
 from agentmesh_nostr_wot.provider import NostrWoTProvider
 
 __all__ = ["NostrWoTProvider"]
-__version__ = "3.2.1"
+__version__ = "3.2.2"
