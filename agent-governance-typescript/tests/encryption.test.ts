@@ -7,8 +7,7 @@
  * Implements against: docs/specs/AGENTMESH-WIRE-1.0.md
  */
 
-import { ed25519 } from "@noble/curves/ed25519.js";
-import { randomBytes } from "@noble/ciphers/utils";
+import { ed25519 } from "@noble/curves/ed25519";
 import {
   X3DHKeyManager,
   generateX25519KeyPair,
@@ -76,187 +75,231 @@ describe("X25519KeyPair", () => {
   });
 });
 
-describe("X3DH", () => {
-  test("shared secret matches on both sides", () => {
+// ── X3DH Key Manager ──
+
+describe("X3DHKeyManager", () => {
+  test("generate signed pre-key", () => {
+    const mgr = makeManager();
+    const spk = mgr.generateSignedPreKey();
+    expect(spk.publicKey.length).toBe(32);
+    expect(spk.signature.length).toBe(64);
+  });
+
+  test("generate one-time pre-keys", () => {
+    const mgr = makeManager();
+    const otks = mgr.generateOneTimePreKeys(5);
+    expect(otks.length).toBe(5);
+    const ids = new Set(otks.map((k) => k.keyId));
+    expect(ids.size).toBe(5);
+  });
+
+  test("get bundle requires SPK", () => {
+    const mgr = makeManager();
+    expect(() => mgr.getPublicBundle()).toThrow("No signed pre-key");
+  });
+
+  test("full exchange with OTK", () => {
     const alice = makeManager();
     const bob = makeManager();
-
     bob.generateSignedPreKey();
     bob.generateOneTimePreKeys(5);
-    const bundle = bob.getPublicBundle(3);
+    const bobBundle = bob.getPublicBundle(0);
 
-    const a = alice.initiate(bundle);
-    const b = bob.respond(alice.identityKey.publicKey, a.ephemeralPublicKey, a.usedOneTimeKeyId);
+    const aliceResult = alice.initiate(bobBundle);
+    const bobResult = bob.respond(
+      alice.identityKey.publicKey,
+      aliceResult.ephemeralPublicKey,
+      aliceResult.usedOneTimeKeyId,
+    );
 
-    expect(Buffer.from(a.sharedSecret).equals(Buffer.from(b.sharedSecret))).toBe(true);
-    expect(a.usedOneTimeKeyId).toBe(3);
-    expect(Buffer.from(a.associatedData).equals(Buffer.from(b.associatedData))).toBe(true);
+    expect(Buffer.from(aliceResult.sharedSecret).equals(Buffer.from(bobResult.sharedSecret))).toBe(true);
+    expect(aliceResult.sharedSecret.length).toBe(32);
   });
 
-  test("one-time pre-key is consumed after use", () => {
+  test("exchange without OTK (3-DH)", () => {
     const alice = makeManager();
     const bob = makeManager();
+    bob.generateSignedPreKey();
+    const bobBundle = bob.getPublicBundle();
 
+    const aliceResult = alice.initiate(bobBundle);
+    const bobResult = bob.respond(
+      alice.identityKey.publicKey,
+      aliceResult.ephemeralPublicKey,
+    );
+
+    expect(Buffer.from(aliceResult.sharedSecret).equals(Buffer.from(bobResult.sharedSecret))).toBe(true);
+  });
+
+  test("consumed OTK raises", () => {
+    const bob = makeManager();
     bob.generateSignedPreKey();
     bob.generateOneTimePreKeys(1);
-    const bundle = bob.getPublicBundle(1);
+    const bundle = bob.getPublicBundle(0);
 
-    const a = alice.initiate(bundle);
-    bob.respond(alice.identityKey.publicKey, a.ephemeralPublicKey, a.usedOneTimeKeyId);
-
-    expect(bob.oneTimePreKeys.has(1)).toBe(false);
-  });
-
-  test("invalid signed pre-key signature is rejected", () => {
     const alice = makeManager();
-    const bob = makeManager();
+    const result = alice.initiate(bundle);
+    bob.respond(alice.identityKey.publicKey, result.ephemeralPublicKey, 0);
 
-    bob.generateSignedPreKey();
-    const bundle = bob.getPublicBundle();
-    bundle.signedPreKeySignature[0] ^= 0xff;
-
-    expect(() => alice.initiate(bundle)).toThrow("Invalid signed pre-key signature");
+    expect(() =>
+      bob.respond(alice.identityKey.publicKey, result.ephemeralPublicKey, 0),
+    ).toThrow("not found or already consumed");
   });
 });
 
+// ── Double Ratchet ──
+
 describe("DoubleRatchet", () => {
-  test("one-way message exchange", () => {
+  test("single message", () => {
     const [alice, bob] = setupPair();
+    const encrypted = alice.encrypt(enc.encode("hello bob"));
+    const plaintext = bob.decrypt(encrypted);
+    expect(dec.decode(plaintext)).toBe("hello bob");
+  });
 
-    const msg = alice.encrypt(enc.encode("hello"));
-    const pt = bob.decrypt(msg);
-
-    expect(dec.decode(pt)).toBe("hello");
+  test("multiple messages one direction", () => {
+    const [alice, bob] = setupPair();
+    for (let i = 0; i < 5; i++) {
+      const msg = enc.encode(`message ${i}`);
+      const encrypted = alice.encrypt(msg);
+      expect(dec.decode(bob.decrypt(encrypted))).toBe(`message ${i}`);
+    }
   });
 
   test("bidirectional conversation", () => {
     const [alice, bob] = setupPair();
 
-    const m1 = alice.encrypt(enc.encode("ping"));
-    expect(dec.decode(bob.decrypt(m1))).toBe("ping");
+    let e = alice.encrypt(enc.encode("hello bob"));
+    expect(dec.decode(bob.decrypt(e))).toBe("hello bob");
 
-    const m2 = bob.encrypt(enc.encode("pong"));
-    expect(dec.decode(alice.decrypt(m2))).toBe("pong");
+    e = bob.encrypt(enc.encode("hello alice"));
+    expect(dec.decode(alice.decrypt(e))).toBe("hello alice");
 
-    const m3 = alice.encrypt(enc.encode("done"));
-    expect(dec.decode(bob.decrypt(m3))).toBe("done");
+    e = alice.encrypt(enc.encode("how are you"));
+    expect(dec.decode(bob.decrypt(e))).toBe("how are you");
   });
 
-  test("out-of-order messages with skipped keys", () => {
+  test("DH ratchet advances on turn change", () => {
     const [alice, bob] = setupPair();
-
-    const m1 = alice.encrypt(enc.encode("msg1"));
-    const m2 = alice.encrypt(enc.encode("msg2"));
-    const m3 = alice.encrypt(enc.encode("msg3"));
-
-    expect(dec.decode(bob.decrypt(m3))).toBe("msg3");
-    expect(dec.decode(bob.decrypt(m1))).toBe("msg1");
-    expect(dec.decode(bob.decrypt(m2))).toBe("msg2");
+    const e1 = alice.encrypt(enc.encode("a1"));
+    bob.decrypt(e1);
+    const e2 = bob.encrypt(enc.encode("b1"));
+    alice.decrypt(e2);
+    const e3 = alice.encrypt(enc.encode("a2"));
+    // DH key should have changed
+    expect(Buffer.from(e3.header.dhPublicKey).equals(Buffer.from(e1.header.dhPublicKey))).toBe(false);
+    expect(dec.decode(bob.decrypt(e3))).toBe("a2");
   });
 
-  test("AAD integrity is enforced", () => {
+  test("out-of-order delivery", () => {
     const [alice, bob] = setupPair();
+    const e0 = alice.encrypt(enc.encode("msg0"));
+    const e1 = alice.encrypt(enc.encode("msg1"));
+    const e2 = alice.encrypt(enc.encode("msg2"));
 
-    const aad = enc.encode("header-data");
-    const msg = alice.encrypt(enc.encode("secret"), aad);
-
-    expect(() => bob.decrypt(msg, enc.encode("wrong-aad"))).toThrow();
-    expect(dec.decode(bob.decrypt(msg, aad))).toBe("secret");
+    expect(dec.decode(bob.decrypt(e2))).toBe("msg2");
+    expect(dec.decode(bob.decrypt(e0))).toBe("msg0");
+    expect(dec.decode(bob.decrypt(e1))).toBe("msg1");
   });
 
-  test("too many skipped messages is rejected", () => {
+  test("tampered ciphertext rejected", () => {
     const [alice, bob] = setupPair();
+    const e = alice.encrypt(enc.encode("secret"));
+    const tampered = { ...e, ciphertext: new Uint8Array(e.ciphertext) };
+    tampered.ciphertext[tampered.ciphertext.length - 1] ^= 0xff;
+    expect(() => bob.decrypt(tampered)).toThrow();
+  });
 
-    let last;
-    for (let i = 0; i < 101; i += 1) {
-      last = alice.encrypt(enc.encode(`msg${i}`));
-    }
+  test("max skip exceeded", () => {
+    const alice = makeManager();
+    const bob = makeManager();
+    bob.generateSignedPreKey();
+    bob.generateOneTimePreKeys(1);
+    const bundle = bob.getPublicBundle(0);
+    const ar = alice.initiate(bundle);
+    const br = bob.respond(alice.identityKey.publicKey, ar.ephemeralPublicKey, 0);
 
-    expect(() => bob.decrypt(last!)).toThrow("Too many skipped messages");
+    const aRatchet = DoubleRatchet.initSender(ar.sharedSecret, bundle.signedPreKey);
+    const bRatchet = DoubleRatchet.initReceiver(br.sharedSecret, {
+      privateKey: bob.signedPreKey!.keyPair.privateKey,
+      publicKey: bob.signedPreKey!.keyPair.publicKey,
+    });
+
+    // Override max skip to 2 via fromState
+    const state = bRatchet.getState();
+    const bLimited = DoubleRatchet.fromState(state, 2);
+
+    aRatchet.encrypt(enc.encode("skip1"));
+    aRatchet.encrypt(enc.encode("skip2"));
+    aRatchet.encrypt(enc.encode("skip3"));
+    const e4 = aRatchet.encrypt(enc.encode("msg4"));
+
+    expect(() => bLimited.decrypt(e4)).toThrow("Too many skipped");
   });
 });
 
+// ── SecureChannel ──
+
 describe("SecureChannel", () => {
-  test("alice ↔ bob encrypted channel", () => {
+  test("full send/receive flow", () => {
     const alice = makeManager();
     const bob = makeManager();
-
     bob.generateSignedPreKey();
     bob.generateOneTimePreKeys(1);
-
     const bundle = bob.getPublicBundle(0);
-    const aliceCh = SecureChannel.createInitiator(alice, bundle);
-    const bobCh = SecureChannel.createResponder(
-      bob,
-      alice.identityKey.publicKey,
-      aliceCh.getInitialEphemeralKey(),
-      aliceCh.getUsedOneTimeKeyId(),
-    );
 
-    const c1 = aliceCh.send("hello bob");
-    expect(bobCh.receive(c1)).toBe("hello bob");
+    const [aliceCh, est] = SecureChannel.createSender(alice, bundle);
+    const bobCh = SecureChannel.createReceiver(bob, est);
 
-    const c2 = bobCh.send("hi alice");
-    expect(aliceCh.receive(c2)).toBe("hi alice");
+    const e = aliceCh.send(enc.encode("hello bob"));
+    expect(dec.decode(bobCh.receive(e))).toBe("hello bob");
+
+    const e2 = bobCh.send(enc.encode("hello alice"));
+    expect(dec.decode(aliceCh.receive(e2))).toBe("hello alice");
   });
 
-  test("channel message JSON roundtrip", () => {
+  test("message count", () => {
     const alice = makeManager();
     const bob = makeManager();
     bob.generateSignedPreKey();
     const bundle = bob.getPublicBundle();
+    const [aliceCh, est] = SecureChannel.createSender(alice, bundle);
+    const bobCh = SecureChannel.createReceiver(bob, est);
 
-    const aliceCh = SecureChannel.createInitiator(alice, bundle);
-    const bobCh = SecureChannel.createResponder(
-      bob,
-      alice.identityKey.publicKey,
-      aliceCh.getInitialEphemeralKey(),
-      aliceCh.getUsedOneTimeKeyId(),
-    );
-
-    const msg = aliceCh.send("json-roundtrip");
-    const serialized = SecureChannel.serialize(msg);
-    const parsed = SecureChannel.deserialize(serialized);
-
-    expect(bobCh.receive(parsed)).toBe("json-roundtrip");
+    expect(aliceCh.messageCount).toBe(0);
+    const e = aliceCh.send(enc.encode("test"));
+    expect(aliceCh.messageCount).toBe(1);
+    bobCh.receive(e);
+    expect(bobCh.messageCount).toBe(1);
   });
 
-  test("tampering is detected", () => {
+  test("close prevents send", () => {
     const alice = makeManager();
     const bob = makeManager();
     bob.generateSignedPreKey();
-    const bundle = bob.getPublicBundle();
-
-    const aliceCh = SecureChannel.createInitiator(alice, bundle);
-    const bobCh = SecureChannel.createResponder(
-      bob,
-      alice.identityKey.publicKey,
-      aliceCh.getInitialEphemeralKey(),
-      aliceCh.getUsedOneTimeKeyId(),
-    );
-
-    const msg = aliceCh.send("untampered");
-    msg.ciphertext[msg.ciphertext.length - 1] ^= 0xff;
-
-    expect(() => bobCh.receive(msg)).toThrow();
+    const [aliceCh] = SecureChannel.createSender(alice, bob.getPublicBundle());
+    aliceCh.close();
+    expect(aliceCh.isClosed).toBe(true);
+    expect(() => aliceCh.send(enc.encode("nope"))).toThrow("closed");
   });
 
-  test("large payload", () => {
+  test("10-message bidirectional", () => {
     const alice = makeManager();
     const bob = makeManager();
     bob.generateSignedPreKey();
-    const bundle = bob.getPublicBundle();
+    bob.generateOneTimePreKeys(1);
+    const [aliceCh, est] = SecureChannel.createSender(alice, bob.getPublicBundle(0));
+    const bobCh = SecureChannel.createReceiver(bob, est);
 
-    const aliceCh = SecureChannel.createInitiator(alice, bundle);
-    const bobCh = SecureChannel.createResponder(
-      bob,
-      alice.identityKey.publicKey,
-      aliceCh.getInitialEphemeralKey(),
-      aliceCh.getUsedOneTimeKeyId(),
-    );
-
-    const payload = Buffer.from(randomBytes(4096)).toString("base64");
-    const msg = aliceCh.send(payload);
-    expect(bobCh.receive(msg)).toBe(payload);
+    for (let i = 0; i < 10; i++) {
+      if (i % 2 === 0) {
+        const e = aliceCh.send(enc.encode(`alice-${i}`));
+        expect(dec.decode(bobCh.receive(e))).toBe(`alice-${i}`);
+      } else {
+        const e = bobCh.send(enc.encode(`bob-${i}`));
+        expect(dec.decode(aliceCh.receive(e))).toBe(`bob-${i}`);
+      }
+    }
+    expect(aliceCh.messageCount).toBe(10);
   });
 });

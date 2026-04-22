@@ -8,12 +8,12 @@
  * Reference: https://signal.org/docs/specifications/doubleratchet/ (CC0)
  */
 
-import { x25519 } from "@noble/curves/ed25519.js";
-import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
-import { hkdf } from "@noble/hashes/hkdf.js";
-import { sha256 } from "@noble/hashes/sha2.js";
-import { hmac } from "@noble/hashes/hmac.js";
-import { randomBytes } from "@noble/ciphers/utils";
+import { x25519 } from "@noble/curves/ed25519";
+import { chacha20poly1305 } from "@noble/ciphers/chacha";
+import { hkdf } from "@noble/hashes/hkdf";
+import { sha256 } from "@noble/hashes/sha2";
+import { hmac } from "@noble/hashes/hmac";
+import { randomBytes } from "node:crypto";
 
 const KDF_INFO_RATCHET = new TextEncoder().encode("AgentMesh_Ratchet_v1");
 const NONCE_LEN = 12;
@@ -79,171 +79,182 @@ function decrypt(key: Uint8Array, data: Uint8Array, aad: Uint8Array): Uint8Array
   return cipher.decrypt(ct);
 }
 
-function skippedKeyId(pubKey: Uint8Array, n: number): string {
-  return `${Buffer.from(pubKey).toString("hex")}:${n}`;
+function serializeHeader(h: MessageHeader): Uint8Array {
+  const buf = new Uint8Array(40);
+  buf.set(h.dhPublicKey, 0);
+  const view = new DataView(buf.buffer);
+  view.setUint32(32, h.previousChainLength, false);
+  view.setUint32(36, h.messageNumber, false);
+  return buf;
+}
+
+function skippedKeyId(dhPub: Uint8Array, n: number): string {
+  return `${Buffer.from(dhPub).toString("hex")}:${n}`;
+}
+
+function arraysEqual(a: Uint8Array | null, b: Uint8Array | null): boolean {
+  if (a === null || b === null) return a === b;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
 
 export class DoubleRatchet {
   private state: RatchetState;
+  private maxSkip: number;
 
-  private constructor(state: RatchetState) {
+  private constructor(state: RatchetState, maxSkip: number) {
     this.state = state;
+    this.maxSkip = maxSkip;
   }
 
   static initSender(
     sharedSecret: Uint8Array,
-    receiverPublicKey: Uint8Array,
+    remoteDHPublic: Uint8Array,
+    maxSkip = MAX_SKIP,
   ): DoubleRatchet {
-    const dhPair = generateDHPair();
-    const [rootKey, chainKeySend] = kdfRoot(sharedSecret, x25519.getSharedSecret(dhPair.privateKey, receiverPublicKey));
+    const dhSelf = generateDHPair();
+    const dhOutput = x25519.getSharedSecret(dhSelf.privateKey, remoteDHPublic);
+    const [rootKey, chainKeySend] = kdfRoot(sharedSecret, dhOutput);
 
-    return new DoubleRatchet({
-      dhSelfPrivate: dhPair.privateKey,
-      dhSelfPublic: dhPair.publicKey,
-      dhRemotePublic: receiverPublicKey,
-      rootKey,
-      chainKeySend,
-      chainKeyRecv: null,
-      sendMessageNumber: 0,
-      recvMessageNumber: 0,
-      previousSendChainLength: 0,
-      skippedKeys: new Map(),
-    });
+    return new DoubleRatchet(
+      {
+        dhSelfPrivate: dhSelf.privateKey,
+        dhSelfPublic: dhSelf.publicKey,
+        dhRemotePublic: remoteDHPublic,
+        rootKey,
+        chainKeySend,
+        chainKeyRecv: null,
+        sendMessageNumber: 0,
+        recvMessageNumber: 0,
+        previousSendChainLength: 0,
+        skippedKeys: new Map(),
+      },
+      maxSkip,
+    );
   }
 
   static initReceiver(
     sharedSecret: Uint8Array,
-    receiverKeyPair: { privateKey: Uint8Array; publicKey: Uint8Array },
+    dhKeyPair: { privateKey: Uint8Array; publicKey: Uint8Array },
+    maxSkip = MAX_SKIP,
   ): DoubleRatchet {
-    return new DoubleRatchet({
-      dhSelfPrivate: receiverKeyPair.privateKey,
-      dhSelfPublic: receiverKeyPair.publicKey,
-      dhRemotePublic: null,
-      rootKey: sharedSecret,
-      chainKeySend: null,
-      chainKeyRecv: null,
-      sendMessageNumber: 0,
-      recvMessageNumber: 0,
-      previousSendChainLength: 0,
-      skippedKeys: new Map(),
-    });
+    return new DoubleRatchet(
+      {
+        dhSelfPrivate: dhKeyPair.privateKey,
+        dhSelfPublic: dhKeyPair.publicKey,
+        dhRemotePublic: null,
+        rootKey: sharedSecret,
+        chainKeySend: null,
+        chainKeyRecv: null,
+        sendMessageNumber: 0,
+        recvMessageNumber: 0,
+        previousSendChainLength: 0,
+        skippedKeys: new Map(),
+      },
+      maxSkip,
+    );
   }
 
-  encrypt(plaintext: Uint8Array, aad: Uint8Array = new Uint8Array(0)): EncryptedMessage {
-    if (!this.state.chainKeySend) {
-      throw new Error("Cannot encrypt: send chain not initialized");
-    }
+  encrypt(plaintext: Uint8Array, associatedData: Uint8Array = new Uint8Array()): EncryptedMessage {
+    const s = this.state;
+    if (!s.chainKeySend) throw new Error("Send chain not initialized. Receive a message first.");
 
-    const [messageKey, nextChainKey] = kdfChain(this.state.chainKeySend);
-    this.state.chainKeySend = nextChainKey;
+    const [messageKey, nextChainKey] = kdfChain(s.chainKeySend);
+    s.chainKeySend = nextChainKey;
 
     const header: MessageHeader = {
-      dhPublicKey: this.state.dhSelfPublic,
-      previousChainLength: this.state.previousSendChainLength,
-      messageNumber: this.state.sendMessageNumber,
+      dhPublicKey: s.dhSelfPublic,
+      previousChainLength: s.previousSendChainLength,
+      messageNumber: s.sendMessageNumber,
     };
+    s.sendMessageNumber++;
 
-    const headerBytes = this.serializeHeader(header);
-    const fullAad = this.concat(aad, headerBytes);
-    const ciphertext = encrypt(messageKey, plaintext, fullAad);
+    const headerBytes = serializeHeader(header);
+    const aad = new Uint8Array(headerBytes.length + associatedData.length);
+    aad.set(associatedData, 0);
+    aad.set(headerBytes, associatedData.length);
 
-    this.state.sendMessageNumber += 1;
-
+    const ciphertext = encrypt(messageKey, plaintext, aad);
     return { header, ciphertext };
   }
 
-  decrypt(message: EncryptedMessage, aad: Uint8Array = new Uint8Array(0)): Uint8Array {
-    const headerKeyId = skippedKeyId(message.header.dhPublicKey, message.header.messageNumber);
-    const skipped = this.state.skippedKeys.get(headerKeyId);
-    if (skipped) {
-      this.state.skippedKeys.delete(headerKeyId);
-      const headerBytes = this.serializeHeader(message.header);
-      return decrypt(skipped, message.ciphertext, this.concat(aad, headerBytes));
+  decrypt(message: EncryptedMessage, associatedData: Uint8Array = new Uint8Array()): Uint8Array {
+    const s = this.state;
+    const { header } = message;
+
+    const headerBytes = serializeHeader(header);
+    const aad = new Uint8Array(headerBytes.length + associatedData.length);
+    aad.set(associatedData, 0);
+    aad.set(headerBytes, associatedData.length);
+
+    // Check skipped keys
+    const skipId = skippedKeyId(header.dhPublicKey, header.messageNumber);
+    const skippedKey = s.skippedKeys.get(skipId);
+    if (skippedKey) {
+      s.skippedKeys.delete(skipId);
+      return decrypt(skippedKey, message.ciphertext, aad);
     }
 
-    if (!this.state.dhRemotePublic || !this.equal(this.state.dhRemotePublic, message.header.dhPublicKey)) {
-      this.skipMessageKeys(message.header.previousChainLength);
-      this.dhRatchet(message.header.dhPublicKey);
+    // DH ratchet step if sender's key changed
+    if (!arraysEqual(s.dhRemotePublic, header.dhPublicKey)) {
+      this.skipMessages(header.previousChainLength);
+      this.dhRatchetStep(header.dhPublicKey);
     }
 
-    this.skipMessageKeys(message.header.messageNumber);
+    this.skipMessages(header.messageNumber);
 
-    if (!this.state.chainKeyRecv) {
-      throw new Error("Cannot decrypt: receive chain not initialized");
-    }
+    const [messageKey, nextChainKey] = kdfChain(s.chainKeyRecv!);
+    s.chainKeyRecv = nextChainKey;
+    s.recvMessageNumber++;
 
-    const [messageKey, nextChainKey] = kdfChain(this.state.chainKeyRecv);
-    this.state.chainKeyRecv = nextChainKey;
-    this.state.recvMessageNumber += 1;
-
-    const headerBytes = this.serializeHeader(message.header);
-    return decrypt(messageKey, message.ciphertext, this.concat(aad, headerBytes));
+    return decrypt(messageKey, message.ciphertext, aad);
   }
 
-  private dhRatchet(newRemotePublicKey: Uint8Array): void {
-    this.state.previousSendChainLength = this.state.sendMessageNumber;
-    this.state.sendMessageNumber = 0;
-    this.state.recvMessageNumber = 0;
+  private dhRatchetStep(remoteDHPublic: Uint8Array): void {
+    const s = this.state;
+    s.previousSendChainLength = s.sendMessageNumber;
+    s.sendMessageNumber = 0;
+    s.recvMessageNumber = 0;
+    s.dhRemotePublic = remoteDHPublic;
 
-    this.state.dhRemotePublic = newRemotePublicKey;
+    let dhOutput = x25519.getSharedSecret(s.dhSelfPrivate, s.dhRemotePublic);
+    [s.rootKey, s.chainKeyRecv] = kdfRoot(s.rootKey, dhOutput);
 
-    const [rootKey1, chainKeyRecv] = kdfRoot(
-      this.state.rootKey,
-      x25519.getSharedSecret(this.state.dhSelfPrivate, newRemotePublicKey),
+    const newDH = generateDHPair();
+    s.dhSelfPrivate = newDH.privateKey;
+    s.dhSelfPublic = newDH.publicKey;
+
+    dhOutput = x25519.getSharedSecret(s.dhSelfPrivate, s.dhRemotePublic);
+    [s.rootKey, s.chainKeySend] = kdfRoot(s.rootKey, dhOutput);
+  }
+
+  private skipMessages(until: number): void {
+    const s = this.state;
+    if (!s.chainKeyRecv) return;
+    if (until - s.recvMessageNumber > this.maxSkip) {
+      throw new Error(
+        `Too many skipped messages (${until - s.recvMessageNumber} > ${this.maxSkip})`,
+      );
+    }
+    while (s.recvMessageNumber < until) {
+      const [mk, next] = kdfChain(s.chainKeyRecv);
+      s.skippedKeys.set(skippedKeyId(s.dhRemotePublic!, s.recvMessageNumber), mk);
+      s.chainKeyRecv = next;
+      s.recvMessageNumber++;
+    }
+  }
+
+  getState(): RatchetState {
+    return { ...this.state, skippedKeys: new Map(this.state.skippedKeys) };
+  }
+
+  static fromState(state: RatchetState, maxSkip = MAX_SKIP): DoubleRatchet {
+    return new DoubleRatchet(
+      { ...state, skippedKeys: new Map(state.skippedKeys) },
+      maxSkip,
     );
-
-    const newDhPair = generateDHPair();
-    const [rootKey2, chainKeySend] = kdfRoot(
-      rootKey1,
-      x25519.getSharedSecret(newDhPair.privateKey, newRemotePublicKey),
-    );
-
-    this.state.rootKey = rootKey2;
-    this.state.chainKeyRecv = chainKeyRecv;
-    this.state.chainKeySend = chainKeySend;
-    this.state.dhSelfPrivate = newDhPair.privateKey;
-    this.state.dhSelfPublic = newDhPair.publicKey;
-  }
-
-  private skipMessageKeys(until: number): void {
-    if (this.state.recvMessageNumber + MAX_SKIP < until) {
-      throw new Error(`Too many skipped messages: ${until - this.state.recvMessageNumber} > ${MAX_SKIP}`);
-    }
-
-    while (this.state.chainKeyRecv && this.state.recvMessageNumber < until) {
-      const [messageKey, nextChainKey] = kdfChain(this.state.chainKeyRecv);
-      const keyId = skippedKeyId(this.state.dhRemotePublic!, this.state.recvMessageNumber);
-      this.state.skippedKeys.set(keyId, messageKey);
-      this.state.chainKeyRecv = nextChainKey;
-      this.state.recvMessageNumber += 1;
-    }
-  }
-
-  private serializeHeader(header: MessageHeader): Uint8Array {
-    const result = new Uint8Array(32 + 4 + 4);
-    result.set(header.dhPublicKey, 0);
-    const view = new DataView(result.buffer);
-    view.setUint32(32, header.previousChainLength, false);
-    view.setUint32(36, header.messageNumber, false);
-    return result;
-  }
-
-  private concat(...arrays: Uint8Array[]): Uint8Array {
-    const total = arrays.reduce((sum, a) => sum + a.length, 0);
-    const result = new Uint8Array(total);
-    let offset = 0;
-    for (const arr of arrays) {
-      result.set(arr, offset);
-      offset += arr.length;
-    }
-    return result;
-  }
-
-  private equal(a: Uint8Array, b: Uint8Array): boolean {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i += 1) {
-      if (a[i] !== b[i]) return false;
-    }
-    return true;
   }
 }

@@ -11,10 +11,10 @@
  * Reference: https://signal.org/docs/specifications/x3dh/ (CC0)
  */
 
-import { x25519, ed25519 } from "@noble/curves/ed25519.js";
-import { hkdf } from "@noble/hashes/hkdf.js";
-import { sha256, sha512 } from "@noble/hashes/sha2.js";
-import { randomBytes } from "@noble/ciphers/utils";
+import { x25519, ed25519 } from "@noble/curves/ed25519";
+import { hkdf } from "@noble/hashes/hkdf";
+import { sha256, sha512 } from "@noble/hashes/sha2";
+import { randomBytes } from "node:crypto";
 
 const X3DH_INFO = new TextEncoder().encode("AgentMesh_X3DH_v1");
 const KEY_LEN = 32;
@@ -76,135 +76,145 @@ function concat(...arrays: Uint8Array[]): Uint8Array {
   const total = arrays.reduce((sum, a) => sum + a.length, 0);
   const result = new Uint8Array(total);
   let offset = 0;
-  for (const arr of arrays) {
-    result.set(arr, offset);
-    offset += arr.length;
+  for (const a of arrays) {
+    result.set(a, offset);
+    offset += a.length;
   }
   return result;
 }
 
 export class X3DHKeyManager {
-  readonly identityKey: X25519KeyPair;
-  readonly identityEd25519: { privateKey: Uint8Array; publicKey: Uint8Array };
-  signedPreKey?: {
-    keyPair: X25519KeyPair;
-    id: number;
-    signature: Uint8Array;
-  };
-  oneTimePreKeys = new Map<number, X25519KeyPair>();
-  private nextPreKeyId = 1;
+  public readonly identityKey: X25519KeyPair;
+  private readonly ed25519Private: Uint8Array;
+  private readonly ed25519Public: Uint8Array;
+  private signedPreKeyPair: { keyPair: X25519KeyPair; signature: Uint8Array; keyId: number } | null = null;
+  private oneTimePreKeys: Map<number, X25519KeyPair> = new Map();
+  private nextSpkId = 0;
+  private nextOtkId = 0;
 
-  constructor(identityPrivateEd25519: Uint8Array, identityPublicEd25519: Uint8Array) {
-    this.identityEd25519 = {
-      privateKey: identityPrivateEd25519,
-      publicKey: identityPublicEd25519,
-    };
-    this.identityKey = ed25519ToX25519(identityPrivateEd25519, identityPublicEd25519);
+  constructor(ed25519Private: Uint8Array, ed25519Public: Uint8Array) {
+    this.ed25519Private = ed25519Private.length === 64 ? ed25519Private.slice(0, 32) : ed25519Private;
+    this.ed25519Public = ed25519Public;
+    this.identityKey = ed25519ToX25519(ed25519Private, ed25519Public);
   }
 
-  generateSignedPreKey(): void {
+  generateSignedPreKey(): { keyId: number; publicKey: Uint8Array; signature: Uint8Array } {
     const keyPair = generateX25519KeyPair();
-    const signature = ed25519.sign(keyPair.publicKey, this.identityEd25519.privateKey);
-    this.signedPreKey = {
-      keyPair,
-      id: this.nextPreKeyId++,
-      signature,
-    };
+    const signature = ed25519.sign(keyPair.publicKey, this.ed25519Private);
+    const keyId = this.nextSpkId++;
+    this.signedPreKeyPair = { keyPair, signature, keyId };
+    return { keyId, publicKey: keyPair.publicKey, signature };
   }
 
-  generateOneTimePreKeys(count: number): void {
-    for (let i = 0; i < count; i += 1) {
-      this.oneTimePreKeys.set(this.nextPreKeyId++, generateX25519KeyPair());
+  generateOneTimePreKeys(count: number): Array<{ keyId: number; publicKey: Uint8Array }> {
+    const keys: Array<{ keyId: number; publicKey: Uint8Array }> = [];
+    for (let i = 0; i < count; i++) {
+      const keyPair = generateX25519KeyPair();
+      const keyId = this.nextOtkId++;
+      this.oneTimePreKeys.set(keyId, keyPair);
+      keys.push({ keyId, publicKey: keyPair.publicKey });
     }
+    return keys;
   }
 
-  getPublicBundle(oneTimePreKeyId?: number): PreKeyBundle {
-    if (!this.signedPreKey) {
-      throw new Error("Signed pre-key not generated");
+  getPublicBundle(otkId?: number): PreKeyBundle {
+    if (!this.signedPreKeyPair) {
+      throw new Error("No signed pre-key generated. Call generateSignedPreKey() first.");
     }
     const bundle: PreKeyBundle = {
       identityKey: this.identityKey.publicKey,
-      signedPreKey: this.signedPreKey.keyPair.publicKey,
-      signedPreKeySignature: this.signedPreKey.signature,
-      signedPreKeyId: this.signedPreKey.id,
+      signedPreKey: this.signedPreKeyPair.keyPair.publicKey,
+      signedPreKeySignature: this.signedPreKeyPair.signature,
+      signedPreKeyId: this.signedPreKeyPair.keyId,
     };
-    if (oneTimePreKeyId !== undefined) {
-      const oneTime = this.oneTimePreKeys.get(oneTimePreKeyId);
-      if (oneTime) {
-        bundle.oneTimePreKey = oneTime.publicKey;
-        bundle.oneTimePreKeyId = oneTimePreKeyId;
+    if (otkId !== undefined) {
+      const otk = this.oneTimePreKeys.get(otkId);
+      if (otk) {
+        bundle.oneTimePreKey = otk.publicKey;
+        bundle.oneTimePreKeyId = otkId;
       }
     }
     return bundle;
   }
 
-  initiate(recipientBundle: PreKeyBundle): X3DHResult {
-    const isValid = ed25519.verify(
-      recipientBundle.signedPreKeySignature,
-      recipientBundle.signedPreKey,
-      recipientBundle.identityKey,
-    );
-    if (!isValid) {
-      throw new Error("Invalid signed pre-key signature");
+  initiate(peerBundle: PreKeyBundle): X3DHResult {
+    verifyBundle(peerBundle);
+
+    const ephemeral = generateX25519KeyPair();
+
+    const dh1 = x25519.getSharedSecret(this.identityKey.privateKey, peerBundle.signedPreKey);
+    const dh2 = x25519.getSharedSecret(ephemeral.privateKey, peerBundle.identityKey);
+    const dh3 = x25519.getSharedSecret(ephemeral.privateKey, peerBundle.signedPreKey);
+
+    let dhConcat = concat(dh1, dh2, dh3);
+    let usedOtkId: number | undefined;
+
+    if (peerBundle.oneTimePreKey) {
+      const dh4 = x25519.getSharedSecret(ephemeral.privateKey, peerBundle.oneTimePreKey);
+      dhConcat = concat(dhConcat, dh4);
+      usedOtkId = peerBundle.oneTimePreKeyId;
     }
 
-    const eph = generateX25519KeyPair();
-
-    const dh1 = x25519.getSharedSecret(this.identityKey.privateKey, recipientBundle.signedPreKey);
-    const dh2 = x25519.getSharedSecret(eph.privateKey, recipientBundle.identityKey);
-    const dh3 = x25519.getSharedSecret(eph.privateKey, recipientBundle.signedPreKey);
-
-    const parts = [dh1, dh2, dh3];
-    if (recipientBundle.oneTimePreKey) {
-      const dh4 = x25519.getSharedSecret(eph.privateKey, recipientBundle.oneTimePreKey);
-      parts.push(dh4);
-    }
-
-    const dhConcat = concat(...parts);
     const sharedSecret = kdf(dhConcat);
-    const associatedData = concat(this.identityKey.publicKey, recipientBundle.identityKey);
+    const ad = concat(this.identityKey.publicKey, peerBundle.identityKey);
 
     return {
       sharedSecret,
-      ephemeralPublicKey: eph.publicKey,
-      usedOneTimeKeyId: recipientBundle.oneTimePreKeyId,
-      associatedData,
+      ephemeralPublicKey: ephemeral.publicKey,
+      usedOneTimeKeyId: usedOtkId,
+      associatedData: ad,
     };
   }
 
   respond(
-    initiatorIdentityKey: Uint8Array,
-    initiatorEphemeralKey: Uint8Array,
-    oneTimePreKeyId?: number,
+    peerIdentityKey: Uint8Array,
+    ephemeralPublicKey: Uint8Array,
+    usedOneTimeKeyId?: number,
   ): X3DHResult {
-    if (!this.signedPreKey) {
-      throw new Error("Signed pre-key not generated");
+    if (!this.signedPreKeyPair) {
+      throw new Error("No signed pre-key available.");
     }
 
-    const dh1 = x25519.getSharedSecret(this.signedPreKey.keyPair.privateKey, initiatorIdentityKey);
-    const dh2 = x25519.getSharedSecret(this.identityKey.privateKey, initiatorEphemeralKey);
-    const dh3 = x25519.getSharedSecret(this.signedPreKey.keyPair.privateKey, initiatorEphemeralKey);
+    const dh1 = x25519.getSharedSecret(this.signedPreKeyPair.keyPair.privateKey, peerIdentityKey);
+    const dh2 = x25519.getSharedSecret(this.identityKey.privateKey, ephemeralPublicKey);
+    const dh3 = x25519.getSharedSecret(this.signedPreKeyPair.keyPair.privateKey, ephemeralPublicKey);
 
-    const parts = [dh1, dh2, dh3];
-    if (oneTimePreKeyId !== undefined) {
-      const oneTimePreKey = this.oneTimePreKeys.get(oneTimePreKeyId);
-      if (!oneTimePreKey) {
-        throw new Error(`One-time pre-key ${oneTimePreKeyId} not found`);
+    let dhConcat = concat(dh1, dh2, dh3);
+
+    if (usedOneTimeKeyId !== undefined) {
+      const otk = this.oneTimePreKeys.get(usedOneTimeKeyId);
+      if (!otk) {
+        throw new Error(`One-time pre-key ${usedOneTimeKeyId} not found or already consumed.`);
       }
-      const dh4 = x25519.getSharedSecret(oneTimePreKey.privateKey, initiatorEphemeralKey);
-      parts.push(dh4);
-      this.oneTimePreKeys.delete(oneTimePreKeyId);
+      const dh4 = x25519.getSharedSecret(otk.privateKey, ephemeralPublicKey);
+      dhConcat = concat(dhConcat, dh4);
+      this.oneTimePreKeys.delete(usedOneTimeKeyId);
     }
 
-    const dhConcat = concat(...parts);
     const sharedSecret = kdf(dhConcat);
-    const associatedData = concat(initiatorIdentityKey, this.identityKey.publicKey);
+    const ad = concat(peerIdentityKey, this.identityKey.publicKey);
 
     return {
       sharedSecret,
-      ephemeralPublicKey: initiatorEphemeralKey,
-      usedOneTimeKeyId: oneTimePreKeyId,
-      associatedData,
+      ephemeralPublicKey,
+      usedOneTimeKeyId,
+      associatedData: ad,
     };
+  }
+
+  get signedPreKey() {
+    return this.signedPreKeyPair;
+  }
+}
+
+function verifyBundle(bundle: PreKeyBundle): void {
+  if (bundle.signedPreKeySignature.length !== 64) {
+    throw new Error("Invalid signed pre-key signature length.");
+  }
+  if (bundle.signedPreKey.length !== 32) {
+    throw new Error("Invalid signed pre-key length.");
+  }
+  if (bundle.identityKey.length !== 32) {
+    throw new Error("Invalid identity key length.");
   }
 }
