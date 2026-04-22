@@ -54,8 +54,8 @@ If a directory contains an `AGENTS.md` file, read it before you start. It captur
 commands, boundaries, and review expectations for that area.
 If a standalone top-level language directory exists for the implementation you are changing, prefer
 that directory over an older shared path unless maintainers tell you to keep work in the legacy
-location. For the approved .NET standalone migration, contributor guidance should point to
-`agent-governance-dotnet/` as the canonical path, not `packages/agent-governance-dotnet/`.
+location. For the standalone .NET SDK, contributor guidance should point to
+`agent-governance-dotnet/` as the canonical path.
 
 ### Choose the Smallest Correct Surface
 
@@ -131,8 +131,10 @@ pip install -e "packages/agent-compliance[dev]"
 pip install -e "packages/agent-marketplace[dev]"  # installs agentmesh-marketplace
 pip install -e "packages/agent-lightning[dev]"
 pip install -e "packages/agent-hypervisor[dev]"
-pip install -e "packages/agent-governance-dotnet[dev]"
 pip install -e "packages/agentmesh-integrations[dev]"
+
+# Restore the standalone .NET SDK when working in that path
+dotnet restore agent-governance-dotnet/AgentGovernance.sln
 
 # Run tests
 pytest
@@ -167,7 +169,7 @@ docker compose --profile dashboard up --build dashboard
 
 ### Package Structure
 
-This is a mono-repo with ten packages today:
+This repo includes these core packages and standalone SDKs today:
 
 | Package | Directory | Description |
 |---------|-----------|-------------|
@@ -179,12 +181,11 @@ This is a mono-repo with ten packages today:
 | `agentmesh-marketplace` | `packages/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
 | `agentmesh-lightning` | `packages/agent-lightning/` | RL training governance with governed runners and policy rewards |
 | `agent-hypervisor` | `packages/agent-hypervisor/` | Runtime infrastructure and capability management |
-| `agent-governance-dotnet` | `packages/agent-governance-dotnet/` | Legacy shared-layout .NET implementation during migration to the root-level standalone path |
+| `agent-governance-dotnet` | `agent-governance-dotnet/` | Standalone .NET SDK for agent governance |
 | `agentmesh-integrations` | `packages/agentmesh-integrations/` | Framework integrations and extension library |
 
 Contributor routing for the standalone .NET SDK should use `agent-governance-dotnet/` at the
-repository root as the canonical path. Legacy shared-layout references such as
-`packages/agent-governance-dotnet/` are migration context, not the target-state path.
+repository root as the canonical path.
 
 ### Coding Guidelines
 

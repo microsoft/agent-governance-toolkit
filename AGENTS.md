@@ -42,9 +42,8 @@ go there rather than into `packages/` or an older shared SDK path.
    and useful to users.
 4. Keep `.github/` changes separate from feature work; they require extra security review.
 5. If both a legacy shared path and a standalone top-level path exist, prefer the standalone
-   top-level path for new work unless maintainers say otherwise. For the approved .NET migration,
-   that means contributor guidance should target `agent-governance-dotnet/` as the canonical path,
-   not `packages/agent-governance-dotnet/`.
+   top-level path for new work unless maintainers say otherwise. For .NET, contributor guidance
+   should target `agent-governance-dotnet/` as the canonical path.
 
 ## OSS Contribution Expectations
 

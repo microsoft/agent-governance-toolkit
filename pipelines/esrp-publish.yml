@@ -317,18 +317,18 @@ stages:
 
           - script: |
               dotnet build --configuration Release
-            workingDirectory: 'packages/agent-governance-dotnet'
+            workingDirectory: 'agent-governance-dotnet'
             displayName: 'Build .NET SDK'
 
           - script: |
               dotnet test --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
-            workingDirectory: 'packages/agent-governance-dotnet'
+            workingDirectory: 'agent-governance-dotnet'
             displayName: 'Run .NET tests'
 
           - task: PublishTestResults@2
             inputs:
               testResultsFormat: 'VSTest'
-              testResultsFiles: 'packages/agent-governance-dotnet/**/test-results.trx'
+              testResultsFiles: 'agent-governance-dotnet/**/test-results.trx'
             displayName: 'Publish test results'
             condition: always()
 
@@ -339,12 +339,12 @@ stages:
                 --output ./nupkg
               echo "=== Packed NuGet artifacts ==="
               ls -la ./nupkg/
-            workingDirectory: 'packages/agent-governance-dotnet'
+            workingDirectory: 'agent-governance-dotnet'
             displayName: 'Pack NuGet package'
 
           - task: PublishPipelineArtifact@1
             inputs:
-              targetPath: 'packages/agent-governance-dotnet/nupkg'
+              targetPath: 'agent-governance-dotnet/nupkg'
               artifact: 'nuget-unsigned'
               publishLocation: 'pipeline'
             displayName: 'Publish unsigned NuGet artifacts'

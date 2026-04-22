@@ -41,10 +41,14 @@ cp CHANGELOG.md "$SITE_DOCS/reference/changelog.md"
 cp CONTRIBUTING.md "$SITE_DOCS/reference/contributing.md"
 
 # Package READMEs
-for pkg in agent-os agent-mesh agent-runtime agent-sre agent-compliance agent-marketplace agent-lightning agent-hypervisor agent-governance-dotnet agent-os-vscode; do
+for pkg in agent-os agent-mesh agent-runtime agent-sre agent-compliance agent-marketplace agent-lightning agent-hypervisor agent-os-vscode; do
   if [ -f "packages/$pkg/README.md" ]; then
     cp "packages/$pkg/README.md" "$SITE_DOCS/packages/$pkg.md"
   fi
 done
+
+if [ -f "agent-governance-dotnet/README.md" ]; then
+  cp "agent-governance-dotnet/README.md" "$SITE_DOCS/packages/dotnet-sdk.md"
+fi
 
 echo "Done. $(find $SITE_DOCS -name '*.md' | wc -l | tr -d ' ') pages ready."

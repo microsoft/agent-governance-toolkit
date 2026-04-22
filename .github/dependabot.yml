@@ -68,7 +68,7 @@ updates:
 
   # .NET
   - package-ecosystem: "nuget"
-    directory: "/packages/agent-governance-dotnet"
+    directory: "/agent-governance-dotnet"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

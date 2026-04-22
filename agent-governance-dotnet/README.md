@@ -388,7 +388,7 @@ var middleware = new GovernanceMiddleware(engine, emitter, rateLimiter, metrics)
 var result = middleware.EvaluateToolCall("did:mesh:agent", "database_write", new() { ["table"] = "users" });
 ```
 
-See the [MAF adapter](../../packages/agent-os/src/agent_os/integrations/maf_adapter.py) for the full Python middleware, or the [Foundry integration guide](../../docs/deployment/azure-foundry-agent-service.md) for Azure deployment.
+See the [MAF adapter](../packages/agent-os/src/agent_os/integrations/maf_adapter.py) for the full Python middleware, or the [Foundry integration guide](../docs/deployment/azure-foundry-agent-service.md) for Azure deployment.
 
 ## Requirements
 
@@ -414,8 +414,8 @@ The .NET SDK addresses all 10 OWASP categories:
 
 ## Contributing
 
-See [CONTRIBUTING.md](../../CONTRIBUTING.md). The .NET SDK follows the same contribution process as the Python packages.
+See [CONTRIBUTING.md](../CONTRIBUTING.md). The .NET SDK follows the same contribution process as the Python packages.
 
 ## License
 
-[MIT](../../LICENSE) © Microsoft Corporation
+[MIT](../LICENSE) © Microsoft Corporation

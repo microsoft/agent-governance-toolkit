@@ -87,7 +87,7 @@ governance stack for enterprise deployments:
 ### .NET SDK
 
 **Package:** [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) ·
-**Source:** [`packages/agent-governance-dotnet/`](../packages/agent-governance-dotnet/)
+**Source:** [`agent-governance-dotnet/`](../agent-governance-dotnet/)
 
 | Namespace | Features |
 |-----------|----------|

@@ -153,7 +153,7 @@ Publishing uses the ADO pipeline (`pipelines/esrp-publish.yml` with target `nuge
 
 | Package | NuGet Name | Directory |
 |---------|------------|-----------|
-| Agent Governance .NET SDK | `Microsoft.AgentGovernance` | `packages/agent-governance-dotnet` |
+| Agent Governance .NET SDK | `Microsoft.AgentGovernance` | `agent-governance-dotnet` |
 
 ---
 
