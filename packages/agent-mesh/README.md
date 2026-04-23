@@ -476,6 +476,32 @@ rules:
     approvers: ["security-team"]
 ```
 
+Optional advisory checks run only after deterministic policy evaluation allows an
+action. They are non-deterministic defense-in-depth and can only tighten the
+result by flagging for review or blocking:
+
+```python
+from agentmesh.governance import AuditLog, PolicyEngine
+from agentmesh.governance.advisory import AdvisoryResult
+
+audit_log = AuditLog()
+engine = PolicyEngine()
+
+def reviewer(agent_did, context, deterministic_decision):
+    return AdvisoryResult(
+        action="flag_for_review",
+        reason="possible context poisoning",
+        classifier="custom-reviewer",
+    )
+
+engine.set_advisory_check(
+    reviewer,
+    classifier="custom-reviewer",
+    actions=["flag_for_review", "block"],
+    audit_log=audit_log,
+)
+```
+
 ## Protocol Support
 
 | Protocol | Status | Description |

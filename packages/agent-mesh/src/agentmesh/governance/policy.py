@@ -11,15 +11,27 @@ Supports schema versioning via ``apiVersion`` (e.g.,
 warnings; unknown versions raise ``ValueError``.
 """
 
-from datetime import datetime
-from typing import Optional, Literal, Any
-from pydantic import BaseModel, Field
+import json
 import logging
 import os
-import warnings
-import yaml
-import json
 import re
+import warnings
+from collections.abc import Sequence
+from datetime import datetime, timezone
+from typing import Any, Literal, Optional
+
+import yaml
+from pydantic import BaseModel, Field
+
+from .advisory import (
+    AdvisoryCheck,
+    AdvisoryConfig,
+    AdvisoryEffect,
+    AdvisoryFunction,
+    AdvisoryResult,
+    FunctionAdvisoryCheck,
+    normalize_advisory_result,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +41,10 @@ SUPPORTED_API_VERSIONS = {
     "governance.toolkit/v1": {"status": "current"},
     "1.0": {"status": "deprecated", "migrate_to": "governance.toolkit/v1"},
 }
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class PolicyRule(BaseModel):
@@ -202,8 +218,8 @@ class Policy(BaseModel):
     default_action: Literal["allow", "deny"] = Field(default="deny")
 
     # Metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
 
     @classmethod
     def from_yaml(cls, yaml_content: str, base_dir: str = "") -> "Policy":
@@ -420,11 +436,14 @@ class PolicyDecision(BaseModel):
     rate_limit_reset: Optional[datetime] = None
 
     # Timing
-    evaluated_at: datetime = Field(default_factory=datetime.utcnow)
+    evaluated_at: datetime = Field(default_factory=_utcnow)
     evaluation_ms: Optional[float] = None
 
     # Extension metadata (e.g., authority resolver details)
-    metadata: Optional[dict] = Field(default=None, description="Additional decision context from resolvers")
+    metadata: Optional[dict] = Field(
+        default=None,
+        description="Additional decision context from resolvers and advisory checks",
+    )
 
 
 class PolicyEngine:
@@ -464,6 +483,9 @@ class PolicyEngine:
         self._authority_resolver: Any = None  # AuthorityResolver protocol
         self._conflict_strategy = ConflictResolutionStrategy(conflict_strategy)
         self._resolver = PolicyConflictResolver(self._conflict_strategy)
+        self._advisory_config = AdvisoryConfig()
+        self._advisory_check: AdvisoryCheck | None = None
+        self._advisory_audit_log: Any = None
 
     def load_policy(self, policy: Policy) -> None:
         """Load a policy into the engine.
@@ -531,7 +553,67 @@ class PolicyEngine:
         """
         self._authority_resolver = resolver
 
-    def _apply_rule(self, rule: PolicyRule, policy: Policy, context: Optional[dict] = None) -> PolicyDecision:
+    def set_advisory_check(
+        self,
+        check: AdvisoryCheck | AdvisoryFunction,
+        *,
+        enabled: bool = True,
+        classifier: str | None = None,
+        actions: Sequence[AdvisoryEffect] | None = None,
+        on_error: Literal["allow"] = "allow",
+        audit_log: Any = None,
+    ) -> None:
+        """Register an optional, non-deterministic advisory check.
+
+        Advisory checks run only after deterministic policy evaluation
+        returns an allowed decision. They can flag the action for review
+        or block it, but they never override a deterministic deny.
+
+        Args:
+            check: ``AdvisoryCheck`` instance or function with signature
+                ``(agent_did, context, deterministic_decision)``.
+            enabled: Whether the advisory stage should run.
+            classifier: Label used in metadata and audit records.
+            actions: Advisory effects allowed to tighten a decision.
+            on_error: Failure behavior. ``"allow"`` preserves the
+                deterministic allow decision.
+            audit_log: Optional ``AuditLog`` used for advisory audit events.
+        """
+        if callable(check) and not isinstance(check, AdvisoryCheck):
+            advisory_check = FunctionAdvisoryCheck(
+                check,
+                name=classifier or getattr(check, "__name__", "custom"),
+            )
+        else:
+            advisory_check = check
+
+        configured_actions = set(actions or ("flag_for_review", "block"))
+        self._advisory_config = AdvisoryConfig(
+            enabled=enabled,
+            classifier=classifier or getattr(advisory_check, "name", None),
+            actions=configured_actions,
+            on_error=on_error,
+        )
+        self._advisory_check = advisory_check
+        self._advisory_audit_log = audit_log
+
+    def clear_advisory_check(self) -> None:
+        """Disable and remove the advisory check stage."""
+        self._advisory_config = AdvisoryConfig()
+        self._advisory_check = None
+        self._advisory_audit_log = None
+
+    @property
+    def advisory_config(self) -> AdvisoryConfig:
+        """Return the current advisory configuration."""
+        return self._advisory_config.model_copy(deep=True)
+
+    def _apply_rule(
+        self,
+        rule: PolicyRule,
+        policy: Policy,
+        context: Optional[dict] = None,
+    ) -> PolicyDecision:
         """Apply a matched rule and generate actionable error messages."""
         # Check rate limit if applicable
         if rule.limit:
@@ -541,7 +623,10 @@ class PolicyEngine:
                     action="deny",
                     matched_rule=rule.name,
                     policy_name=policy.name,
-                    reason=f"Rate limit exceeded for rule '{rule.name}': {rule.limit}. Wait for rate limit to reset.",
+                    reason=(
+                        f"Rate limit exceeded for rule '{rule.name}': {rule.limit}. "
+                        "Wait for rate limit to reset."
+                    ),
                     rate_limited=True,
                 )
             self._increment_rate_limit(rule)
@@ -612,7 +697,7 @@ class PolicyEngine:
             return False
 
         # Check if reset time passed
-        if datetime.utcnow() > limit_data["reset_at"]:
+        if _utcnow() > limit_data["reset_at"]:
             self._rate_limits[limit_key] = None
             return False
 
@@ -633,7 +718,7 @@ class PolicyEngine:
             from datetime import timedelta
             self._rate_limits[limit_key] = {
                 "count": 0,
-                "reset_at": datetime.utcnow() + timedelta(seconds=period),
+                "reset_at": _utcnow() + timedelta(seconds=period),
             }
 
         self._rate_limits[limit_key]["count"] += 1
@@ -688,7 +773,12 @@ class PolicyEngine:
 
     # ── OPA/Rego integration ──────────────────────────────────
 
-    def load_rego(self, rego_path: Optional[str] = None, rego_content: Optional[str] = None, package: str = "agentmesh") -> "OPAEvaluator":  # noqa: F821
+    def load_rego(
+        self,
+        rego_path: Optional[str] = None,
+        rego_content: Optional[str] = None,
+        package: str = "agentmesh",
+    ) -> "OPAEvaluator":  # noqa: F821
         """
         Load a .rego file alongside YAML/JSON policies.
 
@@ -742,6 +832,192 @@ class PolicyEngine:
         self._cedar_evaluators.append(evaluator)
         return evaluator
 
+    def _finalize_decision(
+        self,
+        agent_did: str,
+        context: dict,
+        decision: PolicyDecision,
+        start: datetime,
+    ) -> PolicyDecision:
+        """Apply optional advisory tightening after deterministic allow."""
+        if not decision.allowed:
+            return decision
+
+        if not self._advisory_config.enabled or self._advisory_check is None:
+            return decision
+
+        try:
+            raw_result = self._advisory_check.evaluate(agent_did, context, decision)
+            advisory_result = normalize_advisory_result(
+                raw_result,
+                default_classifier=self._advisory_config.classifier,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Advisory check failed; preserving deterministic allow",
+                exc_info=True,
+            )
+            advisory_result = AdvisoryResult(
+                action=self._advisory_config.on_error,
+                reason="Advisory check failed; deterministic allow preserved",
+                classifier=self._advisory_config.classifier,
+                metadata={
+                    "error": True,
+                    "error_type": type(exc).__name__,
+                },
+            )
+            return self._apply_advisory_result(
+                agent_did,
+                context,
+                decision,
+                advisory_result,
+                start,
+            )
+
+        if (
+            advisory_result.action != "allow"
+            and advisory_result.action not in self._advisory_config.actions
+        ):
+            metadata = dict(advisory_result.metadata)
+            metadata["requested_action"] = advisory_result.action
+            metadata["action_enabled"] = False
+            advisory_result = advisory_result.model_copy(
+                update={
+                    "action": "allow",
+                    "reason": "Advisory action not enabled; deterministic allow preserved",
+                    "metadata": metadata,
+                }
+            )
+
+        return self._apply_advisory_result(
+            agent_did,
+            context,
+            decision,
+            advisory_result,
+            start,
+        )
+
+    def _apply_advisory_result(
+        self,
+        agent_did: str,
+        context: dict,
+        deterministic_decision: PolicyDecision,
+        advisory_result: AdvisoryResult,
+        start: datetime,
+    ) -> PolicyDecision:
+        """Merge an advisory result into the deterministic decision."""
+        advisory_record = {
+            "deterministic": False,
+            "classifier": advisory_result.classifier or self._advisory_config.classifier,
+            "action": advisory_result.action,
+            "reason": advisory_result.reason,
+            "confidence": advisory_result.confidence,
+            "metadata": advisory_result.metadata,
+        }
+        self._log_advisory_decision(
+            agent_did,
+            context,
+            deterministic_decision,
+            advisory_record,
+        )
+
+        metadata = dict(deterministic_decision.metadata or {})
+        metadata["advisory"] = advisory_record
+        elapsed = (_utcnow() - start).total_seconds() * 1000
+
+        if advisory_result.action == "block":
+            return deterministic_decision.model_copy(
+                update={
+                    "allowed": False,
+                    "action": "deny",
+                    "reason": self._advisory_reason("blocked", advisory_result),
+                    "metadata": metadata,
+                    "evaluation_ms": elapsed,
+                }
+            )
+
+        if advisory_result.action == "flag_for_review":
+            return deterministic_decision.model_copy(
+                update={
+                    "allowed": True,
+                    "action": "warn",
+                    "reason": self._advisory_reason("flagged for review", advisory_result),
+                    "metadata": metadata,
+                    "evaluation_ms": elapsed,
+                }
+            )
+
+        return deterministic_decision.model_copy(
+            update={
+                "metadata": metadata,
+                "evaluation_ms": elapsed,
+            }
+        )
+
+    def _log_advisory_decision(
+        self,
+        agent_did: str,
+        context: dict,
+        deterministic_decision: PolicyDecision,
+        advisory_record: dict[str, Any],
+    ) -> None:
+        """Write an advisory audit record when an audit log is configured."""
+        if self._advisory_audit_log is None:
+            return
+
+        action_name = self._context_action_name(context)
+        resource = context.get("resource")
+        if not isinstance(resource, str):
+            resource = None
+
+        outcome_by_action = {
+            "allow": "allowed",
+            "flag_for_review": "flagged",
+            "block": "denied",
+        }
+        try:
+            self._advisory_audit_log.log(
+                event_type="advisory_policy_evaluation",
+                agent_did=agent_did,
+                action=action_name,
+                resource=resource,
+                data={
+                    "deterministic": False,
+                    "advisory": advisory_record,
+                    "deterministic_decision": {
+                        "allowed": deterministic_decision.allowed,
+                        "action": deterministic_decision.action,
+                        "policy_name": deterministic_decision.policy_name,
+                        "matched_rule": deterministic_decision.matched_rule,
+                    },
+                    "context_snapshot": context,
+                },
+                outcome=outcome_by_action.get(advisory_record["action"], "allowed"),
+                policy_decision=advisory_record["action"],
+            )
+        except Exception:
+            logger.warning("Failed to write advisory audit event", exc_info=True)
+
+    def _context_action_name(self, context: dict) -> str:
+        action = context.get("action")
+        if isinstance(action, dict):
+            action_type = action.get("type")
+            if isinstance(action_type, str):
+                return action_type
+        if isinstance(action, str):
+            return action
+        tool_name = context.get("tool_name")
+        if isinstance(tool_name, str):
+            return tool_name
+        return "unknown"
+
+    def _advisory_reason(self, outcome: str, advisory_result: AdvisoryResult) -> str:
+        reason = advisory_result.reason or "advisory classifier matched"
+        classifier = advisory_result.classifier or self._advisory_config.classifier
+        if classifier:
+            return f"Advisory check {outcome} by {classifier}: {reason}"
+        return f"Advisory check {outcome}: {reason}"
+
     def evaluate(
         self,
         agent_did: str,
@@ -777,7 +1053,7 @@ class PolicyEngine:
             PolicyScope,
         )
 
-        start = datetime.utcnow()
+        start = _utcnow()
 
         # 1. Check YAML/JSON policies first
         applicable = [p for p in self._policies.values() if p.applies_to(agent_did)]
@@ -808,7 +1084,7 @@ class PolicyEngine:
             if candidates:
                 result = self._resolver.resolve(candidates)
                 winner = result.winning_decision
-                elapsed = (datetime.utcnow() - start).total_seconds() * 1000
+                elapsed = (_utcnow() - start).total_seconds() * 1000
 
                 # Apply rate limiting for the winning rule
                 matched_rule = None
@@ -822,25 +1098,35 @@ class PolicyEngine:
 
                 if matched_rule and matched_rule.limit:
                     if self._is_rate_limited(matched_rule):
-                        return PolicyDecision(
-                            allowed=False,
-                            action="deny",
-                            matched_rule=matched_rule.name,
-                            policy_name=winner.policy_name,
-                            reason=f"Rate limited: {matched_rule.limit}",
-                            evaluated_at=start,
-                            evaluation_ms=elapsed,
+                        return self._finalize_decision(
+                            agent_did,
+                            context,
+                            PolicyDecision(
+                                allowed=False,
+                                action="deny",
+                                matched_rule=matched_rule.name,
+                                policy_name=winner.policy_name,
+                                reason=f"Rate limited: {matched_rule.limit}",
+                                evaluated_at=start,
+                                evaluation_ms=elapsed,
+                            ),
+                            start,
                         )
 
-                return PolicyDecision(
-                    allowed=(winner.action == "allow"),
-                    action=winner.action,
-                    matched_rule=winner.rule_name,
-                    policy_name=winner.policy_name,
-                    reason=winner.reason,
-                    approvers=winner.approvers,
-                    evaluated_at=start,
-                    evaluation_ms=elapsed,
+                return self._finalize_decision(
+                    agent_did,
+                    context,
+                    PolicyDecision(
+                        allowed=(winner.action == "allow"),
+                        action=winner.action,
+                        matched_rule=winner.rule_name,
+                        policy_name=winner.policy_name,
+                        reason=winner.reason,
+                        approvers=winner.approvers,
+                        evaluated_at=start,
+                        evaluation_ms=elapsed,
+                    ),
+                    start,
                 )
 
         # 2. Authority resolution (trust-based narrowing)
@@ -875,27 +1161,43 @@ class PolicyEngine:
             )
             authority_decision = self._authority_resolver.resolve(authority_req)
             if authority_decision.decision == "deny":
-                elapsed = (datetime.utcnow() - start).total_seconds() * 1000
-                return PolicyDecision(
-                    allowed=False,
-                    action="deny",
-                    reason=f"Authority resolver denied: {authority_decision.narrowing_reason or 'trust check failed'}",
-                    evaluated_at=start,
-                    evaluation_ms=elapsed,
+                elapsed = (_utcnow() - start).total_seconds() * 1000
+                return self._finalize_decision(
+                    agent_did,
+                    context,
+                    PolicyDecision(
+                        allowed=False,
+                        action="deny",
+                        reason=(
+                            "Authority resolver denied: "
+                            f"{authority_decision.narrowing_reason or 'trust check failed'}"
+                        ),
+                        evaluated_at=start,
+                        evaluation_ms=elapsed,
+                    ),
+                    start,
                 )
             if authority_decision.decision == "allow_narrowed":
-                elapsed = (datetime.utcnow() - start).total_seconds() * 1000
-                return PolicyDecision(
-                    allowed=True,
-                    action="allow",
-                    reason=f"Authority resolver narrowed: {authority_decision.narrowing_reason}",
-                    evaluated_at=start,
-                    evaluation_ms=elapsed,
-                    metadata={
-                        "effective_scope": authority_decision.effective_scope,
-                        "effective_spend_limit": authority_decision.effective_spend_limit,
-                        "trust_tier": authority_decision.trust_tier,
-                    },
+                elapsed = (_utcnow() - start).total_seconds() * 1000
+                return self._finalize_decision(
+                    agent_did,
+                    context,
+                    PolicyDecision(
+                        allowed=True,
+                        action="allow",
+                        reason=(
+                            "Authority resolver narrowed: "
+                            f"{authority_decision.narrowing_reason}"
+                        ),
+                        evaluated_at=start,
+                        evaluation_ms=elapsed,
+                        metadata={
+                            "effective_scope": authority_decision.effective_scope,
+                            "effective_spend_limit": authority_decision.effective_spend_limit,
+                            "trust_tier": authority_decision.trust_tier,
+                        },
+                    ),
+                    start,
                 )
 
         # 3. Check Rego policies
@@ -903,13 +1205,21 @@ class PolicyEngine:
             query = f"data.{package}.allow"
             opa_result = evaluator.evaluate(query, context)
             if opa_result.error is None:
-                elapsed = (datetime.utcnow() - start).total_seconds() * 1000
-                return PolicyDecision(
-                    allowed=opa_result.allowed,
-                    action="allow" if opa_result.allowed else "deny",
-                    reason=f"OPA/Rego policy ({package}): {'allowed' if opa_result.allowed else 'denied'}",
-                    evaluated_at=start,
-                    evaluation_ms=elapsed,
+                elapsed = (_utcnow() - start).total_seconds() * 1000
+                return self._finalize_decision(
+                    agent_did,
+                    context,
+                    PolicyDecision(
+                        allowed=opa_result.allowed,
+                        action="allow" if opa_result.allowed else "deny",
+                        reason=(
+                            f"OPA/Rego policy ({package}): "
+                            f"{'allowed' if opa_result.allowed else 'denied'}"
+                        ),
+                        evaluated_at=start,
+                        evaluation_ms=elapsed,
+                    ),
+                    start,
                 )
 
         # 4. Check Cedar policies
@@ -919,13 +1229,18 @@ class PolicyEngine:
             cedar_action = f'Action::"{action_name}"' if "::" not in action_name else action_name
             cedar_result = cedar_eval.evaluate(cedar_action, context)
             if cedar_result.error is None:
-                elapsed = (datetime.utcnow() - start).total_seconds() * 1000
-                return PolicyDecision(
-                    allowed=cedar_result.allowed,
-                    action="allow" if cedar_result.allowed else "deny",
-                    reason=f"Cedar policy: {'allowed' if cedar_result.allowed else 'denied'}",
-                    evaluated_at=start,
-                    evaluation_ms=elapsed,
+                elapsed = (_utcnow() - start).total_seconds() * 1000
+                return self._finalize_decision(
+                    agent_did,
+                    context,
+                    PolicyDecision(
+                        allowed=cedar_result.allowed,
+                        action="allow" if cedar_result.allowed else "deny",
+                        reason=f"Cedar policy: {'allowed' if cedar_result.allowed else 'denied'}",
+                        evaluated_at=start,
+                        evaluation_ms=elapsed,
+                    ),
+                    start,
                 )
 
         # 5. No rules matched - use default
@@ -936,13 +1251,22 @@ class PolicyEngine:
             # Operators must explicitly load an allow policy.
             default = "deny"
 
-        elapsed = (datetime.utcnow() - start).total_seconds() * 1000
-        return PolicyDecision(
-            allowed=(default == "allow"),
-            action=default,
-            reason="No matching rules, using default" if applicable else "No policies loaded (deny by default)",
-            evaluated_at=start,
-            evaluation_ms=elapsed,
+        elapsed = (_utcnow() - start).total_seconds() * 1000
+        return self._finalize_decision(
+            agent_did,
+            context,
+            PolicyDecision(
+                allowed=(default == "allow"),
+                action=default,
+                reason=(
+                    "No matching rules, using default"
+                    if applicable
+                    else "No policies loaded (deny by default)"
+                ),
+                evaluated_at=start,
+                evaluation_ms=elapsed,
+            ),
+            start,
         )
 
 
