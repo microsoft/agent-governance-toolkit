@@ -7,6 +7,7 @@ Declarative policy engine with automated compliance mapping.
 Append-only audit logs with optional external sinks.
 """
 
+from .govern import govern, GovernedCallable, GovernanceConfig, GovernanceDenied
 from .policy import PolicyEngine, Policy, PolicyRule, PolicyDecision
 from .conflict_resolution import (
     ConflictResolutionStrategy,
@@ -75,6 +76,11 @@ from .federation import (
 )
 
 __all__ = [
+    # High-level wrapper (issue #1372)
+    "govern",
+    "GovernedCallable",
+    "GovernanceConfig",
+    "GovernanceDenied",
     "AsyncTrustPolicyEvaluator",
     "TrustConcurrencyStats",
     "PolicyEngine",
