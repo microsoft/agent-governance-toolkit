@@ -8,6 +8,15 @@ Append-only audit logs with optional external sinks.
 """
 
 from .govern import govern, GovernedCallable, GovernanceConfig, GovernanceDenied
+from .approval import (
+    ApprovalHandler,
+    ApprovalRequest,
+    ApprovalDecision,
+    AutoRejectApproval,
+    CallbackApproval,
+    ConsoleApproval,
+    WebhookApproval,
+)
 from .policy import PolicyEngine, Policy, PolicyRule, PolicyDecision
 from .conflict_resolution import (
     ConflictResolutionStrategy,
@@ -81,6 +90,14 @@ __all__ = [
     "GovernedCallable",
     "GovernanceConfig",
     "GovernanceDenied",
+    # Approval workflows (issue #1374)
+    "ApprovalHandler",
+    "ApprovalRequest",
+    "ApprovalDecision",
+    "AutoRejectApproval",
+    "CallbackApproval",
+    "ConsoleApproval",
+    "WebhookApproval",
     "AsyncTrustPolicyEvaluator",
     "TrustConcurrencyStats",
     "PolicyEngine",
