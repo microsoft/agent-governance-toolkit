@@ -40,8 +40,13 @@ class PolicyEvaluator:
     rule matches, external backends are consulted in registration order.
     """
 
-    def __init__(self, policies: list[PolicyDocument] | None = None) -> None:
+    def __init__(
+        self,
+        policies: list[PolicyDocument] | None = None,
+        root_dir: str | Path | None = None,
+    ) -> None:
         self.policies: list[PolicyDocument] = policies or []
+        self.root_dir: Path | None = Path(root_dir) if root_dir else None
         self._backends: list[Any] = []
 
     def load_policies(self, directory: str | Path) -> None:
@@ -119,12 +124,52 @@ class PolicyEvaluator:
     def evaluate(self, context: dict[str, Any]) -> PolicyDecision:
         """Evaluate all loaded policy rules against the given context.
 
+        If ``root_dir`` is set and context contains a ``path`` key,
+        folder-scoped policy discovery is used — governance.yaml files
+        are loaded from the action path up to root and merged
+        hierarchically. Otherwise, the flat policy list is evaluated.
+
         Rules are sorted by priority (descending). The first matching rule
         determines the decision. If no YAML rule matches and external
         backends are registered, they are consulted in order. If nothing
         matches, the default action from the first policy (or global allow)
         is used.
         """
+        # Folder-scoped evaluation path
+        if self.root_dir and "path" in context:
+            return self._evaluate_scoped(context)
+
+        # Flat evaluation (original behavior)
+        return self._evaluate_flat(context)
+
+    def _evaluate_scoped(self, context: dict[str, Any]) -> PolicyDecision:
+        """Evaluate using folder-level policy discovery and merge."""
+        from .discovery import discover_policies, filter_by_scope
+        from .merge import merge_policies
+
+        action_path = Path(context["path"])
+        chain_paths = discover_policies(action_path, self.root_dir)
+
+        if not chain_paths:
+            # No governance files found — fall back to loaded policies
+            return self._evaluate_flat(context)
+
+        docs = [PolicyDocument.from_yaml(p) for p in chain_paths]
+
+        # Filter by scope
+        filtered = []
+        for doc, path in zip(docs, chain_paths):
+            if filter_by_scope(path, doc.scope, action_path, self.root_dir):
+                filtered.append(doc)
+
+        if not filtered:
+            return self._evaluate_flat(context)
+
+        merged_rules = merge_policies(filtered)
+        return self._evaluate_rules(merged_rules, filtered, context)
+
+    def _evaluate_flat(self, context: dict[str, Any]) -> PolicyDecision:
+        """Flat evaluation using the loaded policy list (original behavior)."""
         try:
             all_rules: list[tuple[PolicyRule, PolicyDocument]] = []
             for doc in self.policies:
@@ -205,6 +250,65 @@ class PolicyEvaluator:
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "error": True,
                 },
+            )
+
+    def _evaluate_rules(
+        self,
+        rules: list[PolicyRule],
+        docs: list[PolicyDocument],
+        context: dict[str, Any],
+    ) -> PolicyDecision:
+        """Evaluate a merged rule list from folder-scoped discovery."""
+        try:
+            for rule in rules:
+                if _match_condition(rule.condition, context):
+                    allowed = rule.action in (PolicyAction.ALLOW, PolicyAction.AUDIT)
+                    return PolicyDecision(
+                        allowed=allowed,
+                        matched_rule=rule.name,
+                        action=rule.action.value,
+                        reason=rule.message or f"Matched rule '{rule.name}'",
+                        audit_entry={
+                            "policy": "folder-scoped",
+                            "rule": rule.name,
+                            "action": rule.action.value,
+                            "policy_chain": [d.name for d in docs],
+                            "context_snapshot": context,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+
+            # No rule matched — consult external backends
+            for backend in self._backends:
+                result = backend.evaluate(context)
+                if result.error is None:
+                    return PolicyDecision(
+                        allowed=result.allowed,
+                        matched_rule=None,
+                        action=result.action,
+                        reason=result.reason,
+                    )
+
+            # Defaults from most specific policy
+            default_action = docs[-1].defaults.action if docs else PolicyAction.ALLOW
+            allowed = default_action in (PolicyAction.ALLOW, PolicyAction.AUDIT)
+            return PolicyDecision(
+                allowed=allowed,
+                action=default_action.value,
+                reason="No rules matched; default action applied",
+                audit_entry={
+                    "policy": "folder-scoped",
+                    "policy_chain": [d.name for d in docs],
+                    "context_snapshot": context,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+        except Exception:
+            logger.error("Scoped policy evaluation error — fail closed", exc_info=True)
+            return PolicyDecision(
+                allowed=False,
+                action="deny",
+                reason="Policy evaluation error — access denied (fail closed)",
             )
 
 
