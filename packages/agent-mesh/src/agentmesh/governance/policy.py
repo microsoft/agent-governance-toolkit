@@ -44,6 +44,7 @@ SUPPORTED_API_VERSIONS = {
 
 
 def _utcnow() -> datetime:
+    """Return a naive UTC timestamp for compatibility with existing models."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 

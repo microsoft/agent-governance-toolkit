@@ -478,7 +478,8 @@ rules:
 
 Optional advisory checks run only after deterministic policy evaluation allows an
 action. They are non-deterministic defense-in-depth and can only tighten the
-result by flagging for review or blocking:
+result by flagging for review or blocking. Advisory checks are disabled by
+default unless `set_advisory_check()` is called:
 
 ```python
 from agentmesh.governance import AuditLog, PolicyEngine
@@ -500,6 +501,8 @@ engine.set_advisory_check(
     actions=["flag_for_review", "block"],
     audit_log=audit_log,
 )
+
+engine.clear_advisory_check()  # disable the advisory stage
 ```
 
 ## Protocol Support
