@@ -188,12 +188,20 @@ def test_endpoint_advisory_check_allows_hosts_case_insensitively() -> None:
     assert check.allowed_hosts == {"classifier.example"}
 
 
+def test_endpoint_advisory_check_rejects_wildcard_hosts() -> None:
+    with pytest.raises(ValueError, match="Wildcard"):
+        EndpointAdvisoryCheck(
+            "https://classifier.example/check",
+            allowed_hosts=["*.example.com"],
+        )
+
+
 def test_endpoint_advisory_check_bounds_timeout_and_retries() -> None:
     with pytest.raises(ValueError, match="timeout"):
-        EndpointAdvisoryCheck("https://classifier.example/check", timeout=10.1)
+        EndpointAdvisoryCheck("https://classifier.example/check", timeout=5.1)
 
     with pytest.raises(ValueError, match="max_retries"):
-        EndpointAdvisoryCheck("https://classifier.example/check", max_retries=6)
+        EndpointAdvisoryCheck("https://classifier.example/check", max_retries=3)
 
 
 def test_endpoint_timeout_falls_through_to_deterministic_allow(monkeypatch) -> None:

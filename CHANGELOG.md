@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **AgentMesh**: Optional advisory policy checks after deterministic `PolicyEngine`
+  allow decisions, with callable and endpoint adapters for defense-in-depth
+  classification.
+
+### Compatibility
+- **AgentMesh**: `PolicyEngine.evaluate()` remains deterministic-only unless
+  `set_advisory_check()` is configured. When enabled, advisory checks can only
+  tighten deterministic allow results and may add advisory metadata to
+  `PolicyDecision.metadata`.
+- **AgentMesh**: Internal deprecated `datetime.utcnow()` usage was replaced with
+  `_utcnow()` for Python 3.13 compatibility while preserving naive UTC
+  timestamps in public models.
 
 ## [3.2.1] - 2026-04-22
 

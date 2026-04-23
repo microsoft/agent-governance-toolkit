@@ -507,7 +507,18 @@ engine.clear_advisory_check()  # disable the advisory stage
 
 For classifier endpoints, use HTTPS, configure `allowed_hosts`, and keep timeout
 and retry settings bounded so advisory checks cannot delay deterministic policy
-evaluation indefinitely.
+evaluation indefinitely. `allowed_hosts` uses exact host matches only; wildcard
+patterns such as `*.example.com` are rejected.
+
+Compatibility notes:
+- `PolicyEngine.evaluate()` behaves exactly as before unless `set_advisory_check()`
+  is called. Once enabled, advisory checks run only after a deterministic allow
+  result and may tighten that result to `warn` or `deny`.
+- `PolicyDecision.metadata["advisory"]` is only populated when the advisory
+  stage runs.
+- Internal `datetime.utcnow()` calls were replaced with `_utcnow()` for Python
+  3.13 compatibility, but public timestamps still remain naive UTC `datetime`
+  values for backward compatibility.
 
 ## Protocol Support
 

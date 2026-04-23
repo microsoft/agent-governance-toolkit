@@ -26,8 +26,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-MAX_ENDPOINT_TIMEOUT_SECONDS = 10.0
-MAX_ENDPOINT_RETRIES = 5
+MAX_ENDPOINT_TIMEOUT_SECONDS = 5.0
+MAX_ENDPOINT_RETRIES = 2
+MAX_ENDPOINT_TOTAL_SECONDS = 6.0
 MAX_METADATA_DEPTH = 4
 MAX_METADATA_ITEMS = 50
 MAX_METADATA_KEY_LENGTH = 128
@@ -131,6 +132,8 @@ class EndpointAdvisoryCheck:
 
         endpoint_host = parsed.hostname.lower()
         trusted_hosts = {host.lower() for host in allowed_hosts or ()}
+        if any("*" in host for host in trusted_hosts):
+            raise ValueError("Wildcard advisory endpoint hosts are not supported.")
         if trusted_hosts and endpoint_host not in trusted_hosts:
             raise ValueError(f"Advisory endpoint host '{parsed.hostname}' is not allowed.")
         if timeout <= 0:
@@ -174,14 +177,20 @@ class EndpointAdvisoryCheck:
             "deterministic_decision": decision_payload,
         }
 
+        deadline = time.monotonic() + MAX_ENDPOINT_TOTAL_SECONDS
         attempt = 0
         while True:
             try:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise httpx.TimeoutException(
+                        "Advisory check exceeded the total timeout budget."
+                    )
                 response = httpx.post(
                     self.url,
                     json=payload,
                     headers=self.headers,
-                    timeout=self.timeout,
+                    timeout=min(self.timeout, remaining),
                 )
                 response.raise_for_status()
                 return normalize_advisory_result(
@@ -191,8 +200,11 @@ class EndpointAdvisoryCheck:
             except httpx.HTTPError:
                 if attempt >= self.max_retries:
                     raise
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise
                 if self.retry_backoff:
-                    time.sleep(min(self.retry_backoff * (2**attempt), 1.0))
+                    time.sleep(min(self.retry_backoff * (2**attempt), 1.0, remaining))
                 attempt += 1
 
 
