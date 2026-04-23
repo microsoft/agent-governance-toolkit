@@ -7,7 +7,11 @@ from __future__ import annotations
 import httpx
 import pytest
 from agentmesh.governance import AuditLog, Policy, PolicyEngine, PolicyRule
-from agentmesh.governance.advisory import AdvisoryResult, EndpointAdvisoryCheck
+from agentmesh.governance.advisory import (
+    AdvisoryResult,
+    EndpointAdvisoryCheck,
+    normalize_advisory_result,
+)
 
 AGENT_DID = "did:agentmesh:test"
 
@@ -175,6 +179,23 @@ def test_endpoint_advisory_check_enforces_allowed_hosts() -> None:
         )
 
 
+def test_endpoint_advisory_check_allows_hosts_case_insensitively() -> None:
+    check = EndpointAdvisoryCheck(
+        "https://Classifier.Example/check",
+        allowed_hosts=["CLASSIFIER.EXAMPLE"],
+    )
+
+    assert check.allowed_hosts == {"classifier.example"}
+
+
+def test_endpoint_advisory_check_bounds_timeout_and_retries() -> None:
+    with pytest.raises(ValueError, match="timeout"):
+        EndpointAdvisoryCheck("https://classifier.example/check", timeout=10.1)
+
+    with pytest.raises(ValueError, match="max_retries"):
+        EndpointAdvisoryCheck("https://classifier.example/check", max_retries=6)
+
+
 def test_endpoint_timeout_falls_through_to_deterministic_allow(monkeypatch) -> None:
     audit_log = AuditLog()
     engine = _allowing_engine()
@@ -238,6 +259,57 @@ def test_endpoint_advisory_check_retries_transient_http_errors(monkeypatch) -> N
     assert calls == 2
     assert result.action == "block"
     assert result.classifier == "classifier-endpoint"
+
+
+def test_endpoint_malformed_json_falls_through_to_deterministic_allow(monkeypatch) -> None:
+    audit_log = AuditLog()
+    engine = _allowing_engine()
+
+    def malformed_json_post(*args, **kwargs):
+        request = httpx.Request("POST", "https://classifier.example/check")
+        return httpx.Response(200, content=b"not-json", request=request)
+
+    monkeypatch.setattr("agentmesh.governance.advisory.httpx.post", malformed_json_post)
+    engine.set_advisory_check(
+        EndpointAdvisoryCheck(
+            "https://classifier.example/check",
+            allowed_hosts=["classifier.example"],
+        ),
+        audit_log=audit_log,
+    )
+
+    decision = engine.evaluate(AGENT_DID, {"action": {"type": "tool_call"}})
+
+    assert decision.allowed is True
+    assert decision.action == "allow"
+    assert decision.metadata["advisory"]["deterministic"] is False
+    assert decision.metadata["advisory"]["action"] == "allow"
+    assert decision.metadata["advisory"]["metadata"]["error"] is True
+
+    entries = audit_log.get_entries_by_type("advisory_policy_evaluation")
+    assert len(entries) == 1
+    assert entries[0].data["deterministic"] is False
+    assert entries[0].policy_decision == "allow"
+
+
+def test_advisory_result_metadata_is_sanitized() -> None:
+    result = normalize_advisory_result(
+        {
+            "action": "flag",
+            "metadata": {
+                "bad key\n": "value",
+                "__proto__": "pollute",
+                "nested": {"safe": "ok", "object": object()},
+                "object": object(),
+            },
+        }
+    )
+
+    assert result.action == "flag_for_review"
+    assert result.metadata["bad_key"] == "value"
+    assert result.metadata["metadata__proto"] == "pollute"
+    assert result.metadata["nested"] == {"safe": "ok"}
+    assert "object" not in result.metadata
 
 
 def test_advisory_never_overrides_deterministic_deny() -> None:

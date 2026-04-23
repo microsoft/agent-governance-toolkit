@@ -854,7 +854,7 @@ class PolicyEngine:
                 default_classifier=self._advisory_config.classifier,
             )
         except Exception as exc:
-            logger.warning(
+            logger.error(
                 "Advisory check failed; preserving deterministic allow",
                 exc_info=True,
             )

@@ -11,6 +11,8 @@ action, and they can only add a flag or block.
 from __future__ import annotations
 
 import logging
+import math
+import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
@@ -23,6 +25,15 @@ if TYPE_CHECKING:
     from .policy import PolicyDecision
 
 logger = logging.getLogger(__name__)
+
+MAX_ENDPOINT_TIMEOUT_SECONDS = 10.0
+MAX_ENDPOINT_RETRIES = 5
+MAX_METADATA_DEPTH = 4
+MAX_METADATA_ITEMS = 50
+MAX_METADATA_KEY_LENGTH = 128
+MAX_METADATA_STRING_LENGTH = 4096
+_METADATA_SKIP = object()
+_METADATA_KEY_PATTERN = re.compile(r"[^A-Za-z0-9_.-]")
 
 AdvisoryAction = Literal["allow", "flag_for_review", "block"]
 AdvisoryEffect = Literal["flag_for_review", "block"]
@@ -118,13 +129,22 @@ class EndpointAdvisoryCheck:
         if not parsed.hostname:
             raise ValueError("Advisory endpoint URL must include a hostname.")
 
-        trusted_hosts = set(allowed_hosts or ())
-        if trusted_hosts and parsed.hostname not in trusted_hosts:
+        endpoint_host = parsed.hostname.lower()
+        trusted_hosts = {host.lower() for host in allowed_hosts or ()}
+        if trusted_hosts and endpoint_host not in trusted_hosts:
             raise ValueError(f"Advisory endpoint host '{parsed.hostname}' is not allowed.")
         if timeout <= 0:
             raise ValueError("Advisory endpoint timeout must be greater than zero.")
+        if timeout > MAX_ENDPOINT_TIMEOUT_SECONDS:
+            raise ValueError(
+                f"Advisory endpoint timeout must be <= {MAX_ENDPOINT_TIMEOUT_SECONDS:g} seconds."
+            )
         if max_retries < 0:
             raise ValueError("Advisory endpoint max_retries must be zero or greater.")
+        if max_retries > MAX_ENDPOINT_RETRIES:
+            raise ValueError(
+                f"Advisory endpoint max_retries must be <= {MAX_ENDPOINT_RETRIES}."
+            )
         if retry_backoff < 0:
             raise ValueError("Advisory endpoint retry_backoff must be zero or greater.")
 
@@ -183,9 +203,10 @@ def normalize_advisory_result(
 ) -> AdvisoryResult:
     """Normalize endpoint, model, and function outputs into ``AdvisoryResult``."""
     if isinstance(result, AdvisoryResult):
+        updates: dict[str, Any] = {"metadata": _sanitize_metadata(result.metadata)}
         if result.classifier is None and default_classifier is not None:
-            return result.model_copy(update={"classifier": default_classifier})
-        return result
+            updates["classifier"] = default_classifier
+        return result.model_copy(update=updates)
 
     if result is None:
         return AdvisoryResult(action="allow", classifier=default_classifier)
@@ -205,7 +226,7 @@ def normalize_advisory_result(
     try:
         data = dict(result)
     except (TypeError, ValueError):
-        logger.warning("Malformed advisory result %r; defaulting to allow", result)
+        logger.error("Malformed advisory result %r; defaulting to allow", result)
         return AdvisoryResult(
             action="allow",
             reason="Malformed advisory result; deterministic allow preserved",
@@ -214,7 +235,7 @@ def normalize_advisory_result(
         )
 
     raw_action = data.get("action") or data.get("decision") or data.get("verdict")
-    metadata = dict(data.get("metadata") or {})
+    metadata = _sanitize_metadata(data.get("metadata"))
     known = {
         "action",
         "decision",
@@ -224,7 +245,9 @@ def normalize_advisory_result(
         "confidence",
         "metadata",
     }
-    metadata.update({key: value for key, value in data.items() if key not in known})
+    metadata.update(
+        _sanitize_metadata({key: value for key, value in data.items() if key not in known})
+    )
 
     try:
         return AdvisoryResult(
@@ -235,7 +258,7 @@ def normalize_advisory_result(
             metadata=metadata,
         )
     except Exception as exc:
-        logger.warning("Invalid advisory result %r; defaulting to allow", result)
+        logger.error("Invalid advisory result %r; defaulting to allow", result)
         return AdvisoryResult(
             action="allow",
             reason="Invalid advisory result; deterministic allow preserved",
@@ -260,5 +283,60 @@ def _normalize_action(action: Any) -> AdvisoryAction:
     if value in {"block", "blocked", "deny", "denied", "unsafe"}:
         return "block"
 
-    logger.warning("Unsupported advisory action %r; defaulting to allow", action)
+    logger.error("Unsupported advisory action %r; defaulting to allow", action)
     return "allow"
+
+
+def _sanitize_metadata(raw_metadata: Any, *, depth: int = 0) -> dict[str, Any]:
+    """Return JSON-safe advisory metadata with sanitized keys and bounded values."""
+    if raw_metadata is None:
+        return {}
+    if not isinstance(raw_metadata, Mapping):
+        logger.error("Malformed advisory metadata %r; dropping metadata", raw_metadata)
+        return {"malformed_metadata": True}
+
+    sanitized: dict[str, Any] = {}
+    for key, value in raw_metadata.items():
+        clean_key = _sanitize_metadata_key(key)
+        if clean_key is None:
+            continue
+        clean_value = _sanitize_metadata_value(value, depth=depth)
+        if clean_value is not _METADATA_SKIP:
+            sanitized[clean_key] = clean_value
+    return sanitized
+
+
+def _sanitize_metadata_key(key: Any) -> str | None:
+    key_text = _METADATA_KEY_PATTERN.sub("_", str(key))[:MAX_METADATA_KEY_LENGTH]
+    key_text = key_text.strip(".-")
+    if not key_text:
+        return None
+    if key_text.startswith("__"):
+        key_text = f"metadata{key_text}"
+    key_text = key_text.strip("_")
+    if not key_text:
+        return None
+    return key_text
+
+
+def _sanitize_metadata_value(value: Any, *, depth: int) -> Any:
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else _METADATA_SKIP
+    if isinstance(value, str):
+        return value[:MAX_METADATA_STRING_LENGTH]
+    if depth >= MAX_METADATA_DEPTH:
+        return _METADATA_SKIP
+    if isinstance(value, Mapping):
+        return _sanitize_metadata(value, depth=depth + 1)
+    if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray, str)):
+        sanitized_items = []
+        for item in value[:MAX_METADATA_ITEMS]:
+            clean_item = _sanitize_metadata_value(item, depth=depth + 1)
+            if clean_item is not _METADATA_SKIP:
+                sanitized_items.append(clean_item)
+        return sanitized_items
+    return _METADATA_SKIP

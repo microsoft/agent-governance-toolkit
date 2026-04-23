@@ -505,6 +505,10 @@ engine.set_advisory_check(
 engine.clear_advisory_check()  # disable the advisory stage
 ```
 
+For classifier endpoints, use HTTPS, configure `allowed_hosts`, and keep timeout
+and retry settings bounded so advisory checks cannot delay deterministic policy
+evaluation indefinitely.
+
 ## Protocol Support
 
 | Protocol | Status | Description |
