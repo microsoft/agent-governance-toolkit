@@ -3,14 +3,14 @@
 
 # agent-mcp-governance
 
-> **Public Preview** — Standalone Python package that exposes a focused
-> governance, audit, and trust import surface from Agent OS for MCP-oriented
-> Python consumers outside the full AGT monorepo.
+> **Public Preview** — Standalone Python package that exposes the
+> Agent Governance Toolkit's MCP (Model Context Protocol) governance
+> primitives for use outside the full AGT monorepo.
 
 ## Overview
 
 `agent_mcp_governance` provides a thin, typed re-export surface over the
-currently available governance, audit, and trust modules in
+governance, audit, and trust modules in
 [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/).  It is
 **not** zero-dependency — it requires `agent-os-kernel >=3.0.0,<4.0.0`.
 
@@ -26,38 +26,40 @@ This will pull in `agent-os-kernel` automatically.
 
 ```python
 from agent_mcp_governance import (
-    AuditEntry,
-    GovernanceAuditLogger,
     GovernanceMiddleware,
-    GovernancePolicy,
-    PolicyEvaluator,
-    TrustDecision,
-    TrustRoot,
+    AuditMiddleware,
+    TrustGate,
+    BehaviorMonitor,
 )
 
-# 1. Governance compatibility layer
-gov = GovernanceMiddleware()
-evaluator = PolicyEvaluator()
+# 1. Governance — block prompt-injection patterns
+gov = GovernanceMiddleware(
+    blocked_patterns=[r"(?i)ignore previous instructions"],
+    allowed_tools=["web-search", "read-file"],
+    rate_limit_per_minute=60,
+)
 
-# 2. Audit logging
-audit = GovernanceAuditLogger()
-entry = AuditEntry(agent_id="did:mesh:agent-1", action="search", decision="allow")
-audit.log(entry)
+# 2. Audit — tamper-evident hash-chain logging
+audit = AuditMiddleware(capture_data=True)
 
-# 3. Trust root policy evaluation
-trust_root = TrustRoot(policies=[GovernancePolicy(allowed_tools=["search"])])
+# 3. Trust — DID-based agent identity verification
+gate = TrustGate(min_trust_score=500)
+
+# 4. Monitoring — detect rogue agents
+monitor = BehaviorMonitor(
+    burst_threshold=100,
+    consecutive_failure_threshold=20,
+)
 ```
 
 ## API Reference
 
 | Export | Source module | Description |
 |--------|-------------|-------------|
-| `GovernanceMiddleware` | `agent_os.compat` | Compatibility middleware surface for governance-aware consumers |
-| `PolicyEvaluator` | `agent_os.compat` | Policy evaluator facade (real implementation when available) |
-| `GovernanceAuditLogger` | `agent_os.audit_logger` | Pluggable governance audit logger |
-| `AuditEntry` | `agent_os.audit_logger` | Structured governance audit record |
-| `TrustRoot` | `agent_os.trust_root` | Deterministic trust authority for policy checks |
-| `TrustDecision` | `agent_os.trust_root` | Result object returned by trust-root evaluations |
+| `GovernanceMiddleware` | `agent_os.governance.middleware` | Policy enforcement (rate limits, allow-lists, content filters) |
+| `AuditMiddleware` | `agent_os.audit.middleware` | Tamper-evident audit logging with hash chain |
+| `TrustGate` | `agent_os.trust.gate` | DID-based trust verification for agent handoffs |
+| `BehaviorMonitor` | `agent_os.services.behavior_monitor` | Per-agent anomaly detection and quarantine |
 
 ## Compatibility
 
