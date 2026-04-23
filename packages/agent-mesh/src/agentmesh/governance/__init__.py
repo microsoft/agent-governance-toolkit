@@ -18,6 +18,7 @@ from .approval import (
     WebhookApproval,
 )
 from .policy import PolicyEngine, Policy, PolicyRule, PolicyDecision
+from .session_state import SessionState, SessionAttribute
 from .conflict_resolution import (
     ConflictResolutionStrategy,
     PolicyScope,
@@ -98,6 +99,9 @@ __all__ = [
     "CallbackApproval",
     "ConsoleApproval",
     "WebhookApproval",
+    # Session state / attribute ratchets (issue #1375)
+    "SessionState",
+    "SessionAttribute",
     "AsyncTrustPolicyEvaluator",
     "TrustConcurrencyStats",
     "PolicyEngine",

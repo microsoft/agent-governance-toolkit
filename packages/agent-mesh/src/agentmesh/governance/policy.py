@@ -138,6 +138,38 @@ class PolicyRule(BaseModel):
             actual = self._get_nested(context, path)
             return actual == value
 
+        # Inequality: action.type != 'export'
+        neq_match = re.match(r"(\w+(?:\.\w+)*)\s*!=\s*['\"]([^'\"]+)['\"]", expr)
+        if neq_match:
+            path, value = neq_match.groups()
+            actual = self._get_nested(context, path)
+            return actual != value
+
+        # Membership: field in ['a', 'b', 'c']
+        in_match = re.match(
+            r"(\w+(?:\.\w+)*)\s+in\s+\[([^\]]*)\]", expr
+        )
+        if in_match:
+            path, items_str = in_match.groups()
+            actual = self._get_nested(context, path)
+            items = [s.strip().strip("'\"") for s in items_str.split(",") if s.strip()]
+            return actual in items
+
+        # Comparison: field > number
+        cmp_match = re.match(r"(\w+(?:\.\w+)*)\s*(>=|<=|>|<)\s*(\d+(?:\.\d+)?)", expr)
+        if cmp_match:
+            path, op, num_str = cmp_match.groups()
+            actual = self._get_nested(context, path)
+            try:
+                actual_num = float(actual) if actual is not None else 0
+                target = float(num_str)
+                if op == ">": return actual_num > target
+                if op == "<": return actual_num < target
+                if op == ">=": return actual_num >= target
+                if op == "<=": return actual_num <= target
+            except (TypeError, ValueError):
+                return False
+
         # Boolean attribute: data.contains_pii
         bool_match = re.match(r"^(\w+(?:\.\w+)*)$", expr)
         if bool_match:
