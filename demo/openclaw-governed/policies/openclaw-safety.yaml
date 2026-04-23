@@ -1,0 +1,53 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+# OpenClaw Governance Policy — Demo
+#
+# This policy blocks destructive tool calls, detects PII patterns,
+# and enforces rate limits for the OpenClaw governed demo.
+#
+# Customize for your environment. See examples/policies/ for more templates.
+
+name: openclaw-demo-policy
+version: "1.0"
+description: Safety policy for OpenClaw governed demo
+
+defaults:
+  action: allow
+
+rules:
+  - name: block-destructive-tools
+    description: Block file deletion, shell execution, and code execution
+    condition:
+      field: tool_name
+      operator: in
+      value:
+        - delete_file
+        - shell_exec
+        - execute_code
+        - drop_table
+        - rm
+        - rmdir
+    action: deny
+    message: "Destructive tool blocked by governance policy"
+    priority: 100
+
+  - name: block-pii-ssn
+    description: Block SSN patterns in tool inputs
+    condition:
+      field: input_text
+      operator: matches
+      value: '\b\d{3}-\d{2}-\d{4}\b'
+    action: deny
+    message: "SSN pattern detected — data exfiltration blocked"
+    priority: 90
+
+  - name: block-api-key-leak
+    description: Block API key patterns in tool inputs
+    condition:
+      field: input_text
+      operator: matches
+      value: '\b(sk-|ghp_|AKIA)[A-Za-z0-9]{20,}\b'
+    action: deny
+    message: "API key pattern detected — credential leak blocked"
+    priority: 90

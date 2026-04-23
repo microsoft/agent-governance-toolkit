@@ -15,8 +15,14 @@ tool calls.
 docker compose up --build
 
 # In another terminal — run the smoke test
-bash test-sidecar.sh
+bash test-sidecar.sh          # Linux/macOS
+.\test-sidecar.ps1            # Windows (PowerShell)
 ```
+
+The sidecar mounts `policies/openclaw-safety.yaml` which blocks
+destructive tools, SSN exfiltration, and API key leaks. Edit or add
+YAML files in `policies/` to customize. See `examples/policies/` for
+more templates.
 
 ## Quick Start — Without Docker
 
@@ -28,7 +34,8 @@ pip install agent-os-kernel
 python -m agent_os.server --host 127.0.0.1 --port 8081
 
 # In another terminal — run the smoke test
-bash test-sidecar.sh http://127.0.0.1:8081
+bash test-sidecar.sh http://127.0.0.1:8081          # Linux/macOS
+.\test-sidecar.ps1  -BaseUrl  http://127.0.0.1:8081 # Windows
 ```
 
 ## API Endpoints
@@ -129,7 +136,6 @@ User Input
 ## What's Not Implemented Yet
 
 - **Transparent tool-call proxy** — agent must call sidecar API explicitly
-- **YAML policy loading** from mounted volume
 - **Published container images** — must build from source
 - **OpenClaw native `GOVERNANCE_PROXY`** env var support
 - **Helm chart sidecar injection**
@@ -142,5 +148,7 @@ For the full roadmap, see
 | File | Purpose |
 |------|---------|
 | `docker-compose.yaml` | Builds and runs the governance sidecar |
-| `test-sidecar.sh` | Smoke test hitting all 8 API endpoints |
+| `test-sidecar.sh` | Smoke test — bash (Linux/macOS) |
+| `test-sidecar.ps1` | Smoke test — PowerShell (Windows) |
+| `policies/openclaw-safety.yaml` | Demo governance policy (destructive tools, PII, credential leak) |
 | `README.md` | This file |

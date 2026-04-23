@@ -32,7 +32,7 @@ The `agent-compliance` package turns governance from a claim into evidence. In b
 | Verify source file integrity | `agent_compliance.integrity.IntegrityVerifier` |
 | Gate agent promotions by maturity | `agent_compliance.promotion.PromotionChecker` |
 | Generate compliance badges | `GovernanceAttestation.badge_markdown()` |
-| Use the CLI for CI/CD pipelines | `agent-governance verify`, `integrity` |
+| Use the CLI for CI/CD pipelines | `agt verify`, `integrity` |
 | Map to OWASP Agentic Top 10 | `OWASP_ASI_CONTROLS` mapping |
 
 ---
@@ -56,7 +56,7 @@ pip install agent-governance-toolkit[sre]
 Three CLI entry points are registered — all equivalent:
 
 ```bash
-agent-governance verify
+agt verify
 agent-governance-toolkit verify
 agent-compliance verify
 ```
@@ -798,25 +798,25 @@ print(f"README updated with compliance badge: {attestation.compliance_grade()}")
 
 ## 10. CLI Reference
 
-### 10.1 `agent-governance verify`
+### 10.1 `agt verify`
 
 Verify governance controls and output compliance status:
 
 ```bash
 # Human-readable summary (default)
-agent-governance verify
+agt verify
 
 # JSON attestation for CI/CD pipelines
-agent-governance verify --json
+agt verify --json
 
 # Markdown badge only
-agent-governance verify --badge
+agt verify --badge
 
 # Runtime evidence manifest
-agent-governance verify --evidence ./agt-evidence.json
+agt verify --evidence ./agt-evidence.json
 
 # Strict evidence mode
-agent-governance verify --evidence ./agt-evidence.json --strict
+agt verify --evidence ./agt-evidence.json --strict
 ```
 
 **Exit codes:**
@@ -833,7 +833,7 @@ agent-governance verify --evidence ./agt-evidence.json --strict
 - name: Verify governance compliance
   run: |
     pip install agent-governance-toolkit[full]
-    agent-governance verify --json > compliance-attestation.json
+    agt verify --json > compliance-attestation.json
 
 - name: Upload attestation artifact
   uses: actions/upload-artifact@v4
@@ -842,22 +842,22 @@ agent-governance verify --evidence ./agt-evidence.json --strict
     path: compliance-attestation.json
 
 - name: Update README badge
-  run: agent-governance verify --badge >> $GITHUB_STEP_SUMMARY
+  run: agt verify --badge >> $GITHUB_STEP_SUMMARY
 ```
 
-### 10.2 `agent-governance integrity`
+### 10.2 `agt integrity`
 
 Verify or generate integrity manifests:
 
 ```bash
 # Generate a manifest from current module state
-agent-governance integrity --generate integrity.json
+agt integrity --generate integrity.json
 
 # Verify against an existing manifest
-agent-governance integrity --manifest integrity.json
+agt integrity --manifest integrity.json
 
 # JSON output for automation
-agent-governance integrity --manifest integrity.json --json
+agt integrity --manifest integrity.json --json
 ```
 
 **Exit codes:**
@@ -873,11 +873,11 @@ agent-governance integrity --manifest integrity.json --json
 
 ```bash
 # Non-existent manifest — clean error, no traceback
-$ agent-governance integrity --manifest nonexistent.json
+$ agt integrity --manifest nonexistent.json
 Error: Manifest file not found: nonexistent.json
 
 # Read-only output directory — clean error
-$ agent-governance integrity --generate /readonly/integrity.json
+$ agt integrity --generate /readonly/integrity.json
 Error: Cannot write to output directory: /readonly/
 ```
 
@@ -890,10 +890,10 @@ Combine verify and integrity checks in a single pipeline step:
 set -e
 
 echo "=== Governance Verification ==="
-agent-governance verify --json > attestation.json
+agt verify --json > attestation.json
 
 echo "=== Integrity Verification ==="
-agent-governance integrity --manifest integrity.json --json > integrity-report.json
+agt integrity --manifest integrity.json --json > integrity-report.json
 
 echo "=== Results ==="
 python -c "
@@ -1083,8 +1083,8 @@ Badge: ![Governance](https://img.shields.io/badge/governance-100%25-brightgreen)
 | Promotion gates | `PromotionGate` | Named check function with severity (blocker/warning) |
 | Promotion checker | `PromotionChecker` | Evaluates 9 built-in gates for level transitions |
 | Promotion report | `PromotionReport` | Aggregate pass/fail with blocker list |
-| CLI verify | `agent-governance verify` | `--json`, `--badge`, `--evidence`, `--strict` flags; exit code 0/1 |
-| CLI integrity | `agent-governance integrity` | `--generate`, `--manifest`, `--json` flags |
+| CLI verify | `agt verify` | `--json`, `--badge`, `--evidence`, `--strict` flags; exit code 0/1 |
+| CLI integrity | `agt integrity` | `--generate`, `--manifest`, `--json` flags |
 
 ---
 
@@ -1100,7 +1100,7 @@ Badge: ![Governance](https://img.shields.io/badge/governance-100%25-brightgreen)
 
 You now know how to **prove** governance compliance — from quick five-line checks to full CI/CD pipelines with attestation storage and promotion gating.
 
-- **Automate it:** Add `agent-governance verify --json` to your CI pipeline and gate deployments on compliance grade
+- **Automate it:** Add `agt verify --json` to your CI pipeline and gate deployments on compliance grade
 - **Lock it down:** Generate an `integrity.json` manifest and verify on every deploy to catch tampering
 - **Promote safely:** Use `PromotionChecker` to enforce quality gates before moving agents to production
 - **Audit trail:** Store JSON attestations as build artifacts for regulatory audits

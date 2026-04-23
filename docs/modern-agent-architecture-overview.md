@@ -270,9 +270,9 @@ pip install crewai-agentmesh         # CrewAI
 ### Step 4: Verify OWASP Coverage
 
 ```bash
-agent-governance verify         # Text summary
-agent-governance verify --json  # JSON for CI/CD
-agent-governance verify --badge # Badge for your README
+agt verify         # Text summary
+agt verify --json  # JSON for CI/CD
+agt verify --badge # Badge for your README
 ```
 
 ---

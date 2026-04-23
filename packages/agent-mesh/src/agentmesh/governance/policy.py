@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Optional, Literal, Any
 from pydantic import BaseModel, Field
 import logging
+import os
 import warnings
 import yaml
 import json
@@ -37,10 +38,17 @@ class PolicyRule(BaseModel):
     Rules define conditions and actions:
     - condition: Expression that evaluates to true/false
     - action: What to do when condition matches (allow, deny, warn, require_approval)
+    - stage: When in the agent lifecycle this rule is evaluated
     """
 
     name: str = Field(..., description="Rule name")
     description: Optional[str] = Field(None)
+
+    # Lifecycle stage
+    stage: Literal["pre_input", "pre_tool", "post_tool", "pre_output"] = Field(
+        default="pre_tool",
+        description="Agent lifecycle stage: pre_input, pre_tool, post_tool, pre_output",
+    )
 
     # Condition
     condition: str = Field(..., description="Condition expression")
@@ -157,6 +165,10 @@ class Policy(BaseModel):
     Policies are defined in YAML/JSON and loaded at runtime.
     Use ``apiVersion: governance.toolkit/v1`` in YAML files for
     schema-versioned policies.
+
+    Supports hierarchical composition via ``extends``. Child policies
+    inherit all rules from parent policies and can add new rules but
+    cannot weaken or remove parent rules (additive-only semantics).
     """
 
     apiVersion: str = Field(
@@ -166,6 +178,12 @@ class Policy(BaseModel):
     version: str = Field(default="1.0")
     name: str = Field(...)
     description: Optional[str] = Field(None)
+
+    # Composition
+    extends: list[str] = Field(
+        default_factory=list,
+        description="Parent policy file paths to inherit rules from (additive-only)",
+    )
 
     # Target
     agent: Optional[str] = Field(None, description="Agent this policy applies to")
@@ -188,31 +206,126 @@ class Policy(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     @classmethod
-    def from_yaml(cls, yaml_content: str) -> "Policy":
+    def from_yaml(cls, yaml_content: str, base_dir: str = "") -> "Policy":
         """Load a policy from a YAML string.
 
         Validates the ``apiVersion`` field against supported versions
-        and emits deprecation warnings for older schemas.
+        and emits deprecation warnings for older schemas. Resolves
+        ``extends`` references relative to ``base_dir``.
 
         Args:
             yaml_content: Raw YAML string containing the policy definition.
+            base_dir: Directory for resolving relative ``extends`` paths.
 
         Returns:
-            A fully-constructed ``Policy`` instance.
+            A fully-constructed ``Policy`` instance with inherited rules.
 
         Raises:
-            ValueError: If the ``apiVersion`` is not recognized.
+            ValueError: If the ``apiVersion`` is not recognized or a
+                circular ``extends`` reference is detected.
         """
         data = yaml.safe_load(yaml_content)
         _validate_api_version(data)
 
-        # Parse rules
+        # Normalize extends field
+        extends_raw = data.pop("extends", None)
+        extends_list: list[str] = []
+        if isinstance(extends_raw, str):
+            extends_list = [extends_raw]
+        elif isinstance(extends_raw, list):
+            extends_list = extends_raw
+
+        # Parse own rules
         rules = []
         for rule_data in data.get("rules", []):
             rules.append(PolicyRule(**rule_data))
         data["rules"] = rules
+        data["extends"] = extends_list
 
         return cls(**data)
+
+    @classmethod
+    def from_yaml_file(
+        cls,
+        file_path: str,
+        _resolve_stack: list[str] | None = None,
+    ) -> "Policy":
+        """Load a policy from a YAML file, resolving ``extends`` parents.
+
+        Recursively loads parent policies referenced by ``extends``,
+        merging rules with additive-only semantics (child can add
+        rules but cannot weaken or remove parent deny rules).
+
+        Detects and rejects circular references.
+
+        Args:
+            file_path: Path to the YAML policy file.
+
+        Returns:
+            A ``Policy`` with all inherited rules merged.
+
+        Raises:
+            ValueError: On circular references or missing parent files.
+            FileNotFoundError: If a referenced file does not exist.
+        """
+        abs_path = os.path.abspath(file_path)
+
+        # Cycle detection
+        if _resolve_stack is None:
+            _resolve_stack = []
+        if abs_path in _resolve_stack:
+            chain = " -> ".join(_resolve_stack + [abs_path])
+            raise ValueError(f"Circular policy extends detected: {chain}")
+        _resolve_stack = [*_resolve_stack, abs_path]
+
+        with open(abs_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        base_dir = os.path.dirname(abs_path)
+        policy = cls.from_yaml(content, base_dir=base_dir)
+
+        if not policy.extends:
+            return policy
+
+        # Resolve parent policies and merge rules
+        parent_rules: list[PolicyRule] = []
+        parent_names_seen: set[str] = set()
+
+        for parent_ref in policy.extends:
+            parent_path = (
+                parent_ref
+                if os.path.isabs(parent_ref)
+                else os.path.join(base_dir, parent_ref)
+            )
+            if not os.path.exists(parent_path):
+                raise FileNotFoundError(
+                    f"Policy extends '{parent_ref}' not found at {parent_path}"
+                )
+
+            parent = cls.from_yaml_file(parent_path, _resolve_stack=_resolve_stack)
+
+            # Deduplicate (diamond inheritance) — track by rule name
+            for rule in parent.rules:
+                if rule.name not in parent_names_seen:
+                    parent_names_seen.add(rule.name)
+                    parent_rules.append(rule)
+
+        # Merge: parent rules first, then child rules.
+        # Child cannot override parent deny rules (additive-only).
+        parent_deny_names = {r.name for r in parent_rules if r.action == "deny"}
+        child_rules_filtered = []
+        for rule in policy.rules:
+            if rule.name in parent_deny_names and rule.action in ("allow", "log"):
+                logger.warning(
+                    "Policy '%s' rule '%s' attempts to weaken parent deny — ignored",
+                    policy.name,
+                    rule.name,
+                )
+                continue
+            child_rules_filtered.append(rule)
+
+        policy.rules = parent_rules + child_rules_filtered
+        return policy
 
     @classmethod
     def from_json(cls, json_content: str) -> "Policy":
@@ -371,6 +484,22 @@ class PolicyEngine:
             The loaded ``Policy`` instance.
         """
         policy = Policy.from_yaml(yaml_content)
+        self.load_policy(policy)
+        return policy
+
+    def load_yaml_file(self, file_path: str) -> Policy:
+        """Parse and register a policy from a YAML file.
+
+        Resolves ``extends`` references recursively with additive-only
+        merge semantics. Parent deny rules cannot be weakened by children.
+
+        Args:
+            file_path: Path to the YAML policy file.
+
+        Returns:
+            The loaded ``Policy`` with inherited rules merged.
+        """
+        policy = Policy.from_yaml_file(file_path)
         self.load_policy(policy)
         return policy
 
@@ -617,11 +746,13 @@ class PolicyEngine:
         self,
         agent_did: str,
         context: dict,
+        stage: str = "pre_tool",
     ) -> PolicyDecision:
         """Evaluate all applicable policies for an agent action.
 
-        Collects ALL matching rules across all applicable policies,
-        then resolves conflicts using the configured strategy:
+        Collects ALL matching rules across all applicable policies
+        for the given lifecycle stage, then resolves conflicts using
+        the configured strategy:
 
         - ``priority_first_match``: Highest-priority matching rule wins
           (v1.0 behavior).
@@ -633,6 +764,9 @@ class PolicyEngine:
         Args:
             agent_did: Decentralized identifier of the acting agent.
             context: Runtime context dict describing the action.
+            stage: Lifecycle stage to evaluate. One of ``"pre_input"``,
+                ``"pre_tool"`` (default), ``"post_tool"``, ``"pre_output"``.
+                Only rules matching this stage are evaluated.
 
         Returns:
             A ``PolicyDecision`` indicating whether the action is allowed
@@ -658,6 +792,8 @@ class PolicyEngine:
                     scope = PolicyScope.GLOBAL
 
                 for rule in policy.rules:
+                    if rule.stage != stage:
+                        continue  # skip rules for other stages
                     if rule.enabled and rule.evaluate(context):
                         candidates.append(CandidateDecision(
                             action=rule.action,
