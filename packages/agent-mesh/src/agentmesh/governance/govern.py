@@ -25,7 +25,7 @@ from typing import Any, Callable, Optional, Union
 
 from .policy import Policy, PolicyDecision, PolicyEngine
 from .audit import AuditLog
-from .approval import ApprovalHandler, ApprovalRequest, ApprovalDecision, AutoRejectApproval
+from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
 
 logger = logging.getLogger(__name__)
 
