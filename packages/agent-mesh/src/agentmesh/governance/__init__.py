@@ -26,6 +26,14 @@ from .otel_observability import (
     trace_trust_verification,
     record_denial,
 )
+from .advisory import (
+    AdvisoryCheck,
+    AdvisoryDecision,
+    CallbackAdvisory,
+    HttpAdvisory,
+    PatternAdvisory,
+    CompositeAdvisory,
+)
 from .conflict_resolution import (
     ConflictResolutionStrategy,
     PolicyScope,
@@ -115,6 +123,13 @@ __all__ = [
     "trace_approval",
     "trace_trust_verification",
     "record_denial",
+    # Advisory layer (issue #1377)
+    "AdvisoryCheck",
+    "AdvisoryDecision",
+    "CallbackAdvisory",
+    "HttpAdvisory",
+    "PatternAdvisory",
+    "CompositeAdvisory",
     "AsyncTrustPolicyEvaluator",
     "TrustConcurrencyStats",
     "PolicyEngine",
