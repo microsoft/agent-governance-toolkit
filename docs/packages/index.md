@@ -26,13 +26,13 @@ AGT provides 12 packages covering every layer of agent governance.
 
 | Package | Description | Install |
 |---------|------------|---------|
-| [Agent OS](agent-os.md) | Policy engine, agent lifecycle, governance gate | `pip install agent-os` |
-| [Agent Mesh](agent-mesh.md) | Agent discovery, routing, trust mesh | `pip install agent-mesh` |
-| [Agent Runtime](agent-runtime.md) | Execution sandboxing, four privilege rings | `pip install agent-runtime` |
+| [Agent OS](agent-os.md) | Policy engine, agent lifecycle, governance gate | `pip install agent-os-kernel` |
+| [Agent Mesh](agent-mesh.md) | Agent discovery, routing, trust mesh | `pip install agentmesh-platform` |
+| [Agent Runtime](agent-runtime.md) | Execution sandboxing, four privilege rings | `pip install agentmesh-runtime` |
 | [Agent SRE](agent-sre.md) | Kill switch, SLO monitoring, chaos testing | `pip install agent-sre` |
-| [Agent Compliance](agent-compliance.md) | Audit logging, compliance frameworks | `pip install agent-compliance` |
-| [Agent Marketplace](agent-marketplace.md) | Plugin governance, marketplace trust | `pip install agent-marketplace` |
-| [Agent Lightning](agent-lightning.md) | High-performance orchestration | `pip install agent-lightning` |
+| [Agent Compliance](agent-compliance.md) | Audit logging, compliance frameworks | `pip install agent-governance-toolkit` |
+| [Agent Marketplace](agent-marketplace.md) | Plugin governance, marketplace trust | `pip install agentmesh-marketplace` |
+| [Agent Lightning](agent-lightning.md) | High-performance orchestration | `pip install agentmesh-lightning` |
 | [Agent Hypervisor](agent-hypervisor.md) | Hardware-level workload isolation | `pip install agent-hypervisor` |
 
 ## Language Packages & Tooling
