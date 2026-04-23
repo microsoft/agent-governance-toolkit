@@ -16,7 +16,7 @@
 > [Open a GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) for feedback.
 
 > [!TIP]
-> **v3.2.1 is out!** Patch: encryption exports fix for npm package. E2E encrypted agent messaging (Signal protocol), Wire Protocol spec, registry + relay services. [Changelog →](CHANGELOG.md)
+> **v3.2.2 is out!** Patch: OpenClaw sidecar docker fix, encryption exports for npm. E2E encrypted agent messaging (Signal protocol), Wire Protocol spec, registry + relay services. [Changelog →](CHANGELOG.md)
 
 **Runtime governance for AI agents** — deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents. Covers all **10 OWASP Agentic risks** with **9,500+ tests**.
 
@@ -80,7 +80,7 @@ result = evaluator.evaluate({"tool_name": "delete_file"})   # ❌ Blocked determ
 <summary><b>TypeScript</b></summary>
 
 ```typescript
-import { PolicyEngine } from "@microsoft/agentmesh-sdk";
+import { PolicyEngine } from "@microsoft/agent-governance-sdk";
 
 const engine = new PolicyEngine([
   { action: "web_search", effect: "allow" },
@@ -120,7 +120,7 @@ builder.Services
 <summary><b>Rust</b></summary>
 
 ```rust
-use agentmesh::{AgentMeshClient, ClientOptions};
+use agent_governance::{AgentMeshClient, ClientOptions};
 
 let client = AgentMeshClient::new("my-agent").unwrap();
 let result = client.execute_with_governance("data.read", None);
@@ -233,10 +233,10 @@ Full methodology: [BENCHMARKS.md](docs/BENCHMARKS.md)
 | Language | Package | Command |
 |----------|---------|---------|
 | **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
-| **TypeScript** | [`@microsoft/agentmesh-sdk`](packages/agent-mesh/sdks/typescript/) | `npm install @microsoft/agentmesh-sdk` |
+| **TypeScript** | [`@microsoft/agent-governance-sdk`](packages/agent-mesh/sdks/typescript/) | `npm install @microsoft/agent-governance-sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 | **.NET MCP** | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` | `dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol` |
-| **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
+| **Rust** | [`agent-governance`](https://crates.io/crates/agent-governance) | `cargo add agent-governance` |
 | **Go** | [`agent-governance-toolkit`](agent-governance-golang/) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
 All 5 language packages implement core governance (policy, identity, trust, audit). Python has the full stack.
@@ -325,3 +325,5 @@ trademarks or logos is subject to and must follow
 [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
 Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
 Any use of third-party trademarks or logos are subject to those third-party's policies.
+
+

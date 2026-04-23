@@ -1,11 +1,11 @@
 [package]
-name = "agentmesh"
+name = "agent-governance"
 version.workspace = true
 edition.workspace = true
-description = "Public Preview — Rust SDK for the AgentMesh governance framework (policy, trust, audit, identity)"
+description = "Public Preview — Rust SDK for the Agent Governance Toolkit (policy, trust, audit, identity)"
 license.workspace = true
 repository.workspace = true
-documentation = "https://docs.rs/agentmesh"
+documentation = "https://docs.rs/agent-governance"
 readme = "README.md"
 keywords = ["agent", "governance", "trust", "policy", "audit"]
 categories = ["authentication", "cryptography"]

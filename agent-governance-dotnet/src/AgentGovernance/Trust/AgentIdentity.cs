@@ -41,6 +41,11 @@ public sealed class AgentIdentity
     public const string LegacyDidPrefix = "did:agentmesh:";
 
     /// <summary>
+    /// MCP DID prefix for MCP-native agent identities.
+    /// </summary>
+    public const string McpDidPrefix = "did:mcp:";
+
+    /// <summary>
     /// Maximum delegation depth allowed for child identities.
     /// </summary>
     public const int MaxDelegationDepth = 10;
@@ -547,6 +552,12 @@ public sealed class AgentIdentity
         if (trimmed.StartsWith(CanonicalDidPrefix, StringComparison.OrdinalIgnoreCase))
         {
             return CanonicalDidPrefix + trimmed[CanonicalDidPrefix.Length..];
+        }
+
+        if (trimmed.StartsWith(McpDidPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            // Accept MCP DIDs as-is (do not normalize to did:mesh:)
+            return trimmed;
         }
 
         throw new ArgumentException(
