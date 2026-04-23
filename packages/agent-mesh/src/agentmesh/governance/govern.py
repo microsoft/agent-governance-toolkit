@@ -25,6 +25,7 @@ from typing import Any, Callable, Optional, Union
 
 from .policy import Policy, PolicyDecision, PolicyEngine
 from .audit import AuditLog
+from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class GovernanceConfig:
     audit: bool = True
     audit_file: Optional[str] = None
     on_deny: Optional[Callable[[PolicyDecision], Any]] = None
+    approval_handler: Optional[ApprovalHandler] = None
     conflict_strategy: str = "deny_overrides"
 
 
@@ -106,6 +108,10 @@ class GovernedCallable:
         decision = self._engine.evaluate(self._config.agent_id, context)
         eval_ms = (time.monotonic() - start) * 1000
 
+        # Handle require_approval
+        if decision.action == "require_approval":
+            decision = self._handle_approval(decision, context)
+
         # Audit
         if self._audit:
             self._audit.log(
@@ -129,6 +135,52 @@ class GovernedCallable:
 
         # Allowed — execute the wrapped function
         return self._fn(*args, **kwargs)
+
+    def _handle_approval(self, decision: PolicyDecision, context: dict) -> PolicyDecision:
+        """Route require_approval decisions through the approval handler."""
+        handler = self._config.approval_handler or AutoRejectApproval()
+
+        request = ApprovalRequest(
+            action=context.get("action", {}).get("type", "unknown"),
+            rule_name=decision.matched_rule or "",
+            policy_name=decision.policy_name or "",
+            agent_id=self._config.agent_id,
+            context=context,
+            approvers=decision.approvers,
+        )
+
+        approval = handler.request_approval(request)
+
+        # Audit the approval decision
+        if self._audit:
+            self._audit.log(
+                event_type="approval_decision",
+                agent_did=self._config.agent_id,
+                action=context.get("action", {}).get("type", "unknown"),
+                outcome="approved" if approval.approved else "rejected",
+                data={
+                    "rule": decision.matched_rule or "",
+                    "approver": approval.approver,
+                    "reason": approval.reason,
+                },
+            )
+
+        if approval.approved:
+            return PolicyDecision(
+                allowed=True,
+                action="allow",
+                matched_rule=decision.matched_rule,
+                policy_name=decision.policy_name,
+                reason=f"Approved by {approval.approver}: {approval.reason}",
+            )
+        else:
+            return PolicyDecision(
+                allowed=False,
+                action="deny",
+                matched_rule=decision.matched_rule,
+                policy_name=decision.policy_name,
+                reason=f"Approval rejected by {approval.approver}: {approval.reason}",
+            )
 
     def _build_context(self, args: tuple, kwargs: dict) -> dict:
         """Build policy evaluation context from function arguments."""
@@ -172,6 +224,7 @@ def govern(
     agent_id: str = "*",
     audit: bool = True,
     on_deny: Optional[Callable[[PolicyDecision], Any]] = None,
+    approval_handler: Optional[ApprovalHandler] = None,
     conflict_strategy: str = "deny_overrides",
 ) -> GovernedCallable:
     """Wrap any callable with AGT governance — 2-line integration.
@@ -205,6 +258,7 @@ def govern(
         agent_id=agent_id,
         audit=audit,
         on_deny=on_deny,
+        approval_handler=approval_handler,
         conflict_strategy=conflict_strategy,
     )
     return GovernedCallable(fn, config)
