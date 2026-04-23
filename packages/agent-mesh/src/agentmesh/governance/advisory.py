@@ -109,6 +109,7 @@ class EndpointAdvisoryCheck:
         name: str = "classifier-endpoint",
         headers: Mapping[str, str] | None = None,
         timeout: float = 2.0,
+        total_timeout: float = MAX_ENDPOINT_TOTAL_SECONDS,
         allowed_hosts: Sequence[str] | None = None,
         max_retries: int = 0,
         retry_backoff: float = 0.1,
@@ -120,6 +121,7 @@ class EndpointAdvisoryCheck:
             name: Classifier label used in metadata.
             headers: Optional request headers, such as authorization.
             timeout: Per-request timeout in seconds.
+            total_timeout: Total timeout budget for the advisory check.
             allowed_hosts: Optional exact host allowlist for endpoint URLs.
             max_retries: Number of retries for transient HTTP failures.
             retry_backoff: Initial exponential backoff delay in seconds.
@@ -142,6 +144,13 @@ class EndpointAdvisoryCheck:
             raise ValueError(
                 f"Advisory endpoint timeout must be <= {MAX_ENDPOINT_TIMEOUT_SECONDS:g} seconds."
             )
+        if total_timeout <= 0:
+            raise ValueError("Advisory endpoint total_timeout must be greater than zero.")
+        if total_timeout > MAX_ENDPOINT_TOTAL_SECONDS:
+            raise ValueError(
+                "Advisory endpoint total_timeout must be <= "
+                f"{MAX_ENDPOINT_TOTAL_SECONDS:g} seconds."
+            )
         if max_retries < 0:
             raise ValueError("Advisory endpoint max_retries must be zero or greater.")
         if max_retries > MAX_ENDPOINT_RETRIES:
@@ -155,6 +164,7 @@ class EndpointAdvisoryCheck:
         self.name = name
         self.headers = dict(headers or {})
         self.timeout = timeout
+        self.total_timeout = total_timeout
         self.allowed_hosts = trusted_hosts
         self.max_retries = max_retries
         self.retry_backoff = retry_backoff
@@ -177,7 +187,7 @@ class EndpointAdvisoryCheck:
             "deterministic_decision": decision_payload,
         }
 
-        deadline = time.monotonic() + MAX_ENDPOINT_TOTAL_SECONDS
+        deadline = time.monotonic() + self.total_timeout
         attempt = 0
         while True:
             try:
@@ -319,6 +329,7 @@ def _sanitize_metadata(raw_metadata: Any, *, depth: int = 0) -> dict[str, Any]:
 
 
 def _sanitize_metadata_key(key: Any) -> str | None:
+    """Normalize advisory metadata keys into bounded, safe identifier strings."""
     key_text = _METADATA_KEY_PATTERN.sub("_", str(key))[:MAX_METADATA_KEY_LENGTH]
     key_text = key_text.strip(".-")
     if not key_text:
@@ -332,6 +343,7 @@ def _sanitize_metadata_key(key: Any) -> str | None:
 
 
 def _sanitize_metadata_value(value: Any, *, depth: int) -> Any:
+    """Normalize advisory metadata values into bounded JSON-safe structures."""
     if value is None or isinstance(value, bool):
         return value
     if isinstance(value, int):

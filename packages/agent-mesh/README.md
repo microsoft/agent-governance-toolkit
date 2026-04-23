@@ -502,13 +502,15 @@ engine.set_advisory_check(
     audit_log=audit_log,
 )
 
+current_advisory = engine.advisory_config
 engine.clear_advisory_check()  # disable the advisory stage
 ```
 
 For classifier endpoints, use HTTPS, configure `allowed_hosts`, and keep timeout
 and retry settings bounded so advisory checks cannot delay deterministic policy
 evaluation indefinitely. `allowed_hosts` uses exact host matches only; wildcard
-patterns such as `*.example.com` are rejected.
+patterns such as `*.example.com` are rejected. `advisory_config` returns a copy
+of the current advisory configuration so callers can inspect it safely.
 
 Compatibility notes:
 - `PolicyEngine.evaluate()` behaves exactly as before unless `set_advisory_check()`

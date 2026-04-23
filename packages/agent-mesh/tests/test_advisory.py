@@ -119,6 +119,37 @@ def test_advisory_failure_falls_through_to_deterministic_allow() -> None:
     assert entries[0].policy_decision == "allow"
 
 
+def test_advisory_disabled_skips_check() -> None:
+    calls: list[str] = []
+    engine = _allowing_engine()
+    engine.set_advisory_check(
+        lambda *_: calls.append("called") or {"action": "block"},
+        enabled=False,
+    )
+
+    decision = engine.evaluate(AGENT_DID, {"action": {"type": "tool_call"}})
+
+    assert decision.allowed is True
+    assert decision.action == "allow"
+    assert calls == []
+
+
+def test_advisory_config_returns_copy() -> None:
+    engine = _allowing_engine()
+    engine.set_advisory_check(
+        lambda *_: {"action": "flag_for_review"},
+        classifier="custom-reviewer",
+    )
+
+    config = engine.advisory_config
+    config.enabled = False
+    config.actions.clear()
+
+    fresh_config = engine.advisory_config
+    assert fresh_config.enabled is True
+    assert fresh_config.actions == {"flag_for_review", "block"}
+
+
 def test_advisory_invalid_action_falls_through_to_deterministic_allow() -> None:
     audit_log = AuditLog()
     engine = _allowing_engine()
@@ -199,6 +230,9 @@ def test_endpoint_advisory_check_rejects_wildcard_hosts() -> None:
 def test_endpoint_advisory_check_bounds_timeout_and_retries() -> None:
     with pytest.raises(ValueError, match="timeout"):
         EndpointAdvisoryCheck("https://classifier.example/check", timeout=5.1)
+
+    with pytest.raises(ValueError, match="total_timeout"):
+        EndpointAdvisoryCheck("https://classifier.example/check", total_timeout=6.1)
 
     with pytest.raises(ValueError, match="max_retries"):
         EndpointAdvisoryCheck("https://classifier.example/check", max_retries=3)

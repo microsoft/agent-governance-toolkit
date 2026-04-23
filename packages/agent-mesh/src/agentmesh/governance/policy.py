@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import re
+import threading
 import warnings
 from collections.abc import Sequence
 from datetime import datetime, timezone
@@ -487,6 +488,7 @@ class PolicyEngine:
         self._advisory_config = AdvisoryConfig()
         self._advisory_check: AdvisoryCheck | None = None
         self._advisory_audit_log: Any = None
+        self._advisory_lock = threading.RLock()
 
     def load_policy(self, policy: Policy) -> None:
         """Load a policy into the engine.
@@ -589,25 +591,37 @@ class PolicyEngine:
             advisory_check = check
 
         configured_actions = set(actions or ("flag_for_review", "block"))
-        self._advisory_config = AdvisoryConfig(
-            enabled=enabled,
-            classifier=classifier or getattr(advisory_check, "name", None),
-            actions=configured_actions,
-            on_error=on_error,
-        )
-        self._advisory_check = advisory_check
-        self._advisory_audit_log = audit_log
+        with self._advisory_lock:
+            self._advisory_config = AdvisoryConfig(
+                enabled=enabled,
+                classifier=classifier or getattr(advisory_check, "name", None),
+                actions=configured_actions,
+                on_error=on_error,
+            )
+            self._advisory_check = advisory_check
+            self._advisory_audit_log = audit_log
 
     def clear_advisory_check(self) -> None:
         """Disable and remove the advisory check stage."""
-        self._advisory_config = AdvisoryConfig()
-        self._advisory_check = None
-        self._advisory_audit_log = None
+        with self._advisory_lock:
+            self._advisory_config = AdvisoryConfig()
+            self._advisory_check = None
+            self._advisory_audit_log = None
 
     @property
     def advisory_config(self) -> AdvisoryConfig:
         """Return the current advisory configuration."""
-        return self._advisory_config.model_copy(deep=True)
+        with self._advisory_lock:
+            return self._advisory_config.model_copy(deep=True)
+
+    def _advisory_state(self) -> tuple[AdvisoryConfig, AdvisoryCheck | None, Any]:
+        """Return a consistent snapshot of advisory configuration and hooks."""
+        with self._advisory_lock:
+            return (
+                self._advisory_config.model_copy(deep=True),
+                self._advisory_check,
+                self._advisory_audit_log,
+            )
 
     def _apply_rule(
         self,
@@ -844,14 +858,16 @@ class PolicyEngine:
         if not decision.allowed:
             return decision
 
-        if not self._advisory_config.enabled or self._advisory_check is None:
+        advisory_config, advisory_check, advisory_audit_log = self._advisory_state()
+
+        if not advisory_config.enabled or advisory_check is None:
             return decision
 
         try:
-            raw_result = self._advisory_check.evaluate(agent_did, context, decision)
+            raw_result = advisory_check.evaluate(agent_did, context, decision)
             advisory_result = normalize_advisory_result(
                 raw_result,
-                default_classifier=self._advisory_config.classifier,
+                default_classifier=advisory_config.classifier,
             )
         except Exception as exc:
             logger.error(
@@ -859,9 +875,9 @@ class PolicyEngine:
                 exc_info=True,
             )
             advisory_result = AdvisoryResult(
-                action=self._advisory_config.on_error,
+                action=advisory_config.on_error,
                 reason="Advisory check failed; deterministic allow preserved",
-                classifier=self._advisory_config.classifier,
+                classifier=advisory_config.classifier,
                 metadata={
                     "error": True,
                     "error_type": type(exc).__name__,
@@ -872,12 +888,14 @@ class PolicyEngine:
                 context,
                 decision,
                 advisory_result,
+                advisory_config,
+                advisory_audit_log,
                 start,
             )
 
         if (
             advisory_result.action != "allow"
-            and advisory_result.action not in self._advisory_config.actions
+            and advisory_result.action not in advisory_config.actions
         ):
             metadata = dict(advisory_result.metadata)
             metadata["requested_action"] = advisory_result.action
@@ -895,6 +913,8 @@ class PolicyEngine:
             context,
             decision,
             advisory_result,
+            advisory_config,
+            advisory_audit_log,
             start,
         )
 
@@ -904,12 +924,14 @@ class PolicyEngine:
         context: dict,
         deterministic_decision: PolicyDecision,
         advisory_result: AdvisoryResult,
+        advisory_config: AdvisoryConfig,
+        advisory_audit_log: Any,
         start: datetime,
     ) -> PolicyDecision:
         """Merge an advisory result into the deterministic decision."""
         advisory_record = {
             "deterministic": False,
-            "classifier": advisory_result.classifier or self._advisory_config.classifier,
+            "classifier": advisory_result.classifier or advisory_config.classifier,
             "action": advisory_result.action,
             "reason": advisory_result.reason,
             "confidence": advisory_result.confidence,
@@ -919,6 +941,7 @@ class PolicyEngine:
             agent_did,
             context,
             deterministic_decision,
+            advisory_audit_log,
             advisory_record,
         )
 
@@ -931,7 +954,11 @@ class PolicyEngine:
                 update={
                     "allowed": False,
                     "action": "deny",
-                    "reason": self._advisory_reason("blocked", advisory_result),
+                    "reason": self._advisory_reason(
+                        "blocked",
+                        advisory_result,
+                        advisory_config,
+                    ),
                     "metadata": metadata,
                     "evaluation_ms": elapsed,
                 }
@@ -942,7 +969,11 @@ class PolicyEngine:
                 update={
                     "allowed": True,
                     "action": "warn",
-                    "reason": self._advisory_reason("flagged for review", advisory_result),
+                    "reason": self._advisory_reason(
+                        "flagged for review",
+                        advisory_result,
+                        advisory_config,
+                    ),
                     "metadata": metadata,
                     "evaluation_ms": elapsed,
                 }
@@ -960,10 +991,11 @@ class PolicyEngine:
         agent_did: str,
         context: dict,
         deterministic_decision: PolicyDecision,
+        advisory_audit_log: Any,
         advisory_record: dict[str, Any],
     ) -> None:
         """Write an advisory audit record when an audit log is configured."""
-        if self._advisory_audit_log is None:
+        if advisory_audit_log is None:
             return
 
         action_name = self._context_action_name(context)
@@ -977,7 +1009,7 @@ class PolicyEngine:
             "block": "denied",
         }
         try:
-            self._advisory_audit_log.log(
+            advisory_audit_log.log(
                 event_type="advisory_policy_evaluation",
                 agent_did=agent_did,
                 action=action_name,
@@ -1012,9 +1044,14 @@ class PolicyEngine:
             return tool_name
         return "unknown"
 
-    def _advisory_reason(self, outcome: str, advisory_result: AdvisoryResult) -> str:
+    def _advisory_reason(
+        self,
+        outcome: str,
+        advisory_result: AdvisoryResult,
+        advisory_config: AdvisoryConfig,
+    ) -> str:
         reason = advisory_result.reason or "advisory classifier matched"
-        classifier = advisory_result.classifier or self._advisory_config.classifier
+        classifier = advisory_result.classifier or advisory_config.classifier
         if classifier:
             return f"Advisory check {outcome} by {classifier}: {reason}"
         return f"Advisory check {outcome}: {reason}"
