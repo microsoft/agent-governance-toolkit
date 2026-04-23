@@ -19,6 +19,13 @@ from .approval import (
 )
 from .policy import PolicyEngine, Policy, PolicyRule, PolicyDecision
 from .session_state import SessionState, SessionAttribute
+from .otel_observability import (
+    enable_otel,
+    trace_policy_evaluation,
+    trace_approval,
+    trace_trust_verification,
+    record_denial,
+)
 from .conflict_resolution import (
     ConflictResolutionStrategy,
     PolicyScope,
@@ -102,6 +109,12 @@ __all__ = [
     # Session state / attribute ratchets (issue #1375)
     "SessionState",
     "SessionAttribute",
+    # OTel observability (issue #1376)
+    "enable_otel",
+    "trace_policy_evaluation",
+    "trace_approval",
+    "trace_trust_verification",
+    "record_denial",
     "AsyncTrustPolicyEvaluator",
     "TrustConcurrencyStats",
     "PolicyEngine",
