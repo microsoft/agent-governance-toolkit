@@ -56,6 +56,10 @@ class PolicyRule(BaseModel):
     action: PolicyAction
     priority: int = Field(default=0, description="Higher priority rules are evaluated first")
     message: str = Field(default="", description="Human-readable explanation")
+    override: bool = Field(
+        default=False,
+        description="If true, replaces a parent rule with the same name during folder-level merge",
+    )
 
 
 class PolicyDefaults(BaseModel):
@@ -75,6 +79,14 @@ class PolicyDocument(BaseModel):
     description: str = ""
     rules: list[PolicyRule] = Field(default_factory=list)
     defaults: PolicyDefaults = Field(default_factory=PolicyDefaults)
+    inherit: bool = Field(
+        default=True,
+        description="If false, parent governance.yaml files are not loaded (stops inheritance)",
+    )
+    scope: str | None = Field(
+        default=None,
+        description="Glob pattern — policy only applies when action path matches",
+    )
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> PolicyDocument:
