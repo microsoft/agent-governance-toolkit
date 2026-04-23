@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 # Governance Sidecar Dockerfile
 # Lightweight image for the AGT governance sidecar.
 # Bundles the Agent OS governance API (policy evaluation, prompt injection
@@ -6,7 +9,7 @@
 # Build:  docker build -t agentmesh/governance-sidecar:0.3.0 -f Dockerfile.sidecar .
 # Run:    docker run -p 8081:8081 agentmesh/governance-sidecar:0.3.0
 
-FROM python:3.14-slim@sha256:bc389f7dfcb21413e72a28f491985326994795e34d2b86c8ae2f417b4e7818aa
+FROM python:3.12-slim@sha256:3d5ed973e45820f5ba5e46bd065bd88b3a504ff0724d85980dcd05eab361fcf4
 
 LABEL maintainer="Microsoft Corporation"
 LABEL description="Agent Governance Toolkit — governance sidecar for autonomous AI agents"

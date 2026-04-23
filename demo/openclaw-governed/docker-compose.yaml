@@ -16,14 +16,17 @@
 services:
   governance-sidecar:
     build:
-      context: ../../packages/agent-os
-      dockerfile: Dockerfile.sidecar
+      context: ../..
+      dockerfile: packages/agent-os/Dockerfile.sidecar
     ports:
       - "8081:8081"
     environment:
       - HOST=0.0.0.0
       - PORT=8081
       - LOG_LEVEL=info
+      - POLICY_DIR=/policies
+    volumes:
+      - ./policies:/policies:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
       interval: 15s
