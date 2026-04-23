@@ -38,10 +38,17 @@ class PolicyRule(BaseModel):
     Rules define conditions and actions:
     - condition: Expression that evaluates to true/false
     - action: What to do when condition matches (allow, deny, warn, require_approval)
+    - stage: When in the agent lifecycle this rule is evaluated
     """
 
     name: str = Field(..., description="Rule name")
     description: Optional[str] = Field(None)
+
+    # Lifecycle stage
+    stage: Literal["pre_input", "pre_tool", "post_tool", "pre_output"] = Field(
+        default="pre_tool",
+        description="Agent lifecycle stage: pre_input, pre_tool, post_tool, pre_output",
+    )
 
     # Condition
     condition: str = Field(..., description="Condition expression")
@@ -739,11 +746,13 @@ class PolicyEngine:
         self,
         agent_did: str,
         context: dict,
+        stage: str = "pre_tool",
     ) -> PolicyDecision:
         """Evaluate all applicable policies for an agent action.
 
-        Collects ALL matching rules across all applicable policies,
-        then resolves conflicts using the configured strategy:
+        Collects ALL matching rules across all applicable policies
+        for the given lifecycle stage, then resolves conflicts using
+        the configured strategy:
 
         - ``priority_first_match``: Highest-priority matching rule wins
           (v1.0 behavior).
@@ -755,6 +764,9 @@ class PolicyEngine:
         Args:
             agent_did: Decentralized identifier of the acting agent.
             context: Runtime context dict describing the action.
+            stage: Lifecycle stage to evaluate. One of ``"pre_input"``,
+                ``"pre_tool"`` (default), ``"post_tool"``, ``"pre_output"``.
+                Only rules matching this stage are evaluated.
 
         Returns:
             A ``PolicyDecision`` indicating whether the action is allowed
@@ -780,6 +792,8 @@ class PolicyEngine:
                     scope = PolicyScope.GLOBAL
 
                 for rule in policy.rules:
+                    if rule.stage != stage:
+                        continue  # skip rules for other stages
                     if rule.enabled and rule.evaluate(context):
                         candidates.append(CandidateDecision(
                             action=rule.action,
