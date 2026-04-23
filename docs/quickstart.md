@@ -2,7 +2,7 @@
 
 Get from zero to governed AI agents in under 10 minutes.
 
-> **Prerequisites:** Python 3.10+ / Node.js 18+ / .NET 8.0+ (any one or more).
+> **Prerequisites:** Python 3.11+ / Node.js 18+ / .NET 8.0+ (any one or more).
 
 ## Architecture Overview
 
@@ -62,8 +62,8 @@ python scripts/check_gov.py
 Or use the governance CLI directly:
 
 ```bash
-agent-governance verify
-agent-governance verify --badge
+agt verify
+agt verify --badge
 ```
 
 ## 3. Your First Governed Agent
@@ -290,13 +290,13 @@ Verify your deployment covers the OWASP Agentic Security Threats:
 
 ```bash
 # Text summary
-agent-governance verify
+agt verify
 
 # JSON for CI/CD pipelines
-agent-governance verify --json
+agt verify --json
 
 # Badge for your README
-agent-governance verify --badge
+agt verify --badge
 ```
 
 ### Secure Error Handling
@@ -319,10 +319,10 @@ Ensure no governance modules have been tampered with:
 
 ```bash
 # Generate a baseline integrity manifest
-agent-governance integrity --generate integrity.json
+agt integrity --generate integrity.json
 
 # Verify against the manifest later
-agent-governance integrity --manifest integrity.json
+agt integrity --manifest integrity.json
 ```
 
 ## Next Steps

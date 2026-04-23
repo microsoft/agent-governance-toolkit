@@ -121,5 +121,5 @@ The demo runs in **4 acts**:
 ## Related
 
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
-- [01-loan-processing demo](../01-loan-processing/)
+- [01-loan-processing demo](../../01-loan-processing/)
 - [Python version of this demo](../python/)
