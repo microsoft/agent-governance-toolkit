@@ -230,6 +230,7 @@ class EscalationManager:
                 outcome=request.outcome,
                 decided_by=request.decided_by or "unknown",
                 decided_at=request.decided_at or datetime.now(timezone.utc),
+                reason=request.reason,
             )
 
         del self._pending[request.request_id]
@@ -244,6 +245,7 @@ class EscalationManager:
         request.outcome = EscalationOutcome.APPROVED
         request.decided_by = decided_by
         request.decided_at = datetime.now(timezone.utc)
+        request.reason = reason
         return True
 
     def deny(self, request_id: str, decided_by: str = "human", reason: str = "") -> bool:
@@ -254,6 +256,7 @@ class EscalationManager:
         request.outcome = EscalationOutcome.DENIED
         request.decided_by = decided_by
         request.decided_at = datetime.now(timezone.utc)
+        request.reason = reason
         return True
 
     @property

@@ -703,14 +703,14 @@ Chain valid: true
 
 | Component | Location |
 |-----------|----------|
-| Main exports | `packages/agent-mesh/sdks/rust/agentmesh/src/lib.rs` |
-| Type definitions | `packages/agent-mesh/sdks/rust/agentmesh/src/types.rs` |
-| `PolicyEngine` | `packages/agent-mesh/sdks/rust/agentmesh/src/policy.rs` |
-| `TrustManager` | `packages/agent-mesh/sdks/rust/agentmesh/src/trust.rs` |
-| `AuditLogger` | `packages/agent-mesh/sdks/rust/agentmesh/src/audit.rs` |
-| `AgentIdentity` | `packages/agent-mesh/sdks/rust/agentmesh/src/identity.rs` |
-| Tests | `packages/agent-mesh/sdks/rust/agentmesh/tests/` |
-| Package config | `packages/agent-mesh/sdks/rust/agentmesh/Cargo.toml` |
+| Main exports | `agent-governance-rust/agentmesh/src/lib.rs` |
+| Type definitions | `agent-governance-rust/agentmesh/src/types.rs` |
+| `PolicyEngine` | `agent-governance-rust/agentmesh/src/policy.rs` |
+| `TrustManager` | `agent-governance-rust/agentmesh/src/trust.rs` |
+| `AuditLogger` | `agent-governance-rust/agentmesh/src/audit.rs` |
+| `AgentIdentity` | `agent-governance-rust/agentmesh/src/identity.rs` |
+| Tests | `agent-governance-rust/agentmesh/tests/` |
+| Package config | `agent-governance-rust/agentmesh/Cargo.toml` |
 
 ---
 
@@ -718,7 +718,7 @@ Chain valid: true
 
 - **Run the tests** to see the crate in action:
   ```bash
-  cd packages/agent-mesh/sdks/rust/agentmesh
+  cd agent-governance-rust
   cargo test
   ```
 - **Load a YAML policy** from the repository's `policies/` directory and

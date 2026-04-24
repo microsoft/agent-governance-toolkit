@@ -14,7 +14,13 @@
 import { x25519, ed25519 } from "@noble/curves/ed25519.js";
 import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256, sha512 } from "@noble/hashes/sha2.js";
-import { randomBytes } from "@noble/ciphers/utils.js";
+import { webcrypto } from "node:crypto";
+
+const randomBytes = (n: number): Uint8Array => {
+  const buf = new Uint8Array(n);
+  webcrypto.getRandomValues(buf);
+  return buf;
+};
 
 const X3DH_INFO = new TextEncoder().encode("AgentMesh_X3DH_v1");
 const KEY_LEN = 32;

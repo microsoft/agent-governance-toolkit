@@ -8,7 +8,32 @@ Append-only audit logs with optional external sinks.
 """
 
 from .govern import govern, GovernedCallable, GovernanceConfig, GovernanceDenied
+from .approval import (
+    ApprovalHandler,
+    ApprovalRequest,
+    ApprovalDecision,
+    AutoRejectApproval,
+    CallbackApproval,
+    ConsoleApproval,
+    WebhookApproval,
+)
 from .policy import PolicyEngine, Policy, PolicyRule, PolicyDecision
+from .session_state import SessionState, SessionAttribute
+from .otel_observability import (
+    enable_otel,
+    trace_policy_evaluation,
+    trace_approval,
+    trace_trust_verification,
+    record_denial,
+)
+from .advisory import (
+    AdvisoryCheck,
+    AdvisoryDecision,
+    CallbackAdvisory,
+    HttpAdvisory,
+    PatternAdvisory,
+    CompositeAdvisory,
+)
 from .conflict_resolution import (
     ConflictResolutionStrategy,
     PolicyScope,
@@ -81,6 +106,30 @@ __all__ = [
     "GovernedCallable",
     "GovernanceConfig",
     "GovernanceDenied",
+    # Approval workflows (issue #1374)
+    "ApprovalHandler",
+    "ApprovalRequest",
+    "ApprovalDecision",
+    "AutoRejectApproval",
+    "CallbackApproval",
+    "ConsoleApproval",
+    "WebhookApproval",
+    # Session state / attribute ratchets (issue #1375)
+    "SessionState",
+    "SessionAttribute",
+    # OTel observability (issue #1376)
+    "enable_otel",
+    "trace_policy_evaluation",
+    "trace_approval",
+    "trace_trust_verification",
+    "record_denial",
+    # Advisory layer (issue #1377)
+    "AdvisoryCheck",
+    "AdvisoryDecision",
+    "CallbackAdvisory",
+    "HttpAdvisory",
+    "PatternAdvisory",
+    "CompositeAdvisory",
     "AsyncTrustPolicyEvaluator",
     "TrustConcurrencyStats",
     "PolicyEngine",
