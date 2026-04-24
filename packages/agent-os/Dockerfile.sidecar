@@ -9,7 +9,7 @@
 # Build:  docker build -t agentmesh/governance-sidecar:0.3.0 -f Dockerfile.sidecar .
 # Run:    docker run -p 8081:8081 agentmesh/governance-sidecar:0.3.0
 
-FROM python:3.12-slim@sha256:3d5ed973e45820f5ba5e46bd065bd88b3a504ff0724d85980dcd05eab361fcf4
+FROM python:3.14-slim@sha256:3989a23fd2c28a34c7be819e488b958a10601d421ac25bea1e7a5d757365e2d5
 
 LABEL maintainer="Microsoft Corporation"
 LABEL description="Agent Governance Toolkit — governance sidecar for autonomous AI agents"
