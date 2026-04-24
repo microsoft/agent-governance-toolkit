@@ -88,11 +88,20 @@ statement = accountability_export_to_eeoap_statement(export)
 }
 ```
 
+## Sensitivity note
+
+Exported data may include values derived from `AuditEntry.data`. Review and
+redact sensitive fields before sharing externally. This example is intended to
+demonstrate a smallest-stable external accountability export shape, not to
+define a blanket-safe export for all audit records.
+
 ## Running locally
 
 From the repository root:
 
 ```bash
+pip install .[dev]
+
 PYTHONPATH=packages/agent-mesh/src:packages/agentmesh-integrations/audit-accountability-export \
   python -m pytest packages/agentmesh-integrations/audit-accountability-export/tests -q
 

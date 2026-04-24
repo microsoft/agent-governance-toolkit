@@ -113,6 +113,11 @@ def accountability_export_to_eeoap_statement(export: dict[str, Any]) -> dict[str
 
 
 def _policy_context(entry: AuditEntry) -> dict[str, Any] | None:
+    """Return the minimal policy context included in the external digest.
+
+    This helper intentionally limits the digest input to a smallest-stable
+    interoperability shape rather than defining a new AGT-native policy format.
+    """
     data = entry.data or {}
     context = {
         key: value
@@ -127,6 +132,11 @@ def _policy_context(entry: AuditEntry) -> dict[str, Any] | None:
 
 
 def _subject_ref(entry: AuditEntry) -> str | None:
+    """Resolve a subject reference using the narrowest stable fallback chain.
+
+    Prefer the direct audit resource first, then `target_did`, then an explicit
+    `subject_ref` in `AuditEntry.data` when present.
+    """
     data = entry.data or {}
     return entry.resource or entry.target_did or data.get("subject_ref")
 
