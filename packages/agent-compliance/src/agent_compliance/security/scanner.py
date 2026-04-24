@@ -19,7 +19,7 @@ import json
 import re
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Severity levels and blocking behavior
@@ -289,7 +289,9 @@ class SecurityScanner:
                     if "expires" in ex and ex["expires"] is not None:
                         try:
                             expires = datetime.fromisoformat(ex["expires"])
-                            if expires < datetime.now():
+                            if expires.tzinfo is None:
+                                expires = expires.replace(tzinfo=timezone.utc)
+                            if expires < datetime.now(timezone.utc):
                                 continue  # Skip expired
                         except (ValueError, TypeError):
                             continue  # Invalid date format
@@ -360,7 +362,10 @@ class SecurityScanner:
 
                 for match in matches:
                     file_path = match.group(1)
-                    line_num = int(match.group(2))
+                    try:
+                        line_num = int(match.group(2))
+                    except (ValueError, TypeError):
+                        continue
 
                     # Skip if in exclusion list
                     try:
