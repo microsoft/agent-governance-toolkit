@@ -1,8 +1,18 @@
 # Tutorial 34 — Governing Agents with Microsoft Agent Framework (MAF)
 
 > **Level:** Intermediate · **Time:** 30 min · **Prerequisites:** Tutorial 01 (Policy Engine), Python 3.10+, `pip install agent-framework agent-os-kernel`
+>
+> **Status:** ✅ Implemented — Middleware adapter with 18 passing tests. Joint integration with MAF team in progress.
 
 This tutorial shows how to add AGT governance to agents built with the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework). You'll wire policy enforcement, capability guards, and audit logging into MAF's middleware pipeline so governance is transparent to the agent.
+
+### Implementation Reference
+
+| Component | Location |
+|-----------|----------|
+| MAF Adapter | `packages/agent-os/src/agent_os/integrations/maf_adapter.py` |
+| Tests (18/18 passing) | `packages/agent-os/tests/test_maf_adapter.py` |
+| Quick start | `from agent_os.integrations.maf_adapter import maf_govern` |
 
 ## Why Govern MAF Agents?
 
