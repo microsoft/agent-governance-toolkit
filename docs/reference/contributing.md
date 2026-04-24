@@ -65,6 +65,7 @@ location. For published Python package work, contributor guidance should point t
 - Prefer an `examples/` contribution when proving a new external integration.
 - Prefer `packages/agentmesh-integrations/` when the integration is reusable and maintained.
 - Propose a core package change only when the functionality clearly belongs in AGT long-term.
+
 ### Attribution & Prior Art
 
 **All contributions must properly attribute prior work.** This is a hard requirement, not a suggestion.
@@ -115,6 +116,7 @@ AI-assisted contributions are welcome, but they are held to the same standards a
 - Generated code still needs tests, docs updates, and security review where appropriate.
 - Maintainers may ask contributors to narrow scope, split commits, or rewrite generated changes
   that are too broad or insufficiently understood.
+
 ### Development Setup
 
 ```bash
@@ -328,11 +330,8 @@ Before submitting your integration PR:
 - [ ] Code follows PEP 8 and uses type hints
 - [ ] No secrets or credentials committed
 - [ ] Dependencies are pinned to specific versions
-<<<<<<< HEAD
 - [ ] Prior art and related projects are credited in the PR description
 - [ ] The contribution shape is appropriate (example vs integration package vs core package)
-=======
->>>>>>> 78c4e59 (docs: reduce python migration diff noise)
 
 ### Questions?
 

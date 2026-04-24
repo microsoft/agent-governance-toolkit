@@ -24,7 +24,6 @@ package pages, and integration guides.
 - Use repo-relative links that work from the current document location.
 - Match existing tone: technical, direct, and evidence-based.
 - Keep package names, CLI commands, and install snippets aligned with the actual repo.
-<<<<<<< HEAD
 - When documenting repo layout, treat standalone language SDKs at the repository root as a valid
   first-party pattern. Use `agent-governance-python/` as the canonical Python package path,
   `agent-governance-dotnet/` as the canonical .NET path, and `agent-governance-golang/` as the
