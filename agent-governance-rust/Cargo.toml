@@ -12,7 +12,7 @@ rust-version = "1.70"
 [workspace.dependencies]
 base64 = "=0.22.1"
 ed25519-dalek = { version = "=2.2.0", features = ["rand_core"] }
-hmac = "=0.12.1"
+hmac = "=0.13.0"
 rand = "=0.8.6"
 regex = "=1.12.2"
 serde = { version = "=1.0.228", features = ["derive"] }
