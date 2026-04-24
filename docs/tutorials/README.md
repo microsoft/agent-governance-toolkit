@@ -106,6 +106,18 @@ guides.
 |---|----------|-------------------|---------|
 | 31 | [Entra Agent ID Bridge](31-entra-agent-id-bridge.md) | Bridge AGT DIDs with Microsoft Entra Agent ID / Agent365, AKS workload identity, roles & responsibilities | `agentmesh-platform` |
 
+## Advanced Governance (v3.2+)
+
+| # | Tutorial | What You'll Learn | Package |
+|---|----------|-------------------|---------|
+| 35 | [Policy Composition](35-policy-composition.md) | `extends` for 3-tier governance hierarchies (CISO → platform → app), additive-only merge, diamond dedup | `agentmesh-platform` |
+| 36 | [2-Line Governance with govern()](36-govern-quickstart.md) | The `govern()` wrapper — policy enforcement + audit in 2 lines of code | `agentmesh-platform` |
+| 37 | [Multi-Stage Policy Pipeline](37-multi-stage-pipeline.md) | 4-stage lifecycle: pre_input → pre_tool → post_tool → pre_output | `agentmesh-platform` |
+| 38 | [Approval Workflows](38-approval-workflows.md) | Human-in-the-loop gates with Callback, Webhook, and Console handlers | `agentmesh-platform` |
+| 39 | [DLP with Attribute Ratchets](39-dlp-attribute-ratchets.md) | Monotonic session state — sensitivity only goes up, never resets | `agentmesh-platform` |
+| 40 | [OTel Observability](40-otel-observability.md) | OpenTelemetry spans + metrics for policy, approval, and trust operations | `agentmesh-platform` |
+| 41 | [Advisory Defense-in-Depth](41-advisory-defense-in-depth.md) | Pattern, ML, and HTTP classifiers as non-deterministic defense layer | `agentmesh-platform` |
+
 ## Extending the Toolkit
 
 | # | Tutorial | What You'll Learn | Package |
@@ -158,6 +170,16 @@ A self-contained sub-series progressing from basic allow/deny rules to productio
 5. [26 — SBOM & Signing](26-sbom-and-signing.md) → supply chain security
 6. [33 — Offline-Verifiable Decision Receipts](33-offline-verifiable-receipts.md) → external accountability for each decision
 7. [31 — Entra Agent ID Bridge](31-entra-agent-id-bridge.md) → enterprise identity with Entra / Agent365
+
+### 🛡️ "I need enterprise-grade governance" (v3.2+ features)
+
+1. [36 — govern() Quickstart](36-govern-quickstart.md) → 2-line integration
+2. [35 — Policy Composition](35-policy-composition.md) → CISO → platform → app layers
+3. [37 — Multi-Stage Pipeline](37-multi-stage-pipeline.md) → 4-stage lifecycle checks
+4. [38 — Approval Workflows](38-approval-workflows.md) → human-in-the-loop for regulated actions
+5. [39 — DLP with Ratchets](39-dlp-attribute-ratchets.md) → sensitivity that only goes up
+6. [40 — OTel Observability](40-otel-observability.md) → production monitoring
+7. [41 — Advisory Layer](41-advisory-defense-in-depth.md) → ML-based defense-in-depth
 
 ### 🤖 "I'm building multi-agent systems"
 

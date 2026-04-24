@@ -9,7 +9,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-npm_%40agentmesh%2Fsdk-blue?logo=typescript)](../../agent-governance-typescript/)
 [![.NET 8.0+](https://img.shields.io/badge/.NET_8.0+-NuGet-blue?logo=dotnet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
-[![Rust](https://img.shields.io/badge/Rust-crates.io-orange?logo=rust)](../../packages/agent-mesh/sdks/rust/agentmesh/)
+[![Rust](https://img.shields.io/badge/Rust-crates.io-orange?logo=rust)](../../agent-governance-rust/agentmesh/)
 [![Go](https://img.shields.io/badge/Go-module-00ADD8?logo=go)](../../agent-governance-golang/)
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../../docs/OWASP-COMPLIANCE.md)
 [![OpenSSF Best Practices](https://img.shields.io/cii/percentage/12085?label=OpenSSF%20Best%20Practices&logo=opensourcesecurity)](https://www.bestpractices.dev/projects/12085)
@@ -67,9 +67,9 @@ pip install agentmesh-lightning        # 强化学习训练治理
 ### 📚 文档
 
 - **[快速入门](../../QUICKSTART.md)** — 在 10 分钟内从零开始构建受治理的代理 (Python · TypeScript · .NET · Rust · Go)
-- **[TypeScript 包](../../packages/agent-mesh/sdks/typescript/README.md)** — 提供身份、信任、策略与审计功能的 npm 包
+- **[TypeScript 包](../../agent-governance-typescript/README.md)** — 提供身份、信任、策略与审计功能的 npm 包
 - **[.NET 包](../../agent-governance-dotnet/README.md)** — 提供完整 OWASP 覆盖的 NuGet 包
-- **[Rust crate](../../packages/agent-mesh/sdks/rust/agentmesh/README.md)** — crates.io 上的库，包含策略、信任、审计及 Ed25519 身份
+- **[Rust crate](../../agent-governance-rust/agentmesh/README.md)** — crates.io 上的库，包含策略、信任、审计及 Ed25519 身份
 - **[Go 模块](../../agent-governance-golang/README.md)** — 提供策略、信任、审计与身份功能的 Go 模块
 - **[教程](../../docs/tutorials/)** — 涵盖策略、身份、集成、合规、SRE 与沙箱的分步指南
 - **[Azure 部署](../../docs/deployment/README.md)** — 支持 AKS, Azure AI Foundry, Container Apps, OpenClaw 边车
@@ -392,4 +392,3 @@ AGT 提供 **运行时治理** — 规定代理允许执行的操作。对于 **
 ## 商标
 
 本项目可能包含项目、产品或服务的商标或标志。Microsoft 商标或标志的授权使用需遵循[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).在本项目的修改版本中使用 Microsoft 商标或标志，不得造成混淆或暗示 Microsoft 的赞助。任何第三方商标或标志的使用，均需遵循该第三方的相关政策。
-

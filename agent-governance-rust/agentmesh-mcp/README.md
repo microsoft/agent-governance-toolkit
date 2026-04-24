@@ -49,4 +49,4 @@ cargo add agentmesh
 
 ## License
 
-See repository root [LICENSE](../../../../../LICENSE).
+See repository root [LICENSE](../../LICENSE).

@@ -13,8 +13,8 @@ Use this file for repository-wide routing. When you enter a subdirectory that ha
 
 This routing reflects the repo **as it exists today** while reserving room for approved language
 SDK migrations. Language SDKs may live in **standalone top-level directories** at the repository
-root. For contributor routing, treat `agent-governance-dotnet/` as the canonical .NET home, with
-`agent-governance-golang/` as the matching sibling pattern for Go and future standalone SDKs.
+root. For contributor routing, treat `agent-governance-dotnet/`, `agent-governance-golang/`, and
+`agent-governance-rust/` as the canonical standalone language homes.
 
 Treat current paths as a **point-in-time representation**, not a permanent architecture promise.
 When a standalone top-level implementation exists for a language, changes for that language should
@@ -26,7 +26,7 @@ go there rather than into `packages/` or an older shared SDK path.
 |------|------|------------|
 | Core Python packages | `packages/*/` | Runtime code, policy engines, trust, SRE, compliance |
 | Current shared SDK paths | `packages/agent-mesh/sdks/` | Public SDK APIs and language-specific packaging that still live in the shared layout today |
-| Standalone language implementations | `agent-governance-dotnet/`, `agent-governance-golang/`, and other `agent-governance-*` siblings | Top-level language-specific implementations at the repository root; use these as the canonical contributor-facing paths |
+| Standalone language implementations | `agent-governance-dotnet/`, `agent-governance-golang/`, `agent-governance-rust/`, and other `agent-governance-*` siblings | Top-level language-specific implementations at the repository root; use these as the canonical contributor-facing paths |
 | Docs site | `docs/` | Reference docs, tutorials, architecture, package pages |
 | Runnable examples | `examples/` | Self-contained integrations and worked examples |
 | Interactive demos | `demo/` | Live demos, dashboards, real-service walkthroughs |
