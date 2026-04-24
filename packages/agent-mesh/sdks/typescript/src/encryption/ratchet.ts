@@ -13,7 +13,13 @@ import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
 import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { hmac } from "@noble/hashes/hmac.js";
-import { randomBytes } from "@noble/ciphers/utils.js";
+import { webcrypto } from "node:crypto";
+
+const randomBytes = (n: number): Uint8Array => {
+  const buf = new Uint8Array(n);
+  webcrypto.getRandomValues(buf);
+  return buf;
+};
 
 const KDF_INFO_RATCHET = new TextEncoder().encode("AgentMesh_Ratchet_v1");
 const NONCE_LEN = 12;

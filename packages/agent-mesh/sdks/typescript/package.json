@@ -1,6 +1,6 @@
 {
   "name": "@microsoft/agent-governance-sdk",
-  "version": "3.2.2",
+  "version": "3.3.0",
   "description": "Public Preview — TypeScript SDK for the Agent Governance Toolkit: agent identity, trust scoring, policy evaluation, and audit logging",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
