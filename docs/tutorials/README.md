@@ -71,6 +71,7 @@ guides.
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
 | 19 | [.NET package](19-dotnet-sdk.md) | GovernanceKernel, policy, rings, saga, SLO, OpenTelemetry in C# | `Microsoft.AgentGovernance` |
+| 42 | [C# MCP extension](42-csharp-mcp-extension.md) | Add governed tool execution, startup scanning, and response sanitization to MCP servers | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` |
 | 20 | [TypeScript package](20-typescript-sdk.md) | Identity, trust, policy, audit in TypeScript/Node.js | `@microsoft/agentmesh-sdk` |
 | 21 | [Rust crate](21-rust-sdk.md) | Policy, trust, audit, identity with `agentmesh` crate | `agentmesh` |
 | 22 | [Go module](22-go-sdk.md) | Policy, trust, audit, identity with Go module | `agentmesh` |
@@ -204,7 +205,7 @@ A self-contained sub-series progressing from basic allow/deny rules to productio
 ## Prerequisites
 
 - **Python 3.10+** for Python tutorials (01–18, 24–27, 29–31)
-- **.NET 8.0+** for the .NET tutorial (19)
+- **.NET 8.0+** for the .NET tutorials (19, 42)
 - **Node.js 18+** for the TypeScript tutorials (20, 23)
 - **Rust 1.75+** for the Rust tutorial (21)
 - **Go 1.21+** for the Go tutorial (22)
