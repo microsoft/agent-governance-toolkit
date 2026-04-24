@@ -1,6 +1,6 @@
 # Tutorials
 
-27 step-by-step guides covering every aspect of AI agent governance.
+40+ step-by-step guides covering every aspect of AI agent governance.
 
 ## Foundations
 
