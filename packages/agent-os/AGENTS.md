@@ -15,6 +15,7 @@ Agent-OS is a **governance-first kernel for AI agents** — a Python framework p
 
 ```bash
 # Install dependencies (development mode)
+pip install -e "../../agent-governance-python/agent-primitives[dev]"
 pip install -e ".[dev]"
 
 # Run all tests

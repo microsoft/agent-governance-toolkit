@@ -87,7 +87,7 @@ REGISTERED_PACKAGES = {
     # Internal cross-package references (local-only, NOT on PyPI)
     # These are flagged as HIGH RISK if found in requirements.txt with version pins
     # instead of path references. See dependency confusion attack vector.
-    "agent-primitives", "emk",
+    "agent-primitives", "agent-mcp-governance", "agent_mcp_governance", "emk",
     # With extras (base name is what matters)
 }
 

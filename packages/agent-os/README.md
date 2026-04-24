@@ -406,7 +406,7 @@ agent-os/
 
 | Module | Layer | PyPI Package | Description | Status |
 |--------|-------|-------------|-------------|--------|
-| [`primitives`](modules/primitives/) | 1 | `agent-primitives` | Base failure types, severity levels | ✅ Stable |
+| [`primitives`](../../agent-governance-python/agent-primitives/) | 1 | `agent-primitives` | Base failure types, severity levels | ✅ Stable |
 | [`cmvk`](modules/cmvk/) | 1 | `cmvk` | Verification, drift detection | ✅ Stable |
 | [`emk`](modules/emk/) | 1 | `emk` | Episodic memory kernel (append-only ledger) | ✅ Stable |
 | [`caas`](modules/caas/) | 1 | `caas-core` | Context-as-a-Service, RAG pipeline | ✅ Stable |
@@ -1152,7 +1152,9 @@ Yes. Agent OS has 1,500+ tests, a VS Code extension, PyPI package (`pip install 
 
 ```bash
 git clone https://github.com/microsoft/agent-governance-toolkit.git
-cd agent-os
+cd agent-governance-toolkit
+pip install -e "agent-governance-python/agent-primitives[dev]"
+cd packages/agent-os
 pip install -e ".[dev]"
 pytest
 ```

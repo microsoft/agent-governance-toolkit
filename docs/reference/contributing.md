@@ -41,9 +41,10 @@ term home for that language.
 
 | If your change is about... | Start here |
 |----------------------------|------------|
-| Core governance/runtime behavior | `packages/` |
-| Current shared language package implementations | `packages/agent-mesh/sdks/` and other languages that still live in the shared layout |
-| Standalone language implementations | `agent-governance-dotnet/`, `agent-governance-golang/`, or other `agent-governance-*` siblings at the repository root |
+| Published first-party Python packages | `agent-governance-python/` |
+| Core governance/runtime behavior and Python apps | `packages/` |
+| Current shared SDK implementations | `packages/agent-mesh/sdks/` and other languages that still live in the shared layout |
+| Standalone language implementations | `agent-governance-python/`, `agent-governance-dotnet/`, `agent-governance-golang/`, or other `agent-governance-*` siblings at the repository root |
 | Tutorials, architecture, package docs | `docs/` |
 | Runnable framework integrations | `examples/` |
 | Interactive or live demos | `demo/` |
@@ -54,8 +55,16 @@ If a directory contains an `AGENTS.md` file, read it before you start. It captur
 commands, boundaries, and review expectations for that area.
 If a standalone top-level language directory exists for the implementation you are changing, prefer
 that directory over an older shared path unless maintainers tell you to keep work in the legacy
-location. For the approved .NET standalone migration, contributor guidance should point to
-`agent-governance-dotnet/` as the canonical path, not `packages/agent-governance-dotnet/`.
+location. For published Python package work, contributor guidance should point to
+`agent-governance-python/` as the canonical path. For the standalone .NET SDK, use
+`agent-governance-dotnet/`.
+
+### Choose the Smallest Correct Surface
+
+- Prefer a docs update when the request is informational.
+- Prefer an `examples/` contribution when proving a new external integration.
+- Prefer `packages/agentmesh-integrations/` when the integration is reusable and maintained.
+- Propose a core package change only when the functionality clearly belongs in AGT long-term.
 
 ### Attribution & Prior Art
 
@@ -76,6 +85,38 @@ location. For the approved .NET standalone migration, contributor guidance shoul
 - In code: add a comment like `# Approach adapted from <project> (<license>)`
 - In documentation: include a "Prior art" or "Acknowledgments" section
 
+### External Integrations and Related Projects
+
+We welcome integrations, but we review them as product decisions, not just code submissions.
+
+- If you are proposing support for your own project, explain why AGT users benefit from it.
+- Start with the smallest useful contribution shape: docs mention, example, integration package,
+  then core-package change.
+- Include adoption context when requesting a large integration surface. Small or brand-new projects
+  are usually better introduced through examples than through core dependencies.
+- New dependencies must be justified, pinned correctly, and appropriate for the part of the repo
+  they are entering.
+- "Related project" PRs may be closed if they read primarily as promotion rather than user value.
+
+When in doubt, open an issue or discussion first and describe:
+
+1. the user problem
+2. the external project involved
+3. why the change belongs in AGT
+4. whether the first version can live in docs or examples
+
+### AI-Assisted Contributions
+
+AI-assisted contributions are welcome, but they are held to the same standards as any other PR.
+
+- Review, understand, and stand behind every line you submit.
+- Verify that generated code and docs match the current repository state.
+- Disclose meaningful AI assistance in the PR description when it materially shaped the change.
+- Do not use AI to launder unattributed derivative work from other projects.
+- Generated code still needs tests, docs updates, and security review where appropriate.
+- Maintainers may ask contributors to narrow scope, split commits, or rewrite generated changes
+  that are too broad or insufficiently understood.
+
 ### Development Setup
 
 ```bash
@@ -84,6 +125,8 @@ git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agent-governance-toolkit
 
 # Install in development mode
+pip install -e "agent-governance-python/agent-primitives[dev]"
+pip install -e "agent-governance-python/agent-mcp-governance[dev]"
 pip install -e "packages/agent-os[dev]"
 pip install -e "packages/agent-mesh[dev]"
 pip install -e "packages/agent-runtime[dev]"
@@ -92,8 +135,10 @@ pip install -e "packages/agent-compliance[dev]"
 pip install -e "packages/agent-marketplace[dev]"  # installs agentmesh-marketplace
 pip install -e "packages/agent-lightning[dev]"
 pip install -e "packages/agent-hypervisor[dev]"
-pip install -e "packages/agent-governance-dotnet[dev]"
 pip install -e "packages/agentmesh-integrations[dev]"
+
+# Restore the standalone .NET SDK when working in that path
+dotnet restore agent-governance-dotnet/AgentGovernance.sln
 
 # Run tests
 pytest
@@ -103,7 +148,7 @@ pytest
 
 If you prefer a containerized development environment, use the root Docker
 configuration. The image includes Python 3.11, Node.js 22, the core editable
-Python packages in this monorepo, and the TypeScript package dependencies.
+Python packages in this monorepo, and the TypeScript SDK dependencies.
 
 ```bash
 # Build and start the development container
@@ -128,7 +173,7 @@ docker compose --profile dashboard up --build dashboard
 
 ### Package Structure
 
-This is a mono-repo with ten packages today:
+This repo includes these core packages and standalone SDKs today:
 
 | Package | Directory | Description |
 |---------|-----------|-------------|
@@ -140,12 +185,14 @@ This is a mono-repo with ten packages today:
 | `agentmesh-marketplace` | `packages/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
 | `agentmesh-lightning` | `packages/agent-lightning/` | RL training governance with governed runners and policy rewards |
 | `agent-hypervisor` | `packages/agent-hypervisor/` | Runtime infrastructure and capability management |
-| `agent-governance-dotnet` | `agent-governance-dotnet/` | Standalone .NET package for agent governance |
+| `agent-primitives` | `agent-governance-python/agent-primitives/` | Shared foundational Python primitives package |
+| `agent-mcp-governance` | `agent-governance-python/agent-mcp-governance/` | Published MCP governance facade for Python consumers |
+| `agent-governance-dotnet` | `agent-governance-dotnet/` | Standalone .NET SDK for agent governance |
 | `agentmesh-integrations` | `packages/agentmesh-integrations/` | Framework integrations and extension library |
 
-Contributor routing for the standalone .NET package should use `agent-governance-dotnet/` at the
-repository root as the canonical path. Legacy shared-layout references such as
-`packages/agent-governance-dotnet/` are migration context, not the target-state path.
+Contributor routing for first-party published Python packages should use `agent-governance-python/`
+at the repository root as the canonical path. The standalone .NET SDK should use
+`agent-governance-dotnet/`.
 
 ### Coding Guidelines
 
@@ -163,7 +210,7 @@ All contributions that add or change functionality **must** include correspondin
 - **Security patches** — Add tests verifying the vulnerability is mitigated.
 
 Tests are run automatically via CI on every pull request. The test matrix covers
-Python 3.10–3.12 across all four core packages. PRs will not be merged until
+Python 3.10–3.13 across the core packages in `packages/`. PRs will not be merged until
 all required CI checks pass.
 
 Run tests locally with:
@@ -283,6 +330,8 @@ Before submitting your integration PR:
 - [ ] Code follows PEP 8 and uses type hints
 - [ ] No secrets or credentials committed
 - [ ] Dependencies are pinned to specific versions
+- [ ] Prior art and related projects are credited in the PR description
+- [ ] The contribution shape is appropriate (example vs integration package vs core package)
 
 ### Questions?
 
