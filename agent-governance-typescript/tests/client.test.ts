@@ -62,11 +62,11 @@ describe('AgentMeshClient', () => {
     it('updates trust score after actions', async () => {
       const before = client.trust.getTrustScore(client.identity.did);
 
-      await client.executeWithGovernance('data.read'); // allow → success
+      await client.executeWithGovernance('data.read'); // allow ΓåÆ success
       const afterSuccess = client.trust.getTrustScore(client.identity.did);
       expect(afterSuccess.overall).toBeGreaterThanOrEqual(before.overall);
 
-      await client.executeWithGovernance('data.delete'); // deny → failure
+      await client.executeWithGovernance('data.delete'); // deny ΓåÆ failure
       const afterFailure = client.trust.getTrustScore(client.identity.did);
       expect(afterFailure.overall).toBeLessThan(afterSuccess.overall);
     });

@@ -63,7 +63,7 @@ governance stack for enterprise deployments:
 ### TypeScript package
 
 **Package:** [`@microsoft/agentmesh-sdk`](https://www.npmjs.com/package/@microsoft/agentmesh-sdk) ·
-**Source:** [`packages/agent-mesh/sdks/typescript/`](../packages/agent-mesh/sdks/typescript/)
+**Source:** [`agent-governance-typescript/`](../agent-governance-typescript/)
 
 | Module | Features |
 |--------|----------|

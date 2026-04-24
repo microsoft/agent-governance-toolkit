@@ -7,8 +7,7 @@
  * Implements against: docs/specs/AGENTMESH-WIRE-1.0.md
  */
 
-import { ed25519 } from "@noble/curves/ed25519.js";
-import { randomBytes } from "@noble/ciphers/utils.js";
+import { ed25519 } from "@noble/curves/ed25519";
 import {
   X3DHKeyManager,
   generateX25519KeyPair,

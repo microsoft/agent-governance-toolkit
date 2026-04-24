@@ -15,7 +15,7 @@ import {
 
 export type PolicyDecision = LegacyPolicyDecision;
 
-// ── Conflict Resolution ──
+// ΓöÇΓöÇ Conflict Resolution ΓöÇΓöÇ
 
 const SCOPE_SPECIFICITY: Record<PolicyScope, number> = {
   [PolicyScope.Global]: 0,
@@ -39,7 +39,7 @@ export class PolicyConflictResolver {
         strategyUsed: this.strategy,
         candidatesEvaluated: 1,
         conflictDetected: false,
-        resolutionTrace: [`Single candidate: ${candidates[0].ruleName} → ${candidates[0].action}`],
+        resolutionTrace: [`Single candidate: ${candidates[0].ruleName} ΓåÆ ${candidates[0].action}`],
       };
     }
 
@@ -132,7 +132,7 @@ export class PolicyConflictResolver {
   }
 }
 
-// ── Expression Evaluator ──
+// ΓöÇΓöÇ Expression Evaluator ΓöÇΓöÇ
 
 function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
   const parts = path.split('.');
@@ -284,7 +284,7 @@ function parseListLiteral(s: string): string[] {
     .filter((item) => item.length > 0);
 }
 
-// ── Rate Limiting ──
+// ΓöÇΓöÇ Rate Limiting ΓöÇΓöÇ
 
 interface RateLimitState {
   count: number;
@@ -304,7 +304,7 @@ function parseLimit(limit: string): { count: number; periodMs: number } {
   return { count, periodMs };
 }
 
-// ── Policy Engine ──
+// ΓöÇΓöÇ Policy Engine ΓöÇΓöÇ
 
 /**
  * Declarative policy engine with full parity to the Python/NET SDK.
@@ -334,7 +334,7 @@ export class PolicyEngine {
     );
   }
 
-  // ── Rich Policy API ──
+  // ΓöÇΓöÇ Rich Policy API ΓöÇΓöÇ
 
   /** Load a Policy document into the engine. */
   loadPolicy(policy: Policy): void {
@@ -457,7 +457,7 @@ export class PolicyEngine {
       }
     }
 
-    // No rules matched — use default
+    // No rules matched ΓÇö use default
     const defaultAction =
       applicable.length > 0 ? (applicable[0].default_action ?? 'deny') : 'allow';
     const elapsed = performance.now() - start;
@@ -472,7 +472,7 @@ export class PolicyEngine {
     };
   }
 
-  // ── Legacy v0.1 API (backward compatible) ──
+  // ΓöÇΓöÇ Legacy v0.1 API (backward compatible) ΓöÇΓöÇ
 
   /** Load policy rules from a YAML file (legacy flat format). */
   async loadFromYAML(yamlPath: string): Promise<void> {
@@ -514,7 +514,7 @@ export class PolicyEngine {
     return [...this._legacyRules];
   }
 
-  // ── Private helpers ──
+  // ΓöÇΓöÇ Private helpers ΓöÇΓöÇ
 
   private matchAction(pattern: string, action: string): boolean {
     if (pattern === '*') return true;
@@ -567,7 +567,7 @@ export class PolicyEngine {
   }
 }
 
-// ── Helpers ──
+// ΓöÇΓöÇ Helpers ΓöÇΓöÇ
 
 function policyAppliesTo(policy: Policy, agentDid: string): boolean {
   if (policy.agent && policy.agent === agentDid) return true;

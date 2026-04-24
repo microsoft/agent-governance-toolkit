@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-// ── Identity ──
+// ΓöÇΓöÇ Identity ΓöÇΓöÇ
 
 /** Lifecycle status for agent identities. */
 export type IdentityStatus = 'active' | 'suspended' | 'revoked';
@@ -22,7 +22,7 @@ export interface AgentIdentityJSON {
   expiresAt?: string;
 }
 
-// ── Trust ──
+// ΓöÇΓöÇ Trust ΓöÇΓöÇ
 
 export interface TrustConfig {
   /** Initial trust score for unknown agents (default 0.5) */
@@ -54,7 +54,7 @@ export interface TrustVerificationResult {
   reason?: string;
 }
 
-// ── Policy ──
+// ΓöÇΓöÇ Policy ΓöÇΓöÇ
 
 /** Actions a policy rule can take. */
 export type PolicyAction = 'allow' | 'deny' | 'warn' | 'require_approval' | 'log';
@@ -157,7 +157,7 @@ export interface ResolutionResult {
   resolutionTrace: string[];
 }
 
-// ── Audit ──
+// ΓöÇΓöÇ Audit ΓöÇΓöÇ
 
 export interface AuditConfig {
   /** Maximum entries kept in memory (default 10000) */
@@ -173,7 +173,7 @@ export interface AuditEntry {
   previousHash: string;
 }
 
-// ── Client ──
+// ΓöÇΓöÇ Client ΓöÇΓöÇ
 
 export interface AgentMeshConfig {
   agentId: string;

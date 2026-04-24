@@ -487,7 +487,7 @@ gh attestation verify dist/artifact.whl \
 | Security scanner | `packages/agent-compliance/src/agent_compliance/security/scanner.py` |
 | SBOM workflow | `.github/workflows/sbom.yml` |
 | Publish workflow | `.github/workflows/publish.yml` |
-| Ed25519 identity (TS) | `packages/agent-mesh/sdks/typescript/src/identity.ts` |
+| Ed25519 identity (TS) | `agent-governance-typescript/src/identity.ts` |
 | Ed25519 identity (Rust) | `agent-governance-rust/agentmesh/src/identity.rs` |
 | Ed25519 identity (Go) | `agent-governance-golang/identity.go` |
 

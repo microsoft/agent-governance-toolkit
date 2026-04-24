@@ -49,7 +49,7 @@ RUN python -m pip install --no-cache-dir \
         -e "packages/agent-lightning[agent-os,dev]" \
     && python -m pip install --no-cache-dir \
         -r packages/agent-hypervisor/examples/dashboard/requirements.txt \
-    && cd /workspace/packages/agent-mesh/sdks/typescript \
+    && cd /workspace/agent-governance-typescript \
     && npm ci
 
 ENTRYPOINT ["bash", "/workspace/scripts/docker/dev-entrypoint.sh"]

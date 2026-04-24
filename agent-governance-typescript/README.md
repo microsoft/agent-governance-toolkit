@@ -1,10 +1,10 @@
 # @microsoft/agentmesh-sdk
 
 > [!IMPORTANT]
-> **Public Preview** — This npm package is a Microsoft-signed public preview release.
+> **Public Preview** ΓÇö This npm package is a Microsoft-signed public preview release.
 > APIs may change before GA.
 
-TypeScript package for [AgentMesh](../../README.md) — a governance-first framework for multi-agent systems.
+TypeScript SDK for [AgentMesh](../README.md) ΓÇö a governance-first framework for multi-agent systems.
 
 Provides agent identity (Ed25519 DIDs), trust scoring, policy evaluation, hash-chain audit logging, and a unified `AgentMeshClient`.
 
@@ -103,7 +103,7 @@ const logger = new AuditLogger();
 logger.log({ agentId: 'agent-1', action: 'data.read', decision: 'allow' });
 logger.log({ agentId: 'agent-1', action: 'data.write', decision: 'deny' });
 
-logger.verify();  // true — chain is intact
+logger.verify();  // true ΓÇö chain is intact
 logger.getEntries({ agentId: 'agent-1' }); // filtered results
 logger.exportJSON(); // full log as JSON string
 ```
@@ -125,7 +125,7 @@ const result = await client.executeWithGovernance('data.read', { user: 'alice' }
 
 ### `McpSecurityScanner`
 
-Scan MCP tool definitions for security threats — tool poisoning, typosquatting, hidden instructions, and rug-pull payloads.
+Scan MCP tool definitions for security threats ΓÇö tool poisoning, typosquatting, hidden instructions, and rug-pull payloads.
 
 ```typescript
 import { McpSecurityScanner } from '@microsoft/agentmesh-sdk';
@@ -162,11 +162,11 @@ import { LifecycleManager, LifecycleState } from '@microsoft/agentmesh-sdk';
 
 const lm = new LifecycleManager('agent-1');
 
-lm.activate('Ready to serve');         // provisioning → active
-lm.suspend('Scheduled maintenance');   // active → suspended
-lm.activate('Back online');            // suspended → active
-lm.quarantine('Trust violation');      // active → quarantined
-lm.decommission('End of life');        // quarantined → decommissioning
+lm.activate('Ready to serve');         // provisioning ΓåÆ active
+lm.suspend('Scheduled maintenance');   // active ΓåÆ suspended
+lm.activate('Back online');            // suspended ΓåÆ active
+lm.quarantine('Trust violation');      // active ΓåÆ quarantined
+lm.decommission('End of life');        // quarantined ΓåÆ decommissioning
 
 console.log(lm.state);   // 'decommissioning'
 console.log(lm.events);  // full transition history
@@ -175,11 +175,11 @@ console.log(lm.events);  // full transition history
 **State machine:**
 
 ```
-provisioning → active → suspended ↔ active
-                     → rotating  → active | degraded
-                     → degraded  → active | quarantined | decommissioning
-                     → quarantined → active | decommissioning
-                     → decommissioning → decommissioned
+provisioning ΓåÆ active ΓåÆ suspended Γåö active
+                     ΓåÆ rotating  ΓåÆ active | degraded
+                     ΓåÆ degraded  ΓåÆ active | quarantined | decommissioning
+                     ΓåÆ quarantined ΓåÆ active | decommissioning
+                     ΓåÆ decommissioning ΓåÆ decommissioned
 ```
 
 ## Development
@@ -193,4 +193,4 @@ npm run lint     # Lint with ESLint
 
 ## License
 
-Apache-2.0 — see [LICENSE](../../LICENSE).
+MIT ΓÇö see [LICENSE](../LICENSE).

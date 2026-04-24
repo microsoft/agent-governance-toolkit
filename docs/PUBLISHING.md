@@ -112,7 +112,7 @@ See the full list of Microsoft-controlled scopes: `@microsoft`, `@azure`,
 | AgentMesh Mastra | `@microsoft/agentmesh-mastra` | `packages/agentmesh-integrations/mastra-agentmesh` |
 | AgentMesh API | `@microsoft/agentmesh-api` | `packages/agent-mesh/services/api` |
 | AgentMesh MCP Proxy | `@microsoft/agentmesh-mcp-proxy` | `packages/agent-mesh/packages/mcp-proxy` |
-| AgentMesh SDK | `@microsoft/agentmesh-sdk` | `packages/agent-mesh/sdks/typescript` |
+| AgentMesh SDK | `@microsoft/agentmesh-sdk` | `agent-governance-typescript` |
 | Agent OS Copilot Extension | `@microsoft/agent-os-copilot-extension` | `packages/agent-os/extensions/copilot` |
 | AgentOS MCP Server | `@microsoft/agentos-mcp-server` | `packages/agent-os/extensions/mcp-server` |
 
@@ -122,7 +122,7 @@ not npm.
 ### Building & Packing
 
 ```bash
-cd packages/agent-mesh/sdks/typescript
+cd agent-governance-typescript
 npm ci
 npm run build
 npm pack
