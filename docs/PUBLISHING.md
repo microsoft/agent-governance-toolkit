@@ -177,7 +177,8 @@ All crates are published under the official
 
 | Package | Crate Name | Directory |
 |---------|------------|-----------|
-| AgentMesh Rust SDK | `agentmesh` | `packages/agent-mesh/sdks/rust/agentmesh` |
+| AgentMesh Rust SDK | `agentmesh` | `agent-governance-rust/agentmesh` |
+| AgentMesh MCP Rust SDK | `agentmesh-mcp` | `agent-governance-rust/agentmesh-mcp` |
 
 ### Prerequisites
 
@@ -188,10 +189,11 @@ All crates are published under the official
 ### Building Locally
 
 ```bash
-cd packages/agent-mesh/sdks/rust/agentmesh
-cargo build --release
-cargo test --release
-cargo package --list   # preview what gets published
+cd agent-governance-rust
+cargo build --release --workspace
+cargo test --release --workspace
+cargo package -p agentmesh --list
+cargo package -p agentmesh-mcp --list
 ```
 
 ### Metadata Requirements

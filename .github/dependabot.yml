@@ -77,7 +77,7 @@ updates:
 
   # Rust
   - package-ecosystem: "cargo"
-    directory: "/packages/agent-mesh/sdks/rust/agentmesh"
+    directory: "/agent-governance-rust"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

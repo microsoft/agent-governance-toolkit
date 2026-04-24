@@ -101,7 +101,7 @@ governance stack for enterprise deployments:
 
 **Crate:** [`agentmesh`](https://crates.io/crates/agentmesh) +
 [`agentmesh-mcp`](https://crates.io/crates/agentmesh-mcp) ·
-**Source:** [`packages/agent-mesh/sdks/rust/`](../packages/agent-mesh/sdks/rust/)
+**Source:** [`agent-governance-rust/`](../agent-governance-rust/)
 
 | Module | Features |
 |--------|----------|

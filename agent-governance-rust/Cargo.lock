@@ -3,7 +3,7 @@
 version = 3
 
 [[package]]
-name = "agentmesh"
+name = "agent-governance"
 version = "3.2.2"
 dependencies = [
  "base64",
@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentmesh-mcp"
+name = "agent-governance-mcp"
 version = "3.2.2"
 dependencies = [
  "base64",

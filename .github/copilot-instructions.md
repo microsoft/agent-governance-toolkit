@@ -167,7 +167,7 @@ saves time.
 CI workflows use path filters so only relevant checks run per PR:
 - **Python changes** (`packages/agent-mesh/`, `packages/agent-os/`, etc.) → lint + test for that package only
 - **TypeScript changes** (`sdks/typescript/`, `extensions/copilot/`) → TS lint + test only
-- **Rust changes** (`sdks/rust/`) → cargo test only
+- **Rust changes** (`agent-governance-rust/`) → cargo test only
 - **.NET changes** (`agent-governance-dotnet/`) → dotnet test only
 - **Go changes** (`sdks/go/`) → go test only
 - **Docs-only changes** (`.md`, `notebooks/`) → link check only, skip all builds/tests
