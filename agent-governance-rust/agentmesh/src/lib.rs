@@ -9,7 +9,7 @@
 //! ## Quick Start
 //!
 //! ```rust
-//! use agent_governance::AgentMeshClient;
+//! use agentmesh::AgentMeshClient;
 //!
 //! let client = AgentMeshClient::new("my-agent")
 //!     .expect("failed to create client");
@@ -19,21 +19,76 @@
 //! ```
 
 pub mod audit;
+pub mod control_support;
+pub mod governance_support;
 pub mod identity;
+pub mod identity_support;
+pub mod integration_support;
 pub mod lifecycle;
 pub mod mcp;
 pub mod policy;
+pub mod reward_support;
 pub mod rings;
 pub mod trust;
+pub mod trust_support;
 pub mod types;
 
 pub use audit::AuditLogger;
+pub use control_support::{
+    CircuitBreaker, CircuitState, ErrorBudget, HealthStatus, IncidentRecord, KillSwitch,
+    KillSwitchDecision, KillSwitchEvent, KillSwitchReason, KillSwitchRegistry, KillSwitchScope,
+    ObjectiveEvaluation, ServiceHealthReport, ServiceLevelObjective, SloEngine,
+};
+pub use governance_support::{
+    annex_iv_to_json, annex_iv_to_markdown, load_cedar_into_engine, load_rego_into_engine,
+    ActionRequest, AgentRiskProfile, AnnexIVDocument, AnnexIVSection, AuditChain, AuditSink,
+    AuthorityDecision, AuthorityRequest, CedarDecision, CedarEvaluation, CedarEvaluator,
+    ClassificationResult, ComplianceEngine, ComplianceFramework, ComplianceReport,
+    ComplianceViolation, ConditionOperator, DataClassification, DefaultAuthorityResolver,
+    DelegationInfo, EUAIActRiskClassifier, FederationDecision, FederationEngine, FederationStore,
+    FileAuditSink, FileFederationStore, HashChainVerifier, InMemoryFederationStore, OPADecision,
+    OPAEvaluation, OPAEvaluator, OrgPolicy, OrgPolicyDecision, OrgPolicyRule, OrgTrustAgreement,
+    PolicyBackendDiagnostic, PolicyBackendTrace, PolicyCategory, PolicyDelegation,
+    PolicyDiagnosticSeverity, PolicyEvaluator, PolicyRuleTrace, RiskLevel as GovernanceRiskLevel,
+    ShadowMode, ShadowResult, SignedAuditEntry, TechnicalDocumentationExporter, TrustCondition,
+    TrustDefaults, TrustInfo, TrustPolicy, TrustPolicyDecision, TrustRule,
+};
 pub use identity::{AgentIdentity, PublicIdentity};
+pub use identity_support::{
+    from_jwk, from_jwks, to_jwk, to_jwks, AgentDID, AgentNamespace, Credential, CredentialManager,
+    CredentialStatus, DelegationLink, HumanSponsor, KeyRotationManager, KeyStore, MTLSConfig,
+    MTLSIdentityVerifier, NamespaceManager, NamespaceRule, PKCS11KeyStore, RevocationEntry,
+    RevocationList, RiskLevel, RiskScore as IdentityRiskScore, RiskScorer, RiskSeverity,
+    RiskSignal, SPIFFEIdentity, SPIFFERegistry, ScopeChain, SoftwareKeyStore, SvidType,
+    UserContext, SVID,
+};
+pub use integration_support::{
+    DetectionBasis, DiscoveredAgent, DiscoveryEvidence, DiscoveryInventory,
+    DiscoveryInventorySummary, DiscoveryReconciler, DiscoveryRecord, DiscoveryRiskAssessment,
+    DiscoveryRiskLevel, DiscoveryRiskScorer, DiscoveryScanResult, DiscoveryScanner,
+    DiscoveryStatus, DriftResult, ExecutionRequest, ExecutionResponse, FrameworkAdapter,
+    FrameworkExecutionResult, FrameworkGovernanceAdapter, FrameworkKind, FrameworkResponse,
+    GovernanceEvent, GovernanceEventType, GovernanceHook, GovernanceMiddleware, GovernancePattern,
+    GovernancePolicy, PatternType, ProcessSnapshot, PromptDefenseEvaluator, PromptDefenseFinding,
+    PromptDefenseReport, PromptRiskLevel, RegisteredAgent, ResponseGovernanceAssessment,
+    ShadowAgent,
+};
 pub use lifecycle::{LifecycleEvent, LifecycleManager, LifecycleState};
 pub use mcp::*;
 pub use policy::{PolicyEngine, PolicyError};
+pub use reward_support::{
+    AgentRewardState, ContributionWeightedStrategy, DimensionType, DistributionResult,
+    EqualSplitStrategy, HierarchicalStrategy, InteractionEdge, NetworkTrustEngine, ParticipantInfo,
+    RewardAllocation, RewardConfig, RewardDimension, RewardDistributor, RewardEngine, RewardPool,
+    RewardSignal, RewardStrategy, RewardTrustScore, TrustEvent, TrustWeightedStrategy,
+};
 pub use rings::{Ring, RingEnforcer};
 pub use trust::{TrustConfig, TrustManager};
+pub use trust_support::{
+    CapabilityGrant, CapabilityRegistry, CapabilityScope, CardRegistry, HandshakeChallenge,
+    HandshakeResponse, HandshakeResult, HandshakeTrustLevel, PeerInfo, ProtocolBridge, TrustBridge,
+    TrustHandshake, TrustedAgentCard,
+};
 pub use types::{
     AuditEntry, AuditFilter, CandidateDecision, ConflictResolutionStrategy, GovernanceResult,
     PolicyDecision, PolicyScope, ResolutionResult, TrustScore, TrustTier,

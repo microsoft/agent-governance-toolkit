@@ -77,29 +77,7 @@ impl AuditLogger {
     /// previous entry's hash.
     pub fn verify(&self) -> bool {
         let entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
-        for (i, entry) in entries.iter().enumerate() {
-            let expected_prev = if i == 0 {
-                String::new()
-            } else {
-                entries[i - 1].hash.clone()
-            };
-            if entry.previous_hash != expected_prev {
-                return false;
-            }
-            let hash_input = format!(
-                "{}|{}|{}|{}|{}|{}",
-                entry.seq,
-                entry.timestamp,
-                entry.agent_id,
-                entry.action,
-                entry.decision,
-                entry.previous_hash
-            );
-            if entry.hash != sha256_hex(&hash_input) {
-                return false;
-            }
-        }
-        true
+        verify_audit_entries(&entries)
     }
 
     /// Return all audit entries.
@@ -149,6 +127,32 @@ impl Default for AuditLogger {
     fn default() -> Self {
         Self::new()
     }
+}
+
+pub(crate) fn verify_audit_entries(entries: &[AuditEntry]) -> bool {
+    for (i, entry) in entries.iter().enumerate() {
+        let expected_prev = if i == 0 {
+            String::new()
+        } else {
+            entries[i - 1].hash.clone()
+        };
+        if entry.previous_hash != expected_prev {
+            return false;
+        }
+        let hash_input = format!(
+            "{}|{}|{}|{}|{}|{}",
+            entry.seq,
+            entry.timestamp,
+            entry.agent_id,
+            entry.action,
+            entry.decision,
+            entry.previous_hash
+        );
+        if entry.hash != sha256_hex(&hash_input) {
+            return false;
+        }
+    }
+    true
 }
 
 fn sha256_hex(input: &str) -> String {

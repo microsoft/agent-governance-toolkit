@@ -1,10 +1,10 @@
-# Agent Governance Rust SDK
+# Agent Governance Rust Workspace
 
 Rust workspace for the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit).
 
 This top-level language home contains the Rust publishable crates:
 
-- [`agentmesh/`](./agentmesh/) — the full Rust governance SDK
+- [`agentmesh/`](./agentmesh/) — the full Rust governance crate
 - [`agentmesh-mcp/`](./agentmesh-mcp/) — the standalone MCP governance and security crate
 
 ## Workspace Commands
@@ -20,7 +20,8 @@ cargo test --release --workspace
 
 Use `agentmesh` when you need the broader governance stack:
 policy evaluation, trust scoring, audit logging, Ed25519 identity, execution rings,
-lifecycle management, and MCP-related primitives.
+lifecycle management, governance/compliance helpers, reward primitives, and
+control-plane utilities such as kill-switch and SLO helpers.
 
 ### `agentmesh-mcp`
 

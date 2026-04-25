@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 pub const MAX_DELEGATION_DEPTH: u32 = 10;
 
 /// An agent's cryptographic identity (Ed25519 key pair + DID).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AgentIdentity {
     /// Decentralised identifier, e.g. `did:agentmesh:my-agent`.
     pub did: String,
@@ -23,7 +23,7 @@ pub struct AgentIdentity {
     pub parent_did: Option<String>,
     /// Depth in the delegation chain (0 = root).
     pub delegation_depth: u32,
-    signing_key: SigningKey,
+    pub(crate) signing_key: SigningKey,
 }
 
 impl AgentIdentity {
@@ -140,6 +140,21 @@ impl PublicIdentity {
 pub enum IdentityError {
     #[error("serialization error: {0}")]
     Serialization(serde_json::Error),
+
+    #[error("invalid input for {field}: {message}")]
+    InvalidInput {
+        field: &'static str,
+        message: String,
+    },
+
+    #[error("base64 decoding failed: {0}")]
+    Base64(String),
+
+    #[error("operation requires a private key")]
+    MissingPrivateKey,
+
+    #[error("unsupported operation: {0}")]
+    UnsupportedOperation(String),
 
     #[error("maximum delegation depth ({max}) exceeded (current depth: {current})")]
     DelegationDepthExceeded { current: u32, max: u32 },

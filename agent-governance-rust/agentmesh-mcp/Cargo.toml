@@ -1,11 +1,11 @@
 [package]
-name = "agent-governance-mcp"
+name = "agentmesh-mcp"
 version.workspace = true
 edition.workspace = true
 description = "Public Preview — MCP governance and security primitives for the Agent Governance Toolkit"
 license.workspace = true
 repository.workspace = true
-documentation = "https://docs.rs/agent-governance-mcp"
+documentation = "https://docs.rs/agentmesh-mcp"
 readme = "README.md"
 keywords = ["agent", "mcp", "governance", "security", "policy"]
 categories = ["authentication", "cryptography"]
