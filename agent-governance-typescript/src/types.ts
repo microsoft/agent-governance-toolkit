@@ -157,6 +157,77 @@ export interface ResolutionResult {
   resolutionTrace: string[];
 }
 
+export type BackendDecision = 'allow' | 'deny' | 'review';
+
+export interface BackendEvaluationOutcome {
+  backend: string;
+  decision: BackendDecision;
+  reason?: string;
+  error?: string;
+}
+
+export interface ExternalPolicyBackend {
+  name: string;
+  evaluateAction?(
+    action: string,
+    context: Record<string, unknown>,
+  ): Promise<BackendDecision | BackendEvaluationOutcome> | BackendDecision | BackendEvaluationOutcome;
+  evaluatePolicy?(
+    agentDid: string,
+    context: Record<string, unknown>,
+  ): Promise<BackendDecision | BackendEvaluationOutcome | PolicyDecisionResult>
+    | BackendDecision
+    | BackendEvaluationOutcome
+    | PolicyDecisionResult;
+}
+
+export interface PolicyBackendEvaluationResult {
+  localDecision: LegacyPolicyDecision | PolicyDecisionResult;
+  backendResults: BackendEvaluationOutcome[];
+  effectiveDecision: LegacyPolicyDecision;
+  effectivePolicyResult?: PolicyDecisionResult;
+  deniedBy: string[];
+}
+
+// Execution controls
+
+export enum ExecutionRing {
+  Ring0 = 0,
+  Ring1 = 1,
+  Ring2 = 2,
+  Ring3 = 3,
+}
+
+export interface ExecutionControlConfig {
+  agentRing?: ExecutionRing;
+  defaultRing?: ExecutionRing;
+  actionRings?: Record<string, ExecutionRing>;
+  quarantineOnBreach?: boolean;
+  killOnBreach?: boolean;
+}
+
+export interface RingViolation {
+  action: string;
+  agentRing: ExecutionRing;
+  requiredRing: ExecutionRing;
+  message: string;
+}
+
+export interface KillSwitchConfig {
+  enabled?: boolean;
+  defaultSubstituteAgentId?: string;
+}
+
+export interface KillSwitchResult {
+  agentId: string;
+  action?: string;
+  reason: string;
+  killedAt: string;
+  callbacksExecuted: number;
+  compensationsExecuted: number;
+  handoffAgentId?: string;
+}
+
 // ΓöÇΓöÇ Audit ΓöÇΓöÇ
 
 export interface AuditConfig {
@@ -181,6 +252,8 @@ export interface AgentMeshConfig {
   trust?: TrustConfig;
   policyRules?: PolicyRule[];
   audit?: AuditConfig;
+  execution?: ExecutionControlConfig;
+  killSwitch?: KillSwitchConfig;
 }
 
 export interface GovernanceResult {
@@ -188,4 +261,8 @@ export interface GovernanceResult {
   trustScore: TrustScore;
   auditEntry: AuditEntry;
   executionTime: number;
+  ringViolation?: RingViolation;
+  killSwitchResult?: KillSwitchResult;
+  lifecycleState?: string;
+  lifecycleReason?: string;
 }

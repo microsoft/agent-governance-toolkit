@@ -7,6 +7,10 @@ import {
   PolicyAction,
   PolicyDecisionResult,
   CandidateDecision,
+  BackendDecision,
+  BackendEvaluationOutcome,
+  ExternalPolicyBackend,
+  PolicyBackendEvaluationResult,
   ResolutionResult,
   ConflictResolutionStrategy,
   PolicyScope,
@@ -321,6 +325,7 @@ export class PolicyEngine {
   private _policies: Map<string, Policy> = new Map();
   private _rateLimits: Map<string, RateLimitState> = new Map();
   private _resolver: PolicyConflictResolver;
+  private _backends: ExternalPolicyBackend[] = [];
 
   /** Legacy flat rules for backward compatibility. */
   private _legacyRules: PolicyRule[] = [];
@@ -378,6 +383,18 @@ export class PolicyEngine {
   clearPolicies(): void {
     this._policies.clear();
     this._rateLimits.clear();
+  }
+
+  registerBackend(backend: ExternalPolicyBackend): void {
+    this._backends.push(backend);
+  }
+
+  listBackends(): string[] {
+    return this._backends.map((backend) => backend.name);
+  }
+
+  clearBackends(): void {
+    this._backends = [];
   }
 
   /**
@@ -457,9 +474,9 @@ export class PolicyEngine {
       }
     }
 
-    // No rules matched ΓÇö use default
+    // No rules matched - fail closed.
     const defaultAction =
-      applicable.length > 0 ? (applicable[0].default_action ?? 'deny') : 'allow';
+      applicable.length > 0 ? (applicable[0].default_action ?? 'deny') : 'deny';
     const elapsed = performance.now() - start;
     return {
       allowed: defaultAction === 'allow',
@@ -469,6 +486,84 @@ export class PolicyEngine {
       rateLimited: false,
       evaluatedAt: new Date(),
       evaluationMs: elapsed,
+    };
+  }
+
+  async evaluateWithBackends(
+    action: string,
+    context: Record<string, unknown> = {},
+  ): Promise<PolicyBackendEvaluationResult> {
+    const localDecision = this.evaluate(action, context);
+    if (localDecision === 'deny') {
+      return {
+        localDecision,
+        backendResults: [],
+        effectiveDecision: 'deny',
+        deniedBy: ['local'],
+      };
+    }
+
+    const backendResults = await Promise.all(
+      this._backends.map((backend) => this.runActionBackend(backend, action, context)),
+    );
+
+    const effectiveDecision = resolveEffectiveDecision(localDecision, backendResults);
+    const deniedBy = collectDeniedBy(backendResults, effectiveDecision === 'deny');
+
+    return {
+      localDecision,
+      backendResults,
+      effectiveDecision,
+      deniedBy,
+    };
+  }
+
+  async evaluatePolicyWithBackends(
+    agentDid: string,
+    context: Record<string, unknown>,
+  ): Promise<PolicyBackendEvaluationResult> {
+    const localDecision = this.evaluatePolicy(agentDid, context);
+    if (!localDecision.allowed) {
+      const effectiveDecision = localDecision.action === 'require_approval' ? 'review' : 'deny';
+      return {
+        localDecision,
+        backendResults: [],
+        effectiveDecision,
+        effectivePolicyResult: localDecision,
+        deniedBy: effectiveDecision === 'deny' ? ['local'] : [],
+      };
+    }
+
+    const backendResults = await Promise.all(
+      this._backends.map((backend) => this.runPolicyBackend(backend, agentDid, context)),
+    );
+
+    const effectiveDecision = resolveEffectiveDecision('allow', backendResults);
+    const deniedBy = collectDeniedBy(backendResults, effectiveDecision === 'deny');
+
+    let effectivePolicyResult = localDecision;
+    if (effectiveDecision === 'deny') {
+      effectivePolicyResult = {
+        ...localDecision,
+        allowed: false,
+        action: 'deny',
+        reason: `Denied by policy backend: ${deniedBy.filter((name) => name !== 'local').join(', ')}`,
+      };
+    } else if (effectiveDecision === 'review') {
+      effectivePolicyResult = {
+        ...localDecision,
+        allowed: false,
+        action: 'require_approval',
+        reason: 'Review required by policy backend',
+      };
+    }
+
+    return {
+      localDecision,
+      backendResults,
+      effectiveDecision,
+      effectivePolicyResult,
+      deniedBy,
     };
   }
 
@@ -565,6 +660,56 @@ export class PolicyEngine {
     }
     state.count++;
   }
+
+  private async runActionBackend(
+    backend: ExternalPolicyBackend,
+    action: string,
+    context: Record<string, unknown>,
+  ): Promise<BackendEvaluationOutcome> {
+    if (!backend.evaluateAction) {
+      return {
+        backend: backend.name,
+        decision: 'allow',
+        reason: 'No action evaluator registered',
+      };
+    }
+
+    try {
+      const result = await backend.evaluateAction(action, context);
+      return normalizeBackendOutcome(backend.name, result);
+    } catch (error) {
+      return {
+        backend: backend.name,
+        decision: 'deny',
+        error: error instanceof Error ? error.message : 'Unknown backend error',
+      };
+    }
+  }
+
+  private async runPolicyBackend(
+    backend: ExternalPolicyBackend,
+    agentDid: string,
+    context: Record<string, unknown>,
+  ): Promise<BackendEvaluationOutcome> {
+    if (!backend.evaluatePolicy) {
+      return {
+        backend: backend.name,
+        decision: 'allow',
+        reason: 'No policy evaluator registered',
+      };
+    }
+
+    try {
+      const result = await backend.evaluatePolicy(agentDid, context);
+      return normalizeBackendOutcome(backend.name, result);
+    } catch (error) {
+      return {
+        backend: backend.name,
+        decision: 'deny',
+        error: error instanceof Error ? error.message : 'Unknown backend error',
+      };
+    }
+  }
 }
 
 // ΓöÇΓöÇ Helpers ΓöÇΓöÇ
@@ -634,4 +779,63 @@ function dataToPolicy(data: Record<string, unknown>): Policy {
     rules,
     default_action: (data.default_action as 'allow' | 'deny') ?? 'deny',
   };
+}
+
+function normalizeBackendOutcome(
+  backendName: string,
+  result: BackendDecision | BackendEvaluationOutcome | PolicyDecisionResult,
+): BackendEvaluationOutcome {
+  if (typeof result === 'string') {
+    return {
+      backend: backendName,
+      decision: result,
+    };
+  }
+
+  if ('backend' in result && 'decision' in result) {
+    return {
+      backend: result.backend || backendName,
+      decision: result.decision,
+      reason: result.reason,
+      error: result.error,
+    };
+  }
+
+  return {
+    backend: backendName,
+    decision: result.allowed ? 'allow' : 'deny',
+    reason: result.reason,
+  };
+}
+
+function resolveEffectiveDecision(
+  localDecision: LegacyPolicyDecision,
+  backendResults: BackendEvaluationOutcome[],
+): LegacyPolicyDecision {
+  if (localDecision === 'deny') {
+    return 'deny';
+  }
+
+  if (backendResults.some((result) => result.decision === 'deny' || result.error)) {
+    return 'deny';
+  }
+
+  if (localDecision === 'review' || backendResults.some((result) => result.decision === 'review')) {
+    return 'review';
+  }
+
+  return 'allow';
+}
+
+function collectDeniedBy(
+  backendResults: BackendEvaluationOutcome[],
+  includeBackends: boolean,
+): string[] {
+  if (!includeBackends) {
+    return [];
+  }
+
+  return backendResults
+    .filter((result) => result.decision === 'deny' || result.error)
+    .map((result) => result.backend);
 }

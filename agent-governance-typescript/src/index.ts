@@ -6,11 +6,25 @@ export { PolicyEngine, PolicyConflictResolver } from './policy';
 export type { PolicyDecision } from './policy';
 export { AuditLogger } from './audit';
 export { AgentMeshClient } from './client';
-export { GovernanceMetrics } from './metrics';
+export { GenericFrameworkAdapter, FrameworkInvocationHandle } from './framework-adapter';
+export { KillSwitch } from './kill-switch';
+export {
+  CircuitBreaker,
+  ErrorBudgetTracker,
+  GovernanceMetrics,
+  SLOTracker,
+  TraceCapture,
+} from './metrics';
 export { McpSecurityScanner, McpThreatType } from './mcp';
 export type { McpScanResult, McpThreat, McpToolDefinition } from './mcp';
 export { LifecycleManager, LifecycleState } from './lifecycle';
 export type { LifecycleEvent } from './lifecycle';
+export { ShadowDiscovery } from './discovery';
+export { CedarBackend } from './policy-backends/cedar';
+export { OPABackend } from './policy-backends/opa';
+export { PromptDefenseEvaluator } from './prompt-defense';
+export { RingEnforcer, RingBreachError } from './rings';
+export { GovernanceVerifier } from './verify';
 
 // E2E Encryption (AgentMesh Wire Protocol v1.0)
 export {
@@ -28,25 +42,78 @@ export type {
 
 export {
   ConflictResolutionStrategy,
+  ExecutionRing,
   PolicyScope,
 } from './types';
 
 export type {
   AgentIdentityJSON,
+  BackendDecision,
+  BackendEvaluationOutcome,
   IdentityStatus,
   TrustConfig,
   TrustScore,
   TrustTier,
   TrustVerificationResult,
   PolicyRule,
+  PolicyBackendEvaluationResult,
   Policy,
   PolicyAction,
   LegacyPolicyDecision,
   PolicyDecisionResult,
   CandidateDecision,
+  ExecutionControlConfig,
+  ExternalPolicyBackend,
   ResolutionResult,
+  KillSwitchConfig,
+  KillSwitchResult,
   AuditConfig,
   AuditEntry,
   AgentMeshConfig,
   GovernanceResult,
+  RingViolation,
 } from './types';
+export type { PromptDefenseConfig, PromptDefenseFinding, PromptDefenseReport } from './prompt-defense';
+export type {
+  ControlResult,
+  FileIntegrityResult,
+  GovernanceAttestation,
+  GovernanceVerificationOptions,
+  IntegrityManifest,
+  IntegrityManifestFile,
+  RuntimeEvidence,
+  RuntimeEvidenceCheck,
+  RuntimeEvidenceDeployment,
+  VerifierControlSpec,
+} from './verify';
+export type {
+  FrameworkAdapterResult,
+  FrameworkInvocation,
+  FrameworkInvocationOutcome,
+  GenericFrameworkAdapterOptions,
+} from './framework-adapter';
+export type {
+  CircuitBreakerState,
+  ErrorBudgetSnapshot,
+  ExecutionTrace,
+  GovernanceMetricsConfig,
+  GovernanceMetricsSnapshot,
+  MetricEvent,
+  MetricSink,
+  SLOStatus,
+  TraceSpan,
+  TraceSpanKind,
+  TraceSpanStatus,
+} from './metrics';
+export type {
+  DetectionBasis,
+  DiscoveryEvidence,
+  DiscoveryRiskAssessment,
+  DiscoveryRiskLevel,
+  DiscoveryScanResult,
+  DiscoveryStatus,
+  DiscoveredAgent,
+  RegisteredAgentRecord,
+  ShadowAgentRecord,
+  ShadowDiscoveryOptions,
+} from './discovery';

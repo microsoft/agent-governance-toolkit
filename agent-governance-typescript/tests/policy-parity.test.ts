@@ -226,7 +226,7 @@ rules:
       expect(r1.allowed).toBe(true);
 
       const r2 = engine.evaluatePolicy('did:agentmesh:other:xyz', {});
-      expect(r2.allowed).toBe(true); // default allow (no applicable policies)
+      expect(r2.allowed).toBe(false); // fail closed when no policies apply
     });
 
     it('applies to agents list', () => {
@@ -239,7 +239,7 @@ rules:
 
       expect(engine.evaluatePolicy('did:agentmesh:a:1', {}).allowed).toBe(false);
       expect(engine.evaluatePolicy('did:agentmesh:b:2', {}).allowed).toBe(false);
-      expect(engine.evaluatePolicy('did:agentmesh:c:3', {}).allowed).toBe(true);
+      expect(engine.evaluatePolicy('did:agentmesh:c:3', {}).allowed).toBe(false);
     });
 
     it('wildcard agents applies to all', () => {
