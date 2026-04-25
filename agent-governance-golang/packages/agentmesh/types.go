@@ -72,6 +72,22 @@ type GovernanceResult struct {
 	Allowed    bool
 }
 
+// BackendDecision is the normalized result from an external policy backend.
+type BackendDecision struct {
+	Allowed      bool
+	Decision     PolicyDecision
+	Reason       string
+	Backend      string
+	RawResult    interface{}
+	EvaluationMs float64
+}
+
+// ExternalPolicyBackend evaluates execution contexts using a non-native policy engine.
+type ExternalPolicyBackend interface {
+	Name() string
+	Evaluate(context map[string]interface{}) (BackendDecision, error)
+}
+
 // Option configures an AgentMeshClient.
 type Option func(*clientOptions)
 

@@ -255,10 +255,10 @@ func TestTrustTierBoundaries(t *testing.T) {
 		{0.0, "low"},
 		{0.1, "low"},
 		{0.49, "low"},
-		{0.5, "medium"},  // boundary: exactly at medium threshold
+{0.5, "medium"},  // boundary: exactly at medium threshold
 		{0.6, "medium"},
 		{0.79, "medium"},
-		{0.8, "high"},    // boundary: exactly at high threshold
+{0.8, "high"},    // boundary: exactly at high threshold
 		{0.9, "high"},
 		{1.0, "high"},
 	}
