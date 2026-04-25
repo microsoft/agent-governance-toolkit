@@ -1,47 +1,45 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-
 version: "1.0"
 name: "contoso-bank-loan-governance"
 description: >
-  Governance policy for the Contoso Bank AI Loan Officer agent.
-  Blocks PII access (SSN, tax records), enforces spending limits on
-  loan approvals, restricts internal API access, and permits standard
-  loan inquiry operations. All actions are audit-logged.
+  Governance policy for the Contoso Bank loan assistant. Blocks PII disclosure,
+  high-value approvals, and internal transfer workflows while allowing normal
+  loan inquiry activity.
 
 rules:
   - name: "block_pii_access"
     condition:
       field: "message"
-      operator: "contains_any"
-      value: "SSN,social security,tax records,tax returns,tax filing,personal identifier"
+      operator: "matches"
+      value: '(?i)(\b\d{3}-\d{2}-\d{4}\b|social security|ssn|tax records|tax returns|personal identifier)'
     action: "deny"
     priority: 100
-    message: "Access to SSN, tax records, and personal identifiers is prohibited by PII governance policy"
+    message: "Access to SSN and tax record content is prohibited by banking PII policy"
 
-  - name: "spending_limit"
+  - name: "block_high_value_approval"
     condition:
       field: "message"
-      operator: "contains_any"
-      value: "approve loan,loan approval,approve_loan"
-    action: "deny"
-    priority: 90
-    message: "Loan approvals over $50,000 require human review — agent cannot auto-approve"
-
-  - name: "block_internal_apis"
-    condition:
-      field: "message"
-      operator: "contains_any"
-      value: "internal transfer,admin tool,system tool,transfer_funds,internal_api"
+      operator: "matches"
+      value: '(?i)(approve.*loan|loan approval|\$\s*(?:[5-9]\d{4,}|[1-9]\d{5,}))'
     action: "deny"
     priority: 95
-    message: "Access to internal transfer, admin, and system tools is restricted by capability policy"
+    message: "Loan approvals above the delegated threshold require human review"
+
+  - name: "block_internal_transfers"
+    condition:
+      field: "message"
+      operator: "matches"
+      value: '(?i)(transfer funds|wire transfer|internal transfer|admin tool|internal_api)'
+    action: "deny"
+    priority: 90
+    message: "Transfers and internal bank operations are restricted to approved workflows"
 
   - name: "allow_loan_inquiries"
     condition:
       field: "message"
-      operator: "contains_any"
-      value: "credit check,credit score,rate lookup,loan rate,eligibility,loan inquiry,check_credit"
+      operator: "matches"
+      value: '(?i)(loan|mortgage|credit|rate|eligibility|pre-qualif)'
     action: "allow"
     priority: 50
     message: "Standard loan inquiry operations are permitted"
@@ -53,7 +51,7 @@ rules:
       value: 0
     action: "audit"
     priority: 10
-    message: "All agent actions are audit-logged for compliance"
+    message: "All loan-assistant activity is audit logged"
 
 defaults:
   action: "allow"
