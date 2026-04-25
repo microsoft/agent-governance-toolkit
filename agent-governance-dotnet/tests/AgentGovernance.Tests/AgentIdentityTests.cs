@@ -21,6 +21,25 @@ public class AgentIdentityTests
         Assert.NotNull(identity.PrivateKey);
         Assert.Equal(32, identity.PublicKey.Length);
         Assert.Equal(32, identity.PrivateKey!.Length);
+        Assert.Equal(IdentitySigningAlgorithm.Compatibility, identity.SigningAlgorithm);
+    }
+
+    [Fact]
+    public void CreateAsymmetric_GeneratesVerifiableIdentity()
+    {
+        var identity = AgentIdentity.CreateAsymmetric("test-agent", sponsor: "owner@example.com");
+
+        Assert.StartsWith("did:mesh:", identity.Did);
+        Assert.Equal("test-agent", identity.Name);
+        Assert.Equal("owner@example.com", identity.SponsorEmail);
+        Assert.NotEmpty(identity.VerificationKeyId);
+        Assert.NotNull(identity.PublicKey);
+        Assert.NotNull(identity.PrivateKey);
+        Assert.Equal(IdentitySigningAlgorithm.EcdsaP256, identity.SigningAlgorithm);
+
+        var payload = "native asymmetric auth"u8.ToArray();
+        var signature = identity.Sign(payload);
+        Assert.True(identity.Verify(payload, signature));
     }
 
     [Fact]
@@ -117,6 +136,21 @@ public class AgentIdentityTests
     }
 
     [Fact]
+    public void Verify_AsymmetricVerificationOnlyIdentity_Works()
+    {
+        var identity = AgentIdentity.CreateAsymmetric("full");
+        var verifyOnly = new AgentIdentity(
+            identity.Did,
+            identity.PublicKey,
+            signingAlgorithm: IdentitySigningAlgorithm.EcdsaP256);
+
+        var data = "test"u8.ToArray();
+        var sig = identity.Sign(data);
+
+        Assert.True(verifyOnly.Verify(data, sig));
+    }
+
+    [Fact]
     public void Sign_WithoutPrivateKey_ThrowsInvalidOperationException()
     {
         var identity = new AgentIdentity("did:mesh:test", new byte[32]);
@@ -145,6 +179,20 @@ public class AgentIdentityTests
 
         Assert.Throws<InvalidOperationException>(() =>
             AgentIdentity.VerifySignature(identity.PublicKey, data, signature));
+    }
+
+    [Fact]
+    public void VerifySignature_Static_AsymmetricWithoutPrivateKey_Works()
+    {
+        var identity = AgentIdentity.CreateAsymmetric("static-test");
+        var data = "test"u8.ToArray();
+        var signature = identity.Sign(data);
+
+        Assert.True(AgentIdentity.VerifySignature(
+            identity.PublicKey,
+            data,
+            signature,
+            signingAlgorithm: IdentitySigningAlgorithm.EcdsaP256));
     }
 
     [Fact]

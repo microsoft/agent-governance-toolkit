@@ -22,6 +22,22 @@ public enum IdentityStatus
 }
 
 /// <summary>
+/// Signing implementation used by an <see cref="AgentIdentity"/>.
+/// </summary>
+public enum IdentitySigningAlgorithm
+{
+    /// <summary>
+    /// Legacy compatibility mode backed by HMAC-derived signatures.
+    /// </summary>
+    Compatibility,
+
+    /// <summary>
+    /// Native asymmetric signing using ECDSA P-256.
+    /// </summary>
+    EcdsaP256
+}
+
+/// <summary>
 /// Represents an agent identity with compatibility signing, delegation metadata, and registry-friendly
 /// sponsor and capability information.
 /// </summary>
@@ -84,6 +100,11 @@ public sealed class AgentIdentity
     /// Verification key identifier used in JWK and DID exports.
     /// </summary>
     public string VerificationKeyId { get; }
+
+    /// <summary>
+    /// Signing implementation used by this identity.
+    /// </summary>
+    public IdentitySigningAlgorithm SigningAlgorithm { get; }
 
     /// <summary>
     /// Human sponsor email for this identity.
@@ -191,7 +212,8 @@ public sealed class AgentIdentity
         string? verificationKeyId = null,
         bool attestationVerified = false,
         IdentityStatus status = IdentityStatus.Active,
-        string? revocationReason = null)
+        string? revocationReason = null,
+        IdentitySigningAlgorithm signingAlgorithm = IdentitySigningAlgorithm.Compatibility)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(did);
         ArgumentNullException.ThrowIfNull(publicKey);
@@ -218,12 +240,39 @@ public sealed class AgentIdentity
             : verificationKeyId;
         Status = status;
         RevocationReason = revocationReason;
+        SigningAlgorithm = signingAlgorithm;
     }
 
     /// <summary>
     /// Creates a new agent identity with a freshly generated key pair.
     /// </summary>
     public static AgentIdentity Create(
+        string name,
+        string? sponsor = null,
+        IEnumerable<string>? capabilities = null,
+        string? organization = null,
+        string? description = null,
+        string? organizationId = null,
+        bool sponsorVerified = false,
+        DateTime? expiresAt = null,
+        bool attestationVerified = false)
+    {
+        return CreateCompatibility(
+            name,
+            sponsor,
+            capabilities,
+            organization,
+            description,
+            organizationId,
+            sponsorVerified,
+            expiresAt,
+            attestationVerified);
+    }
+
+    /// <summary>
+    /// Creates a new agent identity using the legacy compatibility signing mode.
+    /// </summary>
+    public static AgentIdentity CreateCompatibility(
         string name,
         string? sponsor = null,
         IEnumerable<string>? capabilities = null,
@@ -251,7 +300,44 @@ public sealed class AgentIdentity
             organizationId: organizationId,
             capabilities: capabilities,
             expiresAt: expiresAt,
-            attestationVerified: attestationVerified);
+            attestationVerified: attestationVerified,
+            signingAlgorithm: IdentitySigningAlgorithm.Compatibility);
+    }
+
+    /// <summary>
+    /// Creates a new agent identity with native asymmetric ECDSA P-256 signing.
+    /// </summary>
+    public static AgentIdentity CreateAsymmetric(
+        string name,
+        string? sponsor = null,
+        IEnumerable<string>? capabilities = null,
+        string? organization = null,
+        string? description = null,
+        string? organizationId = null,
+        bool sponsorVerified = false,
+        DateTime? expiresAt = null,
+        bool attestationVerified = false)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var publicKey = ecdsa.ExportSubjectPublicKeyInfo();
+        var privateKey = ecdsa.ExportPkcs8PrivateKey();
+
+        return new AgentIdentity(
+            did: GenerateDid(name, organization),
+            publicKey: publicKey,
+            privateKey: privateKey,
+            name: name,
+            description: description,
+            sponsorEmail: sponsor,
+            sponsorVerified: sponsorVerified,
+            organization: organization,
+            organizationId: organizationId,
+            capabilities: capabilities,
+            expiresAt: expiresAt,
+            attestationVerified: attestationVerified,
+            signingAlgorithm: IdentitySigningAlgorithm.EcdsaP256);
     }
 
     /// <summary>
@@ -304,7 +390,7 @@ public sealed class AgentIdentity
     }
 
     /// <summary>
-    /// Signs data using the compatibility signing implementation available in .NET 8.
+    /// Signs data using the configured identity signing implementation.
     /// </summary>
     public byte[] Sign(byte[] data)
     {
@@ -316,8 +402,12 @@ public sealed class AgentIdentity
                 "Cannot sign data: this identity does not have a private key.");
         }
 
-        using var hmac = new HMACSHA256(PrivateKey);
-        return hmac.ComputeHash(data);
+        return SigningAlgorithm switch
+        {
+            IdentitySigningAlgorithm.Compatibility => SignCompatibility(data, PrivateKey),
+            IdentitySigningAlgorithm.EcdsaP256 => SignEcdsaP256(data, PrivateKey),
+            _ => throw new InvalidOperationException($"Unsupported signing algorithm '{SigningAlgorithm}'.")
+        };
     }
 
     /// <summary>
@@ -337,34 +427,34 @@ public sealed class AgentIdentity
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(signature);
 
-        if (PrivateKey is null)
+        return SigningAlgorithm switch
         {
-            throw new InvalidOperationException(
-                "Cannot verify signature: the .NET 8 compatibility verifier requires private key material.");
-        }
-
-        var expected = Sign(data);
-        return CryptographicOperations.FixedTimeEquals(expected, signature);
+            IdentitySigningAlgorithm.Compatibility => VerifyCompatibility(data, signature, PrivateKey),
+            IdentitySigningAlgorithm.EcdsaP256 => VerifyEcdsaP256(PublicKey, data, signature),
+            _ => throw new InvalidOperationException($"Unsupported signing algorithm '{SigningAlgorithm}'.")
+        };
     }
 
     /// <summary>
     /// Verifies a signature using standalone key material.
     /// </summary>
-    public static bool VerifySignature(byte[] publicKey, byte[] data, byte[] signature, byte[]? privateKey = null)
+    public static bool VerifySignature(
+        byte[] publicKey,
+        byte[] data,
+        byte[] signature,
+        byte[]? privateKey = null,
+        IdentitySigningAlgorithm signingAlgorithm = IdentitySigningAlgorithm.Compatibility)
     {
         ArgumentNullException.ThrowIfNull(publicKey);
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(signature);
 
-        if (privateKey is null)
+        return signingAlgorithm switch
         {
-            throw new InvalidOperationException(
-                "Cannot verify signature without private key material in the .NET 8 compatibility implementation.");
-        }
-
-        using var hmac = new HMACSHA256(privateKey);
-        var expected = hmac.ComputeHash(data);
-        return CryptographicOperations.FixedTimeEquals(expected, signature);
+            IdentitySigningAlgorithm.Compatibility => VerifyCompatibility(data, signature, privateKey),
+            IdentitySigningAlgorithm.EcdsaP256 => VerifyEcdsaP256(publicKey, data, signature),
+            _ => throw new InvalidOperationException($"Unsupported signing algorithm '{signingAlgorithm}'.")
+        };
     }
 
     /// <summary>
@@ -429,16 +519,27 @@ public sealed class AgentIdentity
             }
         }
 
-        var child = Create(
-            name: name,
-            sponsor: SponsorEmail,
-            capabilities: delegated,
-            organization: Organization,
-            description: description,
-            organizationId: OrganizationId,
-            sponsorVerified: SponsorVerified,
-            expiresAt: ExpiresAt,
-            attestationVerified: AttestationVerified);
+        var child = SigningAlgorithm == IdentitySigningAlgorithm.EcdsaP256
+            ? CreateAsymmetric(
+                name: name,
+                sponsor: SponsorEmail,
+                capabilities: delegated,
+                organization: Organization,
+                description: description,
+                organizationId: OrganizationId,
+                sponsorVerified: SponsorVerified,
+                expiresAt: ExpiresAt,
+                attestationVerified: AttestationVerified)
+            : CreateCompatibility(
+                name: name,
+                sponsor: SponsorEmail,
+                capabilities: delegated,
+                organization: Organization,
+                description: description,
+                organizationId: OrganizationId,
+                sponsorVerified: SponsorVerified,
+                expiresAt: ExpiresAt,
+                attestationVerified: AttestationVerified);
 
         child.ParentDid = Did;
         child.DelegationDepth = DelegationDepth + 1;
@@ -584,6 +685,51 @@ public sealed class AgentIdentity
     private static byte[] DerivePublicKey(byte[] privateKey)
     {
         return SHA256.HashData(privateKey)[..KeySizeBytes];
+    }
+
+    private static byte[] SignCompatibility(byte[] data, byte[]? privateKey)
+    {
+        if (privateKey is null)
+        {
+            throw new InvalidOperationException(
+                "Cannot sign data: this identity does not have a private key.");
+        }
+
+        using var hmac = new HMACSHA256(privateKey);
+        return hmac.ComputeHash(data);
+    }
+
+    private static byte[] SignEcdsaP256(byte[] data, byte[]? privateKey)
+    {
+        if (privateKey is null)
+        {
+            throw new InvalidOperationException(
+                "Cannot sign data: this identity does not have a private key.");
+        }
+
+        using var ecdsa = ECDsa.Create();
+        ecdsa.ImportPkcs8PrivateKey(privateKey, out _);
+        return ecdsa.SignData(data, HashAlgorithmName.SHA256);
+    }
+
+    private static bool VerifyCompatibility(byte[] data, byte[] signature, byte[]? privateKey)
+    {
+        if (privateKey is null)
+        {
+            throw new InvalidOperationException(
+                "Cannot verify signature without private key material in the compatibility implementation.");
+        }
+
+        using var hmac = new HMACSHA256(privateKey);
+        var expected = hmac.ComputeHash(data);
+        return CryptographicOperations.FixedTimeEquals(expected, signature);
+    }
+
+    private static bool VerifyEcdsaP256(byte[] publicKey, byte[] data, byte[] signature)
+    {
+        using var ecdsa = ECDsa.Create();
+        ecdsa.ImportSubjectPublicKeyInfo(publicKey, out _);
+        return ecdsa.VerifyData(data, signature, HashAlgorithmName.SHA256);
     }
 
     private static string CreateVerificationKeyId(byte[] publicKey)

@@ -142,6 +142,12 @@ public sealed class GovernanceKernel : IDisposable
     public PromptInjectionDetector? InjectionDetector { get; }
 
     /// <summary>
+    /// Prompt-defense evaluator for pre-deployment system prompts.
+    /// Always available.
+    /// </summary>
+    public PromptDefenseEvaluator PromptDefense { get; }
+
+    /// <summary>
     /// Circuit breaker for governance evaluation resilience.
     /// <c>null</c> when the circuit breaker is disabled.
     /// </summary>
@@ -192,6 +198,7 @@ public sealed class GovernanceKernel : IDisposable
         InjectionDetector = opts.EnablePromptInjectionDetection
             ? (opts.PromptInjectionConfig is not null ? new PromptInjectionDetector(opts.PromptInjectionConfig) : new PromptInjectionDetector())
             : null;
+        PromptDefense = new PromptDefenseEvaluator();
 
         CircuitBreaker = opts.EnableCircuitBreaker
             ? (opts.CircuitBreakerConfig is not null ? new CircuitBreaker(opts.CircuitBreakerConfig) : new CircuitBreaker())

@@ -68,4 +68,12 @@ public class TrustVerifierTests
         // Cross-verification should fail (DID mismatch).
         Assert.False(TrustVerifier.VerifyPeer(agent1.Did, agent2));
     }
+
+    [Fact]
+    public void VerifyPeer_AsymmetricIdentity_ReturnsTrue()
+    {
+        var identity = AgentIdentity.CreateAsymmetric("peer-agent");
+
+        Assert.True(TrustVerifier.VerifyPeer(identity.Did, identity));
+    }
 }

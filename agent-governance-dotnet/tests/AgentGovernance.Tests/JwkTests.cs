@@ -22,6 +22,20 @@ public class JwkTests
     }
 
     [Fact]
+    public void ToJwk_AsymmetricIdentity_ReturnsEcStructure()
+    {
+        var identity = AgentIdentity.CreateAsymmetric("test-agent");
+
+        var jwk = identity.ToJwk();
+
+        Assert.Equal("EC", jwk["kty"]);
+        Assert.Equal("P-256", jwk["crv"]);
+        Assert.Equal($"{identity.Did}#{identity.VerificationKeyId}", jwk["kid"]);
+        Assert.NotEmpty(jwk["x"]);
+        Assert.NotEmpty(jwk["y"]);
+    }
+
+    [Fact]
     public void ToJwk_WithPrivateKey_EmitsPrivateComponent()
     {
         var identity = AgentIdentity.Create("test-agent");
@@ -58,6 +72,19 @@ public class JwkTests
     }
 
     [Fact]
+    public void FromJwk_AsymmetricWithPrivateKey_RestoresSigningMaterial()
+    {
+        var original = AgentIdentity.CreateAsymmetric("test-agent");
+        var jwk = original.ToJwk(includePrivate: true);
+
+        var restored = Jwk.FromJwk(jwk);
+
+        Assert.Equal(IdentitySigningAlgorithm.EcdsaP256, restored.SigningAlgorithm);
+        Assert.NotNull(restored.PrivateKey);
+        Assert.True(restored.Verify("payload"u8.ToArray(), restored.Sign("payload")));
+    }
+
+    [Fact]
     public void FromJwk_WithoutKid_GeneratesCanonicalDid()
     {
         var identity = AgentIdentity.Create("test-agent");
@@ -88,6 +115,19 @@ public class JwkTests
         var jwk = new Dictionary<string, string>
         {
             ["kty"] = "OKP",
+            ["crv"] = "P-256",
+            ["x"] = "AAAA"
+        };
+
+        Assert.Throws<ArgumentException>(() => Jwk.FromJwk(jwk));
+    }
+
+    [Fact]
+    public void FromJwk_EcMissingY_Throws()
+    {
+        var jwk = new Dictionary<string, string>
+        {
+            ["kty"] = "EC",
             ["crv"] = "P-256",
             ["x"] = "AAAA"
         };

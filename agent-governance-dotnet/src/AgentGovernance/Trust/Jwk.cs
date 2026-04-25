@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Security.Cryptography;
+
 namespace AgentGovernance.Trust;
 
 /// <summary>
@@ -9,26 +11,56 @@ namespace AgentGovernance.Trust;
 public static class Jwk
 {
     /// <summary>
-    /// Converts an <see cref="AgentIdentity"/> to an Ed25519-shaped JWK.
+    /// Converts an <see cref="AgentIdentity"/> to a JWK representation matching its signing algorithm.
     /// </summary>
     public static Dictionary<string, string> ToJwk(this AgentIdentity identity, bool includePrivate = false)
     {
         ArgumentNullException.ThrowIfNull(identity);
 
-        var jwk = new Dictionary<string, string>(StringComparer.Ordinal)
+        if (identity.SigningAlgorithm == IdentitySigningAlgorithm.EcdsaP256)
+        {
+            using var ecdsa = ECDsa.Create();
+            if (includePrivate && identity.PrivateKey is not null)
+            {
+                ecdsa.ImportPkcs8PrivateKey(identity.PrivateKey, out _);
+            }
+            else
+            {
+                ecdsa.ImportSubjectPublicKeyInfo(identity.PublicKey, out _);
+            }
+            var parameters = ecdsa.ExportParameters(includePrivate && identity.PrivateKey is not null);
+
+            var jwk = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["kty"] = "EC",
+                ["crv"] = "P-256",
+                ["kid"] = $"{identity.Did}#{identity.VerificationKeyId}",
+                ["x"] = Base64UrlEncode(parameters.Q.X!),
+                ["y"] = Base64UrlEncode(parameters.Q.Y!)
+            };
+
+            if (includePrivate && parameters.D is not null)
+            {
+                jwk["d"] = Base64UrlEncode(parameters.D);
+            }
+
+            return jwk;
+        }
+
+        var compatibilityJwk = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["kty"] = "OKP",
             ["crv"] = "Ed25519",
             ["kid"] = $"{identity.Did}#{identity.VerificationKeyId}",
-            ["x"] = Base64UrlEncode(identity.PublicKey),
+            ["x"] = Base64UrlEncode(identity.PublicKey)
         };
 
         if (includePrivate && identity.PrivateKey is not null)
         {
-            jwk["d"] = Base64UrlEncode(identity.PrivateKey);
+            compatibilityJwk["d"] = Base64UrlEncode(identity.PrivateKey);
         }
 
-        return jwk;
+        return compatibilityJwk;
     }
 
     /// <summary>
@@ -38,35 +70,94 @@ public static class Jwk
     {
         ArgumentNullException.ThrowIfNull(jwk);
 
-        if (!jwk.TryGetValue("kty", out var kty) || !string.Equals(kty, "OKP", StringComparison.Ordinal))
+        if (!jwk.TryGetValue("kty", out var kty) || string.IsNullOrWhiteSpace(kty))
         {
-            throw new ArgumentException("JWK must have kty=OKP.", nameof(jwk));
+            throw new ArgumentException("JWK must define 'kty'.", nameof(jwk));
         }
 
-        if (!jwk.TryGetValue("crv", out var crv) || !string.Equals(crv, "Ed25519", StringComparison.Ordinal))
+        if (!jwk.TryGetValue("crv", out var crv) || string.IsNullOrWhiteSpace(crv))
         {
-            throw new ArgumentException("JWK must have crv=Ed25519.", nameof(jwk));
+            throw new ArgumentException("JWK must define 'crv'.", nameof(jwk));
         }
 
-        if (!jwk.TryGetValue("x", out var x) || string.IsNullOrWhiteSpace(x))
+        if (string.Equals(kty, "OKP", StringComparison.Ordinal) && string.Equals(crv, "Ed25519", StringComparison.Ordinal))
         {
-            throw new ArgumentException("JWK must have a non-empty 'x' value.", nameof(jwk));
+            if (!jwk.TryGetValue("x", out var x) || string.IsNullOrWhiteSpace(x))
+            {
+                throw new ArgumentException("JWK must have a non-empty 'x' value.", nameof(jwk));
+            }
+
+            var publicKey = Base64UrlDecode(x);
+            var privateKey = jwk.TryGetValue("d", out var d) && !string.IsNullOrWhiteSpace(d)
+                ? Base64UrlDecode(d)
+                : null;
+            var kid = jwk.TryGetValue("kid", out var kidValue) ? kidValue : null;
+            var did = TryGetDidFromKid(kid)
+                ?? $"{AgentIdentity.CanonicalDidPrefix}{Convert.ToHexString(publicKey[..16]).ToLowerInvariant()}";
+            var verificationKeyId = TryGetVerificationKeyIdFromKid(kid);
+
+            return new AgentIdentity(
+                did: did,
+                publicKey: publicKey,
+                privateKey: privateKey,
+                verificationKeyId: verificationKeyId,
+                signingAlgorithm: IdentitySigningAlgorithm.Compatibility);
         }
 
-        var publicKey = Base64UrlDecode(x);
-        var privateKey = jwk.TryGetValue("d", out var d) && !string.IsNullOrWhiteSpace(d)
-            ? Base64UrlDecode(d)
-            : null;
-        var kid = jwk.TryGetValue("kid", out var kidValue) ? kidValue : null;
-        var did = TryGetDidFromKid(kid)
-            ?? $"{AgentIdentity.CanonicalDidPrefix}{Convert.ToHexString(publicKey[..16]).ToLowerInvariant()}";
-        var verificationKeyId = TryGetVerificationKeyIdFromKid(kid);
+        if (string.Equals(kty, "EC", StringComparison.Ordinal) && string.Equals(crv, "P-256", StringComparison.Ordinal))
+        {
+            if (!jwk.TryGetValue("x", out var x) || string.IsNullOrWhiteSpace(x)
+                || !jwk.TryGetValue("y", out var y) || string.IsNullOrWhiteSpace(y))
+            {
+                throw new ArgumentException("EC JWK must contain non-empty 'x' and 'y' values.", nameof(jwk));
+            }
 
-        return new AgentIdentity(
-            did: did,
-            publicKey: publicKey,
-            privateKey: privateKey,
-            verificationKeyId: verificationKeyId);
+            var parameters = new ECParameters
+            {
+                Curve = ECCurve.NamedCurves.nistP256,
+                Q = new ECPoint
+                {
+                    X = Base64UrlDecode(x),
+                    Y = Base64UrlDecode(y)
+                },
+                D = jwk.TryGetValue("d", out var d) && !string.IsNullOrWhiteSpace(d)
+                    ? Base64UrlDecode(d)
+                    : null
+            };
+
+            byte[] publicKey;
+            byte[]? privateKey = null;
+            var publicParameters = new ECParameters
+            {
+                Curve = parameters.Curve,
+                Q = parameters.Q
+            };
+
+            using (var publicKeyEcdsa = ECDsa.Create(publicParameters))
+            {
+                publicKey = publicKeyEcdsa.ExportSubjectPublicKeyInfo();
+            }
+
+            if (parameters.D is not null)
+            {
+                using var privateKeyEcdsa = ECDsa.Create(parameters);
+                privateKey = privateKeyEcdsa.ExportPkcs8PrivateKey();
+            }
+
+            var kid = jwk.TryGetValue("kid", out var kidValue) ? kidValue : null;
+            var did = TryGetDidFromKid(kid)
+                ?? $"{AgentIdentity.CanonicalDidPrefix}{Convert.ToHexString(publicKey[..16]).ToLowerInvariant()}";
+            var verificationKeyId = TryGetVerificationKeyIdFromKid(kid);
+
+            return new AgentIdentity(
+                did: did,
+                publicKey: publicKey,
+                privateKey: privateKey,
+                verificationKeyId: verificationKeyId,
+                signingAlgorithm: IdentitySigningAlgorithm.EcdsaP256);
+        }
+
+        throw new ArgumentException($"Unsupported JWK key type '{kty}' / curve '{crv}'.", nameof(jwk));
     }
 
     /// <summary>
