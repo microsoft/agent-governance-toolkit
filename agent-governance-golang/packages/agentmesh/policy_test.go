@@ -277,7 +277,7 @@ func TestEvaluateWildcardDotStar(t *testing.T) {
 		{"data.delete", Allow},
 		{"data.nested.deep", Deny}, // "data.*" matches "data." prefix, but "data.nested.deep" has prefix "data." so it matches
 		{"file.read", Deny},
-		{"data", Deny},        // no dot after "data"
+{"data", Deny},        // no dot after "data"
 		{"database.read", Deny}, // prefix is "data." not "database."
 	}
 

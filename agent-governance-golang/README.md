@@ -1,6 +1,6 @@
 # AgentMesh Go module
 
-Go module for the AgentMesh governance framework — identity, trust scoring, policy evaluation, tamper-evident audit logging, MCP security scanning, execution privilege rings, and agent lifecycle management.
+Go module for the AgentMesh governance framework — identity, trust scoring, policy evaluation, tamper-evident audit logging, MCP security scanning, execution privilege rings, agent lifecycle management, SLO tracking, shadow discovery, prompt defense, and native Go integrations.
 
 ## Install
 
@@ -76,6 +76,20 @@ Rule-based policy engine with wildcard and condition matching.
 | `NewPolicyEngine(rules)` | Create a policy engine |
 | `(*PolicyEngine).Evaluate(action, context)` | Evaluate an action |
 | `(*PolicyEngine).LoadFromYAML(path)` | Load rules from YAML file |
+| `(*PolicyEngine).AddBackend(backend)` | Register an external policy backend |
+| `(*PolicyEngine).LoadRego(options)` | Register an OPA/Rego backend |
+| `(*PolicyEngine).LoadCedar(options)` | Register a Cedar backend |
+
+### External Policy Backends (`policy_backends.go`)
+
+OPA/Rego and Cedar support with fail-closed evaluation paths.
+
+| Type / Function | Description |
+|---|---|
+| `NewOPABackend(options)` | Create an OPA backend with remote, CLI, or built-in modes |
+| `NewCedarBackend(options)` | Create a Cedar backend with CLI or built-in modes |
+| `OPAOptions` | Configure OPA URL, package/query, timeout, and Rego content |
+| `CedarOptions` | Configure Cedar policy content, entities, schema, and timeout |
 
 ### Audit (`audit.go`)
 
@@ -160,6 +174,53 @@ lm.Suspend("maintenance window")
 lm.Activate("maintenance complete")
 fmt.Println(lm.State()) // active
 ```
+
+### SRE / SLOs (`slo.go`)
+
+Minimal service-level objective tracking for Go applications.
+
+| Type / Function | Description |
+|---|---|
+| `NewSLOEngine(objectives)` | Create an engine with named objectives |
+| `(*SLOEngine).AddObjective(objective)` | Register a new SLO |
+| `(*SLOEngine).RecordEvent(name, success, latency)` | Record a request or operation outcome |
+| `(*SLOEngine).Evaluate(name)` | Compute current attainment and error budget |
+
+### Framework Integrations (`middleware.go`)
+
+Go-native integration helpers built around a composable governance middleware stack.
+
+| Type / Function | Description |
+|---|---|
+| `GovernedOperation` | Common operation envelope for tool calls, prompts, and request flows |
+| `CreateGovernanceMiddlewareStack(config)` | Compose policy, capability guard, prompt defense, audit, and SLO middleware |
+| `NewHTTPGovernanceMiddleware(config)` | Create `net/http` middleware backed by the governance stack |
+| `GovernOperation(...)` | Wrap a generic operation with the standard governance stack |
+
+### Shadow Discovery (`discovery.go`)
+
+Structured SDK discovery for likely unregistered agent tooling across text, processes, config paths, and GitHub repositories.
+
+| Type / Function | Description |
+|---|---|
+| `DiscoveredAgent` / `DiscoveryEvidence` / `DiscoveryScanResult` | Structured discovery models for evidence-driven results |
+| `NewShadowDiscoveryScanner()` | Create a scanner with built-in discovery rules |
+| `(*ShadowDiscoveryScanner).ScanText(source, content)` | Scan config or source text for findings |
+| `(*ShadowDiscoveryScanner).ScanProcessCommands(commands)` | Scan raw command lines supplied by the caller |
+| `(*ShadowDiscoveryScanner).ScanProcesses(processes)` | Produce structured discovery results from process metadata |
+| `(*ShadowDiscoveryScanner).ScanCurrentHostProcessList()` | Enumerate and scan the local process list |
+| `(*ShadowDiscoveryScanner).ScanConfigPaths(paths, maxDepth)` | Scan config and dependency files across filesystem paths |
+| `(*ShadowDiscoveryScanner).ScanGitHubRepositories(client, repos)` | Scan repository contents through the GitHub contents API |
+| `NewGitHubDiscoveryClient(token)` | Create a GitHub API client for repository discovery scans |
+
+### Prompt Defense (`promptdefense.go`)
+
+Structured prompt risk evaluation for injection and exfiltration patterns.
+
+| Type / Function | Description |
+|---|---|
+| `NewPromptDefenseEvaluator()` | Create a prompt defense evaluator |
+| `(*PromptDefenseEvaluator).Evaluate(prompt)` | Score a prompt and return structured findings |
 
 ## License
 
