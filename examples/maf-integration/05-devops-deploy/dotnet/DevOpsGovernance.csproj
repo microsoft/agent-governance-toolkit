@@ -9,7 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\agent-governance-dotnet\src\AgentGovernance\AgentGovernance.csproj" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.3.0" />
+    <PackageReference Include="YamlDotNet" Version="17.0.1" />
     <Compile Include="..\..\shared-dotnet\DemoCommon.cs" Link="DemoCommon.cs" />
   </ItemGroup>
 

@@ -3,8 +3,6 @@
 
 using System.ComponentModel;
 using System.Text.Json;
-using AgentGovernance;
-using AgentGovernance.Integration.AgentFramework;
 using MafIntegration.Shared;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -84,7 +82,7 @@ internal static class Program
             new ToolCallPlan("Escalate the refund complaint to a manager.", "escalate_to_manager", new Dictionary<string, object?> { ["reason"] = "Customer requesting exception refund" })
         };
 
-        Display.Header("📞 Contoso Support — Customer Service Governance Demo", "Real MAF agent + AGT adapter · deterministic tool loop · Merkle audit");
+        Display.Header("📞 Contoso Support — Customer Service Governance Demo", "Real MAF agent + native middleware · deterministic tool loop · Merkle audit");
 
         var policyPath = Path.Combine(AppContext.BaseDirectory, "policies", "support_governance.yaml");
         if (!File.Exists(policyPath))
@@ -92,13 +90,11 @@ internal static class Program
             policyPath = Path.Combine(Directory.GetCurrentDirectory(), "policies", "support_governance.yaml");
         }
 
-        var kernel = new GovernanceKernel(new GovernanceOptions { EnableAudit = true, EnableMetrics = false, PolicyPaths = new() { policyPath } });
         var audit = new AuditTrail();
-        kernel.OnAllEvents(audit.LogGovernanceEvent);
-
-        var adapter = new AgentFrameworkGovernanceAdapter(
-            kernel,
-            new AgentFrameworkGovernanceOptions { DefaultAgentId = "did:agentmesh:customer-support-agent", EnableFunctionMiddleware = true });
+        var middleware = new NativeGovernanceMiddleware(
+            new ExpressionPolicyEngine(policyPath),
+            audit,
+            "customer-support-agent");
 
         var agent = new DeterministicScenarioChatClient(directResponses, toolPlans)
             .AsBuilder()
@@ -114,7 +110,10 @@ internal static class Program
                     AIFunctionFactory.Create(SupportTools.AccessPaymentDetails, name: "access_payment_details"),
                     AIFunctionFactory.Create(SupportTools.EscalateToManager, name: "escalate_to_manager")
                 ])
-            .WithGovernance(adapter);
+            .AsBuilder()
+            .Use(runFunc: middleware.RunAsync, runStreamingFunc: null)
+            .Use(middleware.InvokeFunctionAsync)
+            .Build();
 
         var allowedCount = 0;
         var deniedCount = 0;

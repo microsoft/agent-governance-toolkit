@@ -3,8 +3,6 @@
 
 using System.ComponentModel;
 using System.Text.Json;
-using AgentGovernance;
-using AgentGovernance.Integration.AgentFramework;
 using MafIntegration.Shared;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -76,7 +74,7 @@ internal static class Program
             new ToolCallPlan("Delete the prod-payments-rg resource group.", "delete_resource_group", new Dictionary<string, object?> { ["rgName"] = "prod-payments-rg" })
         };
 
-        Display.Header("🚀 DeployBot — CI/CD Pipeline Safety Governance Demo", "Real MAF agent + AGT adapter · deterministic tool loop · Merkle audit");
+        Display.Header("🚀 DeployBot — CI/CD Pipeline Safety Governance Demo", "Real MAF agent + native middleware · deterministic tool loop · Merkle audit");
 
         var policyPath = Path.Combine(AppContext.BaseDirectory, "policies", "devops_governance.yaml");
         if (!File.Exists(policyPath))
@@ -84,13 +82,11 @@ internal static class Program
             policyPath = Path.Combine(Directory.GetCurrentDirectory(), "policies", "devops_governance.yaml");
         }
 
-        var kernel = new GovernanceKernel(new GovernanceOptions { EnableAudit = true, EnableMetrics = false, PolicyPaths = new() { policyPath } });
         var audit = new AuditTrail();
-        kernel.OnAllEvents(audit.LogGovernanceEvent);
-
-        var adapter = new AgentFrameworkGovernanceAdapter(
-            kernel,
-            new AgentFrameworkGovernanceOptions { DefaultAgentId = "did:agentmesh:deploy-bot-agent", EnableFunctionMiddleware = true });
+        var middleware = new NativeGovernanceMiddleware(
+            new ExpressionPolicyEngine(policyPath),
+            audit,
+            "deploy-bot-agent");
 
         var agent = new DeterministicScenarioChatClient(directResponses, toolPlans)
             .AsBuilder()
@@ -110,7 +106,10 @@ internal static class Program
                     AIFunctionFactory.Create(DevOpsTools.ForcePush, name: "force_push"),
                     AIFunctionFactory.Create(DevOpsTools.DeleteResourceGroup, name: "delete_resource_group")
                 ])
-            .WithGovernance(adapter);
+            .AsBuilder()
+            .Use(runFunc: middleware.RunAsync, runStreamingFunc: null)
+            .Use(middleware.InvokeFunctionAsync)
+            .Build();
 
         var allowedCount = 0;
         var deniedCount = 0;

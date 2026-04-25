@@ -3,8 +3,6 @@
 
 using System.ComponentModel;
 using System.Text.Json;
-using AgentGovernance;
-using AgentGovernance.Integration.AgentFramework;
 using MafIntegration.Shared;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -66,7 +64,7 @@ internal static class Program
             new ToolCallPlan("Retrieve the SQL production server credentials.", "access_credentials_vault", new Dictionary<string, object?> { ["service"] = "prod-sql-server" })
         };
 
-        Display.Header("🔐 SecureDesk — IT Helpdesk Governance Demo", "Real MAF agent + AGT adapter · deterministic tool loop · Merkle audit");
+        Display.Header("🔐 SecureDesk — IT Helpdesk Governance Demo", "Real MAF agent + native middleware · deterministic tool loop · Merkle audit");
 
         var policyPath = Path.Combine(AppContext.BaseDirectory, "policies", "helpdesk_governance.yaml");
         if (!File.Exists(policyPath))
@@ -74,13 +72,11 @@ internal static class Program
             policyPath = Path.Combine(Directory.GetCurrentDirectory(), "policies", "helpdesk_governance.yaml");
         }
 
-        var kernel = new GovernanceKernel(new GovernanceOptions { EnableAudit = true, EnableMetrics = false, PolicyPaths = new() { policyPath } });
         var audit = new AuditTrail();
-        kernel.OnAllEvents(audit.LogGovernanceEvent);
-
-        var adapter = new AgentFrameworkGovernanceAdapter(
-            kernel,
-            new AgentFrameworkGovernanceOptions { DefaultAgentId = "did:agentmesh:helpdesk-agent", EnableFunctionMiddleware = true });
+        var middleware = new NativeGovernanceMiddleware(
+            new ExpressionPolicyEngine(policyPath),
+            audit,
+            "helpdesk-agent");
 
         var agent = new DeterministicScenarioChatClient(directResponses, toolPlans)
             .AsBuilder()
@@ -98,7 +94,10 @@ internal static class Program
                     AIFunctionFactory.Create(HelpDeskTools.AccessAdGroups, name: "access_ad_groups"),
                     AIFunctionFactory.Create(HelpDeskTools.AccessCredentialsVault, name: "access_credentials_vault")
                 ])
-            .WithGovernance(adapter);
+            .AsBuilder()
+            .Use(runFunc: middleware.RunAsync, runStreamingFunc: null)
+            .Use(middleware.InvokeFunctionAsync)
+            .Build();
 
         var allowedCount = 0;
         var deniedCount = 0;

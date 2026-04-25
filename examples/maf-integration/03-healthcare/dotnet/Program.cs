@@ -3,8 +3,6 @@
 
 using System.ComponentModel;
 using System.Text.Json;
-using AgentGovernance;
-using AgentGovernance.Integration.AgentFramework;
 using MafIntegration.Shared;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -61,7 +59,7 @@ internal static class Program
             new ToolCallPlan("Access billing records for patient P-4521.", "access_billing_records", new Dictionary<string, object?> { ["patientId"] = "P-4521" })
         };
 
-        Display.Header("🏥 MedAssist — HIPAA Patient Data Governance Demo", "Real MAF agent + AGT adapter · deterministic tool loop · Merkle audit");
+        Display.Header("🏥 MedAssist — HIPAA Patient Data Governance Demo", "Real MAF agent + native middleware · deterministic tool loop · Merkle audit");
 
         var policyPath = Path.Combine(AppContext.BaseDirectory, "policies", "healthcare_governance.yaml");
         if (!File.Exists(policyPath))
@@ -69,13 +67,11 @@ internal static class Program
             policyPath = Path.Combine(Directory.GetCurrentDirectory(), "policies", "healthcare_governance.yaml");
         }
 
-        var kernel = new GovernanceKernel(new GovernanceOptions { EnableAudit = true, EnableMetrics = false, PolicyPaths = new() { policyPath } });
         var audit = new AuditTrail();
-        kernel.OnAllEvents(audit.LogGovernanceEvent);
-
-        var adapter = new AgentFrameworkGovernanceAdapter(
-            kernel,
-            new AgentFrameworkGovernanceOptions { DefaultAgentId = "did:agentmesh:clinical-assistant-agent", EnableFunctionMiddleware = true });
+        var middleware = new NativeGovernanceMiddleware(
+            new ExpressionPolicyEngine(policyPath),
+            audit,
+            "clinical-assistant-agent");
 
         var agent = new DeterministicScenarioChatClient(directResponses, toolPlans)
             .AsBuilder()
@@ -92,7 +88,10 @@ internal static class Program
                     AIFunctionFactory.Create(HealthcareTools.AccessRadiologyRecords, name: "access_radiology_records"),
                     AIFunctionFactory.Create(HealthcareTools.AccessBillingRecords, name: "access_billing_records")
                 ])
-            .WithGovernance(adapter);
+            .AsBuilder()
+            .Use(runFunc: middleware.RunAsync, runStreamingFunc: null)
+            .Use(middleware.InvokeFunctionAsync)
+            .Build();
 
         var allowedCount = 0;
         var deniedCount = 0;

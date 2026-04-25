@@ -3,9 +3,10 @@
 
 using System.Security.Cryptography;
 using System.Text;
-using AgentGovernance.Audit;
+using System.Text.RegularExpressions;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using YamlDotNet.Serialization;
 
 namespace MafIntegration.Shared;
 
@@ -66,11 +67,8 @@ public static class Display
     }
 
     public static void LlmResponse(string text) => Console.WriteLine($"  {Magenta}🤖 Agent:{Reset} {text}");
-
     public static void Info(string text) => Console.WriteLine($"  {Cyan}{text}{Reset}");
-
     public static void Warning(string text) => Console.WriteLine($"  {Yellow}{text}{Reset}");
-
     public static void DimLine(string text) => Console.WriteLine($"  {Dim}{text}{Reset}");
 }
 
@@ -166,39 +164,6 @@ public sealed class AuditTrail
         return entry;
     }
 
-    public void LogGovernanceEvent(GovernanceEvent governanceEvent)
-    {
-        var action = governanceEvent.Data.TryGetValue("action", out var actionValue)
-            ? actionValue?.ToString() ?? "observe"
-            : governanceEvent.Type switch
-            {
-                GovernanceEventType.PolicyViolation or GovernanceEventType.ToolCallBlocked => "deny",
-                _ => "allow"
-            };
-
-        var detailParts = new List<string>();
-        if (governanceEvent.Data.TryGetValue("message", out var message))
-        {
-            detailParts.Add($"message={message}");
-        }
-
-        if (governanceEvent.Data.TryGetValue("tool_name", out var toolName))
-        {
-            detailParts.Add($"tool={toolName}");
-        }
-
-        if (governanceEvent.Data.TryGetValue("reason", out var reason))
-        {
-            detailParts.Add($"reason={reason}");
-        }
-
-        Log(
-            governanceEvent.AgentId,
-            governanceEvent.Type.ToString(),
-            action,
-            string.Join(" | ", detailParts.Where(part => !string.IsNullOrWhiteSpace(part))));
-    }
-
     public (bool IsValid, int VerifiedCount) VerifyIntegrity()
     {
         var previousHash = new string('0', 64);
@@ -285,6 +250,158 @@ public sealed class DeterministicScenarioChatClient : IChatClient
 
     public void Dispose()
     {
+    }
+}
+
+public sealed record PolicyDecision(bool Allowed, string RuleName, string Reason);
+
+internal sealed class PolicyDocument
+{
+    public string DefaultAction { get; set; } = "allow";
+    public List<PolicyRuleDocument> Rules { get; set; } = [];
+}
+
+internal sealed class PolicyRuleDocument
+{
+    public string Name { get; set; } = string.Empty;
+    public string Condition { get; set; } = string.Empty;
+    public string Action { get; set; } = "allow";
+    public int Priority { get; set; }
+}
+
+public sealed class ExpressionPolicyEngine
+{
+    private static readonly Regex EqualityPattern =
+        new(@"^(?<field>[a-zA-Z_][a-zA-Z0-9_]*)\s*==\s*'(?<value>.*)'$", RegexOptions.Compiled);
+
+    private readonly string _defaultAction;
+    private readonly IReadOnlyList<PolicyRuleDocument> _rules;
+
+    public ExpressionPolicyEngine(string policyPath)
+    {
+        using var reader = File.OpenText(policyPath);
+        var deserializer = new DeserializerBuilder()
+            .IgnoreUnmatchedProperties()
+            .Build();
+        var document = deserializer.Deserialize<PolicyDocument>(reader) ?? new PolicyDocument();
+        _defaultAction = document.DefaultAction;
+        _rules = document.Rules.OrderByDescending(rule => rule.Priority).ToList();
+    }
+
+    public PolicyDecision EvaluateMessage(string message) => Evaluate("message", message);
+    public PolicyDecision EvaluateTool(string toolName) => Evaluate("tool_name", toolName);
+
+    private PolicyDecision Evaluate(string fieldName, string value)
+    {
+        foreach (var rule in _rules)
+        {
+            if (!Matches(rule.Condition, fieldName, value))
+            {
+                continue;
+            }
+
+            var allowed = !string.Equals(rule.Action, "deny", StringComparison.OrdinalIgnoreCase);
+            var reason = allowed ? $"Allowed by {rule.Name}" : $"Blocked by governance policy: {rule.Name}";
+            return new PolicyDecision(allowed, rule.Name, reason);
+        }
+
+        var defaultAllowed = !string.Equals(_defaultAction, "deny", StringComparison.OrdinalIgnoreCase);
+        return new PolicyDecision(defaultAllowed, "default", defaultAllowed ? "Allowed by default policy" : "Blocked by default policy");
+    }
+
+    private static bool Matches(string condition, string expectedFieldName, string actualValue)
+    {
+        foreach (var orClause in Regex.Split(condition, @"\s+or\s+", RegexOptions.IgnoreCase))
+        {
+            var andMatched = true;
+            foreach (var andClause in Regex.Split(orClause, @"\s+and\s+", RegexOptions.IgnoreCase))
+            {
+                var clause = andClause.Trim();
+                var match = EqualityPattern.Match(clause);
+                if (!match.Success)
+                {
+                    andMatched = false;
+                    break;
+                }
+
+                var fieldName = match.Groups["field"].Value;
+                var expectedValue = match.Groups["value"].Value.Replace("\\'", "'");
+                if (!string.Equals(fieldName, expectedFieldName, StringComparison.Ordinal) ||
+                    !string.Equals(expectedValue, actualValue, StringComparison.Ordinal))
+                {
+                    andMatched = false;
+                    break;
+                }
+            }
+
+            if (andMatched)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
+public sealed class NativeGovernanceMiddleware
+{
+    private readonly ExpressionPolicyEngine _policyEngine;
+    private readonly AuditTrail _audit;
+    private readonly string _agentId;
+
+    public NativeGovernanceMiddleware(ExpressionPolicyEngine policyEngine, AuditTrail audit, string agentId)
+    {
+        _policyEngine = policyEngine;
+        _audit = audit;
+        _agentId = agentId;
+    }
+
+    public async Task<AgentResponse> RunAsync(
+        IEnumerable<ChatMessage> messages,
+        AgentSession? session,
+        AgentRunOptions? options,
+        AIAgent innerAgent,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        ArgumentNullException.ThrowIfNull(innerAgent);
+
+        var prompt = messages.LastOrDefault(message => message.Role == ChatRole.User)?.Text ?? string.Empty;
+        var decision = _policyEngine.EvaluateMessage(prompt);
+        _audit.Log(_agentId, "policy_check", decision.Allowed ? "allow" : "deny", prompt);
+
+        if (!decision.Allowed)
+        {
+            return new AgentResponse(
+            [
+                new ChatMessage(ChatRole.Assistant, $"Blocked by governance policy: {decision.RuleName}")
+            ]);
+        }
+
+        return await innerAgent.RunAsync(messages, session, options, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async ValueTask<object?> InvokeFunctionAsync(
+        AIAgent agent,
+        FunctionInvocationContext context,
+        Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> next,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(next);
+
+        var toolName = context.Function.Name;
+        var decision = _policyEngine.EvaluateTool(toolName);
+        _audit.Log(_agentId, "tool_policy", decision.Allowed ? "allow" : "deny", toolName);
+
+        if (!decision.Allowed)
+        {
+            context.Terminate = true;
+            return $"Blocked by governance policy: {decision.RuleName}";
+        }
+
+        return await next(context, cancellationToken).ConfigureAwait(false);
     }
 }
 
