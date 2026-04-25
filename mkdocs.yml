@@ -126,6 +126,7 @@ nav:
     - E2E Encrypted Messaging: tutorials/32-e2e-encrypted-messaging.md
     - Offline Verifiable Receipts: tutorials/33-offline-verifiable-receipts.md
     - MAF Integration: tutorials/34-maf-integration.md
+    - .NET MAF Hook Integration: tutorials/43-dotnet-maf-hook-integration.md
   - Deployment:
     - Overview: deployment/index.md
     - Azure Container Apps: deployment/azure-container-apps.md

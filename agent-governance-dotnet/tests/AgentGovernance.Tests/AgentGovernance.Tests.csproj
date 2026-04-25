@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AgentGovernance\AgentGovernance.csproj" />
+    <ProjectReference Include="..\..\src\AgentGovernance.Extensions.Microsoft.Agents\AgentGovernance.Extensions.Microsoft.Agents.csproj" />
     <ProjectReference Include="..\..\src\AgentGovernance.Extensions.ModelContextProtocol\AgentGovernance.Extensions.ModelContextProtocol.csproj" />
   </ItemGroup>
 

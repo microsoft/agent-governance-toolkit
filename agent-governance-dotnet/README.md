@@ -21,6 +21,12 @@ For Model Context Protocol servers built with the official C# SDK:
 dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol
 ```
 
+For agents built with the real Microsoft Agent Framework from `microsoft/agent-framework`:
+
+```bash
+dotnet add package Microsoft.AgentGovernance.Extensions.Microsoft.Agents
+```
+
 ## Quick Start
 
 ```csharp
