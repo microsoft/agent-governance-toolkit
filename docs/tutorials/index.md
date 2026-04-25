@@ -45,6 +45,7 @@
 | # | Tutorial | What you'll learn |
 |---|---------|------------------|
 | 19 | [.NET package](19-dotnet-sdk.md) | Agent governance in C# / .NET |
+| 42 | [C# MCP extension](42-csharp-mcp-extension.md) | Govern MCP servers built with the official C# SDK |
 | 20 | [TypeScript package](20-typescript-sdk.md) | Agent governance in TypeScript |
 | 21 | [Rust crate](21-rust-sdk.md) | Agent governance in Rust |
 | 22 | [Go module](22-go-sdk.md) | Agent governance in Go |

@@ -1244,15 +1244,15 @@ equivalent Python tutorial for each topic:
 
 | Component | Location |
 |-----------|----------|
-| Main exports | `packages/agent-mesh/sdks/typescript/src/index.ts` |
-| Type definitions | `packages/agent-mesh/sdks/typescript/src/types.ts` |
-| `AgentIdentity` | `packages/agent-mesh/sdks/typescript/src/identity.ts` |
-| `TrustManager` | `packages/agent-mesh/sdks/typescript/src/trust.ts` |
-| `PolicyEngine` | `packages/agent-mesh/sdks/typescript/src/policy.ts` |
-| `AuditLogger` | `packages/agent-mesh/sdks/typescript/src/audit.ts` |
-| `AgentMeshClient` | `packages/agent-mesh/sdks/typescript/src/client.ts` |
-| Tests | `packages/agent-mesh/sdks/typescript/tests/*.test.ts` |
-| Package config | `packages/agent-mesh/sdks/typescript/package.json` |
+| Main exports | `agent-governance-typescript/src/index.ts` |
+| Type definitions | `agent-governance-typescript/src/types.ts` |
+| `AgentIdentity` | `agent-governance-typescript/src/identity.ts` |
+| `TrustManager` | `agent-governance-typescript/src/trust.ts` |
+| `PolicyEngine` | `agent-governance-typescript/src/policy.ts` |
+| `AuditLogger` | `agent-governance-typescript/src/audit.ts` |
+| `AgentMeshClient` | `agent-governance-typescript/src/client.ts` |
+| Tests | `agent-governance-typescript/tests/*.test.ts` |
+| Package config | `agent-governance-typescript/package.json` |
 
 ---
 
@@ -1260,7 +1260,7 @@ equivalent Python tutorial for each topic:
 
 - **Run the tests** to see the package in action:
   ```bash
-  cd packages/agent-mesh/sdks/typescript
+  cd agent-governance-typescript
   npm install && npm test
   ```
 - **Load a YAML policy** from the repository's `policies/` directory and evaluate it

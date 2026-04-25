@@ -96,7 +96,7 @@ identity = AgentIdentity.create(
 )
 ```
 
-**Component:** [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — `sdks/typescript/src/identity.ts`, `sdks/typescript/src/trust.ts`
+**Component:** [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — `agent-governance-typescript/src/identity.ts`, `agent-governance-typescript/src/trust.ts`
 
 ---
 

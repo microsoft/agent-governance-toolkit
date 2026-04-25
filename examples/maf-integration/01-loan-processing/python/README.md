@@ -1,126 +1,46 @@
-# 🏦 Contoso Bank — Loan Processing Governance Demo (Python)
+# Contoso Bank — Loan Processing Governance Demo (Python)
 
-**Part of the [Agent Governance Toolkit (AGT)](https://github.com/microsoft/agent-governance-toolkit)**
+This scenario uses the real Microsoft Agent Framework Python shape plus real AGT
+middleware. `main.py` creates an `agent_framework.Agent`, configures an
+`OpenAIChatClient`, and attaches middleware from
+`agent_os.integrations.maf_adapter`.
 
-This demo shows how an AI loan officer agent is governed in real-time using AGT's four core middleware layers integrated with the Microsoft Agent Framework (MAF).
+## Governance story
 
-## What This Demo Shows
+- **Policy enforcement:** blocks SSN, tax-record, and high-value approval requests
+- **Capability sandboxing:** allows loan lookup tools and blocks transfer/admin operations
+- **Rogue detection:** flags repeated transfer-oriented behavior
+- **Audit trail:** verifies the Merkle-chained AGT audit log at the end of the run
 
-| Governance Layer | What It Does |
-|---|---|
-| **Policy Enforcement** | YAML-driven rules block PII access (SSN, tax records) before the LLM sees them |
-| **Capability Sandboxing** | Allow/deny tool lists restrict which APIs the agent can call |
-| **Rogue Agent Detection** | Z-score frequency analysis and entropy scoring detect anomalous behaviour |
-| **Audit Trail** | SHA-256 Merkle-chained log provides tamper-proof compliance records |
-
-## Architecture
-
-```
- User Request
-      │
-      ▼
-┌─────────────────────────────────────────────────────┐
-│  GovernancePolicyMiddleware                          │
-│  ┌──────────────────────┐                           │
-│  │ loan_governance.yaml │──→ DENY if PII / spend    │
-│  └──────────────────────┘    violation detected      │
-│            │ ALLOW                                   │
-│            ▼                                         │
-│  CapabilityGuardMiddleware                           │
-│  ┌──────────────┐                                   │
-│  │ Allowed tools │──→ DENY if tool not permitted     │
-│  │ Denied tools  │                                   │
-│  └──────────────┘                                   │
-│            │ ALLOW                                   │
-│            ▼                                         │
-│  RogueDetectionMiddleware                            │
-│  ┌──────────────┐                                   │
-│  │ Z-score      │──→ QUARANTINE if anomalous         │
-│  │ Entropy      │                                    │
-│  └──────────────┘                                   │
-│            │                                         │
-│            ▼                                         │
-│  AuditTrailMiddleware                                │
-│  ┌──────────────────┐                                │
-│  │ SHA-256 Merkle   │──→ Every action logged         │
-│  │ chain            │                                │
-│  └──────────────────┘                                │
-│            │                                         │
-│            ▼                                         │
-│        LLM Call                                      │
-└─────────────────────────────────────────────────────┘
-```
-
-## Prerequisites
-
-- **Python 3.9+**
-- (Optional) `GITHUB_TOKEN` for live LLM calls via GitHub Models
-- (Optional) Azure OpenAI credentials
-
-## Quick Start
+## Run it
 
 ```bash
-# 1. Install dependencies
 pip install -r requirements.txt
-
-# 2. (Optional) Set a GitHub token for live LLM
-export GITHUB_TOKEN=ghp_your_token_here
-
-# 3. Run the demo
 python main.py
 ```
 
-The demo works **with or without an API key**. Without one, it uses simulated LLM responses while still enforcing all governance rules.
+Optional live model backends:
 
-## LLM Configuration
+- `GITHUB_TOKEN`
+- `OPENAI_API_KEY`
+- `AZURE_OPENAI_API_KEY` with `AZURE_OPENAI_ENDPOINT` or `AZURE_OPENAI_BASE_URL`
 
-The demo auto-detects your LLM backend in this order:
+Without credentials, the example skips the live `Agent.run(...)` preview and
+still exercises the real AGT middleware pipeline in the terminal walkthrough.
 
-| Priority | Backend | Environment Variables |
-|---|---|---|
-| 1 | **GitHub Models** (recommended, free) | `GITHUB_TOKEN` |
-| 2 | Azure OpenAI | `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` |
-| 3 | Simulated | (none needed) |
+## Files
 
-## Customization Guide
+- `main.py` — real MAF agent wiring plus the four-act walkthrough
+- `policies\loan_governance.yaml` — real AGT policy document loaded by `PolicyEvaluator`
+- `requirements.txt` — MAF and AGT package requirements for running the example
 
-### Editing Policies
-
-The governance policy is in `policies/loan_governance.yaml`. To add a new rule:
+## Policy example
 
 ```yaml
-- name: "block_crypto_transactions"
+- name: "block_pii_access"
   condition:
     field: "message"
-    operator: "contains_any"
-    value: "bitcoin,crypto,ethereum,wallet"
+    operator: "matches"
+    value: '(?i)(\b\d{3}-\d{2}-\d{4}\b|social security|ssn|tax records|tax returns)'
   action: "deny"
-  priority: 95
-  message: "Cryptocurrency transactions are not permitted"
 ```
-
-### Changing Tool Permissions
-
-In `main.py`, modify the `CapabilityGuardMiddleware` initialization:
-
-```python
-capability_mw = CapabilityGuardMiddleware(
-    allowed_tools=["check_credit_score", "get_loan_rates"],
-    denied_tools=["access_tax_records", "transfer_funds"],
-)
-```
-
-## Understanding the Output
-
-| Act | What It Demonstrates |
-|---|---|
-| **Act 1** | YAML policy rules block PII requests (SSN, tax records) before the LLM |
-| **Act 2** | Tool allow/deny lists prevent the agent from calling restricted APIs |
-| **Act 3** | Rapid-fire transfer attempts trigger anomaly detection and quarantine |
-| **Act 4** | Merkle chain integrity verification and compliance proof generation |
-
-## Learn More
-
-- [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
-- [AGT Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs)
-- [MAF Integration Guide](https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agent-os/src/agent_os/integrations)

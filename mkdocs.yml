@@ -109,6 +109,7 @@ nav:
     - Advanced Trust: tutorials/17-advanced-trust-and-behavior.md
     - Compliance Verification: tutorials/18-compliance-verification.md
     - .NET package: tutorials/19-dotnet-sdk.md
+    - C# MCP extension: tutorials/42-csharp-mcp-extension.md
     - TypeScript package: tutorials/20-typescript-sdk.md
     - Rust crate: tutorials/21-rust-sdk.md
     - Go module: tutorials/22-go-sdk.md

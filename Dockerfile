@@ -37,6 +37,8 @@ COPY . /workspace
 # Install local packages (Scorecard: pinned via pyproject.toml)
 # Requirements file dependencies have version constraints
 RUN python -m pip install --no-cache-dir \
+        -e "agent-governance-python/agent-primitives[dev]" \
+        -e "agent-governance-python/agent-mcp-governance[dev]" \
         -e "packages/agent-os[full,dev]" \
         -e "packages/agent-mesh[agent-os,dev,server]" \
         -e "packages/agent-hypervisor[api,dev,nexus]" \
@@ -47,7 +49,7 @@ RUN python -m pip install --no-cache-dir \
         -e "packages/agent-lightning[agent-os,dev]" \
     && python -m pip install --no-cache-dir \
         -r packages/agent-hypervisor/examples/dashboard/requirements.txt \
-    && cd /workspace/packages/agent-mesh/sdks/typescript \
+    && cd /workspace/agent-governance-typescript \
     && npm ci
 
 ENTRYPOINT ["bash", "/workspace/scripts/docker/dev-entrypoint.sh"]

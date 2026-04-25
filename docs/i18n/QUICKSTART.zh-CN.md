@@ -144,7 +144,7 @@ agent-governance verify --badge
 | 内容 | 位置 |
 |------|------|
 | 完整 API 参考（Python） | [packages/agent-os/README.md](../../packages/agent-os/README.md) |
-| TypeScript 包文档 | [packages/agent-mesh/sdks/typescript/](../../packages/agent-mesh/sdks/typescript/README.md) |
+| TypeScript 包文档 | [agent-governance-typescript/README.md](../../agent-governance-typescript/README.md) |
 | .NET 包文档 | [agent-governance-dotnet/README.md](../../agent-governance-dotnet/README.md) |
 | OWASP 覆盖图 | [docs/OWASP-COMPLIANCE.md](../OWASP-COMPLIANCE.md) |
 | 贡献指南 | [CONTRIBUTING.md](../../CONTRIBUTING.md) |
@@ -152,3 +152,4 @@ agent-governance verify --badge
 ---
 
 *基于 [@davidequarracino](https://github.com/davidequarracino) 的初始快速入门贡献。*
+

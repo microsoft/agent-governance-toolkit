@@ -99,7 +99,7 @@ parameters:
       - name: agentmesh-mcp-proxy
         path: packages/agent-mesh/packages/mcp-proxy
       - name: agent-governance-sdk
-        path: packages/agent-mesh/sdks/typescript
+        path: agent-governance-typescript
       - name: agent-os-copilot-extension
         path: packages/agent-os/extensions/copilot
       - name: agentos-mcp-server

@@ -93,6 +93,8 @@ builder.Services
 
 `WithGovernance(...)` wraps the final MCP `ToolCollection`, so it works with tools registered before or after the governance extension is added.
 
+For a step-by-step walkthrough, see [Tutorial 42 — C# MCP extension](../tutorials/42-csharp-mcp-extension.md).
+
 ## Features
 
 ### Policy Engine

@@ -10,7 +10,7 @@ services:
     working_dir: /workspace
     volumes:
       - .:/workspace
-      - typescript_node_modules:/workspace/packages/agent-mesh/sdks/typescript/node_modules
+      - typescript_node_modules:/workspace/agent-governance-typescript/node_modules
 
   test:
     build:
@@ -22,7 +22,7 @@ services:
     working_dir: /workspace
     volumes:
       - .:/workspace
-      - typescript_node_modules:/workspace/packages/agent-mesh/sdks/typescript/node_modules
+      - typescript_node_modules:/workspace/agent-governance-typescript/node_modules
 
   dashboard:
     profiles: ["dashboard"]
@@ -41,7 +41,7 @@ services:
     working_dir: /workspace
     volumes:
       - .:/workspace
-      - typescript_node_modules:/workspace/packages/agent-mesh/sdks/typescript/node_modules
+      - typescript_node_modules:/workspace/agent-governance-typescript/node_modules
 
 volumes:
   typescript_node_modules:

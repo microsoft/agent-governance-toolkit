@@ -506,9 +506,9 @@ with delegated authority.
 
 | Component | Location |
 |-----------|----------|
-| `AgentIdentity` (TypeScript) | `packages/agent-mesh/sdks/typescript/src/identity.ts` |
-| `IdentityRegistry` (TypeScript) | `packages/agent-mesh/sdks/typescript/src/identity.ts` |
-| Tests | `packages/agent-mesh/sdks/typescript/tests/identity.test.ts` |
+| `AgentIdentity` (TypeScript) | `agent-governance-typescript/src/identity.ts` |
+| `IdentityRegistry` (TypeScript) | `agent-governance-typescript/src/identity.ts` |
+| Tests | `agent-governance-typescript/tests/identity.test.ts` |
 
 ---
 

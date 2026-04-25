@@ -84,10 +84,13 @@ REGISTERED_PACKAGES = {
     "agent-tool-registry", "cedar", "opa", "huggingface_hub",
     # APS adapter optional deps
     "aps", "agent-passport-system",
+    # Microsoft Agent Framework (MAF) — not yet on PyPI, used in examples
+    "agent-framework", "agent_framework",
+    "agent-framework-openai", "agent_framework_openai",
     # Internal cross-package references (local-only, NOT on PyPI)
     # These are flagged as HIGH RISK if found in requirements.txt with version pins
     # instead of path references. See dependency confusion attack vector.
-    "agent-primitives", "emk",
+    "agent-primitives", "agent-mcp-governance", "agent_mcp_governance", "emk",
     # With extras (base name is what matters)
 }
 
@@ -124,7 +127,7 @@ REGISTERED_NPM_PACKAGES = {
     "uuid", "yaml", "zod", "@types/uuid", "@vitest/coverage-v8",
     # npm deps from mcp-proxy
     "crypto-js",
-    # npm deps from sdks/typescript
+    # npm deps from agent-governance-typescript
     "js-yaml", "@noble/ed25519", "@noble/ciphers", "@noble/curves", "@noble/hashes",
     # npm deps from agent-os-vscode
     "@types/glob", "@types/mocha", "@vscode/test-electron",

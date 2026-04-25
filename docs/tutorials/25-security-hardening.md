@@ -159,7 +159,7 @@ updates:
     open-pull-requests-limit: 10
 
   - package-ecosystem: npm
-    directory: "/packages/agent-mesh/sdks/typescript"
+    directory: "/agent-governance-typescript"
     schedule:
       interval: weekly
 

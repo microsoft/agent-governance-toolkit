@@ -47,7 +47,7 @@ jobs:
             dotnet:
               - 'agent-governance-dotnet/**'
             typescript:
-              - 'packages/agent-mesh/sdks/typescript/**'
+              - 'agent-governance-typescript/**'
               - 'packages/agent-os/extensions/**'
               - 'packages/agentmesh-integrations/mastra-agentmesh/**'
               - 'packages/agentmesh-integrations/copilot-governance/**'
@@ -425,7 +425,7 @@ jobs:
           - name: agentmesh-mcp-proxy
             path: packages/agent-mesh/packages/mcp-proxy
           - name: agent-governance-sdk
-            path: packages/agent-mesh/sdks/typescript
+            path: agent-governance-typescript
           - name: agentmesh-api
             path: packages/agent-mesh/services/api
           - name: agent-os-copilot-extension
