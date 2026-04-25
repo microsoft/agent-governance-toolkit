@@ -24,6 +24,7 @@ Toolkit.
 11. [Is AGT geared towards Foundry agents or any agent type?](#11-is-agt-geared-towards-foundry-agents-or-any-agent-type)
 12. [What is the relationship between AGT and Agent 365?](#12-what-is-the-relationship-between-agt-and-agent-365)
 13. [How is AGT different from DLP and communication compliance policies?](#13-how-is-agt-different-from-dlp-and-communication-compliance-policies)
+14. [How does AGT's observability compare to Agent 365's observability?](#14-how-does-agts-observability-compare-to-agent-365s-observability)
 
 ---
 
@@ -527,28 +528,67 @@ See the [Independence & Dependency Policy](../INDEPENDENCE.md) for the full vend
 
 ## 12. What is the relationship between AGT and Agent 365?
 
-**Short answer:** They operate at different layers and are complementary. Agent 365 is the M365 control plane for fleet management; AGT is runtime governance middleware for per-action policy enforcement.
+**Short answer:** They operate at different layers and are complementary. Agent 365 **observes** agent behavior (telemetry, dashboards, Defender integration). AGT **enforces** agent behavior (deterministic policy, deny/allow per tool call). AGT is the bouncer; Agent 365 is the security camera. You want both.
 
 ### Layer Comparison
 
 | Aspect | Agent Governance Toolkit | Agent 365 |
 |--------|------------------------|-----------| 
-| **What it is** | Runtime governance middleware | M365 control plane |
-| **Scope** | Per-action enforcement inside each agent | Tenant-level fleet governance |
+| **What it is** | Runtime governance middleware | M365 control plane + observability |
+| **Core function** | **Enforce** — block/allow each agent action | **Observe** — capture telemetry, surface dashboards |
+| **Scope** | Per-action enforcement inside each agent | Tenant-level fleet governance and monitoring |
+| **When it acts** | Before execution — blocks what shouldn't happen | After the fact — captures what happened |
 | **Where it runs** | In-process middleware or sidecar alongside each agent | Centralized Azure / M365 service |
 | **What it does** | Intercepts every tool call, enforces policy, verifies identity, audits | Agent registry, Entra Agent ID, lifecycle management, admin dashboards, Defender + Purview integration |
 | **Latency** | Sub-millisecond (<0.1ms p99) | Dashboard / API-level |
+| **Observability** | OTel spans + metrics (feeds into any OTel backend) | OTel-based tracing via Agent 365 SDK, correlated with Entra identity |
 | **Works with** | Any framework, any cloud, any runtime | M365 tenant boundary |
 | **License** | Open-source (MIT) | M365 licensed service |
 
+### How They Work Together
+
+```
+Agent Action
+    │
+    ├──► AGT: Policy check → ALLOW/DENY (deterministic, <0.1ms)
+    │         └── If denied → blocked, never executes
+    │
+    ├──► Agent 365 SDK: Capture OTel trace (what happened)
+    │         └── Telemetry → Defender + Purview dashboards
+    │
+    └──► Tool executes (only if AGT allowed it)
+```
+
+### What AGT Does That Agent 365 Does Not
+
+- **Deterministic policy enforcement** — 0% bypass rate (prompt-based safety has 26.67% violation rate in red-team testing)
+- **Pre-execution denial** — blocks before the tool runs, not just logs after
+- **E2E encrypted agent messaging** — Signal protocol (X3DH + Double Ratchet)
+- **Multi-stage pipeline** — pre_input → pre_tool → post_tool → pre_output
+- **Session state ratchets** — DLP-style sensitivity that only goes up
+- **Human-in-the-loop approval gates** — pause execution, wait for human
+- **Cross-org zero-trust** — no AAD dependency, works across tenants
+
+### What Agent 365 Does That AGT Does Not
+
+- **Fleet management** — manage thousands of agents across a tenant
+- **Defender integration** — threat detection, SIEM correlation
+- **Purview integration** — compliance classification at tenant level
+- **Admin dashboards** — visual control plane for the agent fleet
+- **Entra Agent ID** — AAD-based agent identity within the M365 ecosystem
+
 ### How to Think About It
 
-- **Agent 365** answers: *"Which agents are allowed to exist in my org and what data can they access?"*
+- **Agent 365** answers: *"Which agents are allowed to exist in my org and what did they do?"*
 - **AGT** answers: *"Should this specific agent be allowed to execute this specific tool call right now?"*
 
-Agent 365 manages the fleet from the admin center. AGT enforces policy inside each agent's runtime. They are complementary — not competing.
+### Integration Points
 
-There is no formal integration between them today. AGT is an open-source MIT project; Agent 365 is a licensed M365 service.
+1. **Identity bridge** — AGT's `did:agentmesh` identities can be bridged to Entra Agent ID ([Tutorial 31](tutorials/31-entra-agent-id-bridge.md)), so Agent 365 dashboards can show AGT-governed agents
+2. **OTel convergence** — AGT emits OTel spans and metrics ([Tutorial 40](tutorials/40-otel-observability.md)) that feed into the same OTel pipeline Agent 365 uses — same dashboards, correlated traces
+3. **Audit trail** — AGT's tamper-evident audit log can export to the same data sinks Agent 365 feeds into
+
+Agent 365 manages the fleet from the admin center. AGT enforces policy inside each agent's runtime. Fully complementary.
 
 ---
 
@@ -586,6 +626,52 @@ DLP and communication compliance are **data-layer controls**. AGT is an **action
 
 - **DLP** ensures sensitive data doesn't leak
 - **AGT** ensures the agent doesn't do things it shouldn't
+
+---
+
+## 14. How does AGT's observability compare to Agent 365's observability?
+
+**Short answer:** Agent 365 provides tenant-level observability (fleet dashboards, Defender/Purview integration). AGT provides runtime-level observability (per-evaluation OTel spans and metrics). They feed the same OTel pipeline and complement each other.
+
+### Comparison
+
+| Aspect | AGT Observability | Agent 365 Observability |
+|--------|-------------------|-------------------------|
+| **Scope** | Per-agent, per-action | Per-tenant, fleet-wide |
+| **Data captured** | Policy evaluations, denials, approval decisions, trust scores | Prompts, tool calls, inference events, exceptions |
+| **Format** | OpenTelemetry spans + metrics | OpenTelemetry traces via Agent 365 SDK |
+| **Latency impact** | Zero when disabled (no-op context managers) | SDK instrumentation overhead |
+| **Identity correlation** | `did:agentmesh` agent identifier | Entra Agent ID |
+| **Security integration** | Audit log (tamper-evident, hash-chained) | Defender for AI, Purview compliance |
+
+### AGT OTel Signals
+
+| Signal | Type | What It Captures |
+|--------|------|------------------|
+| `agt.policy.evaluate` | Span | Every policy evaluation (agent_id, stage, rule, action) |
+| `agt.approval.request` | Span | Approval workflows (outcome, approver identity) |
+| `agt.trust.verify` | Span | Trust verification (score, tier) |
+| `agt.policy.evaluations` | Counter | Total evaluations by action and stage |
+| `agt.policy.denials` | Counter | Denial count by rule and tool |
+| `agt.policy.latency_ms` | Histogram | Policy evaluation latency distribution |
+
+### How They Connect
+
+Both use OpenTelemetry. If you configure both AGT and Agent 365 SDK with the same OTLP endpoint, you get a unified trace:
+
+```
+Agent 365 trace: "agent-X invoked tool-Y with prompt-Z"
+   └── AGT span:  "policy evaluated → allow (rule: allow-read, 0.08ms)"
+```
+
+Enable AGT's OTel with one line:
+
+```python
+from agentmesh.governance import enable_otel
+enable_otel(service_name="my-agent")
+```
+
+See [Tutorial 40 — OTel Observability](tutorials/40-otel-observability.md) for full setup.
 
 ---
 
