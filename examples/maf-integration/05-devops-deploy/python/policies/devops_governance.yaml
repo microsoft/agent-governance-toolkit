@@ -1,60 +1,57 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-
 version: "1.0"
 name: "contoso-devops-deploy-governance"
 description: >
-  Governance policy for the Contoso Engineering DeployBot AI agent.
-  Blocks direct production deployments without approval gates, prevents
-  destructive operations (DROP DATABASE, force push, rm -rf), restricts
-  access to production secrets/credentials, and permits standard CI/CD
-  pipeline operations. All actions are audit-logged.
+  Governance policy for DeployBot. Blocks direct production releases,
+  destructive operations, and secret retrieval while allowing build, test,
+  and staging workflows.
 
 rules:
   - name: "block_production_deploy"
     condition:
       field: "message"
-      operator: "contains_any"
-      value: "to production,production deploy,deploy_to_production,push to prod,release to production,ship to prod,into production"
+      operator: "matches"
+      value: '(?i)(production deploy|deploy.*production|production.*deploy|push to prod|release to production|ship to prod)'
     action: "deny"
     priority: 100
-    message: "Direct production deployments require approval gates — agent cannot deploy to production without human sign-off"
+    message: "Production deployments require human approval gates"
 
   - name: "block_destructive_ops"
     condition:
       field: "message"
-      operator: "contains_any"
-      value: "DROP DATABASE,force push,force_push,rm -rf,delete resource group,delete_resource_group,truncate table,TRUNCATE TABLE,drop table,DROP TABLE"
+      operator: "matches"
+      value: '(?i)(drop database|force push|rm -rf|delete resource group|truncate table|drop table)'
     action: "deny"
     priority: 95
-    message: "Destructive operations (DROP, force push, rm -rf, delete resource group, truncate) are prohibited by safety policy"
+    message: "Destructive operations are prohibited by deployment safety policy"
 
   - name: "block_secret_access"
     condition:
       field: "message"
-      operator: "contains_any"
-      value: "production secret,prod secret,connection string,api key,API_KEY,DB_CONNECTION,certificate,prod credential,access_production_secrets"
+      operator: "matches"
+      value: '(?i)(production secret|connection string|api key|certificate|prod credential)'
     action: "deny"
     priority: 90
-    message: "Access to production secrets, connection strings, API keys, and certificates is restricted by credential isolation policy"
+    message: "Production secrets and credentials are isolated from the agent"
 
   - name: "allow_staging_deploy"
     condition:
       field: "message"
-      operator: "contains_any"
-      value: "deploy to staging,staging deploy,deploy to dev,dev deploy,deploy to test,test deploy,deploy_to_staging"
+      operator: "matches"
+      value: '(?i)(staging|deploy to dev|deploy to test|staging deploy)'
     action: "allow"
     priority: 50
-    message: "Deployments to dev/staging/test environments are permitted"
+    message: "Non-production deployments are permitted"
 
   - name: "allow_pipeline_ops"
     condition:
       field: "message"
-      operator: "contains_any"
-      value: "pipeline status,status of pipeline,build status,trigger build,trigger a build,trigger_build,view logs,view_logs,run tests,run_tests,check pipeline,build trigger"
+      operator: "matches"
+      value: '(?i)(pipeline status|build status|trigger build|view logs|run tests|check pipeline)'
     action: "allow"
-    priority: 50
-    message: "Pipeline status checks, build triggers, log viewing, and test runs are permitted"
+    priority: 45
+    message: "Pipeline inspection and build/test workflows are permitted"
 
   - name: "audit_all_actions"
     condition:
@@ -63,7 +60,7 @@ rules:
       value: 0
     action: "audit"
     priority: 10
-    message: "All agent actions are audit-logged for compliance"
+    message: "All deployment assistant activity is audit logged"
 
 defaults:
   action: "allow"

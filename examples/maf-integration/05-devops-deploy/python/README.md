@@ -1,126 +1,47 @@
-# 🚀 DeployBot — CI/CD Pipeline Safety Governance Demo (Python)
+# DeployBot — DevOps Deployment Governance Demo (Python)
 
-**Part of the [Agent Governance Toolkit (AGT)](https://github.com/microsoft/agent-governance-toolkit)**
+This scenario uses the real Microsoft Agent Framework Python agent pattern with
+AGT middleware from `agent_os.integrations.maf_adapter`. It preserves the
+deployment-safety story from the tutorial: production deploys, destructive ops,
+and secret access are blocked while build, test, and staging workflows remain
+available.
 
-This demo shows how an AI DevOps assistant (DeployBot) is governed in real-time using AGT's four core middleware layers integrated with the Microsoft Agent Framework (MAF).
+## Governance story
 
-## What This Demo Shows
+- **Policy enforcement:** blocks production deploy requests, destructive operations, and secret retrieval
+- **Capability sandboxing:** allows build/test/staging tools and blocks production-only actions
+- **Rogue detection:** quarantines deployment-storm behavior
+- **Audit trail:** confirms audit and detector integrity chains after execution
 
-| Governance Layer | What It Does |
-|---|---|
-| **Policy Enforcement** | YAML-driven rules block production deploys and destructive operations before the LLM sees them |
-| **Capability Sandboxing** | Allow/deny tool lists restrict which pipeline APIs the agent can call |
-| **Rogue Agent Detection** | Deployment storm detection (rapid-fire deploys) triggers auto-quarantine |
-| **Audit Trail** | SHA-256 Merkle-chained log provides tamper-proof compliance records |
-
-## Architecture
-
-```
- User Request
-      │
-      ▼
-┌─────────────────────────────────────────────────────┐
-│  GovernancePolicyMiddleware                          │
-│  ┌────────────────────────┐                         │
-│  │ devops_governance.yaml │──→ DENY if prod deploy   │
-│  └────────────────────────┘    or destructive op     │
-│            │ ALLOW                                   │
-│            ▼                                         │
-│  CapabilityGuardMiddleware                           │
-│  ┌──────────────┐                                   │
-│  │ Allowed tools │──→ DENY if tool not permitted     │
-│  │ Denied tools  │                                   │
-│  └──────────────┘                                   │
-│            │ ALLOW                                   │
-│            ▼                                         │
-│  RogueDetectionMiddleware                            │
-│  ┌──────────────┐                                   │
-│  │ Z-score      │──→ QUARANTINE if deployment storm  │
-│  │ Entropy      │                                    │
-│  └──────────────┘                                   │
-│            │                                         │
-│            ▼                                         │
-│  AuditTrailMiddleware                                │
-│  ┌──────────────────┐                                │
-│  │ SHA-256 Merkle   │──→ Every action logged         │
-│  │ chain            │                                │
-│  └──────────────────┘                                │
-│            │                                         │
-│            ▼                                         │
-│        LLM Call                                      │
-└─────────────────────────────────────────────────────┘
-```
-
-## Prerequisites
-
-- **Python 3.9+**
-- (Optional) `GITHUB_TOKEN` for live LLM calls via GitHub Models
-- (Optional) Azure OpenAI credentials
-
-## Quick Start
+## Run it
 
 ```bash
-# 1. Install dependencies
 pip install -r requirements.txt
-
-# 2. (Optional) Set a GitHub token for live LLM
-export GITHUB_TOKEN=ghp_your_token_here
-
-# 3. Run the demo
 python main.py
 ```
 
-The demo works **with or without an API key**. Without one, it uses simulated LLM responses while still enforcing all governance rules.
+Optional live model backends:
 
-## LLM Configuration
+- `GITHUB_TOKEN`
+- `OPENAI_API_KEY`
+- `AZURE_OPENAI_API_KEY` with `AZURE_OPENAI_ENDPOINT` or `AZURE_OPENAI_BASE_URL`
 
-The demo auto-detects your LLM backend in this order:
+Without credentials, the example still runs the real governance middleware
+walkthrough locally.
 
-| Priority | Backend | Environment Variables |
-|---|---|---|
-| 1 | **GitHub Models** (recommended, free) | `GITHUB_TOKEN` |
-| 2 | Azure OpenAI | `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` |
-| 3 | Simulated | (none needed) |
+## Files
 
-## Customization Guide
+- `main.py` — MAF agent setup, deployment tools, and walkthrough
+- `policies\devops_governance.yaml` — real AGT deployment policy document
+- `requirements.txt` — runtime dependencies
 
-### Editing Policies
-
-The governance policy is in `policies/devops_governance.yaml`. To add a new rule:
+## Policy example
 
 ```yaml
-- name: "block_config_changes"
+- name: "block_production_deploy"
   condition:
     field: "message"
-    operator: "contains_any"
-    value: "modify config,update settings,change environment variables"
+    operator: "matches"
+    value: '(?i)(production deploy|deploy to production|push to prod)'
   action: "deny"
-  priority: 85
-  message: "Configuration changes require change management approval"
 ```
-
-### Changing Tool Permissions
-
-In `main.py`, modify the `CapabilityGuardMiddleware` initialization:
-
-```python
-capability_mw = CapabilityGuardMiddleware(
-    allowed_tools=["trigger_build", "check_pipeline_status", "deploy_to_staging"],
-    denied_tools=["deploy_to_production", "force_push", "delete_resource_group"],
-)
-```
-
-## Understanding the Output
-
-| Act | What It Demonstrates |
-|---|---|
-| **Act 1** | YAML policy rules block production deploys, destructive ops, and secret access before the LLM |
-| **Act 2** | Tool allow/deny lists prevent the agent from calling restricted pipeline APIs |
-| **Act 3** | Rapid-fire production deploy attempts trigger deployment storm detection and quarantine |
-| **Act 4** | Merkle chain integrity verification and compliance proof generation |
-
-## Learn More
-
-- [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
-- [AGT Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs)
-- [MAF Integration Guide](https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agent-os/src/agent_os/integrations)
