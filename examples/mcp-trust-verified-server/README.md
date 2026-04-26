@@ -48,5 +48,5 @@ Add the server to your MCP client configuration (Claude Desktop, Cursor, etc.):
 ## Related
 
 - [MCP Trust Integration Guide](../../docs/integrations/mcp-trust-guide.md)
-- [MCP Trust Proxy](../../packages/agentmesh-integrations/mcp-trust-proxy/)
-- [MCP Trust Server](../../packages/agent-mesh/packages/mcp-trust-server/)
+- [MCP Trust Proxy](../../agentmesh-integrations/mcp-trust-proxy/)
+- [MCP Trust Server](../../agent-mesh/packages/mcp-trust-server/)

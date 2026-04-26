@@ -4,11 +4,11 @@
 set -euo pipefail
 
 packages=(
-  "packages/agent-os"
-  "packages/agent-mesh"
-  "packages/agent-hypervisor"
-  "packages/agent-sre"
-  "packages/agent-compliance"
+  "agent-os"
+  "agent-mesh"
+  "agent-hypervisor"
+  "agent-sre"
+  "agent-compliance"
 )
 
 for package_dir in "${packages[@]}"; do

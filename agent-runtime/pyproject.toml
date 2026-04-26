@@ -41,7 +41,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
 Repository = "https://github.com/microsoft/agent-governance-toolkit"
-Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agent-runtime"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-runtime"
 "Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
 
 [tool.hatch.build.targets.wheel]

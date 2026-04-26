@@ -35,7 +35,7 @@ Key packages: `streamlit`, `plotly`, `pandas`, `numpy`, `networkx`.
 ## How to Run
 
 ```bash
-cd packages/agent-mesh/examples/06-trust-score-dashboard
+cd agent-mesh/examples/06-trust-score-dashboard
 streamlit run trust_dashboard.py
 ```
 

@@ -5,8 +5,8 @@
 NOTE: Behavioral anomaly detection is implemented in the Agent SRE package
 (agent_sre.anomaly.rogue_detector), not in Agent Mesh. The Agent SRE module
 provides tool-call frequency analysis, action entropy scoring, and capability
-profile violation detection. See packages/agent-sre/tests/unit/test_rogue_detector.py
-and packages/agent-sre/tests/unit/test_anomaly_detection.py for the canonical tests
+profile violation detection. See agent-sre/tests/unit/test_rogue_detector.py
+and agent-sre/tests/unit/test_anomaly_detection.py for the canonical tests
 (72 tests covering all ASI-10 behavioral detection scenarios).
 """
 
@@ -14,7 +14,7 @@ import pytest
 
 pytestmark = pytest.mark.skip(
     reason="Behavioral anomaly detection moved to agent-sre package; "
-    "see packages/agent-sre/tests/unit/test_rogue_detector.py"
+    "see agent-sre/tests/unit/test_rogue_detector.py"
 )
 
 

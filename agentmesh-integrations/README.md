@@ -2,7 +2,7 @@
 
 # AgentMesh Integrations
 
-> **📦 Migrated:** This package was moved from its original repository into the monorepo at `packages/agentmesh-integrations/`.
+> **📦 Migrated:** This package was moved from its original repository into the monorepo at `agentmesh-integrations/`.
 
 
 **Platform Plugins & Trust Providers for AgentMesh**
@@ -12,7 +12,7 @@
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![PyPI](https://img.shields.io/badge/PyPI-multiple%20packages-lightgrey)](https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agentmesh-integrations)
+[![PyPI](https://img.shields.io/badge/PyPI-multiple%20packages-lightgrey)](https://github.com/microsoft/agent-governance-toolkit/tree/main/agentmesh-integrations)
 
 > ⭐ **If this project helps you, please star it!** It helps others discover AgentMesh integrations.
 
@@ -127,8 +127,8 @@ agentmesh (core library)              agentmesh-integrations (this repo)
 
 | Type | Location | Example |
 |---|---|---|
-| **Framework adapters** (wrap agent frameworks with governance) | [Agent OS `integrations/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agent-os/src/agent_os/integrations) | LangChainKernel, CrewAIKernel |
-| **Ecosystem bridges** (connect sibling projects) | [Agent SRE `integrations/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agent-sre/src/agent_sre/integrations) | Agent OS bridge, AgentMesh bridge |
+| **Framework adapters** (wrap agent frameworks with governance) | [Agent OS `integrations/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-os/src/agent_os/integrations) | LangChainKernel, CrewAIKernel |
+| **Ecosystem bridges** (connect sibling projects) | [Agent SRE `integrations/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-sre/src/agent_sre/integrations) | Agent OS bridge, AgentMesh bridge |
 | **Platform plugins & trust providers** | **This repo** | Dify plugin, Nostr WoT, Moltbook |
 
 ---

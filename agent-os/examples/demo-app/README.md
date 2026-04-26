@@ -14,13 +14,13 @@ The kernel intercepts the `process_task` action, checks it against the declared 
 - Agent OS installed:
 
 ```bash
-pip install -e "packages/agent-os[dev]"
+pip install -e "agent-os[dev]"
 ```
 
 ## How to Run
 
 ```bash
-cd packages/agent-os/examples/demo-app
+cd agent-os/examples/demo-app
 python agent.py
 ```
 
@@ -38,6 +38,6 @@ The kernel checked the 'read_only' policy before execution.
 
 ## Next Steps
 
-- Add more policies from `packages/agent-os/examples/shared-policies/`
+- Add more policies from `agent-os/examples/shared-policies/`
 - Try the `self-evaluating` example for agents that assess their own output quality
 - See the `governed-chatbot` example for a conversational agent with full policy enforcement

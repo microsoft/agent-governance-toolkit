@@ -102,11 +102,11 @@ From the repository root:
 ```bash
 pip install .[dev]
 
-PYTHONPATH=packages/agent-mesh/src:packages/agentmesh-integrations/audit-accountability-export \
-  python -m pytest packages/agentmesh-integrations/audit-accountability-export/tests -q
+PYTHONPATH=agent-mesh/src:agentmesh-integrations/audit-accountability-export \
+  python -m pytest agentmesh-integrations/audit-accountability-export/tests -q
 
-PYTHONPATH=packages/agent-mesh/src:packages/agentmesh-integrations/audit-accountability-export \
-  python packages/agentmesh-integrations/audit-accountability-export/examples/basic_auditservice_export.py
+PYTHONPATH=agent-mesh/src:agentmesh-integrations/audit-accountability-export \
+  python agentmesh-integrations/audit-accountability-export/examples/basic_auditservice_export.py
 ```
 
 The tests create real `AuditService` entries and use the returned `AuditEntry`

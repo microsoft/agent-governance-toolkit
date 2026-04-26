@@ -24,11 +24,11 @@ VENDOR_MODULES = {
 }
 
 CORE_PATHS = [
-    "packages/agent-os/src/agent_os",
-    "packages/agent-mesh/src/agentmesh",
-    "packages/agent-hypervisor/src/hypervisor",
-    "packages/agent-sre/src/agent_sre",
-    "packages/agent-compliance/src/agent_compliance",
+    "agent-os/src/agent_os",
+    "agent-mesh/src/agentmesh",
+    "agent-hypervisor/src/hypervisor",
+    "agent-sre/src/agent_sre",
+    "agent-compliance/src/agent_compliance",
 ]
 
 # Directories where vendor imports are expected (adapters, integrations)

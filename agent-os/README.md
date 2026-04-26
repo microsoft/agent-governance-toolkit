@@ -175,7 +175,7 @@ That's it! Your agent now has deterministic policy enforcement. [Learn more →]
 
 **🎬 See all features in action:**
 ```bash
-git clone https://github.com/microsoft/agent-governance-toolkit && cd agent-governance-toolkit && pip install -e packages/agent-os && python demo/maf_governance_demo.py
+git clone https://github.com/microsoft/agent-governance-toolkit && cd agent-governance-toolkit && pip install -e agent-os && python demo/maf_governance_demo.py
 ```
 
 <details>
@@ -1154,7 +1154,7 @@ Yes. Agent OS has 1,500+ tests, a VS Code extension, PyPI package (`pip install 
 git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agent-governance-toolkit
 pip install -e "agent-governance-python/agent-primitives[dev]"
-cd packages/agent-os
+cd agent-os
 pip install -e ".[dev]"
 pytest
 ```

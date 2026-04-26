@@ -67,7 +67,7 @@ agent-discovery = "agent_discovery.cli.main:main"
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
-Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agent-discovery"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-discovery"
 Repository = "https://github.com/microsoft/agent-governance-toolkit"
 Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
 

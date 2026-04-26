@@ -53,7 +53,7 @@ black --check .
 | `src/agentmesh/integrations/a2a/` | A2A protocol integration (wraps AICard) |
 | `src/agentmesh/services/` | Backend services |
 | `src/agentmesh/cli/` | CLI commands |
-| `packages/` | External packages (langchain-agentmesh, mcp-proxy) |
+| the repo root | External packages (langchain-agentmesh, mcp-proxy) |
 
 ## Coding Conventions
 
@@ -71,7 +71,7 @@ black --check .
 - **Never commit** secrets, API keys, or credentials
 - **Never weaken** trust thresholds — only tighten
 - Keep backward compatibility with existing protocol messages
-- `packages/` are standalone — changes there need their own test suite
+- the repo root are standalone — changes there need their own test suite
 
 ## Testing Requirements
 

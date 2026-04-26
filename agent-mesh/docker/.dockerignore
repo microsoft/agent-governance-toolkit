@@ -8,31 +8,31 @@ __pycache__/
 .hypothesis/
 
 # Ignore non-Python packages
-packages/agent-mesh/sdks/
-packages/agent-mesh/packages/
-packages/agent-mesh/services/
-packages/agent-mesh/charts/
-packages/agent-mesh/dashboards/
-packages/agent-mesh/deployments/
-packages/agent-mesh/notebooks/
-packages/agent-mesh/tutorials/
-packages/agent-mesh/examples/
-packages/agent-mesh/docs/
-packages/agent-mesh/proto/
-packages/agent-mesh/integrations/
-packages/agent-mesh/assets/
-packages/agent-mesh/dist/
-packages/agent-mesh/tests/
+agent-mesh/sdks/
+agent-mesh/packages/
+agent-mesh/services/
+agent-mesh/charts/
+agent-mesh/dashboards/
+agent-mesh/deployments/
+agent-mesh/notebooks/
+agent-mesh/tutorials/
+agent-mesh/examples/
+agent-mesh/docs/
+agent-mesh/proto/
+agent-mesh/integrations/
+agent-mesh/assets/
+agent-mesh/dist/
+agent-mesh/tests/
 
 # Ignore other top-level packages (only agent-mesh needed)
-packages/agent-os/
-packages/agent-hypervisor/
-packages/agent-sre/
-packages/agent-compliance/
-packages/agent-runtime/
-packages/agent-lightning/
+agent-os/
+agent-hypervisor/
+agent-sre/
+agent-compliance/
+agent-runtime/
+agent-lightning/
 agent-governance-dotnet/
-packages/agentmesh-integrations/
+agentmesh-integrations/
 
 # Ignore repo metadata
 .git/

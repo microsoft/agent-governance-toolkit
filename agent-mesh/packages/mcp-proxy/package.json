@@ -17,9 +17,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/microsoft/agent-governance-toolkit.git",
-    "directory": "packages/agent-mesh/packages/mcp-proxy"
+    "directory": "agent-mesh/packages/mcp-proxy"
   },
-  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agent-mesh/packages/mcp-proxy",
+  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-mesh/packages/mcp-proxy",
   "bugs": {
     "url": "https://github.com/microsoft/agent-governance-toolkit/issues"
   },
