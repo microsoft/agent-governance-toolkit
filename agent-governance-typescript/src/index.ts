@@ -28,6 +28,7 @@ export { GovernanceVerifier } from './verify';
 export { SurfaceParityChecker } from './surface-parity';
 export { CascadeContainmentManager } from './cascade-containment';
 export { ContextPoisoningDetector } from './context-poisoning';
+export { OciManifestAdapter } from './oci-manifest';
 
 // E2E Encryption (AgentMesh Wire Protocol v1.0)
 export {
@@ -92,6 +93,13 @@ export type {
   PoisoningFinding,
   ContextPoisoningScanResult,
   ContextIsolationViolation,
+  OciManifest,
+  OciDescriptor,
+  AICard,
+  AICardSkill,
+  AICardCapabilities,
+  AICardInvocation,
+  OciPackageResult,
 } from './types';
 export type { PromptDefenseConfig, PromptDefenseFinding, PromptDefenseReport } from './prompt-defense';
 export type {
