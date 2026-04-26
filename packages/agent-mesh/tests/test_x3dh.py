@@ -210,11 +210,48 @@ class TestX3DHExchange:
         alice = _make_manager()
         bad_bundle = PreKeyBundle(
             identity_key=b"\x00" * 32,
+            identity_key_ed=b"\x00" * 32,
             signed_pre_key=b"\x00" * 32,
             signed_pre_key_signature=b"\x00" * 32,  # Should be 64
             signed_pre_key_id=0,
         )
         with pytest.raises(ValueError, match="signature length"):
+            alice.initiate(bad_bundle)
+
+    def test_tampered_spk_signature_rejected(self):
+        """A bundle with a valid-length but wrong signature is rejected."""
+        alice = _make_manager()
+        bob = _make_manager()
+        bob.generate_signed_pre_key()
+        bundle = bob.get_public_bundle()
+        # Tamper: flip a byte in the signature
+        tampered_sig = bytearray(bundle.signed_pre_key_signature)
+        tampered_sig[0] ^= 0xFF
+        tampered_bundle = PreKeyBundle(
+            identity_key=bundle.identity_key,
+            identity_key_ed=bundle.identity_key_ed,
+            signed_pre_key=bundle.signed_pre_key,
+            signed_pre_key_signature=bytes(tampered_sig),
+            signed_pre_key_id=bundle.signed_pre_key_id,
+        )
+        with pytest.raises(ValueError, match="verification FAILED"):
+            alice.initiate(tampered_bundle)
+
+    def test_missing_identity_key_ed_rejected(self):
+        """A bundle without identity_key_ed is rejected (fail-closed)."""
+        alice = _make_manager()
+        bob = _make_manager()
+        bob.generate_signed_pre_key()
+        bundle = bob.get_public_bundle()
+        # Remove identity_key_ed
+        bad_bundle = PreKeyBundle(
+            identity_key=bundle.identity_key,
+            identity_key_ed=b"",  # empty = missing
+            signed_pre_key=bundle.signed_pre_key,
+            signed_pre_key_signature=bundle.signed_pre_key_signature,
+            signed_pre_key_id=bundle.signed_pre_key_id,
+        )
+        with pytest.raises(ValueError, match="Missing.*Ed25519"):
             alice.initiate(bad_bundle)
 
 
@@ -223,6 +260,7 @@ class TestInMemoryPreKeyStore:
         store = InMemoryPreKeyStore()
         bundle = PreKeyBundle(
             identity_key=b"\x01" * 32,
+            identity_key_ed=b"\x04" * 32,
             signed_pre_key=b"\x02" * 32,
             signed_pre_key_signature=b"\x03" * 64,
             signed_pre_key_id=0,
@@ -240,6 +278,7 @@ class TestInMemoryPreKeyStore:
         store = InMemoryPreKeyStore()
         bundle = PreKeyBundle(
             identity_key=b"\x01" * 32,
+            identity_key_ed=b"\x05" * 32,
             signed_pre_key=b"\x02" * 32,
             signed_pre_key_signature=b"\x03" * 64,
             signed_pre_key_id=0,
