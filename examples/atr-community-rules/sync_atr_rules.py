@@ -17,6 +17,9 @@ Usage:
 
     # Specify output path
     python sync_atr_rules.py --atr-dir ./rules/ --output atr_policy.yaml
+
+    # CI mode: fail on any invalid regex (use for local validation, not weekly cron)
+    python sync_atr_rules.py --atr-dir ./rules/ --strict-regex
 """
 
 from __future__ import annotations
@@ -60,6 +63,10 @@ CATEGORY_TO_FIELD: dict[str, str] = {
 }
 
 
+class InvalidRegexError(ValueError):
+    """Raised when an ATR regex pattern fails compile validation."""
+
+
 def _load_yaml(path: Path) -> dict[str, Any]:
     """Load a single YAML file, returning an empty dict on failure."""
     try:
@@ -78,6 +85,55 @@ def _extract_regex_patterns(detection: dict[str, Any]) -> list[str]:
         if condition.get("operator") == "regex" and condition.get("value"):
             patterns.append(condition["value"])
     return patterns
+
+
+def _validate_regex(pattern: str, source: str, *, strict: bool) -> bool:
+    """
+    Best-effort regex validation addressing the ReDoS concern raised in #908 review.
+
+    Checks:
+      1. Pattern compiles cleanly (no syntax errors).
+      2. Pattern length is below a conservative upper bound (8 KB) — prevents
+         a malicious or malformed ATR upstream from shipping pathologically
+         long regexes.
+
+    This is a cheap static guard, not a runtime ReDoS defence. True ReDoS
+    mitigation would require wrapping each re.search() call in the core
+    PolicyEvaluator with a timeout, which is out of scope for this example
+    sync utility.
+
+    Returns True if the pattern is acceptable. On failure, either raises
+    InvalidRegexError (when ``strict=True``) or logs a warning and returns
+    False (when ``strict=False``).
+
+    Note: as of ATR v2.0.12, a small number of rules use Unicode escape
+    sequences (\\uXXXX) that are valid in PCRE/JavaScript but not in Python's
+    re module. These are legitimate rules and are silently skipped in lenient
+    mode. The weekly sync workflow runs WITHOUT --strict-regex so that these
+    rules produce a warning rather than aborting the sync.
+    """
+    MAX_PATTERN_BYTES = 8 * 1024  # 8 KB upper bound
+
+    if len(pattern.encode("utf-8")) > MAX_PATTERN_BYTES:
+        msg = (
+            f"Rejecting oversized regex ({len(pattern)} bytes > {MAX_PATTERN_BYTES}) "
+            f"from {source}"
+        )
+        if strict:
+            raise InvalidRegexError(msg)
+        print(f"WARNING: {msg}", file=sys.stderr)
+        return False
+
+    try:
+        re.compile(pattern)
+    except re.error as exc:
+        msg = f"Invalid regex in {source}: {exc}"
+        if strict:
+            raise InvalidRegexError(msg) from exc
+        print(f"WARNING: skipping {msg}", file=sys.stderr)
+        return False
+
+    return True
 
 
 def _atr_to_agt_rule(atr: dict[str, Any], pattern: str, index: int) -> dict[str, Any]:
@@ -108,38 +164,60 @@ def _atr_to_agt_rule(atr: dict[str, Any], pattern: str, index: int) -> dict[str,
     }
 
 
-def convert_atr_directory(atr_dir: Path) -> dict[str, Any]:
+def convert_atr_directory(atr_dir: Path, *, strict_regex: bool = False) -> dict[str, Any]:
     """
     Walk an ATR rules directory and produce an AGT PolicyDocument dict.
 
     Each ATR rule may contain multiple detection conditions (regex patterns).
-    Every pattern becomes a separate AGT rule to preserve detection granularity.
+    Every pattern that passes static validation becomes a separate AGT rule.
+
+    Per PR #908 review:
+      - Raises FileNotFoundError (not sys.exit) when no rules are found, so
+        callers can handle it programmatically (requested by @aymenhmaidiwastaken).
+      - Validates every regex at compile time before emitting it (addresses
+        the ReDoS concern raised by the AI code-reviewer bot). Pathological
+        patterns are dropped with a warning (strict_regex=False) or raise
+        InvalidRegexError (strict_regex=True).
     """
     rules: list[dict[str, Any]] = []
     rule_files = sorted(atr_dir.rglob("*.yaml"))
 
     if not rule_files:
-        print(f"ERROR: no YAML files found in {atr_dir}", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"No YAML files found in {atr_dir}")
 
+    dropped = 0
+    skipped_maturity = 0
     for path in rule_files:
         atr = _load_yaml(path)
         if not atr or "detection" not in atr:
             continue
 
+        # Skip rules that are not production-ready
+        if atr.get("status") == "draft" or atr.get("maturity") == "test":
+            skipped_maturity += 1
+            continue
+
         patterns = _extract_regex_patterns(atr["detection"])
         for i, pattern in enumerate(patterns):
+            if not _validate_regex(pattern, str(path), strict=strict_regex):
+                dropped += 1
+                continue
             rules.append(_atr_to_agt_rule(atr, pattern, i))
 
-    print(f"Converted {len(rules)} detection patterns from {len(rule_files)} ATR files.", file=sys.stderr)
+    print(
+        f"Converted {len(rules)} detection patterns from {len(rule_files)} ATR files "
+        f"(skipped {skipped_maturity} draft/test rules, dropped {dropped} invalid patterns).",
+        file=sys.stderr,
+    )
 
     return {
         "version": "1.0",
         "name": "atr-community-rules-full",
         "description": (
-            "Auto-generated from Agent Threat Rules (ATR). "
-            f"{len(rules)} detection patterns from {len(rule_files)} rules. "
-            "Source: https://agentthreatrule.org"
+            "Auto-generated from Agent Threat Rules (ATR) v2.0.12. "
+            f"{len(rules)} detection patterns from {len(rule_files) - skipped_maturity} production-grade rules "
+            f"({skipped_maturity} draft/test rules excluded). "
+            "Source: https://github.com/Agent-Threat-Rule/agent-threat-rules"
         ),
         "rules": rules,
         "defaults": {"action": "allow"},
@@ -162,13 +240,29 @@ def main() -> None:
         default=Path("atr_community_policy.yaml"),
         help="Output YAML file path (default: atr_community_policy.yaml).",
     )
+    parser.add_argument(
+        "--strict-regex",
+        action="store_true",
+        help=(
+            "Fail fast on any invalid or oversized regex instead of skipping it. "
+            "Use for local validation; the weekly sync workflow runs without this "
+            "flag so that Unicode-escape rules are skipped rather than aborting sync."
+        ),
+    )
     args = parser.parse_args()
 
     if not args.atr_dir.is_dir():
         print(f"ERROR: {args.atr_dir} is not a directory.", file=sys.stderr)
         sys.exit(1)
 
-    policy = convert_atr_directory(args.atr_dir)
+    try:
+        policy = convert_atr_directory(args.atr_dir, strict_regex=args.strict_regex)
+    except FileNotFoundError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
+    except InvalidRegexError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(2)
 
     with open(args.output, "w", encoding="utf-8") as fh:
         yaml.dump(policy, fh, default_flow_style=False, allow_unicode=True, sort_keys=False)
