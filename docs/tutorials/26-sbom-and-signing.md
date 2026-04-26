@@ -477,6 +477,7 @@ gh attestation verify dist/artifact.whl \
 | Compliance verification | [Tutorial 18 — Compliance Verification](./18-compliance-verification.md) |
 | Plugin marketplace signing | [Tutorial 10 — Plugin Marketplace](./10-plugin-marketplace.md) |
 | Ed25519 identity | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
+| Shift-left governance | [Tutorial 45 — Shift-Left Governance](./45-shift-left-governance.md) |
 
 ---
 

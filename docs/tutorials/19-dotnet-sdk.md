@@ -1255,3 +1255,8 @@ tutorials for deeper conceptual coverage:
 6. **Read the OWASP coverage** — The
    [.NET package README](../../agent-governance-dotnet/README.md) maps
    each OWASP Agentic AI Top 10 risk to the package's mitigation.
+
+7. **Explore build-time enforcement** — The .NET SDK enforces nullable
+   reference types, warnings-as-errors, strong-name signing, and deterministic
+   builds at compile time. See [Tutorial 45 — Shift-Left Governance](45-shift-left-governance.md)
+   for the full shift-left story across all SDKs.

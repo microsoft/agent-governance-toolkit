@@ -23,6 +23,7 @@
 | 25 | [Security Hardening](25-security-hardening.md) | Production security best practices |
 | 26 | [SBOM & Signing](26-sbom-and-signing.md) | Software bill of materials, artifact signing |
 | 27 | [MCP Scan CLI](27-mcp-scan-cli.md) | Static analysis for MCP server security |
+| 45 | [Shift-Left Governance](45-shift-left-governance.md) | Pre-commit hooks, CI gates, build-time enforcement |
 
 ## Advanced Patterns
 
