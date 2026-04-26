@@ -613,6 +613,10 @@ def main() -> int:
     metrics_parser = subparsers.add_parser("metrics", help="Output Prometheus metrics")
     metrics_parser.add_argument("--json", action="store_true", help="Output in JSON format")
 
+    # sign — plugin signing & verification
+    from agent_os.cli.cmd_sign import register_sign_subcommands
+    register_sign_subcommands(subparsers)
+
     args = parser.parse_args()
 
     # Handle CI mode
@@ -639,9 +643,13 @@ def main() -> int:
         "policy": cmd_policy,
         "metrics": cmd_metrics,
         "health": cmd_health,
+        "sign": None,  # handled by sub-subcommands
     }
 
     handler = commands.get(args.command)
+    if handler is None and args.command == "sign":
+        from agent_os.cli.cmd_sign import cmd_sign
+        handler = cmd_sign
     if handler is None:
         parser.print_help()
         return 0
