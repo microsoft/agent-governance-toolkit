@@ -265,6 +265,69 @@ export interface KillSwitchResult {
   handoffAgentId?: string;
 }
 
+// ΓöÇΓöÇ Cascade Containment ΓöÇΓöÇ
+
+/** Configuration for blast radius containment, keyed by trust tier. */
+export interface BlastRadiusPolicy {
+  maxDependencyDepth: number;
+  maxFanout: number;
+  circuitBreakerThreshold: number;
+  circuitBreakerResetMs: number;
+  autoQuarantine: boolean;
+  autoRollback: boolean;
+}
+
+/** Agent node in the dependency graph. */
+export interface AgentNode {
+  agentId: string;
+  trustTier: TrustTier;
+  healthStatus: AgentHealthStatus;
+  dependencies: string[];
+  dependents: string[];
+  lastHealthCheck?: string;
+}
+
+export type AgentHealthStatus = 'healthy' | 'degraded' | 'failing' | 'unreachable';
+
+/** Event emitted when a cascade containment action is taken. */
+export interface CascadeEvent {
+  eventId: string;
+  timestamp: string;
+  sourceAgentId: string;
+  affectedAgentIds: string[];
+  action: CascadeAction;
+  reason: string;
+  blastRadius: number;
+  containedAt: number;
+}
+
+export type CascadeAction =
+  | 'circuit_opened'
+  | 'agent_degraded'
+  | 'agent_quarantined'
+  | 'agent_killed'
+  | 'rollback_triggered'
+  | 'health_propagated';
+
+/** Configuration for cascade containment. */
+export interface CascadeContainmentConfig {
+  defaultPolicy: BlastRadiusPolicy;
+  tierPolicies?: Partial<Record<TrustTier, Partial<BlastRadiusPolicy>>>;
+  cascadeThreshold?: number;
+}
+
+/** Summary of cascade containment analysis. */
+export interface CascadeAnalysis {
+  totalAgents: number;
+  healthyAgents: number;
+  degradedAgents: number;
+  failingAgents: number;
+  openCircuitBreakers: number;
+  cascadeRisk: 'low' | 'medium' | 'high' | 'critical';
+  blastRadiusMap: Record<string, number>;
+  events: CascadeEvent[];
+}
+
 // ΓöÇΓöÇ Audit ΓöÇΓöÇ
 
 export interface AuditConfig {
