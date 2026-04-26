@@ -254,6 +254,65 @@ class TestX3DHExchange:
         with pytest.raises(ValueError, match="Missing.*Ed25519"):
             alice.initiate(bad_bundle)
 
+    def test_tampered_signed_pre_key_rejected(self):
+        """A bundle with a tampered signed pre-key (not signature) is rejected.
+
+        Covers the attack where a MITM replaces the signed pre-key content
+        while keeping the original signature intact.
+        """
+        alice = _make_manager()
+        bob = _make_manager()
+        bob.generate_signed_pre_key()
+        bob_bundle = bob.get_public_bundle()
+
+        # Flip a byte in the signed pre-key itself (not the signature)
+        tampered_spk = bytearray(bob_bundle.signed_pre_key)
+        tampered_spk[0] ^= 0xFF
+        tampered_bundle = PreKeyBundle(
+            identity_key=bob_bundle.identity_key,
+            identity_key_ed=bob_bundle.identity_key_ed,
+            signed_pre_key=bytes(tampered_spk),
+            signed_pre_key_signature=bob_bundle.signed_pre_key_signature,
+            signed_pre_key_id=bob_bundle.signed_pre_key_id,
+        )
+
+        with pytest.raises(ValueError, match="verification FAILED"):
+            alice.initiate(tampered_bundle)
+
+    def test_forged_identity_key_ed_rejected(self):
+        """A bundle with an attacker's Ed25519 identity key is rejected.
+
+        Covers the MITM attack where an adversary substitutes their own
+        Ed25519 public key into identity_key_ed to make a forged signature
+        appear valid.
+        """
+        alice = _make_manager()
+        bob = _make_manager()
+        bob.generate_signed_pre_key()
+        bob_bundle = bob.get_public_bundle()
+
+        # Replace identity_key_ed with an attacker's key
+        attacker = SigningKey.generate()
+        forged_bundle = PreKeyBundle(
+            identity_key=bob_bundle.identity_key,
+            identity_key_ed=bytes(attacker.verify_key),
+            signed_pre_key=bob_bundle.signed_pre_key,
+            signed_pre_key_signature=bob_bundle.signed_pre_key_signature,
+            signed_pre_key_id=bob_bundle.signed_pre_key_id,
+        )
+
+        with pytest.raises(ValueError, match="verification FAILED"):
+            alice.initiate(forged_bundle)
+
+    def test_bundle_includes_ed25519_identity_key(self):
+        """get_public_bundle() populates identity_key_ed from ed25519_public."""
+        mgr = _make_manager()
+        mgr.generate_signed_pre_key()
+        bundle = mgr.get_public_bundle()
+        assert bundle.identity_key_ed is not None
+        assert len(bundle.identity_key_ed) == 32
+        assert bundle.identity_key_ed == mgr.ed25519_public
+
 
 class TestInMemoryPreKeyStore:
     def test_store_and_retrieve(self):
