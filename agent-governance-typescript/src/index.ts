@@ -25,6 +25,7 @@ export { OPABackend } from './policy-backends/opa';
 export { PromptDefenseEvaluator } from './prompt-defense';
 export { RingEnforcer, RingBreachError } from './rings';
 export { GovernanceVerifier } from './verify';
+export { SurfaceParityChecker } from './surface-parity';
 
 // E2E Encryption (AgentMesh Wire Protocol v1.0)
 export {
@@ -72,6 +73,10 @@ export type {
   AgentMeshConfig,
   GovernanceResult,
   RingViolation,
+  GovernanceSurface,
+  SurfaceRuleMapping,
+  SurfaceGap,
+  SurfaceParityReport,
 } from './types';
 export type { PromptDefenseConfig, PromptDefenseFinding, PromptDefenseReport } from './prompt-defense';
 export type {
