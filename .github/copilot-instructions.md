@@ -213,3 +213,9 @@ After merging ANY external contributor PR, perform these follow-up checks and fi
 16. **Run CI** — confirm the CI run on the merge commit passes. If it fails, fix immediately.
 17. **Lint compliance** — new Python files must pass `ruff check --select E,F,W --ignore E501`.
 18. **Test compatibility** — if our fixes changed data types (e.g., list → tuple), update any tests that assert on the old type.
+
+## Implementation Quality
+
+- **No mocks or stubs in production code.** Always provide real, working implementations. If a dependency is unavailable, build the real integration or defer the feature — never ship a mock.
+- **No TODO/FIXME/HACK comments as placeholders.** If something needs to be done, do it now or track it as a GitHub issue. Code with TODO comments will not be merged.
+- **No placeholder or skeleton implementations.** Every function, class, and module must be fully implemented and tested. Empty methods, `pass` bodies, `raise NotImplementedError`, or `// TODO` stubs are not acceptable.
