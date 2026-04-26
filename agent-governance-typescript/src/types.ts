@@ -394,6 +394,72 @@ export interface ContextIsolationViolation {
   description: string;
 }
 
+// ΓöÇΓöÇ OCI Manifest Adapter ΓöÇΓöÇ
+
+/** OCI manifest format (v2 schema). */
+export interface OciManifest {
+  schemaVersion: 2;
+  mediaType: string;
+  config: OciDescriptor;
+  layers: OciDescriptor[];
+  annotations?: Record<string, string>;
+}
+
+/** OCI content descriptor. */
+export interface OciDescriptor {
+  mediaType: string;
+  digest: string;
+  size: number;
+  annotations?: Record<string, string>;
+}
+
+/** AI Card agent metadata (framework-neutral). */
+export interface AICard {
+  name: string;
+  version: string;
+  description?: string;
+  author?: string;
+  license?: string;
+  homepage?: string;
+  repository?: string;
+  skills?: AICardSkill[];
+  capabilities?: AICardCapabilities;
+  invocation?: AICardInvocation;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AICardSkill {
+  name: string;
+  description?: string;
+  parameters?: Record<string, string>;
+  returns?: string;
+}
+
+export interface AICardCapabilities {
+  languages?: string[];
+  domains?: string[];
+  input_modes?: string[];
+  output_modes?: string[];
+  streaming?: boolean;
+  async?: boolean;
+}
+
+export interface AICardInvocation {
+  protocol?: string;
+  endpoint?: string;
+  authentication?: { type: string; required: boolean };
+  method?: string;
+  format?: string;
+}
+
+/** Result of converting AGT identity to OCI manifest. */
+export interface OciPackageResult {
+  manifest: OciManifest;
+  aiCard: AICard;
+  configBlob: string;
+  layers: Array<{ descriptor: OciDescriptor; content: string }>;
+}
+
 // ΓöÇΓöÇ Audit ΓöÇΓöÇ
 
 export interface AuditConfig {
