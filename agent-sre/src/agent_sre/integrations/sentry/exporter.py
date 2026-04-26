@@ -188,8 +188,11 @@ class SentryExporter:
         tags: dict[str, str],
         context: dict[str, Any],
     ) -> None:
+        client = self._client
+        if client is None:
+            return
         try:
-            self._client.capture_message(
+            client.capture_message(
                 message,
                 level=level,
                 tags=tags,
@@ -204,8 +207,11 @@ class SentryExporter:
         tags: dict[str, str],
         context: dict[str, Any],
     ) -> None:
+        client = self._client
+        if client is None:
+            return
         try:
-            self._client.capture_exception(error, tags=tags, context=context)
+            client.capture_exception(error, tags=tags, context=context)
         except Exception as e:
             logger.warning(f"Failed to send exception to Sentry: {e}")
 
