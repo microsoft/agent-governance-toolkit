@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Contoso.MafExtensionValidation</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\agent-governance-dotnet\src\AgentGovernance\AgentGovernance.csproj" />
+    <ProjectReference Include="..\..\..\..\agent-governance-dotnet\src\AgentGovernance.Extensions.Microsoft.Agents\AgentGovernance.Extensions.Microsoft.Agents.csproj" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="policies\maf_validation.yaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

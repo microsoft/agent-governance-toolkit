@@ -1,0 +1,14 @@
+apiVersion: governance.toolkit/v1
+version: "1.0"
+name: maf-validation-policy
+default_action: allow
+rules:
+  - name: block-transfers
+    condition: "message == 'transfer funds'"
+    action: deny
+    priority: 100
+
+  - name: block-prod-deploy
+    condition: "tool_name == 'deploy_prod'"
+    action: deny
+    priority: 100

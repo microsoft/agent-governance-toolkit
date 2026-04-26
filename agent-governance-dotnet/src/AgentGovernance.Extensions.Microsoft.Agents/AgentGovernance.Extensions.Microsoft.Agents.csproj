@@ -2,34 +2,35 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
-    <RootNamespace>AgentGovernance</RootNamespace>
-    <AssemblyName>AgentGovernance</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>AgentGovernance.Extensions.Microsoft.Agents</RootNamespace>
+    <AssemblyName>AgentGovernance.Extensions.Microsoft.Agents</AssemblyName>
     <Version>3.2.2</Version>
-    <Description>Agent Governance Toolkit — .NET SDK for policy enforcement, rate limiting, zero-trust identity, OpenTelemetry metrics, and audit logging for autonomous AI agents.</Description>
-    <PackageId>Microsoft.AgentGovernance</PackageId>
+    <Description>Public Preview companion package for Microsoft.AgentGovernance that makes hooking the real Microsoft.Agents.AI surface into AGT governance middleware easy via AIAgentBuilder.WithGovernance(...).</Description>
+    <PackageId>Microsoft.AgentGovernance.Extensions.Microsoft.Agents</PackageId>
     <Authors>Microsoft</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/microsoft/agent-governance-toolkit</PackageProjectUrl>
     <RepositoryUrl>https://github.com/microsoft/agent-governance-toolkit.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>agent;governance;policy;security;owasp;ai;trust;identity</PackageTags>
+    <PackageTags>agent;governance;microsoftagents;microsoftagentsai;dotnet;security;policy</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
     <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-
-    <!-- XML documentation for IntelliSense in consuming projects -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\icon.png" Pack="true" PackagePath="\" />
     <None Include="..\..\..\NOTICE" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="YamlDotNet" Version="17.0.1" />
+    <ProjectReference Include="..\AgentGovernance\AgentGovernance.csproj" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.3.0" />
   </ItemGroup>
 
 </Project>

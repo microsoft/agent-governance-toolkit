@@ -45,11 +45,28 @@ dotnet add package Microsoft.AgentGovernance
 Or add it to your `.csproj` directly:
 
 ```xml
-<PackageReference Include="Microsoft.AgentGovernance" Version="2.1.0" />
+<PackageReference Include="Microsoft.AgentGovernance" Version="3.2.2" />
 ```
 
 The package targets `net8.0` and has a single dependency — `YamlDotNet` for
 policy parsing.
+
+### Companion extension packages
+
+For official Model Context Protocol servers built with the C# SDK:
+
+```bash
+dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol
+```
+
+For agents built with the real Microsoft Agent Framework (`Microsoft.Agents.AI`):
+
+```bash
+dotnet add package Microsoft.AgentGovernance.Extensions.Microsoft.Agents
+```
+
+See [Tutorial 43 — .NET MAF Hook Integration](43-dotnet-maf-hook-integration.md)
+for the Microsoft Agent Framework hook walkthrough.
 
 ---
 

@@ -21,6 +21,12 @@ For Model Context Protocol servers built with the official C# SDK:
 dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol
 ```
 
+For agents built with the real Microsoft Agent Framework from `microsoft/agent-framework`:
+
+```bash
+dotnet add package Microsoft.AgentGovernance.Extensions.Microsoft.Agents
+```
+
 ## Quick Start
 
 ```csharp
@@ -413,16 +419,66 @@ kernel.OnAllEvents(evt => auditLog.Append(evt));
 
 ## Microsoft Agent Framework Integration
 
-Works as middleware in MAF / Azure AI Foundry Agent Service:
+`Microsoft.AgentGovernance` stays framework-agnostic. For real MAF agents built with `Microsoft.Agents.AI`, use the companion package `Microsoft.AgentGovernance.Extensions.Microsoft.Agents`.
+
+You can integrate it in two ways:
+
+- **Hook option** - call `WithGovernance(...)` on an existing `AIAgent` or `AIAgentBuilder`
+- **Governance middleware option** - create `AgentFrameworkGovernanceAdapter` explicitly and reuse that adapter anywhere you want the MAF run/function governance bridge
 
 ```csharp
-using AgentGovernance.Integration;
+using AgentGovernance;
+using AgentGovernance.Extensions.Microsoft.Agents;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 
-var middleware = new GovernanceMiddleware(engine, emitter, rateLimiter, metrics);
-var result = middleware.EvaluateToolCall("did:mesh:agent", "database_write", new() { ["table"] = "users" });
+var kernel = new GovernanceKernel(new GovernanceOptions
+{
+    PolicyPaths = new() { "policies/maf.yaml" },
+});
+
+AIAgent agent = GetYourExistingMafAgent();
+
+var governedAgent = agent.WithGovernance(
+    kernel,
+    new AgentFrameworkGovernanceOptions
+    {
+        DefaultAgentId = "did:agentmesh:loan-processor",
+        EnableFunctionMiddleware = true,
+    });
+
+var response = await governedAgent.RunAsync(
+[
+    new ChatMessage(ChatRole.User, "transfer funds")
+]);
 ```
 
-See the [MAF adapter](../../packages/agent-os/src/agent_os/integrations/maf_adapter.py) for the full Python middleware, or the [Foundry integration guide](../../docs/deployment/azure-foundry-agent-service.md) for Azure deployment.
+Or make the governance middleware object explicit:
+
+```csharp
+var adapter = new AgentFrameworkGovernanceAdapter(
+    kernel,
+    new AgentFrameworkGovernanceOptions
+    {
+        DefaultAgentId = "did:agentmesh:loan-processor",
+        EnableFunctionMiddleware = true,
+    });
+
+var governedAgent = agent
+    .AsBuilder()
+    .WithGovernance(adapter)
+    .Build();
+```
+
+This extension adds:
+
+- run-level governance before the inner MAF agent executes
+- optional function-call governance before tool invocation
+- AGT policy, audit, and metrics translation without replacing the MAF runtime
+
+If your MAF agent does not use a function-invocation-capable pipeline, set `EnableFunctionMiddleware = false` and keep only the run hook.
+
+See [Tutorial 43 — .NET MAF Hook Integration](../tutorials/43-dotnet-maf-hook-integration.md) for the hook-by-hook walkthrough, or the [Foundry integration guide](../deployment/azure-foundry-agent-service.md) for Azure deployment.
 
 ## Requirements
 

@@ -268,4 +268,5 @@ result = evaluator.evaluate({
 - **[Tutorial 01 — Policy Engine](01-policy-engine.md)** — YAML policy syntax deep dive
 - **[Tutorial 03 — Framework Integrations](03-framework-integrations.md)** — LangChain, CrewAI, AutoGen adapters
 - **[Tutorial 14 — Kill Switch](14-kill-switch-and-rate-limiting.md)** — Emergency agent termination
+- **[Tutorial 43 — .NET MAF Hook Integration](43-dotnet-maf-hook-integration.md)** — See the .NET `Microsoft.Agents.AI` extension package and `WithGovernance(...)` hook
 - **[Folder-Level Governance Spec](../proposals/folder-level-governance.md)** — Path-scoped policy inheritance
