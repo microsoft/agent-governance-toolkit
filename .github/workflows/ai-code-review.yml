@@ -62,7 +62,7 @@ jobs:
           custom-instructions: |
             You are reviewing the microsoft/agent-governance-toolkit — a security-focused Python library.
 
-            Stack: Python 3.9-3.12, monorepo with 8 packages under packages/, pytest, ruff.
+            Stack: Python 3.9-3.12, monorepo with 8 packages at the repo root, pytest, ruff.
 
             Focus areas:
             - Policy engine correctness (false negatives = security bypass)

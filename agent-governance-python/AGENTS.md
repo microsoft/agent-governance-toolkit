@@ -7,7 +7,7 @@ in Agent Governance Toolkit. Use this directory for reusable SDK/package surface
 to be consumed directly by external Python users.
 
 Applications, dashboards, demos, and larger runtime/product assemblies should stay in
-`packages/`, `examples/`, or other existing homes unless maintainers explicitly decide to promote
+the repo root, `examples/`, or other existing homes unless maintainers explicitly decide to promote
 them into this package workspace.
 
 ## Key Paths
@@ -28,5 +28,5 @@ them into this package workspace.
 ## Validation
 
 - Run the narrowest package-local checks for the package you changed.
-- If a package here is consumed by `packages/agent-os/`, verify that consumer still installs and
+- If a package here is consumed by `agent-os/`, verify that consumer still installs and
   imports correctly after your changes.

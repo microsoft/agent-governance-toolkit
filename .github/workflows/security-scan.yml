@@ -4,13 +4,13 @@ on:
   push:
     branches: [main]
     paths:
-      - 'packages/**'
+      - '**'
       - 'scripts/**'
       - 'requirements/**'
   pull_request:
     branches: [main]
     paths:
-      - 'packages/**'
+      - '**'
       - 'scripts/**'
       - 'requirements/**'
 
@@ -30,14 +30,14 @@ jobs:
       - name: Run security skills scan
         continue-on-error: true
         run: |
-          python scripts/security_scan.py packages/ \
+          python scripts/security_scan.py . \
             --exclude-tests \
             --min-severity high \
             --format text
       - name: Generate JSON report
         if: always()
         run: |
-          python scripts/security_scan.py packages/ \
+          python scripts/security_scan.py . \
             --exclude-tests \
             --format json > security-scan-results.json || true
       - name: Upload scan results

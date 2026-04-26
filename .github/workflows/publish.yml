@@ -62,11 +62,11 @@ jobs:
             build==1.2.1 --hash=sha256:75e10f767a433d9a86e50d83f418e83efc18ede923ee5ff7df93b6cb0306c5d4
 
       - name: Build ${{ matrix.package }}
-        working-directory: packages/${{ matrix.package }}
+        working-directory: ${{ matrix.package }}
         run: python -m build
 
       - name: Validate build artifacts
-        working-directory: packages/${{ matrix.package }}
+        working-directory: ${{ matrix.package }}
         run: |
           echo "=== Built artifacts for ${{ matrix.package }} ==="
           ls -la dist/
@@ -79,18 +79,18 @@ jobs:
       - name: Sign release artifacts with sigstore
         uses: sigstore/gh-action-sigstore-python@04cffa1d795717b140764e8b640de88853c92acc # v3.3.0
         with:
-          inputs: packages/${{ matrix.package }}/dist/*
+          inputs: ${{ matrix.package }}/dist/*
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
-          subject-path: packages/${{ matrix.package }}/dist/*
+          subject-path: ${{ matrix.package }}/dist/*
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: pypi-${{ matrix.package }}
-          path: packages/${{ matrix.package }}/dist/
+          path: ${{ matrix.package }}/dist/
           retention-days: 30
 
   # -------------------------------------------------------------------
@@ -109,19 +109,19 @@ jobs:
       matrix:
         include:
           - name: agentmesh-copilot-governance
-            path: packages/agentmesh-integrations/copilot-governance
+            path: agentmesh-integrations/copilot-governance
           - name: agentmesh-mastra
-            path: packages/agentmesh-integrations/mastra-agentmesh
+            path: agentmesh-integrations/mastra-agentmesh
           - name: agentmesh-api
-            path: packages/agent-mesh/services/api
+            path: agent-mesh/services/api
           - name: agentmesh-mcp-proxy
-            path: packages/agent-mesh/packages/mcp-proxy
+            path: agent-mesh/packages/mcp-proxy
           - name: agentmesh-sdk
             path: agent-governance-typescript
           - name: agent-os-copilot-extension
-            path: packages/agent-os/extensions/copilot
+            path: agent-os/extensions/copilot
           - name: agentos-mcp-server
-            path: packages/agent-os/extensions/mcp-server
+            path: agent-os/extensions/mcp-server
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 

@@ -804,12 +804,12 @@ if decision:
 
 | Component | Location |
 |-----------|----------|
-| Schema models | `packages/agent-os/src/agent_os/policies/schema.py` |
-| Evaluator | `packages/agent-os/src/agent_os/policies/evaluator.py` |
-| GovernancePolicy | `packages/agent-os/src/agent_os/integrations/base.py` |
-| MAF middleware | `packages/agent-os/src/agent_os/integrations/maf_adapter.py` |
-| Conflict resolution | `packages/agent-mesh/src/agentmesh/governance/conflict_resolution.py` |
-| Policy examples | `packages/agent-os/examples/policies/` |
+| Schema models | `agent-os/src/agent_os/policies/schema.py` |
+| Evaluator | `agent-os/src/agent_os/policies/evaluator.py` |
+| GovernancePolicy | `agent-os/src/agent_os/integrations/base.py` |
+| MAF middleware | `agent-os/src/agent_os/integrations/maf_adapter.py` |
+| Conflict resolution | `agent-mesh/src/agentmesh/governance/conflict_resolution.py` |
+| Policy examples | `agent-os/examples/policies/` |
 | Research demo | `demo/policies/research_policy.yaml` |
 
 ---

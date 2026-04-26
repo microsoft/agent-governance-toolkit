@@ -1277,19 +1277,19 @@ print(f"Reason: {decision.reason}")
 
 | Component | Location |
 |-----------|----------|
-| `ExternalPolicyBackend` protocol | `packages/agent-os/src/agent_os/policies/backends.py` |
-| `OPABackend` | `packages/agent-os/src/agent_os/policies/backends.py` |
-| `CedarBackend` | `packages/agent-os/src/agent_os/policies/backends.py` |
-| `BackendDecision` | `packages/agent-os/src/agent_os/policies/backends.py` |
-| `PolicyEvaluator` | `packages/agent-os/src/agent_os/policies/evaluator.py` |
-| `PolicyDecision` | `packages/agent-os/src/agent_os/policies/evaluator.py` |
-| `OPAEvaluator` | `packages/agent-mesh/src/agentmesh/governance/opa.py` |
-| `OPADecision` | `packages/agent-mesh/src/agentmesh/governance/opa.py` |
-| `CedarEvaluator` | `packages/agent-mesh/src/agentmesh/governance/cedar.py` |
-| `CedarDecision` | `packages/agent-mesh/src/agentmesh/governance/cedar.py` |
-| `PolicyEngine` | `packages/agent-mesh/src/agentmesh/governance/policy.py` |
-| OPA tests | `packages/agent-mesh/tests/test_opa.py` |
-| Cedar tests | `packages/agent-mesh/tests/test_cedar.py` |
+| `ExternalPolicyBackend` protocol | `agent-os/src/agent_os/policies/backends.py` |
+| `OPABackend` | `agent-os/src/agent_os/policies/backends.py` |
+| `CedarBackend` | `agent-os/src/agent_os/policies/backends.py` |
+| `BackendDecision` | `agent-os/src/agent_os/policies/backends.py` |
+| `PolicyEvaluator` | `agent-os/src/agent_os/policies/evaluator.py` |
+| `PolicyDecision` | `agent-os/src/agent_os/policies/evaluator.py` |
+| `OPAEvaluator` | `agent-mesh/src/agentmesh/governance/opa.py` |
+| `OPADecision` | `agent-mesh/src/agentmesh/governance/opa.py` |
+| `CedarEvaluator` | `agent-mesh/src/agentmesh/governance/cedar.py` |
+| `CedarDecision` | `agent-mesh/src/agentmesh/governance/cedar.py` |
+| `PolicyEngine` | `agent-mesh/src/agentmesh/governance/policy.py` |
+| OPA tests | `agent-mesh/tests/test_opa.py` |
+| Cedar tests | `agent-mesh/tests/test_cedar.py` |
 
 ---
 
