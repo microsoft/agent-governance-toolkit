@@ -494,7 +494,7 @@ def memory_safe_tool(data: list, max_memory_mb: int = 100) -> dict:
 |----------|-------------|
 | [Multi-Agent Systems](./multi-agent.md) | Coordinate agent teams |
 | [Observability](../observability.md) | Monitor tool usage |
-| [ATR Reference](../packages/atr.md) | Full ATR documentation |
+| [ATR Reference](../../modules/atr/README.md) | Full ATR documentation |
 
 ---
 

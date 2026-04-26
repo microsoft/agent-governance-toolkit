@@ -79,4 +79,4 @@ python demo.py --scenario fraud
 
 ---
 
-See [CMVK Package](../../packages/cmvk/) for implementation details.
+See [CMVK Package](../../modules/cmvk/) for implementation details.

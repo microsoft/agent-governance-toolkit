@@ -481,10 +481,10 @@ server.start()
 |-----------|----------|
 | Stateless Kernel | `src/agent_os/stateless.py` |
 | Policy Engine | `src/agent_os/stateless.py` (in StatelessKernel) |
-| Signal Dispatch | `packages/control-plane/src/agent_control_plane/signals.py` |
-| VFS | `packages/control-plane/src/agent_control_plane/vfs.py` |
-| MCP Server | `packages/mcp-kernel-server/src/mcp_kernel_server/server.py` |
+| Signal Dispatch | `modules/control-plane/src/agent_control_plane/signals.py` |
+| VFS | `modules/control-plane/src/agent_control_plane/vfs.py` |
+| MCP Server | `modules/mcp-kernel-server/src/mcp_kernel_server/server.py` |
 | AGENTS.md Parser | `src/agent_os/agents_compat.py` |
-| Metrics | `packages/observability/src/agent_os_observability/metrics.py` |
-| Tracer | `packages/observability/src/agent_os_observability/tracer.py` |
+| Metrics | `modules/observability/src/agent_os_observability/metrics.py` |
+| Tracer | `modules/observability/src/agent_os_observability/tracer.py` |
 | CLI | `src/agent_os/cli.py` |

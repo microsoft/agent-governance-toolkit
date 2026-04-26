@@ -478,7 +478,7 @@ All data is stored locally in the `AGENTOS_DATA_DIR`:
 ```bash
 # Clone the repository
 git clone https://github.com/microsoft/agent-governance-toolkit
-cd agent-os/packages/mcp-server
+cd agent-os/extensions/mcp-server
 
 # Install dependencies
 npm install
@@ -496,7 +496,7 @@ npm start -- --http --port 3000
 ### Project Structure
 
 ```
-packages/mcp-server/
+agent-os/extensions/mcp-server/
 ├── src/
 │   ├── index.ts              # Main entry point
 │   ├── cli.ts                # CLI with --stdio/--http modes

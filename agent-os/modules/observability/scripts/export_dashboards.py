@@ -48,7 +48,7 @@ def main():
     
     print(f"\nDone! {len(DASHBOARDS)} dashboards exported to {OUTPUT_DIR}")
     print("\nTo use with Docker Compose:")
-    print("  cd packages/observability")
+    print("  cd agent-os/modules/observability")
     print("  docker-compose up -d")
     print("  open http://localhost:3000 (admin/admin)")
 

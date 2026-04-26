@@ -53,7 +53,7 @@ mcp-kernel-server = "mcp_kernel_server.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
-Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/mcp-kernel-server"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-os/modules/mcp-kernel-server"
 Repository = "https://github.com/microsoft/agent-governance-toolkit"
 
 [tool.setuptools.packages.find]

@@ -65,7 +65,7 @@ def get_metrics():
 ### Full Observability Stack (Docker)
 
 ```bash
-cd packages/observability
+cd agent-os/modules/observability
 docker-compose up -d
 
 # Open dashboards
