@@ -221,10 +221,10 @@ Demonstrates the cryptographic integrity guarantees of the audit trail:
 | `crewai_governance_demo.py` | Full 9-scenario showcase (~1,600 lines) |
 | `policies/content_creation_policy.yaml` | Role-based + PII + injection + delegation policies |
 | `policies/quality_gate_policy.yaml` | Publishing quality gates |
-| `packages/agent-os/src/agent_os/integrations/maf_adapter.py` | Governance middleware |
-| `packages/agentmesh-integrations/crewai-agentmesh/` | CrewAI trust integration |
-| `packages/agent-mesh/src/agentmesh/governance/audit.py` | Merkle-chained audit log |
-| `packages/agent-sre/src/agent_sre/anomaly/rogue_detector.py` | Rogue agent detector |
+| `agent-os/src/agent_os/integrations/maf_adapter.py` | Governance middleware |
+| `agentmesh-integrations/crewai-agentmesh/` | CrewAI trust integration |
+| `agent-mesh/src/agentmesh/governance/audit.py` | Merkle-chained audit log |
+| `agent-sre/src/agent_sre/anomaly/rogue_detector.py` | Rogue agent detector |
 
 ## Related
 

@@ -12,7 +12,7 @@ on:
     types: [opened, synchronize, reopened]
     branches: [main]
     paths:
-      - "packages/*/src/**"
+      - "*/src/**"
 
 permissions:
   contents: read

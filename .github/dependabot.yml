@@ -2,7 +2,7 @@ version: 2
 updates:
   # Python packages
   - package-ecosystem: "pip"
-    directory: "/packages/agent-os"
+    directory: "/agent-os"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -10,7 +10,7 @@ updates:
       - "dependencies"
 
   - package-ecosystem: "pip"
-    directory: "/packages/agent-mesh"
+    directory: "/agent-mesh"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -18,7 +18,7 @@ updates:
       - "dependencies"
 
   - package-ecosystem: "pip"
-    directory: "/packages/agent-hypervisor"
+    directory: "/agent-hypervisor"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -26,7 +26,7 @@ updates:
       - "dependencies"
 
   - package-ecosystem: "pip"
-    directory: "/packages/agent-sre"
+    directory: "/agent-sre"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -34,7 +34,7 @@ updates:
       - "dependencies"
 
   - package-ecosystem: "pip"
-    directory: "/packages/agent-compliance"
+    directory: "/agent-compliance"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -43,7 +43,7 @@ updates:
 
   # npm packages
   - package-ecosystem: "npm"
-    directory: "/packages/agent-os/extensions/mcp-server"
+    directory: "/agent-os/extensions/mcp-server"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -51,7 +51,7 @@ updates:
       - "dependencies"
 
   - package-ecosystem: "npm"
-    directory: "/packages/agent-os/extensions/copilot"
+    directory: "/agent-os/extensions/copilot"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -95,7 +95,7 @@ updates:
 
   # Docker
   - package-ecosystem: "docker"
-    directory: "/packages/agent-os"
+    directory: "/agent-os"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3

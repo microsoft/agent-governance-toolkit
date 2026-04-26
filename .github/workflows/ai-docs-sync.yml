@@ -12,7 +12,7 @@ on:
     types: [opened, synchronize, reopened]
     branches: [main]
     paths:
-      - "packages/*/src/**"
+      - "*/src/**"
 
 permissions:
   contents: read
@@ -64,9 +64,9 @@ jobs:
             5. **Type hints** — new public APIs should have complete type annotations
 
             Monorepo structure:
-            - packages/{name}/src/ — source code
-            - packages/{name}/README.md — package documentation
-            - packages/{name}/tests/ — test files
+            - {name}/src/ — source code
+            - {name}/README.md — package documentation
+            - {name}/tests/ — test files
             - docs/ — project-level documentation
             - CHANGELOG.md — project changelog
 

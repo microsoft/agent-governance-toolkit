@@ -40,19 +40,19 @@ must not be used. See [ESRP Onboarding](https://aka.ms/esrp-onboarding).
 
 | Package | PyPI Name | Directory |
 |---------|-----------|-----------|
-| Agent OS Kernel | `agent-os-kernel` | `packages/agent-os` |
-| AgentMesh Platform | `agentmesh-platform` | `packages/agent-mesh` |
-| Agent Hypervisor | `agent-hypervisor` | `packages/agent-hypervisor` |
-| Agent Runtime | `agentmesh-runtime` | `packages/agent-runtime` |
-| Agent SRE | `agent-sre` | `packages/agent-sre` |
-| Agent Governance Toolkit | `agent-governance-toolkit` | `packages/agent-compliance` |
-| Agent Lightning | `agentmesh-lightning` | `packages/agent-lightning` |
+| Agent OS Kernel | `agent-os-kernel` | `agent-os` |
+| AgentMesh Platform | `agentmesh-platform` | `agent-mesh` |
+| Agent Hypervisor | `agent-hypervisor` | `agent-hypervisor` |
+| Agent Runtime | `agentmesh-runtime` | `agent-runtime` |
+| Agent SRE | `agent-sre` | `agent-sre` |
+| Agent Governance Toolkit | `agent-governance-toolkit` | `agent-compliance` |
+| Agent Lightning | `agentmesh-lightning` | `agent-lightning` |
 
 ### Building Packages
 
 ```bash
 python -m pip install --upgrade pip build
-cd packages/agent-os
+cd agent-os
 python -m build
 ```
 
@@ -108,13 +108,13 @@ See the full list of Microsoft-controlled scopes: `@microsoft`, `@azure`,
 
 | Package | npm Name | Directory |
 |---------|----------|-----------|
-| AgentMesh Copilot Governance | `@microsoft/agentmesh-copilot-governance` | `packages/agentmesh-integrations/copilot-governance` |
-| AgentMesh Mastra | `@microsoft/agentmesh-mastra` | `packages/agentmesh-integrations/mastra-agentmesh` |
-| AgentMesh API | `@microsoft/agentmesh-api` | `packages/agent-mesh/services/api` |
-| AgentMesh MCP Proxy | `@microsoft/agentmesh-mcp-proxy` | `packages/agent-mesh/packages/mcp-proxy` |
+| AgentMesh Copilot Governance | `@microsoft/agentmesh-copilot-governance` | `agentmesh-integrations/copilot-governance` |
+| AgentMesh Mastra | `@microsoft/agentmesh-mastra` | `agentmesh-integrations/mastra-agentmesh` |
+| AgentMesh API | `@microsoft/agentmesh-api` | `agent-mesh/services/api` |
+| AgentMesh MCP Proxy | `@microsoft/agentmesh-mcp-proxy` | `agent-mesh/packages/mcp-proxy` |
 | AgentMesh SDK | `@microsoft/agentmesh-sdk` | `agent-governance-typescript` |
-| Agent OS Copilot Extension | `@microsoft/agent-os-copilot-extension` | `packages/agent-os/extensions/copilot` |
-| AgentOS MCP Server | `@microsoft/agentos-mcp-server` | `packages/agent-os/extensions/mcp-server` |
+| Agent OS Copilot Extension | `@microsoft/agent-os-copilot-extension` | `agent-os/extensions/copilot` |
+| AgentOS MCP Server | `@microsoft/agentos-mcp-server` | `agent-os/extensions/mcp-server` |
 
 The VS Code and Cursor extensions are published via their respective marketplaces,
 not npm.
@@ -268,16 +268,16 @@ DockerHub directly. Follow onboarding at [aka.ms/mcr/onboarding](https://aka.ms/
 
 | Image | Dockerfile | Purpose |
 |-------|-----------|---------|
-| Agent OS | `packages/agent-os/Dockerfile` | Core governance runtime |
-| Copilot Extension | `packages/agent-os/extensions/copilot/Dockerfile` | GitHub Copilot extension |
-| MCP Server | `packages/agent-os/extensions/mcp-server/Dockerfile` | MCP server for Claude Desktop |
-| Cloud Board | `packages/agent-os/services/cloud-board/Dockerfile` | Cloud board service |
-| CMVK | `packages/agent-os/modules/cmvk/Dockerfile` | Cross-Model Verification Kernel |
-| IATP | `packages/agent-os/modules/iatp/Dockerfile` | Inter-Agent Trust Protocol |
-| IATP Sidecar (Go) | `packages/agent-os/modules/iatp/sidecar/go/Dockerfile` | Go trust sidecar |
-| Control Plane | `packages/agent-os/modules/control-plane/Dockerfile` | Agent control plane |
-| SCAK | `packages/agent-os/modules/scak/Dockerfile` | Safety-Critical Agent Kernel |
-| CaaS | `packages/agent-os/modules/caas/Dockerfile` | Compliance as a Service |
+| Agent OS | `agent-os/Dockerfile` | Core governance runtime |
+| Copilot Extension | `agent-os/extensions/copilot/Dockerfile` | GitHub Copilot extension |
+| MCP Server | `agent-os/extensions/mcp-server/Dockerfile` | MCP server for Claude Desktop |
+| Cloud Board | `agent-os/services/cloud-board/Dockerfile` | Cloud board service |
+| CMVK | `agent-os/modules/cmvk/Dockerfile` | Cross-Model Verification Kernel |
+| IATP | `agent-os/modules/iatp/Dockerfile` | Inter-Agent Trust Protocol |
+| IATP Sidecar (Go) | `agent-os/modules/iatp/sidecar/go/Dockerfile` | Go trust sidecar |
+| Control Plane | `agent-os/modules/control-plane/Dockerfile` | Agent control plane |
+| SCAK | `agent-os/modules/scak/Dockerfile` | Safety-Critical Agent Kernel |
+| CaaS | `agent-os/modules/caas/Dockerfile` | Compliance as a Service |
 
 ### Image Requirements
 

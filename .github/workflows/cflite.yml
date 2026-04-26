@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - 'packages/*/src/**'
+      - '*/src/**'
       - 'fuzz/**'
   pull_request:
     branches: [main]
     paths:
-      - 'packages/*/src/**'
+      - '*/src/**'
       - 'fuzz/**'
   schedule:
     - cron: "0 6 * * 0"  # Weekly batch fuzzing

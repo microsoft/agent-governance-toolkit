@@ -9,23 +9,23 @@
 * @microsoft/agent-governance-toolkit
 
 # Package-specific ownership
-/packages/agent-os/          @microsoft/agent-governance-toolkit
-/packages/agent-mesh/        @microsoft/agent-governance-toolkit
-/packages/agent-hypervisor/  @microsoft/agent-governance-toolkit
-/packages/agent-sre/         @microsoft/agent-governance-toolkit
-/packages/agent-compliance/  @microsoft/agent-governance-toolkit
-/packages/agent-marketplace/ @microsoft/agent-governance-toolkit
-/packages/agent-runtime/     @microsoft/agent-governance-toolkit
-/packages/agentmesh-integrations/ @microsoft/agent-governance-toolkit
+/agent-os/          @microsoft/agent-governance-toolkit
+/agent-mesh/        @microsoft/agent-governance-toolkit
+/agent-hypervisor/  @microsoft/agent-governance-toolkit
+/agent-sre/         @microsoft/agent-governance-toolkit
+/agent-compliance/  @microsoft/agent-governance-toolkit
+/agent-marketplace/ @microsoft/agent-governance-toolkit
+/agent-runtime/     @microsoft/agent-governance-toolkit
+/agentmesh-integrations/ @microsoft/agent-governance-toolkit
 
 # Security-sensitive paths — require maintainer review, no exceptions
 /.github/                    @microsoft/agent-governance-toolkit
 /.github/workflows/          @microsoft/agent-governance-toolkit
 /.github/actions/            @microsoft/agent-governance-toolkit
-/packages/*/src/**/sandbox*  @microsoft/agent-governance-toolkit
-/packages/*/src/**/trust*    @microsoft/agent-governance-toolkit
-/packages/*/src/**/identity* @microsoft/agent-governance-toolkit
-/packages/*/src/**/crypto*   @microsoft/agent-governance-toolkit
+/*/src/**/sandbox*            @microsoft/agent-governance-toolkit
+/*/src/**/trust*              @microsoft/agent-governance-toolkit
+/*/src/**/identity*           @microsoft/agent-governance-toolkit
+/*/src/**/crypto*             @microsoft/agent-governance-toolkit
 
 # Infrastructure & container security — require maintainer review
 /scripts/                    @microsoft/agent-governance-toolkit

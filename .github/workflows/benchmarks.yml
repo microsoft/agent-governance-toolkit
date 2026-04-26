@@ -18,31 +18,31 @@ jobs:
           python-version: "3.11"
 
       - name: Install agent-os dependencies
-        working-directory: packages/agent-os
+        working-directory: agent-os
         run: pip install --no-cache-dir -e ".[dev]" --quiet  # Install local package (Scorecard: pinned via pyproject.toml)
 
       - name: Install agent-sre dependencies
-        working-directory: packages/agent-sre
+        working-directory: agent-sre
         run: pip install --no-cache-dir -e ".[dev]" --quiet  # Install local package (Scorecard: pinned via pyproject.toml)
 
       - name: Run policy benchmarks
-        working-directory: packages/agent-os
+        working-directory: agent-os
         run: python benchmarks/bench_policy.py | tee /tmp/bench_policy.json
 
       - name: Run kernel benchmarks
-        working-directory: packages/agent-os
+        working-directory: agent-os
         run: python benchmarks/bench_kernel.py | tee /tmp/bench_kernel.json
 
       - name: Run audit benchmarks
-        working-directory: packages/agent-os
+        working-directory: agent-os
         run: python benchmarks/bench_audit.py | tee /tmp/bench_audit.json
 
       - name: Run adapter benchmarks
-        working-directory: packages/agent-os
+        working-directory: agent-os
         run: python benchmarks/bench_adapters.py | tee /tmp/bench_adapters.json
 
       - name: Run SRE benchmarks
-        working-directory: packages/agent-sre
+        working-directory: agent-sre
         run: |
           python benchmarks/bench_chaos.py | tee /tmp/bench_chaos.txt
           python benchmarks/bench_slo.py | tee /tmp/bench_slo.txt

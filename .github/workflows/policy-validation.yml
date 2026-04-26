@@ -6,13 +6,13 @@ on:
     paths:
       - "**/*.yaml"
       - "**/*.yml"
-      - "packages/agent-os/src/agent_os/policies/**"
+      - "agent-os/src/agent_os/policies/**"
   pull_request:
     branches: [main]
     paths:
       - "**/*.yaml"
       - "**/*.yml"
-      - "packages/agent-os/src/agent_os/policies/**"
+      - "agent-os/src/agent_os/policies/**"
 
 permissions:
   contents: read
@@ -28,7 +28,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install agent-os-kernel
-        working-directory: packages/agent-os
+        working-directory: agent-os
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
           pip install --no-cache-dir --require-hashes \
@@ -62,7 +62,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install agent-os-kernel
-        working-directory: packages/agent-os
+        working-directory: agent-os
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
           pip install --no-cache-dir --require-hashes \
@@ -71,5 +71,5 @@ jobs:
             2>/dev/null || pip install --no-cache-dir pyyaml==6.0.2 pytest==8.4.1
 
       - name: Run policy CLI tests
-        working-directory: packages/agent-os
+        working-directory: agent-os
         run: pytest tests/test_policy_cli.py -v --tb=short

@@ -35,24 +35,24 @@ jobs:
         with:
           filters: |
             python:
-              - 'packages/agent-os/**'
-              - 'packages/agent-mesh/**'
-              - 'packages/agent-hypervisor/**'
-              - 'packages/agent-sre/**'
-              - 'packages/agent-compliance/**'
-              - 'packages/agent-runtime/**'
-              - 'packages/agent-lightning/**'
+              - 'agent-os/**'
+              - 'agent-mesh/**'
+              - 'agent-hypervisor/**'
+              - 'agent-sre/**'
+              - 'agent-compliance/**'
+              - 'agent-runtime/**'
+              - 'agent-lightning/**'
               - 'scripts/**'
               - 'requirements/**'
             dotnet:
               - 'agent-governance-dotnet/**'
             typescript:
               - 'agent-governance-typescript/**'
-              - 'packages/agent-os/extensions/**'
-              - 'packages/agentmesh-integrations/mastra-agentmesh/**'
-              - 'packages/agentmesh-integrations/copilot-governance/**'
+              - 'agent-os/extensions/**'
+              - 'agentmesh-integrations/mastra-agentmesh/**'
+              - 'agentmesh-integrations/copilot-governance/**'
             integrations:
-              - 'packages/agentmesh-integrations/**'
+              - 'agentmesh-integrations/**'
             workflows:
               - '.github/workflows/**'
             rust:
@@ -89,7 +89,7 @@ jobs:
       - name: Install ruff
         run: pip install --require-hashes --no-cache-dir -r requirements/ci-lint.txt
       - name: Lint ${{ matrix.package }}
-        run: ruff check packages/${{ matrix.package }}/src/ --select E,F,W --ignore E501
+        run: ruff check ${{ matrix.package }}/src/ --select E,F,W --ignore E501
 
   # ── Python test (only when Python files change) ───────────────────────
   test:
@@ -127,12 +127,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install ${{ matrix.package }}
-        working-directory: packages/${{ matrix.package }}
+        working-directory: ${{ matrix.package }}
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
           pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==0.26.0 2>/dev/null || true
       - name: Test ${{ matrix.package }}
-        working-directory: packages/${{ matrix.package }}
+        working-directory: ${{ matrix.package }}
         run: pytest tests/ -q --tb=short
 
   # ── PyPI package build (only when Python files change) ────────────────
@@ -161,10 +161,10 @@ jobs:
       - name: Install build tools
         run: pip install --no-cache-dir build==1.2.2 setuptools==75.8.0
       - name: Build ${{ matrix.package }}
-        working-directory: packages/${{ matrix.package }}
+        working-directory: ${{ matrix.package }}
         run: python -m build
       - name: Verify wheel
-        working-directory: packages/${{ matrix.package }}
+        working-directory: ${{ matrix.package }}
         run: ls -la dist/*.whl
 
   # ── Python dependency safety (only when Python files change) ──────────
@@ -186,9 +186,9 @@ jobs:
         run: |
           for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance agent-runtime agent-lightning; do
             echo "=== $pkg ==="
-            cd packages/$pkg
+            cd $pkg
             pip install --no-cache-dir -e . 2>/dev/null || true  # Install local package (Scorecard: pinned via pyproject.toml)
-            cd ../..
+            cd ..
           done
           safety check 2>/dev/null || echo "Safety check completed with warnings"
 
@@ -272,12 +272,12 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install ${{ matrix.package }}
-        working-directory: packages/agentmesh-integrations/${{ matrix.package }}
+        working-directory: agentmesh-integrations/${{ matrix.package }}
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
           pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==0.26.0 2>/dev/null || true
       - name: Validate Python syntax
-        working-directory: packages/agentmesh-integrations/${{ matrix.package }}
+        working-directory: agentmesh-integrations/${{ matrix.package }}
         run: |
           python -c "
           import ast, glob, sys
@@ -297,7 +297,7 @@ jobs:
         run: python -c "import ${{ matrix.import-module }}"
         continue-on-error: true
       - name: Run tests
-        working-directory: packages/agentmesh-integrations/${{ matrix.package }}
+        working-directory: agentmesh-integrations/${{ matrix.package }}
         run: |
           if [ -d tests ]; then
             pytest tests/ -q --tb=short
@@ -394,22 +394,22 @@ jobs:
         with:
           node-version: "20"
       - name: Install mastra-agentmesh
-        working-directory: packages/agentmesh-integrations/mastra-agentmesh
+        working-directory: agentmesh-integrations/mastra-agentmesh
         run: npm ci 2>/dev/null || npm install --ignore-scripts
       - name: Lint mastra-agentmesh
-        working-directory: packages/agentmesh-integrations/mastra-agentmesh
+        working-directory: agentmesh-integrations/mastra-agentmesh
         run: npm run lint 2>/dev/null || true
       - name: Test mastra-agentmesh
-        working-directory: packages/agentmesh-integrations/mastra-agentmesh
+        working-directory: agentmesh-integrations/mastra-agentmesh
         run: npm test
       - name: Install copilot-governance
-        working-directory: packages/agentmesh-integrations/copilot-governance
+        working-directory: agentmesh-integrations/copilot-governance
         run: npm ci 2>/dev/null || npm install --ignore-scripts
       - name: Lint copilot-governance
-        working-directory: packages/agentmesh-integrations/copilot-governance
+        working-directory: agentmesh-integrations/copilot-governance
         run: npm run lint 2>/dev/null || true
       - name: Test copilot-governance
-        working-directory: packages/agentmesh-integrations/copilot-governance
+        working-directory: agentmesh-integrations/copilot-governance
         run: npm test
 
   # ── npm package build + test (only when TS files change) ──────────────
@@ -423,15 +423,15 @@ jobs:
       matrix:
         include:
           - name: agentmesh-mcp-proxy
-            path: packages/agent-mesh/packages/mcp-proxy
+            path: agent-mesh/packages/mcp-proxy
           - name: agent-governance-sdk
             path: agent-governance-typescript
           - name: agentmesh-api
-            path: packages/agent-mesh/services/api
+            path: agent-mesh/services/api
           - name: agent-os-copilot-extension
-            path: packages/agent-os/extensions/copilot
+            path: agent-os/extensions/copilot
           - name: agentos-mcp-server
-            path: packages/agent-os/extensions/mcp-server
+            path: agent-os/extensions/mcp-server
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0

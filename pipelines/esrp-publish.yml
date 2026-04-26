@@ -70,40 +70,40 @@ parameters:
     displayName: 'Python packages to publish'
     default:
       - name: agent-os
-        path: packages/agent-os
+        path: agent-os
       - name: agent-mesh
-        path: packages/agent-mesh
+        path: agent-mesh
       - name: agent-hypervisor
-        path: packages/agent-hypervisor
+        path: agent-hypervisor
       - name: agent-sre
-        path: packages/agent-sre
+        path: agent-sre
       - name: agent-compliance
-        path: packages/agent-compliance
+        path: agent-compliance
       - name: agent-runtime
-        path: packages/agent-runtime
+        path: agent-runtime
       - name: agent-lightning
-        path: packages/agent-lightning
+        path: agent-lightning
       - name: agent-marketplace
-        path: packages/agent-marketplace
+        path: agent-marketplace
 
   - name: npmPackages
     type: object
     displayName: 'npm packages to publish'
     default:
       - name: agentmesh-copilot-governance
-        path: packages/agentmesh-integrations/copilot-governance
+        path: agentmesh-integrations/copilot-governance
       - name: agentmesh-mastra
-        path: packages/agentmesh-integrations/mastra-agentmesh
+        path: agentmesh-integrations/mastra-agentmesh
       - name: agentmesh-api
-        path: packages/agent-mesh/services/api
+        path: agent-mesh/services/api
       - name: agentmesh-mcp-proxy
-        path: packages/agent-mesh/packages/mcp-proxy
+        path: agent-mesh/packages/mcp-proxy
       - name: agent-governance-sdk
         path: agent-governance-typescript
       - name: agent-os-copilot-extension
-        path: packages/agent-os/extensions/copilot
+        path: agent-os/extensions/copilot
       - name: agentos-mcp-server
-        path: packages/agent-os/extensions/mcp-server
+        path: agent-os/extensions/mcp-server
 
 # -------------------------------------------------------
 # ESRP Configuration
@@ -530,7 +530,7 @@ stages:
               done
               echo "=== Packaged crates ==="
               ls -la target/package/*.crate
-              cp target/package/*.crate $(Pipeline.Workspace)/rust-packages/
+              cp target/package/*.crate $(Pipeline.Workspace)/rust-./
             workingDirectory: 'agent-governance-rust'
             displayName: 'Package all crates'
 

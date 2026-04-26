@@ -303,6 +303,6 @@ jobs:
 
 ## Related
 
-- [Agent Discovery README](../../packages/agent-discovery/README.md) — Full API reference
+- [Agent Discovery README](../../agent-discovery/README.md) — Full API reference
 - [Trust & Identity](02-trust-and-identity.md) — Register agents with AgentMesh
 - [Compliance Verification](18-compliance-verification.md) — Prove governance coverage

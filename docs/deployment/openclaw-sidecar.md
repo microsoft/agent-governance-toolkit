@@ -8,9 +8,9 @@ Deploy OpenClaw as an autonomous agent with the Agent Governance Toolkit as a si
 > - The docker-compose example in this doc is for illustration. For a working local demo, use [`demo/openclaw-governed/`](../../demo/openclaw-governed/).
 > - See [Roadmap](#roadmap) for the full list of unimplemented features.
 
-> **Container images** are published to `ghcr.io/microsoft/agentmesh/`. See [Container Images](../../packages/agent-mesh/docs/deployment/azure.md#container-images) for the full list.
+> **Container images** are published to `ghcr.io/microsoft/agentmesh/`. See [Container Images](../../agent-mesh/docs/deployment/azure.md#container-images) for the full list.
 
-> **See also:** [Deployment Overview](README.md) | [AKS Deployment](../../packages/agent-mesh/docs/deployment/azure.md) | [OpenShell Integration](../integrations/openshell.md)
+> **See also:** [Deployment Overview](README.md) | [AKS Deployment](../../agent-mesh/docs/deployment/azure.md) | [OpenShell Integration](../integrations/openshell.md)
 
 ---
 
@@ -73,7 +73,7 @@ OpenClaw is a powerful autonomous agent capable of executing code, calling APIs,
 - Docker and Docker Compose (for local development)
 - Azure CLI with AKS credentials (for production)
 - Helm 3.x (for AKS deployment)
-- An AKS cluster (see [AKS setup guide](../../packages/agent-mesh/docs/deployment/azure.md#aks-cluster-setup))
+- An AKS cluster (see [AKS setup guide](../../agent-mesh/docs/deployment/azure.md#aks-cluster-setup))
 
 ---
 
@@ -127,7 +127,7 @@ services:
 
   governance-sidecar:
     build:
-      context: ../../packages/agent-os
+      context: ../../agent-os
       dockerfile: Dockerfile.sidecar
     ports:
       - "8081:8081"
@@ -161,7 +161,7 @@ The sidecar image is not published to a public registry. Build from source and p
 
 ```bash
 # Build from the agent-os package (bundles policy + trust + audit in one image)
-cd packages/agent-os
+cd agent-os
 docker build -t <YOUR_REGISTRY>/agentmesh/governance-sidecar:0.3.0 \
   -f Dockerfile.sidecar .
 docker push <YOUR_REGISTRY>/agentmesh/governance-sidecar:0.3.0
@@ -275,7 +275,7 @@ kubectl exec -n openclaw-governed deploy/openclaw-governed -c openclaw -- \
 
 ### What About the AgentMesh Helm Chart?
 
-The [AgentMesh Helm chart](../../packages/agent-mesh/charts/agentmesh/) deploys the **full 4-component enterprise architecture** (API Gateway, Trust Engine, Policy Server, Audit Collector). That is a different deployment model — use it when you need a centralized governance control plane serving multiple agents.
+The [AgentMesh Helm chart](../../agent-mesh/charts/agentmesh/) deploys the **full 4-component enterprise architecture** (API Gateway, Trust Engine, Policy Server, Audit Collector). That is a different deployment model — use it when you need a centralized governance control plane serving multiple agents.
 
 For the **OpenClaw sidecar** pattern (one governance instance per agent pod), use the plain Kubernetes manifests above. This is simpler, requires no external dependencies (no PostgreSQL, no Redis), and works immediately.
 
@@ -460,7 +460,7 @@ env:
 
 ## Next Steps
 
-- [Full AKS deployment guide](../../packages/agent-mesh/docs/deployment/azure.md) for enterprise features (managed identity, Key Vault, HA)
-- [Agent SRE documentation](../../packages/agent-sre/README.md) for SLO configuration
-- [AgentMesh identity](../../packages/agent-mesh/README.md) for multi-agent scenarios with OpenClaw
-- [Chaos engineering templates](../../packages/agent-sre/README.md) for testing governance under failure conditions
+- [Full AKS deployment guide](../../agent-mesh/docs/deployment/azure.md) for enterprise features (managed identity, Key Vault, HA)
+- [Agent SRE documentation](../../agent-sre/README.md) for SLO configuration
+- [AgentMesh identity](../../agent-mesh/README.md) for multi-agent scenarios with OpenClaw
+- [Chaos engineering templates](../../agent-sre/README.md) for testing governance under failure conditions
