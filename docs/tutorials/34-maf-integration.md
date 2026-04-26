@@ -10,8 +10,8 @@ This tutorial shows how to add AGT governance to agents built with the [Microsof
 
 | Component | Location |
 |-----------|----------|
-| MAF Adapter | `agent-os/src/agent_os/integrations/maf_adapter.py` |
-| Tests (18/18 passing) | `agent-os/tests/test_maf_adapter.py` |
+| MAF Adapter | `agent-governance-python/agent-os/src/agent_os/integrations/maf_adapter.py` |
+| Tests (18/18 passing) | `agent-governance-python/agent-os/tests/test_maf_adapter.py` |
 | Quick start | `from agent_os.integrations.maf_adapter import maf_govern` |
 
 ## Why Govern MAF Agents?

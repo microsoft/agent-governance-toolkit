@@ -274,7 +274,7 @@ result = proxy.route(target="mcp://random-server.external", tool_call={...})
 
 **Gap:** Current enforcement requires explicit server registration. Full mitigation needs **Server Card validation** (aligned with SEP-2127) — a machine-readable manifest that MCP servers publish to declare their capabilities, security posture, and compliance status. See [Roadmap](#roadmap).
 
-**Component:** [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — `agentmesh-integrations/mcp-trust-proxy/`
+**Component:** [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) — `agent-governance-python/agentmesh-integrations/mcp-trust-proxy/`
 
 ---
 

@@ -362,7 +362,7 @@ While this tutorial focuses on Microsoft Entra, AGT's identity layer is platform
 - **AWS IAM Identity Center** — map `did:agentmesh:*` ↔ IAM role ARN
 - **Google Cloud Workload Identity** — map `did:agentmesh:*` ↔ service account email
 - **Okta Workforce Identity** — map `did:agentmesh:*` ↔ Okta user/app ID
-- **SPIFFE/SPIRE** — map `did:agentmesh:*` ↔ SPIFFE ID (see [identity docs](../../agent-mesh/docs/identity.md))
+- **SPIFFE/SPIRE** — map `did:agentmesh:*` ↔ SPIFFE ID (see [identity docs](../../agent-governance-python/agent-mesh/docs/identity.md))
 
 AGT's `EntraAgentRegistry` pattern can be adapted for any enterprise IdP. We welcome community contributions for AWS, GCP, and Okta adapters.
 
@@ -371,6 +371,6 @@ AGT's `EntraAgentRegistry` pattern can be adapted for any enterprise IdP. We wel
 - **[Tutorial 02 — Trust & Identity](02-trust-and-identity.md)** — AGT identity fundamentals
 - **[Tutorial 23 — Delegation Chains](23-delegation-chains.md)** — Scoped child identities
 - **[Tutorial 25 — Security Hardening](25-security-hardening.md)** — Production deployment
-- **[Azure Deployment Guide](../../agent-mesh/docs/deployment/azure.md)** — AKS + workload identity
-- **[Identity Architecture](../../agent-mesh/docs/identity.md)** — Full identity stack reference
+- **[Azure Deployment Guide](../../agent-governance-python/agent-mesh/docs/deployment/azure.md)** — AKS + workload identity
+- **[Identity Architecture](../../agent-governance-python/agent-mesh/docs/identity.md)** — Full identity stack reference
 - **[Entra Agent ID Docs](https://learn.microsoft.com/en-us/entra/agent-id/)** — Microsoft Entra documentation

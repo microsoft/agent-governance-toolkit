@@ -329,12 +329,12 @@ agt integrity --manifest integrity.json
 
 | What | Where |
 |------|-------|
-| Full API reference (Python) | [agent-os/README.md](agent-os/README.md) |
+| Full API reference (Python) | [agent-governance-python/agent-os/README.md](agent-governance-python/agent-os/README.md) |
 | TypeScript package docs | [agent-governance-typescript/README.md](agent-governance-typescript/README.md) |
 | .NET package docs | [agent-governance-dotnet/README.md](agent-governance-dotnet/README.md) |
 | OWASP coverage map | [docs/OWASP-COMPLIANCE.md](docs/OWASP-COMPLIANCE.md) |
-| Framework integrations | [agent-os/src/agent_os/integrations/](agent-os/src/agent_os/integrations/) |
-| Example applications | [agent-os/examples/](agent-os/examples/) |
+| Framework integrations | [agent-governance-python/agent-os/src/agent_os/integrations/](agent-governance-python/agent-os/src/agent_os/integrations/) |
+| Example applications | [agent-governance-python/agent-os/examples/](agent-governance-python/agent-os/examples/) |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Changelog | [CHANGELOG.md](CHANGELOG.md) |
 

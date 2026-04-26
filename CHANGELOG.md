@@ -127,7 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - NIST AI RMF 1.0 alignment assessment
 - MCP governance consolidated into docs/compliance/
 - Policy-as-code tutorial chapter 4
-- Added `EUAIActRiskClassifier` usage example and API docs to `agent-mesh/README.md`
+- Added `EUAIActRiskClassifier` usage example and API docs to `agent-governance-python/agent-mesh/README.md`
 - Updated `QUICKSTART.md` and `Tutorial 04 — Audit & Compliance` with secure JSON error handling examples and schema details
 - Added "Secure Error Handling" sections to primary documentation to guide users on interpreting sanitized machine-readable outputs
 

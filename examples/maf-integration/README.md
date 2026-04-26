@@ -154,5 +154,5 @@ rules:
 - [docs/tutorials/34-maf-integration.md](../../docs/tutorials/34-maf-integration.md)
 - [docs/tutorials/43-dotnet-maf-hook-integration.md](../../docs/tutorials/43-dotnet-maf-hook-integration.md)
 - [demo/maf-integration](../../demo/maf-integration)
-- [agent-os/src/agent_os/integrations/maf_adapter.py](../../agent-os/src/agent_os/integrations/maf_adapter.py)
+- [agent-governance-python/agent-os/src/agent_os/integrations/maf_adapter.py](../../agent-governance-python/agent-os/src/agent_os/integrations/maf_adapter.py)
 - [Microsoft Agent Framework](https://github.com/microsoft/agent-framework)

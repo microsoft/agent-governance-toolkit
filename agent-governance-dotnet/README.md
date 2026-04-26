@@ -507,7 +507,7 @@ var middleware = new GovernanceMiddleware(engine, emitter, rateLimiter, metrics)
 var result = middleware.EvaluateToolCall("did:mesh:agent", "database_write", new() { ["table"] = "users" });
 ```
 
-See the [MAF adapter](../agent-os/src/agent_os/integrations/maf_adapter.py) for the full Python middleware, or the [Foundry integration guide](../docs/deployment/azure-foundry-agent-service.md) for Azure deployment.
+See the [MAF adapter](../agent-governance-python/agent-os/src/agent_os/integrations/maf_adapter.py) for the full Python middleware, or the [Foundry integration guide](../docs/deployment/azure-foundry-agent-service.md) for Azure deployment.
 
 ## Requirements
 

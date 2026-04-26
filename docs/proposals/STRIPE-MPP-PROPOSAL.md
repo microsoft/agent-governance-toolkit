@@ -32,7 +32,7 @@ Human → VADP Delegation (spend ≤ $X) → Agent Wallet → Stripe MPP Session
 
 - Stripe MPP SDK (March 2026)
 - VADP delegation chain (agent-delegation-protocol/)
-- Nexus escrow system (agent-os/modules/nexus/escrow.py)
+- Nexus escrow system (agent-governance-python/agent-os/modules/nexus/escrow.py)
 
 ## References
 

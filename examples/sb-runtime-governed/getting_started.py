@@ -35,12 +35,12 @@ receipt to prove that the backend choice is covered by the Ed25519
 signature, not just sidecar metadata.
 
 Usage:
-    pip install -e agentmesh-integrations/sb-runtime-skill/
+    pip install -e agent-governance-python/agentmesh-integrations/sb-runtime-skill/
     python examples/sb-runtime-governed/getting_started.py
 
 Background:
     - Integration doc: docs/integrations/sb-runtime.md (merged as PR #1202)
-    - Provider shim:   agentmesh-integrations/sb-runtime-skill/ (merged as PR #1203)
+    - Provider shim:   agent-governance-python/agentmesh-integrations/sb-runtime-skill/ (merged as PR #1203)
     - Receipt format:  draft-farley-acta-signed-receipts-02
     - Offline verifier: npx @veritasacta/verify (Apache-2.0, zero dependencies)
 """
@@ -68,9 +68,9 @@ try:
 except ImportError as exc:
     print(
         "\n  This example requires sb-runtime-skill to be importable.\n"
-        "  Run: pip install -e agentmesh-integrations/sb-runtime-skill/\n"
+        "  Run: pip install -e agent-governance-python/agentmesh-integrations/sb-runtime-skill/\n"
         "\n  or ensure the repository layout is intact; the example imports\n"
-        "  from agentmesh-integrations/sb-runtime-skill/ directly.\n"
+        "  from agent-governance-python/agentmesh-integrations/sb-runtime-skill/ directly.\n"
         f"\n  Import error: {exc}\n"
     )
     raise SystemExit(2)

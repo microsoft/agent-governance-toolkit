@@ -170,7 +170,7 @@ saves time.
 ## CI Optimization
 
 CI workflows use path filters so only relevant checks run per PR:
-- **Python changes** (`agent-mesh/`, `agent-os/`, etc.) → lint + test for that package only
+- **Python changes** (`agent-governance-python/agent-mesh/`, `agent-governance-python/agent-os/`, etc.) → lint + test for that package only
 - **TypeScript changes** (`agent-governance-typescript/`, `extensions/copilot/`) → TS lint + test only`n- **Rust changes** (`agent-governance-rust/`) → cargo test only
 - **.NET changes** (`agent-governance-dotnet/`) → dotnet test only
 - **Go changes** (`agent-governance-golang/`) → go test only

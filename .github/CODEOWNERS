@@ -9,14 +9,14 @@
 * @microsoft/agent-governance-toolkit
 
 # Package-specific ownership
-/agent-os/          @microsoft/agent-governance-toolkit
-/agent-mesh/        @microsoft/agent-governance-toolkit
-/agent-hypervisor/  @microsoft/agent-governance-toolkit
-/agent-sre/         @microsoft/agent-governance-toolkit
-/agent-compliance/  @microsoft/agent-governance-toolkit
-/agent-marketplace/ @microsoft/agent-governance-toolkit
-/agent-runtime/     @microsoft/agent-governance-toolkit
-/agentmesh-integrations/ @microsoft/agent-governance-toolkit
+/agent-governance-python/agent-os/          @microsoft/agent-governance-toolkit
+/agent-governance-python/agent-mesh/        @microsoft/agent-governance-toolkit
+/agent-governance-python/agent-hypervisor/  @microsoft/agent-governance-toolkit
+/agent-governance-python/agent-sre/         @microsoft/agent-governance-toolkit
+/agent-governance-python/agent-compliance/  @microsoft/agent-governance-toolkit
+/agent-governance-python/agent-marketplace/ @microsoft/agent-governance-toolkit
+/agent-governance-python/agent-runtime/     @microsoft/agent-governance-toolkit
+/agent-governance-python/agentmesh-integrations/ @microsoft/agent-governance-toolkit
 
 # Security-sensitive paths — require maintainer review, no exceptions
 /.github/                    @microsoft/agent-governance-toolkit

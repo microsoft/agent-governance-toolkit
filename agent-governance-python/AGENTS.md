@@ -28,5 +28,5 @@ them into this package workspace.
 ## Validation
 
 - Run the narrowest package-local checks for the package you changed.
-- If a package here is consumed by `agent-os/`, verify that consumer still installs and
+- If a package here is consumed by `agent-governance-python/agent-os/`, verify that consumer still installs and
   imports correctly after your changes.

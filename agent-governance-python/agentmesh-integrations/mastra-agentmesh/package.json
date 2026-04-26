@@ -1,0 +1,47 @@
+{
+  "name": "@microsoft/agentmesh-mastra",
+  "version": "3.1.0",
+  "description": "Public Preview \u2014 Governance, trust verification, and audit middleware for Mastra AI agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mastra",
+    "agentmesh",
+    "governance",
+    "trust",
+    "audit",
+    "ai-agents",
+    "middleware",
+    "security"
+  ],
+  "author": "Microsoft Corporation",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/agent-governance-toolkit.git",
+    "directory": "agent-governance-python/agentmesh-integrations/mastra-agentmesh"
+  },
+  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agentmesh-integrations/mastra-agentmesh",
+  "peerDependencies": {
+    "@mastra/core": ">=0.10.0",
+    "zod": ">=3.22.0"
+  },
+  "devDependencies": {
+    "@mastra/core": "0.10.0",
+    "tsup": "8.3.5",
+    "typescript": "5.7.3",
+    "vitest": "3.0.5",
+    "zod": "3.22.0"
+  }
+}

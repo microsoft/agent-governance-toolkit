@@ -44,7 +44,7 @@ The EU AI Act classifies AI systems into four risk tiers. The toolkit's applicab
 | **Limited Risk** (Art. 50) | AI systems interacting directly with persons, generating synthetic content | Transparency obligations apply |
 | **Minimal Risk** | All other AI systems | Voluntary codes of conduct |
 
-The toolkit includes a risk classifier in `agent-mesh/examples/06-eu-ai-act-compliance/compliance_checker.py` that maps agent profiles to these tiers. See [Article 6 details](#article-6-high-risk-classification) for limitations.
+The toolkit includes a risk classifier in `agent-governance-python/agent-mesh/examples/06-eu-ai-act-compliance/compliance_checker.py` that maps agent profiles to these tiers. See [Article 6 details](#article-6-high-risk-classification) for limitations.
 
 ---
 
@@ -72,10 +72,10 @@ Article 4 is an organizational/HR obligation requiring training programs, compet
 
 | Component | Location | Mechanism |
 |-----------|----------|-----------|
-| Risk level enum and domain constants | `agent-mesh/examples/06-eu-ai-act-compliance/compliance_checker.py:30-84` | `RiskLevel` enum (4 tiers) and `UNACCEPTABLE_DOMAINS`, `HIGH_RISK_DOMAINS`, `HIGH_RISK_CAPABILITIES` sets |
-| Risk classifier | `agent-mesh/examples/06-eu-ai-act-compliance/compliance_checker.py:136-180` | `RiskClassifier.classify()` and `.explain()` methods with trigger explanations |
-| Keyword-based classifier | `agent-os/modules/control-plane/src/agent_control_plane/compliance.py:252-304` | `assess_risk_category()` checks system descriptions against indicator keywords |
-| Runtime compliance check | `agentmesh-integrations/langflow-agentmesh/src/langflow_agentmesh/compliance_checker.py:103-114` | `_HIGH_RISK_DOMAINS` and `_UNACCEPTABLE_KEYWORDS` sets |
+| Risk level enum and domain constants | `agent-governance-python/agent-mesh/examples/06-eu-ai-act-compliance/compliance_checker.py:30-84` | `RiskLevel` enum (4 tiers) and `UNACCEPTABLE_DOMAINS`, `HIGH_RISK_DOMAINS`, `HIGH_RISK_CAPABILITIES` sets |
+| Risk classifier | `agent-governance-python/agent-mesh/examples/06-eu-ai-act-compliance/compliance_checker.py:136-180` | `RiskClassifier.classify()` and `.explain()` methods with trigger explanations |
+| Keyword-based classifier | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/compliance.py:252-304` | `assess_risk_category()` checks system descriptions against indicator keywords |
+| Runtime compliance check | `agent-governance-python/agentmesh-integrations/langflow-agentmesh/src/langflow_agentmesh/compliance_checker.py:103-114` | `_HIGH_RISK_DOMAINS` and `_UNACCEPTABLE_KEYWORDS` sets |
 
 **Gaps**:
 
@@ -101,11 +101,11 @@ Article 4 is an organizational/HR obligation requiring training programs, compet
 
 | Component | Location | Mechanism |
 |-----------|----------|-----------|
-| Rogue agent detection | `agent-sre/src/agent_sre/anomaly/rogue_detector.py:276-401` | Composite behavioral risk scoring: frequency z-scores, entropy deviation, capability profile violations |
-| Risk category assessment | `agent-os/modules/control-plane/src/agent_control_plane/compliance.py:252-304` | Keyword-based risk classification into EU AI Act tiers |
-| EUAI-ART9 control | `agent-mesh/src/agentmesh/governance/compliance.py:256-268` | Declares risk management control requirements |
-| Policy compliance SLI | `agent-sre/src/agent_sre/slo/indicators.py:243-266` | Continuous policy adherence tracking (100% target) |
-| Chaos testing | `agent-sre/src/agent_sre/chaos/engine.py:246` | Resilience testing framework for agent systems |
+| Rogue agent detection | `agent-governance-python/agent-sre/src/agent_sre/anomaly/rogue_detector.py:276-401` | Composite behavioral risk scoring: frequency z-scores, entropy deviation, capability profile violations |
+| Risk category assessment | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/compliance.py:252-304` | Keyword-based risk classification into EU AI Act tiers |
+| EUAI-ART9 control | `agent-governance-python/agent-mesh/src/agentmesh/governance/compliance.py:256-268` | Declares risk management control requirements |
+| Policy compliance SLI | `agent-governance-python/agent-sre/src/agent_sre/slo/indicators.py:243-266` | Continuous policy adherence tracking (100% target) |
+| Chaos testing | `agent-governance-python/agent-sre/src/agent_sre/chaos/engine.py:246` | Resilience testing framework for agent systems |
 
 **Gaps**:
 
@@ -144,9 +144,9 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 
 | Component | Location | Mechanism |
 |-----------|----------|-----------|
-| Compliance reports | `agent-mesh/src/agentmesh/governance/compliance.py:121-168` | `ComplianceReport` model with framework, period, controls, scores, violations |
-| Policy documents | `agent-os/src/agent_os/policies/schema.py:70-115` | Serializable YAML/JSON `PolicyDocument` with version, name, rules, defaults |
-| Compliance engine | `agent-os/modules/control-plane/src/agent_control_plane/compliance.py:306-341` | Framework-scoped reports with requirement counts and pass rates |
+| Compliance reports | `agent-governance-python/agent-mesh/src/agentmesh/governance/compliance.py:121-168` | `ComplianceReport` model with framework, period, controls, scores, violations |
+| Policy documents | `agent-governance-python/agent-os/src/agent_os/policies/schema.py:70-115` | Serializable YAML/JSON `PolicyDocument` with version, name, rules, defaults |
+| Compliance engine | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/compliance.py:306-341` | Framework-scoped reports with requirement counts and pass rates |
 
 **Gaps**:
 
@@ -171,12 +171,12 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 
 | Component | Location | Mechanism |
 |-----------|----------|-----------|
-| Merkle audit chain | `agent-mesh/src/agentmesh/governance/audit.py:23-344` | `AuditEntry` with SHA-256 hash chaining, `MerkleAuditChain` with inclusion proofs and full chain verification |
-| Append-only audit log | `agent-mesh/src/agentmesh/governance/audit.py:350-512` | `AuditLog` with agent/type indexes, time-range queries, CloudEvents v1.0 export |
-| Signed audit entries | `agent-mesh/src/agentmesh/governance/audit_backends.py:31-87` | `AuditSink` protocol, `SignedAuditEntry` with HMAC-SHA256 signatures, `HashChainVerifier` |
-| Governance audit logger | `agent-os/src/agent_os/audit_logger.py:19-136` | Pluggable backends (JSONL, in-memory, Python logging) capturing event type, agent ID, action, decision, reason, latency |
-| Flight recorder | `agent-os/modules/control-plane/src/agent_control_plane/flight_recorder.py:33-79` | SQLite with WAL mode, Merkle chain tamper detection, captures prompt, action, verdict, result |
-| Delta audit engine | `agent-hypervisor/src/hypervisor/audit/delta.py:59-110` | Append-only delta log per session with SHA-256 hashed entries |
+| Merkle audit chain | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py:23-344` | `AuditEntry` with SHA-256 hash chaining, `MerkleAuditChain` with inclusion proofs and full chain verification |
+| Append-only audit log | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py:350-512` | `AuditLog` with agent/type indexes, time-range queries, CloudEvents v1.0 export |
+| Signed audit entries | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit_backends.py:31-87` | `AuditSink` protocol, `SignedAuditEntry` with HMAC-SHA256 signatures, `HashChainVerifier` |
+| Governance audit logger | `agent-governance-python/agent-os/src/agent_os/audit_logger.py:19-136` | Pluggable backends (JSONL, in-memory, Python logging) capturing event type, agent ID, action, decision, reason, latency |
+| Flight recorder | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/flight_recorder.py:33-79` | SQLite with WAL mode, Merkle chain tamper detection, captures prompt, action, verdict, result |
+| Delta audit engine | `agent-governance-python/agent-hypervisor/src/hypervisor/audit/delta.py:59-110` | Append-only delta log per session with SHA-256 hashed entries |
 
 **Gaps**:
 
@@ -201,11 +201,11 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 
 | Component | Location | Mechanism |
 |-----------|----------|-----------|
-| EUAI-ART13 control | `agent-mesh/src/agentmesh/governance/compliance.py:270-282` | Defines explainability, documentation, and user notification requirements |
-| Transparency check | `agent-os/modules/control-plane/src/agent_control_plane/compliance.py:390-401` | Validates `provides_transparency_info` boolean in context |
-| Decision explanations | `agent-os/src/agent_os/policies/schema.py:52-58` | `PolicyRule.message` field for human-readable explanation of each governance decision |
-| CloudEvents export | `agent-mesh/src/agentmesh/governance/audit.py:90-128` | Serializes decisions to CloudEvents v1.0 with action, outcome, policy_decision, matched_rule |
-| OpenTelemetry tracing | `agent-mesh/src/agentmesh/observability/otel_governance.py:31` | `GovernanceTracer` for governance decision instrumentation |
+| EUAI-ART13 control | `agent-governance-python/agent-mesh/src/agentmesh/governance/compliance.py:270-282` | Defines explainability, documentation, and user notification requirements |
+| Transparency check | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/compliance.py:390-401` | Validates `provides_transparency_info` boolean in context |
+| Decision explanations | `agent-governance-python/agent-os/src/agent_os/policies/schema.py:52-58` | `PolicyRule.message` field for human-readable explanation of each governance decision |
+| CloudEvents export | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py:90-128` | Serializes decisions to CloudEvents v1.0 with action, outcome, policy_decision, matched_rule |
+| OpenTelemetry tracing | `agent-governance-python/agent-mesh/src/agentmesh/observability/otel_governance.py:31` | `GovernanceTracer` for governance decision instrumentation |
 
 **Gaps**:
 
@@ -229,10 +229,10 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 
 | Component | Location | Mechanism |
 |-----------|----------|-----------|
-| Escalation system | `agent-os/src/agent_os/integrations/escalation.py:48-583` | `EscalationDecision` enum, `ApprovalBackend` ABC, `InMemoryApprovalQueue`, `WebhookApprovalBackend`, `EscalationHandler` with timeout, quorum, fatigue detection |
-| Kill switch | `agent-hypervisor/src/hypervisor/security/kill_switch.py:64-136` | `KillSwitch` with `KillReason` enum (BEHAVIORAL_DRIFT, RATE_LIMIT, RING_BREACH, MANUAL, QUARANTINE_TIMEOUT, SESSION_TIMEOUT) |
-| Ring breach detection | `agent-hypervisor/src/hypervisor/rings/breach_detector.py:1-60` | Internal circuit breaker tripping on HIGH/CRITICAL privilege breaches |
-| Base agent escalation | `agent-os/src/agent_os/base_agent.py:51-81` | `PolicyDecision.ESCALATE` and `EscalationRequest` with approve/reject |
+| Escalation system | `agent-governance-python/agent-os/src/agent_os/integrations/escalation.py:48-583` | `EscalationDecision` enum, `ApprovalBackend` ABC, `InMemoryApprovalQueue`, `WebhookApprovalBackend`, `EscalationHandler` with timeout, quorum, fatigue detection |
+| Kill switch | `agent-governance-python/agent-hypervisor/src/hypervisor/security/kill_switch.py:64-136` | `KillSwitch` with `KillReason` enum (BEHAVIORAL_DRIFT, RATE_LIMIT, RING_BREACH, MANUAL, QUARANTINE_TIMEOUT, SESSION_TIMEOUT) |
+| Ring breach detection | `agent-governance-python/agent-hypervisor/src/hypervisor/rings/breach_detector.py:1-60` | Internal circuit breaker tripping on HIGH/CRITICAL privilege breaches |
+| Base agent escalation | `agent-governance-python/agent-os/src/agent_os/base_agent.py:51-81` | `PolicyDecision.ESCALATE` and `EscalationRequest` with approve/reject |
 
 **Strengths**:
 - Timeout defaults to DENY (`EscalationHandler` at line 308) -- the safe default for conformity
@@ -263,32 +263,32 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 
 | Component | Location | Mechanism |
 |-----------|----------|-----------|
-| Tool call accuracy SLI | `agent-sre/src/agent_sre/slo/indicators.py:159-182` | Measures correct tool selection fraction (default target 99.9%) |
-| Task success rate SLI | `agent-sre/src/agent_sre/slo/indicators.py:133-156` | Tracks task completion success (default target 99.5%) |
-| Hallucination rate SLI | `agent-sre/src/agent_sre/slo/indicators.py:297-337` | Measures factual accuracy via LLM-as-judge (default target 5%) |
-| Calibration delta SLI | `agent-sre/src/agent_sre/slo/indicators.py:340-468` | Tracks predicted confidence vs. actual success rate drift |
+| Tool call accuracy SLI | `agent-governance-python/agent-sre/src/agent_sre/slo/indicators.py:159-182` | Measures correct tool selection fraction (default target 99.9%) |
+| Task success rate SLI | `agent-governance-python/agent-sre/src/agent_sre/slo/indicators.py:133-156` | Tracks task completion success (default target 99.5%) |
+| Hallucination rate SLI | `agent-governance-python/agent-sre/src/agent_sre/slo/indicators.py:297-337` | Measures factual accuracy via LLM-as-judge (default target 5%) |
+| Calibration delta SLI | `agent-governance-python/agent-sre/src/agent_sre/slo/indicators.py:340-468` | Tracks predicted confidence vs. actual success rate drift |
 
 *Robustness:*
 
 | Component | Location | Mechanism |
 |-----------|----------|-----------|
-| Chaos testing | `agent-sre/src/agent_sre/chaos/engine.py:246` | `ChaosExperiment` for resilience testing |
-| Circuit breakers | `agent-sre/src/agent_sre/cascade/circuit_breaker.py:90` | Fault isolation for cascading failures |
-| Replay engine | `agent-sre/src/agent_sre/replay/engine.py:105` | Debugging and failure reproduction |
-| Anomaly detection | `agent-sre/src/agent_sre/anomaly/detector.py:123` | Rolling baselines with z-score detection |
-| Execution rings | `agent-hypervisor/src/hypervisor/models.py:46-69` | 4-tier privilege isolation by trust score |
+| Chaos testing | `agent-governance-python/agent-sre/src/agent_sre/chaos/engine.py:246` | `ChaosExperiment` for resilience testing |
+| Circuit breakers | `agent-governance-python/agent-sre/src/agent_sre/cascade/circuit_breaker.py:90` | Fault isolation for cascading failures |
+| Replay engine | `agent-governance-python/agent-sre/src/agent_sre/replay/engine.py:105` | Debugging and failure reproduction |
+| Anomaly detection | `agent-governance-python/agent-sre/src/agent_sre/anomaly/detector.py:123` | Rolling baselines with z-score detection |
+| Execution rings | `agent-governance-python/agent-hypervisor/src/hypervisor/models.py:46-69` | 4-tier privilege isolation by trust score |
 
 *Cybersecurity:*
 
 | Component | Location | Mechanism |
 |-----------|----------|-----------|
-| Ed25519 trust handshake | `agent-mesh/src/agentmesh/trust/handshake.py:158-456` | Challenge/response authentication with DoS protection and caching |
-| SPIFFE certificate authority | `agent-mesh/src/agentmesh/core/identity/ca.py:6-44` | Ed25519 sponsor verification for SVID certificates |
-| MCP security threat model | `agent-os/src/agent_os/mcp_security.py:1-78` | `MCPThreatType` and `MCPSeverity` enums defining the threat taxonomy |
-| MCP security scanner | `agent-os/src/agent_os/mcp_security.py:272+` | `MCPSecurityScanner` class detecting tool poisoning, rug pulls, description injection, schema abuse, cross-server attacks, confused deputy |
-| Signed audit entries | `agent-mesh/src/agentmesh/governance/audit_backends.py:61-87` | HMAC-SHA256 signatures on audit entries |
-| Ring breach detection | `agent-hypervisor/src/hypervisor/rings/breach_detector.py:1-60` | Privilege escalation detection with severity scoring |
-| Input validation | `agent-hypervisor/src/hypervisor/models.py:106-220` | Validation on agent_did, API paths, numeric bounds |
+| Ed25519 trust handshake | `agent-governance-python/agent-mesh/src/agentmesh/trust/handshake.py:158-456` | Challenge/response authentication with DoS protection and caching |
+| SPIFFE certificate authority | `agent-governance-python/agent-mesh/src/agentmesh/core/identity/ca.py:6-44` | Ed25519 sponsor verification for SVID certificates |
+| MCP security threat model | `agent-governance-python/agent-os/src/agent_os/mcp_security.py:1-78` | `MCPThreatType` and `MCPSeverity` enums defining the threat taxonomy |
+| MCP security scanner | `agent-governance-python/agent-os/src/agent_os/mcp_security.py:272+` | `MCPSecurityScanner` class detecting tool poisoning, rug pulls, description injection, schema abuse, cross-server attacks, confused deputy |
+| Signed audit entries | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit_backends.py:61-87` | HMAC-SHA256 signatures on audit entries |
+| Ring breach detection | `agent-governance-python/agent-hypervisor/src/hypervisor/rings/breach_detector.py:1-60` | Privilege escalation detection with severity scoring |
+| Input validation | `agent-governance-python/agent-hypervisor/src/hypervisor/models.py:106-220` | Validation on agent_did, API paths, numeric bounds |
 
 **Gaps**:
 
@@ -314,11 +314,11 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 
 | Component | Location | Mechanism |
 |-----------|----------|-----------|
-| Retention days schema | `agent-os/src/agent_os/policies/policy_schema.json:215-218` | `retention_days` field with default 90, minimum 1 |
-| Human oversight | `agent-os/src/agent_os/integrations/escalation.py:120-583` | Full escalation system with approval backends |
-| Kill switch | `agent-hypervisor/src/hypervisor/security/kill_switch.py:64-136` | Emergency termination (see Art. 14 caveats) |
-| SRE monitoring | `agent-sre/src/agent_sre/slo/indicators.py` | SLI/SLO framework for operational monitoring |
-| Incident detection | `agent-sre/src/agent_sre/incidents/detector.py` | `Signal` and `IncidentSeverity` for risk signal generation |
+| Retention days schema | `agent-governance-python/agent-os/src/agent_os/policies/policy_schema.json:215-218` | `retention_days` field with default 90, minimum 1 |
+| Human oversight | `agent-governance-python/agent-os/src/agent_os/integrations/escalation.py:120-583` | Full escalation system with approval backends |
+| Kill switch | `agent-governance-python/agent-hypervisor/src/hypervisor/security/kill_switch.py:64-136` | Emergency termination (see Art. 14 caveats) |
+| SRE monitoring | `agent-governance-python/agent-sre/src/agent_sre/slo/indicators.py` | SLI/SLO framework for operational monitoring |
+| Incident detection | `agent-governance-python/agent-sre/src/agent_sre/incidents/detector.py` | `Signal` and `IncidentSeverity` for risk signal generation |
 
 **Gaps**:
 
@@ -345,9 +345,9 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 
 | Component | Location | Mechanism |
 |-----------|----------|-----------|
-| Transparency checker | `agent-mesh/examples/06-eu-ai-act-compliance/compliance_checker.py:186-231` | Validates `transparency_disclosure` on `AgentProfile` |
-| Transparency requirement | `agent-os/modules/control-plane/src/agent_control_plane/compliance.py:390-401` | Checks `provides_transparency_info` boolean in context |
-| Risk indicators | `agent-mesh/examples/06-eu-ai-act-compliance/compliance_checker.py:80-84` | `LIMITED_RISK_INDICATORS` includes `deepfake_generation` |
+| Transparency checker | `agent-governance-python/agent-mesh/examples/06-eu-ai-act-compliance/compliance_checker.py:186-231` | Validates `transparency_disclosure` on `AgentProfile` |
+| Transparency requirement | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/compliance.py:390-401` | Checks `provides_transparency_info` boolean in context |
+| Risk indicators | `agent-governance-python/agent-mesh/examples/06-eu-ai-act-compliance/compliance_checker.py:80-84` | `LIMITED_RISK_INDICATORS` includes `deepfake_generation` |
 
 **Gaps by sub-obligation**:
 

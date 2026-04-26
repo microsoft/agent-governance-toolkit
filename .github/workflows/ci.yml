@@ -35,24 +35,24 @@ jobs:
         with:
           filters: |
             python:
-              - 'agent-os/**'
-              - 'agent-mesh/**'
-              - 'agent-hypervisor/**'
-              - 'agent-sre/**'
-              - 'agent-compliance/**'
-              - 'agent-runtime/**'
-              - 'agent-lightning/**'
+              - 'agent-governance-python/agent-os/**'
+              - 'agent-governance-python/agent-mesh/**'
+              - 'agent-governance-python/agent-hypervisor/**'
+              - 'agent-governance-python/agent-sre/**'
+              - 'agent-governance-python/agent-compliance/**'
+              - 'agent-governance-python/agent-runtime/**'
+              - 'agent-governance-python/agent-lightning/**'
               - 'scripts/**'
               - 'requirements/**'
             dotnet:
               - 'agent-governance-dotnet/**'
             typescript:
               - 'agent-governance-typescript/**'
-              - 'agent-os/extensions/**'
-              - 'agentmesh-integrations/mastra-agentmesh/**'
-              - 'agentmesh-integrations/copilot-governance/**'
+              - 'agent-governance-python/agent-os/extensions/**'
+              - 'agent-governance-python/agentmesh-integrations/mastra-agentmesh/**'
+              - 'agent-governance-python/agentmesh-integrations/copilot-governance/**'
             integrations:
-              - 'agentmesh-integrations/**'
+              - 'agent-governance-python/agentmesh-integrations/**'
             workflows:
               - '.github/workflows/**'
             rust:
@@ -272,12 +272,12 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install ${{ matrix.package }}
-        working-directory: agentmesh-integrations/${{ matrix.package }}
+        working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
           pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==0.26.0 2>/dev/null || true
       - name: Validate Python syntax
-        working-directory: agentmesh-integrations/${{ matrix.package }}
+        working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
           python -c "
           import ast, glob, sys
@@ -297,7 +297,7 @@ jobs:
         run: python -c "import ${{ matrix.import-module }}"
         continue-on-error: true
       - name: Run tests
-        working-directory: agentmesh-integrations/${{ matrix.package }}
+        working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
           if [ -d tests ]; then
             pytest tests/ -q --tb=short
@@ -394,22 +394,22 @@ jobs:
         with:
           node-version: "20"
       - name: Install mastra-agentmesh
-        working-directory: agentmesh-integrations/mastra-agentmesh
+        working-directory: agent-governance-python/agentmesh-integrations/mastra-agentmesh
         run: npm ci 2>/dev/null || npm install --ignore-scripts
       - name: Lint mastra-agentmesh
-        working-directory: agentmesh-integrations/mastra-agentmesh
+        working-directory: agent-governance-python/agentmesh-integrations/mastra-agentmesh
         run: npm run lint 2>/dev/null || true
       - name: Test mastra-agentmesh
-        working-directory: agentmesh-integrations/mastra-agentmesh
+        working-directory: agent-governance-python/agentmesh-integrations/mastra-agentmesh
         run: npm test
       - name: Install copilot-governance
-        working-directory: agentmesh-integrations/copilot-governance
+        working-directory: agent-governance-python/agentmesh-integrations/copilot-governance
         run: npm ci 2>/dev/null || npm install --ignore-scripts
       - name: Lint copilot-governance
-        working-directory: agentmesh-integrations/copilot-governance
+        working-directory: agent-governance-python/agentmesh-integrations/copilot-governance
         run: npm run lint 2>/dev/null || true
       - name: Test copilot-governance
-        working-directory: agentmesh-integrations/copilot-governance
+        working-directory: agent-governance-python/agentmesh-integrations/copilot-governance
         run: npm test
 
   # ── npm package build + test (only when TS files change) ──────────────
@@ -423,15 +423,15 @@ jobs:
       matrix:
         include:
           - name: agentmesh-mcp-proxy
-            path: agent-mesh/packages/mcp-proxy
+            path: agent-governance-python/agent-mesh/packages/mcp-proxy
           - name: agent-governance-sdk
             path: agent-governance-typescript
           - name: agentmesh-api
-            path: agent-mesh/services/api
+            path: agent-governance-python/agent-mesh/services/api
           - name: agent-os-copilot-extension
-            path: agent-os/extensions/copilot
+            path: agent-governance-python/agent-os/extensions/copilot
           - name: agentos-mcp-server
-            path: agent-os/extensions/mcp-server
+            path: agent-governance-python/agent-os/extensions/mcp-server
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0

@@ -1,0 +1,46 @@
+# Ignore Python bytecode, test artifacts, dev tools
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+
+# Ignore non-Python packages
+agent-governance-python/agent-mesh/sdks/
+agent-governance-python/agent-mesh/packages/
+agent-governance-python/agent-mesh/services/
+agent-governance-python/agent-mesh/charts/
+agent-governance-python/agent-mesh/dashboards/
+agent-governance-python/agent-mesh/deployments/
+agent-governance-python/agent-mesh/notebooks/
+agent-governance-python/agent-mesh/tutorials/
+agent-governance-python/agent-mesh/examples/
+agent-governance-python/agent-mesh/docs/
+agent-governance-python/agent-mesh/proto/
+agent-governance-python/agent-mesh/integrations/
+agent-governance-python/agent-mesh/assets/
+agent-governance-python/agent-mesh/dist/
+agent-governance-python/agent-mesh/tests/
+
+# Ignore other top-level packages (only agent-mesh needed)
+agent-governance-python/agent-os/
+agent-governance-python/agent-hypervisor/
+agent-governance-python/agent-sre/
+agent-governance-python/agent-compliance/
+agent-governance-python/agent-runtime/
+agent-governance-python/agent-lightning/
+agent-governance-dotnet/
+agent-governance-python/agentmesh-integrations/
+
+# Ignore repo metadata
+.git/
+.github/
+docs/
+examples/
+pipelines/
+research/
+node_modules/
+*.md
+LICENSE

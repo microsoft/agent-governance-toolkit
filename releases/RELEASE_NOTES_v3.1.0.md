@@ -69,9 +69,9 @@ after upgrading the `agentmesh-platform` package.
 |---------|-----------|---------|--------|
 | Agent OS Kernel | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | 3.1.0 | Public Preview |
 | AgentMesh Platform | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | 3.1.0 | Public Preview |
-| Agent Hypervisor | [`agent-hypervisor`](https://pypi.org/project/agent-hypervisor/) | 3.1.0 | Public Preview |
-| Agent SRE | [`agent-sre`](https://pypi.org/project/agent-sre/) | 3.1.0 | Public Preview |
-| Agent Compliance | [`agent-compliance`](https://pypi.org/project/agent-compliance/) | 3.1.0 | Public Preview |
+| Agent Hypervisor | [`agent-hypervisor`](https://pypi.org/project/agent-governance-python/agent-hypervisor/) | 3.1.0 | Public Preview |
+| Agent SRE | [`agent-sre`](https://pypi.org/project/agent-governance-python/agent-sre/) | 3.1.0 | Public Preview |
+| Agent Compliance | [`agent-compliance`](https://pypi.org/project/agent-governance-python/agent-compliance/) | 3.1.0 | Public Preview |
 | AgentMesh Runtime | [`agentmesh-runtime`](https://pypi.org/project/agentmesh-runtime/) | 3.1.0 | Public Preview |
 | AgentMesh Lightning | [`agentmesh-lightning`](https://pypi.org/project/agentmesh-lightning/) | 3.1.0 | Public Preview |
 

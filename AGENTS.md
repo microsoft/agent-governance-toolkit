@@ -26,7 +26,7 @@ go there rather than into the repo root or an older shared SDK path.
 |------|------|------------|
 | Published Python packages | `agent-governance-python/` | First-party reusable Python packages and SDK surfaces meant for direct external consumption |
 | Python runtime and product code | `*/` | Runtime code, applications, policy engines, trust, SRE, compliance, and other Python product surfaces that have not moved into the standalone package home |
-| Current shared SDK paths | `agent-mesh/sdks/` | Public SDK APIs and language-specific packaging that still live in the shared layout today |
+| Current shared SDK paths | `agent-governance-python/agent-mesh/sdks/` | Public SDK APIs and language-specific packaging that still live in the shared layout today |
 <<<<<<< HEAD
 | Standalone language implementations | `agent-governance-python/`, `agent-governance-dotnet/`, `agent-governance-golang/`, `agent-governance-rust/`, and other `agent-governance-*` siblings | Top-level language-specific implementations at the repository root; use these as the canonical contributor-facing paths |
 | Docs site | `docs/` | Reference docs, tutorials, architecture, package pages |
@@ -38,7 +38,7 @@ go there rather than into the repo root or an older shared SDK path.
 ## Routing Rules
 
 1. Prefer the smallest correct scope for a change.
-2. Put third-party integrations in `examples/` or `agentmesh-integrations/` before
+2. Put third-party integrations in `examples/` or `agent-governance-python/agentmesh-integrations/` before
    expanding core packages.
 3. Put marketing or ecosystem references in docs only after the integration is real, attributable,
    and useful to users.

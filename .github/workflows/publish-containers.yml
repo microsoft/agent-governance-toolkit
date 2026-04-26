@@ -41,23 +41,23 @@ jobs:
       matrix:
         include:
           - component: trust-engine
-            dockerfile: agent-mesh/docker/Dockerfile
+            dockerfile: agent-governance-python/agent-mesh/docker/Dockerfile
             context: .
             port: 8443
           - component: policy-server
-            dockerfile: agent-mesh/docker/Dockerfile
+            dockerfile: agent-governance-python/agent-mesh/docker/Dockerfile
             context: .
             port: 8444
           - component: audit-collector
-            dockerfile: agent-mesh/docker/Dockerfile
+            dockerfile: agent-governance-python/agent-mesh/docker/Dockerfile
             context: .
             port: 8445
           - component: api-gateway
-            dockerfile: agent-mesh/docker/Dockerfile
+            dockerfile: agent-governance-python/agent-mesh/docker/Dockerfile
             context: .
             port: 8446
           - component: governance-sidecar
-            dockerfile: agent-os/Dockerfile.sidecar
+            dockerfile: agent-governance-python/agent-os/Dockerfile.sidecar
             context: .
             port: 8081
 

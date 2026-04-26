@@ -15,7 +15,7 @@
 
 **Multi-step agent transactions with compensating actions, parallel fan-out, and semantic checkpoints.**
 
-See also: [Execution Sandboxing (Tutorial 06)](./06-execution-sandboxing.md) | [Observability & Tracing (Tutorial 13)](./13-observability-and-tracing.md) | [Agent Runtime README](../../agent-runtime/README.md)
+See also: [Execution Sandboxing (Tutorial 06)](./06-execution-sandboxing.md) | [Observability & Tracing (Tutorial 13)](./13-observability-and-tracing.md) | [Agent Runtime README](../../agent-governance-python/agent-runtime/README.md)
 
 ---
 

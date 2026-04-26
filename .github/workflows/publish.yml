@@ -109,19 +109,19 @@ jobs:
       matrix:
         include:
           - name: agentmesh-copilot-governance
-            path: agentmesh-integrations/copilot-governance
+            path: agent-governance-python/agentmesh-integrations/copilot-governance
           - name: agentmesh-mastra
-            path: agentmesh-integrations/mastra-agentmesh
+            path: agent-governance-python/agentmesh-integrations/mastra-agentmesh
           - name: agentmesh-api
-            path: agent-mesh/services/api
+            path: agent-governance-python/agent-mesh/services/api
           - name: agentmesh-mcp-proxy
-            path: agent-mesh/packages/mcp-proxy
+            path: agent-governance-python/agent-mesh/packages/mcp-proxy
           - name: agentmesh-sdk
             path: agent-governance-typescript
           - name: agent-os-copilot-extension
-            path: agent-os/extensions/copilot
+            path: agent-governance-python/agent-os/extensions/copilot
           - name: agentos-mcp-server
-            path: agent-os/extensions/mcp-server
+            path: agent-governance-python/agent-os/extensions/mcp-server
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
