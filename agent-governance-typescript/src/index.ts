@@ -27,6 +27,7 @@ export { RingEnforcer, RingBreachError } from './rings';
 export { GovernanceVerifier } from './verify';
 export { SurfaceParityChecker } from './surface-parity';
 export { CascadeContainmentManager } from './cascade-containment';
+export { ContextPoisoningDetector } from './context-poisoning';
 
 // E2E Encryption (AgentMesh Wire Protocol v1.0)
 export {
@@ -85,6 +86,12 @@ export type {
   CascadeAnalysis,
   CascadeContainmentConfig,
   CascadeEvent,
+  ContextPoisoningConfig,
+  PoisoningPattern,
+  ContextEntry,
+  PoisoningFinding,
+  ContextPoisoningScanResult,
+  ContextIsolationViolation,
 } from './types';
 export type { PromptDefenseConfig, PromptDefenseFinding, PromptDefenseReport } from './prompt-defense';
 export type {
