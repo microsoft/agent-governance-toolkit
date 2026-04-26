@@ -145,6 +145,52 @@ describe("X3DHKeyManager", () => {
       bob.respond(alice.identityKey.publicKey, result.ephemeralPublicKey, 0),
     ).toThrow("not found or already consumed");
   });
+
+  test("bundle includes Ed25519 identity key", () => {
+    const mgr = makeManager();
+    mgr.generateSignedPreKey();
+    const bundle = mgr.getPublicBundle();
+    expect(bundle.identityKeyEd).toBeDefined();
+    expect(bundle.identityKeyEd!.length).toBe(32);
+  });
+
+  test("valid signature passes verification", () => {
+    const alice = makeManager();
+    const bob = makeManager();
+    bob.generateSignedPreKey();
+    const bundle = bob.getPublicBundle();
+    expect(() => alice.initiate(bundle)).not.toThrow();
+  });
+
+  test("tampered signed pre-key rejected", () => {
+    const alice = makeManager();
+    const bob = makeManager();
+    bob.generateSignedPreKey();
+    const bundle = bob.getPublicBundle();
+    const tampered = { ...bundle, signedPreKey: new Uint8Array(bundle.signedPreKey) };
+    tampered.signedPreKey[0] ^= 0xff;
+    expect(() => alice.initiate(tampered)).toThrow("signature verification failed");
+  });
+
+  test("forged identity key rejected", () => {
+    const alice = makeManager();
+    const bob = makeManager();
+    bob.generateSignedPreKey();
+    const bundle = bob.getPublicBundle();
+    const attackerPriv = ed25519.utils.randomSecretKey();
+    const attackerPub = ed25519.getPublicKey(attackerPriv);
+    const forged = { ...bundle, identityKeyEd: attackerPub };
+    expect(() => alice.initiate(forged)).toThrow("signature verification failed");
+  });
+
+  test("missing identityKeyEd throws (fail-closed)", () => {
+    const alice = makeManager();
+    const bob = makeManager();
+    bob.generateSignedPreKey();
+    const bundle = bob.getPublicBundle();
+    delete (bundle as any).identityKeyEd;
+    expect(() => alice.initiate(bundle)).toThrow("identityKeyEd is required");
+  });
 });
 
 // ── Double Ratchet ──

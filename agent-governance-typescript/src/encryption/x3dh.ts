@@ -36,6 +36,8 @@ export interface PreKeyBundle {
   signedPreKey: Uint8Array;
   signedPreKeySignature: Uint8Array;
   signedPreKeyId: number;
+  /** Ed25519 identity public key for signature verification. Required. */
+  identityKeyEd?: Uint8Array;
   oneTimePreKey?: Uint8Array;
   oneTimePreKeyId?: number;
 }
@@ -132,6 +134,7 @@ export class X3DHKeyManager {
       signedPreKey: this.signedPreKeyPair.keyPair.publicKey,
       signedPreKeySignature: this.signedPreKeyPair.signature,
       signedPreKeyId: this.signedPreKeyPair.keyId,
+      identityKeyEd: this.ed25519Public,
     };
     if (otkId !== undefined) {
       const otk = this.oneTimePreKeys.get(otkId);
@@ -222,5 +225,21 @@ function verifyBundle(bundle: PreKeyBundle): void {
   }
   if (bundle.identityKey.length !== 32) {
     throw new Error("Invalid identity key length.");
+  }
+
+  // Fail-closed: identityKeyEd is required for signature verification.
+  if (!bundle.identityKeyEd) {
+    throw new Error("identityKeyEd is required for signature verification.");
+  }
+  if (bundle.identityKeyEd.length !== 32) {
+    throw new Error("Invalid Ed25519 identity key length.");
+  }
+  const valid = ed25519.verify(
+    bundle.signedPreKeySignature,
+    bundle.signedPreKey,
+    bundle.identityKeyEd,
+  );
+  if (!valid) {
+    throw new Error("Signed pre-key signature verification failed — the bundle may be tampered or the identityKeyEd does not match the signing key.");
   }
 }
