@@ -169,7 +169,7 @@ describe("X3DHKeyManager", () => {
     const bundle = bob.getPublicBundle();
     const tampered = { ...bundle, signedPreKey: new Uint8Array(bundle.signedPreKey) };
     tampered.signedPreKey[0] ^= 0xff;
-    expect(() => alice.initiate(tampered)).toThrow("signature verification failed");
+    expect(() => alice.initiate(tampered)).toThrow("Signed pre-key signature verification FAILED");
   });
 
   test("forged identity key rejected", () => {
@@ -180,7 +180,7 @@ describe("X3DHKeyManager", () => {
     const attackerPriv = ed25519.utils.randomSecretKey();
     const attackerPub = ed25519.getPublicKey(attackerPriv);
     const forged = { ...bundle, identityKeyEd: attackerPub };
-    expect(() => alice.initiate(forged)).toThrow("signature verification failed");
+    expect(() => alice.initiate(forged)).toThrow("Signed pre-key signature verification FAILED");
   });
 
   test("missing identityKeyEd throws (fail-closed)", () => {
@@ -189,7 +189,7 @@ describe("X3DHKeyManager", () => {
     bob.generateSignedPreKey();
     const bundle = bob.getPublicBundle();
     delete (bundle as any).identityKeyEd;
-    expect(() => alice.initiate(bundle)).toThrow("identityKeyEd is required");
+    expect(() => alice.initiate(bundle)).toThrow("Missing or invalid Ed25519 identity key (identityKeyEd)");
   });
 });
 
