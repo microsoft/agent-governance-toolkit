@@ -328,6 +328,72 @@ export interface CascadeAnalysis {
   events: CascadeEvent[];
 }
 
+// ΓöÇΓöÇ Context Poisoning Detection ΓöÇΓöÇ
+
+/** Configuration for context poisoning detection. */
+export interface ContextPoisoningConfig {
+  maxContextSizeBytes?: number;
+  maxEntriesPerSession?: number;
+  entropyThreshold?: number;
+  similarityThreshold?: number;
+  enableIsolation?: boolean;
+  knownPatterns?: PoisoningPattern[];
+}
+
+/** A known poisoning attack pattern. */
+export interface PoisoningPattern {
+  id: string;
+  name: string;
+  description: string;
+  detector: 'regex' | 'entropy' | 'repetition' | 'injection' | 'size';
+  pattern?: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+}
+
+/** A context entry stored in agent memory. */
+export interface ContextEntry {
+  entryId: string;
+  sessionId: string;
+  agentId: string;
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+}
+
+/** Finding from context poisoning analysis. */
+export interface PoisoningFinding {
+  findingId: string;
+  patternId: string;
+  patternName: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  entryId: string;
+  sessionId: string;
+  agentId: string;
+  description: string;
+  evidence: string;
+  recommendation: string;
+}
+
+/** Result of context poisoning scan. */
+export interface ContextPoisoningScanResult {
+  scannedAt: string;
+  entriesScanned: number;
+  findings: PoisoningFinding[];
+  integrityValid: boolean;
+  isolationViolations: ContextIsolationViolation[];
+  riskLevel: 'none' | 'low' | 'medium' | 'high' | 'critical';
+}
+
+/** Violation of memory isolation between sessions. */
+export interface ContextIsolationViolation {
+  sourceSessionId: string;
+  targetSessionId: string;
+  agentId: string;
+  sharedEntryIds: string[];
+  description: string;
+}
+
 // ΓöÇΓöÇ Audit ΓöÇΓöÇ
 
 export interface AuditConfig {
