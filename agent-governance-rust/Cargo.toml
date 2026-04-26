@@ -11,7 +11,7 @@ rust-version = "1.70"
 
 [workspace.dependencies]
 base64 = "=0.22.1"
-cedar-policy = "=2.4.2"
+cedar-policy = "=4.10.0"
 ed25519-dalek = { version = "=2.2.0", features = ["rand_core"] }
 hmac = "=0.12.1"
 rand = "=0.8.6"
