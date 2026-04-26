@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 """
-Endorsement Registry — RFC 9334 Endorser Role
+Endorsement Registry -- RFC 9334 Endorser Role
 ===============================================
 
 Implements the Endorser concept from RFC 9334 (RATS Architecture):
@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
