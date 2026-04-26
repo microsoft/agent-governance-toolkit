@@ -420,8 +420,7 @@ consent required for exceptions — constrains the design space.
 - [ADR-0004](0004-keep-policy-evaluation-deterministic.md) — deterministic
   policy evaluation constraint
 - [Issue #1386](https://github.com/microsoft/agent-governance-toolkit/issues/1386)
-  — original discussion thread with technical analysis from @piiiico,
-  @desiorac, and @Knapp-Kevin
+  — original discussion thread with community technical analysis
 - [RFC 8785](https://datatracker.ietf.org/doc/html/rfc8785) — JSON
   Canonicalization Scheme (JCS) for deterministic hashing
 - [Sigstore Rekor](https://docs.sigstore.dev/logging/overview/) —
