@@ -1,7 +1,7 @@
 fastapi==0.115.0
 uvicorn[standard]==0.27.0
 pydantic==2.10.3
-pypdf==6.7.5  # CVE fix: all DoS/infinite-loop vulnerabilities
+pypdf==6.10.2  # CVE fix: all DoS/infinite-loop vulnerabilities
 beautifulsoup4==4.12.2
 lxml==6.1.0
 python-multipart==0.0.26
