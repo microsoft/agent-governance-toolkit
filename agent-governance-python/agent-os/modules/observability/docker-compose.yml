@@ -7,7 +7,7 @@
 # - AlertManager (alerting)
 #
 # Usage:
-#   cd agent-os/modules/observability
+#   cd agent-governance-python/agent-os/modules/observability
 #   docker-compose up -d
 #   
 #   Open: http://localhost:3000 (Grafana, admin/admin)

@@ -273,7 +273,7 @@ class DriftDetector:
         if not components:
             return findings
 
-        # Group by prefix (e.g. "agent-os/kernel" → "agent-os")
+        # Group by prefix (e.g. "agent-governance-python/agent-os/kernel" → "agent-os")
         groups: dict[str, dict[str, str]] = {}
         for name, version in components.items():
             prefix = name.split("-")[0].split("/")[0]

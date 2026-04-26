@@ -41,7 +41,7 @@ export class CMVKClient {
             timeout: 60000, // 60 second timeout for multi-model review
             headers: {
                 'Content-Type': 'application/json',
-                'User-Agent': 'agent-os-vscode/0.1.0'
+                'User-Agent': 'agent-governance-typescript/agent-os-vscode/0.1.0'
             }
         });
     }

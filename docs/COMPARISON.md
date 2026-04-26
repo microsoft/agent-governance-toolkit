@@ -23,7 +23,7 @@ When evaluating agent security tooling, developers often encounter [NeMo Guardra
 | Feature | Agent Governance Toolkit | NeMo Guardrails | Guardrails AI | LiteLLM | Portkey |
 |---------|:----------------------:|:---------------:|:-------------:|:-------:|:-------:|
 | **Agent action governance** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **LLM output validation** | ✅ (via [content-policy adapters](../agent-os/)) | ✅ | ✅ | ✅ | ✅ |
+| **LLM output validation** | ✅ (via [content-policy adapters](../agent-governance-python/agent-os/)) | ✅ | ✅ | ✅ | ✅ |
 | **Agent identity (cryptographic)** | ✅ Ed25519 / SPIFFE | ❌ | ❌ | ❌ | ❌ |
 | **Execution sandboxing** | ✅ 4-tier rings | ❌ | ❌ | ❌ | ❌ |
 | **SRE (SLOs / error budgets)** | ✅ | ❌ | ❌ | ❌ | ❌ |

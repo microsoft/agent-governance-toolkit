@@ -44,7 +44,7 @@ gh agent-os status
 
 ## Configuration
 
-After running `gh agent-os init`, customize `.agent-os/policy.yaml`:
+After running `gh agent-os init`, customize `.agent-governance-python/agent-os/policy.yaml`:
 
 ```yaml
 version: 1

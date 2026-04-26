@@ -32,7 +32,7 @@ services:
     command:
       - streamlit
       - run
-      - agent-hypervisor/examples/dashboard/app.py
+      - agent-governance-python/agent-hypervisor/examples/dashboard/app.py
       - --server.address=0.0.0.0
       - --server.port=8501
     init: true

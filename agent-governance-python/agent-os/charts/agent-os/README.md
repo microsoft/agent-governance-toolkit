@@ -28,7 +28,7 @@ helm upgrade agent-os ./charts/agent-os
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `kernel.replicas` | Kernel replica count | `2` |
-| `kernel.image.repository` | Kernel image | `agent-os/kernel` |
+| `kernel.image.repository` | Kernel image | `agent-governance-python/agent-os/kernel` |
 | `kernel.image.tag` | Kernel image tag | `0.3.0` |
 | `kernel.resources.requests.cpu` | CPU request | `250m` |
 | `kernel.resources.requests.memory` | Memory request | `256Mi` |

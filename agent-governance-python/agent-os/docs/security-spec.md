@@ -339,7 +339,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: microsoft/agent-os/.github/actions/agent-os-audit@main
+      - uses: microsoft/agent-governance-python/agent-os/.github/actions/agent-os-audit@main
         with:
           fail-on-violation: true
 ```

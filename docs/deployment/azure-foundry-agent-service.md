@@ -2,7 +2,7 @@
 
 Use the Agent Governance Toolkit as middleware within Azure AI Foundry Agent Service for in-process policy enforcement, capability sandboxing, and audit logging.
 
-> **See also:** [Deployment Overview](README.md) | [AKS Deployment](../../agent-mesh/docs/deployment/azure.md) | [Container Apps Deployment](azure-container-apps.md)
+> **See also:** [Deployment Overview](README.md) | [AKS Deployment](../../agent-governance-python/agent-mesh/docs/deployment/azure.md) | [Container Apps Deployment](azure-container-apps.md)
 
 ---
 
@@ -310,13 +310,13 @@ For defense-in-depth, combine in-process Foundry middleware with an AKS sidecar:
 
 The middleware handles application-level policy enforcement (tool capability, content safety), while the sidecar handles network-level governance (inter-agent trust, rate limiting at the infrastructure layer).
 
-See the [AKS deployment guide](../../agent-mesh/docs/deployment/azure.md) for sidecar setup.
+See the [AKS deployment guide](../../agent-governance-python/agent-mesh/docs/deployment/azure.md) for sidecar setup.
 
 ---
 
 ## Next Steps
 
-- [Governance policy schema reference](../../agent-os/docs/policy-schema.md)
-- [MAF adapter source code](../../agent-os/src/agent_os/integrations/maf_adapter.py)
-- [AgentMesh identity for multi-agent scenarios](../../agent-mesh/README.md)
-- [AKS deployment](../../agent-mesh/docs/deployment/azure.md) for infrastructure-level governance
+- [Governance policy schema reference](../../agent-governance-python/agent-os/docs/policy-schema.md)
+- [MAF adapter source code](../../agent-governance-python/agent-os/src/agent_os/integrations/maf_adapter.py)
+- [AgentMesh identity for multi-agent scenarios](../../agent-governance-python/agent-mesh/README.md)
+- [AKS deployment](../../agent-governance-python/agent-mesh/docs/deployment/azure.md) for infrastructure-level governance

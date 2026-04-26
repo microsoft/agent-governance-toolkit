@@ -47,7 +47,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
-Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-mesh/packages/langchain-agentmesh"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/packages/langchain-agentmesh"
 Repository = "https://github.com/microsoft/agent-governance-toolkit"
 Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
 

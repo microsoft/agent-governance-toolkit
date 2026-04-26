@@ -17,10 +17,10 @@ LABEL description="Agent Governance Toolkit — governance sidecar for autonomou
 WORKDIR /app
 
 # Copy agent-os package source (context is repo root)
-COPY agent-os/pyproject.toml ./
-COPY agent-os/README.md ./
-COPY agent-os/src/ ./src/
-COPY agent-os/modules/ ./modules/
+COPY agent-governance-python/agent-os/pyproject.toml ./
+COPY agent-governance-python/agent-os/README.md ./
+COPY agent-governance-python/agent-os/src/ ./src/
+COPY agent-governance-python/agent-os/modules/ ./modules/
 
 RUN pip install --no-cache-dir ".[full]"
 

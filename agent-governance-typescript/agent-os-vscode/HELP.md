@@ -137,4 +137,4 @@ All extension settings are documented in the [README](README.md) under the **Ext
 Key settings are prefixed with `agent-os.` in VS Code's Settings UI.
 
 For policy file configuration, see the Agent OS documentation on policy schemas:
-`agent-os/src/agent_os/policies/schema.py`.
+`agent-governance-python/agent-os/src/agent_os/policies/schema.py`.

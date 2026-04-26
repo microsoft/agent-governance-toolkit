@@ -103,17 +103,17 @@ pip install agentmesh-lightning        # 強化学習トレーニングガバナ
 ### ✨ **ハイライト**
 
 - **決定論的ポリシー適用**: すべてのエージェントアクションが実行*前*にポリシーに基づいて評価され、サブミリ秒のレイテンシ（<0.1 ms）で処理
-  - [ポリシーエンジン](../../agent-os/) | [ベンチマーク](../../BENCHMARKS.md)
+  - [ポリシーエンジン](../../agent-governance-python/agent-os/) | [ベンチマーク](../../BENCHMARKS.md)
 - **ゼロトラストエージェントID**: Ed25519 暗号資格情報、SPIFFE/SVID サポート、0〜1000 スケールのトラストスコアリング
-  - [AgentMesh](../../agent-mesh/) | [トラストスコアリング](../../agent-mesh/)
+  - [AgentMesh](../../agent-governance-python/agent-mesh/) | [トラストスコアリング](../../agent-governance-python/agent-mesh/)
 - **実行サンドボックス**: 4 階層の特権リング、Saga オーケストレーション、終了制御、キルスイッチ
-  - [Agent Runtime](../../agent-runtime/) | [Agent Hypervisor](../../agent-hypervisor/)
+  - [Agent Runtime](../../agent-governance-python/agent-runtime/) | [Agent Hypervisor](../../agent-governance-python/agent-hypervisor/)
 - **エージェント SRE**: SLO、エラーバジェット、リプレイデバッグ、カオスエンジニアリング、サーキットブレーカー、プログレッシブデリバリー
-  - [Agent SRE](../../agent-sre/) | [オブザーバビリティ統合](../../agent-hypervisor/src/hypervisor/observability/)
+  - [Agent SRE](../../agent-governance-python/agent-sre/) | [オブザーバビリティ統合](../../agent-governance-python/agent-hypervisor/src/hypervisor/observability/)
 - **MCP セキュリティスキャナー**: MCP ツール定義におけるツールポイズニング、タイポスクワッティング、隠し命令、ラグプル攻撃を検出
-  - [MCP スキャナー](../../agent-os/src/agentos/mcp_security.py) | [CLI](../../agent-os/src/agentos/cli/mcp_scan.py)
+  - [MCP スキャナー](../../agent-governance-python/agent-os/src/agentos/mcp_security.py) | [CLI](../../agent-governance-python/agent-os/src/agentos/cli/mcp_scan.py)
 - **トラストレポート CLI**: `agentmesh trust report` — トラストスコア、タスクの成功/失敗、エージェントアクティビティを可視化
-  - [トラスト CLI](../../agent-mesh/src/agentmesh/cli/trust_cli.py)
+  - [トラスト CLI](../../agent-governance-python/agent-mesh/src/agentmesh/cli/trust_cli.py)
 - **シークレットスキャンとファジング**: Gitleaks ワークフロー、ポリシー・インジェクション・サンドボックス・トラスト・MCP をカバーする7つのファズターゲット
   - [セキュリティワークフロー](../../.github/workflows/)
 - **12 以上のフレームワーク統合**: Microsoft Agent Framework、LangChain、CrewAI、AutoGen、Dify、LlamaIndex、OpenAI Agents、Google ADK など
@@ -297,11 +297,11 @@ decision = engine.evaluate("did:mesh:agent-1", {"tool_name": "analyze"})
 |---------|------|-------------|
 | **Agent OS** | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | ポリシーエンジン — 決定論的アクション評価、ケイパビリティモデル、監査ログ、アクションインターセプション、MCP ゲートウェイ |
 | **AgentMesh** | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | エージェント間トラスト — Ed25519 ID、SPIFFE/SVID 資格情報、トラストスコアリング、A2A/MCP/IATP プロトコルブリッジ |
-| **Agent Runtime** | [`agentmesh-runtime`](../../agent-runtime/) | 実行スーパーバイザー — 4 階層特権リング、Saga オーケストレーション、終了制御、連帯責任、追記専用監査ログ |
-| **Agent SRE** | [`agent-sre`](https://pypi.org/project/agent-sre/) | 信頼性エンジニアリング — SLO、エラーバジェット、リプレイデバッグ、カオスエンジニアリング、プログレッシブデリバリー |
+| **Agent Runtime** | [`agentmesh-runtime`](../../agent-governance-python/agent-runtime/) | 実行スーパーバイザー — 4 階層特権リング、Saga オーケストレーション、終了制御、連帯責任、追記専用監査ログ |
+| **Agent SRE** | [`agent-sre`](https://pypi.org/project/agent-governance-python/agent-sre/) | 信頼性エンジニアリング — SLO、エラーバジェット、リプレイデバッグ、カオスエンジニアリング、プログレッシブデリバリー |
 | **Agent Compliance** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | ランタイムポリシー適用 — OWASP ASI 2026 コントロール、ガバナンスアテステーション、完全性検証 |
-| **Agent Marketplace** | [`agentmesh-marketplace`](../../agent-marketplace/) | プラグインライフサイクル — プラグインの検出、インストール、検証、署名 |
-| **Agent Lightning** | [`agentmesh-lightning`](../../agent-lightning/) | 強化学習トレーニングガバナンス — ガバナンス付きランナー、ポリシー報酬 |
+| **Agent Marketplace** | [`agentmesh-marketplace`](../../agent-governance-python/agent-marketplace/) | プラグインライフサイクル — プラグインの検出、インストール、検証、署名 |
+| **Agent Lightning** | [`agentmesh-lightning`](../../agent-governance-python/agent-lightning/) | 強化学習トレーニングガバナンス — ガバナンス付きランナー、ポリシー報酬 |
 
 ## フレームワーク統合
 

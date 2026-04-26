@@ -226,7 +226,7 @@
     "AgentOS TypeScript SDK": {
         "prefix": ["aos-ts", "agent-os-typescript"],
         "body": [
-            "import { AgentOS, PolicyEngine } from '@agent-os/sdk';",
+            "import { AgentOS, PolicyEngine } from '@agent-governance-python/agent-os/sdk';",
             "",
             "const agentOS = new AgentOS({",
             "  policy: '${1|strict,permissive|}',",
@@ -285,7 +285,7 @@
             "    runs-on: ubuntu-latest",
             "    steps:",
             "      - uses: actions/checkout@v4",
-            "      - uses: microsoft/agent-os/.github/actions/agent-os-audit@main",
+            "      - uses: microsoft/agent-governance-python/agent-os/.github/actions/agent-os-audit@main",
             "        with:",
             "          fail-on-violation: ${1|true,false|}",
             "          policy-file: ${2:.agents/policy.yaml}"

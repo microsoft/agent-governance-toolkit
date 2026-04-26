@@ -146,7 +146,7 @@ from agent_discovery.scanners import ProcessScanner, ConfigScanner
 from agent_discovery.reconciler import Reconciler, StaticRegistryProvider
 
 async def discover():
-    inventory = AgentInventory(storage_path="~/.agent-discovery/inventory.json")
+    inventory = AgentInventory(storage_path="~/.agent-governance-python/agent-discovery/inventory.json")
     
     # Run scanners
     process_result = await ProcessScanner().scan()

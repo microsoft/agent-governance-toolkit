@@ -294,7 +294,7 @@ class TraceStore:
     Default implementation uses local filesystem (JSON files).
     """
 
-    def __init__(self, storage_dir: str | Path = ".agent-sre/traces") -> None:
+    def __init__(self, storage_dir: str | Path = ".agent-governance-python/agent-sre/traces") -> None:
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 

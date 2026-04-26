@@ -7,7 +7,7 @@
 
 > **Build safe AI agents with natural language and 0% policy violations**
 
-[![npm version](https://badge.fury.io/js/@agent-os%2Fcopilot-extension.svg)](https://www.npmjs.com/package/@agent-os/copilot-extension)
+[![npm version](https://badge.fury.io/js/@agent-os%2Fcopilot-extension.svg)](https://www.npmjs.com/package/@agent-governance-python/agent-os/copilot-extension)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Part of [Agent OS](https://github.com/microsoft/agent-governance-toolkit)** - Kernel-level governance for AI agents
@@ -136,7 +136,7 @@ AgentOS: 🤖 Agent Created: ApiUptimeMonitoringAgent
 
 ```bash
 git clone https://github.com/microsoft/agent-governance-toolkit
-cd agent-os/extensions/copilot
+cd agent-governance-python/agent-os/extensions/copilot
 
 npm install
 npm run build

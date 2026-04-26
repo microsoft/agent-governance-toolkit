@@ -35,7 +35,7 @@ what gets logged for audit.
 
 ## The MCP Proxy
 
-[`@microsoft/agentmesh-mcp-proxy`](../../../agent-mesh/packages/mcp-proxy/README.md)
+[`@microsoft/agentmesh-mcp-proxy`](../../../agent-governance-python/agent-mesh/packages/mcp-proxy/README.md)
 sits **between the agent and the original MCP server**. The proxy intercepts
 requests and either forwards or blocks the call.
 
@@ -59,7 +59,7 @@ That makes the proxy the enforcement point in front of the MCP server.
 
 ## Policy YAML format
 
-Use [`standard.yaml`](../../../agent-mesh/packages/mcp-proxy/policies/standard.yaml)
+Use [`standard.yaml`](../../../agent-governance-python/agent-mesh/packages/mcp-proxy/policies/standard.yaml)
 as the reference shape. Proxy policies are intentionally small: a header, a list
 of rules, and optional schema fields for rate limiting.
 
@@ -225,9 +225,9 @@ blocks risky tool calls before they reach the server.
 For some environments, allow/deny rules are not enough. You also want to know
 *who* is asking. This repo has two related Python packages:
 
-- [`mcp-trust-proxy`](../../../agentmesh-integrations/mcp-trust-proxy/README.md)
+- [`mcp-trust-proxy`](../../../agent-governance-python/agentmesh-integrations/mcp-trust-proxy/README.md)
   is the inline trust-gating layer.
-- [`mcp-trust-server`](../../../agent-mesh/packages/mcp-trust-server/README.md)
+- [`mcp-trust-server`](../../../agent-governance-python/agent-mesh/packages/mcp-trust-server/README.md)
   is an MCP server that exposes trust-management tools such as `check_trust`,
   `get_trust_score`, `establish_handshake`, and `verify_delegation`.
 
@@ -262,7 +262,7 @@ Use `mcp-trust-server` alongside that when you want trust operations over MCP.
 
 ## Next steps
 
-1. Read [`enterprise.yaml`](../../../agent-mesh/packages/mcp-proxy/policies/enterprise.yaml).
+1. Read [`enterprise.yaml`](../../../agent-governance-python/agent-mesh/packages/mcp-proxy/policies/enterprise.yaml).
 2. Review [`docs/compliance/owasp-llm-top10-mapping.md`](../../compliance/owasp-llm-top10-mapping.md)
    and [`docs/OWASP-COMPLIANCE.md`](../../OWASP-COMPLIANCE.md).
 3. Start with `standard`, then move to `strict` or custom rules.

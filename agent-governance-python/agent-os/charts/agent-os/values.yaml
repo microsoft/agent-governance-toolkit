@@ -4,7 +4,7 @@
 kernel:
   replicas: 2
   image:
-    repository: agent-os/kernel
+    repository: agent-governance-python/agent-os/kernel
     tag: "0.3.0"
     pullPolicy: IfNotPresent
   resources:
@@ -29,7 +29,7 @@ kernel:
 policyServer:
   replicas: 2
   image:
-    repository: agent-os/policy-server
+    repository: agent-governance-python/agent-os/policy-server
     tag: "0.3.0"
     pullPolicy: IfNotPresent
   resources:
@@ -51,7 +51,7 @@ policyServer:
 auditCollector:
   replicas: 1
   image:
-    repository: agent-os/audit-collector
+    repository: agent-governance-python/agent-os/audit-collector
     tag: "0.3.0"
     pullPolicy: IfNotPresent
   resources:

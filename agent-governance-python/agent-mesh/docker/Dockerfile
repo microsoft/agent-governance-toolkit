@@ -5,7 +5,7 @@
 # Build:
 #   docker build --build-arg COMPONENT=trust-engine \
 #     -t ghcr.io/microsoft/agentmesh/trust-engine:0.3.0 \
-#     -f agent-mesh/docker/Dockerfile .
+#     -f agent-governance-python/agent-mesh/docker/Dockerfile .
 #
 # Run:
 #   docker run -p 8443:8443 ghcr.io/microsoft/agentmesh/trust-engine:0.3.0
@@ -31,9 +31,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy package source from repo root context
-COPY agent-mesh/pyproject.toml ./
-COPY agent-mesh/README.md ./
-COPY agent-mesh/src/ ./src/
+COPY agent-governance-python/agent-mesh/pyproject.toml ./
+COPY agent-governance-python/agent-mesh/README.md ./
+COPY agent-governance-python/agent-mesh/src/ ./src/
 
 # Install the package with server extras (fastapi + uvicorn)
 RUN pip install --no-cache-dir ".[server]"

@@ -15,9 +15,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/microsoft/agent-governance-toolkit.git",
-    "directory": "agent-mesh/services/api"
+    "directory": "agent-governance-python/agent-mesh/services/api"
   },
-  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-mesh/services/api",
+  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/services/api",
   "dependencies": {
     "express": "4.22.0",
     "uuid": "14.0.0"

@@ -8,31 +8,31 @@ __pycache__/
 .hypothesis/
 
 # Ignore non-Python packages
-agent-mesh/sdks/
-agent-mesh/packages/
-agent-mesh/services/
-agent-mesh/charts/
-agent-mesh/dashboards/
-agent-mesh/deployments/
-agent-mesh/notebooks/
-agent-mesh/tutorials/
-agent-mesh/examples/
-agent-mesh/docs/
-agent-mesh/proto/
-agent-mesh/integrations/
-agent-mesh/assets/
-agent-mesh/dist/
-agent-mesh/tests/
+agent-governance-python/agent-mesh/sdks/
+agent-governance-python/agent-mesh/packages/
+agent-governance-python/agent-mesh/services/
+agent-governance-python/agent-mesh/charts/
+agent-governance-python/agent-mesh/dashboards/
+agent-governance-python/agent-mesh/deployments/
+agent-governance-python/agent-mesh/notebooks/
+agent-governance-python/agent-mesh/tutorials/
+agent-governance-python/agent-mesh/examples/
+agent-governance-python/agent-mesh/docs/
+agent-governance-python/agent-mesh/proto/
+agent-governance-python/agent-mesh/integrations/
+agent-governance-python/agent-mesh/assets/
+agent-governance-python/agent-mesh/dist/
+agent-governance-python/agent-mesh/tests/
 
 # Ignore other top-level packages (only agent-mesh needed)
-agent-os/
-agent-hypervisor/
-agent-sre/
-agent-compliance/
-agent-runtime/
-agent-lightning/
+agent-governance-python/agent-os/
+agent-governance-python/agent-hypervisor/
+agent-governance-python/agent-sre/
+agent-governance-python/agent-compliance/
+agent-governance-python/agent-runtime/
+agent-governance-python/agent-lightning/
 agent-governance-dotnet/
-agentmesh-integrations/
+agent-governance-python/agentmesh-integrations/
 
 # Ignore repo metadata
 .git/

@@ -43,7 +43,7 @@ Contribution of insecure/secure code pairs to the OWASP Agent Security Initiativ
 ## File Structure
 
 ```
-frameworks/agent-os/
+frameworks/agent-governance-python/agent-os/
 ├── README.md                          # Framework overview + architecture
 ├── Dockerfile                         # Build/run container
 ├── ASI-01-agent-hijacking/

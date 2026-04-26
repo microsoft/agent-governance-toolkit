@@ -26,7 +26,7 @@ pip install mcp-trust-server
 Or install from the repository:
 
 ```bash
-cd agent-mesh/packages/mcp-trust-server
+cd agent-governance-python/agent-mesh/packages/mcp-trust-server
 pip install -e ".[dev]"
 ```
 
@@ -134,7 +134,7 @@ Claude calls check_trust(agent_did="did:mesh:abc123")
 ## Development
 
 ```bash
-cd agent-mesh/packages/mcp-trust-server
+cd agent-governance-python/agent-mesh/packages/mcp-trust-server
 pip install -e ".[dev]"
 pytest tests/ -v
 ```

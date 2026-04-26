@@ -8,7 +8,7 @@ The fastest way to see Agent-SRE in action:
 
 ```bash
 pip install -e "agent-sre[dev]"
-python agent-sre/examples/quickstart.py
+python agent-governance-python/agent-sre/examples/quickstart.py
 ```
 
 This simulates 100 agent tasks with a 93% success rate (below the 95% target) and 8% hallucination rate (above the 5% target), then shows SLO status, error budget consumption, cost tracking, and burn rate alerts.

@@ -27,7 +27,7 @@ Or install from source:
 
 ```bash
 git clone https://github.com/microsoft/agent-governance-toolkit.git
-cd agentmesh-integrations/flowise-agentmesh
+cd agent-governance-python/agentmesh-integrations/flowise-agentmesh
 pip install -e ".[dev]"
 ```
 

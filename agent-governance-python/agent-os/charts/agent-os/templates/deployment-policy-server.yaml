@@ -53,7 +53,7 @@ spec:
           {{- if .Values.policyServer.policyMount.enabled }}
           volumeMounts:
             - name: policies
-              mountPath: /etc/agent-os/policies
+              mountPath: /etc/agent-governance-python/agent-os/policies
               readOnly: true
           {{- end }}
       {{- if .Values.policyServer.policyMount.enabled }}

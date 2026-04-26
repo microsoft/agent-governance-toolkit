@@ -35,9 +35,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/microsoft/agent-governance-toolkit.git",
-    "directory": "agentmesh-integrations/copilot-governance"
+    "directory": "agent-governance-python/agentmesh-integrations/copilot-governance"
   },
-  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agentmesh-integrations/copilot-governance",
+  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agentmesh-integrations/copilot-governance",
   "devDependencies": {
     "@types/node": "20.0.0",
     "tsup": "8.5.1",

@@ -49,7 +49,7 @@ mcp-trust-server = "mcp_trust_server.server:main"
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
-Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-mesh/packages/mcp-trust-server"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/packages/mcp-trust-server"
 Repository = "https://github.com/microsoft/agent-governance-toolkit"
 Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
 

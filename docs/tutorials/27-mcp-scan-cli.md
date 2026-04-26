@@ -620,10 +620,10 @@ MCPSeverity.CRITICAL  # "critical"
 
 | Component | Location |
 |-----------|----------|
-| MCP scan CLI | `agent-os/src/agent_os/cli/mcp_scan.py` |
-| MCP security scanner | `agent-os/src/agent_os/mcp_security.py` |
-| MCP gateway (runtime) | `agent-os/src/agent_os/mcp_gateway.py` |
-| Prompt injection detector | `agent-os/src/agent_os/prompt_injection.py` |
+| MCP scan CLI | `agent-governance-python/agent-os/src/agent_os/cli/mcp_scan.py` |
+| MCP security scanner | `agent-governance-python/agent-os/src/agent_os/mcp_security.py` |
+| MCP gateway (runtime) | `agent-governance-python/agent-os/src/agent_os/mcp_gateway.py` |
+| Prompt injection detector | `agent-governance-python/agent-os/src/agent_os/prompt_injection.py` |
 
 ---
 

@@ -12,7 +12,7 @@ Example:
     
     # Convert AMB Message to CloudEvent
     message = Message(id="123", topic="fraud.alerts", payload={"risk": 0.9})
-    cloud_event = to_cloudevent(message, source="/agent-os/fraud-detector")
+    cloud_event = to_cloudevent(message, source="/agent-governance-python/agent-os/fraud-detector")
     
     # Send as JSON (CloudEvents structured content mode)
     json_data = cloud_event.to_json()
@@ -279,12 +279,12 @@ def to_cloudevent(
             sender="fraud-detector"
         )
         
-        event = to_cloudevent(message, source="/agent-os/fraud-detector")
+        event = to_cloudevent(message, source="/agent-governance-python/agent-os/fraud-detector")
         # Result:
         # {
         #     "specversion": "1.0",
         #     "id": "msg-123",
-        #     "source": "/agent-os/fraud-detector",
+        #     "source": "/agent-governance-python/agent-os/fraud-detector",
         #     "type": "dev.agent-os.fraud.alerts",
         #     "datacontenttype": "application/json",
         #     "time": "2026-02-03T04:30:00Z",
@@ -456,7 +456,7 @@ def to_http_headers(event: CloudEvent) -> Dict[str, str]:
         headers = to_http_headers(event)
         # {
         #     "ce-id": "msg-123",
-        #     "ce-source": "/agent-os/detector",
+        #     "ce-source": "/agent-governance-python/agent-os/detector",
         #     "ce-type": "dev.agent-os.fraud.alerts",
         #     "ce-specversion": "1.0",
         #     "content-type": "application/json",

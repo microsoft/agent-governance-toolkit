@@ -328,10 +328,10 @@ export class AgentOSCompletionProvider implements vscode.CompletionItemProvider 
 
         // Add import suggestion
         if (linePrefix.trim().startsWith('import ')) {
-            const importItem = new vscode.CompletionItem('@agent-os/sdk', vscode.CompletionItemKind.Module);
+            const importItem = new vscode.CompletionItem('@agent-governance-python/agent-os/sdk', vscode.CompletionItemKind.Module);
             importItem.detail = 'Import AgentOS SDK';
             importItem.documentation = new vscode.MarkdownString('Import the AgentOS TypeScript SDK.');
-            importItem.insertText = new vscode.SnippetString('{ AgentOS, PolicyEngine } from \'@agent-os/sdk\'');
+            importItem.insertText = new vscode.SnippetString('{ AgentOS, PolicyEngine } from \'@agent-governance-python/agent-os/sdk\'');
             items.push(importItem);
         }
 

@@ -14,7 +14,7 @@
 
 **Isolate AI agents at runtime using privilege rings, saga transactions, and kill switches.**
 
-See also: [Deployment Guide](../deployment/README.md) | [Agent Runtime README](../../agent-runtime/README.md)
+See also: [Deployment Guide](../deployment/README.md) | [Agent Runtime README](../../agent-governance-python/agent-runtime/README.md)
 
 ---
 

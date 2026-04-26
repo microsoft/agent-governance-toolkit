@@ -389,7 +389,7 @@ Two resources that go deeper than this post:
 
 The **[MCP Trust Guide](../../../../docs/integrations/mcp-trust-guide.md)** walks through four composable governance layers for MCP: a trust proxy with DID-based identity verification and per-tool trust score thresholds (scored across five dimensions on a 0-1000 scale), a trust server with Ed25519 cryptographic identity and delegation chain verification, a security scanner for tool poisoning detection, and a runtime policy enforcement gateway. Each layer works independently — you can adopt one at a time or stack all four for defense-in-depth.
 
-The **[MCP Security Scanner](../../../../agent-os/src/agent_os/mcp_security.py)** (`agent_os.mcp_security`) is an open-source Python module that screens tool definitions for adversarial manipulation. It catches hidden instructions, invisible Unicode, markdown/HTML comments, encoded payloads, overly permissive schemas, instruction-bearing default values, tool impersonation via typosquatting, and rug-pull drift between sessions. Every scan is logged with a timestamp and tool identity for forensic review.
+The **[MCP Security Scanner](../../../../agent-governance-python/agent-os/src/agent_os/mcp_security.py)** (`agent_os.mcp_security`) is an open-source Python module that screens tool definitions for adversarial manipulation. It catches hidden instructions, invisible Unicode, markdown/HTML comments, encoded payloads, overly permissive schemas, instruction-bearing default values, tool impersonation via typosquatting, and rug-pull drift between sessions. Every scan is logged with a timestamp and tool identity for forensic review.
 
 ## The Path Forward
 
@@ -401,4 +401,4 @@ The agents are shipping. The firewall for their tool calls should ship with them
 
 ---
 
-*This post is part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit) community. For hands-on implementation of the defenses described here, see the [MCP Trust Guide](../../../../docs/integrations/mcp-trust-guide.md) and the [MCP Security Scanner](../../../../agent-os/src/agent_os/mcp_security.py).*
+*This post is part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit) community. For hands-on implementation of the defenses described here, see the [MCP Trust Guide](../../../../docs/integrations/mcp-trust-guide.md) and the [MCP Security Scanner](../../../../agent-governance-python/agent-os/src/agent_os/mcp_security.py).*

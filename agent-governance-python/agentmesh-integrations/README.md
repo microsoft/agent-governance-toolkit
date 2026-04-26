@@ -2,7 +2,7 @@
 
 # AgentMesh Integrations
 
-> **📦 Migrated:** This package was moved from its original repository into the monorepo at `agentmesh-integrations/`.
+> **📦 Migrated:** This package was moved from its original repository into the monorepo at `agent-governance-python/agentmesh-integrations/`.
 
 
 **Platform Plugins & Trust Providers for AgentMesh**
@@ -43,7 +43,7 @@ AgentMesh core is a lean, zero-external-dependency library. Platform integration
 | [LangChain](langchain-agentmesh/) | `langchain-agentmesh` | ✅ Stable | Ed25519 identity, trust-gated tools, scope chains, callbacks |
 | [LangGraph](langgraph-trust/) | [`langgraph-trust`](https://pypi.org/project/langgraph-trust/) | ✅ Published (PyPI) | Trust-gated checkpoint nodes, governance policy enforcement, trust-aware routing |
 | [LlamaIndex](llamaindex-agentmesh/) | `llama-index-agent-agentmesh` | ✅ Merged Upstream | Trust-verified workers, identity-aware query engines, scope chains |
-| [Agent Lightning](https://github.com/microsoft/agent-lightning/tree/main/contrib/recipes/agentos) | — | ✅ Merged Upstream | Agent-OS governance adapters, reward shaping, governed RL training — maintained in [microsoft/agent-lightning](https://github.com/microsoft/agent-lightning) |
+| [Agent Lightning](https://github.com/microsoft/agent-governance-python/agent-lightning/tree/main/contrib/recipes/agentos) | — | ✅ Merged Upstream | Agent-OS governance adapters, reward shaping, governed RL training — maintained in [microsoft/agent-lightning](https://github.com/microsoft/agent-lightning) |
 | [Dify Plugin](dify-plugin/) | `agentmesh-trust-layer` | ✅ Stable | Packaged `.difypkg` with peer verification, step auth, trust scoring |
 | [Dify Middleware](dify/) | — | 📦 Archived | Flask middleware (archived — use the plugin instead) |
 | [Moltbook](moltbook/) | — | ✅ Stable | AgentMesh governance skill for [Moltbook](https://moltbook.com) agent registry |
@@ -127,8 +127,8 @@ agentmesh (core library)              agentmesh-integrations (this repo)
 
 | Type | Location | Example |
 |---|---|---|
-| **Framework adapters** (wrap agent frameworks with governance) | [Agent OS `integrations/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-os/src/agent_os/integrations) | LangChainKernel, CrewAIKernel |
-| **Ecosystem bridges** (connect sibling projects) | [Agent SRE `integrations/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-sre/src/agent_sre/integrations) | Agent OS bridge, AgentMesh bridge |
+| **Framework adapters** (wrap agent frameworks with governance) | [Agent OS `integrations/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/src/agent_os/integrations) | LangChainKernel, CrewAIKernel |
+| **Ecosystem bridges** (connect sibling projects) | [Agent SRE `integrations/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-sre/src/agent_sre/integrations) | Agent OS bridge, AgentMesh bridge |
 | **Platform plugins & trust providers** | **This repo** | Dify plugin, Nostr WoT, Moltbook |
 
 ---

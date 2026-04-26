@@ -31,7 +31,7 @@ pip install agent-os-kernel crewai   # crewai is optional for the demo
 
 ```bash
 git clone https://github.com/microsoft/agent-governance-toolkit
-cd agent-os/examples/crewai-governance
+cd agent-governance-python/agent-os/examples/crewai-governance
 python demo.py
 ```
 

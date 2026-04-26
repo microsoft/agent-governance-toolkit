@@ -102,7 +102,7 @@ spec:
     spec:
       containers:
       - name: demo
-        image: agent-os/$DEMO_NAME:latest
+        image: agent-governance-python/agent-os/$DEMO_NAME:latest
         ports:
         - containerPort: 8080
           name: http

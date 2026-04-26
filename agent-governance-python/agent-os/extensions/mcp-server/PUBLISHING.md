@@ -5,7 +5,7 @@ This guide walks you through publishing the AgentOS MCP Server to npm for distri
 ## Prerequisites
 
 Before publishing, ensure you have:
-- [x] A working MCP server (code in `agent-os/extensions/mcp-server/`)
+- [x] A working MCP server (code in `agent-governance-python/agent-os/extensions/mcp-server/`)
 - [x] npm account with publish access
 - [ ] MCP server tested with Claude Desktop
 - [ ] All TypeScript compiled successfully
@@ -37,7 +37,7 @@ Before publishing, verify the server works with Claude Desktop:
 ### 1.1 Build the Package
 
 ```powershell
-cd agent-os/extensions/mcp-server
+cd agent-governance-python/agent-os/extensions/mcp-server
 npm run build
 ```
 
@@ -174,7 +174,7 @@ npm login
 ### 4.1 Publish Public Package
 
 ```powershell
-cd agent-os/extensions/mcp-server
+cd agent-governance-python/agent-os/extensions/mcp-server
 
 # For scoped packages, must explicitly set public access
 npm publish --access public
@@ -323,15 +323,15 @@ jobs:
       
       - name: Install dependencies
         run: npm ci
-        working-directory: agent-os/extensions/mcp-server
+        working-directory: agent-governance-python/agent-os/extensions/mcp-server
       
       - name: Build
         run: npm run build
-        working-directory: agent-os/extensions/mcp-server
+        working-directory: agent-governance-python/agent-os/extensions/mcp-server
       
       - name: Publish
         run: npm publish --access public
-        working-directory: agent-os/extensions/mcp-server
+        working-directory: agent-governance-python/agent-os/extensions/mcp-server
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```

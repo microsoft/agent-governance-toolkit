@@ -1,7 +1,7 @@
 # AgentConfig File Reference
 
 `AgentConfig.from_file()` loads `.yaml`, `.yml`, and `.json` files into the
-`AgentConfig` dataclass in `agent-os/src/agent_os/base_agent.py`.
+`AgentConfig` dataclass in `agent-governance-python/agent-os/src/agent_os/base_agent.py`.
 
 Use [`../examples/agent_config.yaml`](../examples/agent_config.yaml) as the
 baseline example when creating new agent configs.

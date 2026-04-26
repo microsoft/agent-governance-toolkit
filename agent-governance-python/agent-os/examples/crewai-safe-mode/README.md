@@ -18,7 +18,7 @@ Visual demos showing Agent OS blocking dangerous AI agent operations in real-tim
 ```bash
 # Clone and run (no dependencies needed!)
 git clone https://github.com/microsoft/agent-governance-toolkit
-cd agent-os/examples/crewai-safe-mode
+cd agent-governance-python/agent-os/examples/crewai-safe-mode
 
 # CrewAI demo
 python crewai_safe_mode.py
@@ -69,7 +69,7 @@ What it does:
 
 Run it yourself:
 git clone https://github.com/microsoft/agent-governance-toolkit
-cd agent-os/examples/crewai-safe-mode
+cd agent-governance-python/agent-os/examples/crewai-safe-mode
 python crewai_safe_mode.py
 
 Would love feedback!

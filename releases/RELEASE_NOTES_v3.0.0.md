@@ -48,8 +48,8 @@ Key milestone changes:
 |---------|-----------|--------|
 | Agent OS Kernel | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | Public Preview |
 | AgentMesh Platform | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | Public Preview |
-| Agent Hypervisor | [`agent-hypervisor`](https://pypi.org/project/agent-hypervisor/) | Public Preview |
-| Agent SRE | [`agent-sre`](https://pypi.org/project/agent-sre/) | Public Preview |
+| Agent Hypervisor | [`agent-hypervisor`](https://pypi.org/project/agent-governance-python/agent-hypervisor/) | Public Preview |
+| Agent SRE | [`agent-sre`](https://pypi.org/project/agent-governance-python/agent-sre/) | Public Preview |
 | Agent Governance Toolkit | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | Public Preview |
 | AgentMesh Runtime | [`agentmesh-runtime`](https://pypi.org/project/agentmesh-runtime/) | Public Preview |
 | AgentMesh Lightning | [`agentmesh-lightning`](https://pypi.org/project/agentmesh-lightning/) | Public Preview |

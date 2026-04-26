@@ -11,7 +11,7 @@ Extend Google's A2A protocol with trust scoring, payment negotiation, and delega
 
 ## Current State
 
-- A2A trust adapter shipped: `agentmesh-integrations/a2a-protocol/`
+- A2A trust adapter shipped: `agent-governance-python/agentmesh-integrations/a2a-protocol/`
 - Agent Cards with governance metadata implemented
 - Trust-gated task acceptance implemented
 

@@ -27,12 +27,12 @@ class TestCloudEvent:
         """Test creating CloudEvent with minimal required attributes."""
         event = CloudEvent(
             id="evt-123",
-            source="/agent-os/test",
+            source="/agent-governance-python/agent-os/test",
             type="dev.agent-os.test.event"
         )
         
         assert event.id == "evt-123"
-        assert event.source == "/agent-os/test"
+        assert event.source == "/agent-governance-python/agent-os/test"
         assert event.type == "dev.agent-os.test.event"
         assert event.specversion == CLOUDEVENTS_SPEC_VERSION
         assert event.datacontenttype == "application/json"
@@ -42,7 +42,7 @@ class TestCloudEvent:
         now = datetime.now(timezone.utc)
         event = CloudEvent(
             id="evt-456",
-            source="/agent-os/fraud-detector",
+            source="/agent-governance-python/agent-os/fraud-detector",
             type="dev.agent-os.fraud.alerts",
             subject="fraud.alerts",
             time=now,
@@ -176,10 +176,10 @@ class TestMessageConversion:
             payload={"transaction_id": "tx-456", "risk_score": 0.9}
         )
         
-        event = to_cloudevent(message, source="/agent-os/detector")
+        event = to_cloudevent(message, source="/agent-governance-python/agent-os/detector")
         
         assert event.id == "msg-123"
-        assert event.source == "/agent-os/detector"
+        assert event.source == "/agent-governance-python/agent-os/detector"
         assert event.type == "dev.agent-os.fraud.alerts"
         assert event.subject == "fraud.alerts"
         assert event.data == {"transaction_id": "tx-456", "risk_score": 0.9}
@@ -321,7 +321,7 @@ class TestMessageConversion:
             ttl=300
         )
         
-        event = to_cloudevent(original, source="/agent-os/detector")
+        event = to_cloudevent(original, source="/agent-governance-python/agent-os/detector")
         converted = from_cloudevent(event)
         
         assert converted.id == original.id
@@ -394,7 +394,7 @@ class TestHTTPBinding:
         """Test converting CloudEvent to HTTP headers."""
         event = CloudEvent(
             id="evt-123",
-            source="/agent-os/detector",
+            source="/agent-governance-python/agent-os/detector",
             type="dev.agent-os.fraud.alerts",
             ambpriority=15,
             ambsender="detector"
@@ -403,7 +403,7 @@ class TestHTTPBinding:
         headers = to_http_headers(event)
         
         assert headers["ce-id"] == "evt-123"
-        assert headers["ce-source"] == "/agent-os/detector"
+        assert headers["ce-source"] == "/agent-governance-python/agent-os/detector"
         assert headers["ce-type"] == "dev.agent-os.fraud.alerts"
         assert headers["ce-specversion"] == "1.0"
         assert headers["ce-ambpriority"] == "15"

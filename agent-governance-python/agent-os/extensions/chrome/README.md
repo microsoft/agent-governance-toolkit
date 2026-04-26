@@ -56,7 +56,7 @@ Floating action button on every supported page:
 1. Clone the repository:
    ```bash
    git clone https://github.com/microsoft/agent-governance-toolkit.git
-   cd agent-os/extensions/chrome
+   cd agent-governance-python/agent-os/extensions/chrome
    ```
 
 2. Install dependencies and build:

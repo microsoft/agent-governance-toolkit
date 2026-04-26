@@ -76,7 +76,7 @@ agentOS:
       memory: 1Gi
   config:
     logLevel: info
-    policyPath: /etc/agent-os/policies
+    policyPath: /etc/agent-governance-python/agent-os/policies
     auditEnabled: true
   service:
     type: ClusterIP
