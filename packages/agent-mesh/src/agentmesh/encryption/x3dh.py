@@ -91,6 +91,7 @@ class PreKeyBundle:
     """
 
     identity_key: bytes
+    identity_key_ed: bytes  # Ed25519 signing public key for signature verification
     signed_pre_key: bytes
     signed_pre_key_signature: bytes
     signed_pre_key_id: int
@@ -138,6 +139,7 @@ class InMemoryPreKeyStore:
         # Remove the OTK from the bundle
         self._bundles[agent_did] = PreKeyBundle(
             identity_key=bundle.identity_key,
+            identity_key_ed=bundle.identity_key_ed,
             signed_pre_key=bundle.signed_pre_key,
             signed_pre_key_signature=bundle.signed_pre_key_signature,
             signed_pre_key_id=bundle.signed_pre_key_id,
@@ -235,6 +237,7 @@ class X3DHKeyManager:
 
         return PreKeyBundle(
             identity_key=self.identity_key.public_key,
+            identity_key_ed=self.ed25519_public,
             signed_pre_key=self.signed_pre_key.key_pair.public_key,
             signed_pre_key_signature=self.signed_pre_key.signature,
             signed_pre_key_id=self.signed_pre_key.key_id,
@@ -322,17 +325,36 @@ class X3DHKeyManager:
 
     @staticmethod
     def _verify_signed_pre_key(bundle: PreKeyBundle) -> None:
-        """Verify the signed pre-key signature against the identity key."""
-        # Convert X25519 identity key back to Ed25519 is not directly possible,
-        # so we verify using the signature which was created with Ed25519.
-        # The bundle must carry enough info to verify. For now, we verify
-        # that the signature is structurally valid (64 bytes).
+        """Verify the signed pre-key signature against the Ed25519 identity key.
+
+        Fail-closed: if identity_key_ed is missing or verification fails, raises.
+        """
+        from nacl.signing import VerifyKey
+        from nacl.exceptions import BadSignatureError
+
+        if not hasattr(bundle, "identity_key_ed") or not bundle.identity_key_ed:
+            raise ValueError(
+                "Missing Ed25519 identity key (identity_key_ed). "
+                "Required for signed pre-key signature verification."
+            )
+        if len(bundle.identity_key_ed) != 32:
+            raise ValueError("Invalid Ed25519 identity key length.")
         if len(bundle.signed_pre_key_signature) != 64:
             raise ValueError("Invalid signed pre-key signature length.")
         if len(bundle.signed_pre_key) != 32:
             raise ValueError("Invalid signed pre-key length.")
         if len(bundle.identity_key) != 32:
             raise ValueError("Invalid identity key length.")
+
+        # Verify: the signature was created by ed25519.sign(signed_pre_key, ed25519_private)
+        try:
+            verify_key = VerifyKey(bundle.identity_key_ed)
+            verify_key.verify(bundle.signed_pre_key, bundle.signed_pre_key_signature)
+        except BadSignatureError:
+            raise ValueError(
+                "Signed pre-key signature verification FAILED. "
+                "The pre-key was not signed by the claimed identity key."
+            )
 
 
 def _kdf(ikm: bytes) -> bytes:
