@@ -109,6 +109,43 @@ export interface PolicyRule {
 
   /** Whether this rule is enabled (default true). */
   enabled?: boolean;
+
+  /** Governance surfaces this rule applies to (omit for universal rules). */
+  surfaces?: GovernanceSurface[];
+}
+
+/** Governance surface where policy enforcement occurs. */
+export type GovernanceSurface = 'cli' | 'ide' | 'api' | 'unknown';
+
+/** Maps a rule to the surfaces it covers. */
+export interface SurfaceRuleMapping {
+  rule: PolicyRule;
+  policyName: string;
+  detectedSurfaces: GovernanceSurface[];
+  isUniversal: boolean;
+}
+
+/** A gap where a rule exists for one surface but not another. */
+export interface SurfaceGap {
+  ruleName: string;
+  policyName: string;
+  presentOn: GovernanceSurface[];
+  missingFrom: GovernanceSurface[];
+  ruleAction: PolicyAction | undefined;
+  severity: 'high' | 'medium' | 'low';
+  recommendation: string;
+}
+
+/** Report of governance parity analysis across surfaces. */
+export interface SurfaceParityReport {
+  analyzedAt: Date;
+  totalRules: number;
+  universalRules: number;
+  surfaceSpecificRules: number;
+  gaps: SurfaceGap[];
+  mappings: SurfaceRuleMapping[];
+  surfaceCoverage: Record<GovernanceSurface, number>;
+  parityScore: number;
 }
 
 /** A complete policy document (matches Python Policy model). */

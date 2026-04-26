@@ -764,6 +764,7 @@ function dataToPolicy(data: Record<string, unknown>): Policy {
         approvers: r.approvers as string[] | undefined,
         priority: r.priority as number | undefined,
         enabled: r.enabled as boolean | undefined,
+        surfaces: r.surfaces as import('./types').GovernanceSurface[] | undefined,
       });
     }
   }
