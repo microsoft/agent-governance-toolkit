@@ -15,7 +15,7 @@ This gap becomes structural as agent ecosystems grow. Three real scenarios expos
 
 2. **Platform agents.** A SaaS platform hosts agents on behalf of multiple tenants. Each tenant's agents need to interact with agents from other platforms. The platform cannot pre-register every possible counterparty.
 
-3. **Open federation.** Independent agent operators (like [AgentLair](https://agentlair.dev)) issue identities to agents that interact with enterprise-governed agents. No bilateral agreement exists in advance.
+3. **Open federation.** Independent agent operators (like an external agent platform) issue identities to agents that interact with enterprise-governed agents. No bilateral agreement exists in advance.
 
 ### Existing cross-org paths
 
@@ -62,7 +62,7 @@ Each organization publishes a JWKS endpoint at a well-known URL under its domain
 
 ```
 https://org-a.example.com/.well-known/jwks.json
-https://agentlair.dev/.well-known/jwks.json
+https://ExternalPlatform.dev/.well-known/jwks.json
 ```
 
 This follows the pattern established by:
@@ -111,8 +111,8 @@ federation_config = FederationPolicy(
     # Trusted JWKS endpoints (explicit allowlist)
     trusted_endpoints=[
         TrustedEndpoint(
-            domain="agentlair.dev",
-            jwks_url="https://agentlair.dev/.well-known/jwks.json",
+            domain="ExternalPlatform.dev",
+            jwks_url="https://ExternalPlatform.dev/.well-known/jwks.json",
             trust_tier="verified_partner",  # maps to existing trust tiers
         ),
         TrustedEndpoint(
@@ -182,7 +182,7 @@ class HandshakeResult(BaseModel):
 
 class ExternalIdentity(BaseModel):
     """Identity verified via external JWKS federation."""
-    did_web: str                    # e.g., "did:web:agentlair.dev:agents:abc123"
+    did_web: str                    # e.g., "did:web:ExternalPlatform.dev:agents:abc123"
     jwks_url: str                   # The JWKS endpoint used for verification
     issuer_domain: str              # DNS domain of the issuing organization
     federation_tier: str            # "verified_partner" | "trusted" | "tofu"
@@ -207,10 +207,10 @@ External agents that support liveness attestation can participate in the heartbe
 
 ### Working example
 
-[AgentLair](https://agentlair.dev) currently issues Ed25519 JWTs (AATs — Agent Authentication Tokens) verified via a JWKS endpoint:
+an external agent platform currently issues Ed25519 JWTs (AATs — Agent Authentication Tokens) verified via a JWKS endpoint:
 
 ```
-GET https://agentlair.dev/.well-known/jwks.json
+GET https://ExternalPlatform.dev/.well-known/jwks.json
 
 {
   "keys": [{
@@ -256,7 +256,7 @@ This aligns with ADR-0001 (Ed25519 for agent identity) — the same key type and
 - [OpenID Federation](https://openid.net/specs/openid-federation-1_0.html) — entity statement chains, trust marks, and `/.well-known/` discovery
 - [SPIFFE](https://spiffe.io/) — trust domain model and workload identity federation
 - [did:web specification](https://w3c-ccg.github.io/did-method-web/) — DNS-anchored decentralized identifiers
-- [AgentLair JWKS](https://agentlair.dev/.well-known/jwks.json) — production Ed25519 JWKS endpoint for agent identity
+- [ExternalPlatform JWKS](https://ExternalPlatform.dev/.well-known/jwks.json) — production Ed25519 JWKS endpoint for agent identity
 - [springdrift PR #38](https://github.com/seamus-brady/springdrift/pull/38) — JWKS gate handler integration, merged
 - [task-orchestrator v3.2.0](https://github.com/jpicklyk/task-orchestrator) — independent JWKS ActorVerifier adoption
 - AGT Tutorial 31 — Entra Agent ID bridge for cross-tenant federation within the Microsoft ecosystem
