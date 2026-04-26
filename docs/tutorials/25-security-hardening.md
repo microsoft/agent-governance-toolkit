@@ -528,6 +528,7 @@ For known false positives, create a `.security-exemptions.json`:
 | SBOM and signing | [Tutorial 26 — SBOM and Signing](./26-sbom-and-signing.md) |
 | MCP scan CLI | [Tutorial 27 — MCP Scan CLI](./27-mcp-scan-cli.md) |
 | Plugin marketplace security | [Tutorial 10 — Plugin Marketplace](./10-plugin-marketplace.md) |
+| Shift-left governance | [Tutorial 45 — Shift-Left Governance](./45-shift-left-governance.md) |
 
 ---
 
