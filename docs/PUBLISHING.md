@@ -108,13 +108,13 @@ See the full list of Microsoft-controlled scopes: `@microsoft`, `@azure`,
 
 | Package | npm Name | Directory |
 |---------|----------|-----------|
-| AgentMesh Copilot Governance | `@microsoft/agentmesh-copilot-governance` | `agentmesh-integrations/copilot-governance` |
-| AgentMesh Mastra | `@microsoft/agentmesh-mastra` | `agentmesh-integrations/mastra-agentmesh` |
-| AgentMesh API | `@microsoft/agentmesh-api` | `agent-mesh/services/api` |
-| AgentMesh MCP Proxy | `@microsoft/agentmesh-mcp-proxy` | `agent-mesh/packages/mcp-proxy` |
+| AgentMesh Copilot Governance | `@microsoft/agentmesh-copilot-governance` | `agent-governance-python/agentmesh-integrations/copilot-governance` |
+| AgentMesh Mastra | `@microsoft/agentmesh-mastra` | `agent-governance-python/agentmesh-integrations/mastra-agentmesh` |
+| AgentMesh API | `@microsoft/agentmesh-api` | `agent-governance-python/agent-mesh/services/api` |
+| AgentMesh MCP Proxy | `@microsoft/agentmesh-mcp-proxy` | `agent-governance-python/agent-mesh/packages/mcp-proxy` |
 | AgentMesh SDK | `@microsoft/agentmesh-sdk` | `agent-governance-typescript` |
-| Agent OS Copilot Extension | `@microsoft/agent-os-copilot-extension` | `agent-os/extensions/copilot` |
-| AgentOS MCP Server | `@microsoft/agentos-mcp-server` | `agent-os/extensions/mcp-server` |
+| Agent OS Copilot Extension | `@microsoft/agent-os-copilot-extension` | `agent-governance-python/agent-os/extensions/copilot` |
+| AgentOS MCP Server | `@microsoft/agentos-mcp-server` | `agent-governance-python/agent-os/extensions/mcp-server` |
 
 The VS Code and Cursor extensions are published via their respective marketplaces,
 not npm.
@@ -268,16 +268,16 @@ DockerHub directly. Follow onboarding at [aka.ms/mcr/onboarding](https://aka.ms/
 
 | Image | Dockerfile | Purpose |
 |-------|-----------|---------|
-| Agent OS | `agent-os/Dockerfile` | Core governance runtime |
-| Copilot Extension | `agent-os/extensions/copilot/Dockerfile` | GitHub Copilot extension |
-| MCP Server | `agent-os/extensions/mcp-server/Dockerfile` | MCP server for Claude Desktop |
-| Cloud Board | `agent-os/services/cloud-board/Dockerfile` | Cloud board service |
-| CMVK | `agent-os/modules/cmvk/Dockerfile` | Cross-Model Verification Kernel |
-| IATP | `agent-os/modules/iatp/Dockerfile` | Inter-Agent Trust Protocol |
-| IATP Sidecar (Go) | `agent-os/modules/iatp/sidecar/go/Dockerfile` | Go trust sidecar |
-| Control Plane | `agent-os/modules/control-plane/Dockerfile` | Agent control plane |
-| SCAK | `agent-os/modules/scak/Dockerfile` | Safety-Critical Agent Kernel |
-| CaaS | `agent-os/modules/caas/Dockerfile` | Compliance as a Service |
+| Agent OS | `agent-governance-python/agent-os/Dockerfile` | Core governance runtime |
+| Copilot Extension | `agent-governance-python/agent-os/extensions/copilot/Dockerfile` | GitHub Copilot extension |
+| MCP Server | `agent-governance-python/agent-os/extensions/mcp-server/Dockerfile` | MCP server for Claude Desktop |
+| Cloud Board | `agent-governance-python/agent-os/services/cloud-board/Dockerfile` | Cloud board service |
+| CMVK | `agent-governance-python/agent-os/modules/cmvk/Dockerfile` | Cross-Model Verification Kernel |
+| IATP | `agent-governance-python/agent-os/modules/iatp/Dockerfile` | Inter-Agent Trust Protocol |
+| IATP Sidecar (Go) | `agent-governance-python/agent-os/modules/iatp/sidecar/go/Dockerfile` | Go trust sidecar |
+| Control Plane | `agent-governance-python/agent-os/modules/control-plane/Dockerfile` | Agent control plane |
+| SCAK | `agent-governance-python/agent-os/modules/scak/Dockerfile` | Safety-Critical Agent Kernel |
+| CaaS | `agent-governance-python/agent-os/modules/caas/Dockerfile` | Compliance as a Service |
 
 ### Image Requirements
 

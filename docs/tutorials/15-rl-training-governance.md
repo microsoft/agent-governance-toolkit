@@ -1049,7 +1049,7 @@ training. Here's where to go next:
 | Wire up distributed tracing and metrics | [Tutorial 13 — Observability & Tracing](13-observability-and-tracing.md) |
 | Sandbox agent execution during training | [Tutorial 06 — Execution Sandboxing](06-execution-sandboxing.md) |
 | Add reliability (SLOs, circuit breakers) | [Tutorial 05 — Agent Reliability](05-agent-reliability.md) |
-| Browse the full Agent-Lightning README | [`agent-lightning/README.md`](../../agent-lightning/README.md) |
+| Browse the full Agent-Lightning README | [`agent-governance-python/agent-lightning/README.md`](../../agent-governance-python/agent-lightning/README.md) |
 
 ### Key takeaways
 

@@ -31,7 +31,7 @@ enforcing limits, blocking disallowed tools, and logging everything.
                      audit log
 ```
 
-All adapters live in `agent-os/src/agent_os/integrations/` and inherit
+All adapters live in `agent-governance-python/agent-os/src/agent_os/integrations/` and inherit
 from `BaseIntegration` (defined in `base.py`).  Every kernel exposes:
 
 | Hook | When it fires | What it does |
@@ -772,5 +772,5 @@ violations route to the same handler, and the audit trail is unified.
 - [Tutorial 01 — Policy Engine](./01-policy-engine.md)
 - [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md)
 - [OWASP Compliance Mapping](../OWASP-COMPLIANCE.md)
-- [API Reference — `BaseIntegration`](../../agent-os/src/agent_os/integrations/base.py)
-- [All 22+ adapters](../../agent-os/src/agent_os/integrations/)
+- [API Reference — `BaseIntegration`](../../agent-governance-python/agent-os/src/agent_os/integrations/base.py)
+- [All 22+ adapters](../../agent-governance-python/agent-os/src/agent_os/integrations/)

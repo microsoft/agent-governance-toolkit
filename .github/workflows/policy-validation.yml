@@ -6,13 +6,13 @@ on:
     paths:
       - "**/*.yaml"
       - "**/*.yml"
-      - "agent-os/src/agent_os/policies/**"
+      - "agent-governance-python/agent-os/src/agent_os/policies/**"
   pull_request:
     branches: [main]
     paths:
       - "**/*.yaml"
       - "**/*.yml"
-      - "agent-os/src/agent_os/policies/**"
+      - "agent-governance-python/agent-os/src/agent_os/policies/**"
 
 permissions:
   contents: read

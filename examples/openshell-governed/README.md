@@ -13,4 +13,4 @@ python examples/openshell-governed/demo.py
 ## Related
 
 - [OpenShell Integration Guide](../../docs/integrations/openshell.md)
-- [Skill Package](../../agentmesh-integrations/openshell-skill/)
+- [Skill Package](../../agent-governance-python/agentmesh-integrations/openshell-skill/)

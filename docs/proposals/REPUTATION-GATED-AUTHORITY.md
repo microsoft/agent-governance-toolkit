@@ -294,5 +294,5 @@ Out of scope for v1. The lineage-bound initial trust (Invariant 6) and runtime c
 
 - Agent Passport System: `resolve_authority()` implementation — [source](https://github.com/aeoess/agent-passport-system)
 - Monotonic Narrowing paper — [Zenodo](https://doi.org/10.5281/zenodo.18749779)
-- AgentMesh trust scoring — `agent-mesh/docs/TRUST-SCORING.md`
+- AgentMesh trust scoring — `agent-governance-python/agent-mesh/docs/TRUST-SCORING.md`
 - OWASP ASI-03 (Identity & Privilege Abuse) — directly addressed by this proposal

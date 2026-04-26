@@ -3,7 +3,7 @@
 #                           outside the designated security modules.
 #
 # AGT's crypto belongs in:
-#   agent-mesh/  (identity, encryption, trust)
+#   agent-governance-python/agent-mesh/  (identity, encryption, trust)
 #   agent-governance-rust/src/crypto/
 #   agent-governance-typescript/src/encryption/
 #   agent-governance-dotnet/src/Security/
@@ -39,7 +39,7 @@ CRYPTO_PATTERNS=(
 
 # Paths where crypto is allowed
 ALLOWED_PATHS=(
-  'agent-mesh/'
+  'agent-governance-python/agent-mesh/'
   'agent-governance-rust/src/'
   'agent-governance-typescript/src/encryption/'
   'agent-governance-dotnet/src/'
@@ -51,7 +51,7 @@ PATTERN=$(IFS='|'; echo "${CRYPTO_PATTERNS[*]}")
 # Get added lines from non-allowed paths
 ADDED=$(git diff "$BASE_REF"...HEAD --diff-filter=ACMR -U0 -- \
   '*.py' '*.ts' '*.rs' '*.cs' '*.go' \
-  ':!agent-mesh/**' \
+  ':!agent-governance-python/agent-mesh/**' \
   ':!agent-governance-rust/**' \
   ':!agent-governance-typescript/src/encryption/**' \
   ':!agent-governance-dotnet/**' \

@@ -111,7 +111,7 @@ history. The rest of this tutorial covers every component in detail.
 
 ## 3. KillSwitch — Immediate Termination
 
-**Source:** `agent-hypervisor/src/hypervisor/security/kill_switch.py`
+**Source:** `agent-governance-python/agent-hypervisor/src/hypervisor/security/kill_switch.py`
 
 The `KillSwitch` provides immediate, hard termination of an agent with a full
 audit trail. In the public preview, all in-flight saga steps are
@@ -271,7 +271,7 @@ The `KillResult` dataclass is returned from every `kill()` call:
 
 ## 4. AgentRateLimiter — Per-Ring Token Buckets
 
-**Source:** `agent-hypervisor/src/hypervisor/security/rate_limiter.py`
+**Source:** `agent-governance-python/agent-hypervisor/src/hypervisor/security/rate_limiter.py`
 
 The `AgentRateLimiter` enforces per-agent, per-ring rate limits inside the
 hypervisor runtime layer using the token bucket algorithm. Higher-privilege rings
@@ -450,7 +450,7 @@ assert bucket.consume(1.0) is False
 
 ## 5. RateLimiter (Agent Mesh) — HTTP Service Limits
 
-**Source:** `agent-mesh/src/agentmesh/services/rate_limiter.py`
+**Source:** `agent-governance-python/agent-mesh/src/agentmesh/services/rate_limiter.py`
 
 While `AgentRateLimiter` operates inside the hypervisor runtime, the Agent Mesh
 `RateLimiter` applies limits at the trust-proxy service layer. It uses two
@@ -649,7 +649,7 @@ where multiple HTTP handler threads may be checking limits concurrently.
 
 ## 6. RateLimitMiddleware — HTTP Edge Enforcement
 
-**Source:** `agent-mesh/src/agentmesh/services/rate_limit_middleware.py`
+**Source:** `agent-governance-python/agent-mesh/src/agentmesh/services/rate_limit_middleware.py`
 
 The `RateLimitMiddleware` integrates rate limiting with HTTP request handling.
 It extracts agent identity from request headers, checks limits, and decorates
@@ -769,7 +769,7 @@ assert response.status_code == 200
 
 ## 7. RingElevationManager — Temporary Privilege Escalation
 
-**Source:** `agent-hypervisor/src/hypervisor/rings/elevation.py`
+**Source:** `agent-governance-python/agent-hypervisor/src/hypervisor/rings/elevation.py`
 
 The `RingElevationManager` controls temporary ring elevation — allowing an
 agent to operate at a higher privilege level for a limited time. In the
@@ -935,7 +935,7 @@ print(RingElevationManager.DEFAULT_TTL)          # 300 seconds
 
 ## 8. RingBreachDetector — Anomaly Detection
 
-**Source:** `agent-hypervisor/src/hypervisor/rings/breach_detector.py`
+**Source:** `agent-governance-python/agent-hypervisor/src/hypervisor/rings/breach_detector.py`
 
 The `RingBreachDetector` monitors agent behavior for two classes of anomaly:
 

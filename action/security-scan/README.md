@@ -116,7 +116,7 @@ Create `.security-exemptions.json` in your repository to suppress false positive
 }
 ```
 
-See [schema](../../agent-compliance/src/agent_compliance/security/schemas/security-exemptions.schema.json) for full format.
+See [schema](../../agent-governance-python/agent-compliance/src/agent_compliance/security/schemas/security-exemptions.schema.json) for full format.
 
 ## Complete Workflow Example
 

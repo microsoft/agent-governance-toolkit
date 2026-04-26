@@ -370,7 +370,7 @@ re-verification. Handshakes that exceed the timeout raise
 
 ### 5.3 IATP Protocol Buffer Definitions
 
-IATP is defined in Protocol Buffers (`agent-os/modules/iatp/proto/iatp.proto`).
+IATP is defined in Protocol Buffers (`agent-governance-python/agent-os/modules/iatp/proto/iatp.proto`).
 Key messages:
 
 | Message | Purpose |

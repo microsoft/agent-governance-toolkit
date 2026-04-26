@@ -9,13 +9,13 @@ This is PR 3 in the three-PR sequence proposed on [#748](https://github.com/micr
 | # | What | Status |
 |---|---|---|
 | 1 | Integration doc at [`docs/integrations/sb-runtime.md`](../../docs/integrations/sb-runtime.md) | Merged ([#1202](https://github.com/microsoft/agent-governance-toolkit/pull/1202)) |
-| 2 | Provider shim at [`agentmesh-integrations/sb-runtime-skill/`](../../agentmesh-integrations/sb-runtime-skill/) | Merged ([#1203](https://github.com/microsoft/agent-governance-toolkit/pull/1203)) |
+| 2 | Provider shim at [`agent-governance-python/agentmesh-integrations/sb-runtime-skill/`](../../agent-governance-python/agentmesh-integrations/sb-runtime-skill/) | Merged ([#1203](https://github.com/microsoft/agent-governance-toolkit/pull/1203)) |
 | 3 | Worked example (this directory) | This PR |
 
 ## Quick start
 
 ```bash
-pip install -e agentmesh-integrations/sb-runtime-skill/
+pip install -e agent-governance-python/agentmesh-integrations/sb-runtime-skill/
 python examples/sb-runtime-governed/getting_started.py
 ```
 
@@ -121,7 +121,7 @@ See [`policies/sandbox-policy.yaml`](./policies/sandbox-policy.yaml). Mirrors th
 ## Related
 
 - **Integration doc:** [`docs/integrations/sb-runtime.md`](../../docs/integrations/sb-runtime.md)
-- **Provider shim package:** [`agentmesh-integrations/sb-runtime-skill/`](../../agentmesh-integrations/sb-runtime-skill/)
+- **Provider shim package:** [`agent-governance-python/agentmesh-integrations/sb-runtime-skill/`](../../agent-governance-python/agentmesh-integrations/sb-runtime-skill/)
 - **Reference verifier:** [`@veritasacta/verify`](https://github.com/ScopeBlind/verify) (Apache-2.0, offline, zero runtime dependencies on AGT or sb-runtime)
 - **Receipt format spec:** [draft-farley-acta-signed-receipts-02](https://datatracker.ietf.org/doc/draft-farley-acta-signed-receipts/)
 - **Conformance profile:** [VeritasActa/agt-integration-profile](https://github.com/VeritasActa/agt-integration-profile)

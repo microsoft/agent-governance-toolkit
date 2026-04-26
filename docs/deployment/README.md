@@ -15,7 +15,7 @@ Deploy the Agent Governance Toolkit on any cloud or on-premises infrastructure.
 
 | Scenario | Guide | Best For |
 |----------|-------|----------|
-| **Azure Kubernetes Service (AKS)** | [AKS Sidecar Deployment](../../agent-mesh/docs/deployment/azure.md) | Production multi-agent systems, enterprise HA |
+| **Azure Kubernetes Service (AKS)** | [AKS Sidecar Deployment](../../agent-governance-python/agent-mesh/docs/deployment/azure.md) | Production multi-agent systems, enterprise HA |
 | **Azure AI Foundry Agent Service** | [Foundry Integration](azure-foundry-agent-service.md) | Agents built with Azure AI Foundry |
 | **Azure Container Apps** | [Container Apps](azure-container-apps.md) | Serverless, scale-to-zero scenarios |
 | **OpenClaw on AKS** | [OpenClaw Sidecar](openclaw-sidecar.md) | Governing OpenClaw autonomous agents |

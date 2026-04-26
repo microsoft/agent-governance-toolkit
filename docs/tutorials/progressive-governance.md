@@ -71,7 +71,7 @@ decision = evaluator.evaluate({"action": "read_file", "path": "/data/public/repo
 ```
 
 > 💡 **Generate policies instantly** with `agent-os policy generate --template strict`.
-> See [Policy Generator CLI](../../agent-os/src/agent_os/cli/cmd_policy_gen.py).
+> See [Policy Generator CLI](../../agent-governance-python/agent-os/src/agent_os/cli/cmd_policy_gen.py).
 
 ---
 

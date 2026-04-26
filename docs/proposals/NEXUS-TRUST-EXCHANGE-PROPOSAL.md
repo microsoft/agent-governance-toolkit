@@ -12,14 +12,14 @@ A decentralized agent trust exchange enabling agents to discover, verify, transa
 
 | Component | Status | Location |
 |-----------|--------|----------|
-| Agent Registry | ✅ Implemented | `agent-os/modules/nexus/registry.py` |
-| Reputation Engine (0-1000) | ✅ Implemented | `agent-os/modules/nexus/reputation.py` |
-| Escrow Manager | ✅ Implemented | `agent-os/modules/nexus/escrow.py` |
-| Arbiter (Dispute Resolution) | ✅ Implemented | `agent-os/modules/nexus/arbiter.py` |
-| DMZ Protocol | ✅ Implemented | `agent-os/modules/nexus/dmz.py` |
-| NexusClient SDK | ✅ Implemented | `agent-os/modules/nexus/client.py` |
-| IATP Trust Handshake | ✅ Implemented | `agent-mesh/src/agentmesh/trust/handshake.py` |
-| Agent Cards | ✅ Implemented | `agent-mesh/src/agentmesh/trust/cards.py` |
+| Agent Registry | ✅ Implemented | `agent-governance-python/agent-os/modules/nexus/registry.py` |
+| Reputation Engine (0-1000) | ✅ Implemented | `agent-governance-python/agent-os/modules/nexus/reputation.py` |
+| Escrow Manager | ✅ Implemented | `agent-governance-python/agent-os/modules/nexus/escrow.py` |
+| Arbiter (Dispute Resolution) | ✅ Implemented | `agent-governance-python/agent-os/modules/nexus/arbiter.py` |
+| DMZ Protocol | ✅ Implemented | `agent-governance-python/agent-os/modules/nexus/dmz.py` |
+| NexusClient SDK | ✅ Implemented | `agent-governance-python/agent-os/modules/nexus/client.py` |
+| IATP Trust Handshake | ✅ Implemented | `agent-governance-python/agent-mesh/src/agentmesh/trust/handshake.py` |
+| Agent Cards | ✅ Implemented | `agent-governance-python/agent-mesh/src/agentmesh/trust/cards.py` |
 | Crypto (Ed25519) | ⚠️ Placeholder (XOR) | Needs Azure Key Vault HSM |
 | Cloud Persistence | ❌ In-memory only | Needs Cosmos DB |
 | Payment Rails | ❌ Credits only | Needs Stripe MPP |
@@ -31,4 +31,4 @@ An "Agent Internet" where agents discover each other through signed Agent Cards,
 ## References
 
 - [Agent Internet Research Document](../../research/docs/2026-03-21-agent-internet-economy.md)
-- [Moltbook Integration](../../agentmesh-integrations/moltbook/)
+- [Moltbook Integration](../../agent-governance-python/agentmesh-integrations/moltbook/)

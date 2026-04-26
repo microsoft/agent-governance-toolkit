@@ -1073,13 +1073,13 @@ disclaimer: "Custom rules for production deployment"
 
 | Component | Path |
 |-----------|------|
-| MCPGateway, AuditEntry, GatewayConfig | `agent-os/src/agent_os/mcp_gateway.py` |
-| MCPSecurityScanner, MCPThreat, MCPThreatType | `agent-os/src/agent_os/mcp_security.py` |
-| CLI (`mcp-scan`) | `agent-os/src/agent_os/cli/mcp_scan.py` |
-| Gateway tests | `agent-os/tests/test_mcp_gateway.py` |
-| Scanner tests | `agent-os/tests/test_mcp_security.py` |
-| CLI tests | `agent-os/tests/test_mcp_scan_cli.py` |
-| GovernancePolicy | `agent-os/src/agent_os/integrations/base.py` |
+| MCPGateway, AuditEntry, GatewayConfig | `agent-governance-python/agent-os/src/agent_os/mcp_gateway.py` |
+| MCPSecurityScanner, MCPThreat, MCPThreatType | `agent-governance-python/agent-os/src/agent_os/mcp_security.py` |
+| CLI (`mcp-scan`) | `agent-governance-python/agent-os/src/agent_os/cli/mcp_scan.py` |
+| Gateway tests | `agent-governance-python/agent-os/tests/test_mcp_gateway.py` |
+| Scanner tests | `agent-governance-python/agent-os/tests/test_mcp_security.py` |
+| CLI tests | `agent-governance-python/agent-os/tests/test_mcp_scan_cli.py` |
+| GovernancePolicy | `agent-governance-python/agent-os/src/agent_os/integrations/base.py` |
 
 ---
 

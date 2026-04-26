@@ -71,11 +71,11 @@ coexist in production.
 ## 2. Trust Integration (Standalone Package)
 
 > **Starter template available.** Copy
-> `agentmesh-integrations/template-agentmesh/` and rename it for your
+> `agent-governance-python/agentmesh-integrations/template-agentmesh/` and rename it for your
 > framework. It includes a working `trust.py`, `__init__.py`, `pyproject.toml`,
 > and 29 tests. The walkthrough below explains each component.
 
-Trust integrations live under `agentmesh-integrations/` and follow a
+Trust integrations live under `agent-governance-python/agentmesh-integrations/` and follow a
 consistent structure. Most have zero runtime dependencies on the target
 framework SDK (CrewAI and OpenAI Agents use duck typing). The LangChain
 integration is an exception — it requires `langchain-core` and `cryptography`
@@ -802,8 +802,8 @@ governed.run("Deploy v2.1.0 to staging", action="deploy")
 
 ### 5.1 Package placement
 
-Trust integrations belong in `agentmesh-integrations/yourframework-agentmesh/`.
-Kernel adapters belong in `agent-os/src/agent_os/integrations/yourframework_adapter.py`.
+Trust integrations belong in `agent-governance-python/agentmesh-integrations/yourframework-agentmesh/`.
+Kernel adapters belong in `agent-governance-python/agent-os/src/agent_os/integrations/yourframework_adapter.py`.
 
 ### 5.2 PR requirements
 
@@ -820,7 +820,7 @@ The `CONTRIBUTING.md` checklist applies. Key items:
 ### 5.3 Versioning
 
 Follow the existing packages: start at `0.1.0`, use semantic versioning.
-Trust integrations in `agentmesh-integrations/` ship at the current toolkit
+Trust integrations in `agent-governance-python/agentmesh-integrations/` ship at the current toolkit
 release version (check `pyproject.toml` in any existing integration for the
 current number). New community integrations start at `0.1.0` and are bumped
 to match the toolkit version on acceptance.
@@ -857,12 +857,12 @@ to match the toolkit version on acceptance.
 
 | Resource | Path |
 |----------|------|
-| `BaseIntegration` interface | `agent-os/src/agent_os/integrations/base.py` |
-| CrewAI trust integration | `agentmesh-integrations/crewai-agentmesh/` |
-| LangChain trust integration | `agentmesh-integrations/langchain-agentmesh/` |
-| OpenAI Agents trust integration | `agentmesh-integrations/openai-agents-agentmesh/` |
+| `BaseIntegration` interface | `agent-governance-python/agent-os/src/agent_os/integrations/base.py` |
+| CrewAI trust integration | `agent-governance-python/agentmesh-integrations/crewai-agentmesh/` |
+| LangChain trust integration | `agent-governance-python/agentmesh-integrations/langchain-agentmesh/` |
+| OpenAI Agents trust integration | `agent-governance-python/agentmesh-integrations/openai-agents-agentmesh/` |
 | Framework integrations tutorial | `docs/tutorials/03-framework-integrations.md` |
-| Template integration (copy this) | `agentmesh-integrations/template-agentmesh/` |
+| Template integration (copy this) | `agent-governance-python/agentmesh-integrations/template-agentmesh/` |
 | GovernancePolicy patterns | Tutorial 03, Section 7 |
 
 ---

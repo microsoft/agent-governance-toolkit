@@ -48,7 +48,7 @@ RUN python -m pip install --no-cache-dir \
         -e "agent-marketplace[cli,dev]" \
         -e "agent-lightning[agent-os,dev]" \
     && python -m pip install --no-cache-dir \
-        -r agent-hypervisor/examples/dashboard/requirements.txt \
+        -r agent-governance-python/agent-hypervisor/examples/dashboard/requirements.txt \
     && cd /workspace/agent-governance-typescript \
     && npm ci
 

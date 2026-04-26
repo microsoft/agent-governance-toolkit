@@ -759,4 +759,4 @@ entry.to_cloudevent()   # CloudEvents v1.0 JSON envelope
 * **[OWASP ASI 2026](https://owaspai.org/asi/)** — Read the full
   specification for context on each control.
 * **`examples/quickstart.py`** and **`examples/governed_agent.py`** in
-  `agent-compliance/` — runnable demos you can adapt.
+  `agent-governance-python/agent-compliance/` — runnable demos you can adapt.

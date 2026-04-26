@@ -85,17 +85,17 @@ pip install agentmesh-lightning        # 强化学习训练治理
 ### ✨ **亮点**
 
 - **确定性策略执行**: 每个代理行为在执行 *前* 都会根据策略进行评估，延迟低于毫秒级 (<0.1 ms)
-  - [策略引擎](../../agent-os/) | [性能基准](../../BENCHMARKS.md)
+  - [策略引擎](../../agent-governance-python/agent-os/) | [性能基准](../../BENCHMARKS.md)
 - **零信任代理身份**: 基于 Ed25519 的加密凭证，支持 SPIFFE/SVID，信任评分范围为 0–1000 
-  - [AgentMesh](../../agent-mesh/) | [信任评分](../../agent-mesh/)
+  - [AgentMesh](../../agent-governance-python/agent-mesh/) | [信任评分](../../agent-governance-python/agent-mesh/)
 - **执行沙箱**: 4 层权限环、Saga 编排、终止控制与紧急停止(kill switch)
-  - [Agent Runtime](../../agent-runtime/) | [代理虚拟化管理器](../../agent-hypervisor/)
+  - [Agent Runtime](../../agent-governance-python/agent-runtime/) | [代理虚拟化管理器](../../agent-governance-python/agent-hypervisor/)
 - **代理 SRE**: 包含 SLO、错误预算、回放调试、混沌工程、熔断机制与渐进式发布
-  - [Agent SRE](../../agent-sre/) | [可观测性集成](../../agent-hypervisor/src/hypervisor/observability/)
+  - [Agent SRE](../../agent-governance-python/agent-sre/) | [可观测性集成](../../agent-governance-python/agent-hypervisor/src/hypervisor/observability/)
 - **MCP 安全扫描器**: 检测 MCP 工具定义中的工具投毒、拼写劫持(typosquatting)、隐藏指令与rug-pull攻击
-  - [MCP 扫描器](../../agent-os/src/agentos/mcp_security.py) | [CLI](../../agent-os/src/agentos/cli/mcp_scan.py)
+  - [MCP 扫描器](../../agent-governance-python/agent-os/src/agentos/mcp_security.py) | [CLI](../../agent-governance-python/agent-os/src/agentos/cli/mcp_scan.py)
 - **信任报告 CLI**: `agentmesh trust report` — 可视化信任评分、任务成功/失败情况及代理活动
-  - [信任 CLI](../../agent-mesh/src/agentmesh/cli/trust_cli.py)
+  - [信任 CLI](../../agent-governance-python/agent-mesh/src/agentmesh/cli/trust_cli.py)
 - **密钥扫描与模糊测试**: 基于 Gitleaks 的工作流，包含 7 个模糊测试目标，覆盖策略、注入、沙箱、信任及 MCP
   - [安全工作流](../../.github/workflows/)
 - **12+ 框架集成**: 支持 Microsoft Agent Framework, LangChain, CrewAI, AutoGen, Dify, LlamaIndex, OpenAI Agents, Google ADK 等
@@ -278,11 +278,11 @@ decision = engine.evaluate("did:mesh:agent-1", {"tool_name": "analyze"})
 |---------|------|-------------|
 | **Agent OS** | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | 策略引擎 — 确定性动作评估、能力模型、审计日志、动作拦截、MCP 网关 |
 | **AgentMesh** | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | 代理间信任 — Ed25519 身份、SPIFFE/SVID 凭证、信任评分、A2A/MCP/IATP 协议桥接 |
-| **Agent Runtime** | [`agentmesh-runtime`](../../agent-runtime/) | 执行监督器 — 四层权限环、 saga 编排 、终止控制、联合责任、仅追加审计日志 |
-| **Agent SRE** | [`agent-sre`](https://pypi.org/project/agent-sre/) | 可靠性工程 — SLOs、错误预算、重放调试、混沌工程、渐进式发布 |
+| **Agent Runtime** | [`agentmesh-runtime`](../../agent-governance-python/agent-runtime/) | 执行监督器 — 四层权限环、 saga 编排 、终止控制、联合责任、仅追加审计日志 |
+| **Agent SRE** | [`agent-sre`](https://pypi.org/project/agent-governance-python/agent-sre/) | 可靠性工程 — SLOs、错误预算、重放调试、混沌工程、渐进式发布 |
 | **Agent Compliance** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | 运行时策略执行 — OWASP ASI 2026 控制、治理证明、完整性验证 |
-| **Agent Marketplace** | [`agentmesh-marketplace`](../../agent-marketplace/) | 插件生命周期 — 发现、安装、验证和签名插件 |
-| **Agent Lightning** | [`agentmesh-lightning`](../../agent-lightning/) | RL 训练治理 — 受治理运行器、策略奖励 |
+| **Agent Marketplace** | [`agentmesh-marketplace`](../../agent-governance-python/agent-marketplace/) | 插件生命周期 — 发现、安装、验证和签名插件 |
+| **Agent Lightning** | [`agentmesh-lightning`](../../agent-governance-python/agent-lightning/) | RL 训练治理 — 受治理运行器、策略奖励 |
 
 ## 框架集成
 

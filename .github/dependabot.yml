@@ -43,7 +43,7 @@ updates:
 
   # npm packages
   - package-ecosystem: "npm"
-    directory: "/agent-os/extensions/mcp-server"
+    directory: "/agent-governance-python/agent-os/extensions/mcp-server"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -51,7 +51,7 @@ updates:
       - "dependencies"
 
   - package-ecosystem: "npm"
-    directory: "/agent-os/extensions/copilot"
+    directory: "/agent-governance-python/agent-os/extensions/copilot"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

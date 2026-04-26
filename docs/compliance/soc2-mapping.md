@@ -48,56 +48,56 @@ The Agent Governance Toolkit provides runtime governance infrastructure that add
 | Control | Feature | Location | Coverage |
 |---------|---------|----------|----------|
 | CC1.1 Commitment to integrity | STRIDE-oriented threat model | `docs/THREAT_MODEL.md` | ⚠️ Partial — documents threats, no control ownership |
-| CC1.4 Accountability | RBAC with 4 roles (READER, WRITER, ADMIN, AUDITOR) | `agent-os/src/agent_os/integrations/rbac.py:16-30` | ⚠️ Partial — role-to-permission mapping, no personnel tracking |
+| CC1.4 Accountability | RBAC with 4 roles (READER, WRITER, ADMIN, AUDITOR) | `agent-governance-python/agent-os/src/agent_os/integrations/rbac.py:16-30` | ⚠️ Partial — role-to-permission mapping, no personnel tracking |
 
 #### CC5: Control Activities
 
 | Control | Feature | Location | Coverage |
 |---------|---------|----------|----------|
-| CC5.1 Risk-mitigating controls | PolicyEvaluator — every agent action evaluated before execution | `agent-os/src/agent_os/policies/evaluator.py` | ✅ Covered |
-| CC5.2 Technology controls | GovernancePolicy with max_tool_calls, max_tokens, timeout_seconds, blocked_patterns | `agent-os/src/agent_os/integrations/base.py` | ✅ Covered |
-| CC5.2 Policy modes | Strict (deny-by-default), permissive (allow-by-default), audit (log-only) | `agent-os/src/agent_os/policies/schema.py:34-41` | ✅ Covered |
+| CC5.1 Risk-mitigating controls | PolicyEvaluator — every agent action evaluated before execution | `agent-governance-python/agent-os/src/agent_os/policies/evaluator.py` | ✅ Covered |
+| CC5.2 Technology controls | GovernancePolicy with max_tool_calls, max_tokens, timeout_seconds, blocked_patterns | `agent-governance-python/agent-os/src/agent_os/integrations/base.py` | ✅ Covered |
+| CC5.2 Policy modes | Strict (deny-by-default), permissive (allow-by-default), audit (log-only) | `agent-governance-python/agent-os/src/agent_os/policies/schema.py:34-41` | ✅ Covered |
 
 #### CC6: Logical and Physical Access Controls
 
 | Control | Feature | Location | Coverage |
 |---------|---------|----------|----------|
-| CC6.1 Logical access | RBAC — 4 roles with action-level permissions | `agent-os/src/agent_os/integrations/rbac.py:24-30` | ✅ Covered |
-| CC6.1 Tool restrictions | `allowed_tools` per policy, `PolicyInterceptor` blocks unlisted tools | `agent-os/src/agent_os/integrations/base.py:689-693` | ✅ Covered |
-| CC6.2 Access provisioning | Trust scoring (0–1000, 5 tiers), delegation chains must narrow | `agent-mesh/src/agentmesh/trust/` | ✅ Covered |
-| CC6.3 Access removal | Trust decay over time without positive signals, role removal | `agent-os/src/agent_os/integrations/rbac.py:94-96` | ⚠️ Partial |
-| CC6.6 Authentication | Ed25519 challenge-response handshake with DoS protection | `agent-mesh/src/agentmesh/trust/handshake.py:158-456` | ✅ Covered |
-| CC6.6 Certificate authority | SPIFFE CA with Ed25519 sponsor verification for SVID certificates | `agent-mesh/src/agentmesh/core/identity/ca.py:6-44` | ✅ Covered |
-| CC6.7 Privilege restriction | Execution rings (Ring 0–3) enforce privilege tiers; Ring 0 always denied | `agent-hypervisor/src/hypervisor/models.py:46-69` | ✅ Covered |
-| CC6.8 Malicious software prevention | Prompt injection detection (6 regex groups), MCP security scanner, MemoryGuard | `agent-os/src/agent_os/prompt_injection.py:147-197`, `mcp_security.py:272+` | ⚠️ Partial |
+| CC6.1 Logical access | RBAC — 4 roles with action-level permissions | `agent-governance-python/agent-os/src/agent_os/integrations/rbac.py:24-30` | ✅ Covered |
+| CC6.1 Tool restrictions | `allowed_tools` per policy, `PolicyInterceptor` blocks unlisted tools | `agent-governance-python/agent-os/src/agent_os/integrations/base.py:689-693` | ✅ Covered |
+| CC6.2 Access provisioning | Trust scoring (0–1000, 5 tiers), delegation chains must narrow | `agent-governance-python/agent-mesh/src/agentmesh/trust/` | ✅ Covered |
+| CC6.3 Access removal | Trust decay over time without positive signals, role removal | `agent-governance-python/agent-os/src/agent_os/integrations/rbac.py:94-96` | ⚠️ Partial |
+| CC6.6 Authentication | Ed25519 challenge-response handshake with DoS protection | `agent-governance-python/agent-mesh/src/agentmesh/trust/handshake.py:158-456` | ✅ Covered |
+| CC6.6 Certificate authority | SPIFFE CA with Ed25519 sponsor verification for SVID certificates | `agent-governance-python/agent-mesh/src/agentmesh/core/identity/ca.py:6-44` | ✅ Covered |
+| CC6.7 Privilege restriction | Execution rings (Ring 0–3) enforce privilege tiers; Ring 0 always denied | `agent-governance-python/agent-hypervisor/src/hypervisor/models.py:46-69` | ✅ Covered |
+| CC6.8 Malicious software prevention | Prompt injection detection (6 regex groups), MCP security scanner, MemoryGuard | `agent-governance-python/agent-os/src/agent_os/prompt_injection.py:147-197`, `mcp_security.py:272+` | ⚠️ Partial |
 
 #### CC7: System Operations
 
 | Control | Feature | Location | Coverage |
 |---------|---------|----------|----------|
-| CC7.1 Detection and monitoring | GovernanceAuditLogger with pluggable backends (JSONL, in-memory, logging) | `agent-os/src/agent_os/audit_logger.py:19-136` | ✅ Covered |
-| CC7.1 Tamper-evident logging | MerkleAuditChain with SHA-256 hash chaining and inclusion proofs | `agent-mesh/src/agentmesh/governance/audit.py:23-344` | ✅ Covered |
-| CC7.2 Change monitoring | Version-controlled PolicyDocument with name, version, description fields | `agent-os/src/agent_os/policies/schema.py:70-115` | ⚠️ Partial |
-| CC7.3 Vulnerability management | MCP security scanner: tool poisoning, rug pulls, description injection, schema abuse, cross-server attacks, confused deputy | `agent-os/src/agent_os/mcp_security.py:300-331` | ⚠️ Partial |
-| CC7.3 Supply chain | SupplyChainGuard: freshly published packages (<7 days), unpinned versions, typosquatting detection | `agent-os/src/agent_os/supply_chain.py:72-79` | ⚠️ Partial |
-| CC7.4 Incident response | Kill switch with 6 kill reasons (BEHAVIORAL_DRIFT, RATE_LIMIT, RING_BREACH, MANUAL, QUARANTINE_TIMEOUT, SESSION_TIMEOUT) | `agent-hypervisor/src/hypervisor/security/kill_switch.py:64-136` | ⚠️ Partial |
-| CC7.4 Escalation | EscalationHandler with approval backends, timeout with default-deny, M-of-N quorum, fatigue detection | `agent-os/src/agent_os/integrations/escalation.py:48-583` | ✅ Covered |
+| CC7.1 Detection and monitoring | GovernanceAuditLogger with pluggable backends (JSONL, in-memory, logging) | `agent-governance-python/agent-os/src/agent_os/audit_logger.py:19-136` | ✅ Covered |
+| CC7.1 Tamper-evident logging | MerkleAuditChain with SHA-256 hash chaining and inclusion proofs | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py:23-344` | ✅ Covered |
+| CC7.2 Change monitoring | Version-controlled PolicyDocument with name, version, description fields | `agent-governance-python/agent-os/src/agent_os/policies/schema.py:70-115` | ⚠️ Partial |
+| CC7.3 Vulnerability management | MCP security scanner: tool poisoning, rug pulls, description injection, schema abuse, cross-server attacks, confused deputy | `agent-governance-python/agent-os/src/agent_os/mcp_security.py:300-331` | ⚠️ Partial |
+| CC7.3 Supply chain | SupplyChainGuard: freshly published packages (<7 days), unpinned versions, typosquatting detection | `agent-governance-python/agent-os/src/agent_os/supply_chain.py:72-79` | ⚠️ Partial |
+| CC7.4 Incident response | Kill switch with 6 kill reasons (BEHAVIORAL_DRIFT, RATE_LIMIT, RING_BREACH, MANUAL, QUARANTINE_TIMEOUT, SESSION_TIMEOUT) | `agent-governance-python/agent-hypervisor/src/hypervisor/security/kill_switch.py:64-136` | ⚠️ Partial |
+| CC7.4 Escalation | EscalationHandler with approval backends, timeout with default-deny, M-of-N quorum, fatigue detection | `agent-governance-python/agent-os/src/agent_os/integrations/escalation.py:48-583` | ✅ Covered |
 
 #### CC8: Change Management
 
 | Control | Feature | Location | Coverage |
 |---------|---------|----------|----------|
-| CC8.1 Infrastructure changes | SBOM generation (SPDX 2.3 format), Ed25519 artifact signing | `agent-sre/src/agent_sre/signing.py:18-33` | ⚠️ Partial |
+| CC8.1 Infrastructure changes | SBOM generation (SPDX 2.3 format), Ed25519 artifact signing | `agent-governance-python/agent-sre/src/agent_sre/signing.py:18-33` | ⚠️ Partial |
 | CC8.1 CI security | Automated dependency review, CodeQL scanning, OpenSSF Scorecard, SBOM generation | `.github/workflows/dependency-review.yml`, `codeql.yml`, `scorecard.yml`, `sbom.yml` | ✅ Covered |
-| CC8.1 Progressive delivery | Canary deployments for gradual rollout | `agent-sre/src/agent_sre/delivery/gitops.py` | ⚠️ Partial |
+| CC8.1 Progressive delivery | Canary deployments for gradual rollout | `agent-governance-python/agent-sre/src/agent_sre/delivery/gitops.py` | ⚠️ Partial |
 
 #### CC9: Risk Mitigation
 
 | Control | Feature | Location | Coverage |
 |---------|---------|----------|----------|
-| CC9.1 Risk identification | Rogue agent detection — composite behavioral risk scoring: frequency z-scores, entropy deviation, capability profile violations | `agent-sre/src/agent_sre/anomaly/rogue_detector.py:276-401` | ✅ Covered |
-| CC9.1 Anomaly detection | Rolling baselines with z-score detection | `agent-sre/src/agent_sre/anomaly/detector.py:123` | ✅ Covered |
-| CC9.2 Risk mitigation | Circuit breakers for cascading failure prevention | `agent-sre/src/agent_sre/cascade/circuit_breaker.py:90` | ✅ Covered |
+| CC9.1 Risk identification | Rogue agent detection — composite behavioral risk scoring: frequency z-scores, entropy deviation, capability profile violations | `agent-governance-python/agent-sre/src/agent_sre/anomaly/rogue_detector.py:276-401` | ✅ Covered |
+| CC9.1 Anomaly detection | Rolling baselines with z-score detection | `agent-governance-python/agent-sre/src/agent_sre/anomaly/detector.py:123` | ✅ Covered |
+| CC9.2 Risk mitigation | Circuit breakers for cascading failure prevention | `agent-governance-python/agent-sre/src/agent_sre/cascade/circuit_breaker.py:90` | ✅ Covered |
 
 ```python
 # CC6.1 in action: Role-Based Access Control
@@ -126,7 +126,7 @@ audit.log_decision(
 )
 ```
 
-**Reference implementation:** The [`finance-soc2` example](../../agent-os/examples/finance-soc2/) demonstrates CC6.1, CC6.3, CC7.1, CC7.2, CC7.3, and CC8.1 using real Agent OS governance APIs with role-based separation of duties, approval workflows, and immutable audit trails.
+**Reference implementation:** The [`finance-soc2` example](../../agent-governance-python/agent-os/examples/finance-soc2/) demonstrates CC6.1, CC6.3, CC7.1, CC7.2, CC7.3, and CC8.1 using real Agent OS governance APIs with role-based separation of duties, approval workflows, and immutable audit trails.
 
 ### Security Gaps
 
@@ -156,15 +156,15 @@ audit.log_decision(
 | Control | Feature | Location | Coverage |
 |---------|---------|----------|----------|
 | A1.1 System capacity | Policy enforcement at sub-millisecond latency; 47K ops/sec at 1,000 concurrent agents | `BENCHMARKS.md` | ✅ Covered |
-| A1.1 Throughput stability | Near-linear scaling: 46,329 ops/sec (50 agents) → 47,085 ops/sec (1,000 agents) | `agent-os/benchmarks/bench_kernel.py` | ✅ Covered |
-| A1.2 Fault isolation | Per-agent circuit breakers (CLOSED → OPEN → HALF_OPEN) with configurable failure thresholds | `agent-sre/src/agent_sre/cascade/circuit_breaker.py:22-26` | ✅ Covered |
-| A1.2 Cascading failure prevention | Cascade detection monitors dependency chains for failure propagation patterns | `agent-sre/src/agent_sre/cascade/circuit_breaker.py` | ✅ Covered |
-| A1.2 SLO enforcement | 7 SLI types: TaskSuccessRate, ToolCallAccuracy, ResponseLatency, CostPerTask, PolicyComplianceRate, HallucinationRate, CalibrationDelta | `agent-sre/src/agent_sre/slo/indicators.py` | ✅ Covered |
-| A1.2 Error budgets | Quantified failure tolerance with burn rate alerts triggering automatic intervention | `agent-sre/src/agent_sre/slo/indicators.py` | ✅ Covered |
-| A1.2 Chaos testing | ChaosExperiment framework for resilience testing with fault injection, schedule evaluation, and template library | `agent-sre/src/agent_sre/chaos/engine.py:246` | ⚠️ Partial |
-| A1.2 Rate limiting | Token-bucket algorithm, thread-safe with `threading.Lock` | `agent-os/src/agent_os/rate_limiter.py:93-101` | ⚠️ Partial (unwired) |
-| A1.2 Replay | Replay engine for failure reproduction and debugging | `agent-sre/src/agent_sre/replay/engine.py:105` | ⚠️ Partial |
-| A1.3 Recovery | Saga compensation for automatic rollback on execution failure | `agent-hypervisor/src/hypervisor/security/kill_switch.py` | ⚠️ Partial |
+| A1.1 Throughput stability | Near-linear scaling: 46,329 ops/sec (50 agents) → 47,085 ops/sec (1,000 agents) | `agent-governance-python/agent-os/benchmarks/bench_kernel.py` | ✅ Covered |
+| A1.2 Fault isolation | Per-agent circuit breakers (CLOSED → OPEN → HALF_OPEN) with configurable failure thresholds | `agent-governance-python/agent-sre/src/agent_sre/cascade/circuit_breaker.py:22-26` | ✅ Covered |
+| A1.2 Cascading failure prevention | Cascade detection monitors dependency chains for failure propagation patterns | `agent-governance-python/agent-sre/src/agent_sre/cascade/circuit_breaker.py` | ✅ Covered |
+| A1.2 SLO enforcement | 7 SLI types: TaskSuccessRate, ToolCallAccuracy, ResponseLatency, CostPerTask, PolicyComplianceRate, HallucinationRate, CalibrationDelta | `agent-governance-python/agent-sre/src/agent_sre/slo/indicators.py` | ✅ Covered |
+| A1.2 Error budgets | Quantified failure tolerance with burn rate alerts triggering automatic intervention | `agent-governance-python/agent-sre/src/agent_sre/slo/indicators.py` | ✅ Covered |
+| A1.2 Chaos testing | ChaosExperiment framework for resilience testing with fault injection, schedule evaluation, and template library | `agent-governance-python/agent-sre/src/agent_sre/chaos/engine.py:246` | ⚠️ Partial |
+| A1.2 Rate limiting | Token-bucket algorithm, thread-safe with `threading.Lock` | `agent-governance-python/agent-os/src/agent_os/rate_limiter.py:93-101` | ⚠️ Partial (unwired) |
+| A1.2 Replay | Replay engine for failure reproduction and debugging | `agent-governance-python/agent-sre/src/agent_sre/replay/engine.py:105` | ⚠️ Partial |
+| A1.3 Recovery | Saga compensation for automatic rollback on execution failure | `agent-governance-python/agent-hypervisor/src/hypervisor/security/kill_switch.py` | ⚠️ Partial |
 
 #### Performance Benchmarks
 
@@ -225,18 +225,18 @@ slo = SLO(
 
 | Control | Feature | Location | Coverage |
 |---------|---------|----------|----------|
-| PI1.1 Input validation | PolicyEvaluator validates every action against declarative rules before execution | `agent-os/src/agent_os/policies/evaluator.py` | ✅ Covered |
-| PI1.1 Blocked patterns | Substring, regex, and glob pattern blocking on tool arguments | `agent-os/src/agent_os/integrations/base.py:695-701` | ✅ Covered |
-| PI1.1 Input sanitization | Command injection detection, shell metacharacter blocking, base64 payload decoding | `agent-os/src/agent_os/prompt_injection.py:548-563` | ✅ Covered |
-| PI1.2 Processing completeness | Saga orchestration tracks multi-step workflows with checkpoint_frequency | `agent-os/src/agent_os/integrations/base.py` | ⚠️ Partial |
-| PI1.3 Accuracy verification | CodeSecurityValidator — AST-based validation of LLM-generated Python code (17 dangerous imports, 22+ dangerous calls, shell/SQL injection, path traversal, secrets) | `agent-os/src/agent_os/secure_codegen.py:179-237` | ⚠️ Partial |
-| PI1.3 Drift detection | SequenceMatcher-based drift scoring between baseline and actual output | `agent-os/src/agent_os/integrations/base.py:977-1038` | ⚠️ Partial (advisory only) |
-| PI1.3 Accuracy SLIs | ToolCallAccuracy (99.9% target), TaskSuccessRate (99.5% target), HallucinationRate (5% target), CalibrationDelta | `agent-sre/src/agent_sre/slo/indicators.py:133-468` | ✅ Covered |
-| PI1.4 Output recording | CloudEvents v1.0 export with action, outcome, policy_decision, matched_rule | `agent-mesh/src/agentmesh/governance/audit.py:90-128` | ✅ Covered |
-| PI1.5 Audit chain integrity | MerkleAuditChain with SHA-256 hash chaining, inclusion proofs, full chain verification | `agent-mesh/src/agentmesh/governance/audit.py:23-344` | ✅ Covered |
-| PI1.5 Signed audit entries | HMAC-SHA256 signatures on audit entries via AuditSink protocol | `agent-mesh/src/agentmesh/governance/audit_backends.py:31-87` | ⚠️ Partial |
-| PI1.5 Flight recorder | SQLite with WAL mode, Merkle chain tamper detection; captures prompt, action, verdict, result | `agent-os/modules/control-plane/src/agent_control_plane/flight_recorder.py:33-79` | ⚠️ Partial |
-| PI1.5 Delta audit engine | Append-only delta log per session with SHA-256 hashed entries | `agent-hypervisor/src/hypervisor/audit/delta.py:59-110` | ❌ Stub |
+| PI1.1 Input validation | PolicyEvaluator validates every action against declarative rules before execution | `agent-governance-python/agent-os/src/agent_os/policies/evaluator.py` | ✅ Covered |
+| PI1.1 Blocked patterns | Substring, regex, and glob pattern blocking on tool arguments | `agent-governance-python/agent-os/src/agent_os/integrations/base.py:695-701` | ✅ Covered |
+| PI1.1 Input sanitization | Command injection detection, shell metacharacter blocking, base64 payload decoding | `agent-governance-python/agent-os/src/agent_os/prompt_injection.py:548-563` | ✅ Covered |
+| PI1.2 Processing completeness | Saga orchestration tracks multi-step workflows with checkpoint_frequency | `agent-governance-python/agent-os/src/agent_os/integrations/base.py` | ⚠️ Partial |
+| PI1.3 Accuracy verification | CodeSecurityValidator — AST-based validation of LLM-generated Python code (17 dangerous imports, 22+ dangerous calls, shell/SQL injection, path traversal, secrets) | `agent-governance-python/agent-os/src/agent_os/secure_codegen.py:179-237` | ⚠️ Partial |
+| PI1.3 Drift detection | SequenceMatcher-based drift scoring between baseline and actual output | `agent-governance-python/agent-os/src/agent_os/integrations/base.py:977-1038` | ⚠️ Partial (advisory only) |
+| PI1.3 Accuracy SLIs | ToolCallAccuracy (99.9% target), TaskSuccessRate (99.5% target), HallucinationRate (5% target), CalibrationDelta | `agent-governance-python/agent-sre/src/agent_sre/slo/indicators.py:133-468` | ✅ Covered |
+| PI1.4 Output recording | CloudEvents v1.0 export with action, outcome, policy_decision, matched_rule | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py:90-128` | ✅ Covered |
+| PI1.5 Audit chain integrity | MerkleAuditChain with SHA-256 hash chaining, inclusion proofs, full chain verification | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py:23-344` | ✅ Covered |
+| PI1.5 Signed audit entries | HMAC-SHA256 signatures on audit entries via AuditSink protocol | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit_backends.py:31-87` | ⚠️ Partial |
+| PI1.5 Flight recorder | SQLite with WAL mode, Merkle chain tamper detection; captures prompt, action, verdict, result | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/flight_recorder.py:33-79` | ⚠️ Partial |
+| PI1.5 Delta audit engine | Append-only delta log per session with SHA-256 hashed entries | `agent-governance-python/agent-hypervisor/src/hypervisor/audit/delta.py:59-110` | ❌ Stub |
 
 ```python
 # PI1.5 in action: Merkle Audit Chain
@@ -285,14 +285,14 @@ assert entry.previous_hash != "" or log.entries.index(entry) == 0
 
 | Control | Feature | Location | Coverage |
 |---------|---------|----------|----------|
-| C1.1 Confidential data identification | PII detection: SSN (`\b\d{3}-\d{2}-\d{4}\b`) and credit card regex patterns in tool parameters | `agent-os/src/agent_os/mcp_gateway.py:34-42` | ⚠️ Partial (2 patterns only) |
-| C1.1 Secret detection | 5 regex patterns for API keys, passwords, tokens, AWS keys, private keys in generated code (CRITICAL severity) | `agent-os/src/agent_os/secure_codegen.py:346-360` | ⚠️ Partial |
-| C1.2 Data access controls | RBAC with action-level permissions; scoped capabilities with delegation narrowing (child ≤ parent) | `agent-os/src/agent_os/integrations/rbac.py:88-92` | ✅ Covered |
-| C1.2 Egress controls | Domain-level egress filtering with first-match-wins and default-deny | `agent-os/src/agent_os/egress_policy.py:113-139` | ✅ Covered |
-| C1.2 Cryptographic identity | Ed25519 key pairs for agent identity; DID format `did:agentmesh:{agentId}:{fingerprint}` | `agent-mesh/src/agentmesh/trust/handshake.py` | ✅ Covered |
-| C1.2 Signed audit | HMAC-SHA256 signatures on audit entries for tamper detection | `agent-mesh/src/agentmesh/governance/audit_backends.py:61-87` | ⚠️ Partial |
-| C1.2 Channel encryption | IATP (Inter-Agent Trust Protocol) provides encrypted inter-agent communication channels | `agent-os/modules/iatp/` | ⚠️ Partial |
-| C1.3 Data disposal | `retention_days` field in policy schema (default 90, minimum 1) | `agent-os/src/agent_os/policies/policy_schema.json:215-218` | ❌ Declaration only |
+| C1.1 Confidential data identification | PII detection: SSN (`\b\d{3}-\d{2}-\d{4}\b`) and credit card regex patterns in tool parameters | `agent-governance-python/agent-os/src/agent_os/mcp_gateway.py:34-42` | ⚠️ Partial (2 patterns only) |
+| C1.1 Secret detection | 5 regex patterns for API keys, passwords, tokens, AWS keys, private keys in generated code (CRITICAL severity) | `agent-governance-python/agent-os/src/agent_os/secure_codegen.py:346-360` | ⚠️ Partial |
+| C1.2 Data access controls | RBAC with action-level permissions; scoped capabilities with delegation narrowing (child ≤ parent) | `agent-governance-python/agent-os/src/agent_os/integrations/rbac.py:88-92` | ✅ Covered |
+| C1.2 Egress controls | Domain-level egress filtering with first-match-wins and default-deny | `agent-governance-python/agent-os/src/agent_os/egress_policy.py:113-139` | ✅ Covered |
+| C1.2 Cryptographic identity | Ed25519 key pairs for agent identity; DID format `did:agentmesh:{agentId}:{fingerprint}` | `agent-governance-python/agent-mesh/src/agentmesh/trust/handshake.py` | ✅ Covered |
+| C1.2 Signed audit | HMAC-SHA256 signatures on audit entries for tamper detection | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit_backends.py:61-87` | ⚠️ Partial |
+| C1.2 Channel encryption | IATP (Inter-Agent Trust Protocol) provides encrypted inter-agent communication channels | `agent-governance-python/agent-os/modules/iatp/` | ⚠️ Partial |
+| C1.3 Data disposal | `retention_days` field in policy schema (default 90, minimum 1) | `agent-governance-python/agent-os/src/agent_os/policies/policy_schema.json:215-218` | ❌ Declaration only |
 
 ```python
 # C1.2 in action: Egress Policy with Default-Deny
@@ -340,12 +340,12 @@ assert policy.is_allowed("api.openai.com")              # Allowed
 |---------|---------|----------|----------|
 | P1 Notice | No privacy notice mechanism | — | ❌ Gap |
 | P2 Choice and consent | No consent management | — | ❌ Gap |
-| P3 Collection limitation | `blocked_patterns` can restrict sensitive data in tool arguments (regex, substring, glob) | `agent-os/src/agent_os/integrations/base.py:695-701` | ⚠️ Partial — tool arguments only |
-| P4 Use, retention, disposal | `retention_days` schema field (default 90, minimum 1) — declaration only, not enforced at runtime | `agent-os/src/agent_os/policies/policy_schema.json:215-218` | ❌ Gap |
+| P3 Collection limitation | `blocked_patterns` can restrict sensitive data in tool arguments (regex, substring, glob) | `agent-governance-python/agent-os/src/agent_os/integrations/base.py:695-701` | ⚠️ Partial — tool arguments only |
+| P4 Use, retention, disposal | `retention_days` schema field (default 90, minimum 1) — declaration only, not enforced at runtime | `agent-governance-python/agent-os/src/agent_os/policies/policy_schema.json:215-218` | ❌ Gap |
 | P5 Access | No data subject access request (DSAR) support | — | ❌ Gap |
-| P6 Disclosure and notification | PII detection: 2 regex patterns (SSN, credit card) block matching tool parameters | `agent-os/src/agent_os/mcp_gateway.py:34-42` | ⚠️ Partial |
-| P6 Egress controls | Domain-level egress filtering prevents data exfiltration to unauthorized domains | `agent-os/src/agent_os/egress_policy.py:113-139` | ⚠️ Partial |
-| P6 Leak detection | Canary token detection catches system prompt leakage in user-visible output | `agent-os/src/agent_os/prompt_injection.py:595-612` | ⚠️ Partial |
+| P6 Disclosure and notification | PII detection: 2 regex patterns (SSN, credit card) block matching tool parameters | `agent-governance-python/agent-os/src/agent_os/mcp_gateway.py:34-42` | ⚠️ Partial |
+| P6 Egress controls | Domain-level egress filtering prevents data exfiltration to unauthorized domains | `agent-governance-python/agent-os/src/agent_os/egress_policy.py:113-139` | ⚠️ Partial |
+| P6 Leak detection | Canary token detection catches system prompt leakage in user-visible output | `agent-governance-python/agent-os/src/agent_os/prompt_injection.py:595-612` | ⚠️ Partial |
 | P7 Quality | No data quality or accuracy verification for personal data | — | ❌ Gap |
 | P8 Monitoring and enforcement | No privacy-specific monitoring or enforcement mechanisms | — | ❌ Gap |
 
@@ -377,7 +377,7 @@ assert policy.is_allowed("api.openai.com")              # Allowed
 
 All file paths referenced in this document, organized by package:
 
-### Agent OS (`agent-os/`)
+### Agent OS (`agent-governance-python/agent-os/`)
 | File | Evidence For |
 |------|-------------|
 | `src/agent_os/policies/evaluator.py` | CC5.1, PI1.1 — Policy evaluation engine |
@@ -397,7 +397,7 @@ All file paths referenced in this document, organized by package:
 | `examples/finance-soc2/` | CC6.1, CC6.3, CC7.1, CC7.2, CC7.3, CC8.1 — Reference SOC 2 implementation |
 | `modules/control-plane/src/agent_control_plane/flight_recorder.py:33-79` | PI1.5 — Flight recorder (hash integrity defect) |
 
-### AgentMesh (`agent-mesh/`)
+### AgentMesh (`agent-governance-python/agent-mesh/`)
 | File | Evidence For |
 |------|-------------|
 | `src/agentmesh/governance/audit.py:23-512` | PI1.5, CC7.1 — MerkleAuditChain, AuditLog, CloudEvents export |
@@ -405,7 +405,7 @@ All file paths referenced in this document, organized by package:
 | `src/agentmesh/trust/handshake.py:158-456` | CC6.6 — Ed25519 challenge-response handshake |
 | `src/agentmesh/core/identity/ca.py:6-44` | CC6.6 — SPIFFE certificate authority |
 
-### Agent Hypervisor (`agent-hypervisor/`)
+### Agent Hypervisor (`agent-governance-python/agent-hypervisor/`)
 | File | Evidence For |
 |------|-------------|
 | `src/hypervisor/models.py:46-69` | CC6.7 — Execution rings (Ring 0–3) |
@@ -413,7 +413,7 @@ All file paths referenced in this document, organized by package:
 | `src/hypervisor/audit/delta.py:59-127` | PI1.5 — Delta audit engine with SHA-256 chain verification |
 | `src/hypervisor/rings/breach_detector.py:1-60` | CC9.1 — Ring breach detection |
 
-### Agent SRE (`agent-sre/`)
+### Agent SRE (`agent-governance-python/agent-sre/`)
 | File | Evidence For |
 |------|-------------|
 | `src/agent_sre/cascade/circuit_breaker.py:22-90` | A1.2, CC9.2 — Circuit breakers |

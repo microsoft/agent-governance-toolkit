@@ -1,0 +1,295 @@
+{
+    "AgentOS Kernel Setup (Python)": {
+        "prefix": ["aos-kernel", "agent-os-kernel"],
+        "body": [
+            "from agent_os import KernelSpace, Policy",
+            "",
+            "# Load policy",
+            "policy = Policy.load(\"${1:policy.yaml}\")",
+            "",
+            "# Create kernel with policy",
+            "kernel = KernelSpace(policy=policy)",
+            "",
+            "@kernel.register",
+            "async def ${2:my_agent}(task: str):",
+            "    ${3:# Your agent code here}",
+            "    return result",
+            "",
+            "# Execute with safety guarantee",
+            "result = await kernel.execute(${2:my_agent}, \"${4:task}\")"
+        ],
+        "description": "Create a basic AgentOS kernel with policy enforcement"
+    },
+
+    "AgentOS Simple Agent (Python)": {
+        "prefix": ["aos-agent", "agent-os-agent"],
+        "body": [
+            "from agent_os import KernelSpace",
+            "",
+            "kernel = KernelSpace(policy=\"${1|strict,permissive,audit|}\")",
+            "",
+            "@kernel.register",
+            "async def ${2:agent_name}(task: str):",
+            "    \"\"\"${3:Agent description}\"\"\"",
+            "    $0",
+            "    return result"
+        ],
+        "description": "Create a simple AgentOS agent"
+    },
+
+    "AgentOS Policy (YAML)": {
+        "prefix": ["aos-policy", "agent-os-policy"],
+        "body": [
+            "kernel:",
+            "  version: \"1.0\"",
+            "  mode: ${1|strict,permissive,audit|}",
+            "",
+            "signals:",
+            "  - SIGSTOP",
+            "  - SIGKILL",
+            "  - SIGCONT",
+            "",
+            "policies:",
+            "  - name: ${2:policy_name}",
+            "    severity: ${3|critical,high,medium,low|}",
+            "    ${4:deny}:",
+            "      - action: ${5:action_type}",
+            "    action: SIGKILL",
+            "",
+            "observability:",
+            "  metrics: true",
+            "  traces: true",
+            "  flight_recorder: true"
+        ],
+        "description": "Create an AgentOS policy file"
+    },
+
+    "AgentOS Security Policy Rule": {
+        "prefix": ["aos-rule", "agent-os-rule"],
+        "body": [
+            "- name: ${1:rule_name}",
+            "  description: ${2:Rule description}",
+            "  severity: ${3|critical,high,medium,low|}",
+            "  category: ${4|security,compliance,operational|}",
+            "  deny:",
+            "    - action: ${5:action_type}",
+            "      ${6:patterns}:",
+            "        - '${7:pattern}'",
+            "  action: ${8|SIGKILL,SIGSTOP|}"
+        ],
+        "description": "Create an AgentOS policy rule"
+    },
+
+    "AgentOS VFS Memory Access (Python)": {
+        "prefix": ["aos-vfs", "agent-os-vfs"],
+        "body": [
+            "from agent_os import AgentVFS",
+            "",
+            "vfs = AgentVFS(agent_id=\"${1:agent_id}\")",
+            "",
+            "# Write to working memory",
+            "vfs.write(\"/mem/working/${2:file.txt}\", ${3:content})",
+            "",
+            "# Read from memory",
+            "data = vfs.read(\"/mem/working/${2:file.txt}\")",
+            "",
+            "# Read-only policy access",
+            "rules = vfs.read(\"/policy/rules.yaml\")"
+        ],
+        "description": "Access AgentOS Virtual File System"
+    },
+
+    "AgentOS Signal Handling (Python)": {
+        "prefix": ["aos-signals", "agent-os-signals"],
+        "body": [
+            "from agent_os import SignalDispatcher, AgentSignal",
+            "",
+            "dispatcher = SignalDispatcher()",
+            "",
+            "# Pause agent",
+            "dispatcher.signal(\"${1:agent_id}\", AgentSignal.SIGSTOP)",
+            "",
+            "# Resume agent",
+            "dispatcher.signal(\"${1:agent_id}\", AgentSignal.SIGCONT)",
+            "",
+            "# Terminate agent",
+            "dispatcher.signal(\"${1:agent_id}\", AgentSignal.SIGKILL)"
+        ],
+        "description": "AgentOS signal management"
+    },
+
+    "AgentOS LangChain Integration (Python)": {
+        "prefix": ["aos-langchain", "agent-os-langchain"],
+        "body": [
+            "from langchain.agents import AgentExecutor",
+            "from agent_os import KernelSpace",
+            "from agent_os.integrations import LangChainKernel",
+            "",
+            "# Create your LangChain agent",
+            "agent_executor = AgentExecutor(${1:agent}, ${2:tools})",
+            "",
+            "# Wrap with Agent OS governance",
+            "kernel = LangChainKernel(policy=\"strict\")",
+            "governed_agent = kernel.wrap(agent_executor)",
+            "",
+            "# Execute with safety guarantee",
+            "result = await governed_agent.invoke({\"input\": \"${3:task}\"})"
+        ],
+        "description": "Wrap LangChain agent with AgentOS governance"
+    },
+
+    "AgentOS Safe Toolkit (Python)": {
+        "prefix": ["aos-toolkit", "agent-os-toolkit"],
+        "body": [
+            "from atr.tools.safe import create_safe_toolkit",
+            "",
+            "toolkit = create_safe_toolkit(\"${1|standard,minimal,extended|}\")",
+            "",
+            "# Available tools",
+            "http = toolkit[\"http\"]        # Rate-limited HTTP",
+            "files = toolkit[\"files\"]      # Sandboxed file reader",
+            "calc = toolkit[\"calculator\"]  # Safe math",
+            "json_tool = toolkit[\"json\"]   # Safe JSON parsing",
+            "",
+            "# Use a tool",
+            "result = await http.get(\"${2:https://api.example.com}\")"
+        ],
+        "description": "Create safe tools toolkit for agents"
+    },
+
+    "AgentOS CMVK Review (Python)": {
+        "prefix": ["aos-cmvk", "agent-os-cmvk"],
+        "body": [
+            "from agent_os.cmvk import CMVKClient",
+            "",
+            "cmvk = CMVKClient(",
+            "    models=[\"gpt-4\", \"claude-sonnet-4\", \"gemini-pro\"],",
+            "    consensus_threshold=${1:0.8}",
+            ")",
+            "",
+            "# Verify code with multiple models",
+            "result = await cmvk.verify(",
+            "    code=\"\"\"${2:code_to_verify}\"\"\",",
+            "    language=\"${3|python,javascript,typescript|}\"",
+            ")",
+            "",
+            "if result.consensus >= ${1:0.8}:",
+            "    print(\"Code approved by model consensus\")",
+            "else:",
+            "    print(f\"Issues found: {result.issues}\")"
+        ],
+        "description": "CMVK Verification Kernel review"
+    },
+
+    "AgentOS Compliance Policy": {
+        "prefix": ["aos-compliance", "agent-os-compliance"],
+        "body": [
+            "policies:",
+            "  - name: ${1|soc2,gdpr,hipaa,pci|}_compliance",
+            "    description: ${2:Compliance description}",
+            "    severity: critical",
+            "    category: compliance",
+            "    scope: [input, output]",
+            "    deny:",
+            "      - patterns:",
+            "          - '\\\\b\\\\d{3}-\\\\d{2}-\\\\d{4}\\\\b'  # SSN",
+            "          - '\\\\b(?:4[0-9]{12}(?:[0-9]{3})?)\\\\b'  # Credit card",
+            "    action: SIGKILL",
+            "    audit: always",
+            "",
+            "audit:",
+            "  enabled: true",
+            "  format: json",
+            "  retention_days: 365"
+        ],
+        "description": "Create compliance-focused policy"
+    },
+
+    "AgentOS Rate Limiting Policy": {
+        "prefix": ["aos-ratelimit", "agent-os-ratelimit"],
+        "body": [
+            "policies:",
+            "  - name: rate_limiting",
+            "    description: Prevent resource abuse",
+            "    severity: medium",
+            "    category: operational",
+            "    limits:",
+            "      - action: ${1|llm_call,http_request,database_query|}",
+            "        max_per_minute: ${2:60}",
+            "        max_per_hour: ${3:1000}",
+            "    action: SIGSTOP",
+            "    message: \"Rate limit exceeded\""
+        ],
+        "description": "Create rate limiting policy"
+    },
+
+    "AgentOS TypeScript SDK": {
+        "prefix": ["aos-ts", "agent-os-typescript"],
+        "body": [
+            "import { AgentOS, PolicyEngine } from '@agent-governance-python/agent-os/sdk';",
+            "",
+            "const agentOS = new AgentOS({",
+            "  policy: '${1|strict,permissive|}',",
+            "  apiKey: process.env.AGENT_OS_KEY",
+            "});",
+            "",
+            "// Execute with safety guarantee",
+            "const result = await agentOS.execute(async () => {",
+            "  ${2:// Your agent code here}",
+            "});",
+            "",
+            "// Check policy compliance",
+            "const isAllowed = await agentOS.checkPolicy({",
+            "  action: '${3:action}',",
+            "  params: {}",
+            "});"
+        ],
+        "description": "AgentOS TypeScript SDK setup"
+    },
+
+    "AgentOS Audit Configuration": {
+        "prefix": ["aos-audit", "agent-os-audit"],
+        "body": [
+            "audit:",
+            "  enabled: true",
+            "  log_path: \"./logs/agent-os-audit.log\"",
+            "  include:",
+            "    - all_actions",
+            "    - policy_checks",
+            "    - signals",
+            "    - violations",
+            "  format: ${1|json,text|}",
+            "  fields:",
+            "    - timestamp",
+            "    - agent_id",
+            "    - action",
+            "    - policy",
+            "    - result",
+            "  retention_days: ${2:365}",
+            "  export:",
+            "    enabled: ${3|true,false|}",
+            "    destinations:",
+            "      - type: ${4|syslog,webhook,file|}"
+        ],
+        "description": "Configure audit logging"
+    },
+
+    "AgentOS GitHub Action": {
+        "prefix": ["aos-gha", "agent-os-github-action"],
+        "body": [
+            "name: Agent OS Security",
+            "on: [push, pull_request]",
+            "",
+            "jobs:",
+            "  audit:",
+            "    runs-on: ubuntu-latest",
+            "    steps:",
+            "      - uses: actions/checkout@v4",
+            "      - uses: microsoft/agent-governance-python/agent-os/.github/actions/agent-os-audit@main",
+            "        with:",
+            "          fail-on-violation: ${1|true,false|}",
+            "          policy-file: ${2:.agents/policy.yaml}"
+        ],
+        "description": "AgentOS GitHub Actions workflow"
+    }
+}

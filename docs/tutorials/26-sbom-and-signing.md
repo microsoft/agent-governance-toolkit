@@ -485,7 +485,7 @@ gh attestation verify dist/artifact.whl \
 
 | Component | Location |
 |-----------|----------|
-| Security scanner | `agent-compliance/src/agent_compliance/security/scanner.py` |
+| Security scanner | `agent-governance-python/agent-compliance/src/agent_compliance/security/scanner.py` |
 | SBOM workflow | `.github/workflows/sbom.yml` |
 | Publish workflow | `.github/workflows/publish.yml` |
 | Ed25519 identity (TS) | `agent-governance-typescript/src/identity.ts` |

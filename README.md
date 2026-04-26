@@ -156,16 +156,16 @@ result := client.ExecuteWithGovernance("data.read", nil)
 
 | Capability | What It Does | Links |
 |---|---|---|
-| **Policy Engine** | Every action evaluated before execution — sub-millisecond, deterministic. Supports YAML, OPA/Rego, and Cedar policies | [Agent OS](agent-os/) · [Benchmarks](docs/BENCHMARKS.md) |
-| **Zero-Trust Identity** | Ed25519 + quantum-safe ML-DSA-65 credentials, trust scoring (0–1000), SPIFFE/SVID | [AgentMesh](agent-mesh/) |
-| **Execution Sandboxing** | 4-tier privilege rings, saga orchestration, kill switch | [Runtime](agent-runtime/) · [Hypervisor](agent-hypervisor/) |
-| **Agent SRE** | SLOs, error budgets, replay debugging, chaos engineering, circuit breakers | [Agent SRE](agent-sre/) |
-| **MCP Security Scanner** | Detect tool poisoning, typosquatting, hidden instructions in MCP definitions | [MCP Scanner](agent-os/src/agent_os/mcp_security.py) |
-| **Shadow AI Discovery** | Find unregistered agents across processes, configs, and repos | [Agent Discovery](agent-discovery/) |
-| **Agent Lifecycle** | Provisioning → credential rotation → orphan detection → decommissioning | [Lifecycle](agent-mesh/src/agentmesh/lifecycle/) |
+| **Policy Engine** | Every action evaluated before execution — sub-millisecond, deterministic. Supports YAML, OPA/Rego, and Cedar policies | [Agent OS](agent-governance-python/agent-os/) · [Benchmarks](docs/BENCHMARKS.md) |
+| **Zero-Trust Identity** | Ed25519 + quantum-safe ML-DSA-65 credentials, trust scoring (0–1000), SPIFFE/SVID | [AgentMesh](agent-governance-python/agent-mesh/) |
+| **Execution Sandboxing** | 4-tier privilege rings, saga orchestration, kill switch | [Runtime](agent-governance-python/agent-runtime/) · [Hypervisor](agent-governance-python/agent-hypervisor/) |
+| **Agent SRE** | SLOs, error budgets, replay debugging, chaos engineering, circuit breakers | [Agent SRE](agent-governance-python/agent-sre/) |
+| **MCP Security Scanner** | Detect tool poisoning, typosquatting, hidden instructions in MCP definitions | [MCP Scanner](agent-governance-python/agent-os/src/agent_os/mcp_security.py) |
+| **Shadow AI Discovery** | Find unregistered agents across processes, configs, and repos | [Agent Discovery](agent-governance-python/agent-discovery/) |
+| **Agent Lifecycle** | Provisioning → credential rotation → orphan detection → decommissioning | [Lifecycle](agent-governance-python/agent-mesh/src/agentmesh/lifecycle/) |
 | **Governance Dashboard** | Real-time fleet visibility — health, trust, compliance, audit events | [Dashboard](demo/governance-dashboard/) |
-| **Unified CLI** | `agt verify`, `agt doctor`, `agt lint-policy` — one command for everything | [CLI](agent-compliance/src/agent_compliance/cli/agt.py) |
-| **PromptDefense Evaluator** | 12-vector prompt injection audit for compliance testing | [Evaluator](agent-compliance/src/agent_compliance/prompt_defense.py) |
+| **Unified CLI** | `agt verify`, `agt doctor`, `agt lint-policy` — one command for everything | [CLI](agent-governance-python/agent-compliance/src/agent_compliance/cli/agt.py) |
+| **PromptDefense Evaluator** | 12-vector prompt injection audit for compliance testing | [Evaluator](agent-governance-python/agent-compliance/src/agent_compliance/prompt_defense.py) |
 
 ---
 
@@ -186,7 +186,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 | [Dify](https://github.com/langgenius/dify) | Plugin |
 | [Azure AI Foundry](https://learn.microsoft.com/azure/ai-studio/) | Deployment Guide |
 
-Full list: [Framework Integrations](agentmesh-integrations/) · [Quickstart Examples](examples/quickstart/)
+Full list: [Framework Integrations](agent-governance-python/agentmesh-integrations/) · [Quickstart Examples](examples/quickstart/)
 
 ---
 
@@ -249,13 +249,13 @@ See **[Language Package Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detail
 |---------|------|-------------|
 | Agent OS | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | Policy engine, capability model, audit logging, MCP gateway |
 | AgentMesh | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | Zero-trust identity, trust scoring, A2A/MCP/IATP bridges |
-| Agent Runtime | [`agentmesh-runtime`](agent-runtime/) | Privilege rings, saga orchestration, termination control |
-| Agent SRE | [`agent-sre`](https://pypi.org/project/agent-sre/) | SLOs, error budgets, chaos engineering, circuit breakers |
+| Agent Runtime | [`agentmesh-runtime`](agent-governance-python/agent-runtime/) | Privilege rings, saga orchestration, termination control |
+| Agent SRE | [`agent-sre`](https://pypi.org/project/agent-governance-python/agent-sre/) | SLOs, error budgets, chaos engineering, circuit breakers |
 | Agent Compliance | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | OWASP verification, integrity checks, policy linting |
-| Agent Discovery | [`agent-discovery`](agent-discovery/) | Shadow AI discovery, inventory, risk scoring |
-| Agent Hypervisor | [`agent-hypervisor`](agent-hypervisor/) | Reversibility verification, execution plan validation |
-| Agent Marketplace | [`agentmesh-marketplace`](agent-marketplace/) | Plugin lifecycle management |
-| Agent Lightning | [`agentmesh-lightning`](agent-lightning/) | RL training governance |
+| Agent Discovery | [`agent-discovery`](agent-governance-python/agent-discovery/) | Shadow AI discovery, inventory, risk scoring |
+| Agent Hypervisor | [`agent-hypervisor`](agent-governance-python/agent-hypervisor/) | Reversibility verification, execution plan validation |
+| Agent Marketplace | [`agentmesh-marketplace`](agent-governance-python/agent-marketplace/) | Plugin lifecycle management |
+| Agent Lightning | [`agentmesh-lightning`](agent-governance-python/agent-lightning/) | RL training governance |
 
 </details>
 
@@ -273,7 +273,7 @@ See **[Language Package Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detail
 - [Architecture](docs/ARCHITECTURE.md) — System design, security model, trust scoring
 - [Architecture Decisions](docs/adr/README.md) — ADR log
 - [Threat Model](docs/THREAT_MODEL.md) — Trust boundaries and STRIDE analysis
-- [API: Agent OS](agent-os/README.md) · [AgentMesh](agent-mesh/README.md) · [Agent SRE](agent-sre/README.md)
+- [API: Agent OS](agent-governance-python/agent-os/README.md) · [AgentMesh](agent-governance-python/agent-mesh/README.md) · [Agent SRE](agent-governance-python/agent-sre/README.md)
 
 **Compliance & Deployment**
 - [Known Limitations](docs/LIMITATIONS.md) — Honest design boundaries and recommended layered defense
@@ -282,7 +282,7 @@ See **[Language Package Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detail
 - [NIST AI RMF Alignment](docs/compliance/nist-ai-rmf-alignment.md) · [EU AI Act](docs/compliance/) · [SOC 2 Mapping](docs/compliance/soc2-mapping.md)
 
 **Extensions**
-- [VS Code Extension](agent-os-vscode/) · [Framework Integrations](agentmesh-integrations/)
+- [VS Code Extension](agent-governance-typescript/agent-os-vscode/) · [Framework Integrations](agent-governance-python/agentmesh-integrations/)
 
 ---
 

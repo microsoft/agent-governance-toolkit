@@ -15,10 +15,10 @@ The ecosystem consists of 5 interoperating packages:
 
 | Package | Purpose | PyPI |
 |---------|---------|------|
-| **Agent OS** | Core governance kernel (policy engine, capability sandbox, VFS) | [agent-os](https://pypi.org/project/agent-os/) |
-| **Agent Mesh** | Inter-agent trust layer (DID identity, IATP protocol) | [agent-mesh](https://pypi.org/project/agent-mesh/) |
+| **Agent OS** | Core governance kernel (policy engine, capability sandbox, VFS) | [agent-os](https://pypi.org/project/agent-governance-python/agent-os/) |
+| **Agent Mesh** | Inter-agent trust layer (DID identity, IATP protocol) | [agent-mesh](https://pypi.org/project/agent-governance-python/agent-mesh/) |
 | **Agent Runtime** | Execution isolation (ring model, kill switch) | [agentmesh-runtime](https://pypi.org/project/agentmesh-runtime/) |
-| **Agent SRE** | Observability & reliability (circuit breakers, anomaly detection) | [agent-sre](https://pypi.org/project/agent-sre/) |
+| **Agent SRE** | Observability & reliability (circuit breakers, anomaly detection) | [agent-sre](https://pypi.org/project/agent-governance-python/agent-sre/) |
 | **Agent Governance** | Meta-framework & compliance mapping | [agent-governance](https://pypi.org/project/agent-governance/) |
 
 ## Key Metrics
@@ -104,4 +104,4 @@ As AI agents become increasingly autonomous, governance infrastructure is critic
 - [Agent OS](https://github.com/microsoft/agent-governance-toolkit) | [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit) | [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) | [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) | [Agent Governance](https://github.com/microsoft/agent-governance-toolkit)
 - [Microsoft mono-repo](https://github.com/microsoft/agent-governance-toolkit) (pending public release)
 - [OWASP Compliance Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
-- [PyPI: agent-os](https://pypi.org/project/agent-os/)
+- [PyPI: agent-os](https://pypi.org/project/agent-governance-python/agent-os/)

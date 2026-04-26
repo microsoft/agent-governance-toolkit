@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0,<62.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent_os_observability"
+version = "3.2.2"
+description = "Production observability for Agent OS - OpenTelemetry traces, Prometheus metrics, Grafana dashboards"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
+]
+keywords = [
+    "observability",
+    "opentelemetry",
+    "prometheus",
+    "grafana",
+    "agent-os",
+    "monitoring",
+    "cmvk"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Monitoring",
+]
+dependencies = [
+    "opentelemetry-api>=1.20.0,<2.0",
+    "opentelemetry-sdk>=1.20.0,<2.0",
+    "opentelemetry-exporter-otlp>=1.20.0,<2.0",
+    "prometheus-client>=0.17.0,<1.0",
+]
+
+[project.optional-dependencies]
+full = [
+    "opentelemetry-instrumentation-httpx>=0.41b0,<1.0",
+    "opentelemetry-instrumentation-asyncio>=0.41b0,<1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/modules/observability"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+
+[tool.setuptools.packages.find]
+where = ["src"]

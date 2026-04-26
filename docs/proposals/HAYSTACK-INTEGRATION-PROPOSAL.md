@@ -17,7 +17,7 @@ Integration adapter connecting Haystack pipelines with AGT governance. Implement
 
 ## Implementation
 
-- **Package:** `agentmesh-integrations/haystack-agentmesh/`
+- **Package:** `agent-governance-python/agentmesh-integrations/haystack-agentmesh/`
 - **Module:** `src/haystack_agentmesh/`
 
 ### Components
@@ -63,4 +63,4 @@ This ensures components function as regular Python classes even without Haystack
 
 - [Haystack SuperComponents docs](https://docs.haystack.deepset.ai/docs/supercomponents)
 - [Contributing guide](https://github.com/deepset-ai/haystack-core-integrations/blob/main/CONTRIBUTING.md)
-- [Package README](../../agentmesh-integrations/haystack-agentmesh/README.md)
+- [Package README](../../agent-governance-python/agentmesh-integrations/haystack-agentmesh/README.md)

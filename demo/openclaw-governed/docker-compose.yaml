@@ -17,7 +17,7 @@ services:
   governance-sidecar:
     build:
       context: ../..
-      dockerfile: agent-os/Dockerfile.sidecar
+      dockerfile: agent-governance-python/agent-os/Dockerfile.sidecar
     ports:
       - "8081:8081"
     environment:

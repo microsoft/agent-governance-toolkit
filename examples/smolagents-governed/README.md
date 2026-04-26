@@ -234,9 +234,9 @@ Demonstrates the cryptographic integrity guarantees of the audit trail:
 | `smolagents_governance_demo.py` | Full 9-scenario showcase |
 | `policies/research_governance_policy.yaml` | Role-based + PII + injection + delegation policies |
 | `policies/model_safety_policy.yaml` | Model trust and publishing quality gates |
-| `agent-os/src/agent_os/integrations/smolagents_adapter.py` | smolagents governance kernel |
-| `agent-mesh/src/agentmesh/governance/audit.py` | Merkle-chained audit log |
-| `agent-sre/src/agent_sre/anomaly/rogue_detector.py` | Rogue agent detector |
+| `agent-governance-python/agent-os/src/agent_os/integrations/smolagents_adapter.py` | smolagents governance kernel |
+| `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py` | Merkle-chained audit log |
+| `agent-governance-python/agent-sre/src/agent_sre/anomaly/rogue_detector.py` | Rogue agent detector |
 
 ## LLM Configuration
 

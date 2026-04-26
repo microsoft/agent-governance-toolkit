@@ -910,14 +910,14 @@ print(result)
 
 | Component | Location |
 |-----------|----------|
-| PluginManifest / PluginType | `agent-marketplace/src/agent_marketplace/manifest.py` |
-| PluginRegistry | `agent-marketplace/src/agent_marketplace/registry.py` |
-| PluginInstaller | `agent-marketplace/src/agent_marketplace/installer.py` |
-| PluginSigner / verify_signature | `agent-marketplace/src/agent_marketplace/signing.py` |
-| CLI commands | `agent-marketplace/src/agent_marketplace/cli_commands.py` |
-| PluginSandbox | `agent-mesh/src/agentmesh/marketplace/sandbox.py` |
-| Backward-compat shim | `agent-mesh/src/agentmesh/marketplace/__init__.py` |
-| Tests | `agent-marketplace/tests/test_marketplace.py` |
+| PluginManifest / PluginType | `agent-governance-python/agent-marketplace/src/agent_marketplace/manifest.py` |
+| PluginRegistry | `agent-governance-python/agent-marketplace/src/agent_marketplace/registry.py` |
+| PluginInstaller | `agent-governance-python/agent-marketplace/src/agent_marketplace/installer.py` |
+| PluginSigner / verify_signature | `agent-governance-python/agent-marketplace/src/agent_marketplace/signing.py` |
+| CLI commands | `agent-governance-python/agent-marketplace/src/agent_marketplace/cli_commands.py` |
+| PluginSandbox | `agent-governance-python/agent-mesh/src/agentmesh/marketplace/sandbox.py` |
+| Backward-compat shim | `agent-governance-python/agent-mesh/src/agentmesh/marketplace/__init__.py` |
+| Tests | `agent-governance-python/agent-marketplace/tests/test_marketplace.py` |
 
 ---
 

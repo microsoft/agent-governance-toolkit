@@ -109,23 +109,23 @@ validation, versioning, conflict resolution, and multiple backend support.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| Core policy evaluator | `agent-os/src/agent_os/policies/evaluator.py` | `PolicyEvaluator` |
-| Async policy evaluator | `agent-os/src/agent_os/policies/async_evaluator.py` | `AsyncPolicyEvaluator` |
-| Shared/cross-project policies | `agent-os/src/agent_os/policies/shared.py` | `SharedPolicyEvaluator` |
-| AgentMesh policy engine | `agent-mesh/src/agentmesh/governance/policy.py:317` | `PolicyEngine` |
-| AgentMesh policy evaluator | `agent-mesh/src/agentmesh/governance/policy_evaluator.py:33` | `PolicyEvaluator` |
+| Core policy evaluator | `agent-governance-python/agent-os/src/agent_os/policies/evaluator.py` | `PolicyEvaluator` |
+| Async policy evaluator | `agent-governance-python/agent-os/src/agent_os/policies/async_evaluator.py` | `AsyncPolicyEvaluator` |
+| Shared/cross-project policies | `agent-governance-python/agent-os/src/agent_os/policies/shared.py` | `SharedPolicyEvaluator` |
+| AgentMesh policy engine | `agent-governance-python/agent-mesh/src/agentmesh/governance/policy.py:317` | `PolicyEngine` |
+| AgentMesh policy evaluator | `agent-governance-python/agent-mesh/src/agentmesh/governance/policy_evaluator.py:33` | `PolicyEvaluator` |
 | .NET policy engine | `agent-governance-dotnet/src/AgentGovernance/Policy/PolicyEngine.cs:16` | `PolicyEngine` |
-| TypeScript MCP policy engine | `agent-os/extensions/mcp-server/src/services/policy-engine.ts:208` | `PolicyEngine` |
-| VS Code policy engine | `agent-os-vscode/src/policyEngine.ts:51` | `PolicyEngine` |
-| Contextual policy engine | `agent-os/src/agent_os/execution_context_policy.py:62` | `ContextualPolicyEngine` |
-| Semantic policy engine | `agent-os/src/agent_os/semantic_policy.py:248` | `SemanticPolicyEngine` |
-| IATP policy engine | `agent-os/modules/iatp/iatp/policy_engine.py:78` | `IATPPolicyEngine` |
-| Control-plane policy engine | `agent-os/modules/control-plane/src/agent_control_plane/policy_engine.py:178` | `PolicyEngine` |
-| Conflict resolution | `agent-os/src/agent_os/policies/conflict_resolution.py` | `ResolutionResult` |
-| Policy schema (JSON) | `agent-os/src/agent_os/policies/policy_schema.json` | JSON Schema |
-| OPA integration | `agent-mesh/src/agentmesh/governance/opa.py` | OPA/Rego backend |
-| Cedar integration | `agent-mesh/src/agentmesh/governance/cedar.py` | Cedar backend |
-| Policy templates | `agent-os/templates/policies/*.yaml` | GDPR, production, enterprise, data-protection, content-safety |
+| TypeScript MCP policy engine | `agent-governance-python/agent-os/extensions/mcp-server/src/services/policy-engine.ts:208` | `PolicyEngine` |
+| VS Code policy engine | `agent-governance-typescript/agent-os-vscode/src/policyEngine.ts:51` | `PolicyEngine` |
+| Contextual policy engine | `agent-governance-python/agent-os/src/agent_os/execution_context_policy.py:62` | `ContextualPolicyEngine` |
+| Semantic policy engine | `agent-governance-python/agent-os/src/agent_os/semantic_policy.py:248` | `SemanticPolicyEngine` |
+| IATP policy engine | `agent-governance-python/agent-os/modules/iatp/iatp/policy_engine.py:78` | `IATPPolicyEngine` |
+| Control-plane policy engine | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/policy_engine.py:178` | `PolicyEngine` |
+| Conflict resolution | `agent-governance-python/agent-os/src/agent_os/policies/conflict_resolution.py` | `ResolutionResult` |
+| Policy schema (JSON) | `agent-governance-python/agent-os/src/agent_os/policies/policy_schema.json` | JSON Schema |
+| OPA integration | `agent-governance-python/agent-mesh/src/agentmesh/governance/opa.py` | OPA/Rego backend |
+| Cedar integration | `agent-governance-python/agent-mesh/src/agentmesh/governance/cedar.py` | Cedar backend |
+| Policy templates | `agent-governance-python/agent-os/templates/policies/*.yaml` | GDPR, production, enterprise, data-protection, content-safety |
 
 **How AGT addresses this subcategory:** Policy-as-code with YAML templates
 supports declarative governance across environments. Multiple backend engines
@@ -147,17 +147,17 @@ attribution, and joint liability tracking.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| Merkle audit chain | `agent-mesh/src/agentmesh/governance/audit.py:153` | `MerkleAuditChain` |
-| Flight recorder (control-plane) | `agent-os/modules/control-plane/src/agent_control_plane/flight_recorder.py:33` | `FlightRecorder` |
-| Flight recorder (IATP) | `agent-os/modules/iatp/iatp/telemetry/__init__.py:21` | `FlightRecorder` |
-| Flight recorder (Lightning) | `agent-lightning/src/agent_lightning_gov/emitter.py:56` | `FlightRecorderEmitter` |
-| Hypervisor audit | `agent-hypervisor/audit/delta.py` | `DeltaEngine` |
-| Shapley attribution | `agent-hypervisor/src/hypervisor/liability/attribution.py` | Shapley-value fault attribution |
-| Joint liability | `agent-hypervisor/src/hypervisor/liability/__init__.py` | Joint liability module |
-| Liability ledger | `agent-hypervisor/src/hypervisor/liability/ledger.py` | Liability tracking |
-| Quarantine system | `agent-hypervisor/src/hypervisor/liability/quarantine.py` | Agent quarantine |
-| RBAC | `agent-os/src/agent_os/integrations/rbac.py` | 4 roles: READER, WRITER, ADMIN, AUDITOR |
-| DID-based attribution | `agent-mesh/src/agentmesh/governance/audit.py` | `agent_did` field per entry |
+| Merkle audit chain | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py:153` | `MerkleAuditChain` |
+| Flight recorder (control-plane) | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/flight_recorder.py:33` | `FlightRecorder` |
+| Flight recorder (IATP) | `agent-governance-python/agent-os/modules/iatp/iatp/telemetry/__init__.py:21` | `FlightRecorder` |
+| Flight recorder (Lightning) | `agent-governance-python/agent-lightning/src/agent_lightning_gov/emitter.py:56` | `FlightRecorderEmitter` |
+| Hypervisor audit | `agent-governance-python/agent-hypervisor/audit/delta.py` | `DeltaEngine` |
+| Shapley attribution | `agent-governance-python/agent-hypervisor/src/hypervisor/liability/attribution.py` | Shapley-value fault attribution |
+| Joint liability | `agent-governance-python/agent-hypervisor/src/hypervisor/liability/__init__.py` | Joint liability module |
+| Liability ledger | `agent-governance-python/agent-hypervisor/src/hypervisor/liability/ledger.py` | Liability tracking |
+| Quarantine system | `agent-governance-python/agent-hypervisor/src/hypervisor/liability/quarantine.py` | Agent quarantine |
+| RBAC | `agent-governance-python/agent-os/src/agent_os/integrations/rbac.py` | 4 roles: READER, WRITER, ADMIN, AUDITOR |
+| DID-based attribution | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py` | `agent_did` field per entry |
 
 **How AGT addresses this subcategory:** Merkle hash chains provide tamper-evident
 audit trails where each entry is cryptographically linked to its predecessor.
@@ -205,17 +205,17 @@ trust tiers, MCP gateway controls, AI-BOM, and dependency confusion protection.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| MCP security scanner | `agent-os/src/agent_os/mcp_security.py:324` | `MCPSecurityScanner` |
-| MCP gateway | `agent-os/src/agent_os/mcp_gateway.py:99` | `MCPGateway` |
-| Plugin signing | `agent-marketplace/src/agent_marketplace/signing.py:22` | `PluginSigner` (Ed25519) |
-| Plugin manifest | `agent-marketplace/src/agent_marketplace/manifest.py:36` | `PluginManifest` |
-| MCP trust proxy | `agent-mesh/packages/mcp-proxy/` | TypeScript proxy with policy enforcement |
-| Trust tiers | `agent-marketplace/src/agent_marketplace/trust_tiers.py` | `filter_capabilities()` |
-| Usage trust scoring | `agent-marketplace/src/agent_marketplace/usage_trust.py:48` | `UsageTrustScorer` |
-| Marketplace policy | `agent-marketplace/src/agent_marketplace/marketplace_policy.py` | `MCPServerPolicy` |
-| Egress policy | `agent-os/src/agent_os/egress_policy.py:50` | `EgressPolicy` |
-| AI-BOM | `agent-mesh/docs/RFC_AGENT_SBOM.md` | AI Bill of Materials v2.0 |
-| Federation | `agent-mesh/src/agentmesh/governance/federation.py` | Cross-org federation |
+| MCP security scanner | `agent-governance-python/agent-os/src/agent_os/mcp_security.py:324` | `MCPSecurityScanner` |
+| MCP gateway | `agent-governance-python/agent-os/src/agent_os/mcp_gateway.py:99` | `MCPGateway` |
+| Plugin signing | `agent-governance-python/agent-marketplace/src/agent_marketplace/signing.py:22` | `PluginSigner` (Ed25519) |
+| Plugin manifest | `agent-governance-python/agent-marketplace/src/agent_marketplace/manifest.py:36` | `PluginManifest` |
+| MCP trust proxy | `agent-governance-python/agent-mesh/packages/mcp-proxy/` | TypeScript proxy with policy enforcement |
+| Trust tiers | `agent-governance-python/agent-marketplace/src/agent_marketplace/trust_tiers.py` | `filter_capabilities()` |
+| Usage trust scoring | `agent-governance-python/agent-marketplace/src/agent_marketplace/usage_trust.py:48` | `UsageTrustScorer` |
+| Marketplace policy | `agent-governance-python/agent-marketplace/src/agent_marketplace/marketplace_policy.py` | `MCPServerPolicy` |
+| Egress policy | `agent-governance-python/agent-os/src/agent_os/egress_policy.py:50` | `EgressPolicy` |
+| AI-BOM | `agent-governance-python/agent-mesh/docs/RFC_AGENT_SBOM.md` | AI Bill of Materials v2.0 |
+| Federation | `agent-governance-python/agent-mesh/src/agentmesh/governance/federation.py` | Cross-org federation |
 
 **How AGT addresses this subcategory:** Ed25519-signed plugins and manifest
 validation ensure supply chain integrity. The five-tier trust scoring system
@@ -235,10 +235,10 @@ and weights versioning.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| EU AI Act risk classifier | `agent-mesh/src/agentmesh/governance/eu_ai_act.py` | `RiskLevel`, `RiskClassifier`, `AgentRiskProfile` |
-| Compliance framework | `agent-mesh/src/agentmesh/governance/compliance.py` | Multi-framework compliance |
-| Control-plane compliance | `agent-os/modules/control-plane/src/agent_control_plane/compliance.py` | Compliance engine |
-| Rogue agent detector | `agent-sre/src/agent_sre/anomaly/rogue_detector.py:304` | `RogueAgentDetector` |
+| EU AI Act risk classifier | `agent-governance-python/agent-mesh/src/agentmesh/governance/eu_ai_act.py` | `RiskLevel`, `RiskClassifier`, `AgentRiskProfile` |
+| Compliance framework | `agent-governance-python/agent-mesh/src/agentmesh/governance/compliance.py` | Multi-framework compliance |
+| Control-plane compliance | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/compliance.py` | Compliance engine |
+| Rogue agent detector | `agent-governance-python/agent-sre/src/agent_sre/anomaly/rogue_detector.py:304` | `RogueAgentDetector` |
 
 **How AGT addresses this subcategory:** EU AI Act four-tier risk classification
 (`UNACCEPTABLE`, `HIGH`, `LIMITED`, `MINIMAL`) provides structured risk
@@ -264,7 +264,7 @@ AGT maintains dedicated compliance mapping documents for seven major frameworks.
 | ATF Conformance | `docs/compliance/atf-conformance-assessment.md` | 25/25 requirements (7 partial) |
 | OWASP LLM Top 10 | `docs/compliance/owasp-llm-top10-mapping.md` | Full mapping |
 | NIST RFI (2026) | `docs/compliance/nist-rfi-2026-00206.md` | Question-by-question mapping |
-| South Korea AI Framework Act | `agent-compliance/docs/compliance/south-korea-ai-framework-act.md` | Mapped |
+| South Korea AI Framework Act | `agent-governance-python/agent-compliance/docs/compliance/south-korea-ai-framework-act.md` | Mapped |
 
 **How AGT addresses this subcategory:** Each compliance document systematically
 maps AGT capabilities to specific regulatory requirements, identifies gaps, and
@@ -283,11 +283,11 @@ to the eighth framework.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| Execution context | `agent-os/src/agent_os/execution_context_policy.py:62` | `ContextualPolicyEngine` |
-| Stateless kernel context | `agent-os/src/agent_os/stateless.py` | `ExecutionContext` |
-| Governance tiers | `agent-hypervisor/src/hypervisor/models.py` | Ring 0–3 privilege separation |
-| Policy modes | `agent-os/src/agent_os/policies/schema.py:34-41` | `strict`, `permissive`, `audit` |
-| Context budget | `agent-os/src/agent_os/context_budget.py` | `ContextScheduler` |
+| Execution context | `agent-governance-python/agent-os/src/agent_os/execution_context_policy.py:62` | `ContextualPolicyEngine` |
+| Stateless kernel context | `agent-governance-python/agent-os/src/agent_os/stateless.py` | `ExecutionContext` |
+| Governance tiers | `agent-governance-python/agent-hypervisor/src/hypervisor/models.py` | Ring 0–3 privilege separation |
+| Policy modes | `agent-governance-python/agent-os/src/agent_os/policies/schema.py:34-41` | `strict`, `permissive`, `audit` |
+| Context budget | `agent-governance-python/agent-os/src/agent_os/context_budget.py` | `ContextScheduler` |
 
 **How AGT addresses this subcategory:** `ContextualPolicyEngine` binds policy
 evaluation to rich execution context including governance tiers, environment
@@ -305,11 +305,11 @@ Ring 3: untrusted) establishes operational boundaries for each agent.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| EU AI Act risk classifier | `agent-mesh/src/agentmesh/governance/eu_ai_act.py` | `RiskLevel` enum |
-| Agent risk profile | `agent-mesh/src/agentmesh/governance/eu_ai_act.py` | `AgentRiskProfile` dataclass |
-| Compliance checker example | `agent-mesh/examples/06-eu-ai-act-compliance/compliance_checker.py` | Demo risk classifier |
+| EU AI Act risk classifier | `agent-governance-python/agent-mesh/src/agentmesh/governance/eu_ai_act.py` | `RiskLevel` enum |
+| Agent risk profile | `agent-governance-python/agent-mesh/src/agentmesh/governance/eu_ai_act.py` | `AgentRiskProfile` dataclass |
+| Compliance checker example | `agent-governance-python/agent-mesh/examples/06-eu-ai-act-compliance/compliance_checker.py` | Demo risk classifier |
 | Trust tiers (5-tier) | `docs/ARCHITECTURE.md` | 0–1000 scale: Untrusted → Verified Partner |
-| Execution rings (4-tier) | `agent-hypervisor/src/hypervisor/models.py` | Ring 0 (kernel) → Ring 3 (untrusted) |
+| Execution rings (4-tier) | `agent-governance-python/agent-hypervisor/src/hypervisor/models.py` | Ring 0 (kernel) → Ring 3 (untrusted) |
 
 **How AGT addresses this subcategory:** Dual categorization systems — EU AI Act
 risk levels (`UNACCEPTABLE`, `HIGH`, `LIMITED`, `MINIMAL`) and the five-tier
@@ -331,11 +331,11 @@ but lacks formal cost-benefit frameworks.
 | Component | File | Key Metric |
 |-----------|------|------------|
 | Policy benchmarks | `BENCHMARKS.md` | 0.011ms p50 (single rule), 47K ops/sec at 1K agents |
-| Kernel benchmarks | `agent-os/benchmarks/bench_kernel.py` | 0.103ms p50 full enforcement path |
-| Audit benchmarks | `agent-os/benchmarks/bench_audit.py` | 2µs per audit write |
+| Kernel benchmarks | `agent-governance-python/agent-os/benchmarks/bench_kernel.py` | 0.103ms p50 full enforcement path |
+| Audit benchmarks | `agent-governance-python/agent-os/benchmarks/bench_audit.py` | 2µs per audit write |
 | Adapter overhead | `BENCHMARKS.md` | 0.005–0.007ms per adapter check |
 | Circuit breaker | `BENCHMARKS.md` | 0.0005ms (1.83M ops/sec) |
-| SRE benchmarks | `agent-sre/src/agent_sre/benchmarks/__init__.py` | SRE-specific benchmarks |
+| SRE benchmarks | `agent-governance-python/agent-sre/src/agent_sre/benchmarks/__init__.py` | SRE-specific benchmarks |
 
 **How AGT addresses this subcategory:** Governance overhead is rigorously
 quantified in latency and throughput terms. Sub-millisecond policy evaluation
@@ -356,13 +356,13 @@ terms (risk reduction, compliance cost savings, incident prevention value).
 |-----------|------|-------------|
 | STRIDE threat model | `docs/THREAT_MODEL.md` | 4 trust boundaries, 6 attack surfaces, STRIDE analysis |
 | OWASP Agentic Top 10 | `docs/OWASP-COMPLIANCE.md` | 10/10 risks mapped with mitigations |
-| Blast radius containment | `agent-hypervisor/src/hypervisor/models.py` | Ring isolation, Ring 0–3 |
-| Cascade detection | `agent-sre/src/agent_sre/cascade/circuit_breaker.py:223` | `CascadeDetector` |
-| Ring breach detection | `agent-hypervisor/rings/breach_detector.py` | Sliding-window anomaly detection |
-| Prompt injection detector | `agent-os/src/agent_os/prompt_injection.py:357` | `PromptInjectionDetector` (12+ patterns) |
-| Memory guard | `agent-os/src/agent_os/memory_guard.py:170` | `MemoryGuard` — memory poisoning defense |
-| Adversarial evaluator | `agent-sre/src/agent_sre/chaos/adversarial.py` | Adversarial testing |
-| Chaos testing | `agent-sre/src/agent_sre/chaos/engine.py` | Chaos engineering library |
+| Blast radius containment | `agent-governance-python/agent-hypervisor/src/hypervisor/models.py` | Ring isolation, Ring 0–3 |
+| Cascade detection | `agent-governance-python/agent-sre/src/agent_sre/cascade/circuit_breaker.py:223` | `CascadeDetector` |
+| Ring breach detection | `agent-governance-python/agent-hypervisor/rings/breach_detector.py` | Sliding-window anomaly detection |
+| Prompt injection detector | `agent-governance-python/agent-os/src/agent_os/prompt_injection.py:357` | `PromptInjectionDetector` (12+ patterns) |
+| Memory guard | `agent-governance-python/agent-os/src/agent_os/memory_guard.py:170` | `MemoryGuard` — memory poisoning defense |
+| Adversarial evaluator | `agent-governance-python/agent-sre/src/agent_sre/chaos/adversarial.py` | Adversarial testing |
+| Chaos testing | `agent-governance-python/agent-sre/src/agent_sre/chaos/engine.py` | Chaos engineering library |
 
 **How AGT addresses this subcategory:** STRIDE-based threat modeling
 systematically identifies risks across four trust boundaries and six attack
@@ -383,13 +383,13 @@ lacks ML-based bias detection or fairness evaluation.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| GDPR policy template | `agent-os/templates/policies/gdpr.yaml` | 10+ PII pattern categories, right to erasure, data minimization |
-| Data protection template | `agent-os/templates/policies/data-protection.yaml` | Data protection rules |
-| PII detection policy | `agent-os/examples/shared-policies/no-pii.yaml` | Shareable PII blocking policy |
-| Memory guard PII redaction | `agent-os/src/agent_os/memory_guard.py` | PII redaction in context |
-| Content governance | `agent-os/src/agent_os/content_governance.py:78` | `ContentQualityEvaluator` |
-| HIPAA example | `agent-os/tutorials/hipaa-compliant-agent/demo.py` | Healthcare compliance demo |
-| Healthcare HIPAA example | `agent-mesh/examples/03-healthcare-hipaa/main.py` | PHI protection demo |
+| GDPR policy template | `agent-governance-python/agent-os/templates/policies/gdpr.yaml` | 10+ PII pattern categories, right to erasure, data minimization |
+| Data protection template | `agent-governance-python/agent-os/templates/policies/data-protection.yaml` | Data protection rules |
+| PII detection policy | `agent-governance-python/agent-os/examples/shared-policies/no-pii.yaml` | Shareable PII blocking policy |
+| Memory guard PII redaction | `agent-governance-python/agent-os/src/agent_os/memory_guard.py` | PII redaction in context |
+| Content governance | `agent-governance-python/agent-os/src/agent_os/content_governance.py:78` | `ContentQualityEvaluator` |
+| HIPAA example | `agent-governance-python/agent-os/tutorials/hipaa-compliant-agent/demo.py` | Healthcare compliance demo |
+| Healthcare HIPAA example | `agent-governance-python/agent-mesh/examples/03-healthcare-hipaa/main.py` | PHI protection demo |
 
 **How AGT addresses this subcategory:** GDPR policy templates provide declarative
 PII protection across 10+ categories with right-to-erasure and data minimization
@@ -413,18 +413,18 @@ agent tutorials demonstrate PHI protection patterns.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| SLO engine | `agent-sre/src/agent_sre/slo/objectives.py:167` | `SLO`, `ErrorBudget`, `SLOStatus` |
-| SLO spec | `agent-sre/src/agent_sre/slo/spec.py:51` | `SLOSpec`, `ErrorBudgetPolicy` |
-| SLO dashboard | `agent-sre/src/agent_sre/slo/dashboard.py:73` | `SLODashboard`, `SLOSnapshot` |
-| SLO validator | `agent-sre/src/agent_sre/slo/validator.py:33` | `SLODiff` |
+| SLO engine | `agent-governance-python/agent-sre/src/agent_sre/slo/objectives.py:167` | `SLO`, `ErrorBudget`, `SLOStatus` |
+| SLO spec | `agent-governance-python/agent-sre/src/agent_sre/slo/spec.py:51` | `SLOSpec`, `ErrorBudgetPolicy` |
+| SLO dashboard | `agent-governance-python/agent-sre/src/agent_sre/slo/dashboard.py:73` | `SLODashboard`, `SLOSnapshot` |
+| SLO validator | `agent-governance-python/agent-sre/src/agent_sre/slo/validator.py:33` | `SLODiff` |
 | .NET SLO engine | `agent-governance-dotnet/src/AgentGovernance/Sre/SloEngine.cs` | `ErrorBudgetPolicy`, `ErrorBudgetTracker` |
-| SLO VS Code panel | `agent-os-vscode/src/views/sloDashboardView.ts:38` | `SLODashboardProvider` |
-| Trust score (AgentMesh) | `agent-mesh/src/agentmesh/governance/` | 0–1000 scale, 5 tiers |
-| Shift-left metrics | `agent-os/src/agent_os/shift_left_metrics.py` | `ShiftLeftTracker`, `ViolationStage`, `ViolationRecord` |
-| Usage trust scorer | `agent-marketplace/src/agent_marketplace/usage_trust.py:48` | `UsageTrustScorer` |
-| OTel metrics | `agent-sre/src/agent_sre/integrations/otel/metrics.py` | OpenTelemetry metrics export |
-| MCP metrics | `agent-os/src/agent_os/_mcp_metrics.py` | MCP-specific metrics |
-| Langfuse SLO scores | `agent-sre/src/agent_sre/integrations/langfuse/exporter.py:56` | `SLOScore` |
+| SLO VS Code panel | `agent-governance-typescript/agent-os-vscode/src/views/sloDashboardView.ts:38` | `SLODashboardProvider` |
+| Trust score (AgentMesh) | `agent-governance-python/agent-mesh/src/agentmesh/governance/` | 0–1000 scale, 5 tiers |
+| Shift-left metrics | `agent-governance-python/agent-os/src/agent_os/shift_left_metrics.py` | `ShiftLeftTracker`, `ViolationStage`, `ViolationRecord` |
+| Usage trust scorer | `agent-governance-python/agent-marketplace/src/agent_marketplace/usage_trust.py:48` | `UsageTrustScorer` |
+| OTel metrics | `agent-governance-python/agent-sre/src/agent_sre/integrations/otel/metrics.py` | OpenTelemetry metrics export |
+| MCP metrics | `agent-governance-python/agent-os/src/agent_os/_mcp_metrics.py` | MCP-specific metrics |
+| Langfuse SLO scores | `agent-governance-python/agent-sre/src/agent_sre/integrations/langfuse/exporter.py:56` | `SLOScore` |
 
 **How AGT addresses this subcategory:** SLI/SLO/error budget engine provides
 structured quantitative metrics with dashboard visualization. Trust scoring
@@ -443,11 +443,11 @@ platforms.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| Content quality evaluator | `agent-os/src/agent_os/content_governance.py:78` | `ContentQualityEvaluator` |
-| Plugin quality assessor | `agent-marketplace/src/agent_marketplace/quality_assessment.py:120` | `QualityAssessor` |
-| Red team dataset | `agent-os/modules/control-plane/benchmark/red_team_dataset.py` | Red-team benchmark data |
-| Policy benchmark suite | `agent-os/benchmarks/bench_policy.py` | 30-scenario OWASP benchmark |
-| CMVK verification | `agent-os/modules/cmvk/src/cmvk/constitutional.py` | Cross-Model Verification Kernel |
+| Content quality evaluator | `agent-governance-python/agent-os/src/agent_os/content_governance.py:78` | `ContentQualityEvaluator` |
+| Plugin quality assessor | `agent-governance-python/agent-marketplace/src/agent_marketplace/quality_assessment.py:120` | `QualityAssessor` |
+| Red team dataset | `agent-governance-python/agent-os/modules/control-plane/benchmark/red_team_dataset.py` | Red-team benchmark data |
+| Policy benchmark suite | `agent-governance-python/agent-os/benchmarks/bench_policy.py` | 30-scenario OWASP benchmark |
+| CMVK verification | `agent-governance-python/agent-os/modules/cmvk/src/cmvk/constitutional.py` | Cross-Model Verification Kernel |
 
 **How AGT addresses this subcategory:** Content quality evaluation and plugin
 quality assessment provide governance-level evaluation. Red-team datasets and
@@ -467,13 +467,13 @@ metrics (e.g., accuracy, calibration, hallucination rate).
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| Behavioral baseline | `agent-sre/src/agent_sre/anomaly/detector.py:68` | `BehaviorBaseline` |
-| Rogue agent detector | `agent-sre/src/agent_sre/anomaly/rogue_detector.py:304` | `RogueAgentDetector` |
-| Drift detector (Agent OS) | `agent-os/src/agent_os/integrations/drift_detector.py:93` | `DriftDetector`, `DriftType` enum |
-| MCP drift detector (SRE) | `agent-sre/src/agent_sre/integrations/mcp/__init__.py:169` | `DriftDetector` |
-| Flight recorder (control-plane) | `agent-os/modules/control-plane/src/agent_control_plane/flight_recorder.py:33` | `FlightRecorder` |
-| Ring breach detection | `agent-hypervisor/rings/breach_detector.py` | Sliding-window anomaly detection |
-| Fleet monitoring | `agent-sre/src/agent_sre/fleet/__init__.py` | Fleet-wide health with `AgentState.DEGRADED` |
+| Behavioral baseline | `agent-governance-python/agent-sre/src/agent_sre/anomaly/detector.py:68` | `BehaviorBaseline` |
+| Rogue agent detector | `agent-governance-python/agent-sre/src/agent_sre/anomaly/rogue_detector.py:304` | `RogueAgentDetector` |
+| Drift detector (Agent OS) | `agent-governance-python/agent-os/src/agent_os/integrations/drift_detector.py:93` | `DriftDetector`, `DriftType` enum |
+| MCP drift detector (SRE) | `agent-governance-python/agent-sre/src/agent_sre/integrations/mcp/__init__.py:169` | `DriftDetector` |
+| Flight recorder (control-plane) | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/flight_recorder.py:33` | `FlightRecorder` |
+| Ring breach detection | `agent-governance-python/agent-hypervisor/rings/breach_detector.py` | Sliding-window anomaly detection |
+| Fleet monitoring | `agent-governance-python/agent-sre/src/agent_sre/fleet/__init__.py` | Fleet-wide health with `AgentState.DEGRADED` |
 
 **How AGT addresses this subcategory:** Behavioral baselines establish normal
 operating patterns per agent. Drift detectors identify deviations from expected
@@ -492,12 +492,12 @@ cross-session persistence. Baselines are lost when agent sessions terminate.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| Shift-left tracker | `agent-os/src/agent_os/shift_left_metrics.py` | `ShiftLeftTracker` — violations by lifecycle stage |
-| SLO dashboard | `agent-sre/src/agent_sre/slo/dashboard.py:73` | `SLODashboard` snapshots |
-| VS Code SLO panel | `agent-os-vscode/src/webviews/sidebar/panels/SLOSummary.tsx` | Real-time SLO summary |
-| OTel governance export | `agent-mesh/src/agentmesh/observability/otel_governance.py` | Governance telemetry |
-| Langfuse exporter | `agent-sre/src/agent_sre/integrations/langfuse/exporter.py` | SLO scores to Langfuse |
-| OpenLit integration | `agent-sre/src/agent_sre/integrations/openlit.py` | OpenLit observability |
+| Shift-left tracker | `agent-governance-python/agent-os/src/agent_os/shift_left_metrics.py` | `ShiftLeftTracker` — violations by lifecycle stage |
+| SLO dashboard | `agent-governance-python/agent-sre/src/agent_sre/slo/dashboard.py:73` | `SLODashboard` snapshots |
+| VS Code SLO panel | `agent-governance-typescript/agent-os-vscode/src/webviews/sidebar/panels/SLOSummary.tsx` | Real-time SLO summary |
+| OTel governance export | `agent-governance-python/agent-mesh/src/agentmesh/observability/otel_governance.py` | Governance telemetry |
+| Langfuse exporter | `agent-governance-python/agent-sre/src/agent_sre/integrations/langfuse/exporter.py` | SLO scores to Langfuse |
+| OpenLit integration | `agent-governance-python/agent-sre/src/agent_sre/integrations/openlit.py` | OpenLit observability |
 
 **How AGT addresses this subcategory:** Shift-left metrics track violations by
 lifecycle stage (pre-commit, PR, CI, runtime), enabling measurement of where
@@ -520,19 +520,19 @@ whether those measurements are themselves effective.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| Circuit breaker (SRE) | `agent-sre/src/agent_sre/cascade/circuit_breaker.py:90` | `CircuitBreaker` (trip/open/half-open) |
-| Circuit breaker (incidents) | `agent-sre/src/agent_sre/incidents/circuit_breaker.py:59` | `CircuitBreaker`, `CircuitBreakerRegistry` |
-| Circuit breaker (Agent OS) | `agent-os/src/agent_os/_circuit_breaker_impl.py:82` | `CircuitBreaker`, `CascadeDetector` |
+| Circuit breaker (SRE) | `agent-governance-python/agent-sre/src/agent_sre/cascade/circuit_breaker.py:90` | `CircuitBreaker` (trip/open/half-open) |
+| Circuit breaker (incidents) | `agent-governance-python/agent-sre/src/agent_sre/incidents/circuit_breaker.py:59` | `CircuitBreaker`, `CircuitBreakerRegistry` |
+| Circuit breaker (Agent OS) | `agent-governance-python/agent-os/src/agent_os/_circuit_breaker_impl.py:82` | `CircuitBreaker`, `CascadeDetector` |
 | .NET circuit breaker | `agent-governance-dotnet/src/AgentGovernance/Sre/CircuitBreaker.cs:62` | `CircuitBreaker` |
-| Kill switch | `agent-hypervisor/src/hypervisor/security/kill_switch.py:69` | `KillSwitch.kill()` — 6 kill reasons |
-| Rate limiter (hypervisor) | `agent-hypervisor/src/hypervisor/security/rate_limiter.py:86` | `AgentRateLimiter` |
-| Rate limiter (Agent Mesh) | `agent-mesh/src/agentmesh/services/rate_limiter.py:93` | `RateLimiter` |
-| Rate limiter (MCP sliding) | `agent-os/src/agent_os/mcp_sliding_rate_limiter.py:17` | `MCPSlidingRateLimiter` |
-| Rate limiter (TypeScript) | `agent-mesh/packages/mcp-proxy/src/rate-limiter.ts:19` | `RateLimiter` |
+| Kill switch | `agent-governance-python/agent-hypervisor/src/hypervisor/security/kill_switch.py:69` | `KillSwitch.kill()` — 6 kill reasons |
+| Rate limiter (hypervisor) | `agent-governance-python/agent-hypervisor/src/hypervisor/security/rate_limiter.py:86` | `AgentRateLimiter` |
+| Rate limiter (Agent Mesh) | `agent-governance-python/agent-mesh/src/agentmesh/services/rate_limiter.py:93` | `RateLimiter` |
+| Rate limiter (MCP sliding) | `agent-governance-python/agent-os/src/agent_os/mcp_sliding_rate_limiter.py:17` | `MCPSlidingRateLimiter` |
+| Rate limiter (TypeScript) | `agent-governance-python/agent-mesh/packages/mcp-proxy/src/rate-limiter.ts:19` | `RateLimiter` |
 | .NET rate limiter | `agent-governance-dotnet/src/AgentGovernance/RateLimiting/RateLimiter.cs:11` | `RateLimiter` |
-| Approval workflow | `agent-os/extensions/mcp-server/src/services/approval-workflow.ts:18` | `ApprovalWorkflow` — quorum, expiration |
-| Saga orchestrator | `agent-hypervisor/saga/orchestrator.py` | `SagaOrchestrator` — rollback compensation |
-| Reversibility registry | `agent-hypervisor/reversibility/registry.py` | Undo/rollback registry |
+| Approval workflow | `agent-governance-python/agent-os/extensions/mcp-server/src/services/approval-workflow.ts:18` | `ApprovalWorkflow` — quorum, expiration |
+| Saga orchestrator | `agent-governance-python/agent-hypervisor/saga/orchestrator.py` | `SagaOrchestrator` — rollback compensation |
+| Reversibility registry | `agent-governance-python/agent-hypervisor/reversibility/registry.py` | Undo/rollback registry |
 
 **How AGT addresses this subcategory:** Multi-tier risk response: circuit
 breakers (with trip/open/half-open state machine) prevent cascade failures; kill
@@ -552,15 +552,15 @@ operations upon failure.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| Trust scoring (0–1000) | `agent-mesh/src/agentmesh/governance/` | 5 tiers: Untrusted → Verified Partner |
-| Trust decay | `agent-mesh/` | Scores degrade without positive signals |
-| Capability delegation | `agent-mesh/identity/agent_id.py` | `delegate()`, capability narrowing |
-| Graduated rings | `agent-hypervisor/src/hypervisor/models.py` | Ring 0–3 privilege escalation/demotion |
-| Ring demotion | `agent-hypervisor/session/__init__.py` | `update_ring()` |
-| Trust-tier filtering | `agent-marketplace/src/agent_marketplace/trust_tiers.py` | `filter_capabilities()` |
-| Progressive delivery | `agent-sre/src/agent_sre/delivery/` | Canary deploys, GitOps |
-| NoOp fallbacks | `agent-os/src/agent_os/compat.py:37` | `NoOpPolicyEvaluator` |
-| RL training governance | `agent-lightning/` | Policy rewards for RL training |
+| Trust scoring (0–1000) | `agent-governance-python/agent-mesh/src/agentmesh/governance/` | 5 tiers: Untrusted → Verified Partner |
+| Trust decay | `agent-governance-python/agent-mesh/` | Scores degrade without positive signals |
+| Capability delegation | `agent-governance-python/agent-mesh/identity/agent_id.py` | `delegate()`, capability narrowing |
+| Graduated rings | `agent-governance-python/agent-hypervisor/src/hypervisor/models.py` | Ring 0–3 privilege escalation/demotion |
+| Ring demotion | `agent-governance-python/agent-hypervisor/session/__init__.py` | `update_ring()` |
+| Trust-tier filtering | `agent-governance-python/agent-marketplace/src/agent_marketplace/trust_tiers.py` | `filter_capabilities()` |
+| Progressive delivery | `agent-governance-python/agent-sre/src/agent_sre/delivery/` | Canary deploys, GitOps |
+| NoOp fallbacks | `agent-governance-python/agent-os/src/agent_os/compat.py:37` | `NoOpPolicyEvaluator` |
+| RL training governance | `agent-governance-python/agent-lightning/` | Policy rewards for RL training |
 
 **How AGT addresses this subcategory:** Trust-based capability delegation
 (child ≤ parent) ensures agents earn expanded privileges through demonstrated
@@ -581,16 +581,16 @@ agent utility.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| MCP security scanner | `agent-os/src/agent_os/mcp_security.py:324` | `MCPSecurityScanner` — tool poisoning, injection detection |
-| MCP gateway | `agent-os/src/agent_os/mcp_gateway.py:99` | `MCPGateway` — allowlist/blocklist |
-| MCP trust proxy | `agent-mesh/packages/mcp-proxy/` | TypeScript proxy with policy enforcement |
-| Plugin signing | `agent-marketplace/src/agent_marketplace/signing.py:22` | `PluginSigner` — Ed25519 |
-| Plugin manifest validation | `agent-marketplace/src/agent_marketplace/manifest.py:36` | `PluginManifest` — Pydantic validation |
-| Marketplace policy | `agent-marketplace/src/agent_marketplace/marketplace_policy.py` | `MCPServerPolicy`, org-level policies |
-| Trust tiers | `agent-marketplace/src/agent_marketplace/trust_tiers.py` | Plugin trust tier filtering |
-| AI-BOM v2.0 | `agent-mesh/docs/RFC_AGENT_SBOM.md` | Model provenance, dataset lineage |
-| Egress policy | `agent-os/src/agent_os/egress_policy.py:50` | `EgressPolicy` — domain allow/deny |
-| Schema adapters | `agent-marketplace/src/agent_marketplace/schema_adapters.py` | Copilot/Claude manifest normalization |
+| MCP security scanner | `agent-governance-python/agent-os/src/agent_os/mcp_security.py:324` | `MCPSecurityScanner` — tool poisoning, injection detection |
+| MCP gateway | `agent-governance-python/agent-os/src/agent_os/mcp_gateway.py:99` | `MCPGateway` — allowlist/blocklist |
+| MCP trust proxy | `agent-governance-python/agent-mesh/packages/mcp-proxy/` | TypeScript proxy with policy enforcement |
+| Plugin signing | `agent-governance-python/agent-marketplace/src/agent_marketplace/signing.py:22` | `PluginSigner` — Ed25519 |
+| Plugin manifest validation | `agent-governance-python/agent-marketplace/src/agent_marketplace/manifest.py:36` | `PluginManifest` — Pydantic validation |
+| Marketplace policy | `agent-governance-python/agent-marketplace/src/agent_marketplace/marketplace_policy.py` | `MCPServerPolicy`, org-level policies |
+| Trust tiers | `agent-governance-python/agent-marketplace/src/agent_marketplace/trust_tiers.py` | Plugin trust tier filtering |
+| AI-BOM v2.0 | `agent-governance-python/agent-mesh/docs/RFC_AGENT_SBOM.md` | Model provenance, dataset lineage |
+| Egress policy | `agent-governance-python/agent-os/src/agent_os/egress_policy.py:50` | `EgressPolicy` — domain allow/deny |
+| Schema adapters | `agent-governance-python/agent-marketplace/src/agent_marketplace/schema_adapters.py` | Copilot/Claude manifest normalization |
 
 **How AGT addresses this subcategory:** Defense-in-depth for third-party risks:
 MCP security scanner detects tool poisoning and injection; gateway enforces
@@ -608,19 +608,19 @@ lineage. Egress policies control outbound data flows to authorized domains only.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
-| Rogue agent detector | `agent-sre/src/agent_sre/anomaly/rogue_detector.py:304` | `RogueAgentDetector` — scoring, classification |
-| Fleet monitoring | `agent-sre/src/agent_sre/fleet/__init__.py` | Fleet-wide health, `AgentState` enum |
-| OTel tracing (SRE) | `agent-sre/src/agent_sre/tracing/spans.py` | Distributed tracing spans |
-| OTel metrics (SRE) | `agent-sre/src/agent_sre/tracing/metrics.py` | Metrics instrumentation |
-| OTel exporters | `agent-sre/src/agent_sre/tracing/exporters.py` | OTLP/Jaeger/Zipkin exporters |
-| OTel governance SDK | `agent-mesh/src/agentmesh/observability/otel_sdk.py` | Governance-aware OTel |
-| OTel governance enrichment | `agent-mesh/src/agentmesh/observability/otel_governance.py` | Policy events as OTel spans |
-| OTel saga sink | `agent-sre/src/agent_sre/integrations/otel/saga_sink.py` | Saga lifecycle as OTel spans |
-| OTel events | `agent-sre/src/agent_sre/integrations/otel/events.py` | Governance event export |
-| OpenLit integration | `agent-sre/src/agent_sre/integrations/openlit.py` | OpenLit observability |
-| Agent OS observability | `agent-os/modules/observability/src/agent_os_observability/tracer.py` | Agent OS tracing |
-| Hypervisor event bus | `agent-hypervisor/src/hypervisor/observability/event_bus.py` | Internal event bus |
-| Cascade detector | `agent-sre/src/agent_sre/cascade/circuit_breaker.py:223` | `CascadeDetector` |
+| Rogue agent detector | `agent-governance-python/agent-sre/src/agent_sre/anomaly/rogue_detector.py:304` | `RogueAgentDetector` — scoring, classification |
+| Fleet monitoring | `agent-governance-python/agent-sre/src/agent_sre/fleet/__init__.py` | Fleet-wide health, `AgentState` enum |
+| OTel tracing (SRE) | `agent-governance-python/agent-sre/src/agent_sre/tracing/spans.py` | Distributed tracing spans |
+| OTel metrics (SRE) | `agent-governance-python/agent-sre/src/agent_sre/tracing/metrics.py` | Metrics instrumentation |
+| OTel exporters | `agent-governance-python/agent-sre/src/agent_sre/tracing/exporters.py` | OTLP/Jaeger/Zipkin exporters |
+| OTel governance SDK | `agent-governance-python/agent-mesh/src/agentmesh/observability/otel_sdk.py` | Governance-aware OTel |
+| OTel governance enrichment | `agent-governance-python/agent-mesh/src/agentmesh/observability/otel_governance.py` | Policy events as OTel spans |
+| OTel saga sink | `agent-governance-python/agent-sre/src/agent_sre/integrations/otel/saga_sink.py` | Saga lifecycle as OTel spans |
+| OTel events | `agent-governance-python/agent-sre/src/agent_sre/integrations/otel/events.py` | Governance event export |
+| OpenLit integration | `agent-governance-python/agent-sre/src/agent_sre/integrations/openlit.py` | OpenLit observability |
+| Agent OS observability | `agent-governance-python/agent-os/modules/observability/src/agent_os_observability/tracer.py` | Agent OS tracing |
+| Hypervisor event bus | `agent-governance-python/agent-hypervisor/src/hypervisor/observability/event_bus.py` | Internal event bus |
+| Cascade detector | `agent-governance-python/agent-sre/src/agent_sre/cascade/circuit_breaker.py:223` | `CascadeDetector` |
 
 **How AGT addresses this subcategory:** Deep observability stack: OpenTelemetry
 integration across all packages (spans, metrics, events) exports to
@@ -677,7 +677,7 @@ distributed traces, enabling governance-aware debugging.
 | No compliance trend analysis | MEASURE 4 | Point-in-time SLO snapshots only | Add `ComplianceTrendAnalyzer` to aggregate shift-left and SLO data over time; expose via SRE dashboard API |
 | No model evaluation pipeline | MEASURE 2 | Content/plugin quality only | Add `ModelEvaluator` module or LM Harness/HELM integration for accuracy/calibration benchmarks |
 | No benefit-maximization framing | MANAGE 2 | Trust delegation framed as security | Document governance ROI; reframe trust scoring as benefit optimization with measurable utility metrics |
-| In-memory behavioral baselines | MEASURE 3 | Baselines lost on session end | Add `BaselinePersistence` backend (SQLite or file-backed) to `agent-sre/anomaly/` |
+| In-memory behavioral baselines | MEASURE 3 | Baselines lost on session end | Add `BaselinePersistence` backend (SQLite or file-backed) to `agent-governance-python/agent-sre/anomaly/` |
 
 ### Priority 3 — LOW
 

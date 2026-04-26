@@ -618,7 +618,7 @@ DLP won't catch any of these because there's no sensitive content to flag. AGT's
 
 ### Where They Overlap
 
-Both can block prompt injection. DLP uses content classifiers; AGT uses a dedicated [PromptInjectionDetector](../agent-os/src/agent_os/prompt_injection.py) with 7 attack-type detection. In practice you'd want both layers — DLP for data classification + AGT for action governance.
+Both can block prompt injection. DLP uses content classifiers; AGT uses a dedicated [PromptInjectionDetector](../agent-governance-python/agent-os/src/agent_os/prompt_injection.py) with 7 attack-type detection. In practice you'd want both layers — DLP for data classification + AGT for action governance.
 
 ### Bottom Line
 

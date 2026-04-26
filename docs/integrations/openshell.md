@@ -69,7 +69,7 @@ Neither replaces the other — they're complementary layers in a defense-in-dept
 
 ### Option A: Governance Skill Inside the Sandbox (Python Library)
 
-Install the [OpenShell governance skill](../../agentmesh-integrations/openshell-skill/) and use it from your agent's code:
+Install the [OpenShell governance skill](../../agent-governance-python/agentmesh-integrations/openshell-skill/) and use it from your agent's code:
 
 ```python
 # Inside the sandbox
@@ -184,7 +184,7 @@ When running both layers, you get two complementary telemetry streams:
 - Process execution logs
 - Inference routing logs
 
-Both can feed into the same Grafana dashboard for a unified view. See the [Agent SRE monitoring guide](../../agent-sre/README.md) for SLO configuration.
+Both can feed into the same Grafana dashboard for a unified view. See the [Agent SRE monitoring guide](../../agent-governance-python/agent-sre/README.md) for SLO configuration.
 
 ---
 
@@ -206,7 +206,7 @@ OpenShell can *host* the sidecar. The governance sidecar runs inside or alongsid
 
 ## Related
 
-- [OpenShell Governance Skill](../../agentmesh-integrations/openshell-skill/) — Python skill package for OpenShell agents
+- [OpenShell Governance Skill](../../agent-governance-python/agentmesh-integrations/openshell-skill/) — Python skill package for OpenShell agents
 - [Runnable Example](../../examples/openshell-governed/) — Self-contained demo with policy enforcement
 - [OpenClaw Sidecar Deployment](../deployment/openclaw-sidecar.md) — AKS and Docker Compose guide
 - [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) — Runtime sandbox for AI agents

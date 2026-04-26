@@ -5,7 +5,7 @@ Toolkit (AGT) using a STRIDE-oriented view of the main trust boundaries in the
 system.
 
 For the current OWASP Agentic Top 10 mapping across all 10 categories, see
-[`agent-compliance/docs/OWASP-COMPLIANCE.md`](../agent-compliance/docs/OWASP-COMPLIANCE.md).
+[`agent-governance-python/agent-compliance/docs/OWASP-COMPLIANCE.md`](../agent-governance-python/agent-compliance/docs/OWASP-COMPLIANCE.md).
 
 ## Scope
 

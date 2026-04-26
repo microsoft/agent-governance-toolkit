@@ -1,0 +1,43 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+# Governance Sidecar Dockerfile
+# Lightweight image for the AGT governance sidecar.
+# Bundles the Agent OS governance API (policy evaluation, prompt injection
+# detection, stateless execution, health/metrics endpoints).
+#
+# Build:  docker build -t agentmesh/governance-sidecar:0.3.0 -f Dockerfile.sidecar .
+# Run:    docker run -p 8081:8081 agentmesh/governance-sidecar:0.3.0
+
+FROM python:3.14-slim@sha256:5b3879b6f3cb77e712644d50262d05a7c146b7312d784a18eff7ff5462e77033
+
+LABEL maintainer="Microsoft Corporation"
+LABEL description="Agent Governance Toolkit — governance sidecar for autonomous AI agents"
+
+WORKDIR /app
+
+# Copy agent-os package source (context is repo root)
+COPY agent-governance-python/agent-os/pyproject.toml ./
+COPY agent-governance-python/agent-os/README.md ./
+COPY agent-governance-python/agent-os/src/ ./src/
+COPY agent-governance-python/agent-os/modules/ ./modules/
+
+RUN pip install --no-cache-dir ".[full]"
+
+# Create non-root user
+RUN useradd -m -s /bin/bash sidecar
+USER sidecar
+
+ENV LOG_LEVEL=INFO
+ENV PYTHONUNBUFFERED=1
+ENV HOST=0.0.0.0
+ENV PORT=8081
+
+EXPOSE 8081
+
+# Run the governance API server — host/port configurable via env or args
+ENTRYPOINT ["python", "-m", "agent_os.server"]
+CMD ["--host", "0.0.0.0", "--port", "8081"]
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')" || exit 1

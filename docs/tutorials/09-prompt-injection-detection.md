@@ -1066,19 +1066,19 @@ assert report.risk_score == 0.0, f"Gaps found: {report.failed} attacks succeeded
 
 | Component | Location |
 |-----------|----------|
-| PromptInjectionDetector | `agent-os/src/agent_os/prompt_injection.py` |
-| MemoryGuard | `agent-os/src/agent_os/memory_guard.py` |
-| ConversationGuardian | `agent-os/src/agent_os/integrations/conversation_guardian.py` |
-| EscalationHandler | `agent-os/src/agent_os/integrations/escalation.py` |
-| AdversarialEvaluator | `agent-os/src/agent_os/adversarial.py` |
-| Adversarial implementation | `agent-os/src/agent_os/_adversarial_impl.py` |
-| MCP Security Scanner | `agent-os/src/agent_os/mcp_security.py` |
-| Security Skills | `agent-os/src/agent_os/security_skills.py` |
-| Prompt injection tests | `agent-os/tests/test_prompt_injection.py` |
-| Memory guard tests | `agent-os/tests/test_memory_guard.py` |
-| Adversarial tests | `agent-os/tests/test_adversarial.py` |
-| Conversation guardian tests | `agent-os/tests/test_conversation_guardian.py` |
-| Escalation tests | `agent-os/tests/test_escalation.py` |
+| PromptInjectionDetector | `agent-governance-python/agent-os/src/agent_os/prompt_injection.py` |
+| MemoryGuard | `agent-governance-python/agent-os/src/agent_os/memory_guard.py` |
+| ConversationGuardian | `agent-governance-python/agent-os/src/agent_os/integrations/conversation_guardian.py` |
+| EscalationHandler | `agent-governance-python/agent-os/src/agent_os/integrations/escalation.py` |
+| AdversarialEvaluator | `agent-governance-python/agent-os/src/agent_os/adversarial.py` |
+| Adversarial implementation | `agent-governance-python/agent-os/src/agent_os/_adversarial_impl.py` |
+| MCP Security Scanner | `agent-governance-python/agent-os/src/agent_os/mcp_security.py` |
+| Security Skills | `agent-governance-python/agent-os/src/agent_os/security_skills.py` |
+| Prompt injection tests | `agent-governance-python/agent-os/tests/test_prompt_injection.py` |
+| Memory guard tests | `agent-governance-python/agent-os/tests/test_memory_guard.py` |
+| Adversarial tests | `agent-governance-python/agent-os/tests/test_adversarial.py` |
+| Conversation guardian tests | `agent-governance-python/agent-os/tests/test_conversation_guardian.py` |
+| Escalation tests | `agent-governance-python/agent-os/tests/test_escalation.py` |
 
 ---
 

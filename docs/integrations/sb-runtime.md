@@ -292,7 +292,7 @@ Operators adopting this pattern:
 2. Run sb-runtime with `--ring 2` rather than `--ring 3`. Ring 3 would duplicate sandbox work that nono is already doing.
 3. Receipts land in the configured `--receipts-dir`. They verify with `@veritasacta/verify` regardless of which sandbox layer wrapped the process, because the sandbox choice is not part of the receipt's trust boundary: the receipt attests the Cedar decision and the signer identity, not the sandbox configuration.
 
-This composition is the recommended path for operators who already trust nono's sandbox model and want Veritas Acta-conformant decision receipts layered on top. The provider shim (`agent-runtime/sb_runtime_agt`, landing in a follow-up PR) exposes this composition as a first-class option alongside the standalone sb-runtime path.
+This composition is the recommended path for operators who already trust nono's sandbox model and want Veritas Acta-conformant decision receipts layered on top. The provider shim (`agent-governance-python/agent-runtime/sb_runtime_agt`, landing in a follow-up PR) exposes this composition as a first-class option alongside the standalone sb-runtime path.
 
 ---
 

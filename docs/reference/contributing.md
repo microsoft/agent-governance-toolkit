@@ -43,7 +43,7 @@ term home for that language.
 |----------------------------|------------|
 | Published first-party Python packages | `agent-governance-python/` |
 | Core governance/runtime behavior and Python apps | the repo root |
-| Current shared SDK implementations | `agent-mesh/sdks/` and other languages that still live in the shared layout |
+| Current shared SDK implementations | `agent-governance-python/agent-mesh/sdks/` and other languages that still live in the shared layout |
 | Standalone language implementations | `agent-governance-python/`, `agent-governance-dotnet/`, `agent-governance-golang/`, or other `agent-governance-*` siblings at the repository root |
 | Tutorials, architecture, package docs | `docs/` |
 | Runnable framework integrations | `examples/` |
@@ -63,7 +63,7 @@ location. For published Python package work, contributor guidance should point t
 
 - Prefer a docs update when the request is informational.
 - Prefer an `examples/` contribution when proving a new external integration.
-- Prefer `agentmesh-integrations/` when the integration is reusable and maintained.
+- Prefer `agent-governance-python/agentmesh-integrations/` when the integration is reusable and maintained.
 - Propose a core package change only when the functionality clearly belongs in AGT long-term.
 
 ### Attribution & Prior Art
@@ -177,18 +177,18 @@ This repo includes these core packages and standalone SDKs today:
 
 | Package | Directory | Description |
 |---------|-----------|-------------|
-| `agent-os-kernel` | `agent-os/` | Kernel architecture for policy enforcement |
-| `agentmesh` | `agent-mesh/` | Inter-agent trust and identity mesh |
-| `agentmesh-runtime` | `agent-runtime/` | Runtime sandboxing and capability isolation |
-| `agent-sre` | `agent-sre/` | Observability, alerting, and reliability |
-| `agent-governance` | `agent-compliance/` | Unified installer and runtime policy enforcement |
-| `agentmesh-marketplace` | `agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
-| `agentmesh-lightning` | `agent-lightning/` | RL training governance with governed runners and policy rewards |
-| `agent-hypervisor` | `agent-hypervisor/` | Runtime infrastructure and capability management |
+| `agent-os-kernel` | `agent-governance-python/agent-os/` | Kernel architecture for policy enforcement |
+| `agentmesh` | `agent-governance-python/agent-mesh/` | Inter-agent trust and identity mesh |
+| `agentmesh-runtime` | `agent-governance-python/agent-runtime/` | Runtime sandboxing and capability isolation |
+| `agent-sre` | `agent-governance-python/agent-sre/` | Observability, alerting, and reliability |
+| `agent-governance` | `agent-governance-python/agent-compliance/` | Unified installer and runtime policy enforcement |
+| `agentmesh-marketplace` | `agent-governance-python/agent-marketplace/` | Plugin lifecycle management for governed agent ecosystems |
+| `agentmesh-lightning` | `agent-governance-python/agent-lightning/` | RL training governance with governed runners and policy rewards |
+| `agent-hypervisor` | `agent-governance-python/agent-hypervisor/` | Runtime infrastructure and capability management |
 | `agent-primitives` | `agent-governance-python/agent-primitives/` | Shared foundational Python primitives package |
 | `agent-mcp-governance` | `agent-governance-python/agent-mcp-governance/` | Published MCP governance facade for Python consumers |
 | `agent-governance-dotnet` | `agent-governance-dotnet/` | Standalone .NET SDK for agent governance |
-| `agentmesh-integrations` | `agentmesh-integrations/` | Framework integrations and extension library |
+| `agentmesh-integrations` | `agent-governance-python/agentmesh-integrations/` | Framework integrations and extension library |
 
 Contributor routing for first-party published Python packages should use `agent-governance-python/`
 at the repository root as the canonical path. The standalone .NET SDK should use
@@ -262,10 +262,10 @@ This guide walks you through creating a new framework integration for Agent Gove
 
 ### Integration Package Structure
 
-Each integration is a standalone package under `agentmesh-integrations/`:
+Each integration is a standalone package under `agent-governance-python/agentmesh-integrations/`:
 
 ```
-agentmesh-integrations/your-integration/
+agent-governance-python/agentmesh-integrations/your-integration/
 ├── pyproject.toml          # Package metadata and dependencies
 ├── README.md               # Documentation with quick start
 ├── LICENSE                 # MIT License
@@ -284,7 +284,7 @@ agentmesh-integrations/your-integration/
 3. **TrustedToolExecutor**: Execute tools with verification
 4. **TrustCallbackHandler**: Monitor trust events
 
-See `agentmesh-integrations/langchain-agentmesh/` for the best reference implementation.
+See `agent-governance-python/agentmesh-integrations/langchain-agentmesh/` for the best reference implementation.
 
 ### Writing Tests
 
@@ -335,7 +335,7 @@ Before submitting your integration PR:
 
 ### Questions?
 
-- Review existing integrations in `agentmesh-integrations/`
+- Review existing integrations in `agent-governance-python/agentmesh-integrations/`
 - Open a [discussion](https://github.com/microsoft/agent-governance-toolkit/discussions) for design questions
 - Tag `@microsoft/agent-governance-team` for integration review
 

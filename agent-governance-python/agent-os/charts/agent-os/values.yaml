@@ -1,0 +1,103 @@
+# Default values for agent-os Helm chart
+
+# -- Kernel deployment
+kernel:
+  replicas: 2
+  image:
+    repository: agent-governance-python/agent-os/kernel
+    tag: "0.3.0"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  port: 8080
+  service:
+    type: ClusterIP
+    port: 80
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilization: 70
+    targetMemoryUtilization: 80
+
+# -- Policy Server deployment
+policyServer:
+  replicas: 2
+  image:
+    repository: agent-governance-python/agent-os/policy-server
+    tag: "0.3.0"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  port: 8081
+  service:
+    type: ClusterIP
+    port: 80
+  policyMount:
+    enabled: true
+    configMapName: agent-os-policies
+
+# -- Audit Collector deployment
+auditCollector:
+  replicas: 1
+  image:
+    repository: agent-governance-python/agent-os/audit-collector
+    tag: "0.3.0"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  port: 8082
+  service:
+    type: ClusterIP
+    port: 80
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+
+# -- Monitoring
+monitoring:
+  enabled: true
+  prometheus:
+    scrape: true
+    port: 9090
+    path: /metrics
+
+# -- Global settings
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+
+imagePullSecrets: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

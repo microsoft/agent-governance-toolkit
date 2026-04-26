@@ -249,11 +249,11 @@ Demonstrates the cryptographic integrity guarantees of the audit trail:
 | `openai_agents_governance_demo.py` | Full 9-scenario showcase |
 | `policies/agent_governance_policy.yaml` | Role-based + PII + injection + handoff policies |
 | `policies/quality_gate_policy.yaml` | Publishing quality gates |
-| `agent-os/src/agent_os/integrations/maf_adapter.py` | Governance middleware |
-| `agentmesh-integrations/openai-agents-trust/` | OpenAI Agents SDK trust integration |
-| `agentmesh-integrations/openai-agents-agentmesh/` | OpenAI Agents SDK trust layer |
-| `agent-mesh/src/agentmesh/governance/audit.py` | Merkle-chained audit log |
-| `agent-sre/src/agent_sre/anomaly/rogue_detector.py` | Rogue agent detector |
+| `agent-governance-python/agent-os/src/agent_os/integrations/maf_adapter.py` | Governance middleware |
+| `agent-governance-python/agentmesh-integrations/openai-agents-trust/` | OpenAI Agents SDK trust integration |
+| `agent-governance-python/agentmesh-integrations/openai-agents-agentmesh/` | OpenAI Agents SDK trust layer |
+| `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py` | Merkle-chained audit log |
+| `agent-governance-python/agent-sre/src/agent_sre/anomaly/rogue_detector.py` | Rogue agent detector |
 
 ## OpenAI Agents SDK Integration Points
 

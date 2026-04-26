@@ -82,7 +82,7 @@ repos:
         name: No Raw Crypto Outside Security Modules
         entry: bash -c '
           PATTERN="from cryptography|from Crypto\.|import hashlib|import hmac|crypto\.subtle|crypto\.createHash|use ring::|use ed25519_dalek|System\.Security\.Cryptography"
-          STAGED=$(git diff --cached --diff-filter=ACMR -U0 -- "*.py" "*.ts" "*.rs" "*.cs" "*.go" ":!agent-mesh/**" ":!*encryption*" ":!*security*" ":!*test*" | grep -E "^\+[^+]" || true)
+          STAGED=$(git diff --cached --diff-filter=ACMR -U0 -- "*.py" "*.ts" "*.rs" "*.cs" "*.go" ":!agent-governance-python/agent-mesh/**" ":!*encryption*" ":!*security*" ":!*test*" | grep -E "^\+[^+]" || true)
           if [ -n "$STAGED" ]; then
             HITS=$(echo "$STAGED" | grep -E "$PATTERN" || true)
             if [ -n "$HITS" ]; then
