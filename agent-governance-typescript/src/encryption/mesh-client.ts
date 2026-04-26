@@ -93,12 +93,18 @@ export class MeshClient {
 
     await new Promise<void>((resolve, reject) => {
       this.ws!.onopen = () => {
+        this.connected = true;
         this.sendFrame({
           v: 1,
           type: "connect",
           from: this.options.agentDid,
         });
-        this.connected = true;
+        // Request any messages queued while offline (inbox replay)
+        this.sendFrame({
+          v: 1,
+          type: "fetch_pending",
+          from: this.options.agentDid,
+        });
         resolve();
       };
       this.ws!.onerror = (e) => reject(new Error(`WebSocket error: ${e}`));
@@ -115,6 +121,26 @@ export class MeshClient {
     this.ws.close();
     this.connected = false;
     this.ws = null;
+  }
+
+  /**
+   * Disconnect and reconnect to the relay.
+   *
+   * Resets the WebSocket connection and sends a fresh connect +
+   * fetch_pending sequence, triggering inbox replay for any messages
+   * queued while offline.
+   */
+  async reconnect(): Promise<void> {
+    this.connected = false;
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch {
+        /* ignore close errors */
+      }
+      this.ws = null;
+    }
+    await this.connect();
   }
 
   get isConnected(): boolean {
@@ -299,6 +325,8 @@ export class MeshClient {
       this.handleKnockReject(frame);
     } else if (type === "ack") {
       // ACK processed — nothing to do
+    } else if (type === "pending_messages") {
+      await this.handlePendingMessages(frame);
     }
   }
 
@@ -354,6 +382,22 @@ export class MeshClient {
     // Notify handlers
     for (const handler of this.messageHandlers) {
       handler(from, payload, isPlaintext);
+    }
+  }
+
+  /**
+   * Handle a batch of pending messages replayed by the relay on reconnect.
+   *
+   * The relay may respond to a fetch_pending frame with a
+   * pending_messages frame containing an array of queued messages.
+   * Each message is dispatched through the standard handleMessage path.
+   */
+  private async handlePendingMessages(frame: Record<string, unknown>): Promise<void> {
+    const messages = frame.messages as Array<Record<string, unknown>> | undefined;
+    if (!messages || !Array.isArray(messages)) return;
+
+    for (const msg of messages) {
+      await this.handleMessage(msg);
     }
   }
 
