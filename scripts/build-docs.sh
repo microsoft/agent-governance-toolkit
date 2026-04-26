@@ -42,8 +42,8 @@ cp CONTRIBUTING.md "$SITE_DOCS/reference/contributing.md"
 
 # Package READMEs
 for pkg in agent-os agent-mesh agent-runtime agent-sre agent-compliance agent-marketplace agent-lightning agent-hypervisor agent-os-vscode; do
-  if [ -f "packages/$pkg/README.md" ]; then
-    cp "packages/$pkg/README.md" "$SITE_DOCS/packages/$pkg.md"
+  if [ -f "$pkg/README.md" ]; then
+    cp "$pkg/README.md" "$SITE_DOCS/packages/$pkg.md"
   fi
 done
 

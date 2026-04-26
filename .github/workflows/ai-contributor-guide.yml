@@ -1,6 +1,6 @@
 # AI-powered contributor helper for the agent-governance-toolkit.
 # Welcomes first-time contributors with helpful, personalized context:
-# - For issues: analyzes the issue and suggests relevant packages/code areas
+# - For issues: analyzes the issue and suggests relevant code areas
 # - For PRs: provides a friendly first-PR review with extra guidance
 # Builds OSS community by making the contribution experience welcoming.
 name: AI Contributor Guide
@@ -120,7 +120,7 @@ jobs:
             3. **Highlight what they did well** before suggesting improvements
             4. **Explain project conventions**:
                - We use ruff for linting (select E,F,W)
-               - Tests go in packages/{name}/tests/
+               - Tests go in {name}/tests/
                - We follow conventional commits (feat:, fix:, docs:, etc.)
                - Security-sensitive code gets extra scrutiny
             5. **Link to resources**:
