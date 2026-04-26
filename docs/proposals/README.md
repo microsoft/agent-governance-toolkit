@@ -2,7 +2,7 @@
 
 Master index of all external proposals, PRs, and issues submitted by the Agent Governance Toolkit project.
 
-Last updated: April 20, 2026
+Last updated: April 26, 2026
 
 ---
 
@@ -10,7 +10,9 @@ Last updated: April 20, 2026
 
 | Organization | Submission | Type | Status |
 |-------------|-----------|------|--------|
+| **AAIF (Agentic AI Foundation)** | [aaif/project-proposals#19](https://github.com/aaif/project-proposals/issues/19) | Growth Stage Proposal | Open |
 | **AAIF (AI Alliance)** | [The-AI-Alliance/community#58](https://github.com/The-AI-Alliance/community/issues/58) | Project Proposal | Open |
+| **OpenSSF** | [ossf/tac#603](https://github.com/ossf/tac/pull/603) | Sandbox Stage Proposal | Open |
 | **LF AI & Data** | [lfai/proposing-projects#104](https://github.com/lfai/proposing-projects/pull/104) | Sandbox Proposal | Open |
 | **OpenSSF AI/ML WG** | [ossf/ai-ml-security#47](https://github.com/ossf/ai-ml-security/issues/47) | Collaboration Proposal | Open |
 | **CNCF TOC** | [cncf/toc#2125](https://github.com/cncf/toc/issues/2125) | Cloud-Native Governance | Open |
@@ -65,9 +67,9 @@ Last updated: April 20, 2026
 
 | Category | Total | Shipped | Open |
 |----------|-------|---------|------|
-| Standards & Foundations | 7 | 0 | 7 |
+| Standards & Foundations | 9 | 0 | 9 |
 | Microsoft Ecosystem | 3 | 1 | 2 |
 | Framework Integrations | 15 | 3 | 12 |
 | MCP Ecosystem | 1 | 0 | 1 |
 | Agent Infrastructure | 2 | 2 | 0 |
-| **Total** | **28** | **6** | **22** |
+| **Total** | **30** | **6** | **24** |
