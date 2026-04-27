@@ -87,15 +87,33 @@ rules:
 
 ```csharp
 using AgentGovernance.Extensions.ModelContextProtocol;
+using System.Security.Claims;
 
 builder.Services
     .AddMcpServer()
     .WithGovernance(options =>
     {
         options.PolicyPaths.Add("policies/mcp.yaml");
-        options.DefaultAgentId = "did:mcp:server";
+        options.AgentIdResolver = static principal =>
+            principal.FindFirst("agent_id")?.Value
+            ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
     });
 ```
+
+MCP governance now **requires an authenticated agent identity by default**. `DefaultAgentId` is only used when you explicitly opt into anonymous fallback:
+
+```csharp
+builder.Services
+    .AddMcpServer()
+    .WithGovernance(options =>
+    {
+        options.PolicyPaths.Add("policies/mcp.yaml");
+        options.RequireAuthenticatedAgentId = false;
+        options.DefaultAgentId = "did:mcp:anonymous";
+    });
+```
+
+If you previously relied on `DefaultAgentId` as an implicit fallback, set `RequireAuthenticatedAgentId = false` during migration. Request-scoped `context.Items["agent_id"]` values are no longer trusted for governance identity.
 
 `WithGovernance(...)` wraps the final MCP `ToolCollection`, so it works with tools registered before or after the governance extension is added.
 

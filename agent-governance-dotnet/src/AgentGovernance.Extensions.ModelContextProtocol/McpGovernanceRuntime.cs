@@ -29,17 +29,25 @@ internal sealed class McpGovernanceRuntime
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        return TryGetAgentId(context.User)
-            ?? TryGetAgentId(context.Items)
-            ?? _options.DefaultAgentId;
+        if (TryResolveAgentId(context, out var agentId, out var reason))
+        {
+            return agentId;
+        }
+
+        throw new InvalidOperationException(reason);
     }
 
     public bool IsAllowed(RequestContext<CallToolRequestParams> request, out string? reason)
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        if (!TryResolveAgentId(request, out var agentId, out reason))
+        {
+            return false;
+        }
+
         var evaluation = _kernel.EvaluateToolCall(
-            ResolveAgentId(request),
+            agentId,
             request.Params.Name,
             ConvertArguments(request.Params.Arguments));
 
@@ -110,26 +118,51 @@ internal sealed class McpGovernanceRuntime
         };
     }
 
-    private static string? TryGetAgentId(ClaimsPrincipal? principal)
+    private bool TryResolveAgentId(MessageContext context, out string agentId, out string? reason)
     {
-        if (principal is null)
+        var resolved = TryGetAuthenticatedAgentId(context.User);
+        if (!string.IsNullOrWhiteSpace(resolved))
+        {
+            agentId = resolved;
+            reason = null;
+            return true;
+        }
+
+        if (_options.RequireAuthenticatedAgentId)
+        {
+            agentId = string.Empty;
+            reason = "Authenticated agent identity is required for MCP governance. Configure AgentIdResolver to map authenticated principals or set RequireAuthenticatedAgentId = false to allow DefaultAgentId fallback.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.DefaultAgentId))
+        {
+            agentId = string.Empty;
+            reason = "MCP governance could not resolve an authenticated agent identity and DefaultAgentId is not configured.";
+            return false;
+        }
+
+        agentId = _options.DefaultAgentId;
+        reason = null;
+        return true;
+    }
+
+    private string? TryGetAuthenticatedAgentId(ClaimsPrincipal? principal)
+    {
+        if (principal?.Identity?.IsAuthenticated != true)
         {
             return null;
+        }
+
+        var resolved = _options.AgentIdResolver?.Invoke(principal);
+        if (!string.IsNullOrWhiteSpace(resolved))
+        {
+            return resolved;
         }
 
         return principal.FindFirst("agent_id")?.Value
             ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
             ?? principal.Identity?.Name;
-    }
-
-    private static string? TryGetAgentId(IDictionary<string, object?> items)
-    {
-        if (items.TryGetValue("agent_id", out var agentId) && agentId is string agentIdValue && !string.IsNullOrWhiteSpace(agentIdValue))
-        {
-            return agentIdValue;
-        }
-
-        return null;
     }
 
     private static Dictionary<string, object>? ConvertArguments(IDictionary<string, JsonElement>? arguments)
@@ -142,29 +175,73 @@ internal sealed class McpGovernanceRuntime
         var converted = new Dictionary<string, object>(StringComparer.Ordinal);
         foreach (var (key, value) in arguments)
         {
-            converted[key] = ConvertElement(value);
+            if (TryConvertElement(value, out var convertedValue))
+            {
+                converted[key] = convertedValue;
+            }
         }
 
-        return converted;
+        return converted.Count == 0 ? null : converted;
     }
 
-    private static object ConvertElement(JsonElement element)
+    private static bool TryConvertElement(JsonElement element, out object value)
     {
-        return element.ValueKind switch
+        switch (element.ValueKind)
         {
-            JsonValueKind.Object => element.EnumerateObject()
-                .ToDictionary(property => property.Name, property => ConvertElement(property.Value), StringComparer.Ordinal),
-            JsonValueKind.Array => element.EnumerateArray().Select(ConvertElement).ToList(),
-            JsonValueKind.String => element.GetString() ?? string.Empty,
-            JsonValueKind.Number => element.TryGetInt64(out var longValue)
-                ? longValue
-                : element.TryGetDecimal(out var decimalValue)
-                    ? decimalValue
-                    : element.GetDouble(),
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.Null => null!,
-            _ => element.GetRawText()
-        };
+            case JsonValueKind.Object:
+                var objectValue = new Dictionary<string, object>(StringComparer.Ordinal);
+                foreach (var property in element.EnumerateObject())
+                {
+                    if (TryConvertElement(property.Value, out var propertyValue))
+                    {
+                        objectValue[property.Name] = propertyValue;
+                    }
+                }
+
+                value = objectValue;
+                return true;
+
+            case JsonValueKind.Array:
+                var arrayValue = new List<object>();
+                foreach (var item in element.EnumerateArray())
+                {
+                    if (TryConvertElement(item, out var itemValue))
+                    {
+                        arrayValue.Add(itemValue);
+                    }
+                }
+
+                value = arrayValue;
+                return true;
+
+            case JsonValueKind.String:
+                value = element.GetString() ?? string.Empty;
+                return true;
+
+            case JsonValueKind.Number:
+                value = element.TryGetInt64(out var longValue)
+                    ? longValue
+                    : element.TryGetDecimal(out var decimalValue)
+                        ? decimalValue
+                        : element.GetDouble();
+                return true;
+
+            case JsonValueKind.True:
+                value = true;
+                return true;
+
+            case JsonValueKind.False:
+                value = false;
+                return true;
+
+            case JsonValueKind.Null:
+            case JsonValueKind.Undefined:
+                value = string.Empty;
+                return false;
+
+            default:
+                value = element.GetRawText();
+                return true;
+        }
     }
 }

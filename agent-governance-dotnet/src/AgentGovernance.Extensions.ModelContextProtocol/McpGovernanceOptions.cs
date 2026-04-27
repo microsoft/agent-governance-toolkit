@@ -1,5 +1,6 @@
 // Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
+using System.Security.Claims;
 using AgentGovernance.Hypervisor;
 using AgentGovernance.Policy;
 using AgentGovernance.Security;
@@ -63,7 +64,17 @@ public sealed class McpGovernanceOptions
     public CircuitBreakerConfig? CircuitBreakerConfig { get; set; }
 
     /// <summary>
-    /// Gets or sets the agent identifier used when the request has no authenticated identity.
+    /// Gets or sets a value indicating whether MCP requests must resolve to an authenticated agent identifier.
+    /// </summary>
+    public bool RequireAuthenticatedAgentId { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a resolver that maps an authenticated principal to an agent identifier for policy evaluation.
+    /// </summary>
+    public Func<ClaimsPrincipal, string?>? AgentIdResolver { get; set; }
+
+    /// <summary>
+    /// Gets or sets the fallback agent identifier used only when anonymous requests are explicitly allowed.
     /// </summary>
     public string DefaultAgentId { get; set; } = "did:mcp:anonymous";
 
