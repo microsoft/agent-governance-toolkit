@@ -1,6 +1,6 @@
 # AgentMesh Go module
 
-Go module for the AgentMesh governance framework — identity, trust scoring, policy evaluation, tamper-evident audit logging, MCP security scanning, execution privilege rings, agent lifecycle management, SLO tracking, shadow discovery, prompt defense, and native Go integrations.
+Go module for the AgentMesh governance framework — identity, trust scoring, policy evaluation, tamper-evident audit logging, MCP security scanning, execution privilege rings, kill switches, agent lifecycle management, SLO tracking, shadow discovery, prompt defense, and native Go integrations.
 
 ## Install
 
@@ -149,6 +149,34 @@ enforcer.Assign("agent-1", agentmesh.RingStandard)
 fmt.Println(enforcer.CheckAccess("agent-1", "data.read")) // true
 ```
 
+### Kill Switch (`kill_switch.go`)
+
+Scoped execution stop controls for global, agent, and capability-level containment.
+
+| Type / Function | Description |
+|---|---|
+| `NewKillSwitch()` | Create a single kill switch |
+| `NewKillSwitchRegistry()` | Create a scoped kill switch registry |
+| `GlobalKillSwitchScope()` | Target all execution globally |
+| `AgentKillSwitchScope(agentID)` | Target one agent |
+| `CapabilityKillSwitchScope(capability)` | Target one capability or tool |
+| `(*KillSwitchRegistry).Activate(scope, reason, message)` | Activate a scoped kill switch |
+| `(*KillSwitchRegistry).Clear(scope, reason, message)` | Clear a scoped kill switch |
+| `(*KillSwitchRegistry).DecisionFor(agentID, capability)` | Resolve whether execution is currently allowed |
+| `(*KillSwitchRegistry).History()` | Return the recorded activation/clear history |
+
+```go
+registry := agentmesh.NewKillSwitchRegistry()
+_, _ = registry.Activate(
+    agentmesh.AgentKillSwitchScope("agent-1"),
+    agentmesh.KillSwitchReasonSecurityIncident,
+    "contain suspicious behavior",
+)
+
+decision := registry.DecisionFor("agent-1", "tool.run")
+fmt.Printf("Allowed: %v\n", decision.Allowed) // false
+```
+
 ### Lifecycle (`lifecycle.go`)
 
 Eight-state lifecycle model with validated transitions.
@@ -193,7 +221,7 @@ Go-native integration helpers built around a composable governance middleware st
 | Type / Function | Description |
 |---|---|
 | `GovernedOperation` | Common operation envelope for tool calls, prompts, and request flows |
-| `CreateGovernanceMiddlewareStack(config)` | Compose policy, capability guard, prompt defense, audit, and SLO middleware |
+| `CreateGovernanceMiddlewareStack(config)` | Compose audit, kill switch, policy, capability guard, prompt defense, and SLO middleware |
 | `NewHTTPGovernanceMiddleware(config)` | Create `net/http` middleware backed by the governance stack |
 | `GovernOperation(...)` | Wrap a generic operation with the standard governance stack |
 

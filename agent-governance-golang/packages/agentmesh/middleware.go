@@ -69,6 +69,7 @@ func (s *GovernanceMiddlewareStack) Execute(operation *GovernedOperation, final 
 type MiddlewareStackConfig struct {
 	Policy                    *PolicyEngine
 	Audit                     *AuditLogger
+	KillSwitches              *KillSwitchRegistry
 	SLO                       *SLOEngine
 	SLOObjective              string
 	AllowedTools              []string
@@ -119,6 +120,9 @@ func CreateGovernanceMiddlewareStack(config MiddlewareStackConfig) (*GovernanceM
 	if config.Audit != nil {
 		stack.Use(AuditTrailMiddleware(config.Audit))
 	}
+	if config.KillSwitches != nil {
+		stack.Use(KillSwitchMiddleware(config.KillSwitches))
+	}
 	stack.Use(PolicyEvaluationMiddleware(config.Policy))
 	if len(config.AllowedTools) > 0 || len(config.DeniedTools) > 0 {
 		stack.Use(CapabilityGuardMiddleware(config.AllowedTools, config.DeniedTools))
@@ -130,6 +134,36 @@ func CreateGovernanceMiddlewareStack(config MiddlewareStackConfig) (*GovernanceM
 		stack.Use(SLOTrackingMiddleware(config.SLO, config.SLOObjective))
 	}
 	return stack, nil
+}
+
+// KillSwitchMiddleware blocks execution when a scoped kill switch is active.
+func KillSwitchMiddleware(registry *KillSwitchRegistry) OperationMiddleware {
+	return func(next OperationHandler) OperationHandler {
+		return func(operation *GovernedOperation) error {
+			if registry == nil {
+				return next(operation)
+			}
+
+			capability := defaultString(operation.ToolName, operation.Action)
+			decision := registry.DecisionFor(operation.AgentID, capability)
+			ensureOperationMetadata(operation)
+			operation.Metadata["kill_switch_decision"] = decision
+			if err := killSwitchDecisionError(decision); err != nil {
+				return err
+			}
+			return next(operation)
+		}
+	}
+}
+
+func killSwitchDecisionError(decision KillSwitchDecision) error {
+	if decision.Allowed {
+		return nil
+	}
+	if decision.Scope != nil {
+		return fmt.Errorf("%w: %s", ErrKillSwitchActive, decision.Scope.String())
+	}
+	return ErrKillSwitchActive
 }
 
 // PolicyEvaluationMiddleware enforces policy before the next handler executes.
@@ -264,6 +298,7 @@ func SLOTrackingMiddleware(slo *SLOEngine, objective string) OperationMiddleware
 type HTTPMiddlewareConfig struct {
 	Policy                    *PolicyEngine
 	Audit                     *AuditLogger
+	KillSwitches              *KillSwitchRegistry
 	SLO                       *SLOEngine
 	SLOObjective              string
 	ActionResolver            func(*http.Request) string
@@ -283,6 +318,7 @@ func NewHTTPGovernanceMiddleware(config HTTPMiddlewareConfig) (func(http.Handler
 	stack, err := CreateGovernanceMiddlewareStack(MiddlewareStackConfig{
 		Policy:                    config.Policy,
 		Audit:                     config.Audit,
+		KillSwitches:              config.KillSwitches,
 		SLO:                       config.SLO,
 		SLOObjective:              config.SLOObjective,
 		AllowedTools:              config.AllowedTools,
@@ -347,7 +383,9 @@ func NewHTTPGovernanceMiddleware(config HTTPMiddlewareConfig) (func(http.Handler
 				return
 			}
 			statusCode := http.StatusForbidden
-			if !errors.Is(err, ErrPolicyDenied) && !errors.Is(err, ErrVerifiedAgentIdentityRequired) {
+			if !errors.Is(err, ErrPolicyDenied) &&
+				!errors.Is(err, ErrKillSwitchActive) &&
+				!errors.Is(err, ErrVerifiedAgentIdentityRequired) {
 				statusCode = http.StatusInternalServerError
 			}
 			http.Error(w, err.Error(), statusCode)
@@ -355,11 +393,33 @@ func NewHTTPGovernanceMiddleware(config HTTPMiddlewareConfig) (func(http.Handler
 	}, nil
 }
 
+// GovernOperationOption configures GovernOperation without changing existing call sites.
+type GovernOperationOption func(*governOperationConfig)
+
+type governOperationConfig struct {
+	killSwitches *KillSwitchRegistry
+}
+
+// WithGovernOperationKillSwitches enables kill switch enforcement for GovernOperation.
+func WithGovernOperationKillSwitches(registry *KillSwitchRegistry) GovernOperationOption {
+	return func(config *governOperationConfig) {
+		config.killSwitches = registry
+	}
+}
+
 // GovernOperation executes a single operation behind the standard governance stack.
-func GovernOperation(action string, policyContext map[string]interface{}, policy *PolicyEngine, audit *AuditLogger, slo *SLOEngine, sloObjective string, operation func() error) error {
+func GovernOperation(action string, policyContext map[string]interface{}, policy *PolicyEngine, audit *AuditLogger, slo *SLOEngine, sloObjective string, operation func() error, opts ...GovernOperationOption) error {
+	config := &governOperationConfig{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(config)
+		}
+	}
+
 	stack, err := CreateGovernanceMiddlewareStack(MiddlewareStackConfig{
 		Policy:       policy,
 		Audit:        audit,
+		KillSwitches: config.killSwitches,
 		SLO:          slo,
 		SLOObjective: sloObjective,
 	})
@@ -369,7 +429,7 @@ func GovernOperation(action string, policyContext map[string]interface{}, policy
 	return stack.Execute(&GovernedOperation{
 		AgentID:  stringValueFromContext(policyContext, "agent_id", "agent", ""),
 		Action:   action,
-		ToolName: action,
+		ToolName: stringValueFromContext(policyContext, "tool_name", "tool", action),
 		Input:    policyContext,
 	}, func(*GovernedOperation) error {
 		return operation()
