@@ -83,6 +83,7 @@ class AttestationReceipt:
                 "reading_hash": self.reading_hash,
                 "policy_id": self.policy_id,
                 "policy_decision": self.policy_decision,
+                "violation_reason": self.violation_reason,
                 "shipment_id": self.shipment_id,
             },
             sort_keys=True,

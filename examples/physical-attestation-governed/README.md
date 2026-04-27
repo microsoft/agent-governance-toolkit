@@ -93,6 +93,17 @@ Sensor       Type         Value        Decision   Details
 - **Industrial IoT** — equipment vibration governance
 - **Logistics** — shipment integrity verification
 
+## Limitations
+
+This example is for **demonstration purposes only**:
+
+- Policy thresholds are hardcoded in Python to keep the example self-contained
+  (no Cedar engine dependency). In production, use the AGT Cedar evaluator.
+- Tamper detection uses SHA-256 hashing without cryptographic signatures.
+  For non-repudiation, combine with the `mcp-receipt-governed` signing adapter.
+- The in-memory receipt list is not persisted. Production deployments should
+  use a durable audit store.
+
 ## License
 
 MIT
