@@ -1,0 +1,70 @@
+name: 'PR Triage Spray Detection'
+description: 'Detect cross-repo spray and credibility laundering from PRs and Issues'
+author: 'Microsoft'
+branding:
+  icon: 'alert-triangle'
+  color: 'orange'
+
+inputs:
+  github-token:
+    description: 'GitHub token for querying APIs'
+    required: true
+  spray-threshold:
+    description: 'Flag if the user filed similar issues/PRs in X other repos this week'
+    required: false
+    default: '3'
+  check-credential-claims:
+    description: 'Check if the body references merges in other repos'
+    required: false
+    default: 'true'
+  check-cross-repo-spray:
+    description: 'Check for cross repo spray patterns'
+    required: false
+    default: 'true'
+  monitor-repos:
+    description: 'Newline-separated list of repos to monitor'
+    required: false
+    default: ''
+  watchlist:
+    description: 'JSON list of known suspicious actors'
+    required: false
+    default: '[]'
+
+outputs:
+  risk-level:
+    description: 'Calculated risk level (LOW, MEDIUM, HIGH)'
+    value: ${{ steps.triage.outputs.risk_level }}
+  spray-detected:
+    description: 'Whether spray was detected'
+    value: ${{ steps.triage.outputs.spray_detected }}
+  findings:
+    description: 'JSON findings'
+    value: ${{ steps.triage.outputs.findings }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Dependencies
+      shell: bash
+      run: |
+        pip install requests PyGithub
+
+    - name: Run PR Triage
+      id: triage
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        SPRAY_THRESHOLD: ${{ inputs.spray-threshold }}
+        CHECK_CREDENTIALS: ${{ inputs.check-credential-claims }}
+        CHECK_SPRAY: ${{ inputs.check-cross-repo-spray }}
+        MONITOR_REPOS: ${{ inputs.monitor-repos }}
+        WATCHLIST: ${{ inputs.watchlist }}
+        GITHUB_EVENT_PATH: ${{ github.event_path }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        python ${{ github.action_path }}/triage.py
