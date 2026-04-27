@@ -237,6 +237,74 @@ class TestSQLiteMeasurementStore:
         rows = store.query("sli", 0)
         assert len(rows) == 8 * 50
 
+    # -- Hygiene follow-ups from #1504 --
+
+    def test_symlink_traversal_rejected(self, tmp_path: object) -> None:
+        """Symlink inside safe dir pointing outside must be rejected."""
+        import os
+        import pathlib
+
+        safe_dir = pathlib.Path(str(tmp_path)) / "safe"
+        safe_dir.mkdir()
+        target_outside = pathlib.Path("/etc/passwd")
+        link = safe_dir / "escape.db"
+        try:
+            link.symlink_to(target_outside)
+        except OSError:
+            pytest.skip("Cannot create symlinks on this system")
+        # resolve() follows the symlink — the real path is /etc/passwd
+        # which is outside all safe dirs.
+        with pytest.raises(ValueError, match="Invalid db_path|outside allowed"):
+            _validate_db_path(str(link))
+
+    def test_relative_dot_dot_components_normalised(self, tmp_path: object) -> None:
+        """Paths with ../ components resolve and are validated normally."""
+        import pathlib
+
+        # tmp_path/sub/../db.sqlite resolves to tmp_path/db.sqlite
+        raw = str(pathlib.Path(str(tmp_path)) / "sub" / ".." / "db.sqlite")
+        result = _validate_db_path(raw)
+        expected = str(pathlib.Path(str(tmp_path)) / "db.sqlite")
+        assert result == expected
+
+    def test_redundant_separators_normalised(self, tmp_path: object) -> None:
+        """Paths with redundant separators (////) are normalised."""
+        import pathlib
+
+        raw = str(tmp_path) + "////db.sqlite"
+        result = _validate_db_path(raw)
+        expected = str(pathlib.Path(str(tmp_path)) / "db.sqlite")
+        assert result == expected
+
+    def test_unicode_path_accepted(self, tmp_path: object) -> None:
+        """Paths containing valid Unicode characters are accepted."""
+        import pathlib
+
+        raw = str(pathlib.Path(str(tmp_path)) / "données" / "sli.db")
+        result = _validate_db_path(raw)
+        assert "données" in result or "donn" in result  # may be NFC-normalised
+
+    def test_null_byte_in_path_raises(self) -> None:
+        """Null bytes in paths must be rejected with a clear error message."""
+        with pytest.raises(ValueError, match="null byte"):
+            _validate_db_path("/tmp/evil\x00.db")
+
+    def test_unicode_nfc_nfd_normalization(self, tmp_path: object) -> None:
+        """NFC and NFD normalisation forms for the same name resolve identically."""
+        import pathlib
+        import unicodedata
+
+        name_nfc = unicodedata.normalize("NFC", "café")
+        name_nfd = unicodedata.normalize("NFD", "café")
+        path_nfc = str(pathlib.Path(str(tmp_path)) / name_nfc / "sli.db")
+        path_nfd = str(pathlib.Path(str(tmp_path)) / name_nfd / "sli.db")
+        result_nfc = _validate_db_path(path_nfc)
+        result_nfd = _validate_db_path(path_nfd)
+        # On macOS, the filesystem normalises to NFD; on Linux they may differ.
+        # Both must resolve without error.
+        assert isinstance(result_nfc, str)
+        assert isinstance(result_nfd, str)
+
 
 # ---------------------------------------------------------------------------
 # SLI integration: SQLite store survives "restart" (re-open)

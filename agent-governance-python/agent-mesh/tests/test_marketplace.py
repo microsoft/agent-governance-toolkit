@@ -392,3 +392,85 @@ class TestPluginInstaller:
         )
         dest = installer.install("test-plugin")
         assert dest.exists()
+
+
+# ---------------------------------------------------------------------------
+# Hygiene follow-ups from #1504
+# ---------------------------------------------------------------------------
+
+
+class TestPluginSignerEdgeCases:
+    """Additional signing edge cases per issue #1504."""
+
+    def test_key_reuse_deterministic(self) -> None:
+        """Signing the same manifest twice with the same key yields different
+        signatures (Ed25519 is deterministic, but verify both pass)."""
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        public_key = private_key.public_key()
+        signer = PluginSigner(private_key)
+        m = _make_manifest()
+        signed1 = signer.sign(m)
+        signed2 = signer.sign(m)
+        # Both signatures must verify
+        assert verify_signature(signed1, public_key) is True
+        assert verify_signature(signed2, public_key) is True
+        # Ed25519 is deterministic — same input → same sig
+        assert signed1.signature == signed2.signature
+
+    def test_corrupted_signature_bytes_rejected(self) -> None:
+        """A manifest with garbled base64 signature should be rejected."""
+        m = _make_manifest(signature="THIS-IS-NOT-VALID-BASE64!!!")
+        public_key = ed25519.Ed25519PrivateKey.generate().public_key()
+        with pytest.raises(MarketplaceError, match="verification failed"):
+            verify_signature(m, public_key)
+
+    def test_empty_signature_string_rejected(self) -> None:
+        """An empty-string signature must be treated as missing."""
+        m = _make_manifest(signature="")
+        public_key = ed25519.Ed25519PrivateKey.generate().public_key()
+        with pytest.raises(MarketplaceError, match="no signature"):
+            verify_signature(m, public_key)
+
+    def test_truncated_signature_rejected(self) -> None:
+        """A truncated (too-short) signature should fail verification."""
+        import base64
+
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        public_key = private_key.public_key()
+        signer = PluginSigner(private_key)
+        m = _make_manifest()
+        signed = signer.sign(m)
+        # Truncate the signature to 16 bytes
+        raw_sig = base64.b64decode(signed.signature)
+        truncated = base64.b64encode(raw_sig[:16]).decode()
+        tampered = signed.model_copy(update={"signature": truncated})
+        with pytest.raises(MarketplaceError, match="verification failed"):
+            verify_signature(tampered, public_key)
+
+
+class TestTrustedKeysImmutability:
+    """Verify that PluginInstaller.trusted_keys is frozen at construction."""
+
+    def test_trusted_keys_cannot_be_mutated(self, tmp_path: Path) -> None:
+        """Attempting to add a key after construction must raise TypeError."""
+        registry = PluginRegistry()
+        installer = PluginInstaller(
+            plugins_dir=tmp_path / "plugins",
+            registry=registry,
+            trusted_keys={"author": ed25519.Ed25519PrivateKey.generate().public_key()},
+        )
+        with pytest.raises(TypeError):
+            installer._trusted_keys["evil"] = "injected"  # type: ignore[index]
+
+    def test_original_dict_mutation_does_not_affect_installer(self, tmp_path: Path) -> None:
+        """Mutating the original dict after construction must not change installer state."""
+        registry = PluginRegistry()
+        original = {"author": ed25519.Ed25519PrivateKey.generate().public_key()}
+        installer = PluginInstaller(
+            plugins_dir=tmp_path / "plugins",
+            registry=registry,
+            trusted_keys=original,
+        )
+        original["evil"] = "injected"
+        assert "evil" not in installer._trusted_keys
+

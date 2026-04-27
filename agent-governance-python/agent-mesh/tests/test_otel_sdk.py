@@ -214,3 +214,64 @@ class TestGracefulDegradation:
         inst.record_policy_decision("deny", 2.0)
         inst.record_trust_score("a1", 0.5)
         inst.record_audit_chain_length(10)
+
+
+# =========================================================================
+# GovernanceInstrumentor — thread safety (#1504)
+# =========================================================================
+
+
+class TestGovernanceInstrumentorThreadSafety:
+    """Concurrent use of GovernanceInstrumentor must not corrupt state."""
+
+    def test_concurrent_trace_and_record(self):
+        """Multiple threads calling trace and record concurrently must not raise."""
+        import threading
+
+        inst, _exporter = _make_instrumentor()
+        errors: list[Exception] = []
+
+        def worker(idx: int) -> None:
+            try:
+                for _ in range(20):
+                    with inst.trace_policy_evaluation(f"action-{idx}", f"agent-{idx}"):
+                        pass
+                    inst.record_policy_decision("allow", float(idx))
+                    inst.record_trust_score(f"agent-{idx}", 0.9)
+                    with inst.trace_trust_update(f"agent-{idx}", 0.5, 0.8):
+                        pass
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(16)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # Primary assertion: no thread raised an exception.
+        assert not errors, f"Thread-safety errors: {errors}"
+
+    def test_concurrent_disabled_noop(self):
+        """Disabled instrumentor must be safe under concurrent use."""
+        import threading
+
+        inst = GovernanceInstrumentor(enabled=False)
+        errors: list[Exception] = []
+
+        def worker(idx: int) -> None:
+            try:
+                for _ in range(20):
+                    with inst.trace_policy_evaluation(f"act-{idx}", f"a-{idx}"):
+                        pass
+                    inst.record_policy_decision("deny", 1.0)
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(16)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors, f"Thread-safety errors: {errors}"
