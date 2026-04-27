@@ -422,6 +422,12 @@ Agent SRE completes the governance-to-reliability stack:
 - Custom semantic conventions for agent-specific telemetry
 - Compatible with Grafana, Prometheus, Jaeger, and other OTLP-compatible backends
 
+### With Sentry
+- Capture incidents, exceptions, and SLO breaches as Sentry events
+- Live mode (real DSN) or offline mode (in-memory for tests)
+- Structured context: burn rate, budget remaining, agent tags
+- Install with `pip install agent-sre[sentry]`
+
 ---
 
 ## Architecture
@@ -607,7 +613,7 @@ Tabs: SLO Health | Cost Management | Chaos Engineering | Incidents | Progressive
 - [Deployment Guide](docs/deployment.md) — Docker, integration patterns, production checklist
 - [Security Model](docs/security.md) — Threat model, attack vectors, best practices
 - [Concepts](docs/concepts.md) — Why agent reliability is different from infrastructure reliability
-- [Integration Guide](docs/integration-guide.md) — Use with Agent OS, AgentMesh, and OpenTelemetry
+- [Integration Guide](docs/integration-guide.md) — Use with Agent OS, AgentMesh, OpenTelemetry, and Sentry
 - [Comparison](docs/comparison.md) — Detailed comparison with other tools
 
 ---

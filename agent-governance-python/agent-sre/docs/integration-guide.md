@@ -67,3 +67,125 @@ exporter = OTelExporter(endpoint="http://localhost:4317")
 ```
 
 This means agent-level traces appear in the same Grafana/Jaeger dashboards as your infrastructure traces — but with agent-specific attributes like `agent.trust_score`, `agent.decision`, and `agent.policy_result`.
+
+## Sentry Integration
+
+Agent SRE includes a native [Sentry](https://sentry.io) exporter for capturing
+incidents, exceptions, and SLO breaches. The integration supports two modes:
+
+- **Live mode**: Sends events to Sentry via DSN or a provided client instance.
+- **Offline mode**: Stores events in memory for testing and inspection without
+  network calls.
+
+### Installation
+
+Install Agent SRE with the Sentry optional dependency:
+
+```bash
+pip install agent-sre[sentry]
+```
+
+### Quick start (live mode)
+
+```python
+from agent_sre.integrations.sentry import SentryExporter
+
+# Initialize with your Sentry DSN
+exporter = SentryExporter(
+    dsn="https://examplePublicKey@o0.ingest.sentry.io/0",
+    environment="production",
+    release="agent-v1.2.0",
+)
+
+# Capture an incident
+exporter.capture_incident(
+    title="Agent task timeout exceeded 30s threshold",
+    severity="warning",
+    tags={"agent_id": "payment-agent", "task": "process_refund"},
+    context={"timeout_ms": 31200, "retry_count": 3},
+)
+
+# Capture an exception
+try:
+    result = agent.execute(task)
+except Exception as e:
+    exporter.capture_exception(
+        error=e,
+        tags={"agent_id": "payment-agent"},
+        context={"task_input": task.summary},
+    )
+```
+
+### Quick start (offline mode)
+
+Omit the DSN to run in offline mode. Events are stored in memory and accessible
+via the `events` property:
+
+```python
+from agent_sre.integrations.sentry import SentryExporter
+
+exporter = SentryExporter()  # No DSN = offline mode
+assert exporter.is_offline
+
+exporter.capture_incident(title="Test incident", severity="info")
+assert len(exporter.events) == 1
+assert exporter.events[0].message == "Test incident"
+```
+
+### Capturing SLO breaches
+
+When an SLO is breached, capture it with structured context including burn rate
+and budget remaining:
+
+```python
+from agent_sre import SLO, ErrorBudget
+from agent_sre.slo.indicators import TaskSuccessRate
+from agent_sre.integrations.sentry import SentryExporter
+
+slo = SLO(
+    name="payment-agent-success",
+    indicators=[TaskSuccessRate(target=0.99, window="1h")],
+    error_budget=ErrorBudget(total=0.01),
+)
+
+exporter = SentryExporter(dsn="https://...")
+
+# When SLO breaches, capture with full context
+exporter.capture_slo_breach(
+    slo=slo,
+    agent_id="payment-agent",
+    tags={"team": "payments", "tier": "critical"},
+)
+# Event includes: slo name, status, budget_remaining, burn_rate
+```
+
+### Using a custom client
+
+You can provide your own Sentry-compatible client instead of relying on
+`sentry_sdk` auto-initialization. The client must implement `capture_exception`
+and `capture_message` methods:
+
+```python
+import sentry_sdk
+
+sentry_sdk.init(dsn="https://...", traces_sample_rate=0.1)
+exporter = SentryExporter(client=sentry_sdk)
+```
+
+### Exporter statistics
+
+Check the exporter state at any time:
+
+```python
+stats = exporter.get_stats()
+# {"is_offline": False, "total_events": 12, "environment": "production", "release": "v1.2.0"}
+```
+
+### Clearing events
+
+In test scenarios, clear captured events between test cases:
+
+```python
+exporter.clear()
+assert len(exporter.events) == 0
+```
