@@ -45,8 +45,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from .annex_iv import AnnexIVDocument, TechnicalDocumentationExporter
 from .audit import AuditEntry
 from .compliance import ComplianceFramework, ComplianceReport

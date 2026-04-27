@@ -170,7 +170,7 @@ class ConsoleApproval(ApprovalHandler):
 
     def request_approval(self, request: ApprovalRequest) -> ApprovalDecision:
         print(f"\n{'='*60}")
-        print(f"APPROVAL REQUIRED")
+        print("APPROVAL REQUIRED")
         print(f"{'='*60}")
         print(f"  Rule:    {request.rule_name}")
         print(f"  Policy:  {request.policy_name}")

@@ -163,10 +163,14 @@ class PolicyRule(BaseModel):
             try:
                 actual_num = float(actual) if actual is not None else 0
                 target = float(num_str)
-                if op == ">": return actual_num > target
-                if op == "<": return actual_num < target
-                if op == ">=": return actual_num >= target
-                if op == "<=": return actual_num <= target
+                if op == ">":
+                    return actual_num > target
+                if op == "<":
+                    return actual_num < target
+                if op == ">=":
+                    return actual_num >= target
+                if op == "<=":
+                    return actual_num <= target
             except (TypeError, ValueError):
                 return False
 

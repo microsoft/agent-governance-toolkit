@@ -57,7 +57,8 @@ REGISTERED_PACKAGES = {
     "python-multipart", "python-json-logger", "langchain-openai",
     # Slack / messaging
     "slack-sdk", "slack-bolt",
-    # Telemetry
+    # Telemetry / monitoring
+    "sentry-sdk",
     "opentelemetry-instrumentation-fastapi", "opentelemetry-exporter-otlp",
     "opentelemetry-instrumentation-httpx", "opentelemetry-instrumentation-asyncio",
     # pyproject.toml optional-dependency group names (not real packages)

@@ -28,7 +28,6 @@ Usage::
 from __future__ import annotations
 
 import logging
-import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
