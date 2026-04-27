@@ -24,12 +24,12 @@ class MCPSession:
     agent_id: str
     user_id: str | None
     created_at: datetime
-    expires_at: datetime
+    expires_at: datetime | None
     rate_limit_key: str
 
     @property
     def is_expired(self) -> bool:
-        return _utcnow() >= self.expires_at
+        return self.expires_at is not None and _utcnow() >= self.expires_at
 
 
 def _utcnow() -> datetime:
@@ -94,7 +94,7 @@ class MCPSessionAuthenticator:
                 for token in self._agent_sessions.get(agent_id, set())
                 if (
                     (session := self._session_store.get(token)) is not None
-                    and session.expires_at > now
+                    and (session.expires_at is None or session.expires_at > now)
                 )
             )
             if active_for_agent >= self.max_concurrent_sessions:
@@ -117,6 +117,60 @@ class MCPSessionAuthenticator:
         logger.info("Created MCP session for agent %s", agent_id)
         return token
 
+    def bootstrap_session(
+        self,
+        agent_id: str,
+        session_token: str,
+        user_id: str | None = None,
+    ) -> str:
+        """Persist a pre-provisioned session token bound to an agent.
+
+        This is intended for environments that need deterministic bootstrap
+        credentials (for example, wiring a FastAPI server to a deployment-time
+        token map). Bootstrapped sessions do not expire automatically; they
+        remain valid until explicitly revoked or the process restarts.
+        """
+        if not agent_id or not agent_id.strip():
+            raise ValueError("agent_id must not be empty")
+        if not session_token or not session_token.strip():
+            raise ValueError("session_token must not be empty")
+
+        now = _utcnow()
+        with self._lock:
+            self._cleanup_expired_locked(now)
+            active_for_agent = sum(
+                1
+                for token in self._agent_sessions.get(agent_id, set())
+                if (
+                    (session := self._session_store.get(token)) is not None
+                    and (session.expires_at is None or session.expires_at > now)
+                )
+            )
+            if active_for_agent >= self.max_concurrent_sessions:
+                raise RuntimeError(
+                    f"Agent '{agent_id}' exceeded maximum concurrent sessions "
+                    f"({self.max_concurrent_sessions})."
+                )
+
+            existing = self._session_store.get(session_token)
+            if existing is not None and not getattr(existing, "is_expired", False):
+                raise RuntimeError("session_token is already bound to an active session")
+            if existing is not None:
+                self._delete_session_locked(session_token, existing)
+
+            session = MCPSession(
+                token=session_token,
+                agent_id=agent_id,
+                user_id=user_id,
+                created_at=now,
+                expires_at=None,
+                rate_limit_key=f"{user_id}:{agent_id}" if user_id else agent_id,
+            )
+            self._store_session_locked(session)
+
+        logger.info("Bootstrapped MCP session for agent %s", agent_id)
+        return session_token
+
     def validate_session(self, agent_id: str, session_token: str) -> MCPSession | None:
         """Validate a session token for a specific agent.
 
@@ -135,18 +189,25 @@ class MCPSessionAuthenticator:
 
         try:
             with self._lock:
-                session = self._session_store.get(session_token)
-                if session is None:
-                    self._delete_session_locked(session_token)
-                    return None
-                if session.agent_id != agent_id:
-                    return None
-                if session.is_expired:
-                    self._delete_session_locked(session_token, session)
+                session = self._get_valid_session_locked(session_token)
+                if session is None or session.agent_id != agent_id:
                     return None
                 return session
         except Exception:
             logger.error("MCP session validation failed closed", exc_info=True)
+            return None
+
+    def validate_token(self, session_token: str) -> MCPSession | None:
+        """Validate a session token without trusting a caller-asserted agent ID."""
+        if not session_token or not session_token.strip():
+            logger.warning("MCP session token validation failed due to missing token")
+            return None
+
+        try:
+            with self._lock:
+                return self._get_valid_session_locked(session_token)
+        except Exception:
+            logger.error("MCP session token validation failed closed", exc_info=True)
             return None
 
     def revoke_session(self, session_token: str) -> bool:
@@ -202,7 +263,9 @@ class MCPSessionAuthenticator:
 
     def _cleanup_expired_locked(self, now: datetime) -> int:
         expired_tokens = [
-            token for token, expires_at in self._session_expirations.items() if expires_at <= now
+            token
+            for token, expires_at in self._session_expirations.items()
+            if expires_at is not None and expires_at <= now
         ]
         for token in expired_tokens:
             session = self._session_store.get(token)
@@ -211,7 +274,10 @@ class MCPSessionAuthenticator:
 
     def _store_session_locked(self, session: MCPSession) -> None:
         self._session_store.set(session)
-        self._session_expirations[session.token] = session.expires_at
+        if session.expires_at is not None:
+            self._session_expirations[session.token] = session.expires_at
+        else:
+            self._session_expirations.pop(session.token, None)
         self._agent_sessions.setdefault(session.agent_id, set()).add(session.token)
 
     def _delete_session_locked(
@@ -229,3 +295,13 @@ class MCPSessionAuthenticator:
                 if not tokens:
                     self._agent_sessions.pop(stored_session.agent_id, None)
         return deleted or stored_session is not None
+
+    def _get_valid_session_locked(self, session_token: str) -> MCPSession | None:
+        session = self._session_store.get(session_token)
+        if session is None:
+            self._delete_session_locked(session_token)
+            return None
+        if session.is_expired:
+            self._delete_session_locked(session_token, session)
+            return None
+        return session

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -28,6 +29,9 @@ from agent_os.server.models import (
 
 logger = logging.getLogger(__name__)
 
+_EXECUTE_TOKENS_ENV = "AGENT_OS_EXECUTION_TOKENS"
+_ALLOW_UNAUTHENTICATED_EXECUTE_ENV = "AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE"
+
 
 def _detection_result_to_response(result: Any) -> DetectionResponse:
     """Convert a ``DetectionResult`` dataclass to a Pydantic response."""
@@ -49,9 +53,12 @@ class GovServer:
         *,
         title: str = "Agent OS Governance API",
         version: str | None = None,
+        execute_authenticator: Any | None = None,
+        allow_unauthenticated_execute: bool | None = None,
     ) -> None:
         from agent_os import __version__
         from agent_os.health import HealthChecker
+        from agent_os.mcp_session_auth import MCPSessionAuthenticator
         from agent_os.metrics import GovernanceMetrics
         from agent_os.prompt_injection import DetectionConfig, PromptInjectionDetector
 
@@ -59,6 +66,20 @@ class GovServer:
         self._detector = PromptInjectionDetector(DetectionConfig(sensitivity="balanced"))
         self._metrics = GovernanceMetrics()
         self._health_checker = HealthChecker(version=self._version)
+        self._execute_authenticator: MCPSessionAuthenticator | None = (
+            execute_authenticator or _build_execute_authenticator_from_env()
+        )
+        self._allow_unauthenticated_execute = (
+            _read_bool_env(_ALLOW_UNAUTHENTICATED_EXECUTE_ENV, default=False)
+            if allow_unauthenticated_execute is None
+            else allow_unauthenticated_execute
+        )
+        if not self._allow_unauthenticated_execute and self._execute_authenticator is None:
+            logger.warning(
+                "Execute authentication is enabled but no bearer tokens are configured. "
+                "/api/v1/execute will return 503 until %s or execute_authenticator is set.",
+                _EXECUTE_TOKENS_ENV,
+            )
         self._app = create_app(self, title=title)
 
     @property
@@ -77,6 +98,91 @@ class GovServer:
     def health_checker(self) -> Any:
         return self._health_checker
 
+    @property
+    def execute_authenticator(self) -> Any:
+        return self._execute_authenticator
+
+    @property
+    def allow_unauthenticated_execute(self) -> bool:
+        return self._allow_unauthenticated_execute
+
+
+def _read_bool_env(name: str, *, default: bool) -> bool:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_execute_tokens(raw_tokens: str) -> dict[str, str]:
+    tokens: dict[str, str] = {}
+    seen_tokens: set[str] = set()
+    for item in re.split(r"[,\n;]+", raw_tokens):
+        entry = item.strip()
+        if not entry:
+            continue
+        agent_id, separator, token = entry.partition("=")
+        if separator == "" or not agent_id.strip() or not token.strip():
+            raise ValueError(
+                f"Invalid {_EXECUTE_TOKENS_ENV} entry '{entry}'. Use 'agent-id=token'."
+            )
+        normalized_agent_id = agent_id.strip()
+        normalized_token = token.strip()
+        if normalized_agent_id in tokens:
+            raise ValueError(f"Duplicate execute token mapping for agent '{normalized_agent_id}'.")
+        if normalized_token in seen_tokens:
+            raise ValueError("Execute bearer tokens must be unique per agent.")
+        tokens[normalized_agent_id] = normalized_token
+        seen_tokens.add(normalized_token)
+    return tokens
+
+
+def _build_execute_authenticator_from_env() -> Any | None:
+    from agent_os.mcp_session_auth import MCPSessionAuthenticator
+
+    raw_tokens = os.environ.get(_EXECUTE_TOKENS_ENV, "").strip()
+    if not raw_tokens:
+        return None
+
+    authenticator = MCPSessionAuthenticator()
+    for agent_id, token in _parse_execute_tokens(raw_tokens).items():
+        authenticator.bootstrap_session(agent_id, token)
+    return authenticator
+
+
+def _extract_bearer_token(request: Request) -> str:
+    authorization = request.headers.get("Authorization", "")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid Authorization header. Use 'Bearer <session-token>'.",
+        )
+    return token.strip()
+
+
+def _authenticate_execute_request(
+    request: Request,
+    *,
+    execute_authenticator: Any | None,
+    allow_unauthenticated_execute: bool,
+) -> Any | None:
+    if allow_unauthenticated_execute:
+        return None
+    if execute_authenticator is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Execute authentication is not configured. Set AGENT_OS_EXECUTION_TOKENS or "
+                "provide GovServer(execute_authenticator=...)."
+            ),
+        )
+
+    session = execute_authenticator.validate_token(_extract_bearer_token(request))
+    if session is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired execute bearer token.")
+    return session
+
 
 def create_app(
     server: GovServer | None = None,
@@ -87,6 +193,12 @@ def create_app(
     from agent_os import __version__
 
     version = server._version if server else __version__
+    execute_authenticator = server.execute_authenticator if server else _build_execute_authenticator_from_env()
+    allow_unauthenticated_execute = (
+        server.allow_unauthenticated_execute
+        if server
+        else _read_bool_env(_ALLOW_UNAUTHENTICATED_EXECUTE_ENV, default=False)
+    )
 
     app = FastAPI(
         title=title,
@@ -229,13 +341,36 @@ def create_app(
     # -- execute -----------------------------------------------------------
 
     @app.post("/api/v1/execute", response_model=ExecuteResponse)
-    async def execute(req: ExecuteRequest) -> ExecuteResponse:
+    async def execute(req: ExecuteRequest, request: Request) -> ExecuteResponse:
         """Execute an action through the stateless kernel."""
         from agent_os.stateless import ExecutionContext, StatelessKernel
 
+        authenticated_session = _authenticate_execute_request(
+            request,
+            execute_authenticator=execute_authenticator,
+            allow_unauthenticated_execute=allow_unauthenticated_execute,
+        )
+        if authenticated_session is not None:
+            if req.agent_id and req.agent_id != authenticated_session.agent_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "Request agent_id does not match the identity bound to the "
+                        "execute bearer token."
+                    ),
+                )
+            effective_agent_id = authenticated_session.agent_id
+        else:
+            if not req.agent_id:
+                raise HTTPException(
+                    status_code=422,
+                    detail="agent_id is required when unauthenticated execute mode is enabled.",
+                )
+            effective_agent_id = req.agent_id
+
         kernel = StatelessKernel()
         ctx = ExecutionContext(
-            agent_id=req.agent_id,
+            agent_id=effective_agent_id,
             policies=req.policies,
         )
         try:

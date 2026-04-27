@@ -32,6 +32,39 @@ def test_validate_rejects_wrong_agent():
     assert authenticator.validate_session("did:mesh:agent-002", token) is None
 
 
+def test_validate_token_returns_bound_session_without_caller_asserted_agent():
+    authenticator = MCPSessionAuthenticator()
+    token = authenticator.create_session("did:mesh:agent-001", user_id="user@example.com")
+
+    session = authenticator.validate_token(token)
+
+    assert session is not None
+    assert session.agent_id == "did:mesh:agent-001"
+    assert session.user_id == "user@example.com"
+
+
+def test_bootstrap_session_supports_static_server_tokens():
+    authenticator = MCPSessionAuthenticator()
+
+    authenticator.bootstrap_session("did:mesh:agent-001", "server-bootstrap-token")
+
+    session = authenticator.validate_token("server-bootstrap-token")
+    assert session is not None
+    assert session.agent_id == "did:mesh:agent-001"
+    assert session.expires_at is None
+
+
+def test_bootstrap_session_does_not_expire_with_runtime_ttl():
+    authenticator = MCPSessionAuthenticator(session_ttl=timedelta(milliseconds=10))
+
+    authenticator.bootstrap_session("did:mesh:agent-001", "server-bootstrap-token")
+    time.sleep(0.05)
+
+    session = authenticator.validate_token("server-bootstrap-token")
+    assert session is not None
+    assert session.agent_id == "did:mesh:agent-001"
+
+
 def test_expired_session_is_rejected():
     authenticator = MCPSessionAuthenticator(session_ttl=timedelta(milliseconds=10))
     token = authenticator.create_session("did:mesh:agent-001")
