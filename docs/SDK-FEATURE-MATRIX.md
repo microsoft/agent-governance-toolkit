@@ -51,7 +51,7 @@ governance stack for enterprise deployments:
 | Capability | Package | Description |
 |---|---|---|
 | **Replay Debugging** | `agent-sre` | Deterministic replay of agent sessions |
-| **Governance Dashboard** | `demo/` | Real-time fleet visibility (Streamlit) |
+| **Governance Dashboard** | `examples/demos/` | Real-time fleet visibility (Streamlit) |
 | **Unified CLI (`agt`)** | `agent-compliance` | `agt verify`, `agt doctor`, `agt lint-policy` |
 | **OWASP Verification** | `agent-compliance` | ASI 2026 compliance attestation |
 | **20+ Framework Adapters** | `agentmesh-integrations` | LangChain, CrewAI, AutoGen, OpenAI Agents, Google ADK, etc. |

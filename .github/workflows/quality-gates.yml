@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: chmod +x ci/no-stubs.sh && ci/no-stubs.sh origin/${{ github.base_ref }}
+      - run: chmod +x scripts/ci/no-stubs.sh && scripts/ci/no-stubs.sh origin/${{ github.base_ref }}
 
   no-custom-crypto:
     name: No Unauthorized Crypto
@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: chmod +x ci/no-custom-crypto.sh && ci/no-custom-crypto.sh origin/${{ github.base_ref }}
+      - run: chmod +x scripts/ci/no-custom-crypto.sh && scripts/ci/no-custom-crypto.sh origin/${{ github.base_ref }}
 
   security-audit-required:
     name: Security Audit Required
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: chmod +x ci/security-audit-required.sh && ci/security-audit-required.sh origin/${{ github.base_ref }}
+      - run: chmod +x scripts/ci/security-audit-required.sh && scripts/ci/security-audit-required.sh origin/${{ github.base_ref }}
 
   vendored-patch-audit:
     name: Dependency Audit Trail
@@ -42,4 +42,4 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: chmod +x ci/vendored-patch-audit.sh && ci/vendored-patch-audit.sh origin/${{ github.base_ref }}
+      - run: chmod +x scripts/ci/vendored-patch-audit.sh && scripts/ci/vendored-patch-audit.sh origin/${{ github.base_ref }}

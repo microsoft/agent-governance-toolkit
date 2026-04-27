@@ -810,7 +810,7 @@ if decision:
 | MAF middleware | `agent-governance-python/agent-os/src/agent_os/integrations/maf_adapter.py` |
 | Conflict resolution | `agent-governance-python/agent-mesh/src/agentmesh/governance/conflict_resolution.py` |
 | Policy examples | `agent-governance-python/agent-os/examples/policies/` |
-| Research demo | `demo/policies/research_policy.yaml` |
+| Research demo | `examples/demos/policies/research_policy.yaml` |
 
 ---
 

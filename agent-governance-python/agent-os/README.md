@@ -175,7 +175,7 @@ That's it! Your agent now has deterministic policy enforcement. [Learn more →]
 
 **🎬 See all features in action:**
 ```bash
-git clone https://github.com/microsoft/agent-governance-toolkit && cd agent-governance-toolkit && pip install -e agent-os && python demo/maf_governance_demo.py
+git clone https://github.com/microsoft/agent-governance-toolkit && cd agent-governance-toolkit && pip install -e agent-os && python examples/demos/maf_governance_demo.py
 ```
 
 <details>

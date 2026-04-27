@@ -9,7 +9,7 @@ This document describes the requirements and compliance policies for publishing
 packages from the Agent Governance Toolkit to public registries.
 
 For all registries, the approved path is **ESRP Release** via Azure DevOps
-pipelines (`pipelines/esrp-publish.yml`) unless noted otherwise.
+pipelines (`.github/pipelines/esrp-publish.yml`) unless noted otherwise.
 
 > [!WARNING]
 > **GitHub Packages** is not an approved general-purpose package registry for
@@ -143,7 +143,7 @@ npm pack
 ### Policy
 
 NuGet packages are published following the process at [aka.ms/nuget](https://aka.ms/nuget).
-Publishing uses the ADO pipeline (`pipelines/esrp-publish.yml` with target `nuget`).
+Publishing uses the ADO pipeline (`.github/pipelines/esrp-publish.yml` with target `nuget`).
 
 - GitHub Actions is **not** used for NuGet publishing
 - Follow Microsoft's NuGet signing and namespace reservation requirements
@@ -162,7 +162,7 @@ Publishing uses the ADO pipeline (`pipelines/esrp-publish.yml` with target `nuge
 ### Policy
 
 The Rust crate is published to [crates.io](https://crates.io) via **ESRP Release**
-using the ADO pipeline (`pipelines/esrp-publish.yml` with target `rust`).
+using the ADO pipeline (`.github/pipelines/esrp-publish.yml` with target `rust`).
 All crates are published under the official
 [`microsoft-oss-releases`](https://crates.io/users/microsoft-oss-releases) account.
 
@@ -219,7 +219,7 @@ Go modules are published via the [Go module proxy](https://proxy.golang.org).
 No explicit upload is needed — the proxy indexes modules automatically when a
 matching git tag is pushed.
 
-The ADO pipeline (`pipelines/esrp-publish.yml` with target `go`) builds, tests,
+The ADO pipeline (`.github/pipelines/esrp-publish.yml` with target `go`) builds, tests,
 and tags the module.
 
 ### Published Packages
@@ -316,7 +316,7 @@ the future, follow the PMC onboarding process.
 
 ## Pipeline Overview
 
-The unified ESRP pipeline (`pipelines/esrp-publish.yml`) supports these targets:
+The unified ESRP pipeline (`.github/pipelines/esrp-publish.yml`) supports these targets:
 
 | Target | Registry | Method |
 |--------|----------|--------|

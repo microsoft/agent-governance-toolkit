@@ -1,7 +1,7 @@
 # Dependency Audits
 
 This directory contains dependency audit documents required by the
-`ci/vendored-patch-audit.sh` CI gate.
+`scripts/ci/vendored-patch-audit.sh` CI gate.
 
 When a PR changes lockfiles (`requirements.txt`, `Cargo.lock`,
 `package-lock.json`, `go.sum`, `packages.lock.json`, etc.) or vendored

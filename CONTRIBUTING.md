@@ -47,8 +47,8 @@ term home for that language.
 | Standalone language implementations | `agent-governance-python/`, `agent-governance-dotnet/`, `agent-governance-golang/`, or other `agent-governance-*` siblings at the repository root |
 | Tutorials, architecture, package docs | `docs/` |
 | Runnable framework integrations | `examples/` |
-| Interactive or live demos | `demo/` |
-| Azure DevOps publishing/release automation | `pipelines/` |
+| Interactive or live demos | `examples/demos/` |
+| Azure DevOps publishing/release automation | `.github/pipelines/` |
 | GitHub Actions, PR automation, templates | `.github/` |
 
 If a directory contains an `AGENTS.md` file, read it before you start. It captures local

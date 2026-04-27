@@ -7,7 +7,7 @@ A Streamlit dashboard for monitoring agent trust networks, credential lifecycles
 > [`agentmesh.dashboard.DashboardAPI`](../../src/agentmesh/dashboard/api.py)
 > backend. Replace the data generators with `DashboardAPI` calls for
 > real-time monitoring. For a fleet-level overview (shadow agents, lifecycle,
-> policy feed), see [`demo/governance-dashboard/`](../../../../demo/governance-dashboard/).
+> policy feed), see [`examples/demos/governance-dashboard/`](../../../../demo/governance-dashboard/).
 
 ## What It Does
 

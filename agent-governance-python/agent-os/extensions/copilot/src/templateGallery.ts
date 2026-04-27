@@ -398,7 +398,7 @@ ${template.exampleUseCase ? `**Example Use Case:** ${template.exampleUseCase}` :
                 category: 'devops',
                 description: 'Automates deployment workflows with rollback capabilities and notifications.',
                 shortDescription: 'Automate deployments',
-                tags: ['deployment', 'ci/cd', 'rollback', 'automation'],
+                tags: ['deployment', 'scripts/ci/cd', 'rollback', 'automation'],
                 complexity: 'advanced',
                 estimatedSetupTime: '30 minutes',
                 spec: {

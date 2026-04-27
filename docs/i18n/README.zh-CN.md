@@ -194,10 +194,10 @@ result := client.ExecuteWithGovernance("data.read", nil)
 
 ```bash
 # 完整治理演示 (policy enforcement, audit, trust, cost, reliability)
-python demo/maf_governance_demo.py
+python examples/demos/maf_governance_demo.py
 
 # 使用对抗性攻击场景运行
-python demo/maf_governance_demo.py --include-attacks
+python examples/demos/maf_governance_demo.py --include-attacks
 ```
 
 ## 更多示例与样本

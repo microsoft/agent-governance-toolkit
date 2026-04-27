@@ -169,7 +169,7 @@ class VerificationIdentity:
             signature_b64 = base64.b64encode(signature_bytes).decode("ascii")
         else:
             # SECURITY WARNING: Fallback simulation — NOT cryptographically secure.
-            # Only for demo/development when cryptography package is unavailable.
+            # Only for examples/demos/development when cryptography package is unavailable.
             sig_input = f"{data}:{self.private_key}"
             signature_b64 = base64.b64encode(
                 hashlib.sha256(sig_input.encode()).digest()

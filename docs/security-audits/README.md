@@ -1,7 +1,7 @@
 # Security Audits
 
 This directory contains security audit documents required by the
-`ci/security-audit-required.sh` CI gate.
+`scripts/ci/security-audit-required.sh` CI gate.
 
 When a PR touches core security surfaces (policy engine, identity, trust,
 encryption, execution rings, kill switch), it **must** include a dated

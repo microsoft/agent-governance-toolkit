@@ -62,7 +62,7 @@ On Windows PowerShell, use `$env:OPENAI_API_KEY = "sk-..."` instead of `export`.
 ### Step 3: Run the demo
 
 ```bash
-python demo/maf_governance_demo.py
+python examples/demos/maf_governance_demo.py
 ```
 
 You'll see 4 scenarios:
@@ -77,7 +77,7 @@ You'll see 4 scenarios:
 ### Step 4: Run adversarial attacks
 
 ```bash
-python demo/maf_governance_demo.py --include-attacks
+python examples/demos/maf_governance_demo.py --include-attacks
 ```
 
 This adds a 5th scenario that tries to break governance:
@@ -253,8 +253,8 @@ cd ../agent-compliance && python -m pytest tests/ -q
 | Area | How to Test | Expected Result |
 |------|------------|-----------------|
 | **Install** | `pip install agent-governance-toolkit[full]` | Installs cleanly, no errors |
-| **Demo** | `python demo/maf_governance_demo.py` | 4 scenarios run, blocked actions shown |
-| **Adversarial** | `python demo/maf_governance_demo.py --include-attacks` | All 4 attacks blocked |
+| **Demo** | `python examples/demos/maf_governance_demo.py` | 4 scenarios run, blocked actions shown |
+| **Adversarial** | `python examples/demos/maf_governance_demo.py --include-attacks` | All 4 attacks blocked |
 | **Policy loading** | Load YAML from `examples/policies/` | Policies parse without errors |
 | **SQL safety** | Run `test_sql_policy.py` | 40 tests pass |
 | **Framework integration** | Run any `examples/quickstart/*.py` | Governed agent works end-to-end |

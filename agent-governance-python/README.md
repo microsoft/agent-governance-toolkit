@@ -22,7 +22,7 @@ This directory is **not** for:
 - monorepo-only product composition code
 - framework-specific integration packages that are not part of the core first-party Python package story
 
-Those surfaces should stay in the repo root, `examples/`, `demo/`, or other existing homes.
+Those surfaces should stay in the repo root, `examples/`, `examples/demos/`, or other existing homes.
 
 ## Current Packages
 

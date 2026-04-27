@@ -31,8 +31,8 @@ go there rather than into the repo root or an older shared SDK path.
 | Standalone language implementations | `agent-governance-python/`, `agent-governance-dotnet/`, `agent-governance-golang/`, `agent-governance-rust/`, and other `agent-governance-*` siblings | Top-level language-specific implementations at the repository root; use these as the canonical contributor-facing paths |
 | Docs site | `docs/` | Reference docs, tutorials, architecture, package pages |
 | Runnable examples | `examples/` | Self-contained integrations and worked examples |
-| Interactive demos | `demo/` | Live demos, dashboards, real-service walkthroughs |
-| Release pipelines | `pipelines/` | Azure DevOps ESRP publishing and release automation |
+| Interactive demos | `examples/demos/` | Live demos, dashboards, real-service walkthroughs |
+| Release pipelines | `.github/pipelines/` | Azure DevOps ESRP publishing and release automation |
 | GitHub automation | `.github/` | CI, PR automation, issue templates, CODEOWNERS |
 
 ## Routing Rules

@@ -243,13 +243,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.2.0] - 2026-03-17
 
 ### Added
-- ESRP Release ADO pipeline for PyPI publishing (`pipelines/pypi-publish.yml`)
-- ESRP Release ADO pipeline for npm publishing (`pipelines/npm-publish.yml`)
+- ESRP Release ADO pipeline for PyPI publishing (`.github/pipelines/pypi-publish.yml`)
+- ESRP Release ADO pipeline for npm publishing (`.github/pipelines/npm-publish.yml`)
 - npm build + pack job in GitHub Actions publish workflow
 - Community preview disclaimers across all READMEs, release notes, and package descriptions
 - `docs/PUBLISHING.md` guide covering PyPI, npm, and NuGet publishing requirements
 - `agent-runtime` re-export wrapper package (`src/agent_runtime/__init__.py`)
-- `releases/RELEASE_NOTES_v2.2.0.md`
+- `docs/releases/RELEASE_NOTES_v2.2.0.md`
 - `create_policies_from_config()` API — load security policies from YAML config files
 - `SQLPolicyConfig` dataclass and `load_sql_policy_config()` for structured policy loading
 - 10 sample policy configs in `examples/policies/` (sql-safety, sql-strict, sql-readonly, sandbox-safety, prompt-injection-safety, mcp-security, semantic-policy, pii-detection, conversation-guardian, cli-security-rules)

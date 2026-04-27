@@ -197,7 +197,7 @@ tier1_agent = Agent(name="tier1-support", kernel=tier1_kernel, ...)
 admin_agent = Agent(name="admin-support", kernel=admin_kernel, ...)
 ```
 
-See the full demo: [`demo/maf-integration/02_helpdesk_it.py`](../../demo/maf-integration/02_helpdesk_it.py)
+See the full demo: [`examples/demos/maf-integration/02_helpdesk_it.py`](../../demo/maf-integration/02_helpdesk_it.py)
 
 ## Step 6 — Prompt Injection Detection
 
@@ -229,7 +229,7 @@ kernel.add_agent_middleware(
 support_agent = Agent(name="support", kernel=kernel, ...)
 ```
 
-See the full demo: [`demo/maf-integration/03_contoso_support.py`](../../demo/maf-integration/03_contoso_support.py)
+See the full demo: [`examples/demos/maf-integration/03_contoso_support.py`](../../demo/maf-integration/03_contoso_support.py)
 
 ## Step 7 — Folder-Level Policies for Multi-Agent Systems
 
