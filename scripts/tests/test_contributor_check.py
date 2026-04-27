@@ -20,7 +20,10 @@ from contributor_check import (
     ReputationReport,
     check_account_shape,
     check_contributor,
+    check_feature_overlap,
+    check_thin_credibility,
     format_report,
+    _check_fork_burst,
 )
 
 
@@ -217,3 +220,159 @@ class TestCheckContributor:
         assert report.risk in ("MEDIUM", "HIGH")
         signal_names = [s.name for s in report.signals]
         assert "new_account_burst" in signal_names or "repo_velocity" in signal_names
+
+
+# ---------------------------------------------------------------------------
+# Fork burst tests
+# ---------------------------------------------------------------------------
+
+class TestForkBurst:
+    def test_no_forks_no_signal(self):
+        repos = [
+            {"name": "my-project", "fork": False, "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
+        ]
+        signals = _check_fork_burst(repos)
+        assert len(signals) == 0
+
+    def test_awesome_fork_burst_detected(self):
+        now = datetime.now(timezone.utc)
+        repos = [
+            {"name": f"awesome-list-{i}", "fork": True, "description": "curated list", "created_at": (now - timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(5)
+        ]
+        signals = _check_fork_burst(repos)
+        names = [s.name for s in signals]
+        assert "awesome_fork_burst" in names
+        burst = [s for s in signals if s.name == "awesome_fork_burst"]
+        assert burst[0].severity == "HIGH"
+
+    def test_general_fork_burst_medium(self):
+        now = datetime.now(timezone.utc)
+        repos = [
+            {"name": f"project-{i}", "fork": True, "created_at": (now - timedelta(hours=i * 2)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(6)
+        ]
+        signals = _check_fork_burst(repos)
+        names = [s.name for s in signals]
+        assert "fork_burst" in names
+
+    def test_old_forks_ignored(self):
+        old = datetime.now(timezone.utc) - timedelta(days=120)
+        repos = [
+            {"name": f"awesome-old-{i}", "fork": True, "description": "awesome list", "created_at": (old + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(5)
+        ]
+        signals = _check_fork_burst(repos)
+        assert len(signals) == 0
+
+
+# ---------------------------------------------------------------------------
+# Feature overlap tests
+# ---------------------------------------------------------------------------
+
+class TestFeatureOverlap:
+    @patch("contributor_check._api")
+    def test_clone_repo_detected(self, mock_api):
+        def api_side_effect(path, params=None):
+            if "/repos" in path and "readme" not in path:
+                return [{
+                    "name": "my-agent-guard",
+                    "fork": False,
+                    "description": "policy engine with mcp scanner, ed25519 agent identity, execution sandbox, audit trail, circuit breaker, owasp agentic compliance",
+                    "topics": ["kill-switch", "trust-scoring"],
+                    "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "stargazers_count": 1,
+                    "full_name": "clone-user/my-agent-guard",
+                }]
+            if "readme" in path:
+                return None
+            return []
+
+        mock_api.side_effect = api_side_effect
+        signals = check_feature_overlap("clone-user", "microsoft/agent-governance-toolkit")
+        assert any(s.name == "feature_overlap" and s.severity == "HIGH" for s in signals)
+
+    @patch("contributor_check._api")
+    def test_unrelated_repo_no_signal(self, mock_api):
+        def api_side_effect(path, params=None):
+            if "/repos" in path:
+                return [{
+                    "name": "my-website",
+                    "fork": False,
+                    "description": "personal blog built with Next.js",
+                    "topics": ["react", "nextjs"],
+                    "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "stargazers_count": 5,
+                }]
+            return []
+
+        mock_api.side_effect = api_side_effect
+        signals = check_feature_overlap("normal-user", "microsoft/agent-governance-toolkit")
+        assert len(signals) == 0
+
+    def test_no_target_repo_skips(self):
+        signals = check_feature_overlap("anyone", None)
+        assert len(signals) == 0
+
+
+# ---------------------------------------------------------------------------
+# Thin credibility tests
+# ---------------------------------------------------------------------------
+
+class TestThinCredibility:
+    @patch("contributor_check._search_issues")
+    @patch("contributor_check._api")
+    def test_thin_repo_promoted_across_orgs(self, mock_api, mock_search):
+        now = datetime.now(timezone.utc)
+
+        def api_side_effect(path, params=None):
+            if "/repos" in path:
+                return [{
+                    "name": "my-framework",
+                    "fork": False,
+                    "full_name": "promo-user/my-framework",
+                    "description": "my governance framework",
+                    "created_at": (now - timedelta(days=10)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "stargazers_count": 0,
+                }]
+            return []
+
+        mock_api.side_effect = api_side_effect
+        mock_search.return_value = [
+            {
+                "title": "Add my-framework support",
+                "body": "my-framework provides governance...",
+                "repository_url": "https://api.github.com/repos/aaif/project-proposals",
+                "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            },
+            {
+                "title": "Integrate my-framework",
+                "body": "my-framework would be great for...",
+                "repository_url": "https://api.github.com/repos/openssf/some-project",
+                "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            },
+        ]
+        signals = check_thin_credibility("promo-user", "microsoft/agent-governance-toolkit")
+        assert any(s.name == "thin_credibility" and s.severity == "HIGH" for s in signals)
+
+    @patch("contributor_check._search_issues")
+    @patch("contributor_check._api")
+    def test_established_repo_no_signal(self, mock_api, mock_search):
+        now = datetime.now(timezone.utc)
+
+        def api_side_effect(path, params=None):
+            if "/repos" in path:
+                return [{
+                    "name": "mature-project",
+                    "fork": False,
+                    "full_name": "good-user/mature-project",
+                    "description": "well established project",
+                    "created_at": (now - timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "stargazers_count": 500,
+                }]
+            return []
+
+        mock_api.side_effect = api_side_effect
+        mock_search.return_value = []
+        signals = check_thin_credibility("good-user", "microsoft/agent-governance-toolkit")
+        assert len(signals) == 0
