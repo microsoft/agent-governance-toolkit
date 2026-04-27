@@ -5,6 +5,34 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- `POST /api/v1/execute` now fails closed by default and no longer trusts
+  caller-asserted `agent_id` values before policy, audit, and rate-limit
+  enforcement.
+
+### Changed
+- Execute requests must now present `Authorization: Bearer <token>` bound to an
+  agent identity through `MCPSessionAuthenticator`, unless you explicitly opt
+  into local-only unsafe mode.
+- `ExecuteRequest.agent_id` is now optional; when present, it must match the
+  authenticated agent identity derived from the bearer token.
+- If execute auth is not configured, unauthenticated requests now return `503`
+  instead of running with a caller-supplied identity.
+
+### Added
+- `AGENT_OS_EXECUTION_TOKENS="agent-id=token"` for packaged-server bootstrap
+  credentials. These tokens remain valid for the life of the process unless
+  revoked explicitly.
+
+### Migration Notes
+- Configure `GovServer(execute_authenticator=...)` or set
+  `AGENT_OS_EXECUTION_TOKENS` before exposing `/api/v1/execute`.
+- `AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE=true` is available only as an unsafe
+  local-development escape hatch. It restores caller-asserted identity behavior
+  and should not be used in shared or production environments.
+
 ## [1.0.0] - 2026-01-26
 
 ### Added - Monorepo Creation

@@ -17,7 +17,14 @@ class ExecuteRequest(BaseModel):
 
     action: str = Field(..., description="Action to execute")
     params: dict = Field(default_factory=dict, description="Action parameters")
-    agent_id: str = Field(..., description="Unique agent identifier")
+    agent_id: str | None = Field(
+        default=None,
+        description=(
+            "Deprecated caller-asserted agent identifier. When execute authentication "
+            "is enabled, omit this field or set it to the same agent bound to the "
+            "bearer token."
+        ),
+    )
     policies: list[str] = Field(default_factory=list, description="Policy names to enforce")
 
 

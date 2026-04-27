@@ -5,13 +5,22 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from agent_os.server.app import GovServer, create_app
+from agent_os.mcp_session_auth import MCPSessionAuthenticator
+from agent_os.server.app import GovServer, _build_execute_authenticator_from_env
 
 
 @pytest.fixture
 def client():
     server = GovServer()
     return TestClient(server.app)
+
+
+@pytest.fixture
+def authenticated_execute_client():
+    authenticator = MCPSessionAuthenticator()
+    token = authenticator.create_session("test-agent", user_id="user@example.com")
+    server = GovServer(execute_authenticator=authenticator)
+    return TestClient(server.app), token
 
 
 # =========================================================================
@@ -246,7 +255,32 @@ class TestAuditEndpoint:
 # =========================================================================
 
 class TestExecuteEndpoint:
-    def test_execute_simple_action(self, client):
+    def test_env_configured_execute_token_authenticates_server(self, monkeypatch):
+        monkeypatch.setenv("AGENT_OS_EXECUTION_TOKENS", "test-agent=env-token")
+        monkeypatch.delenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
+
+        authenticator = _build_execute_authenticator_from_env()
+
+        assert authenticator is not None
+        session = authenticator.validate_token("env-token")
+        assert session is not None
+        assert session.agent_id == "test-agent"
+        assert session.expires_at is None
+
+        server = GovServer(execute_authenticator=authenticator)
+        client = TestClient(server.app)
+        resp = client.post(
+            "/api/v1/execute",
+            json={
+                "action": "database_query",
+                "params": {"query": "SELECT 1"},
+            },
+            headers={"Authorization": "Bearer env-token"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+
+    def test_execute_returns_503_when_auth_not_configured(self, client):
         resp = client.post(
             "/api/v1/execute",
             json={
@@ -255,20 +289,60 @@ class TestExecuteEndpoint:
                 "agent_id": "test-agent",
             },
         )
+        assert resp.status_code == 503
+        assert "AGENT_OS_EXECUTION_TOKENS" in resp.json()["detail"]
+
+    def test_execute_requires_bearer_token(self, authenticated_execute_client):
+        client, _ = authenticated_execute_client
+        resp = client.post(
+            "/api/v1/execute",
+            json={
+                "action": "database_query",
+                "params": {"query": "SELECT 1"},
+            },
+        )
+        assert resp.status_code == 401
+        assert "Bearer" in resp.json()["detail"]
+
+    def test_execute_rejects_spoofed_agent_id(self, authenticated_execute_client):
+        client, token = authenticated_execute_client
+        resp = client.post(
+            "/api/v1/execute",
+            json={
+                "action": "database_query",
+                "params": {"query": "SELECT 1"},
+                "agent_id": "spoofed-agent",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 403
+        assert "does not match" in resp.json()["detail"]
+
+    def test_execute_uses_authenticated_agent_identity(self, authenticated_execute_client):
+        client, token = authenticated_execute_client
+        resp = client.post(
+            "/api/v1/execute",
+            json={
+                "action": "database_query",
+                "params": {"query": "SELECT 1"},
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
         assert body["data"] is not None
 
-    def test_execute_with_policies(self, client):
+    def test_execute_with_policies(self, authenticated_execute_client):
+        client, token = authenticated_execute_client
         resp = client.post(
             "/api/v1/execute",
             json={
                 "action": "file_write",
                 "params": {"path": "/tmp/test.txt"},
-                "agent_id": "test-agent",
                 "policies": ["read_only"],
             },
+            headers={"Authorization": f"Bearer {token}"},
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -279,7 +353,7 @@ class TestExecuteEndpoint:
     def test_execute_missing_action(self, client):
         resp = client.post(
             "/api/v1/execute",
-            json={"params": {}, "agent_id": "test-agent"},
+            json={"params": {}},
         )
         assert resp.status_code == 422  # validation error
 
