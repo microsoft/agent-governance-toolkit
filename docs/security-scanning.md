@@ -330,6 +330,37 @@ Security exemptions are reviewed:
 - **On promotion** - All exemptions reviewed before moving to curated marketplace
 - **Security audits** - Periodic review of all exempted findings
 
+## Plugin Signature Enforcement (Fail-Closed)
+
+> **Since PR #921**, the `PluginInstaller` enforces a **fail-closed** policy for
+> unsigned plugins.
+
+When signature verification is enabled (the default), plugins **without** a valid
+Ed25519 signature are rejected at install time. This means:
+
+- A plugin with no `signature` field → install raises `MarketplaceError`
+- A plugin signed by an author not in `trusted_keys` → install raises `MarketplaceError`
+- A plugin whose signature does not verify → install raises `MarketplaceError`
+
+To install an unsigned plugin during development, pass `verify=False` explicitly:
+
+```python
+installer.install("my-dev-plugin", verify=False)
+```
+
+**This is not recommended for production.** All production deployments should use
+signed plugins from trusted authors.
+
+## Python Version Requirements
+
+The `agent-sre` SLI persistence module uses `pathlib.Path.is_relative_to()` for
+safe directory confinement checks. This method was introduced in **Python 3.9**.
+
+**Minimum Python version: 3.9**
+
+If you encounter `AttributeError: 'PosixPath' object has no attribute 'is_relative_to'`,
+upgrade your Python installation to 3.9 or later.
+
 ## Questions?
 
 - **Security concerns:** Contact @security-team

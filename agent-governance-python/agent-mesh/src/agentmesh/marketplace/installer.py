@@ -12,7 +12,8 @@ from __future__ import annotations
 import logging
 import shutil
 from pathlib import Path
-from typing import Optional
+from types import MappingProxyType
+from typing import Any, Mapping, Optional
 
 from agentmesh.marketplace.manifest import (
     MANIFEST_FILENAME,
@@ -55,11 +56,14 @@ class PluginInstaller:
         self,
         plugins_dir: Path,
         registry: PluginRegistry,
-        trusted_keys: Optional[dict] = None,  # type: ignore[type-arg]
+        trusted_keys: Optional[Mapping[str, Any]] = None,
     ) -> None:
         self._plugins_dir = plugins_dir
         self._registry = registry
-        self._trusted_keys = trusted_keys or {}
+        # Freeze trusted keys at construction time to prevent runtime mutation.
+        self._trusted_keys: MappingProxyType[str, Any] = MappingProxyType(
+            dict(trusted_keys) if trusted_keys else {}
+        )
         self._plugins_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------

@@ -16,7 +16,8 @@ import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Any, Optional
+from types import MappingProxyType
+from typing import Any, Mapping, Optional
 
 import yaml
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -235,11 +236,14 @@ class PluginInstaller:
         self,
         plugins_dir: Path,
         registry: PluginRegistry,
-        trusted_keys: Optional[dict[str, Any]] = None,
+        trusted_keys: Optional[Mapping[str, Any]] = None,
     ) -> None:
         self._plugins_dir = plugins_dir
         self._registry = registry
-        self._trusted_keys = trusted_keys or {}
+        # Freeze trusted keys at construction time to prevent runtime mutation.
+        self._trusted_keys: MappingProxyType[str, Any] = MappingProxyType(
+            dict(trusted_keys) if trusted_keys else {}
+        )
         self._plugins_dir.mkdir(parents=True, exist_ok=True)
 
     def install(
