@@ -109,8 +109,12 @@ parameters:
 # ESRP Configuration
 # Service connection name is hardcoded (required at compile time by ADO).
 # All other values sourced from ADO pipeline variables (mark as secret):
-#   ESRP_KEYVAULT_NAME, ESRP_CERT_IDENTIFIER,
+#   ESRP_KEYVAULT_NAME, ESRP_CERT_IDENTIFIER, ESRP_SIGN_CERT_IDENTIFIER,
 #   ESRP_CLIENT_ID, ESRP_OWNERS, ESRP_APPROVERS
+#
+# ESRP_CERT_IDENTIFIER = authentication certificate (issued by Public CA)
+# ESRP_SIGN_CERT_IDENTIFIER = signing certificate (issued by Private CA)
+# These MUST be two different certificates from different CAs.
 #
 # Note: ESRP_DOMAIN_TENANT_ID was removed from pipeline variables due to
 # cyclical reference. The ESRP cert lives in the PME (Partner Managed
@@ -392,7 +396,7 @@ stages:
               AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
               AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
               AuthCertName: '$(ESRP_CERT_IDENTIFIER)'
-              AuthSignCertName: '$(ESRP_CERT_IDENTIFIER)'
+              AuthSignCertName: '$(ESRP_SIGN_CERT_IDENTIFIER)'
               FolderPath: '$(Pipeline.Workspace)\nuget-unsigned'
               Pattern: '*.dll'
               signConfigType: 'inlineSignParams'
@@ -444,7 +448,7 @@ stages:
               AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
               AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
               AuthCertName: '$(ESRP_CERT_IDENTIFIER)'
-              AuthSignCertName: '$(ESRP_CERT_IDENTIFIER)'
+              AuthSignCertName: '$(ESRP_SIGN_CERT_IDENTIFIER)'
               FolderPath: '$(Pipeline.Workspace)\nuget-unsigned'
               Pattern: '*.nupkg'
               signConfigType: 'inlineSignParams'
