@@ -71,6 +71,8 @@ dev = [
     "websockets>=12.0,<17.0",
     "fastapi>=0.115.0,<1.0",
     "httpx>=0.27.0,<1.0",
+    "opentelemetry-api>=1.20.0,<2.0",
+    "opentelemetry-sdk>=1.20.0,<2.0",
 ]
 redis = [
     "redis>=4.0,<8.0",

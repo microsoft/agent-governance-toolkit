@@ -1,6 +1,7 @@
 {
   "challenge_id": "challenge_67a8568ec049dab7",
   "nonce": "b174f3f32f39ec2565170cc8c3a0c838d0fa5c172954b9641d6b2680d7f83a3a",
+  "freshness_nonce": null,
   "timestamp": "2026-02-18T22:50:53.614420",
   "expires_in_seconds": 30
 }
