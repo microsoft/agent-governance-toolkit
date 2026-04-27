@@ -36,7 +36,7 @@ dependencies = [
 
 [project.optional-dependencies]
 cli = ["click>=8.0,<9.0", "rich>=13.0,<14.0"]
-dev = ["pytest>=7.0,<8.0", "pytest-cov"]
+dev = ["pytest>=7.0,<10.0", "pytest-cov"]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"

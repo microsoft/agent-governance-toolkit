@@ -12,7 +12,6 @@ from pathlib import Path
 # Add modules to path for testing
 REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
-sys.path.insert(0, str(REPO_ROOT / "modules" / "primitives"))
 sys.path.insert(0, str(REPO_ROOT / "modules" / "control-plane" / "src"))
 sys.path.insert(0, str(REPO_ROOT / "modules" / "iatp"))
 sys.path.insert(0, str(REPO_ROOT / "modules" / "cmvk" / "src"))

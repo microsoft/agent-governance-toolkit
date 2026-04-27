@@ -176,11 +176,14 @@ class TestSQLiteMeasurementStore:
             _validate_db_path("file:///etc/passwd")
 
     def test_file_uri_inside_home_accepted(self, tmp_path: object) -> None:
-        """file:// URI resolving inside home dir should be accepted."""
+        """file:// URI resolving inside a safe directory should be accepted."""
         import pathlib
         home = pathlib.Path.home()
-        # Construct a path under home that looks like a file:// URI
-        target = str(home / "sli_test.db")
+        if home.parent == home:
+            # Container/CI: home resolves to "/" — use tmp_path instead.
+            target = str(tmp_path / "sli_test.db")  # type: ignore[operator]
+        else:
+            target = str(home / "sli_test.db")
         result = _validate_db_path(f"file://{target}")
         assert result == str(pathlib.Path(target).resolve())
 
@@ -193,6 +196,17 @@ class TestSQLiteMeasurementStore:
         """/var/log/syslog is outside home/tmp/cwd — should be rejected."""
         with pytest.raises(ValueError, match="Invalid db_path|outside allowed"):
             _validate_db_path("/var/log/syslog")
+
+    def test_prefix_confusion_rejected(self, tmp_path: object) -> None:
+        """Paths sharing a prefix with a safe dir must not pass.
+
+        Regression test: the old str.startswith check would accept
+        /tmp-evil/db.sqlite because it starts with /tmp.
+        """
+        import pathlib
+        evil = pathlib.Path("/tmp-evil/db.sqlite")
+        with pytest.raises(ValueError, match="Invalid db_path|outside allowed"):
+            _validate_db_path(str(evil))
 
     def test_excessively_long_path_raises(self) -> None:
         """Paths > 4096 chars should be rejected."""
