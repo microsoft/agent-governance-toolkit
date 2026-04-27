@@ -129,9 +129,7 @@ This improves Go module proxy resolution and aligns with Go ecosystem convention
 
 - **ryanzhang-oss** — Go SDK reorganization (#1285), Dockerfile fix proposals
 - **lawcontinue** — Chaos testing tutorial, ISO 42001 mapping, Windows UTF-8 fixes, ADR-0006, workshop content
-- **tomjwxf** — Tutorial 33 (offline verifiable receipts), physical attestation examples, GitHub Pages docs site
 - **zeel2104** — Architecture deep dive video series
-- **willamhou** — Signet attestation layer examples
 - **jackbatzner** — Governance wording alignment, contributor routing guidance
 
 ## Install / Upgrade

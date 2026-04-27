@@ -108,13 +108,9 @@ It is not part of the AGT runtime path.
 
 ## Example Reference Implementation
 
-- Repository: https://github.com/joy7758/agent-evidence
-- Prototype path: https://github.com/joy7758/agent-evidence/tree/v0.1-agt-interop-examples/demos/integrations/agt
-- Cookbook: https://github.com/joy7758/agent-evidence/blob/v0.1-agt-interop-examples/demos/docs/cookbooks/agt_to_eeoap_v0_1.md
 - Related issue: https://github.com/microsoft/agent-governance-toolkit/issues/1314
 
-The prototype uses a synthetic AGT-like fixture. It is not an official AGT
-evidence schema.
+No reference implementation is currently available. Community contributions welcome.
 
 ## Review Note
 

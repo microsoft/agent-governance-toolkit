@@ -50,8 +50,6 @@ agent-compliance produces compliance grades. The receipt emits alongside the gra
 
 agent-mesh uses Ed25519 DIDs. The receipt uses the same key material. No new crypto needed.
 
-Signet attestations (#1196) use a similar shape. Converging gives AGT one evidence format.
-
 Physical AI receipts (#787) can use the same bilateral structure.
 
 ## Canonicalization

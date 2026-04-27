@@ -81,7 +81,7 @@ after upgrading the `agentmesh-platform` package.
 |---------|---------|--------|
 | Agent Discovery | 0.1.0 | Public Preview |
 | Agent MCP Governance | 0.1.0 | Public Preview |
-| APS AgentMesh | 0.1.0 | Public Preview |
+
 
 **npm — packages under `@microsoft` scope**
 
