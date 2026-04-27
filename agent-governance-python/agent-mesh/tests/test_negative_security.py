@@ -390,11 +390,15 @@ class TestPluginSignatureBypass:
     """Test that unsigned or wrongly-signed plugins are handled correctly."""
 
     def test_unsigned_plugin_accepted_when_no_trusted_keys(self, tmp_path: Path):
-        """If no trusted_keys are configured, ALL plugins are accepted
-        regardless of verify=True. This is a configuration weakness.
+        """Unsigned plugins are rejected when no trusted_keys are configured.
+
+        Originally asserted permissive acceptance (a known weakness).
+        PR #921 (f71da82) hardened the installer to fail closed.
+        https://github.com/microsoft/agent-governance-toolkit/pull/921
         """
         from agentmesh.marketplace import (
             PluginInstaller, PluginRegistry, PluginManifest, PluginType,
+            MarketplaceError,
         )
 
         registry = PluginRegistry()
@@ -411,10 +415,9 @@ class TestPluginSignatureBypass:
             registry=registry,
             # No trusted_keys!
         )
-        # This succeeds even with verify=True because there's no signature
-        # AND no trusted key for the author
-        dest = installer.install("unsigned-plugin", verify=True)
-        assert dest.exists()
+        # PR #921: installer now fails closed — no signature means rejection
+        with pytest.raises(MarketplaceError, match="has no signature"):
+            installer.install("unsigned-plugin", verify=True)
 
     def test_signed_plugin_with_wrong_key_rejected(self, tmp_path: Path):
         """Plugin signed by an unknown key should be rejected if author

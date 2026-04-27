@@ -96,7 +96,8 @@ class TestTraceTrustUpdate:
 
     def test_creates_span_with_scores(self):
         inst, exporter = _make_instrumentor()
-        inst.trace_trust_update("agent-3", 0.5, 0.8)
+        with inst.trace_trust_update("agent-3", 0.5, 0.8):
+            pass
         spans = exporter.get_finished_spans()
         assert len(spans) == 1
         assert spans[0].name == "agt.trust.update"
@@ -111,7 +112,8 @@ class TestTraceAuditAppend:
 
     def test_creates_span_with_seq(self):
         inst, exporter = _make_instrumentor()
-        inst.trace_audit_append(42)
+        with inst.trace_audit_append(42):
+            pass
         spans = exporter.get_finished_spans()
         assert len(spans) == 1
         assert spans[0].name == "agt.audit.append"
@@ -124,7 +126,8 @@ class TestTraceIdentityOperation:
 
     def test_creates_span_with_op_and_did(self):
         inst, exporter = _make_instrumentor()
-        inst.trace_identity_operation("verify", "did:mesh:abc")
+        with inst.trace_identity_operation("verify", "did:mesh:abc"):
+            pass
         spans = exporter.get_finished_spans()
         assert len(spans) == 1
         assert spans[0].name == "agt.identity.verify"
@@ -179,9 +182,12 @@ class TestGracefulDegradation:
             mod = importlib.import_module("agentmesh.observability.otel_sdk")
             importlib.reload(mod)
             inst = mod.GovernanceInstrumentor()
-            inst.trace_trust_update("a1", 0.5, 0.8)
-            inst.trace_audit_append(1)
-            inst.trace_identity_operation("create", "did:mesh:x")
+            with inst.trace_trust_update("a1", 0.5, 0.8):
+                pass
+            with inst.trace_audit_append(1):
+                pass
+            with inst.trace_identity_operation("create", "did:mesh:x"):
+                pass
 
     def test_record_methods_noop(self):
         """All record methods complete without error when OTel is absent."""
@@ -199,9 +205,12 @@ class TestGracefulDegradation:
         assert not inst.enabled
         with inst.trace_policy_evaluation("act", "a1"):
             pass
-        inst.trace_trust_update("a1", 0.5, 0.8)
-        inst.trace_audit_append(1)
-        inst.trace_identity_operation("create", "did:mesh:x")
+        with inst.trace_trust_update("a1", 0.5, 0.8):
+            pass
+        with inst.trace_audit_append(1):
+            pass
+        with inst.trace_identity_operation("create", "did:mesh:x"):
+            pass
         inst.record_policy_decision("deny", 2.0)
         inst.record_trust_score("a1", 0.5)
         inst.record_audit_chain_length(10)

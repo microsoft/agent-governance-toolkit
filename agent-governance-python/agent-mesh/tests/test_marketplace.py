@@ -296,20 +296,37 @@ class TestPluginSigning:
 class TestPluginInstaller:
     """Tests for plugin installation, uninstallation, and sandboxing."""
 
-    def test_install_and_list(self, tmp_path: Path, manifest: PluginManifest) -> None:
+    @pytest.fixture()
+    def _signing(self):
+        """Provide a signer, trusted-keys dict, and a helper to sign manifests."""
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        public_key = private_key.public_key()
+        signer = PluginSigner(private_key)
+        trusted_keys = {"tester@example.com": public_key}
+        return signer, trusted_keys
+
+    def test_install_and_list(self, tmp_path: Path, manifest: PluginManifest, _signing) -> None:
+        signer, trusted_keys = _signing
+        signed = signer.sign(manifest)
         registry = PluginRegistry()
-        registry.register(manifest)
-        installer = PluginInstaller(plugins_dir=tmp_path / "plugins", registry=registry)
+        registry.register(signed)
+        installer = PluginInstaller(
+            plugins_dir=tmp_path / "plugins", registry=registry, trusted_keys=trusted_keys,
+        )
         dest = installer.install("test-plugin")
         assert (dest / MANIFEST_FILENAME).exists()
         installed = installer.list_installed()
         assert len(installed) == 1
         assert installed[0].name == "test-plugin"
 
-    def test_uninstall(self, tmp_path: Path, manifest: PluginManifest) -> None:
+    def test_uninstall(self, tmp_path: Path, manifest: PluginManifest, _signing) -> None:
+        signer, trusted_keys = _signing
+        signed = signer.sign(manifest)
         registry = PluginRegistry()
-        registry.register(manifest)
-        installer = PluginInstaller(plugins_dir=tmp_path / "plugins", registry=registry)
+        registry.register(signed)
+        installer = PluginInstaller(
+            plugins_dir=tmp_path / "plugins", registry=registry, trusted_keys=trusted_keys,
+        )
         installer.install("test-plugin")
         installer.uninstall("test-plugin")
         assert installer.list_installed() == []
@@ -320,25 +337,31 @@ class TestPluginInstaller:
         with pytest.raises(MarketplaceError, match="not installed"):
             installer.uninstall("ghost")
 
-    def test_install_with_dependency(self, tmp_path: Path) -> None:
-        registry = PluginRegistry()
+    def test_install_with_dependency(self, tmp_path: Path, _signing) -> None:
+        signer, trusted_keys = _signing
         dep = _make_manifest(name="dep-plugin", version="1.0.0")
         main = _make_manifest(name="main-plugin", dependencies=["dep-plugin>=1.0.0"])
-        registry.register(dep)
-        registry.register(main)
-        installer = PluginInstaller(plugins_dir=tmp_path / "plugins", registry=registry)
+        registry = PluginRegistry()
+        registry.register(signer.sign(dep))
+        registry.register(signer.sign(main))
+        installer = PluginInstaller(
+            plugins_dir=tmp_path / "plugins", registry=registry, trusted_keys=trusted_keys,
+        )
         installer.install("main-plugin")
         installed_names = [p.name for p in installer.list_installed()]
         assert "main-plugin" in installed_names
         assert "dep-plugin" in installed_names
 
-    def test_circular_dependency_detected(self, tmp_path: Path) -> None:
-        registry = PluginRegistry()
+    def test_circular_dependency_detected(self, tmp_path: Path, _signing) -> None:
+        signer, trusted_keys = _signing
         a = _make_manifest(name="plugin-a", dependencies=["plugin-b"])
         b = _make_manifest(name="plugin-b", dependencies=["plugin-a"])
-        registry.register(a)
-        registry.register(b)
-        installer = PluginInstaller(plugins_dir=tmp_path / "plugins", registry=registry)
+        registry = PluginRegistry()
+        registry.register(signer.sign(a))
+        registry.register(signer.sign(b))
+        installer = PluginInstaller(
+            plugins_dir=tmp_path / "plugins", registry=registry, trusted_keys=trusted_keys,
+        )
         with pytest.raises(MarketplaceError, match="Circular dependency"):
             installer.install("plugin-a")
 

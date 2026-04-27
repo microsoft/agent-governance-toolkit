@@ -170,9 +170,17 @@ def _validate_db_path(raw: str) -> str:
     # Also allow paths that are *inside* the current working directory.
     safe_roots.append(Path.cwd().resolve())
 
-    if not any(
-        str(resolved).startswith(str(root)) for root in safe_roots
-    ):
+    # Exclude filesystem roots — they provide no confinement (e.g. Path.home()
+    # returns "/" when running as a user without an /etc/passwd entry).
+    safe_roots = [r for r in safe_roots if r.parent != r]
+
+    if not safe_roots:
+        raise ValueError(
+            f"Invalid db_path {raw!r}: all candidate safe directories resolve "
+            f"to filesystem roots. No confined directory available."
+        )
+
+    if not any(resolved == root or resolved.is_relative_to(root) for root in safe_roots):
         raise ValueError(
             f"Invalid db_path {raw!r}: resolved path {resolved} is outside "
             f"allowed directories (home, temp, cwd). Move the database file "
