@@ -62,28 +62,32 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           model: gpt-4o
           fallback-model: gpt-4o-mini
-          max-tokens: "4000"
+          max-tokens: "1500"
           context-mode: pr-diff
           output-mode: pr-comment
           custom-instructions: |
-            You are a security analyst reviewing changes to microsoft/agent-governance-toolkit —
-            a security-focused AI agent governance library.
+            You are a security analyst reviewing changes to microsoft/agent-governance-toolkit.
 
-            This is CRITICAL: the toolkit itself IS the security layer. Bugs here mean
-            security bypasses for all downstream users.
+            BE CONCISE. Only report actual findings, not a methodology walkthrough.
+            Skip categories with no issues. No boilerplate, no "no changes needed" rows.
 
             Scan for:
-            1. **Prompt injection defense bypass** — can crafted input circumvent policy guards?
-            2. **Policy engine circumvention** — can policies be skipped or weakened?
-            3. **Trust chain weaknesses** — SPIFFE/SVID validation gaps, cert pinning issues
-            4. **Credential exposure** — secrets in logs, error messages, or debug output
-            5. **Sandbox escape** — container/process isolation breakouts
-            6. **Deserialization attacks** — unsafe pickle/yaml/json loading
-            7. **Race conditions** — TOCTOU in policy checks, concurrent trust evaluation
-            8. **Supply chain** — dependency confusion, typosquatting in imports
+            1. Prompt injection defense bypass
+            2. Policy engine circumvention
+            3. Trust chain weaknesses
+            4. Credential exposure
+            5. Sandbox escape
+            6. Deserialization attacks
+            7. Race conditions
+            8. Supply chain risks
 
-            Rate each finding: 🔴 CRITICAL / 🟠 HIGH / 🟡 MEDIUM / 🔵 LOW
-            For each finding, explain the attack vector and suggest a fix.
+            Format (compact):
+            ### Security Review
+            | Severity | Finding | Fix |
+            |----------|---------|-----|
+            | 🔴 CRITICAL | [one-line description] | [one-line fix] |
+
+            If NO security issues found, reply only: ✅ No security issues found.
 
   weekly-full-scan:
     name: Weekly Full Security Audit
@@ -105,26 +109,19 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           model: gpt-4o
           fallback-model: gpt-4o-mini
-          max-tokens: "4000"
+          max-tokens: "1500"
           context-mode: repo-scan
           output-mode: none
           custom-instructions: |
-            You are performing a weekly security audit of microsoft/agent-governance-toolkit.
+            Perform a weekly security audit of microsoft/agent-governance-toolkit.
+            Be concise. Findings table only, no methodology.
 
-            Review the repository structure and recent changes for:
-            1. Prompt injection defense bypass vectors
-            2. Policy engine circumvention paths
-            3. Trust chain weaknesses (SPIFFE/SVID)
-            4. Credential exposure risks
-            5. Sandbox escape vectors
-            6. Deserialization attack surfaces
-            7. Race conditions in security-critical paths
-            8. Supply chain vulnerabilities
+            Format:
+            ### Weekly Security Audit
+            | Severity | Category | Finding | Location |
+            |----------|----------|---------|----------|
 
-            Format as a security report with:
-            - Executive summary
-            - Findings table (Severity | Category | Description | Location)
-            - Recommendations
+            If clean, say: ✅ No issues found this week.
 
       - name: Create security audit issue
         env:

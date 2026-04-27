@@ -48,32 +48,19 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           model: gpt-4o
           fallback-model: gpt-4o-mini
-          max-tokens: "4000"
+          max-tokens: "800"
           context-mode: issue
           output-mode: issue-comment
           custom-instructions: |
             You are a friendly OSS community helper for microsoft/agent-governance-toolkit.
-            A first-time contributor has opened an issue. Welcome them warmly!
+            A first-time contributor has opened an issue.
 
-            Your response should:
-            1. **Welcome** them to the project
-            2. **Analyze** their issue and suggest which package(s) might be relevant:
-               - agent-os: Core policy engine, agent lifecycle
-               - agent-mesh: Agent discovery, routing, trust mesh
-               - agent-hypervisor: Execution sandboxing, resource isolation
-               - agent-sre: Reliability, chaos testing, SLOs
-               - agent-compliance: Compliance frameworks, audit logging
-               - agentmesh-marketplace: Agent registry
-               - agentmesh-lightning: High-performance inference
-               - agentmesh-runtime: Runtime execution environment
-            3. **Point to relevant code** — suggest specific directories to look at
-            4. **Link to resources**:
-               - [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md)
-               - [docs/QUICKSTART.md](../blob/main/docs/QUICKSTART.md)
-               - [Code of Conduct](../blob/main/CODE_OF_CONDUCT.md)
-            5. **Offer next steps** — what they can do to help resolve this
+            Keep it SHORT (5-8 lines max). Include:
+            1. A warm one-line welcome
+            2. Which package(s) are relevant to their issue
+            3. One link: [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md)
 
-            Be encouraging and specific. Avoid generic boilerplate.
+            Do NOT list all packages, conventions, or boilerplate. Be specific to their issue.
 
   guide-pr:
     name: Guide First-Time PR Author
@@ -106,26 +93,18 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           model: gpt-4o
           fallback-model: gpt-4o-mini
-          max-tokens: "4000"
+          max-tokens: "800"
           context-mode: pr-diff
           output-mode: pr-comment
           custom-instructions: |
             You are a friendly OSS community helper for microsoft/agent-governance-toolkit.
-            A first-time contributor has opened a pull request. Welcome them!
+            A first-time contributor has opened a pull request.
 
-            Your response should:
-            1. **Welcome** them and thank them for contributing
-            2. **Review their PR** with extra kindness — explain WHY things should be
-               different, not just what to change
-            3. **Highlight what they did well** before suggesting improvements
-            4. **Explain project conventions**:
-               - We use ruff for linting (select E,F,W)
-               - Tests go in {name}/tests/
-               - We follow conventional commits (feat:, fix:, docs:, etc.)
-               - Security-sensitive code gets extra scrutiny
-            5. **Link to resources**:
-               - [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md)
-               - [docs/QUICKSTART.md](../blob/main/docs/QUICKSTART.md)
-            6. **Explain next steps** — what happens in the review process
+            Keep it SHORT (8-10 lines max). Include:
+            1. A warm one-line welcome and thanks
+            2. One thing they did well
+            3. Actionable items only (if any): what specifically to fix before merge
+            4. Link: [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md)
 
-            Be warm, specific, and constructive. First impressions matter for OSS!
+            Do NOT explain project conventions, review process, or general advice.
+            Only mention issues that would block merge.
