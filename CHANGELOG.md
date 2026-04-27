@@ -12,6 +12,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [3.3.0] - 2026-04-27
+
+### Highlights
+
+**Contributor Reputation Check** — a new reusable GitHub Action that screens PR and issue authors for coordinated inauthentic behavior. Detects following farming, cross-repo spray, credential laundering, and network coordination. Any OSS repo can adopt it. Part of AGT's shift-left governance strategy.
+
+**Repo Reorganization** — all SDK packages now live under language-specific directories (`agent-governance-python/`, `agent-governance-typescript/`, `agent-governance-dotnet/`, `agent-governance-rust/`, `agent-governance-golang/`). Root directory is clean and navigable.
+
+### Added
+- **Contributor Reputation Action** — reusable composite action at `.github/actions/contributor-check/` for any OSS repo (#1479, #1483, #1484, #1496, #1497)
+  - `contributor_check.py`: Account shape analysis, repo velocity, following farming, spray pattern detection
+  - `credential_audit.py`: Detects credential laundering (merged PRs cited as credentials in spray issues)
+  - `cluster_detect.py`: Maps coordination networks via shared forks, co-comments, synchronized filing
+  - Runs automatically on PR/issue open, labels MEDIUM/HIGH risk, posts structured comment
+  - 38 tests across all three tools
+- **Sentry integration** for Agent SRE — native error tracking exporter (#1469, #1493)
+- **ADR 0010** — TEE keystore design with SEV-SNP attestation (#1492)
+- **RFC 9334 RATS** architecture alignment for trust framework (#1480)
+- **Tutorial 45** — Shift-left governance with contributor reputation as the leftmost check (#1450)
+- **Sigstore provenance**, plugin lifecycle management, EU AI Act evidence pipeline (#1448)
+- **MCP CVE feed** and CLI vs IDE governance parity detection (#1446)
+- **MCP auth method enforcement** in allowlist (#1444)
+- **A2A tutorial** and governance operations docs (#1442)
+- **EU AI Act compliance templates** — FRIA, post-market monitoring, data provenance (#1441, #1439)
+- **CIS Controls v8.1 mapping** for AI agent governance (#1447)
+- **Quality gate scripts** inspired by AzureClaw Phase 0 (#1440)
+- **ATR Community Rules** upgraded from 15 to 287 rules (ATR v2.0.12) with weekly sync workflow (#1277)
+- **Microsoft.Agents governance extension** for .NET (#1420)
+- **SDK parity improvements** across .NET (#1424), TypeScript (#1425), Rust (#1426), Go (#1419)
+- **MAF integration demos** and Tutorial 34 (#1387, #1388)
+- **Advisory layer** — optional classifier-based defense-in-depth (#1390)
+- **OpenTelemetry native observability** (#1389)
+- **Attribute ratchets** — monotonic session state (#1384)
+- **Human-in-the-loop approval workflows** (#1383)
+- **Multi-stage policy pipeline** — pre_input, pre_tool, post_tool, pre_output (#1381)
+- **2-line governance wrapper** — `govern()` function (#1380)
+- **Policy composition with inheritance** via `extends` (#1379)
+- **Folder-level governance** — discovery, merge, evaluator (#1352)
+- **Bilateral receipt signing** — pre-execution + post-execution (#1333)
+- **MCP governance extension** for .NET (#1330)
+- **Cognitive attestation** example (#1328)
+- **OCI manifest adapter** for AI Card spec alignment (#1456)
+- **Context poisoning detection** for agent memory (OWASP ASI-06) (#1455)
+- **Cascading failure containment** for multi-agent systems (#1454)
+- **Inbox replay on reconnect** (#1451)
+
+### Changed
+- **Repo structure**: All packages reorganized under language-specific SDK directories (#1459, #1471)
+  - `agent-governance-python/` — 10 Python packages
+  - `agent-governance-typescript/` — VS Code extension and TS SDK
+  - `agent-governance-dotnet/` — .NET SDK
+  - `agent-governance-rust/` — Rust SDK
+  - `agent-governance-golang/` — Go SDK
+- Root folders consolidated: `ci/` to `scripts/ci/`, `demo/` to `examples/demos/`, `releases/` to `docs/releases/`, `pipelines/` to `.github/pipelines/` (#1488)
+- `fuzz/`, `notebooks/`, `benchmarks/`, `requirements/` moved under `agent-governance-python/` (#1481)
+- Duplicate root `QUICKSTART.md` removed (canonical version at `docs/QUICKSTART.md`) (#1490)
+- SDK packages renamed with standardized naming (#1343)
+- Tutorials verified: all 42 tutorials pass 68 checks (#1408)
+
+### Security
+- **Contributor reputation tools** hardened: URL encoding for Python 3.13+, retry-with-backoff for rate limits, real usernames scrubbed (#1491)
+- ScopeBlind content removed after credential laundering detection (#1498)
+- Example Sentry DSN replaced to avoid secret scanning (#1494)
+- X3DH signed pre-key signature verification (#1437, #1428)
+- Adversarial X3DH signature verification tests (#1443)
+- Self-promotional content removed from ADRs (#1449)
+
+### Fixed
+- CI workflow paths updated for reorganized package directories (#1482, #1491)
+- `sentry-sdk` added to dependency scan allowlist (#1491)
+- 13 ruff lint errors in agent-mesh (#1491)
+- Docs audit: CLI name, package names, broken links, YAML, prereqs (#1378)
+- OpenClaw demo docker build context and Windows test (#1353)
+- TypeScript SDK build for TypeScript 6 (#1409, #1411)
+- Rust crate directory rename (#1347, #1345)
+- ESRP and CI pipeline updates for new SDK package names (#1344)
+
+## [3.2.2] - 2026-04-22
+
+### Fixed
+- **Docker**: OpenClaw sidecar docker compose fix
+- **TypeScript SDK**: Encryption module exports for npm package
+
 ## [3.2.1] - 2026-04-22
 
 ### Fixed
