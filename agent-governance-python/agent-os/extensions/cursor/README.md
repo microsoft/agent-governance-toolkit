@@ -166,14 +166,6 @@ Open Settings (Ctrl+,) and search for "Agent OS":
 | `Agent OS: Ask Cursor for Safe Alternative` | Get safe code from Cursor AI |
 | `Agent OS: Enterprise Features` | View enterprise capabilities |
 
-## Pricing
-
-| Tier | Price | Features |
-|------|-------|----------|
-| **Free** | $0 | Local policies, 7-day audit, 10 CMVK/day |
-| **Pro** | $9/mo | Unlimited CMVK, 90-day audit, priority support |
-| **Enterprise** | Custom | Self-hosted, SSO, SOC 2 mode, approval workflows |
-
 ## Why Cursor + Agent OS?
 
 | Feature | Other IDEs | Cursor + Agent OS |

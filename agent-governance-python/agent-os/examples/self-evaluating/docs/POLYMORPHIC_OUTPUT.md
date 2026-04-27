@@ -353,8 +353,6 @@ app.display(ui_component)
 - Every IDE needs intelligent suggestions
 
 ### The Revenue Model
-- $99/month per developer
-- Enterprise: $10k/year unlimited
 - Open source core + premium components
 
 **Stop hard-coding screens. Build the engine that dreams them up.**
