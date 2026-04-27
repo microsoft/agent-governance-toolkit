@@ -98,6 +98,74 @@ assert!(result.sanitized.contains("[REDACTED_BEARER_TOKEN]"));
 # Ok::<(), agentmesh_mcp::McpError>(())
 ```
 
+## MCP Gateway Authentication
+
+`McpGateway` now requires session-backed authentication before it will evaluate
+tool access. The legacy `process_request` path fails closed.
+
+```rust
+use agentmesh::{
+    CredentialRedactor, DeterministicNonceGenerator, FixedClock, InMemoryAuditSink,
+    InMemoryRateLimitStore, InMemorySessionStore, McpGateway, McpGatewayConfig,
+    McpGatewayRequest, McpResponseScanner, McpSessionAuthenticator,
+    McpSlidingRateLimiter, McpMetricsCollector, SystemClock,
+};
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+
+let redactor = CredentialRedactor::new()?;
+let audit = Arc::new(InMemoryAuditSink::new(redactor.clone()));
+let metrics = McpMetricsCollector::default();
+let scanner = McpResponseScanner::new(
+    redactor,
+    audit.clone(),
+    metrics.clone(),
+    Arc::new(SystemClock),
+)?;
+let limiter = McpSlidingRateLimiter::new(
+    10,
+    Duration::from_secs(60),
+    Arc::new(SystemClock),
+    Arc::new(InMemoryRateLimitStore::default()),
+)?;
+let session_authenticator = McpSessionAuthenticator::new(
+    b"0123456789abcdef0123456789abcdef".to_vec(),
+    Arc::new(FixedClock::new(SystemTime::UNIX_EPOCH)),
+    Arc::new(DeterministicNonceGenerator::from_values(vec!["session-1".into()])),
+    Arc::new(InMemorySessionStore::default()),
+    Duration::from_secs(300),
+    4,
+)?;
+let issued = session_authenticator.issue_session("did:agentmesh:gateway")?;
+let gateway = McpGateway::new(
+    McpGatewayConfig::default(),
+    scanner,
+    limiter,
+    audit,
+    metrics,
+    Arc::new(SystemClock),
+)
+.with_session_authenticator(session_authenticator);
+
+let decision = gateway.process_authenticated_request(
+    &McpGatewayRequest {
+        agent_id: "did:agentmesh:gateway".into(),
+        tool_name: "db.read".into(),
+        payload: serde_json::json!({"query": "select 1"}),
+    },
+    &issued.token,
+)?;
+assert!(decision.allowed);
+# Ok::<(), agentmesh::McpError>(())
+```
+
+### Migration note
+
+If you previously called `McpGateway::process_request`, switch to
+`process_authenticated_request` and pass a session token issued by
+`McpSessionAuthenticator`. Unauthenticated requests are now denied before
+governance, audit, and rate-limit logic runs.
+
 ## API Overview
 
 ### Client (`lib.rs`)

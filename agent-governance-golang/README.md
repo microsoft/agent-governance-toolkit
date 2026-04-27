@@ -197,6 +197,27 @@ Go-native integration helpers built around a composable governance middleware st
 | `NewHTTPGovernanceMiddleware(config)` | Create `net/http` middleware backed by the governance stack |
 | `GovernOperation(...)` | Wrap a generic operation with the standard governance stack |
 
+`NewHTTPGovernanceMiddleware` now fails closed unless `HTTPMiddlewareConfig.AgentIDResolver`
+returns a verified identity. Caller-asserted `X-Agent-ID` values are exposed to policy as
+`caller_asserted_agent_id`, but they are no longer treated as trusted `agent_id` values by
+default.
+
+For short-lived migrations behind a trusted front door, opt in explicitly:
+
+```go
+middleware, err := agentmesh.NewHTTPGovernanceMiddleware(agentmesh.HTTPMiddlewareConfig{
+    Policy:                    policy,
+    AgentIDResolver:           agentmesh.LegacyTrustedHeaderAgentIDResolver("X-Agent-ID"),
+    PromptDefense:             agentmesh.NewPromptDefenseEvaluator(),
+    PromptDefenseMaxRiskScore: 24,
+})
+```
+
+Recommended migration path: wire `AgentIDResolver` to your authenticated reverse proxy,
+service mesh, or workload identity layer so it returns a verified agent identity. Use
+`LegacyTrustedHeaderAgentIDResolver` only as an explicit compatibility bridge while you move
+away from caller-asserted headers.
+
 ### Shadow Discovery (`discovery.go`)
 
 Structured SDK discovery for likely unregistered agent tooling across text, processes, config paths, and GitHub repositories.
@@ -224,4 +245,4 @@ Structured prompt risk evaluation for injection and exfiltration patterns.
 
 ## License
 
-See repository root [LICENSE](../../LICENSE).
+See repository root [LICENSE](../LICENSE).
