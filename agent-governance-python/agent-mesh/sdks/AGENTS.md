@@ -26,7 +26,7 @@ here.
 - Preserve API parity where practical; call out intentional gaps instead of creating silent drift.
 - Keep package metadata, examples, and docs aligned with the shipped API surface.
 - Favor small, language-idiomatic wrappers over clever abstractions that hide security behavior.
-- Update shared docs such as `docs/SDK-FEATURE-MATRIX.md` when parity materially changes.
+- Update shared docs such as `docs/PACKAGE-FEATURE-MATRIX.md` when parity materially changes.
 
 ## Boundaries
 
