@@ -20,7 +20,7 @@ import functools
 import logging
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Optional, Union
 
 from .policy import Policy, PolicyDecision, PolicyEngine
