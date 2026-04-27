@@ -22,6 +22,7 @@ binary analysis, and supply chain verification on every build.
 |---------|-------|
 | [Why Shift-Left?](#why-shift-left) | The case for catching violations before runtime |
 | [Commit-Time](#commit-time-pre-commit-hooks) | Pre-commit hooks for policy and plugin validation |
+| [PR-Time: Contributor Reputation](#pr-time-contributor-reputation) | Automated screening for coordinated inauthentic behavior |
 | [PR-Time](#pr-time-gates) | Governance attestation, dependency review, secret scanning |
 | [CI/Build-Time](#cibuild-time-checks) | Governance verify, policy validation, security scans, binary analysis |
 | [Language-Specific Build Checks](#language-specific-build-time-enforcement) | .NET, TypeScript, Python build-time enforcement |
@@ -43,17 +44,22 @@ Shift-left governance moves checks earlier in the development lifecycle:
   Commit        PR           CI/Build        Release        Runtime
     │            │              │               │              │
     ▼            ▼              ▼               ▼              ▼
- ┌──────┐  ┌─────────┐  ┌────────────┐  ┌───────────┐  ┌──────────┐
- │ pre- │  │ attest  │  │ governance │  │ SBOM +    │  │ policy   │
- │commit│  │ + dep   │  │ verify +   │  │ signing + │  │ engine + │
- │hooks │  │ review  │  │ CodeQL +   │  │ provenance│  │ trust +  │
- │      │  │ + scans │  │ BinSkim    │  │           │  │ audit    │
- └──────┘  └─────────┘  └────────────┘  └───────────┘  └──────────┘
-   Fastest feedback                              Most comprehensive
+```
+  Contributor   Commit        PR           CI/Build        Release        Runtime
+     │            │            │              │               │              │
+     ▼            ▼            ▼              ▼               ▼              ▼
+  ┌──────┐  ┌──────┐  ┌─────────┐  ┌────────────┐  ┌───────────┐  ┌──────────┐
+  │reputa│  │ pre- │  │ attest  │  │ governance │  │ SBOM +    │  │ policy   │
+  │tion  │  │commit│  │ + dep   │  │ verify +   │  │ signing + │  │ engine + │
+  │check │  │hooks │  │ review  │  │ CodeQL +   │  │ provenance│  │ trust +  │
+  │      │  │      │  │ + scans │  │ BinSkim    │  │           │  │ audit    │
+  └──────┘  └──────┘  └─────────┘  └────────────┘  └───────────┘  └──────────┘
+    Earliest feedback                                        Most comprehensive
 ```
 
 **Why it matters:**
 
+- A social engineering contributor caught at PR open never gets code reviewed
 - A malformed policy file caught at commit time costs zero CI minutes
 - A secret caught in PR review never reaches the default branch
 - A dependency confusion attack blocked in CI never reaches production
@@ -122,6 +128,83 @@ For teams adopting AGT incrementally:
 3. **Week 3**: Enable all hooks as blocking
 4. **Week 4**: Graduate to full blocking per the
    [graduation checklist](../operations/advisory-to-blocking-graduation.md)
+
+---
+
+## PR-Time: Contributor Reputation
+
+The **leftmost** check in AGT's shift-left pipeline. Before reviewing code,
+before running CI, the contributor reputation action screens the author's
+GitHub profile for signals of coordinated inauthentic behavior.
+
+### What It Detects
+
+| Signal | Severity | Description |
+|--------|----------|-------------|
+| Following farming | MEDIUM/HIGH | Extreme following:follower ratios (e.g., 2000 following, 50 followers) |
+| Repo velocity | MEDIUM/HIGH | Unnatural repo creation rate (e.g., 60 repos in 90 days) |
+| Cross-repo spray | HIGH | Same issue template filed across dozens of repos in days |
+| Credential laundering | HIGH | Citing merged PRs as credentials in spray issues across other repos |
+| Governance theme concentration | MEDIUM | Repos overwhelmingly themed around governance/security topics |
+| Network coordination | MEDIUM/HIGH | Shared forks, synchronized filing, co-comment patterns (opt-in) |
+
+### Add It to Your Repo
+
+AGT ships a reusable composite action. Add this workflow to any repository:
+
+```yaml
+# .github/workflows/contributor-check.yml
+name: Contributor Reputation Check
+
+on:
+  pull_request_target:        # Use pull_request_target, not pull_request
+    types: [opened]
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    steps:
+      - name: Checkout AGT action
+        uses: actions/checkout@v4
+        with:
+          repository: microsoft/agent-governance-toolkit
+          sparse-checkout: |
+            scripts
+            .github/actions/contributor-check
+          path: agt
+
+      - name: Run contributor check
+        uses: ./agt/.github/actions/contributor-check
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          checks: profile,credential    # Add 'cluster' for deep analysis
+          risk-threshold: MEDIUM        # MEDIUM or HIGH
+```
+
+### How It Works
+
+1. **On every PR or issue open**, the action runs two checks (profile + credential audit) using only the GitHub REST API and Python stdlib. No dependencies to install.
+
+2. **Risk is computed** as the max across all checks:
+   - **LOW**: No action taken (silent pass)
+   - **MEDIUM**: Posts a collapsible comment, adds `needs-review:MEDIUM` label
+   - **HIGH**: Posts a detailed comment, adds `needs-review:HIGH` label
+
+3. **Comments are idempotent**: re-runs update the same comment instead of creating duplicates. Old risk labels are removed before applying the current one.
+
+4. **Cluster detection** (opt-in) maps coordination networks from a seed account via shared forks, co-comments, and synchronized filing. It is API-heavy and recommended only for manual dispatch investigations.
+
+> **Important:** Use `pull_request_target` (not `pull_request`) so the action
+> has write permissions to comment and label on fork PRs. Do not run untrusted
+> PR code before this action in the same workflow.
 
 ---
 
