@@ -70,6 +70,14 @@ lawcontinue
 Permissioned
 ufeff
 agentveil
+Deserialise
 EigenTrust
 IPFS
+Println
+println
+Printf
+promptdefense
+Rego
+Sandboxed
+Serialise
 sybil
