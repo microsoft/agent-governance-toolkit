@@ -8,7 +8,7 @@ on:
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
-      - 'notebooks/**'
+      - 'agent-governance-python/notebooks/**'
   schedule:
     - cron: "30 6 * * 1"
 

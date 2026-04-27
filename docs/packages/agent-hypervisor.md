@@ -10,7 +10,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agent-hypervisor)](https://pypi.org/project/agent-governance-python/agent-hypervisor/)
-[![Benchmark](https://img.shields.io/badge/latency-268%CE%BCs%20pipeline-orange)](benchmarks/)
+[![Benchmark](https://img.shields.io/badge/latency-268%CE%BCs%20pipeline-orange)](agent-governance-python/benchmarks/)
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 
 > [!IMPORTANT]
@@ -662,7 +662,7 @@ pytest tests/ -v
 pytest tests/integration/ -v
 
 # Run benchmarks
-python benchmarks/bench_hypervisor.py
+python agent-governance-python/benchmarks/bench_hypervisor.py
 ```
 
 ## Cross-Module Integrations

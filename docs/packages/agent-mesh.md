@@ -59,7 +59,7 @@
 <td align="center"><h3>6</h3><sub>Framework Integrations</sub></td>
 <td align="center"><h3>170K+</h3><sub>Combined Stars of<br/>Integrated Projects</sub></td>
 <td align="center"><h3>4</h3><sub>Protocol Bridges<br/>(A2A · MCP · IATP · AI Card)</sub></td>
-<td align="center"><h3>&lt;1ms p99</h3><sub><a href="benchmarks/results/BENCHMARKS.md">Full Governance Pipeline</a></sub></td>
+<td align="center"><h3>&lt;1ms p99</h3><sub><a href="agent-governance-python/benchmarks/results/BENCHMARKS.md">Full Governance Pipeline</a></sub></td>
 </tr>
 </table>
 

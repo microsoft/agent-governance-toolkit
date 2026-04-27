@@ -5,12 +5,12 @@ on:
     branches: [main]
     paths:
       - '*/src/**'
-      - 'fuzz/**'
+      - 'agent-governance-python/fuzz/**'
   pull_request:
     branches: [main]
     paths:
       - '*/src/**'
-      - 'fuzz/**'
+      - 'agent-governance-python/fuzz/**'
   schedule:
     - cron: "0 6 * * 0"  # Weekly batch fuzzing
 

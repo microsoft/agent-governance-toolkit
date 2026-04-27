@@ -6,13 +6,13 @@ on:
     paths:
       - '**'
       - 'scripts/**'
-      - 'requirements/**'
+      - 'agent-governance-python/requirements/**'
   pull_request:
     branches: [main]
     paths:
       - '**'
       - 'scripts/**'
-      - 'requirements/**'
+      - 'agent-governance-python/requirements/**'
 
 permissions:
   contents: read
