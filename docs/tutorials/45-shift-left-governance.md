@@ -144,8 +144,14 @@ GitHub profile for signals of coordinated inauthentic behavior.
 | Following farming | MEDIUM/HIGH | Extreme following:follower ratios (e.g., 2000 following, 50 followers) |
 | Repo velocity | MEDIUM/HIGH | Unnatural repo creation rate (e.g., 60 repos in 90 days) |
 | Cross-repo spray | HIGH | Same issue template filed across dozens of repos in days |
+| Self-promotion spray | MEDIUM/HIGH | Issues promoting the author's own repos across multiple orgs |
 | Credential laundering | HIGH | Citing merged PRs as credentials in spray issues across other repos |
 | Governance theme concentration | MEDIUM | Repos overwhelmingly themed around governance/security topics |
+| Awesome fork burst | HIGH | Rapid forking of curated/awesome lists (credibility farming) |
+| Batch repo naming | MEDIUM/HIGH | Templated repo creation (e.g., 5+ `*-mcp` repos in 48 hours) |
+| Feature overlap | MEDIUM/HIGH | Repo clones AGT's feature set across 3+ of 6 feature buckets |
+| Thin credibility | MEDIUM/HIGH | Young, low-star repos promoted via issues across multiple orgs |
+| Coordinated promotion | HIGH | Multiple thin repos targeting overlapping org sets |
 | Network coordination | MEDIUM/HIGH | Shared forks, synchronized filing, co-comment patterns (opt-in) |
 
 ### Add It to Your Repo
@@ -536,6 +542,7 @@ enforcing that nothing that ran has failed.
 | SBOM and artifact signing | [Tutorial 26 -- SBOM & Signing](26-sbom-and-signing.md) |
 | MCP tool scanning | [Tutorial 27 -- MCP Scan CLI](27-mcp-scan-cli.md) |
 | Multi-stage policy pipeline | [Tutorial 37 -- Multi-Stage Pipeline](37-multi-stage-pipeline.md) |
+| Contributor reputation deep dive | [Tutorial 46 -- Contributor Governance](46-contributor-governance.md) |
 | .NET SDK | [Tutorial 19 -- .NET package](19-dotnet-sdk.md) |
 | TypeScript SDK | [Tutorial 20 -- TypeScript package](20-typescript-sdk.md) |
 | Plugin marketplace | [Tutorial 10 -- Plugin Marketplace](10-plugin-marketplace.md) |
