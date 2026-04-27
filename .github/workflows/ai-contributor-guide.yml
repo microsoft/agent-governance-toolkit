@@ -69,7 +69,7 @@ jobs:
             3. **Point to relevant code** — suggest specific directories to look at
             4. **Link to resources**:
                - [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md)
-               - [QUICKSTART.md](../blob/main/QUICKSTART.md)
+               - [docs/QUICKSTART.md](../blob/main/docs/QUICKSTART.md)
                - [Code of Conduct](../blob/main/CODE_OF_CONDUCT.md)
             5. **Offer next steps** — what they can do to help resolve this
 
@@ -125,7 +125,7 @@ jobs:
                - Security-sensitive code gets extra scrutiny
             5. **Link to resources**:
                - [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md)
-               - [QUICKSTART.md](../blob/main/QUICKSTART.md)
+               - [docs/QUICKSTART.md](../blob/main/docs/QUICKSTART.md)
             6. **Explain next steps** — what happens in the review process
 
             Be warm, specific, and constructive. First impressions matter for OSS!
