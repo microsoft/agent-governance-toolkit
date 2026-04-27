@@ -157,6 +157,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 | Capability | What It Does | Links |
 |---|---|---|
 | **Policy Engine** | Every action evaluated before execution — sub-millisecond, deterministic. Supports YAML, OPA/Rego, and Cedar policies | [Agent OS](agent-governance-python/agent-os/) · [Benchmarks](docs/BENCHMARKS.md) |
+| **Contributor Reputation** | Screens PR/issue authors for social engineering: credential laundering, spray patterns, network coordination. Reusable GitHub Action for any repo | [Action](.github/actions/contributor-check/) · [Scripts](scripts/) |
 | **Zero-Trust Identity** | Ed25519 + quantum-safe ML-DSA-65 credentials, trust scoring (0–1000), SPIFFE/SVID | [AgentMesh](agent-governance-python/agent-mesh/) |
 | **Execution Sandboxing** | 4-tier privilege rings, saga orchestration, kill switch | [Runtime](agent-governance-python/agent-runtime/) · [Hypervisor](agent-governance-python/agent-hypervisor/) |
 | **Agent SRE** | SLOs, error budgets, replay debugging, chaos engineering, circuit breakers | [Agent SRE](agent-governance-python/agent-sre/) |

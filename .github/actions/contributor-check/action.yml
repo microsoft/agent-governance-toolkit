@@ -1,0 +1,437 @@
+name: "Contributor Reputation Check"
+description: >
+  Reusable composite action that screens GitHub contributors for coordinated
+  inauthentic behavior: account-shape anomalies, cross-repo spray, credential
+  laundering, and network coordination. Part of AGT's shift-left governance.
+
+inputs:
+  github-token:
+    description: "GitHub token with issues:write and pull-requests:write"
+    required: true
+  checks:
+    description: "Comma-separated list of checks to run: profile, credential, cluster"
+    required: false
+    default: "profile,credential"
+  target-repo:
+    description: "Repository for credential audit (owner/repo). Defaults to the current repo."
+    required: false
+    default: ""
+  risk-threshold:
+    description: "Minimum risk to comment/label: MEDIUM or HIGH"
+    required: false
+    default: "MEDIUM"
+
+outputs:
+  risk:
+    description: "Overall risk level: LOW, MEDIUM, HIGH, or UNKNOWN"
+    value: ${{ steps.aggregate.outputs.risk }}
+  profile-risk:
+    description: "Profile analysis risk level"
+    value: ${{ steps.profile.outputs.risk }}
+  credential-risk:
+    description: "Credential audit risk level"
+    value: ${{ steps.credential.outputs.risk }}
+  cluster-risk:
+    description: "Cluster detection risk level (empty if not run)"
+    value: ${{ steps.cluster.outputs.risk }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      with:
+        python-version: "3.12"
+
+    - name: Resolve inputs
+      id: inputs
+      shell: bash
+      run: |
+        username=""
+        number="0"
+        type="manual"
+
+        event_name="${{ github.event_name }}"
+
+        if [ "$event_name" = "pull_request_target" ] || [ "$event_name" = "pull_request" ]; then
+          username="${{ github.event.pull_request.user.login }}"
+          number="${{ github.event.pull_request.number }}"
+          type="pr"
+        elif [ "$event_name" = "issues" ]; then
+          username="${{ github.event.issue.user.login }}"
+          number="${{ github.event.issue.number }}"
+          type="issue"
+        elif [ "$event_name" = "workflow_dispatch" ]; then
+          username="${{ github.event.inputs.username || '' }}"
+          type="manual"
+        fi
+
+        echo "username=$username" >> "$GITHUB_OUTPUT"
+        echo "number=$number" >> "$GITHUB_OUTPUT"
+        echo "type=$type" >> "$GITHUB_OUTPUT"
+
+        target="${{ inputs.target-repo }}"
+        if [ -z "$target" ]; then
+          target="${{ github.repository }}"
+        fi
+        echo "target_repo=$target" >> "$GITHUB_OUTPUT"
+
+        scripts="${{ github.action_path }}/../../../scripts"
+        echo "scripts_dir=$scripts" >> "$GITHUB_OUTPUT"
+
+    # ── Profile check ──
+    - name: Run profile check
+      id: profile
+      if: contains(inputs.checks, 'profile')
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        scripts="${{ steps.inputs.outputs.scripts_dir }}"
+        username="${{ steps.inputs.outputs.username }}"
+        target="${{ steps.inputs.outputs.target_repo }}"
+
+        if [ -z "$username" ]; then
+          echo "risk=UNKNOWN" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        set +e
+        python "$scripts/contributor_check.py" \
+          --username "$username" \
+          --repo "$target" \
+          --json > /tmp/agt-profile.json 2>/tmp/agt-profile.log
+        set -e
+
+        risk=$(python -c "import json; print(json.load(open('/tmp/agt-profile.json'))['risk'])" 2>/dev/null || echo "UNKNOWN")
+        echo "risk=$risk" >> "$GITHUB_OUTPUT"
+
+        signals=$(python -c "
+        import json
+        r = json.load(open('/tmp/agt-profile.json'))
+        for s in r.get('signals', []):
+            print(f\"- **[{s['severity']}]** {s['name']}: {s['detail']}\")
+        " 2>/dev/null || echo "")
+        {
+          echo "signals<<PROFILE_SIGNALS_EOF"
+          echo "$signals"
+          echo "PROFILE_SIGNALS_EOF"
+        } >> "$GITHUB_OUTPUT"
+
+    # ── Credential audit ──
+    - name: Run credential audit
+      id: credential
+      if: contains(inputs.checks, 'credential')
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        scripts="${{ steps.inputs.outputs.scripts_dir }}"
+        username="${{ steps.inputs.outputs.username }}"
+        target="${{ steps.inputs.outputs.target_repo }}"
+
+        if [ -z "$username" ]; then
+          echo "risk=UNKNOWN" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        set +e
+        python "$scripts/credential_audit.py" \
+          --username "$username" \
+          --repo "$target" \
+          --json > /tmp/agt-cred.json 2>/tmp/agt-cred.log
+        set -e
+
+        risk=$(python -c "import json; print(json.load(open('/tmp/agt-cred.json'))['risk'])" 2>/dev/null || echo "UNKNOWN")
+        echo "risk=$risk" >> "$GITHUB_OUTPUT"
+
+        merges=$(python -c "import json; print(len(json.load(open('/tmp/agt-cred.json')).get('merges', [])))" 2>/dev/null || echo "0")
+        citations=$(python -c "import json; print(len(json.load(open('/tmp/agt-cred.json')).get('citations', [])))" 2>/dev/null || echo "0")
+        spray_repos=$(python -c "import json; print(json.load(open('/tmp/agt-cred.json')).get('spray_repos_count', 0))" 2>/dev/null || echo "0")
+        echo "merges=$merges" >> "$GITHUB_OUTPUT"
+        echo "citations=$citations" >> "$GITHUB_OUTPUT"
+        echo "spray_repos=$spray_repos" >> "$GITHUB_OUTPUT"
+
+    # ── Cluster detection (opt-in) ──
+    - name: Run cluster detection
+      id: cluster
+      if: contains(inputs.checks, 'cluster')
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        scripts="${{ steps.inputs.outputs.scripts_dir }}"
+        username="${{ steps.inputs.outputs.username }}"
+
+        if [ -z "$username" ]; then
+          echo "risk=UNKNOWN" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        set +e
+        python "$scripts/cluster_detect.py" \
+          --seed "$username" \
+          --json > /tmp/agt-cluster.json 2>/tmp/agt-cluster.log
+        set -e
+
+        risk=$(python -c "import json; print(json.load(open('/tmp/agt-cluster.json'))['risk'])" 2>/dev/null || echo "UNKNOWN")
+        echo "risk=$risk" >> "$GITHUB_OUTPUT"
+
+        accounts=$(python -c "import json; print(json.load(open('/tmp/agt-cluster.json')).get('account_count', 0))" 2>/dev/null || echo "0")
+        edges=$(python -c "import json; print(json.load(open('/tmp/agt-cluster.json')).get('edge_count', 0))" 2>/dev/null || echo "0")
+        echo "accounts=$accounts" >> "$GITHUB_OUTPUT"
+        echo "edges=$edges" >> "$GITHUB_OUTPUT"
+
+    # ── Aggregate risk ──
+    - name: Compute overall risk
+      id: aggregate
+      shell: bash
+      run: |
+        risk_to_num() {
+          case "$1" in
+            HIGH) echo 3 ;; MEDIUM) echo 2 ;; LOW) echo 1 ;; *) echo 0 ;;
+          esac
+        }
+
+        p=$(risk_to_num "${{ steps.profile.outputs.risk }}")
+        c=$(risk_to_num "${{ steps.credential.outputs.risk }}")
+        k=$(risk_to_num "${{ steps.cluster.outputs.risk }}")
+
+        max=$p
+        [ "$c" -gt "$max" ] && max=$c
+        [ "$k" -gt "$max" ] && max=$k
+
+        case "$max" in
+          3) overall="HIGH" ;; 2) overall="MEDIUM" ;; 1) overall="LOW" ;; *) overall="LOW" ;;
+        esac
+        echo "risk=$overall" >> "$GITHUB_OUTPUT"
+
+    # ── Post comment (idempotent via marker) ──
+    - name: Post review comment
+      if: >-
+        steps.inputs.outputs.type != 'manual' &&
+        (steps.aggregate.outputs.risk == 'HIGH' ||
+         (inputs.risk-threshold == 'MEDIUM' && steps.aggregate.outputs.risk == 'MEDIUM'))
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        username="${{ steps.inputs.outputs.username }}"
+        number="${{ steps.inputs.outputs.number }}"
+        type="${{ steps.inputs.outputs.type }}"
+        overall="${{ steps.aggregate.outputs.risk }}"
+        profile_risk="${{ steps.profile.outputs.risk }}"
+        cred_risk="${{ steps.credential.outputs.risk }}"
+        owner="${{ github.repository_owner }}"
+        repo="${{ github.event.repository.name }}"
+
+        if [ "$overall" = "HIGH" ]; then icon="🔴"; else icon="🟡"; fi
+
+        body="<!-- agt-contributor-check -->
+        $icon **Contributor Reputation Check: $overall risk**
+
+        | Check | Risk |
+        |-------|------|
+        | Profile analysis | $profile_risk |
+        | Credential audit | $cred_risk |
+        "
+
+        profile_signals="${{ steps.profile.outputs.signals }}"
+        if [ -n "$profile_signals" ]; then
+          body="$body
+        <details>
+        <summary>Profile signals</summary>
+
+        $profile_signals
+
+        </details>
+        "
+        fi
+
+        citations="${{ steps.credential.outputs.citations }}"
+        if [ "$citations" != "0" ] && [ -n "$citations" ]; then
+          spray_repos="${{ steps.credential.outputs.spray_repos }}"
+          merges="${{ steps.credential.outputs.merges }}"
+          body="$body
+        <details>
+        <summary>Credential audit: $merges merged PRs, $citations citations across $spray_repos repos</summary>
+
+        The contributor cites merged PRs from this repo in issues filed across other repositories.
+        This pattern may indicate credential laundering.
+
+        </details>
+        "
+        fi
+
+        body="$body
+        ---
+        *Automated check by [AGT Contributor Reputation](https://github.com/microsoft/agent-governance-toolkit/tree/main/scripts#contributor-reputation-tools). Not a judgment.*"
+
+        # Idempotent comment: find and update existing, or create new
+        python3 << 'PYEOF'
+        import json, os, sys
+        from urllib.request import Request, urlopen
+        from urllib.error import HTTPError
+
+        token = os.environ["GITHUB_TOKEN"]
+        owner = os.environ.get("owner", "")
+        repo_name = os.environ.get("repo", "")
+        number = os.environ.get("number", "0")
+        body = os.environ.get("body", "")
+        item_type = os.environ.get("type", "issue")
+        marker = "<!-- agt-contributor-check -->"
+
+        base = "https://api.github.com"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+
+        def api(method, path, data=None):
+            url = f"{base}{path}"
+            req = Request(url, method=method, headers=headers)
+            if data:
+                req.add_header("Content-Type", "application/json")
+                req.data = json.dumps(data).encode()
+            with urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read())
+
+        # Search for existing comment with our marker
+        existing_id = None
+        page = 1
+        while True:
+            comments = api("GET", f"/repos/{owner}/{repo_name}/issues/{number}/comments?per_page=100&page={page}")
+            for c in comments:
+                if marker in (c.get("body") or ""):
+                    existing_id = c["id"]
+                    break
+            if existing_id or len(comments) < 100:
+                break
+            page += 1
+
+        if existing_id:
+            api("PATCH", f"/repos/{owner}/{repo_name}/issues/comments/{existing_id}", {"body": body})
+            print(f"Updated existing comment {existing_id}")
+        else:
+            api("POST", f"/repos/{owner}/{repo_name}/issues/{number}/comments", {"body": body})
+            print("Created new comment")
+        PYEOF
+
+    # ── Label (idempotent) ──
+    - name: Add risk label
+      if: >-
+        steps.inputs.outputs.type != 'manual' &&
+        (steps.aggregate.outputs.risk == 'HIGH' ||
+         (inputs.risk-threshold == 'MEDIUM' && steps.aggregate.outputs.risk == 'MEDIUM'))
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        number="${{ steps.inputs.outputs.number }}"
+        type="${{ steps.inputs.outputs.type }}"
+        risk="${{ steps.aggregate.outputs.risk }}"
+        owner="${{ github.repository_owner }}"
+        repo="${{ github.event.repository.name }}"
+
+        # Use Python for portability (no gh CLI dependency)
+        python3 << PYEOF
+        import json, os, sys
+        from urllib.request import Request, urlopen
+        from urllib.error import HTTPError
+
+        token = os.environ["GITHUB_TOKEN"]
+        owner = "$owner"
+        repo = "$repo"
+        number = "$number"
+        risk = "$risk"
+
+        base = "https://api.github.com"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+
+        def api(method, path, data=None):
+            url = f"{base}{path}"
+            req = Request(url, method=method, headers=headers)
+            if data:
+                req.add_header("Content-Type", "application/json")
+                req.data = json.dumps(data).encode()
+            try:
+                with urlopen(req, timeout=15) as resp:
+                    return json.loads(resp.read())
+            except HTTPError as e:
+                if e.code == 422:
+                    return None  # label already exists or already applied
+                raise
+
+        color = "D93F0B" if risk == "HIGH" else "FFA500"
+
+        # Create label if missing
+        try:
+            api("POST", f"/repos/{owner}/{repo}/labels", {
+                "name": f"needs-review:{risk}",
+                "description": f"Contributor reputation check flagged {risk} risk",
+                "color": color,
+            })
+        except HTTPError:
+            pass
+
+        # Remove stale risk labels
+        for level in ["LOW", "MEDIUM", "HIGH"]:
+            if level != risk:
+                try:
+                    req = Request(
+                        f"{base}/repos/{owner}/{repo}/issues/{number}/labels/needs-review:{level}",
+                        method="DELETE", headers=headers,
+                    )
+                    urlopen(req, timeout=15)
+                except Exception:
+                    pass
+
+        # Apply current label
+        api("POST", f"/repos/{owner}/{repo}/issues/{number}/labels", {
+            "labels": [f"needs-review:{risk}"],
+        })
+        print(f"Applied label needs-review:{risk}")
+        PYEOF
+
+    # ── Job summary ──
+    - name: Write job summary
+      if: always()
+      shell: bash
+      run: |
+        username="${{ steps.inputs.outputs.username }}"
+        overall="${{ steps.aggregate.outputs.risk }}"
+        profile_risk="${{ steps.profile.outputs.risk }}"
+        cred_risk="${{ steps.credential.outputs.risk }}"
+        cluster_risk="${{ steps.cluster.outputs.risk }}"
+
+        {
+          echo "## Contributor Reputation Check: \`$username\`"
+          echo ""
+          echo "| Check | Risk |"
+          echo "|-------|------|"
+          echo "| **Overall** | **$overall** |"
+          if [ -n "$profile_risk" ]; then echo "| Profile analysis | $profile_risk |"; fi
+          if [ -n "$cred_risk" ]; then echo "| Credential audit | $cred_risk |"; fi
+          if [ -n "$cluster_risk" ]; then echo "| Cluster detection | $cluster_risk |"; fi
+          echo ""
+
+          profile_signals="${{ steps.profile.outputs.signals }}"
+          if [ -n "$profile_signals" ]; then
+            echo "### Profile signals"
+            echo "$profile_signals"
+            echo ""
+          fi
+
+          citations="${{ steps.credential.outputs.citations }}"
+          if [ "$citations" != "0" ] && [ -n "$citations" ]; then
+            echo "### Credential audit"
+            echo "- Merged PRs: ${{ steps.credential.outputs.merges }}"
+            echo "- Spray citations: $citations across ${{ steps.credential.outputs.spray_repos }} repos"
+            echo ""
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
