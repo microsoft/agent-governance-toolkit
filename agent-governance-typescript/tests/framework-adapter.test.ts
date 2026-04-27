@@ -101,6 +101,80 @@ describe('GenericFrameworkAdapter', () => {
     expect(result.output).toEqual({ found: true });
   });
 
+  it('allows an explicitly matching agentId', async () => {
+    const client = AgentMeshClient.create('adapter-agent', {
+      policyRules: [
+        { action: 'framework.tool_call.lookup', effect: 'allow' },
+      ],
+    });
+    const adapter = new GenericFrameworkAdapter(client);
+    const handler = jest.fn(async () => ({ found: true }));
+
+    const result = await adapter.run(
+      {
+        name: 'lookup',
+        kind: 'tool_call',
+        agentId: client.identity.did,
+        input: { id: '123' },
+      },
+      handler,
+    );
+
+    expect(result.allowed).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(result.invocation.agentId).toBe(client.identity.did);
+    expect(result.trace.agentId).toBe(client.identity.did);
+  });
+
+  it('binds omitted agentId to the client identity', async () => {
+    const client = AgentMeshClient.create('adapter-agent', {
+      policyRules: [
+        { action: 'framework.tool_call.lookup', effect: 'allow' },
+      ],
+    });
+    const adapter = new GenericFrameworkAdapter(client);
+    const handler = jest.fn(async () => ({ found: true }));
+
+    const result = await adapter.run(
+      {
+        name: 'lookup',
+        kind: 'tool_call',
+        input: { id: '123' },
+      },
+      handler,
+    );
+
+    expect(result.allowed).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(result.invocation.agentId).toBe(client.identity.did);
+    expect(result.trace.agentId).toBe(client.identity.did);
+  });
+
+  it('treats an empty-string agentId as no caller assertion', async () => {
+    const client = AgentMeshClient.create('adapter-agent', {
+      policyRules: [
+        { action: 'framework.tool_call.lookup', effect: 'allow' },
+      ],
+    });
+    const adapter = new GenericFrameworkAdapter(client);
+    const handler = jest.fn(async () => ({ found: true }));
+
+    const result = await adapter.run(
+      {
+        name: 'lookup',
+        kind: 'tool_call',
+        agentId: '',
+        input: { id: '123' },
+      },
+      handler,
+    );
+
+    expect(result.allowed).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(result.invocation.agentId).toBe(client.identity.did);
+    expect(result.trace.agentId).toBe(client.identity.did);
+  });
+
   it('fails closed when a caller asserts a different agentId', async () => {
     const client = AgentMeshClient.create('adapter-agent', {
       policyRules: [
