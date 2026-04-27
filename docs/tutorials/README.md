@@ -90,7 +90,6 @@ guides.
 | 25 | [Security Hardening](25-security-hardening.md) | Gitleaks, Dependabot, CodeQL, fuzzing, Scorecard, branch protection | `agent-governance-toolkit` |
 | 26 | [SBOM & Signing](26-sbom-and-signing.md) | SPDX/CycloneDX SBOMs, Ed25519 artifact signing, attestation | `agent-compliance` |
 | 27 | [MCP Scan CLI](27-mcp-scan-cli.md) | MCP tool scanning, rug-pull detection, CI integration | `agent-os-kernel` |
-| 33 | [Offline-Verifiable Decision Receipts](33-offline-verifiable-receipts.md) | Ed25519 + JCS receipts, hash-chained, externally verifiable per tool call | `protect-mcp` / `agent-governance-toolkit` |
 | 45 | [Shift-Left Governance](45-shift-left-governance.md) | Pre-commit hooks, GitHub Actions, CI gates, language-specific build-time enforcement | `agent-governance-toolkit` |
 
 ---

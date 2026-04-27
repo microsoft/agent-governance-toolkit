@@ -43,7 +43,6 @@ jobs:
                      | grep -i policy \
                      | grep -v 'charts/.*/templates/' \
                      | grep -v 'node_modules/' \
-                     | grep -v 'physical-attestation-governed/' \
                      | sort); do
             echo "--- Validating: $f ---"
             python -m agent_os.policies.cli validate "$f" || EXIT_CODE=1

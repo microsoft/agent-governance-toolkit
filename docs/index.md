@@ -36,8 +36,6 @@ Governed examples for popular AI agent frameworks:
 | [openai-agents-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/openai-agents-governed) | OpenAI Agents SDK | Policy-gated tool calls with trust tiers |
 | [crewai-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/crewai-governed) | CrewAI | Multi-agent governance with role-based policies |
 | [smolagents-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/smolagents-governed) | HuggingFace smolagents | Lightweight agent governance |
-| [protect-mcp-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/protect-mcp-governed) | protect-mcp | Cedar policies + Ed25519 signed receipts for MCP tool calls |
-| [physical-attestation-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/physical-attestation-governed) | Physical sensors | Cold chain sensor attestation (temperature, shock, GPS) |
 | [openshell-governed](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/openshell-governed) | OpenShell | Sandboxed shell execution governance |
 | [mcp-trust-verified-server](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/mcp-trust-verified-server) | MCP | Trust-verified MCP server implementation |
 | [maf-integration](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/maf-integration) | MAF | Microsoft Agent Framework integration |
