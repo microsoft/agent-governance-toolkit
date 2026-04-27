@@ -7,8 +7,8 @@ Checks whether a contributor cites merges from a target repo in issues
 filed across other repos, a pattern called "credential laundering."
 
 Usage:
-    python scripts/credential_audit.py --username aeoess --repo microsoft/agent-governance-toolkit
-    python scripts/credential_audit.py --username aeoess --repo microsoft/agent-governance-toolkit --json
+    python scripts/credential_audit.py --username <handle> --repo org/repo
+    python scripts/credential_audit.py --username <handle> --repo org/repo --json
 
 Requires: GITHUB_TOKEN environment variable (or gh CLI auth).
 """
@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 from urllib.error import HTTPError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 # ---------------------------------------------------------------------------
@@ -61,7 +62,7 @@ def _get_token() -> str:
 def _api(path: str, params: dict[str, str] | None = None) -> Any:
     url = f"https://api.github.com{path}"
     if params:
-        qs = "&".join(f"{k}={v}" for k, v in params.items())
+        qs = "&".join(f"{k}={quote(v, safe='')}" for k, v in params.items())
         url = f"{url}?{qs}"
 
     req = Request(url)
@@ -69,13 +70,20 @@ def _api(path: str, params: dict[str, str] | None = None) -> Any:
     req.add_header("Accept", "application/vnd.github+json")
     req.add_header("X-GitHub-Api-Version", "2022-11-28")
 
-    try:
-        with urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read())
-    except HTTPError as exc:
-        if exc.code in (404, 422):
-            return None
-        raise
+    for attempt in range(3):
+        try:
+            with urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read())
+        except HTTPError as exc:
+            if exc.code == 403 and attempt < 2:
+                wait = int(exc.headers.get("Retry-After", "10"))
+                wait = min(max(wait, 5), 60)
+                print(f"  Rate limited, waiting {wait}s...", file=sys.stderr)
+                import time; time.sleep(wait)
+                continue
+            if exc.code in (404, 422):
+                return None
+            raise
 
 
 def _search(endpoint: str, query: str, per_page: int = 100) -> list[dict]:

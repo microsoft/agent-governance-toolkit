@@ -90,16 +90,16 @@ class TestFormatReport:
         )
         report.citations = [
             SprayCitation(
-                "langflow-ai/langflow", 12544,
+                "contoso/example-project", 12544,
                 "Per-flow governance", "2026-04-07T15:53:22Z",
                 "https://example.com",
                 citation_snippets=["PR #598 merged"],
                 days_after_merge=1,
             ),
         ]
-        report.spray_repos = {"langflow-ai/langflow"}
+        report.spray_repos = {"contoso/example-project"}
         output = format_report(report)
-        assert "langflow" in output
+        assert "contoso" in output
         assert "12544" in output
 
     def test_json_output_valid(self):
