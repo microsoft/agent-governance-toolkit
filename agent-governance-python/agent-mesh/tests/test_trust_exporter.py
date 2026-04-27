@@ -1,11 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Tests for the provider-agnostic trust score exporter.
-
-Refs: microsoft/agent-governance-toolkit#1274
-"""
+"""Tests for the provider-agnostic trust score exporter."""
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -102,6 +100,26 @@ class TestTrustAttributeRecord:
         with pytest.raises(ValidationError):
             _record(updated_at=None)
 
+    def test_updated_at_naive_raises(self) -> None:
+        naive = datetime(2026, 4, 27, 12, 0, 0)
+        assert naive.tzinfo is None
+        with pytest.raises(ValidationError):
+            _record(updated_at=naive)
+
+    def test_score_dimension_nan_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            _record(score=None, score_dimensions={"x": float("nan")})
+
+    def test_score_dimension_inf_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            _record(score=None, score_dimensions={"x": float("inf")})
+        with pytest.raises(ValidationError):
+            _record(score=None, score_dimensions={"x": float("-inf")})
+
+    def test_score_dimension_string_nan_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            _record(score=None, score_dimensions={"x": "nan"})  # type: ignore[dict-item]
+
     def test_serialization_round_trip(self) -> None:
         original = _record(
             score=0.7,
@@ -195,3 +213,11 @@ class TestTrustScoreExporter:
             max_age_seconds=60,
         )
         assert exporter.is_fresh(stale) is False
+
+    def test_is_fresh_naive_now_raises(self) -> None:
+        exporter = _FakeExporter("p", 0.5, max_age=60)
+        record = exporter.export(SUBJECT_DID)
+        naive_now = datetime(2026, 4, 27, 12, 0, 0)
+        assert naive_now.tzinfo is None
+        with pytest.raises(ValueError):
+            exporter.is_fresh(record, now=naive_now)

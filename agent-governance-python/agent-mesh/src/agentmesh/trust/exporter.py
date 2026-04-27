@@ -1,14 +1,13 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 """
-Trust Score Exporter
+Trust Score Exporter.
 
 Provider-agnostic abstraction for exposing TrustProvider scores as
 first-class agent trust attributes that downstream systems can consume.
-
-Refs: microsoft/agent-governance-toolkit#1274
 """
 
+import math
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
@@ -71,6 +70,13 @@ class TrustAttributeRecord(BaseModel):
         description="Provider-specific metadata that does not fit the normalized shape.",
     )
 
+    @field_validator("updated_at")
+    @classmethod
+    def validate_updated_at_is_aware(cls, v: datetime) -> datetime:
+        if v.tzinfo is None or v.tzinfo.utcoffset(v) is None:
+            raise ValueError("updated_at must be a timezone-aware datetime")
+        return v
+
     @field_validator("score_dimensions")
     @classmethod
     def validate_dimension_ranges(
@@ -81,6 +87,10 @@ class TrustAttributeRecord(BaseModel):
         for name, score in v.items():
             if not isinstance(name, str) or not name:
                 raise ValueError("score_dimensions keys must be non-empty strings")
+            if not math.isfinite(score):
+                raise ValueError(
+                    f"score_dimensions['{name}']={score} is not a finite number"
+                )
             if score < 0.0 or score > 1.0:
                 raise ValueError(
                     f"score_dimensions['{name}']={score} is outside [0.0, 1.0]"
@@ -132,9 +142,18 @@ class TrustScoreExporter(ABC):
 
         If ``record.max_age_seconds`` is ``None``, the record is treated as
         having no provider-declared expiry and is always considered fresh.
+
+        Raises ``ValueError`` if ``now`` is provided as a naive datetime,
+        to prevent silent mismatches against the timezone-aware
+        ``record.updated_at``.
         """
         if record.max_age_seconds is None:
             return True
-        reference = now if now is not None else _utc_now()
+        if now is None:
+            reference = _utc_now()
+        else:
+            if now.tzinfo is None or now.tzinfo.utcoffset(now) is None:
+                raise ValueError("is_fresh() requires a timezone-aware 'now'")
+            reference = now
         age = reference - record.updated_at
         return age <= timedelta(seconds=record.max_age_seconds)
