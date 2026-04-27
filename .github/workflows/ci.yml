@@ -130,8 +130,10 @@ jobs:
       - name: Install local sibling dependencies
         run: |
           # agent-os depends on agent_primitives (local, not on PyPI at >=3.x)
+          # and agentmesh (test_cmd_sign.py imports agentmesh.marketplace)
           if [ "${{ matrix.package }}" = "agent-os" ]; then
             pip install --no-cache-dir -e agent-governance-python/agent-primitives
+            pip install --no-cache-dir -e agent-governance-python/agent-mesh
           fi
       - name: Install ${{ matrix.package }}
         working-directory: agent-governance-python/${{ matrix.package }}

@@ -9,6 +9,7 @@
   "trust_score": 750,
   "signature": "tzEb+xuSKLiu7hDodWChvlBMV8wr3sZ/dqJM3TWgXVEVDUptPpKl23hs6GHHof7ZmLxLuvXnABXzRVZK8DvzDw==",
   "public_key": "OiBcwuYOePUqv6r/mwIef/mmgwSzlUitAVSUkxenHV0=",
+  "freshness_nonce": null,
   "user_context": null,
   "timestamp": "2026-02-18T22:50:53.621780"
 }
