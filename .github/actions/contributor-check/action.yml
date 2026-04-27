@@ -43,6 +43,15 @@ runs:
       with:
         python-version: "3.12"
 
+    - name: Validate inputs
+      shell: bash
+      run: |
+        threshold="${{ inputs.risk-threshold }}"
+        if [ -n "$threshold" ] && [ "$threshold" != "LOW" ] && [ "$threshold" != "MEDIUM" ] && [ "$threshold" != "HIGH" ]; then
+          echo "::error::Invalid risk-threshold '$threshold'. Must be LOW, MEDIUM, or HIGH."
+          exit 1
+        fi
+
     - name: Resolve inputs
       id: inputs
       shell: bash
@@ -435,3 +444,12 @@ runs:
             echo ""
           fi
         } >> "$GITHUB_STEP_SUMMARY"
+
+    # ── Cleanup temp files ──
+    - name: Cleanup temporary files
+      if: always()
+      shell: bash
+      run: |
+        rm -f /tmp/agt-profile.json /tmp/agt-profile.log
+        rm -f /tmp/agt-cred.json /tmp/agt-cred.log
+        rm -f /tmp/agt-cluster.json /tmp/agt-cluster.log
