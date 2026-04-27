@@ -47,39 +47,23 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           model: gpt-4o
           fallback-model: gpt-4o-mini
-          max-tokens: "4000"
+          max-tokens: "1000"
           context-mode: pr-diff
           output-mode: pr-comment
           custom-instructions: |
             You are a documentation freshness checker for microsoft/agent-governance-toolkit.
 
-            Analyze the PR diff and check:
-            1. **New public APIs without docstrings** — all public functions, classes, and
-               methods should have docstrings explaining purpose, parameters, return values,
-               and exceptions
-            2. **README sections out of date** — if behavior changes, does the package README
-               reflect it?
-            3. **CHANGELOG missing entries** — behavioral changes should have a CHANGELOG.md entry
-            4. **Example code outdated** — if API signatures change, examples/ should be updated
-            5. **Type hints** — new public APIs should have complete type annotations
+            BE CONCISE. Only flag actual issues, no suggestions or nice-to-haves.
 
-            Monorepo structure:
-            - {name}/src/ — source code
-            - {name}/README.md — package documentation
-            - {name}/tests/ — test files
-            - docs/ — project-level documentation
-            - CHANGELOG.md — project changelog
+            Check for:
+            1. New public APIs without docstrings
+            2. README sections outdated by this change
+            3. CHANGELOG missing entry for behavioral changes
 
             Format:
-            ## 📝 Documentation Sync Report
+            ### Docs Sync
+            - ❌ `func()` in `module.py` -- missing docstring
+            - ⚠️ `README.md` -- section X needs update
+            - ⚠️ CHANGELOG.md -- no entry for this change
 
-            ### Issues Found
-            - ❌ `function_name()` in `package/module.py` — missing docstring
-            - ⚠️ `package/README.md` — section X may need update for new behavior
-            - ⚠️ CHANGELOG.md — no entry for this change
-
-            ### Suggestions
-            - 💡 Add docstring for `function_name(param1: str, param2: int) -> bool`
-            - 💡 Update README section "Configuration" to mention new option
-
-            If everything looks good, say ✅ Documentation is in sync.
+            If everything is in sync: ✅ Documentation is in sync.

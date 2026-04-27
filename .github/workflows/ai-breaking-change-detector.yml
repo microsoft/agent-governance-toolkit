@@ -47,39 +47,20 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           model: gpt-4o
           fallback-model: gpt-4o-mini
-          max-tokens: "4000"
+          max-tokens: "1000"
           context-mode: pr-diff
           output-mode: pr-comment
           custom-instructions: |
             You are an API compatibility analyzer for microsoft/agent-governance-toolkit.
-            These packages are published to PyPI — breaking changes affect downstream users.
+            These packages are published to PyPI/NuGet/crates.io.
 
-            Analyze the diff for:
-            1. **🔴 Removed/renamed** public functions, classes, or methods
-            2. **🔴 Changed function signatures** — removed params, changed types, new required params
-            3. **🔴 Removed/changed exports** in `__init__.py` files
-            4. **🔴 Changed exception types** — different exceptions raised
-            5. **🟡 Changed default values** — may alter existing behavior
-            6. **🟡 Changed return types** — may break callers
-            7. **🔵 New public API** — not breaking, but should be documented
-
-            Classification:
-            - 🔴 **BREAKING** — will break existing code
-            - 🟡 **POTENTIALLY BREAKING** — may break depending on usage
-            - 🔵 **ADDITIVE** — new API, not breaking
-
-            If NO breaking changes found, say so clearly with ✅.
+            BE CONCISE. Only list actual breaking or potentially breaking changes.
+            Do NOT list additive (non-breaking) changes.
 
             Format:
-            ## 🔍 API Compatibility Report
+            ### API Compatibility
+            | Severity | Change | Impact |
+            |----------|--------|--------|
+            | 🔴 BREAKING | `func()` removed param `x` | Callers using `x` will fail |
 
-            ### Summary
-            (brief overall assessment)
-
-            ### Findings
-            | Severity | Package | Change | Impact |
-            |----------|---------|--------|--------|
-            | 🔴 | agent-os | `PolicyEngine.evaluate()` removed `strict` param | Callers using `strict=True` will fail |
-
-            ### Migration Guide
-            (if breaking changes found, suggest migration steps)
+            If NO breaking changes: ✅ No breaking changes detected.
