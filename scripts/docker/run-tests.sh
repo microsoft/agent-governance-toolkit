@@ -4,11 +4,11 @@
 set -euo pipefail
 
 packages=(
-  "agent-os"
-  "agent-mesh"
-  "agent-hypervisor"
-  "agent-sre"
-  "agent-compliance"
+  "agent-governance-python/agent-os"
+  "agent-governance-python/agent-mesh"
+  "agent-governance-python/agent-hypervisor"
+  "agent-governance-python/agent-sre"
+  "agent-governance-python/agent-compliance"
 )
 
 for package_dir in "${packages[@]}"; do

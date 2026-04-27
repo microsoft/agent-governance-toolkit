@@ -1,0 +1,24 @@
+# Default: let Git auto-detect text vs binary, normalize to LF in repo
+* text=auto eol=lf
+
+# Files that MUST always be LF, regardless of host OS,
+# because they are executed by Linux shells / containers
+*.sh         text eol=lf
+Dockerfile   text eol=lf
+*.dockerfile text eol=lf
+
+# Keep Windows-only files as CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Treat as binary (no line-ending conversion, no diff)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz  binary
+*.tar binary

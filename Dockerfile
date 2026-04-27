@@ -40,14 +40,14 @@ COPY . /workspace
 RUN python -m pip install --no-cache-dir \
         -e "agent-governance-python/agent-primitives[dev]" \
         -e "agent-governance-python/agent-mcp-governance[dev]" \
-        -e "agent-os[full,dev]" \
-        -e "agent-mesh[agent-os,dev,server]" \
-        -e "agent-hypervisor[api,dev,nexus]" \
-        -e "agent-runtime" \
-        -e "agent-sre[api,dev]" \
-        -e "agent-compliance" \
-        -e "agent-marketplace[cli,dev]" \
-        -e "agent-lightning[agent-os,dev]" \
+        -e "agent-governance-python/agent-os[full,dev]" \
+        -e "agent-governance-python/agent-mesh[agent-os,dev,server]" \
+        -e "agent-governance-python/agent-hypervisor[api,dev,nexus]" \
+        -e "agent-governance-python/agent-runtime" \
+        -e "agent-governance-python/agent-sre[api,dev]" \
+        -e "agent-governance-python/agent-compliance" \
+        -e "agent-governance-python/agent-marketplace[cli,dev]" \
+        -e "agent-governance-python/agent-lightning[agent-os,dev]" \
     && python -m pip install --no-cache-dir \
         -r agent-governance-python/agent-hypervisor/examples/dashboard/requirements.txt \
     && cd /workspace/agent-governance-typescript \
