@@ -92,7 +92,7 @@ from agent_sre.integrations.sentry import SentryExporter
 
 # Initialize with your Sentry DSN
 exporter = SentryExporter(
-    dsn="https://examplePublicKey@o0.ingest.sentry.io/0",
+    dsn="https://your-public-key@o0.ingest.sentry.io/0",  # replace with your DSN
     environment="production",
     release="agent-v1.2.0",
 )
