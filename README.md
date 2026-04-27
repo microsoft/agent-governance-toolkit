@@ -250,7 +250,7 @@ See **[Language Package Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detail
 | Agent OS | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | Policy engine, capability model, audit logging, MCP gateway |
 | AgentMesh | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | Zero-trust identity, trust scoring, A2A/MCP/IATP bridges |
 | Agent Runtime | [`agentmesh-runtime`](agent-governance-python/agent-runtime/) | Privilege rings, saga orchestration, termination control |
-| Agent SRE | [`agent-sre`](https://pypi.org/project/agent-governance-python/agent-sre/) | SLOs, error budgets, chaos engineering, circuit breakers |
+| Agent SRE | [`agent-sre`](https://pypi.org/project/agent-sre/) | SLOs, error budgets, chaos engineering, circuit breakers |
 | Agent Compliance | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | OWASP verification, integrity checks, policy linting |
 | Agent Discovery | [`agent-discovery`](agent-governance-python/agent-discovery/) | Shadow AI discovery, inventory, risk scoring |
 | Agent Hypervisor | [`agent-hypervisor`](agent-governance-python/agent-hypervisor/) | Reversibility verification, execution plan validation |
