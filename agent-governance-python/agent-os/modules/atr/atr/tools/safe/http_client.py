@@ -120,10 +120,15 @@ class HttpClientTool:
         if parsed.scheme not in ("http", "https"):
             raise ValueError(f"Scheme '{parsed.scheme}' not allowed. Use http or https.")
         
-        # Extract domain
-        domain = parsed.netloc.lower()
-        if ":" in domain:
-            domain = domain.split(":")[0]  # Remove port
+        # Reject userinfo in URL (user:pass@host) to prevent SSRF bypass
+        if "@" in (parsed.netloc or ""):
+            raise ValueError("URLs with userinfo (user:password@host) are not allowed")
+        
+        # Extract domain using parsed.hostname for safe handling
+        domain = (parsed.hostname or "").lower()
+        
+        if not domain:
+            raise ValueError("URL must include a valid hostname")
         
         # Check blocked domains
         if domain in self.blocked_domains:
