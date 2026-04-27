@@ -280,6 +280,41 @@ class TestExecuteEndpoint:
         assert resp.status_code == 200
         assert resp.json()["success"] is True
 
+    def test_execute_allows_unauthenticated_when_escape_hatch_enabled(self, monkeypatch):
+        monkeypatch.delenv("AGENT_OS_EXECUTION_TOKENS", raising=False)
+        monkeypatch.setenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", "true")
+
+        server = GovServer()
+        client = TestClient(server.app)
+        resp = client.post(
+            "/api/v1/execute",
+            json={
+                "action": "database_query",
+                "params": {"query": "SELECT 1"},
+                "agent_id": "unauthenticated-agent",
+            },
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+
+    def test_execute_escape_hatch_requires_agent_id(self, monkeypatch):
+        monkeypatch.delenv("AGENT_OS_EXECUTION_TOKENS", raising=False)
+        monkeypatch.setenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", "true")
+
+        server = GovServer()
+        client = TestClient(server.app)
+        resp = client.post(
+            "/api/v1/execute",
+            json={
+                "action": "database_query",
+                "params": {"query": "SELECT 1"},
+            },
+        )
+
+        assert resp.status_code == 422
+        assert "agent_id is required" in resp.json()["detail"]
+
     def test_execute_returns_503_when_auth_not_configured(self, client):
         resp = client.post(
             "/api/v1/execute",
