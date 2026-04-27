@@ -18,7 +18,7 @@ on:
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
-      - 'notebooks/**'
+      - 'agent-governance-python/notebooks/**'
   schedule:
     - cron: "0 6 * * 1" # Weekly Monday 6:00 UTC
   workflow_dispatch:

@@ -134,7 +134,7 @@ The toolkit uses Dependabot to monitor dependencies across **13 ecosystems**:
 
 | Ecosystem | Config File | Scope |
 |-----------|-------------|-------|
-| Python (pip) | `requirements/*.txt` | Core packages |
+| Python (pip) | `agent-governance-python/requirements/*.txt` | Core packages |
 | Python (pip) | `*/requirements.txt` | Per-package |
 | Node.js (npm) | `*/package.json` | TypeScript package |
 | .NET (NuGet) | `*.csproj` | .NET package |

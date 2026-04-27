@@ -14,7 +14,7 @@ on:
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
-      - 'notebooks/**'
+      - 'agent-governance-python/notebooks/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

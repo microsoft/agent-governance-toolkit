@@ -157,7 +157,7 @@ governed-action overhead to ~0.02 ms (p50).
 ## Reproducing
 
 ```bash
-py -3.12 benchmarks/governance_overhead.py
+py -3.12 agent-governance-python/benchmarks/governance_overhead.py
 ```
 
-Raw results are saved to `benchmarks/results/governance_overhead.json`.
+Raw results are saved to `agent-governance-python/benchmarks/results/governance_overhead.json`.

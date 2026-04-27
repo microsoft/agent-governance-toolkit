@@ -57,7 +57,7 @@
 <td align="center"><h3>2,573+</h3><sub>Tests Passing</sub></td>
 <td align="center"><h3>12</h3><sub>Framework Integrations</sub></td>
 <td align="center"><h3>170K+</h3><sub>Combined Stars of<br/>Integrated Projects</sub></td>
-<td align="center"><h3>&lt;0.1ms p99</h3><sub>Governance Latency<br/><a href="benchmarks/results/BENCHMARKS.md">Benchmarks</a></sub></td>
+<td align="center"><h3>&lt;0.1ms p99</h3><sub>Governance Latency<br/><a href="agent-governance-python/benchmarks/results/BENCHMARKS.md">Benchmarks</a></sub></td>
 <td align="center"><h3>9</h3><sub>More Framework Proposals<br/>Under Review</sub></td>
 </tr>
 </table>
@@ -395,7 +395,7 @@ agent-governance-python/agent-os/
 ├── examples/                 # Working examples
 ├── docs/                     # Documentation
 ├── tests/                    # Test suite (organized by layer)
-├── notebooks/                # Jupyter tutorials
+├── agent-governance-python/notebooks/                # Jupyter tutorials
 ├── papers/                   # Research papers
 └── templates/                # Policy templates
 ```
@@ -923,12 +923,12 @@ See [MCP server documentation](extensions/mcp-server/README.md) for full details
 
 | Notebook | Description | Time |
 |----------|-------------|------|
-| [Hello Agent OS](notebooks/01-hello-agent-os.ipynb) | Your first governed agent | 5 min |
-| [Episodic Memory](notebooks/02-episodic-memory-demo.ipynb) | Agent memory that persists | 15 min |
-| [Time-Travel Debugging](notebooks/03-time-travel-debugging.ipynb) | Replay and debug decisions | 20 min |
-| [Verification](notebooks/04-verification.ipynb) | Detect hallucinations | 15 min |
-| [Multi-Agent Coordination](notebooks/05-multi-agent-coordination.ipynb) | Trust between agents | 20 min |
-| [Policy Engine](notebooks/06-policy-engine.ipynb) | Deep dive into policies | 15 min |
+| [Hello Agent OS](agent-governance-python/notebooks/01-hello-agent-os.ipynb) | Your first governed agent | 5 min |
+| [Episodic Memory](agent-governance-python/notebooks/02-episodic-memory-demo.ipynb) | Agent memory that persists | 15 min |
+| [Time-Travel Debugging](agent-governance-python/notebooks/03-time-travel-debugging.ipynb) | Replay and debug decisions | 20 min |
+| [Verification](agent-governance-python/notebooks/04-verification.ipynb) | Detect hallucinations | 15 min |
+| [Multi-Agent Coordination](agent-governance-python/notebooks/05-multi-agent-coordination.ipynb) | Trust between agents | 20 min |
+| [Policy Engine](agent-governance-python/notebooks/06-policy-engine.ipynb) | Deep dive into policies | 15 min |
 
 ### Reference
 - [Quickstart Guide](docs/quickstart.md) — 60 seconds to first agent

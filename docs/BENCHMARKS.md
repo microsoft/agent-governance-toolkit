@@ -151,16 +151,16 @@ cd agent-governance-toolkit
 # Policy, kernel, audit, adapter benchmarks
 cd agent-os
 pip install -e ".[dev]"
-python benchmarks/bench_policy.py
-python benchmarks/bench_kernel.py
-python benchmarks/bench_audit.py
-python benchmarks/bench_adapters.py
+python agent-governance-python/benchmarks/bench_policy.py
+python agent-governance-python/benchmarks/bench_kernel.py
+python agent-governance-python/benchmarks/bench_audit.py
+python agent-governance-python/benchmarks/bench_adapters.py
 
 # SRE benchmarks
 cd ../agent-sre
 pip install -e ".[dev]"
-python benchmarks/bench_chaos.py
-python benchmarks/bench_slo.py
+python agent-governance-python/benchmarks/bench_chaos.py
+python agent-governance-python/benchmarks/bench_slo.py
 
 # Custom concurrency levels (default: 50 agents × 200 ops)
 python -c "

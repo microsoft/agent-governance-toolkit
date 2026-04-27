@@ -174,7 +174,7 @@ CI workflows use path filters so only relevant checks run per PR:
 - **TypeScript changes** (`agent-governance-typescript/`, `extensions/copilot/`) → TS lint + test only`n- **Rust changes** (`agent-governance-rust/`) → cargo test only
 - **.NET changes** (`agent-governance-dotnet/`) → dotnet test only
 - **Go changes** (`agent-governance-golang/`) → go test only
-- **Docs-only changes** (`.md`, `notebooks/`) → link check only, skip all builds/tests
+- **Docs-only changes** (`.md`, `agent-governance-python/notebooks/`) → link check only, skip all builds/tests
 - **Workflow changes** (`.github/workflows/`) → workflow-security audit only
 
 ## Publishing
