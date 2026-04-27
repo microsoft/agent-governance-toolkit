@@ -100,4 +100,36 @@ describe('GenericFrameworkAdapter', () => {
     expect(result.trace.traceId).toBeDefined();
     expect(result.output).toEqual({ found: true });
   });
+
+  it('fails closed when a caller asserts a different agentId', async () => {
+    const client = AgentMeshClient.create('adapter-agent', {
+      policyRules: [
+        { action: 'framework.tool_call.lookup', effect: 'allow' },
+      ],
+    });
+    const metrics = new GovernanceMetrics({ enabled: true });
+    const adapter = new GenericFrameworkAdapter(client, { metrics });
+    const handler = jest.fn(async () => ({ found: true }));
+
+    const result = await adapter.run(
+      {
+        name: 'lookup',
+        kind: 'tool_call',
+        agentId: 'did:agentmesh:spoofed:1234',
+        input: { id: '123' },
+      },
+      handler,
+    );
+
+    expect(result.allowed).toBe(false);
+    expect(handler).not.toHaveBeenCalled();
+    expect(result.reason).toContain('Caller-asserted agentId');
+    expect(result.invocation.agentId).toBe(client.identity.did);
+    expect(result.trace.agentId).toBe(client.identity.did);
+    expect(result.governanceResult.decision).toBe('deny');
+    expect(result.governanceResult.auditEntry.agentId).toBe(client.identity.did);
+    expect(metrics.getSnapshot().events.some((event) =>
+      event.name === 'trust.score' && event.attributes.agentId === client.identity.did
+    )).toBe(true);
+  });
 });
