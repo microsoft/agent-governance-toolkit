@@ -241,7 +241,7 @@ Full methodology: [BENCHMARKS.md](docs/BENCHMARKS.md)
 | **Go** | [`agent-governance-toolkit`](agent-governance-golang/) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
 All 5 language packages implement core governance (policy, identity, trust, audit). Python has the full stack.
-See **[Language Package Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detailed per-language coverage.
+See **[Language Package Matrix](docs/PACKAGE-FEATURE-MATRIX.md)** for detailed per-language coverage.
 
 <details>
 <summary><b>Individual Python packages</b></summary>
@@ -270,7 +270,7 @@ See **[Language Package Feature Matrix](docs/SDK-FEATURE-MATRIX.md)** for detail
 - [FAQ](docs/FAQ.md) — Technical Q&A for customers, partners, and evaluators
 
 **Architecture & Reference**
-- [Language Package Feature Matrix](docs/SDK-FEATURE-MATRIX.md) — Per-language capability comparison
+- [Language Package Matrix](docs/PACKAGE-FEATURE-MATRIX.md) — Per-language capability comparison
 - [Architecture](docs/ARCHITECTURE.md) — System design, security model, trust scoring
 - [Architecture Decisions](docs/adr/README.md) — ADR log
 - [Threat Model](docs/THREAT_MODEL.md) — Trust boundaries and STRIDE analysis
@@ -326,5 +326,4 @@ trademarks or logos is subject to and must follow
 [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
 Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
 Any use of third-party trademarks or logos are subject to those third-party's policies.
-
 
