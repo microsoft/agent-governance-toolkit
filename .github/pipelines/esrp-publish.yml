@@ -70,21 +70,21 @@ parameters:
     displayName: 'Python packages to publish'
     default:
       - name: agent-os
-        path: agent-os
+        path: agent-governance-python/agent-os
       - name: agent-mesh
-        path: agent-mesh
+        path: agent-governance-python/agent-mesh
       - name: agent-hypervisor
-        path: agent-hypervisor
+        path: agent-governance-python/agent-hypervisor
       - name: agent-sre
-        path: agent-sre
+        path: agent-governance-python/agent-sre
       - name: agent-compliance
-        path: agent-compliance
+        path: agent-governance-python/agent-compliance
       - name: agent-runtime
-        path: agent-runtime
+        path: agent-governance-python/agent-runtime
       - name: agent-lightning
-        path: agent-lightning
+        path: agent-governance-python/agent-lightning
       - name: agent-marketplace
-        path: agent-marketplace
+        path: agent-governance-python/agent-marketplace
 
   - name: npmPackages
     type: object
@@ -524,13 +524,13 @@ stages:
 
           - script: |
               mkdir -p $(Pipeline.Workspace)/rust-packages
-              for CRATE in agent-governance agent-governance-mcp; do
+              for CRATE in agentmesh agentmesh-mcp; do
                 echo "=== Packaging $CRATE ==="
                 cargo package -p $CRATE --allow-dirty
               done
               echo "=== Packaged crates ==="
               ls -la target/package/*.crate
-              cp target/package/*.crate $(Pipeline.Workspace)/rust-./
+              cp target/package/*.crate $(Pipeline.Workspace)/rust-packages/
             workingDirectory: 'agent-governance-rust'
             displayName: 'Package all crates'
 
@@ -547,7 +547,7 @@ stages:
     condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'rust'), eq('${{ parameters.target }}', 'all')))
     jobs:
       - job: PublishCrates
-        displayName: 'ESRP Publish agent-governance + agent-governance-mcp to crates.io'
+        displayName: 'ESRP Publish agentmesh + agentmesh-mcp to crates.io'
         steps:
           - task: DownloadPipelineArtifact@2
             inputs:
