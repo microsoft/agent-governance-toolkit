@@ -56,6 +56,7 @@ class GovernanceReceipt:
     cedar_decision: Literal["allow", "deny"] = "deny"
     args_hash: str = ""
     timestamp: float = field(default_factory=time.time)
+    session_id: Optional[str] = None
     parent_receipt_hash: Optional[str] = None
     signature: Optional[str] = None
     signer_public_key: Optional[str] = None
@@ -82,6 +83,8 @@ class GovernanceReceipt:
         }
         if self.parent_receipt_hash is not None:
             data["parent_receipt_hash"] = self.parent_receipt_hash
+        if self.session_id is not None:
+            data["session_id"] = self.session_id
         return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
     def payload_hash(self) -> str:
@@ -98,6 +101,7 @@ class GovernanceReceipt:
             "cedar_decision": self.cedar_decision,
             "args_hash": self.args_hash,
             "timestamp": self.timestamp,
+            "session_id": self.session_id,
             "parent_receipt_hash": self.parent_receipt_hash,
             "payload_hash": self.payload_hash(),
             "signature": self.signature,
@@ -228,17 +232,27 @@ def verify_receipt(receipt: GovernanceReceipt) -> bool:
         return False
 
 
-def verify_receipt_chain(receipts: List[GovernanceReceipt]) -> List[str]:
+def verify_receipt_chain(
+    receipts: List[GovernanceReceipt],
+    *,
+    trusted_keys: Optional[List[str]] = None,
+) -> List[str]:
     """Verify the hash chain and signatures of an ordered receipt list.
 
     Checks:
       1. The first receipt has no parent (``parent_receipt_hash is None``).
       2. Each subsequent receipt's ``parent_receipt_hash`` equals the
          ``payload_hash()`` of the preceding receipt.
-      3. Every signed receipt passes Ed25519 verification.
+      3. Every receipt has an Ed25519 signature.
+      4. Every signed receipt passes Ed25519 verification.
+      5. If ``trusted_keys`` is provided, the signer's public key must
+         be in the trusted set.
 
     Args:
         receipts: Ordered list of receipts to verify.
+        trusted_keys: Optional list of hex-encoded Ed25519 public keys.
+            When provided, receipts signed by keys not in this list are
+            flagged as untrusted.
 
     Returns:
         A list of human-readable error strings. An empty list means the
@@ -248,6 +262,8 @@ def verify_receipt_chain(receipts: List[GovernanceReceipt]) -> List[str]:
 
     if not receipts:
         return errors
+
+    trusted_set = set(trusted_keys) if trusted_keys else None
 
     for i, receipt in enumerate(receipts):
         # Chain contiguity
@@ -268,6 +284,11 @@ def verify_receipt_chain(receipts: List[GovernanceReceipt]) -> List[str]:
                 errors.append(
                     f"[{i}] Ed25519 signature verification failed for "
                     f"receipt {receipt.receipt_id}"
+                )
+            elif trusted_set and receipt.signer_public_key not in trusted_set:
+                errors.append(
+                    f"[{i}] Signer key {(receipt.signer_public_key or '')[:16]}… "
+                    f"not in trusted key set"
                 )
         else:
             errors.append(f"[{i}] Unsigned receipt — missing Ed25519 signature")

@@ -29,6 +29,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any, Callable, Dict, List, Optional
 
 from mcp_receipt_governed.receipt import (
@@ -159,6 +160,7 @@ class McpReceiptAdapter:
         cedar_policy_id: str = "default",
         signing_key_hex: Optional[str] = None,
         store: Optional[ReceiptStore] = None,
+        session_id: Optional[str] = None,
     ) -> None:
         self._evaluator = CedarPolicyEvaluator(
             policy_content=cedar_policy,
@@ -166,6 +168,7 @@ class McpReceiptAdapter:
         )
         self._policy_id = cedar_policy_id
         self._signing_key = signing_key_hex
+        self._session_id = session_id or str(uuid.uuid4())
         self.store = store or ReceiptStore()
 
     def govern_tool_call(
@@ -206,6 +209,7 @@ class McpReceiptAdapter:
             cedar_policy_id=self._policy_id,
             cedar_decision="allow" if allowed else "deny",
             args_hash=hash_tool_args(tool_args),
+            session_id=self._session_id,
             parent_receipt_hash=parent_hash,
         )
 

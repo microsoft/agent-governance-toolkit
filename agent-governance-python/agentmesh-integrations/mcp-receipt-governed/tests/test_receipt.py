@@ -134,6 +134,82 @@ class TestJCSCanonicalization:
         keys = list(parsed.keys())
         assert keys == sorted(keys)
 
+    def test_emoji_unicode_preserved(self):
+        """Emoji (astral plane) codepoints are preserved in canonical form."""
+        r = GovernanceReceipt(
+            receipt_id="test-id",
+            tool_name="Send\U0001f600Message",
+            timestamp=1.0,
+        )
+        payload = r.canonical_payload()
+        assert "\U0001f600" in payload
+        assert "\\u" not in payload
+
+    def test_cjk_characters_preserved(self):
+        """CJK ideographs are emitted as raw UTF-8."""
+        r = GovernanceReceipt(
+            receipt_id="test-id",
+            tool_name="\u8bfb\u53d6\u6570\u636e",
+            timestamp=1.0,
+        )
+        payload = r.canonical_payload()
+        assert "\u8bfb\u53d6\u6570\u636e" in payload
+
+    def test_empty_string_fields(self):
+        """Empty strings are valid and canonical."""
+        r = GovernanceReceipt(
+            receipt_id="",
+            tool_name="",
+            timestamp=1.0,
+        )
+        payload = r.canonical_payload()
+        parsed = json.loads(payload)
+        assert parsed["receipt_id"] == ""
+        assert parsed["tool_name"] == ""
+
+
+# ── Session ID ──
+
+
+class TestSessionId:
+    """Test session_id for replay attack prevention."""
+
+    def test_session_id_in_canonical_payload(self):
+        r = GovernanceReceipt(
+            receipt_id="test-id",
+            timestamp=1.0,
+            session_id="session-abc",
+        )
+        payload = r.canonical_payload()
+        assert "session-abc" in payload
+
+    def test_session_id_absent_when_none(self):
+        r = GovernanceReceipt(receipt_id="test-id", timestamp=1.0)
+        payload = r.canonical_payload()
+        assert "session_id" not in payload
+
+    def test_session_id_affects_payload_hash(self):
+        r_a = GovernanceReceipt(
+            receipt_id="test-id",
+            timestamp=1.0,
+            session_id="session-1",
+        )
+        r_b = GovernanceReceipt(
+            receipt_id="test-id",
+            timestamp=1.0,
+            session_id="session-2",
+        )
+        assert r_a.payload_hash() != r_b.payload_hash()
+
+    def test_session_id_in_to_dict(self):
+        r = GovernanceReceipt(
+            receipt_id="test-id",
+            timestamp=1.0,
+            session_id="session-xyz",
+        )
+        d = r.to_dict()
+        assert d["session_id"] == "session-xyz"
+
 
 # ── Hash Chaining ──
 
@@ -261,8 +337,7 @@ class TestSLSAProvenance:
         assert run["metadata"]["invocationId"] == "test-id"
         builder_host = urlparse(run["builder"]["id"]).hostname
         assert builder_host and (
-            builder_host == "agent-governance.org"
-            or builder_host.endswith(".agent-governance.org")
+            builder_host == "agent-governance.org" or builder_host.endswith(".agent-governance.org")
         )
 
 
@@ -473,6 +548,28 @@ class TestVerifyReceiptChain:
         r2.tool_name = "TAMPERED"
         errors = verify_receipt_chain([r1, r2])
         assert any("signature" in e.lower() for e in errors)
+
+    def test_trusted_keys_accepted(self, signing_key):
+        """Receipts signed by a trusted key pass validation."""
+        try:
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+            key = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(signing_key))
+            pub_hex = key.public_key().public_bytes_raw().hex()
+        except ImportError:
+            pytest.skip("cryptography not installed")
+
+        r = GovernanceReceipt(receipt_id="r1", timestamp=1.0)
+        sign_receipt(r, signing_key)
+        errors = verify_receipt_chain([r], trusted_keys=[pub_hex])
+        assert errors == []
+
+    def test_untrusted_key_flagged(self, signing_key):
+        """Receipts signed by an untrusted key are flagged."""
+        r = GovernanceReceipt(receipt_id="r1", timestamp=1.0)
+        sign_receipt(r, signing_key)
+        errors = verify_receipt_chain([r], trusted_keys=["deadbeef" * 4])
+        assert any("not in trusted key set" in e for e in errors)
 
 
 # ── Receipt Store ──

@@ -32,6 +32,7 @@ def _reconstruct(data: Dict[str, Any]) -> GovernanceReceipt:
         cedar_decision=data.get("cedar_decision", "deny"),
         args_hash=data.get("args_hash", ""),
         timestamp=data.get("timestamp", 0.0),
+        session_id=data.get("session_id"),
         parent_receipt_hash=data.get("parent_receipt_hash"),
         signature=data.get("signature"),
         signer_public_key=data.get("signer_public_key"),
@@ -101,6 +102,12 @@ def main() -> int:
         "receipts_file",
         help="Path to JSON file containing exported receipts (from ReceiptStore.export())",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Output results as JSON for CI/CD integration",
+    )
     args = parser.parse_args()
 
     print()
@@ -121,7 +128,14 @@ def main() -> int:
 
     result = verify_chain(receipts_data)
 
-    if result == 0:
+    if args.json_output:
+        output = {
+            "file": args.receipts_file,
+            "total_receipts": len(receipts_data),
+            "passed": result == 0,
+        }
+        print(json.dumps(output, indent=2))
+    elif result == 0:
         print("  🎉 Verification passed — chain is contiguous and signatures are valid.")
     else:
         print("  🚨 Verification failed — the receipt chain has integrity issues.")
