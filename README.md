@@ -4,7 +4,17 @@
 
 # Agent Governance Toolkit
 
+<p align="center">
+  <strong>
+    📖 <a href="https://microsoft.github.io/agent-governance-toolkit">Documentation Site</a> ·
+    🚀 <a href="#get-started-in-90-seconds">Quick Start</a> ·
+    📦 <a href="https://pypi.org/project/agent-governance-toolkit/">PyPI</a> ·
+    📝 <a href="CHANGELOG.md">Changelog</a>
+  </strong>
+</p>
+
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-microsoft.github.io%2Fagent--governance--toolkit-blue?logo=github)](https://microsoft.github.io/agent-governance-toolkit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/agent-governance-toolkit)](https://pypi.org/project/agent-governance-toolkit/)
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/OWASP-COMPLIANCE.md)
