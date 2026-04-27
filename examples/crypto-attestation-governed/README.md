@@ -6,6 +6,8 @@ This example demonstrates a first-party cryptographic attestation layer for gove
 - **Policy attestation proof** embedded in each receipt
 - **Hash-chained audit trail** (`previous_receipt_hash`) for tamper evidence
 - **Offline verification** of signatures, receipt hashes, and chain integrity
+- **Policy hash verification** against expected policy content
+- **Signer key pinning** and timestamp window checks for basic replay resistance
 
 This is an example implementation for learning and prototyping. It is not a production API contract.
 
@@ -77,6 +79,17 @@ receipt[1] verification: FAIL (receipt_hash mismatch)
 - Receipts cannot be modified without breaking hash or signature validation
 - Chain links detect deletion/reordering/mutation attempts
 - Policy decision context can be audited independently of runtime services
+- Verification can enforce trusted signer keys and policy hash consistency
+
+## Security Notes (Example Scope)
+
+This walkthrough adds practical safeguards for demonstration purposes:
+- signer key pinning (`trusted_signer_key_b64`)
+- policy hash verification (`policy_sha256`)
+- timestamp freshness checks (`max_age_seconds`)
+
+Production systems should additionally use robust key distribution/rotation,
+revocation, and central policy provenance controls.
 
 ## Cleanup
 
