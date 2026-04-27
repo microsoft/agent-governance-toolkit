@@ -142,8 +142,8 @@ def _validate_db_path(raw: str) -> str:
     # check provides a clearer error message.
     if "\x00" in raw:
         raise ValueError(
-            f"Invalid db_path: path contains null byte(s). "
-            f"This may indicate a path injection attempt."
+            "Invalid db_path: path contains null byte(s). "
+            "This may indicate a path injection attempt."
         )
 
     if len(raw) > _MAX_DB_PATH_LEN:
