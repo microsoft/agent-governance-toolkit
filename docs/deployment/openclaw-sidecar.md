@@ -5,7 +5,7 @@ Deploy OpenClaw as an autonomous agent with the Agent Governance Toolkit as a si
 > [!WARNING]
 > **Known limitations — read before deploying:**
 > - OpenClaw does **not** natively call the governance sidecar. Your orchestration layer must call the sidecar HTTP API explicitly before executing tools.
-> - The docker-compose example in this doc is for illustration. For a working local demo, use [`demo/openclaw-governed/`](../../demo/openclaw-governed/).
+> - The docker-compose example in this doc is for illustration. For a working local demo, use [`examples/demos/openclaw-governed/`](../../demo/openclaw-governed/).
 > - See [Roadmap](#roadmap) for the full list of unimplemented features.
 
 > **Container images** are published to `ghcr.io/microsoft/agentmesh/`. See [Container Images](../../agent-governance-python/agent-mesh/docs/deployment/azure.md#container-images) for the full list.
@@ -79,10 +79,10 @@ OpenClaw is a powerful autonomous agent capable of executing code, calling APIs,
 
 ## Quick Start with Docker Compose
 
-A working local demo is available at [`demo/openclaw-governed/`](../../demo/openclaw-governed/):
+A working local demo is available at [`examples/demos/openclaw-governed/`](../../demo/openclaw-governed/):
 
 ```bash
-cd demo/openclaw-governed
+cd examples/demos/openclaw-governed
 docker compose up --build
 
 # Verify governance sidecar is running
@@ -383,7 +383,7 @@ pip install agent-os-kernel
 python -m agent_os.server --host 127.0.0.1 --port 8081
 ```
 
-A smoke test script is available at [`demo/openclaw-governed/test-sidecar.sh`](../../demo/openclaw-governed/test-sidecar.sh) — it tests all 8 API endpoints.
+A smoke test script is available at [`examples/demos/openclaw-governed/test-sidecar.sh`](../../demo/openclaw-governed/test-sidecar.sh) — it tests all 8 API endpoints.
 
 ---
 

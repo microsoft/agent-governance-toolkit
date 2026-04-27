@@ -163,7 +163,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 | **MCP Security Scanner** | Detect tool poisoning, typosquatting, hidden instructions in MCP definitions | [MCP Scanner](agent-governance-python/agent-os/src/agent_os/mcp_security.py) |
 | **Shadow AI Discovery** | Find unregistered agents across processes, configs, and repos | [Agent Discovery](agent-governance-python/agent-discovery/) |
 | **Agent Lifecycle** | Provisioning → credential rotation → orphan detection → decommissioning | [Lifecycle](agent-governance-python/agent-mesh/src/agentmesh/lifecycle/) |
-| **Governance Dashboard** | Real-time fleet visibility — health, trust, compliance, audit events | [Dashboard](demo/governance-dashboard/) |
+| **Governance Dashboard** | Real-time fleet visibility — health, trust, compliance, audit events | [Dashboard](examples/demos/governance-dashboard/) |
 | **Unified CLI** | `agt verify`, `agt doctor`, `agt lint-policy` — one command for everything | [CLI](agent-governance-python/agent-compliance/src/agent_compliance/cli/agt.py) |
 | **PromptDefense Evaluator** | 12-vector prompt injection audit for compliance testing | [Evaluator](agent-governance-python/agent-compliance/src/agent_compliance/prompt_defense.py) |
 

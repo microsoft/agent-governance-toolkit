@@ -14,9 +14,9 @@ This release establishes the compliant publishing infrastructure required for fu
 Microsoft-signed package releases:
 
 - **PyPI publishing** migrated from GitHub Actions Trusted Publishers to Azure DevOps pipeline
-  using `EsrpRelease@11` (`pipelines/pypi-publish.yml`)
+  using `EsrpRelease@11` (`.github/pipelines/pypi-publish.yml`)
 - **npm publishing** pipeline created using `EsrpRelease@11` with `@microsoft` scope
-  (`pipelines/npm-publish.yml`)
+  (`.github/pipelines/npm-publish.yml`)
 - **GitHub Actions** (`publish.yml`) now builds and attests packages only — actual publishing
   is done exclusively through ESRP Release ADO pipelines
 

@@ -212,10 +212,10 @@ result := client.ExecuteWithGovernance("data.read", nil)
 
 ```bash
 # フルガバナンスデモ（ポリシー適用、監査、トラスト、コスト、信頼性）
-python demo/maf_governance_demo.py
+python examples/demos/maf_governance_demo.py
 
 # 敵対的攻撃シナリオを含めて実行
-python demo/maf_governance_demo.py --include-attacks
+python examples/demos/maf_governance_demo.py --include-attacks
 ```
 
 ## その他のサンプルと例

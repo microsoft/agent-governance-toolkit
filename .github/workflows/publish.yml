@@ -30,7 +30,7 @@ jobs:
   # Build Python packages and attest provenance.
   #
   # IMPORTANT: Actual PyPI publishing is done via the ADO pipeline
-  # (pipelines/pypi-publish.yml) using ESRP Release. GitHub Actions
+  # (.github/pipelines/pypi-publish.yml) using ESRP Release. GitHub Actions
   # Trusted Publishers are NOT compliant for Microsoft PyPI publishing.
   # See: docs/internal/pypi-publishing.md
   # -------------------------------------------------------------------
@@ -97,7 +97,7 @@ jobs:
   # Build npm packages, pack .tgz, and upload artifacts.
   #
   # IMPORTANT: Actual npm publishing is done via the ADO pipeline
-  # (pipelines/npm-publish.yml) using ESRP Release. GitHub Actions
+  # (.github/pipelines/npm-publish.yml) using ESRP Release. GitHub Actions
   # is NOT compliant for Microsoft npm publishing.
   # See: PUBLISHING.md
   # -------------------------------------------------------------------
@@ -211,7 +211,7 @@ jobs:
           # TODO: Replace this block with actual ESRP signing invocation once
           # PRSS certificates are generated and uploaded to Key Vault.
           # Until then, fail to prevent publishing unsigned assemblies.
-          echo "::error::ESRP Authenticode signing not yet implemented — PRSS certs required. Use the ADO pipeline (pipelines/esrp-publish.yml) for production publishing."
+          echo "::error::ESRP Authenticode signing not yet implemented — PRSS certs required. Use the ADO pipeline (.github/pipelines/esrp-publish.yml) for production publishing."
           exit 1
 
       - name: Sign NuGet package (ESRP)
@@ -225,7 +225,7 @@ jobs:
           # TODO: Replace this block with actual ESRP NuGetSign + NuGetVerify
           # invocation (KeyCode: CP-401405) once PRSS certs are ready.
           # Until then, fail to prevent publishing unsigned packages.
-          echo "::error::ESRP NuGet signing not yet implemented — PRSS certs required. Use the ADO pipeline (pipelines/esrp-publish.yml) for production publishing."
+          echo "::error::ESRP NuGet signing not yet implemented — PRSS certs required. Use the ADO pipeline (.github/pipelines/esrp-publish.yml) for production publishing."
           exit 1
 
       - name: Validate NuGet package metadata

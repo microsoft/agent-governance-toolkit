@@ -10,7 +10,7 @@
 "agent-sre":
   - changed-files:
       - any-glob-to-any-file: "agent-governance-python/agent-sre/**"
-"ci/cd":
+"scripts/ci/cd":
   - changed-files:
       - any-glob-to-any-file: ".github/**"
 "documentation":

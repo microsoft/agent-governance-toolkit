@@ -31,7 +31,7 @@
 - [ ] CI pipeline includes blocking governance checks:
   - `agt audit` — verify policy coverage
   - `agt doctor` — verify component health
-  - Quality gates from `ci/` scripts (no-stubs, no-custom-crypto, etc.)
+  - Quality gates from `scripts/ci/` scripts (no-stubs, no-custom-crypto, etc.)
 - [ ] Branch protection requires governance checks to pass before merge
 - [ ] Dependabot/Renovate configured with governance-aware merge policies
 
