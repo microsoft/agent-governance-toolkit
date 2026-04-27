@@ -137,6 +137,15 @@ def _validate_db_path(raw: str) -> str:
     if raw == ":memory:":
         return raw
 
+    # Defense-in-depth: reject null bytes before any path processing.
+    # Path() also raises ValueError for embedded nulls, but an explicit
+    # check provides a clearer error message.
+    if "\x00" in raw:
+        raise ValueError(
+            f"Invalid db_path: path contains null byte(s). "
+            f"This may indicate a path injection attempt."
+        )
+
     if len(raw) > _MAX_DB_PATH_LEN:
         raise ValueError(
             f"Invalid db_path: path exceeds {_MAX_DB_PATH_LEN} characters."

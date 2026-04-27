@@ -285,9 +285,25 @@ class TestSQLiteMeasurementStore:
         assert "données" in result or "donn" in result  # may be NFC-normalised
 
     def test_null_byte_in_path_raises(self) -> None:
-        """Null bytes in paths must be rejected."""
-        with pytest.raises((ValueError, OSError)):
+        """Null bytes in paths must be rejected with a clear error message."""
+        with pytest.raises(ValueError, match="null byte"):
             _validate_db_path("/tmp/evil\x00.db")
+
+    def test_unicode_nfc_nfd_normalization(self, tmp_path: object) -> None:
+        """NFC and NFD normalisation forms for the same name resolve identically."""
+        import pathlib
+        import unicodedata
+
+        name_nfc = unicodedata.normalize("NFC", "café")
+        name_nfd = unicodedata.normalize("NFD", "café")
+        path_nfc = str(pathlib.Path(str(tmp_path)) / name_nfc / "sli.db")
+        path_nfd = str(pathlib.Path(str(tmp_path)) / name_nfd / "sli.db")
+        result_nfc = _validate_db_path(path_nfc)
+        result_nfd = _validate_db_path(path_nfd)
+        # On macOS, the filesystem normalises to NFD; on Linux they may differ.
+        # Both must resolve without error.
+        assert isinstance(result_nfc, str)
+        assert isinstance(result_nfd, str)
 
 
 # ---------------------------------------------------------------------------

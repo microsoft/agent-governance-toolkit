@@ -243,7 +243,7 @@ class TestGovernanceInstrumentorThreadSafety:
             except Exception as exc:
                 errors.append(exc)
 
-        threads = [threading.Thread(target=worker, args=(i,)) for i in range(8)]
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(16)]
         for t in threads:
             t.start()
         for t in threads:
@@ -268,7 +268,7 @@ class TestGovernanceInstrumentorThreadSafety:
             except Exception as exc:
                 errors.append(exc)
 
-        threads = [threading.Thread(target=worker, args=(i,)) for i in range(8)]
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(16)]
         for t in threads:
             t.start()
         for t in threads:
