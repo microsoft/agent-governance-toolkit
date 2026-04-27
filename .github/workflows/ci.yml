@@ -127,6 +127,12 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install local sibling dependencies
+        run: |
+          # agent-os depends on agent_primitives (local, not on PyPI at >=3.x)
+          if [ "${{ matrix.package }}" = "agent-os" ]; then
+            pip install --no-cache-dir -e agent-governance-python/agent-primitives
+          fi
       - name: Install ${{ matrix.package }}
         working-directory: agent-governance-python/${{ matrix.package }}
         run: |
