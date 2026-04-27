@@ -125,28 +125,17 @@ def sign_receipt(receipt: GovernanceReceipt, private_key_hex: str) -> Governance
     """
     payload = receipt.canonical_payload().encode()
 
-    try:
-        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-        seed = bytes.fromhex(private_key_hex)
-        private_key = Ed25519PrivateKey.from_private_bytes(seed)
-        sig = private_key.sign(payload)
-        receipt.signature = sig.hex()
-        receipt.signer_public_key = (
-            private_key.public_key()
-            .public_bytes_raw()
-            .hex()
-        )
-    except ImportError:
-        # Fallback: HMAC-SHA256 for envs without cryptography
-        import hmac
-
-        _logger.warning("cryptography not available — using HMAC-SHA256 fallback")
-        sig = hmac.new(
-            bytes.fromhex(private_key_hex), payload, hashlib.sha256
-        ).hexdigest()
-        receipt.signature = sig
-        receipt.signer_public_key = f"hmac:{private_key_hex[:16]}..."
+    seed = bytes.fromhex(private_key_hex)
+    private_key = Ed25519PrivateKey.from_private_bytes(seed)
+    sig = private_key.sign(payload)
+    receipt.signature = sig.hex()
+    receipt.signer_public_key = (
+        private_key.public_key()
+        .public_bytes_raw()
+        .hex()
+    )
 
     return receipt
 
@@ -161,11 +150,6 @@ def verify_receipt(receipt: GovernanceReceipt) -> bool:
         ``True`` if the signature is valid, ``False`` otherwise.
     """
     if not receipt.signature or not receipt.signer_public_key:
-        return False
-
-    # HMAC fallback receipts cannot be externally verified
-    if receipt.signer_public_key.startswith("hmac:"):
-        _logger.warning("Cannot verify HMAC-signed receipt without the key")
         return False
 
     try:

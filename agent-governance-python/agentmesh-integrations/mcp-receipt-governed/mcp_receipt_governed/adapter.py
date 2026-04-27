@@ -200,8 +200,8 @@ class McpReceiptAdapter:
             try:
                 sign_receipt(receipt, self._signing_key)
             except Exception as exc:
-                _logger.error(f"Receipt signing failed: {exc}")
-                receipt.error = f"signing_failed: {exc}"
+                _logger.error(f"Receipt signing failed: {type(exc).__name__}")
+                receipt.error = f"signing_failed: {type(exc).__name__}"
 
         # 4. Store receipt
         self.store.add(receipt)
