@@ -168,13 +168,17 @@ Python packages in this monorepo, and the TypeScript SDK dependencies.
 
 ```bash
 # Build and start the development container
-docker compose up --build dev
-
-# Open a shell in the running container
-docker compose exec dev bash
+docker compose up --build dev -d
 
 # Run the full test suite
 docker compose run --rm test
+```
+
+To access the container and run commands interactively, use the following command:
+
+```bash
+# Open a shell in the running container
+docker compose exec dev bash
 ```
 
 The repository is bind-mounted into `/workspace`, so Python source changes are
