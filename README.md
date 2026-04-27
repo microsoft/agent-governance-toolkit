@@ -16,7 +16,7 @@
 > [Open a GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) for feedback.
 
 > [!TIP]
-> **v3.2.2 is out!** Patch: OpenClaw sidecar docker fix, encryption exports for npm. E2E encrypted agent messaging (Signal protocol), Wire Protocol spec, registry + relay services. [Changelog →](CHANGELOG.md)
+> **v3.3.0 is out!** Contributor Reputation Check (reusable GitHub Action for any OSS repo), repo reorganization under language-specific SDK dirs, Sentry integration, shift-left governance tutorial, policy composition, multi-stage pipelines, and 80+ other improvements. [Changelog →](CHANGELOG.md)
 
 **Runtime governance for AI agents** — deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents. Covers all **10 OWASP Agentic risks** with **9,500+ tests**.
 
