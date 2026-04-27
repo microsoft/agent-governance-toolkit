@@ -38,7 +38,7 @@ Framework integrations are published as **separate packages** that depend on AGT
 | `crewai-agentmesh` | CrewAI | `pip install crewai-agentmesh` |
 | `openai-agents-agentmesh` | OpenAI Agents | `pip install openai-agents-agentmesh` |
 | `pydantic-ai-governance` | Pydantic AI | `pip install pydantic-ai-governance` |
-| `aps-agentmesh` | APS | `pip install aps-agentmesh` |
+
 
 
 Adapters **must** use try/except for all framework imports so they fail gracefully when the framework isn't installed.
