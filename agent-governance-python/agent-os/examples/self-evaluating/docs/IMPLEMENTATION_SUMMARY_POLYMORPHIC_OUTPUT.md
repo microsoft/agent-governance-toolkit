@@ -300,8 +300,6 @@ Component: Table with columns, rows, pagination
 - Any app with dynamic UI needs
 
 **Revenue Model**:
-- $99/month per developer
-- $10k/year enterprise unlimited
 - Open source core + premium components
 
 ## Future Enhancements

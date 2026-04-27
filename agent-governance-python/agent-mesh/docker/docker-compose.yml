@@ -1,0 +1,65 @@
+# AgentMesh Registry + Relay — Docker Compose
+#
+# Runs the registry and relay as standalone services. Agents connect via
+# WebSocket (relay, port 8083) and register via HTTP (registry, port 8082).
+#
+# Usage (from repo root):
+#   docker compose -f agent-governance-python/agent-mesh/docker/docker-compose.yml up --build
+#
+# Environment variables (optional):
+#   REGISTRY_PORT  — registry HTTP port (default: 8082)
+#   RELAY_PORT     — relay WebSocket port (default: 8083)
+#   LOG_LEVEL      — uvicorn log level (default: info)
+
+services:
+  registry:
+    build:
+      context: ../../../
+      dockerfile: agent-governance-python/agent-mesh/docker/Dockerfile
+      args:
+        COMPONENT: registry
+    container_name: agentmesh-registry
+    ports:
+      - "${REGISTRY_PORT:-8082}:8082"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8082"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 8s
+    networks:
+      - mesh
+
+  relay:
+    build:
+      context: ../../../
+      dockerfile: agent-governance-python/agent-mesh/docker/Dockerfile
+      args:
+        COMPONENT: relay
+    container_name: agentmesh-relay
+    ports:
+      - "${RELAY_PORT:-8083}:8083"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8083"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+    depends_on:
+      registry:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 8s
+    networks:
+      - mesh
+
+networks:
+  mesh:
+    driver: bridge
+    name: agentmesh

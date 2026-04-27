@@ -170,13 +170,6 @@ Type `@agentos help` in GitHub Copilot Chat to get started!
 Visit our [documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docstutorials/copilot-extension/) for tutorials and guides.
 ```
 
-### Pricing and plans
-| Plan | Price | Features |
-|------|-------|----------|
-| **Free** | $0/month | All features, unlimited agents |
-
-(Start with free to get traction, can add paid tiers later)
-
 ### Links
 | Field | Value |
 |-------|-------|

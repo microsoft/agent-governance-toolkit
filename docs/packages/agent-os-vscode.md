@@ -230,14 +230,6 @@ Open Settings (Ctrl+,) and search for "Agent OS":
 | `agentOS.governance.endpoint` | "" | Override: connect to existing agent-failsafe server (auto-start if empty) |
 | `agentOS.governance.refreshIntervalMs` | 10000 | Polling interval for governance data (minimum 5000ms) |
 
-## Pricing
-
-| Tier | Price | Features |
-|------|-------|----------|
-| **Free** | $0 | Local policies, 7-day audit, 10 CMVK/day |
-| **Pro** | $9/mo | Unlimited CMVK, 90-day audit, priority support |
-| **Enterprise** | Custom | Self-hosted, SSO, RBAC, compliance reports |
-
 ## Privacy and Security
 
 - **Local-first**: Policy checks run entirely in the extension
