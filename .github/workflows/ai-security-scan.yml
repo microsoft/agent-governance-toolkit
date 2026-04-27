@@ -1,98 +1,24 @@
-# AI-powered security analysis for the agent-governance-toolkit.
-# Catches security issues that static analysis tools like CodeQL may miss:
-# prompt injection defense bypass, policy engine circumvention, trust chain
-# weaknesses, credential exposure, sandbox escape, and deserialization attacks.
+# AI-powered weekly full security audit for agent-governance-toolkit.
+# Catches security issues that static analysis tools like CodeQL may miss.
+# Posts comprehensive audit results as a GitHub issue.
 #
-# Two modes:
-# - PR scan: non-blocking analysis on every pull request
-# - Weekly full scan: comprehensive audit posted as a GitHub issue
+# PR-time security scanning is handled by ai-pr-review.yml (consolidated).
 name: AI Security Scan
-# SECURITY: Uses pull_request_target for write access to post PR comments.
-# All checkouts pin to BASE ref (never HEAD) to prevent RCE via modified
-# composite actions in fork PRs. See workflow security audit.
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened]
-    branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - 'agent-governance-python/notebooks/**'
   schedule:
     - cron: "0 6 * * 1" # Weekly Monday 6:00 UTC
   workflow_dispatch:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
-  pull-requests: write
   issues: write
   models: read
 
-# SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
 jobs:
-  pr-security-scan:
-    name: PR Security Analysis
-    runs-on: ubuntu-latest
-    if: >-
-      github.event_name == 'pull_request_target' &&
-      github.event.pull_request.draft == false &&
-      github.actor != 'dependabot[bot]'
-    continue-on-error: true
-    steps:
-      - name: Fork safety check
-        if: github.event.pull_request.head.repo.full_name != github.repository
-        run: echo "::notice::Running on fork PR — composite action resolved from base branch (safe)"
-
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          # SECURITY: pull_request_target defaults to base branch checkout (safe).
-          # SECURITY: base-only checkout required for pull_request_target context.
-          persist-credentials: false
-          fetch-depth: 1
-
-      - name: Run AI security scan
-        uses: ./.github/actions/ai-agent-runner
-        with:
-          agent-type: security-scanner
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          model: gpt-4o
-          fallback-model: gpt-4o-mini
-          max-tokens: "1500"
-          context-mode: pr-diff
-          output-mode: pr-comment
-          custom-instructions: |
-            You are a security analyst reviewing changes to microsoft/agent-governance-toolkit.
-
-            BE CONCISE. Only report actual findings, not a methodology walkthrough.
-            Skip categories with no issues. No boilerplate, no "no changes needed" rows.
-
-            Scan for:
-            1. Prompt injection defense bypass
-            2. Policy engine circumvention
-            3. Trust chain weaknesses
-            4. Credential exposure
-            5. Sandbox escape
-            6. Deserialization attacks
-            7. Race conditions
-            8. Supply chain risks
-
-            Format (compact):
-            ### Security Review
-            | Severity | Finding | Fix |
-            |----------|---------|-----|
-            | 🔴 CRITICAL | [one-line description] | [one-line fix] |
-
-            If NO security issues found, reply only: ✅ No security issues found.
-
   weekly-full-scan:
     name: Weekly Full Security Audit
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
