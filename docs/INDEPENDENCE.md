@@ -39,7 +39,7 @@ Framework integrations are published as **separate packages** that depend on AGT
 | `openai-agents-agentmesh` | OpenAI Agents | `pip install openai-agents-agentmesh` |
 | `pydantic-ai-governance` | Pydantic AI | `pip install pydantic-ai-governance` |
 | `aps-agentmesh` | APS | `pip install aps-agentmesh` |
-| `scopeblind-protect-mcp` | ScopeBlind | `pip install scopeblind-protect-mcp` |
+
 
 Adapters **must** use try/except for all framework imports so they fail gracefully when the framework isn't installed.
 
