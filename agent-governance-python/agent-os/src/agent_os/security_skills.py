@@ -409,6 +409,58 @@ def check_error_info_leak(source: str, path: str = "") -> list[SecurityFinding]:
 
 
 # ---------------------------------------------------------------------------
+# SKILL-011: Unsafe URL netloc parsing (SSRF bypass via userinfo)
+# ---------------------------------------------------------------------------
+
+_UNSAFE_NETLOC = re.compile(
+    r"""
+    \.netloc                          # accessing parsed.netloc
+    (?:(?!\.\bhostname\b).)*?         # not immediately followed by .hostname
+    \.split\s*\(\s*['\"]:['\"]        # then .split(":")
+    """,
+    re.VERBOSE | re.DOTALL,
+)
+
+_SAFE_HOSTNAME = re.compile(
+    r"\.hostname\b",
+)
+
+
+def check_unsafe_netloc_parsing(source: str, path: str = "") -> list[SecurityFinding]:
+    """Detect manual netloc parsing that ignores userinfo (SSRF bypass).
+
+    Parsing ``parsed.netloc.split(':')`` to extract the host misses
+    RFC 3986 userinfo (``user:pass@host``), allowing URLs like
+    ``http://allowed.com:80@127.0.0.1`` to bypass domain checks.
+    """
+    if not _UNSAFE_NETLOC.search(source):
+        return []
+    # If the file also uses .hostname, it may be safe (but still suspicious)
+    if _SAFE_HOSTNAME.search(source):
+        return []
+    line = _find_line(source, _UNSAFE_NETLOC)
+    return [SecurityFinding(
+        rule_id="SKILL-011",
+        title="Unsafe URL netloc parsing (SSRF bypass via userinfo)",
+        severity=Severity.CRITICAL,
+        description=(
+            "URL domain is extracted by splitting netloc on ':' to remove the "
+            "port. This ignores RFC 3986 userinfo (user:pass@host), allowing "
+            "an attacker to bypass blocklists/allowlists with a URL like "
+            "http://allowed.com:80@127.0.0.1. Use parsed.hostname instead, "
+            "and reject URLs containing '@' in the netloc."
+        ),
+        file_path=path,
+        line_number=line,
+        suggestion=(
+            "Replace netloc.split(':')[0] with parsed.hostname. "
+            "Also reject URLs where '@' appears in parsed.netloc."
+        ),
+        owasp_risks=("AT02", "AT07"),
+    )]
+
+
+# ---------------------------------------------------------------------------
 # Aggregate scanner
 # ---------------------------------------------------------------------------
 
@@ -423,6 +475,7 @@ ALL_CHECKS: list[Callable[[str, str], list[SecurityFinding]]] = [
     check_hardcoded_secrets,
     check_trust_without_crypto,
     check_error_info_leak,
+    check_unsafe_netloc_parsing,
 ]
 
 

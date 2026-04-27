@@ -18,6 +18,7 @@ from agent_os.security_skills import (
     check_stub_security,
     check_trust_without_crypto,
     check_unbounded_collections,
+    check_unsafe_netloc_parsing,
     check_unsafe_pickle,
     format_findings,
     scan_source,
@@ -339,6 +340,53 @@ class TestErrorInfoLeak:
                 return {"error": type(e).__name__}
         """)
         findings = check_error_info_leak(src)
+        assert len(findings) == 0
+
+
+# ---------------------------------------------------------------------------
+# SKILL-011: Unsafe URL netloc parsing (SSRF bypass via userinfo)
+# ---------------------------------------------------------------------------
+
+class TestUnsafeNetlocParsing:
+    def test_detects_netloc_split_colon(self):
+        src = textwrap.dedent("""\
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            domain = parsed.netloc.lower()
+            if ":" in domain:
+                domain = domain.split(":")[0]
+        """)
+        findings = check_unsafe_netloc_parsing(src)
+        assert len(findings) == 1
+        assert findings[0].rule_id == "SKILL-011"
+        assert findings[0].severity == Severity.CRITICAL
+
+    def test_safe_hostname_usage(self):
+        src = textwrap.dedent("""\
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            domain = parsed.hostname
+        """)
+        findings = check_unsafe_netloc_parsing(src)
+        assert len(findings) == 0
+
+    def test_no_netloc_at_all(self):
+        src = textwrap.dedent("""\
+            import requests
+            response = requests.get("https://example.com")
+        """)
+        findings = check_unsafe_netloc_parsing(src)
+        assert len(findings) == 0
+
+    def test_netloc_without_split(self):
+        src = textwrap.dedent("""\
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            netloc = parsed.netloc
+            if "@" in netloc:
+                raise ValueError("no userinfo")
+        """)
+        findings = check_unsafe_netloc_parsing(src)
         assert len(findings) == 0
 
 
