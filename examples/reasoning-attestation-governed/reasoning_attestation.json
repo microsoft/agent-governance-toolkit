@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0.0",
+  "attestation_type": "reasoning_state",
+  "timestamp_utc": "2026-04-27T05:23:38.335075+00:00",
+  "action_ref": "f471ebc2e56d1bf4e1bebe4522be9162dfb712b7cceb34552df08733cac30f9a",
+  "model_id": "gpt-4o-2026-04",
+  "policy_decision": {
+    "policy_id": "reasoning-attestation-policy",
+    "policy_version": "1.0.0",
+    "policy_sha256": "054e16994b16bf855e40542c88e48661fe0aebcd303a6b538486a5e936812e45",
+    "decision": "allow",
+    "reason": "rule matched: allow_summarize_internal_audit"
+  },
+  "dictionary_reference": {
+    "dictionary_id": "sae-gpt4o-compliance-v1",
+    "model_family": "gpt-4o",
+    "dictionary_version": "2026.04",
+    "source_uri": "https://example.org/dictionaries/sae-gpt4o-compliance-v1.json",
+    "source_sha256": "9f5dc8dcf9d6f9c0df0cc5a0a5d09f9fb00d903f779ef93957b017dc8ba7af10"
+  },
+  "sae_activations": [
+    {
+      "feature_id": "f_1182",
+      "activation": "0.91",
+      "token_span": "SOC 2 controls",
+      "interpretation": "compliance_framework_reference"
+    },
+    {
+      "feature_id": "f_405",
+      "activation": "0.83",
+      "token_span": "least privilege",
+      "interpretation": "security_principle_binding"
+    },
+    {
+      "feature_id": "f_9021",
+      "activation": "0.77",
+      "token_span": "audit evidence",
+      "interpretation": "attestation_traceability_signal"
+    }
+  ],
+  "signer_public_key_b64": "+FK+bRrpDgp97lQeCyRRTszxH+N9rqA8ey3msKmh5Rg=",
+  "signature_b64": "CPh6KqKw1faYxyr6Ge9gCGtqcb2fnCoAH/tbo+2ns4s5DAl87lVdTmFyl8EHkT6DXzAcOs3vCr43imkR653hBA==",
+  "envelope_sha256": "2a2a91163f149a877f36c831fee3ccdfe49ce86ccf9482d5cbd1dd85c7e584ec"
+}
