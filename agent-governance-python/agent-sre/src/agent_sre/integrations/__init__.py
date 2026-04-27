@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Integrations with Agent OS, Agent Mesh, OpenTelemetry, and OpenLit."""
+"""Integrations with Agent OS, Agent Mesh, OpenTelemetry, and observability tools."""
 
 __all__ = [
     "langchain",
@@ -17,5 +17,6 @@ __all__ = [
     "mcp",
     "mlflow",
     "prometheus",
+    "sentry",
     "wandb",
 ]
