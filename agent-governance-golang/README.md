@@ -245,4 +245,4 @@ Structured prompt risk evaluation for injection and exfiltration patterns.
 
 ## License
 
-See repository root [LICENSE](../../LICENSE).
+See repository root [LICENSE](../LICENSE).
