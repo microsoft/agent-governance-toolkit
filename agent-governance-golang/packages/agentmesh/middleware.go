@@ -14,6 +14,9 @@ import (
 // ErrPolicyDenied is returned when a governed operation is rejected by policy.
 var ErrPolicyDenied = errors.New("policy denied action")
 
+// ErrVerifiedAgentIdentityRequired is returned when HTTP middleware cannot resolve a verified identity.
+var ErrVerifiedAgentIdentityRequired = errors.New("verified agent identity required")
+
 // GovernedOperation is the common request envelope for middleware-based integrations.
 type GovernedOperation struct {
 	AgentID  string
@@ -72,6 +75,35 @@ type MiddlewareStackConfig struct {
 	DeniedTools               []string
 	PromptDefense             *PromptDefenseEvaluator
 	PromptDefenseMaxRiskScore int
+}
+
+// HTTPResolvedAgentIdentity describes an HTTP identity returned by an AgentIDResolver.
+type HTTPResolvedAgentIdentity struct {
+	AgentID            string
+	Verified           bool
+	VerificationSource string
+}
+
+// HTTPAgentIDResolver resolves a verified agent identity for an HTTP request.
+type HTTPAgentIDResolver func(*http.Request) (HTTPResolvedAgentIdentity, error)
+
+// LegacyTrustedHeaderAgentIDResolver explicitly trusts a caller-supplied header for short-lived migrations.
+func LegacyTrustedHeaderAgentIDResolver(headerName string) HTTPAgentIDResolver {
+	if strings.TrimSpace(headerName) == "" {
+		headerName = "X-Agent-ID"
+	}
+
+	return func(request *http.Request) (HTTPResolvedAgentIdentity, error) {
+		agentID := strings.TrimSpace(request.Header.Get(headerName))
+		if agentID == "" {
+			return HTTPResolvedAgentIdentity{}, fmt.Errorf("%w: trusted header %q missing", ErrVerifiedAgentIdentityRequired, headerName)
+		}
+		return HTTPResolvedAgentIdentity{
+			AgentID:            agentID,
+			Verified:           true,
+			VerificationSource: "legacy_trusted_header:" + headerName,
+		}, nil
+	}
 }
 
 // CreateGovernanceMiddlewareStack creates a composed stack similar to the Python middleware factory.
@@ -225,28 +257,38 @@ func SLOTrackingMiddleware(slo *SLOEngine, objective string) OperationMiddleware
 }
 
 // HTTPMiddlewareConfig configures the net/http governance middleware.
+//
+// Upgrades that adopt verified HTTP identities must set AgentIDResolver explicitly.
+// NewHTTPGovernanceMiddleware now fails closed when no verified identity can be
+// resolved. For short-lived trusted migrations, use LegacyTrustedHeaderAgentIDResolver.
 type HTTPMiddlewareConfig struct {
-	Policy         *PolicyEngine
-	Audit          *AuditLogger
-	SLO            *SLOEngine
-	SLOObjective   string
-	ActionResolver func(*http.Request) string
-	ContextBuilder func(*http.Request) map[string]interface{}
-	AllowedTools   []string
-	DeniedTools    []string
-	PromptDefense  *PromptDefenseEvaluator
+	Policy                    *PolicyEngine
+	Audit                     *AuditLogger
+	SLO                       *SLOEngine
+	SLOObjective              string
+	ActionResolver            func(*http.Request) string
+	AgentIDResolver           HTTPAgentIDResolver
+	ContextBuilder            func(*http.Request) map[string]interface{}
+	AllowedTools              []string
+	DeniedTools               []string
+	PromptDefense             *PromptDefenseEvaluator
+	PromptDefenseMaxRiskScore int
 }
 
 // NewHTTPGovernanceMiddleware creates net/http middleware backed by the governance stack.
+//
+// The middleware rejects requests unless AgentIDResolver returns a verified
+// identity. Caller-asserted X-Agent-ID headers are not trusted implicitly.
 func NewHTTPGovernanceMiddleware(config HTTPMiddlewareConfig) (func(http.Handler) http.Handler, error) {
 	stack, err := CreateGovernanceMiddlewareStack(MiddlewareStackConfig{
-		Policy:        config.Policy,
-		Audit:         config.Audit,
-		SLO:           config.SLO,
-		SLOObjective:  config.SLOObjective,
-		AllowedTools:  config.AllowedTools,
-		DeniedTools:   config.DeniedTools,
-		PromptDefense: config.PromptDefense,
+		Policy:                    config.Policy,
+		Audit:                     config.Audit,
+		SLO:                       config.SLO,
+		SLOObjective:              config.SLOObjective,
+		AllowedTools:              config.AllowedTools,
+		DeniedTools:               config.DeniedTools,
+		PromptDefense:             config.PromptDefense,
+		PromptDefenseMaxRiskScore: config.PromptDefenseMaxRiskScore,
 	})
 	if err != nil {
 		return nil, err
@@ -263,30 +305,49 @@ func NewHTTPGovernanceMiddleware(config HTTPMiddlewareConfig) (func(http.Handler
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			operation := &GovernedOperation{
-				AgentID:  r.Header.Get("X-Agent-ID"),
-				Action:   actionResolver(r),
-				ToolName: actionResolver(r),
-				Message:  requestMessage(r),
-				Input:    contextBuilder(r),
+			input := contextBuilder(r)
+			if input == nil {
+				input = make(map[string]interface{})
 			}
 
-			recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+			identity, resolveErr := resolveHTTPAgentIdentity(r, config.AgentIDResolver)
+			if identity.VerificationSource != "" {
+				input["agent_id_verification_source"] = identity.VerificationSource
+			}
+
+			action := actionResolver(r)
+			operation := &GovernedOperation{
+				AgentID:  identity.AgentID,
+				Action:   action,
+				ToolName: action,
+				Message:  requestMessage(r),
+				Input:    input,
+			}
+			if resolveErr != nil {
+				ensureOperationMetadata(operation)
+				operation.Metadata["agent_identity_error"] = resolveErr.Error()
+			}
+
+			recorder := &statusRecorder{ResponseWriter: w}
+			if resolveErr != nil {
+				http.Error(w, ErrVerifiedAgentIdentityRequired.Error(), http.StatusForbidden)
+				return
+			}
 			err := stack.Execute(operation, func(*GovernedOperation) error {
 				next.ServeHTTP(recorder, r)
-				if recorder.status >= http.StatusBadRequest {
-					return fmt.Errorf("http handler returned status %d", recorder.status)
+				if recorder.Status() >= http.StatusBadRequest {
+					return fmt.Errorf("http handler returned status %d", recorder.Status())
 				}
 				return nil
 			})
 			if err == nil {
 				return
 			}
-			if recorder.status != http.StatusOK {
+			if recorder.WroteHeader() {
 				return
 			}
 			statusCode := http.StatusForbidden
-			if !errors.Is(err, ErrPolicyDenied) {
+			if !errors.Is(err, ErrPolicyDenied) && !errors.Is(err, ErrVerifiedAgentIdentityRequired) {
 				statusCode = http.StatusInternalServerError
 			}
 			http.Error(w, err.Error(), statusCode)
@@ -317,12 +378,32 @@ func GovernOperation(action string, policyContext map[string]interface{}, policy
 
 type statusRecorder struct {
 	http.ResponseWriter
-	status int
+	status      int
+	wroteHeader bool
 }
 
 func (r *statusRecorder) WriteHeader(statusCode int) {
 	r.status = statusCode
+	r.wroteHeader = true
 	r.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (r *statusRecorder) Write(data []byte) (int, error) {
+	if !r.wroteHeader {
+		r.WriteHeader(http.StatusOK)
+	}
+	return r.ResponseWriter.Write(data)
+}
+
+func (r *statusRecorder) Status() int {
+	if r.status == 0 {
+		return http.StatusOK
+	}
+	return r.status
+}
+
+func (r *statusRecorder) WroteHeader() bool {
+	return r.wroteHeader
 }
 
 func defaultHTTPActionResolver(request *http.Request) string {
@@ -330,18 +411,47 @@ func defaultHTTPActionResolver(request *http.Request) string {
 }
 
 func defaultHTTPContextBuilder(request *http.Request) map[string]interface{} {
-	return map[string]interface{}{
-		"agent_id":       request.Header.Get("X-Agent-ID"),
+	context := map[string]interface{}{
 		"method":         request.Method,
 		"path":           request.URL.Path,
 		"host":           request.Host,
 		"user_agent":     request.UserAgent(),
 		"content_length": request.ContentLength,
 	}
+	if callerAssertedAgentID := strings.TrimSpace(request.Header.Get("X-Agent-ID")); callerAssertedAgentID != "" {
+		context["caller_asserted_agent_id"] = callerAssertedAgentID
+	}
+	return context
 }
 
 func requestMessage(request *http.Request) string {
 	return strings.TrimSpace(strings.Join([]string{request.Method, request.URL.Path, request.URL.RawQuery}, " "))
+}
+
+func resolveHTTPAgentIdentity(request *http.Request, resolver HTTPAgentIDResolver) (HTTPResolvedAgentIdentity, error) {
+	if resolver == nil {
+		return HTTPResolvedAgentIdentity{}, fmt.Errorf("%w: configure HTTPMiddlewareConfig.AgentIDResolver", ErrVerifiedAgentIdentityRequired)
+	}
+
+	identity, err := resolver(request)
+	if err != nil {
+		if errors.Is(err, ErrVerifiedAgentIdentityRequired) {
+			return HTTPResolvedAgentIdentity{}, err
+		}
+		return HTTPResolvedAgentIdentity{}, fmt.Errorf("%w: %v", ErrVerifiedAgentIdentityRequired, err)
+	}
+
+	identity.AgentID = strings.TrimSpace(identity.AgentID)
+	if identity.AgentID == "" {
+		return HTTPResolvedAgentIdentity{}, fmt.Errorf("%w: resolver returned an empty agent id", ErrVerifiedAgentIdentityRequired)
+	}
+	if !identity.Verified {
+		return HTTPResolvedAgentIdentity{}, fmt.Errorf("%w: resolver returned an unverified agent id", ErrVerifiedAgentIdentityRequired)
+	}
+	if identity.VerificationSource == "" {
+		identity.VerificationSource = "custom_resolver"
+	}
+	return identity, nil
 }
 
 func operationContext(operation *GovernedOperation) map[string]interface{} {
