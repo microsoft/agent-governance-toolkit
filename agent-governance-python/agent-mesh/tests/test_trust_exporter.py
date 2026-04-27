@@ -3,7 +3,6 @@
 """Tests for the provider-agnostic trust score exporter."""
 from __future__ import annotations
 
-import math
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -119,6 +118,24 @@ class TestTrustAttributeRecord:
     def test_score_dimension_string_nan_raises(self) -> None:
         with pytest.raises(ValidationError):
             _record(score=None, score_dimensions={"x": "nan"})  # type: ignore[dict-item]
+
+    def test_score_scalar_bool_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            _record(score=True)  # type: ignore[arg-type]
+        with pytest.raises(ValidationError):
+            _record(score=False)  # type: ignore[arg-type]
+
+    def test_score_dimensions_bool_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            _record(
+                score=None,
+                score_dimensions={"x": True},  # type: ignore[dict-item]
+            )
+        with pytest.raises(ValidationError):
+            _record(
+                score=None,
+                score_dimensions={"x": False},  # type: ignore[dict-item]
+            )
 
     def test_serialization_round_trip(self) -> None:
         original = _record(

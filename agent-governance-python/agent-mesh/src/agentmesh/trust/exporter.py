@@ -77,6 +77,27 @@ class TrustAttributeRecord(BaseModel):
             raise ValueError("updated_at must be a timezone-aware datetime")
         return v
 
+    @field_validator("score", mode="before")
+    @classmethod
+    def reject_bool_score(cls, v: Any) -> Any:
+        # Run before coercion: pydantic would otherwise turn True/False into
+        # 1.0/0.0 and silently produce maximum/zero trust from a malformed bool.
+        if isinstance(v, bool):
+            raise ValueError("score must not be a bool")
+        return v
+
+    @field_validator("score_dimensions", mode="before")
+    @classmethod
+    def reject_bool_dimension_values(cls, v: Any) -> Any:
+        # Same reasoning as reject_bool_score, applied to each dimension value.
+        if isinstance(v, dict):
+            for name, score in v.items():
+                if isinstance(score, bool):
+                    raise ValueError(
+                        f"score_dimensions['{name}'] must not be a bool"
+                    )
+        return v
+
     @field_validator("score_dimensions")
     @classmethod
     def validate_dimension_ranges(
