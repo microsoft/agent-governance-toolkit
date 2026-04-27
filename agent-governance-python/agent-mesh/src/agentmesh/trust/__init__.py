@@ -12,6 +12,7 @@ from .endorsement import Endorsement, EndorsementRegistry, EndorsementType
 from .handshake import TrustHandshake, HandshakeResult
 from .capability import CapabilityScope, CapabilityGrant, CapabilityRegistry
 from .cards import TrustedAgentCard, CardRegistry
+from .exporter import TrustAttributeRecord, TrustScoreExporter
 
 __all__ = [
     "TrustBridge",
@@ -26,4 +27,6 @@ __all__ = [
     "CapabilityRegistry",
     "TrustedAgentCard",
     "CardRegistry",
+    "TrustAttributeRecord",
+    "TrustScoreExporter",
 ]
