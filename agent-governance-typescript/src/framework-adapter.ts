@@ -15,6 +15,7 @@ export interface FrameworkInvocation {
   name: string;
   kind?: TraceSpanKind;
   action?: string;
+  /** Optional diagnostic identity hint; if provided, it must match the bound client identity. */
   agentId?: string;
   input?: Record<string, unknown>;
   attributes?: Record<string, unknown>;
@@ -146,37 +147,51 @@ export class GenericFrameworkAdapter {
     invocation: FrameworkInvocation,
   ): Promise<FrameworkInvocationHandle<TOutput>> {
     const action = this.resolveAction(invocation);
+    const canonicalAgentId = this.client.identity.did;
+    const assertedAgentId = invocation.agentId;
+    const normalizedInvocation: FrameworkInvocation = {
+      ...invocation,
+      agentId: canonicalAgentId,
+    };
+    const identityMismatchReason = assertedAgentId && assertedAgentId !== canonicalAgentId
+      ? `Caller-asserted agentId "${assertedAgentId}" does not match bound client identity "${canonicalAgentId}"`
+      : undefined;
     const capture = new TraceCapture(
-      invocation.agentId ?? this.client.identity.did,
-      stringifyOutput(invocation.input ?? {}),
+      canonicalAgentId,
+      stringifyOutput(normalizedInvocation.input ?? {}),
     );
     const span = capture.startSpan(
-      invocation.name,
-      invocation.kind ?? 'internal',
-      invocation.input,
+      normalizedInvocation.name,
+      normalizedInvocation.kind ?? 'internal',
+      normalizedInvocation.input,
       undefined,
-      invocation.attributes ?? {},
+      {
+        ...(normalizedInvocation.attributes ?? {}),
+        ...(assertedAgentId ? { assertedAgentId } : {}),
+      },
     );
 
-    const governanceResult = await this.client.executeWithGovernance(action, invocation.input ?? {});
+    const governanceResult = identityMismatchReason
+      ? this.rejectIdentityMismatch(action, canonicalAgentId, identityMismatchReason)
+      : await this.client.executeWithGovernance(action, normalizedInvocation.input ?? {});
     this.metrics?.recordPolicyDecision(
       governanceResult.decision,
       governanceResult.executionTime,
       {
         action,
-        invocationKind: invocation.kind ?? 'internal',
+        invocationKind: normalizedInvocation.kind ?? 'internal',
       },
     );
     this.metrics?.recordTrustScore(
-      invocation.agentId ?? this.client.identity.did,
+      canonicalAgentId,
       governanceResult.trustScore.overall,
     );
     this.metrics?.recordAuditEntry(this.client.audit.length);
 
     const allowed = governanceResult.decision === 'allow';
-    const reason = toReason(action, governanceResult);
+    const reason = identityMismatchReason ?? toReason(action, governanceResult);
     const handle = new FrameworkInvocationHandle<TOutput>(
-      invocation,
+      normalizedInvocation,
       action,
       allowed,
       reason,
@@ -231,6 +246,26 @@ export class GenericFrameworkAdapter {
     }
 
     return `${this.actionPrefix}.${invocation.kind ?? 'internal'}.${invocation.name}`;
+  }
+
+  private rejectIdentityMismatch(
+    action: string,
+    agentId: string,
+    reason: string,
+  ): GovernanceResult {
+    const auditEntry = this.client.audit.log({
+      agentId,
+      action,
+      decision: 'deny',
+    });
+    this.client.trust.recordFailure(agentId);
+    return {
+      decision: 'deny',
+      trustScore: this.client.trust.getTrustScore(agentId),
+      auditEntry,
+      executionTime: 0,
+      lifecycleState: this.client.lifecycle.state,
+    };
   }
 }
 

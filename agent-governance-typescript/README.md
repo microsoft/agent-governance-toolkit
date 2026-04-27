@@ -342,6 +342,10 @@ console.log(result.trace.traceId);
 
 Framework-specific integrations can also call `beginInvocation()` and `complete()` directly to plug this into callback or middleware pipelines.
 
+The adapter is now **identity-bound** to the `AgentMeshClient` you construct it with. If an invocation supplies `agentId`, it must match `client.identity.did`; mismatches are denied fail-closed before the handler runs, and audit/trace data stays anchored to the bound client identity.
+
+**Migration guidance:** if you previously reused one `GenericFrameworkAdapter` across multiple runtime identities and passed per-call `agentId` values, create a separate `AgentMeshClient`/`GenericFrameworkAdapter` pair for each real agent identity instead of relying on caller-asserted IDs.
+
 ## Development
 
 ```bash
