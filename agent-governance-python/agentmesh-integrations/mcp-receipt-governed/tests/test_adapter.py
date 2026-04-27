@@ -182,6 +182,17 @@ class TestSigning:
         )
         assert verify_receipt(receipt) is True
 
+    def test_signing_failure_raises(self):
+        """Fail-closed: signing failure raises RuntimeError, not silent error."""
+        adapter = McpReceiptAdapter(
+            cedar_policy=self.POLICY,
+            signing_key_hex="invalid_key",
+        )
+        with pytest.raises(RuntimeError, match="Receipt signing failed"):
+            adapter.govern_tool_call(
+                agent_did="did:mesh:a1",
+                tool_name="ReadData",
+            )
 
 # ── Govern and Execute ──
 

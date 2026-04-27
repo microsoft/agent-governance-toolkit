@@ -10,22 +10,27 @@ Components:
 - McpReceiptAdapter: Policy evaluation + receipt signing for MCP tool calls
 - GovernanceReceipt: Signed proof of a governance decision
 - ReceiptStore: In-memory audit trail with query capabilities
+- verify_receipt_chain: Offline hash-chain and signature verification
 """
 
 from mcp_receipt_governed.adapter import McpReceiptAdapter
 from mcp_receipt_governed.receipt import (
     GovernanceReceipt,
+    ReceiptSigningError,
     ReceiptStore,
     hash_tool_args,
     sign_receipt,
     verify_receipt,
+    verify_receipt_chain,
 )
 
 __all__ = [
     "GovernanceReceipt",
     "McpReceiptAdapter",
+    "ReceiptSigningError",
     "ReceiptStore",
     "hash_tool_args",
     "sign_receipt",
     "verify_receipt",
+    "verify_receipt_chain",
 ]
