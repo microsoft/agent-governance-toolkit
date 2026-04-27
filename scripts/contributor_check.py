@@ -265,6 +265,248 @@ def check_repo_themes(username: str) -> list[Signal]:
             value=len(recent_repos),
         ))
 
+    # Fork burst detection: many forks created in a short window
+    fork_signals = _check_fork_burst(repos)
+    signals.extend(fork_signals)
+
+    return signals
+
+
+def _check_fork_burst(repos: list[dict]) -> list[Signal]:
+    """Detect credibility-farming fork bursts (e.g., forking awesome lists)."""
+    signals: list[Signal] = []
+    now = datetime.now(timezone.utc)
+
+    forks = []
+    awesome_forks = []
+    for repo in repos:
+        if not repo.get("fork"):
+            continue
+        created = datetime.fromisoformat(repo["created_at"].replace("Z", "+00:00"))
+        if (now - created).days > 90:
+            continue
+        forks.append({"name": repo["name"], "created": created})
+        name_lower = repo.get("name", "").lower()
+        if "awesome" in name_lower or "curated" in (repo.get("description") or "").lower():
+            awesome_forks.append({"name": repo["name"], "created": created})
+
+    if not forks:
+        return signals
+
+    forks.sort(key=lambda f: f["created"])
+    max_window = 0
+    for f in forks:
+        window_count = sum(
+            1 for f2 in forks
+            if abs((f2["created"] - f["created"]).total_seconds()) <= 72 * 3600
+        )
+        max_window = max(max_window, window_count)
+
+    awesome_window = 0
+    if awesome_forks:
+        awesome_forks.sort(key=lambda f: f["created"])
+        for f in awesome_forks:
+            count = sum(
+                1 for f2 in awesome_forks
+                if abs((f2["created"] - f["created"]).total_seconds()) <= 72 * 3600
+            )
+            awesome_window = max(awesome_window, count)
+
+    if awesome_window >= 3:
+        signals.append(Signal(
+            name="awesome_fork_burst",
+            severity="HIGH",
+            detail=f"{awesome_window} awesome-list forks within 72 hours (credibility farming)",
+            value=awesome_window,
+        ))
+    elif max_window >= 5:
+        signals.append(Signal(
+            name="fork_burst",
+            severity="MEDIUM",
+            detail=f"{max_window} forks within 72 hours",
+            value=max_window,
+        ))
+
+    return signals
+
+
+# Feature buckets for detecting concept clones of AGT
+_AGT_FEATURE_BUCKETS: dict[str, list[str]] = {
+    "mcp_security": [
+        "mcp scanner", "mcp security", "tool poisoning", "mcp gateway",
+        "rug pull", "typosquat", "mcp tool scan",
+    ],
+    "policy_engine": [
+        "policy engine", "policy evaluator", "policy enforcement",
+        "cedar polic", "yaml polic", "deny-by-default",
+    ],
+    "identity_crypto": [
+        "ed25519", "agent identity", "zero-trust identity",
+        "cryptographic identity", "agent keypair", "agent did",
+    ],
+    "runtime_controls": [
+        "execution sandbox", "kill switch", "circuit breaker",
+        "permission level", "sandboxing", "emergency shutdown",
+    ],
+    "audit_trust": [
+        "audit trail", "trust scor", "hash-chain", "tamper-proof log",
+        "governance decision", "trust tier",
+    ],
+    "compliance": [
+        "owasp agentic", "owasp agent", "compliance attestation",
+        "eu ai act", "nist ai rmf",
+    ],
+}
+
+
+def check_feature_overlap(username: str, target_repo: str | None = None) -> list[Signal]:
+    """Detect repos that clone AGT's feature set using bucketed analysis."""
+    signals: list[Signal] = []
+    if not target_repo:
+        return signals
+
+    repos = _api(f"/users/{username}/repos", {"per_page": "100", "sort": "updated"})
+    if not repos:
+        return signals
+
+    now = datetime.now(timezone.utc)
+
+    for repo in repos:
+        if repo.get("fork"):
+            continue
+
+        name = repo.get("name", "")
+        desc = (repo.get("description") or "").lower()
+        topics = " ".join(repo.get("topics", []))
+        searchable = f"{name} {desc} {topics}".lower()
+
+        # Quick scan: does this repo match at least 2 buckets?
+        matched_buckets = set()
+        for bucket, keywords in _AGT_FEATURE_BUCKETS.items():
+            for kw in keywords:
+                if kw in searchable:
+                    matched_buckets.add(bucket)
+                    break
+
+        if len(matched_buckets) < 2:
+            continue
+
+        # Deep scan: fetch README for candidates
+        readme_text = ""
+        readme = _api(f"/repos/{username}/{name}/readme")
+        if readme and readme.get("content"):
+            try:
+                import base64
+                readme_text = base64.b64decode(readme["content"]).decode("utf-8", errors="replace").lower()
+            except Exception:
+                pass
+
+        full_text = f"{searchable} {readme_text}"
+        final_buckets = set()
+        for bucket, keywords in _AGT_FEATURE_BUCKETS.items():
+            for kw in keywords:
+                if kw in full_text:
+                    final_buckets.add(bucket)
+                    break
+
+        created = datetime.fromisoformat(repo["created_at"].replace("Z", "+00:00"))
+        age_days = (now - created).days
+        stars = repo.get("stargazers_count", 0)
+
+        if len(final_buckets) >= 4:
+            signals.append(Signal(
+                name="feature_overlap",
+                severity="HIGH",
+                detail=(
+                    f"Repo '{name}' matches {len(final_buckets)}/6 AGT feature buckets "
+                    f"({', '.join(sorted(final_buckets))}), "
+                    f"age={age_days}d, stars={stars}"
+                ),
+                value=len(final_buckets),
+            ))
+        elif len(final_buckets) >= 3:
+            signals.append(Signal(
+                name="feature_overlap",
+                severity="MEDIUM",
+                detail=(
+                    f"Repo '{name}' matches {len(final_buckets)}/6 AGT feature buckets "
+                    f"({', '.join(sorted(final_buckets))})"
+                ),
+                value=len(final_buckets),
+            ))
+
+    return signals
+
+
+def check_thin_credibility(username: str, target_repo: str | None = None) -> list[Signal]:
+    """Detect young, low-star projects promoted across multiple orgs."""
+    signals: list[Signal] = []
+
+    repos = _api(f"/users/{username}/repos", {"per_page": "100", "sort": "created"})
+    if not repos:
+        return signals
+
+    now = datetime.now(timezone.utc)
+
+    thin_repos: list[dict] = []
+    for repo in repos:
+        if repo.get("fork"):
+            continue
+        created = datetime.fromisoformat(repo["created_at"].replace("Z", "+00:00"))
+        age_days = (now - created).days
+        stars = repo.get("stargazers_count", 0)
+
+        if age_days <= 60 and stars < 5:
+            thin_repos.append({
+                "name": repo["name"],
+                "full_name": repo.get("full_name", f"{username}/{repo['name']}"),
+                "age_days": age_days,
+                "stars": stars,
+            })
+
+    if not thin_repos:
+        return signals
+
+    issues = _search_issues(f"author:{username} is:issue", per_page=50)
+    if not issues:
+        return signals
+
+    for thin in thin_repos:
+        repo_name = thin["name"].lower()
+        full_name = thin["full_name"].lower()
+        promoting_orgs = set()
+
+        for issue in issues:
+            body = (issue.get("body") or "").lower()
+            title = (issue.get("title") or "").lower()
+            repo_url = issue.get("repository_url", "")
+            issue_org = repo_url.replace("https://api.github.com/repos/", "").split("/")[0].lower()
+
+            if repo_name in body or repo_name in title or full_name in body:
+                if issue_org != username.lower():
+                    promoting_orgs.add(issue_org)
+
+        if len(promoting_orgs) >= 2:
+            signals.append(Signal(
+                name="thin_credibility",
+                severity="HIGH",
+                detail=(
+                    f"Repo '{thin['name']}' ({thin['age_days']}d old, {thin['stars']} stars) "
+                    f"promoted across {len(promoting_orgs)} orgs ({', '.join(sorted(promoting_orgs)[:5])})"
+                ),
+                value=len(promoting_orgs),
+            ))
+        elif len(promoting_orgs) >= 1:
+            signals.append(Signal(
+                name="thin_credibility",
+                severity="MEDIUM",
+                detail=(
+                    f"Repo '{thin['name']}' ({thin['age_days']}d old, {thin['stars']} stars) "
+                    f"promoted in {list(promoting_orgs)[0]}"
+                ),
+                value=len(promoting_orgs),
+            ))
+
     return signals
 
 
@@ -420,6 +662,10 @@ def check_contributor(username: str, target_repo: str | None = None) -> Reputati
 
     if target_repo:
         for signal in check_credential_spray(username, target_repo):
+            report.add(signal)
+        for signal in check_feature_overlap(username, target_repo):
+            report.add(signal)
+        for signal in check_thin_credibility(username, target_repo):
             report.add(signal)
 
     report.compute_risk()
