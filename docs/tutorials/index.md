@@ -24,6 +24,7 @@
 | 26 | [SBOM & Signing](26-sbom-and-signing.md) | Software bill of materials, artifact signing |
 | 27 | [MCP Scan CLI](27-mcp-scan-cli.md) | Static analysis for MCP server security |
 | 45 | [Shift-Left Governance](45-shift-left-governance.md) | Pre-commit hooks, CI gates, build-time enforcement |
+| 46 | [Contributor Governance](46-contributor-governance.md) | Contributor reputation, spam detection, cross-project scanning |
 
 ## Advanced Patterns
 
