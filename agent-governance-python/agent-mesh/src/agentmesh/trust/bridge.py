@@ -16,6 +16,7 @@ import logging
 import os
 
 from .handshake import TrustHandshake, HandshakeResult
+from .endorsement import EndorsementRegistry, Endorsement, EndorsementType
 
 logger = logging.getLogger(__name__)
 
@@ -92,9 +93,11 @@ class TrustBridge(BaseModel):
     def __init__(self, **data):
         identity = data.pop("identity", None)
         registry = data.pop("registry", None)
+        endorsement_registry = data.pop("endorsement_registry", None)
         super().__init__(**data)
         self._identity = identity
         self._registry = registry
+        self._endorsement_registry: Optional[EndorsementRegistry] = endorsement_registry
         self._handshake = TrustHandshake(
             agent_did=self.agent_did,
             identity=identity,
@@ -186,6 +189,21 @@ class TrustBridge(BaseModel):
             if peer.trust_verified and peer.trust_score >= threshold
         ]
 
+    def get_endorsements(
+        self,
+        peer_did: str,
+        endorsement_type: Optional[EndorsementType] = None,
+    ) -> list[Endorsement]:
+        """Get valid endorsements for a peer from the endorsement registry.
+
+        Returns an empty list if no endorsement registry is configured.
+        Endorsements are resolved on demand from the registry (not cached
+        on PeerInfo) to avoid HMAC integrity gaps.
+        """
+        if self._endorsement_registry is None:
+            return []
+        return self._endorsement_registry.get_endorsements(peer_did, endorsement_type)
+
     async def revoke_peer_trust(self, peer_did: str, reason: str) -> bool:
         """Revoke trust for a previously verified peer."""
         if peer_did in self.peers:
@@ -212,14 +230,17 @@ class ProtocolBridge(BaseModel):
     def __init__(self, **data):
         identity = data.pop("identity", None)
         registry = data.pop("registry", None)
+        endorsement_registry = data.pop("endorsement_registry", None)
         super().__init__(**data)
         self._identity = identity
         self._registry = registry
+        self._endorsement_registry = endorsement_registry
         if not self.trust_bridge:
             self.trust_bridge = TrustBridge(
                 agent_did=self.agent_did,
                 identity=identity,
                 registry=registry,
+                endorsement_registry=endorsement_registry,
             )
 
     async def send_message(

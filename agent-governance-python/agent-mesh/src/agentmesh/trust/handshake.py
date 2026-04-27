@@ -29,15 +29,26 @@ class HandshakeChallenge(BaseModel):
 
     challenge_id: str
     nonce: str
+    freshness_nonce: Optional[str] = Field(
+        None,
+        description="RFC 9334 freshness nonce for Evidence liveness proof",
+    )
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     expires_in_seconds: int = 30
 
     @classmethod
-    def generate(cls) -> "HandshakeChallenge":
-        """Generate a new challenge with a random nonce."""
+    def generate(cls, require_freshness: bool = False) -> "HandshakeChallenge":
+        """Generate a new challenge with a random nonce.
+
+        Args:
+            require_freshness: If True, include an RFC 9334 freshness
+                nonce that the responder must echo back in its signed
+                payload, proving Evidence liveness.
+        """
         return cls(
             challenge_id=f"challenge_{secrets.token_hex(8)}",
             nonce=secrets.token_hex(32),
+            freshness_nonce=secrets.token_hex(16) if require_freshness else None,
         )
 
     def is_expired(self) -> bool:
@@ -60,6 +71,9 @@ class HandshakeResponse(BaseModel):
     # Ed25519 signature and public key
     signature: str
     public_key: str
+
+    # RFC 9334: freshness nonce echoed back from challenge
+    freshness_nonce: Optional[str] = None
 
     # User context for OBO flows
     user_context: Optional[dict] = Field(None, description="End-user context for OBO flows")
@@ -236,11 +250,17 @@ class TrustHandshake:
         required_trust_score: int = 700,
         required_capabilities: Optional[list[str]] = None,
         use_cache: bool = True,
+        require_freshness: bool = False,
     ) -> HandshakeResult:
         """
         Initiate a simple nonce-based handshake with a peer.
+
+        Args:
+            require_freshness: If True, include an RFC 9334 freshness
+                nonce and bypass the handshake result cache so that every
+                call produces a fresh Evidence verification.
         """
-        if use_cache:
+        if use_cache and not require_freshness:
             cached = self._get_cached_result(peer_did)
             if cached:
                 return cached
@@ -249,7 +269,7 @@ class TrustHandshake:
 
         try:
             result = await asyncio.wait_for(
-                self._do_initiate(peer_did, required_trust_score, required_capabilities, start),
+                self._do_initiate(peer_did, required_trust_score, required_capabilities, start, require_freshness),
                 timeout=self.timeout_seconds,
             )
             return result
@@ -270,6 +290,7 @@ class TrustHandshake:
         required_trust_score: int,
         required_capabilities: Optional[list[str]],
         start: datetime,
+        require_freshness: bool = False,
     ) -> HandshakeResult:
         """Execute the core handshake: generate nonce, verify it comes back."""
         challenge: Optional[HandshakeChallenge] = None
@@ -281,8 +302,8 @@ class TrustHandshake:
                     peer_did, "Too many pending challenges — try again later", start
                 )
 
-            # Generate nonce challenge
-            challenge = HandshakeChallenge.generate()
+            # Generate nonce challenge (with optional RFC 9334 freshness nonce)
+            challenge = HandshakeChallenge.generate(require_freshness=require_freshness)
             self._pending_challenges[challenge.challenge_id] = challenge
 
             # Get peer response
@@ -350,7 +371,10 @@ class TrustHandshake:
         response_nonce = secrets.token_hex(16)
 
         # Sign the challenge+response payload with Ed25519
+        # RFC 9334: include freshness_nonce in signed payload when present
         payload = f"{challenge.challenge_id}:{challenge.nonce}:{response_nonce}:{self.agent_did}"
+        if challenge.freshness_nonce:
+            payload += f":{challenge.freshness_nonce}"
         signature = agent_identity.sign(payload.encode())
 
         return HandshakeResponse(
@@ -361,6 +385,7 @@ class TrustHandshake:
             trust_score=my_trust_score,
             signature=signature,
             public_key=agent_identity.public_key,
+            freshness_nonce=challenge.freshness_nonce,
             user_context=user_context.model_dump() if user_context else None,
         )
 
@@ -463,6 +488,11 @@ class TrustHandshake:
 
         # Verify Ed25519 signature over the challenge payload
         payload = f"{response.challenge_id}:{challenge.nonce}:{response.response_nonce}:{response.agent_did}"
+        # RFC 9334: verify freshness_nonce match and include in payload
+        if challenge.freshness_nonce:
+            if response.freshness_nonce != challenge.freshness_nonce:
+                return {"valid": False, "reason": "Freshness nonce mismatch (RFC 9334)"}
+            payload += f":{challenge.freshness_nonce}"
         if not peer_identity.verify_signature(payload.encode(), response.signature):
             return {"valid": False, "reason": "Ed25519 signature verification failed"}
 
@@ -497,9 +527,14 @@ class TrustHandshake:
             "registry_capabilities": registry_capabilities,
         }
 
-    def create_challenge(self) -> HandshakeChallenge:
-        """Create and register a new challenge."""
-        challenge = HandshakeChallenge.generate()
+    def create_challenge(self, require_freshness: bool = False) -> HandshakeChallenge:
+        """Create and register a new challenge.
+
+        Args:
+            require_freshness: If True, include an RFC 9334 freshness
+                nonce in the challenge.
+        """
+        challenge = HandshakeChallenge.generate(require_freshness=require_freshness)
         self._pending_challenges[challenge.challenge_id] = challenge
         return challenge
 

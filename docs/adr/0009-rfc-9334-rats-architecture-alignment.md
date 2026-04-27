@@ -1,98 +1,127 @@
-# ADR 0009: RFC 9334 RATS Architecture Alignment
+# ADR 0009: RFC 9334 (RATS) Architecture Alignment
 
 - Status: accepted
-- Date: 2026-04-26
+- Date: 2025-07-17
+- Deciders: @imran-siddique
 
 ## Context
 
-RFC 9334 (Remote ATtestation procedureS Architecture) defines a standard architecture for remote attestation: how one entity (Attester) produces Evidence about its state, how a Verifier appraises that Evidence against Reference Values, and how a Relying Party consumes the resulting Attestation Results to make trust decisions. The specification formalizes five roles (Attester, Verifier, Relying Party, Endorser, Reference Value Provider), four artifact types (Evidence, Attestation Results, Endorsements, Reference Values), two topological patterns (Passport Model, Background-Check Model), and three freshness mechanisms (nonce, timestamp, epoch ID).
+IETF RFC 9334 defines the **Remote ATtestation procedureS (RATS) Architecture**,
+a standard framework for verifying the trustworthiness of remote peers through
+Evidence, Attestation Results, and Endorsements. The Agent Governance Toolkit
+already implements many RATS concepts (Attester, Verifier, Evidence, Attestation
+Results) through its IATP trust handshake, but gaps remain in three areas:
 
-The Agent Governance Toolkit already implements most of these concepts across its Python SDK (`agent-compliance`), TypeScript SDK (`agent-governance-typescript`), and AgentMesh runtime (`agent-mesh`), but the mapping is implicit. Components were built to solve governance problems, not to conform to RATS terminology. This ADR formalizes the alignment, identifies gaps, and documents the changes made to close the highest-priority gaps.
+1. **Endorser role**: RFC 9334 section 3.3 defines an Endorser that vouches for
+   an Attester's integrity/capabilities, distinct from the Attester itself. AGT
+   had no mechanism for third-party endorsements.
+
+2. **Freshness nonce**: RFC 9334 section 10 describes freshness mechanisms
+   (nonce, timestamp, epoch) to prove Evidence liveness. AGT's challenge nonce
+   binds the response to a specific challenge but does not provide explicit
+   Evidence freshness proof as defined in the RFC.
+
+3. **Explicit RATS role mapping**: No documentation mapped AGT components to
+   RATS roles, making it harder for standards-aware adopters to evaluate
+   alignment.
 
 ## Decision
 
-### Role Mapping
+We add three backward-compatible features to align AGT with RFC 9334:
 
-AGT components map to RFC 9334 roles as follows:
+### 1. EndorsementRegistry (RFC 9334 Endorser role)
 
-| RFC 9334 Role | AGT Component(s) | Notes |
-|---|---|---|
-| **Attester** | Agent runtime, `RuntimeEvidence` producer, physical/cognitive attestation examples | Agents produce Evidence about their state (trust scores, integrity reports, compliance data) |
-| **Verifier** | `GovernanceVerifier`, `IntegrityVerifier`, Hypervisor `verification_adapter`, Nexus Arbiter | Appraiser logic that evaluates Evidence against policies and produces Attestation Results |
-| **Relying Party** | `governance-attestation` GitHub Action, Orchestrator, callers of `TrustBridge.verify_peer()` | Entities that consume `HandshakeResult` / `GovernanceAttestation` to make authorization decisions |
-| **Endorser** | `EndorsementRegistry` (new), Nexus manifest signatures, SBOM/Sigstore provenance | Entities that vouch for agent capabilities, integrity, or compliance |
-| **Reference Value Provider** | Integrity manifests (expected hashes), policy files (deny-by-default baselines) | Sources of known-good values used during Evidence appraisal |
-| **Verifier Owner** | Policy file authors, CI pipeline configurators | Not explicitly modeled as a distinct role |
-| **Relying Party Owner** | Not modeled | RFC 9334 separates policy owners from RP instances; AGT conflates these |
+A new `agentmesh.trust.endorsement` module provides:
 
-### Artifact Mapping
+- `EndorsementType` enum: COMPLIANCE, CAPABILITY, INTEGRITY, IDENTITY,
+  REFERENCE_VALUE (maps to RATS Reference Values and Endorsements)
+- `Endorsement` dataclass with endorser_did, target_did, type, claims, expiry,
+  metadata, and serialization
+- `EndorsementRegistry` for CRUD operations, type filtering, expiry validation,
+  and revocation
 
-| RFC 9334 Artifact | AGT Implementation |
-|---|---|
-| **Evidence** | `RuntimeEvidence`, `IntegrityReport` inputs, heartbeat payloads (DID + timestamp + delegation chain hash), sensor data in physical attestation examples |
-| **Attestation Results** | `GovernanceAttestation`, `IntegrityReport`, `DriftCheckResult`, `HandshakeResult`, trust scores (0-1000) |
-| **Endorsements** | `Endorsement` dataclass (new), Nexus `attestation_signature`, SBOM signatures, compliance `nexus_signature` |
-| **Reference Values** | Integrity manifest hashes, critical function bytecode fingerprints, policy baselines |
-| **Appraisal Policy** | Deny-by-default policy evaluation, PR governance checklist, inline rule sets |
+Design constraints (from rubber-duck critique):
 
-### Topological Patterns
+- Endorsements are **unsigned metadata only** for now: no `signature` field is
+  exposed until cryptographic verification of endorsers is implemented
+- Endorsements are resolved **on demand** from the registry, not stored on
+  PeerInfo, to avoid HMAC integrity gaps in TrustBridge._sign_peer()
+- The registry lives in its own file (`trust/endorsement.py`) since it is
+  stateful, not alongside the lightweight types in `trust_types.py`
 
-**Background-Check Model** (primary pattern in AGT):
-The Relying Party forwards Evidence to the Verifier for appraisal. This is the dominant pattern in `GovernanceVerifier.verify_evidence()`, `IntegrityVerifier.verify()`, and `TrustHandshake.initiate()` where the initiator sends a challenge, receives Evidence (the signed response), and verifies it locally.
+### 2. Freshness nonce in IATP handshake
 
-**Passport Model** (also supported):
-The Attester obtains an Attestation Result and presents it directly to the Relying Party. Examples include:
-- ADR-0005 liveness attestation: `HandshakeResult` gains a `liveness` field that agents carry.
-- Signet attestation: signed receipts carry policy attestation inside the artifact.
-- Physical attestation: offline-verifiable signed receipts embedded in sensor data.
+- `HandshakeChallenge` gains an optional `freshness_nonce` field
+- `HandshakeChallenge.generate(require_freshness=True)` produces a 16-byte hex
+  freshness nonce alongside the existing challenge nonce
+- `HandshakeResponse` echoes `freshness_nonce` and includes it in the Ed25519
+  signed payload
+- `_verify_response()` rejects mismatched freshness nonces before signature
+  verification
+- `initiate(require_freshness=True)` bypasses the handshake result cache,
+  ensuring every call produces a fresh Evidence verification
+- `create_challenge(require_freshness=True)` passes through to generate()
 
-### Freshness Mechanisms
+The existing `nonce` (challenge-binding token) and the new `freshness_nonce`
+(verifier-supplied Evidence liveness proof) are semantically distinct per
+RFC 9334 section 10.
 
-RFC 9334 Section 10 defines three freshness approaches:
+### 3. This ADR
 
-| Mechanism | AGT Support | Implementation |
-|---|---|---|
-| **Nonce-based** | Supported (new) | `HandshakeChallenge.freshness_nonce` provides a verifier-supplied nonce that must be echoed in the signed Evidence. Requests with `require_freshness=True` bypass the result cache. |
-| **Timestamp-based** | Supported (existing) | Liveness attestation (ADR-0005), evidence timestamps, attestation expiry fields |
-| **Epoch ID** | Not implemented | No current use case; agents do not operate in synchronized epoch windows |
+Documents the mapping between AGT concepts and RATS roles/artifacts for
+standards-aware adopters.
 
-The existing `HandshakeChallenge.nonce` serves as the challenge-binding token (proving the response corresponds to a specific challenge). The new `freshness_nonce` is semantically distinct: it binds Evidence to a specific verification request, ensuring the Evidence was produced *after* the verifier asked for it. This distinction matters when attestation evidence is produced asynchronously or cached by intermediaries.
+## RATS Role Mapping
 
-### Changes Made
+| RATS Role | AGT Component | Notes |
+|-----------|--------------|-------|
+| Attester | AgentIdentity + TrustHandshake.respond() | Produces Evidence (signed challenge response) |
+| Verifier | TrustHandshake._verify_response() | Appraises Evidence against Appraisal Policy |
+| Relying Party | TrustBridge.verify_peer() callers | Consumes Attestation Results (HandshakeResult) |
+| Endorser | EndorsementRegistry | Third-party vouching for Attester properties |
+| Reference Value Provider | GovernanceEngine policy definitions | Supplies reference values for appraisal |
 
-1. **Endorsement module** (`agent-mesh/src/agentmesh/trust/endorsement.py`): New `Endorsement` dataclass and `EndorsementRegistry` implementing the RFC 9334 Endorser role. Currently unsigned metadata; cryptographic signature verification is deferred (see Gaps).
+## RATS Artifact Mapping
 
-2. **Freshness nonce** (`agent-mesh/src/agentmesh/trust/handshake.py`): Optional `freshness_nonce` field on `HandshakeChallenge` and `HandshakeResponse`. When present, it is included in the Ed25519 signature payload and verified during response validation. `initiate()` accepts `require_freshness=True` which bypasses the result cache.
+| RATS Artifact | AGT Equivalent |
+|---------------|---------------|
+| Evidence | HandshakeResponse (Ed25519 signed payload) |
+| Attestation Results | HandshakeResult |
+| Endorsements | Endorsement records in EndorsementRegistry |
+| Reference Values | Policy rules, capability requirements, trust thresholds |
+| Appraisal Policy | required_trust_score, required_capabilities, registry checks |
 
-3. **TrustBridge endorsement integration** (`agent-mesh/src/agentmesh/trust/bridge.py`): Optional `endorsement_registry` parameter threaded through `TrustBridge` and `ProtocolBridge`. Endorsements resolved on demand via `get_endorsements()` rather than cached on `PeerInfo` to avoid HMAC integrity gaps.
+## Topological Pattern
 
-### Explicit Gaps (Not Addressed)
+AGT primarily follows the **Background-Check Model** (RFC 9334 section 5.2):
+the Relying Party (caller of verify_peer) delegates Evidence appraisal to the
+Verifier (_verify_response), which returns Attestation Results. The handshake
+result cache adds a Passport Model optimization where cached results serve as
+pre-computed attestation results.
 
-These gaps are documented for transparency. They do not block the alignment but should be addressed in future iterations:
+## Explicit Gaps (Not Addressed)
 
-1. **Endorsement signature verification**: The `EndorsementRegistry` validates expiry but does not verify cryptographic signatures. Endorsements are treated as informational metadata, not cryptographic proofs. A future `EndorsementVerifier` should verify Ed25519 signatures against a trusted endorser identity source.
+These areas are documented for future work:
 
-2. **Verifier Owner / Relying Party Owner**: RFC 9334 separates policy owners from the roles that execute policies. AGT conflates these. Separating them would enable delegated policy management.
-
-3. **Composite Device attestation**: RFC 9334 Section 3.3 defines composite attestation for systems with multiple sub-attesters. AGT's multi-agent orchestration does not model this explicitly, though delegation chains provide a partial analogue.
-
-4. **Epoch-based freshness**: Not implemented. Would be useful for batch attestation scenarios where multiple agents attest within the same time window.
-
-5. **Formal Conceptual Message types**: The protocol exchanges between roles are not formalized as RATS "Conceptual Messages." IATP messages carry the equivalent data but do not use RATS-defined message structures.
+- **Cryptographic endorsement verification**: Endorsements are unsigned metadata.
+  Future work could add endorser signature verification using the same Ed25519
+  infrastructure.
+- **Epoch-based freshness**: Only nonce-based freshness is implemented.
+  Timestamp-based and epoch-based freshness models are not yet supported.
+- **Formal Conceptual Messages**: RFC 9334 section 8 defines formal message
+  formats. AGT uses Pydantic models that carry equivalent information but do not
+  use the exact wire format.
+- **Multi-verifier topologies**: The current architecture assumes a single
+  verifier co-located with the relying party.
 
 ## Consequences
 
-**Benefits:**
-- AGT's trust architecture is now explicitly documented against a recognized IETF standard, strengthening the project's credibility for standards-aligned adopters.
-- The Endorser role is a first-class concept, enabling third-party vouching workflows (compliance authorities, SBOM signing services, identity providers).
-- Nonce-based freshness provides replay protection beyond timestamp validation, closing a gap for time-sensitive attestation scenarios.
-- All changes are additive and backward-compatible: no existing API signatures changed, no new required dependencies.
-
-**Tradeoffs:**
-- The `freshness_nonce` adds a field to the handshake models that most callers will not use. The overhead is minimal (one optional string field).
-- Endorsements without signature verification could create a false sense of trust if consumers treat them as authoritative. The module documentation and this ADR explicitly state they are unsigned metadata.
-
-**Follow-up work:**
-- Implement `EndorsementVerifier` with Ed25519 signature verification against a trusted endorser registry.
-- Evaluate whether CBOR-encoded Evidence (RFC 9334 recommends CBOR for wire efficiency) would benefit high-throughput AgentMesh deployments.
-- Consider aligning IATP message structures with EAT (Entity Attestation Token, RFC 9711) for interoperability with hardware attestation ecosystems.
+- **Backward compatible**: All changes are additive. Existing code that does not
+  use `require_freshness` or `endorsement_registry` continues to work unchanged.
+- **Standards alignment**: Adopters evaluating AGT against RATS can point to this
+  ADR and the role mapping table.
+- **Foundation for future work**: The EndorsementRegistry provides the extension
+  point for cryptographic endorser verification when needed.
+- **No performance impact**: Freshness nonce adds one extra field to
+  challenge/response. Endorsement lookup is O(n) in endorsements per target,
+  which is acceptable for typical deployment sizes.

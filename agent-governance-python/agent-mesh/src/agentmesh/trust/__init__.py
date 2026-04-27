@@ -8,6 +8,7 @@ Native A2A and MCP support with transparent protocol translation.
 """
 
 from .bridge import TrustBridge, ProtocolBridge
+from .endorsement import Endorsement, EndorsementRegistry, EndorsementType
 from .handshake import TrustHandshake, HandshakeResult
 from .capability import CapabilityScope, CapabilityGrant, CapabilityRegistry
 from .cards import TrustedAgentCard, CardRegistry
@@ -15,6 +16,9 @@ from .cards import TrustedAgentCard, CardRegistry
 __all__ = [
     "TrustBridge",
     "ProtocolBridge",
+    "Endorsement",
+    "EndorsementRegistry",
+    "EndorsementType",
     "TrustHandshake",
     "HandshakeResult",
     "CapabilityScope",
