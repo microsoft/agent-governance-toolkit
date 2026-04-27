@@ -22,8 +22,11 @@ from contributor_check import (
     check_contributor,
     check_feature_overlap,
     check_thin_credibility,
+    check_spray_pattern,
     format_report,
     _check_fork_burst,
+    _check_batch_naming,
+    _check_self_promotion,
 )
 
 
@@ -375,4 +378,211 @@ class TestThinCredibility:
         mock_api.side_effect = api_side_effect
         mock_search.return_value = []
         signals = check_thin_credibility("good-user", "microsoft/agent-governance-toolkit")
+        assert len(signals) == 0
+
+
+# ---------------------------------------------------------------------------
+# Batch naming tests
+# ---------------------------------------------------------------------------
+
+class TestBatchNaming:
+    def test_many_mcp_repos_same_day(self):
+        now = datetime.now(timezone.utc)
+        repos = [
+            {"name": f"service-{i}-mcp", "fork": False, "stargazers_count": 0,
+             "created_at": (now - timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(6)
+        ]
+        signals = _check_batch_naming(repos)
+        assert any(s.name == "batch_repo_naming" and s.severity == "HIGH" for s in signals)
+
+    def test_few_repos_no_signal(self):
+        now = datetime.now(timezone.utc)
+        repos = [
+            {"name": "one-mcp", "fork": False, "stargazers_count": 0,
+             "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ")},
+            {"name": "two-mcp", "fork": False, "stargazers_count": 0,
+             "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ")},
+        ]
+        signals = _check_batch_naming(repos)
+        assert len(signals) == 0
+
+    def test_high_star_repos_excluded(self):
+        now = datetime.now(timezone.utc)
+        repos = [
+            {"name": f"popular-{i}-mcp", "fork": False, "stargazers_count": 50,
+             "created_at": (now - timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(6)
+        ]
+        signals = _check_batch_naming(repos)
+        assert len(signals) == 0
+
+    def test_old_repos_excluded(self):
+        old = datetime.now(timezone.utc) - timedelta(days=200)
+        repos = [
+            {"name": f"old-{i}-mcp", "fork": False, "stargazers_count": 0,
+             "created_at": (old + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(6)
+        ]
+        signals = _check_batch_naming(repos)
+        assert len(signals) == 0
+
+    def test_medium_for_three_repos(self):
+        now = datetime.now(timezone.utc)
+        repos = [
+            {"name": f"tool-{i}-agent", "fork": False, "stargazers_count": 0,
+             "created_at": (now - timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(3)
+        ]
+        signals = _check_batch_naming(repos)
+        assert any(s.name == "batch_repo_naming" and s.severity == "MEDIUM" for s in signals)
+
+
+# ---------------------------------------------------------------------------
+# Self-promotion tests
+# ---------------------------------------------------------------------------
+
+class TestSelfPromotion:
+    def test_promoting_own_repos_high(self):
+        user_repos = [
+            {"name": "buywhere-mcp", "fork": False, "full_name": "spammer/buywhere-mcp"},
+            {"name": "buywhere", "fork": False, "full_name": "spammer/buywhere"},
+        ]
+        issues = [
+            {"title": f"Add buywhere-mcp support", "body": "buywhere-mcp is great for shopping",
+             "repository_url": f"https://api.github.com/repos/org{i}/repo",
+             "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(6)
+        ]
+        signals = _check_self_promotion("spammer", issues, user_repos)
+        assert any(s.name == "self_promotion_spray" and s.severity == "HIGH" for s in signals)
+
+    def test_no_self_references_clean(self):
+        user_repos = [
+            {"name": "my-project", "fork": False, "full_name": "dev/my-project"},
+        ]
+        issues = [
+            {"title": "Bug in auth flow", "body": "The auth flow crashes when...",
+             "repository_url": f"https://api.github.com/repos/org{i}/repo",
+             "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(10)
+        ]
+        signals = _check_self_promotion("dev", issues, user_repos)
+        assert len(signals) == 0
+
+    def test_generic_names_not_matched(self):
+        user_repos = [
+            {"name": "app", "fork": False, "full_name": "dev/app"},
+            {"name": "api", "fork": False, "full_name": "dev/api"},
+            {"name": "web", "fork": False, "full_name": "dev/web"},
+        ]
+        issues = [
+            {"title": "App crashes on load", "body": "The web api returns 500...",
+             "repository_url": f"https://api.github.com/repos/org{i}/repo",
+             "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(10)
+        ]
+        signals = _check_self_promotion("dev", issues, user_repos)
+        assert len(signals) == 0
+
+    def test_issues_in_own_org_excluded(self):
+        user_repos = [
+            {"name": "my-tool", "fork": False, "full_name": "myorg/my-tool"},
+        ]
+        issues = [
+            {"title": "Update my-tool docs", "body": "my-tool needs better docs",
+             "repository_url": "https://api.github.com/repos/myorg/other-repo",
+             "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for _ in range(10)
+        ]
+        signals = _check_self_promotion("myorg", issues, user_repos)
+        assert len(signals) == 0
+
+
+# ---------------------------------------------------------------------------
+# Coordinated promotion tests
+# ---------------------------------------------------------------------------
+
+class TestCoordinatedPromotion:
+    def test_many_thin_repos_same_targets(self):
+        now = datetime.now(timezone.utc)
+        thin_names = ["tool-a", "tool-b", "tool-c", "tool-d"]
+        repos = [
+            {"name": n, "fork": False, "full_name": f"spammer/{n}",
+             "created_at": (now - timedelta(days=5)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+             "stargazers_count": 0}
+            for n in thin_names
+        ]
+
+        # Each thin repo promoted to the same 3 orgs
+        issues = []
+        for n in thin_names:
+            for org in ["orgA", "orgB", "orgC"]:
+                issues.append({
+                    "title": f"Add {n} support",
+                    "body": f"{n} integration",
+                    "repository_url": f"https://api.github.com/repos/{org}/project",
+                    "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                })
+
+        signals = check_thin_credibility("spammer", repos=repos, issues=issues)
+        assert any(s.name == "coordinated_promotion" and s.severity == "HIGH" for s in signals)
+
+    def test_different_targets_no_coordination(self):
+        now = datetime.now(timezone.utc)
+        repos = [
+            {"name": f"proj-{i}", "fork": False, "full_name": f"user/proj-{i}",
+             "created_at": (now - timedelta(days=5)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+             "stargazers_count": 0}
+            for i in range(4)
+        ]
+        # Each repo promoted to completely different orgs
+        issues = []
+        for i in range(4):
+            for j in range(2):
+                issues.append({
+                    "title": f"Add proj-{i}",
+                    "body": f"proj-{i} is useful",
+                    "repository_url": f"https://api.github.com/repos/unique-org-{i}-{j}/repo",
+                    "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                })
+
+        signals = check_thin_credibility("user", repos=repos, issues=issues)
+        assert not any(s.name == "coordinated_promotion" for s in signals)
+
+
+# ---------------------------------------------------------------------------
+# Negative/regression tests for false positives
+# ---------------------------------------------------------------------------
+
+class TestFalsePositiveRegression:
+    """Ensure legitimate spec/protocol contributors are not flagged."""
+
+    def test_spec_contributor_no_self_promo(self):
+        """Spec contributor files issues across repos about protocol topics, not own repos."""
+        user_repos = [
+            {"name": "http-spec-tests", "fork": False, "full_name": "spec-dev/http-spec-tests"},
+        ]
+        issues = [
+            {"title": "HTTP/3 support tracking", "body": "Tracking HTTP/3 adoption in this project",
+             "repository_url": f"https://api.github.com/repos/org{i}/web-server",
+             "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(15)
+        ]
+        signals = _check_self_promotion("spec-dev", issues, user_repos)
+        assert len(signals) == 0
+
+    def test_forked_repos_excluded_from_self_promo(self):
+        """Forked repos should not count as self-promotion targets."""
+        user_repos = [
+            {"name": "popular-framework", "fork": True, "full_name": "dev/popular-framework"},
+            {"name": "my-real-project", "fork": False, "full_name": "dev/my-real-project"},
+        ]
+        issues = [
+            {"title": "popular-framework has a bug", "body": "popular-framework crashes here",
+             "repository_url": f"https://api.github.com/repos/org{i}/repo",
+             "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(10)
+        ]
+        signals = _check_self_promotion("dev", issues, user_repos)
         assert len(signals) == 0

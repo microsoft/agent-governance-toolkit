@@ -214,10 +214,16 @@ def check_account_shape(user: dict) -> list[Signal]:
     return signals
 
 
-def check_repo_themes(username: str) -> list[Signal]:
-    """Check if repos are overwhelmingly governance/security themed."""
+def check_repo_themes(username: str, repos: list[dict] | None = None) -> list[Signal]:
+    """Check if repos are overwhelmingly governance/security themed.
+
+    Args:
+        username: GitHub username.
+        repos: Pre-fetched repos (avoids redundant API call).
+    """
     signals: list[Signal] = []
-    repos = _api(f"/users/{username}/repos", {"per_page": "100", "sort": "created"})
+    if repos is None:
+        repos = _api(f"/users/{username}/repos", {"per_page": "100", "sort": "created"})
     if not repos:
         return signals
 
@@ -268,6 +274,10 @@ def check_repo_themes(username: str) -> list[Signal]:
     # Fork burst detection: many forks created in a short window
     fork_signals = _check_fork_burst(repos)
     signals.extend(fork_signals)
+
+    # Batch naming detection: many repos with same suffix created together
+    batch_signals = _check_batch_naming(repos)
+    signals.extend(batch_signals)
 
     return signals
 
@@ -330,7 +340,63 @@ def _check_fork_burst(repos: list[dict]) -> list[Signal]:
     return signals
 
 
-# Feature buckets for detecting concept clones of AGT
+def _check_batch_naming(repos: list[dict]) -> list[Signal]:
+    """Detect templated repo creation: many repos with same suffix in a short window."""
+    signals: list[Signal] = []
+    now = datetime.now(timezone.utc)
+
+    # Only consider non-fork, recent, low-star repos
+    recent: list[dict] = []
+    for repo in repos:
+        if repo.get("fork"):
+            continue
+        created = datetime.fromisoformat(repo["created_at"].replace("Z", "+00:00"))
+        if (now - created).days > 90:
+            continue
+        stars = repo.get("stargazers_count", 0)
+        if stars >= 10:
+            continue
+        recent.append({"name": repo["name"].lower(), "created": created})
+
+    if len(recent) < 3:
+        return signals
+
+    # Extract common suffixes (last hyphenated segment, e.g., "-mcp", "-agent")
+    suffix_groups: dict[str, list[dict]] = {}
+    for r in recent:
+        parts = r["name"].rsplit("-", 1)
+        if len(parts) == 2 and len(parts[1]) >= 2:
+            suffix_groups.setdefault(f"-{parts[1]}", []).append(r)
+
+    for suffix, group in suffix_groups.items():
+        if len(group) < 3:
+            continue
+        # Check if created within 48-hour windows
+        group.sort(key=lambda g: g["created"])
+        best_window = 0
+        for g in group:
+            count = sum(
+                1 for g2 in group
+                if abs((g2["created"] - g["created"]).total_seconds()) <= 48 * 3600
+            )
+            best_window = max(best_window, count)
+
+        if best_window >= 5:
+            signals.append(Signal(
+                name="batch_repo_naming",
+                severity="HIGH",
+                detail=f"{best_window} repos with '{suffix}' suffix created within 48 hours",
+                value=best_window,
+            ))
+        elif best_window >= 3:
+            signals.append(Signal(
+                name="batch_repo_naming",
+                severity="MEDIUM",
+                detail=f"{best_window} repos with '{suffix}' suffix created within 48 hours",
+                value=best_window,
+            ))
+
+    return signals
 _AGT_FEATURE_BUCKETS: dict[str, list[str]] = {
     "mcp_security": [
         "mcp scanner", "mcp security", "tool poisoning", "mcp gateway",
@@ -438,11 +504,24 @@ def check_feature_overlap(username: str, target_repo: str | None = None) -> list
     return signals
 
 
-def check_thin_credibility(username: str, target_repo: str | None = None) -> list[Signal]:
-    """Detect young, low-star projects promoted across multiple orgs."""
+def check_thin_credibility(
+    username: str,
+    target_repo: str | None = None,
+    repos: list[dict] | None = None,
+    issues: list[dict] | None = None,
+) -> list[Signal]:
+    """Detect young, low-star projects promoted across multiple orgs.
+
+    Args:
+        username: GitHub username.
+        target_repo: Optional target repo context (unused, kept for API compat).
+        repos: Pre-fetched user repos (avoids redundant API call).
+        issues: Pre-fetched issues (avoids redundant API call).
+    """
     signals: list[Signal] = []
 
-    repos = _api(f"/users/{username}/repos", {"per_page": "100", "sort": "created"})
+    if repos is None:
+        repos = _api(f"/users/{username}/repos", {"per_page": "100", "sort": "created"})
     if not repos:
         return signals
 
@@ -467,14 +546,18 @@ def check_thin_credibility(username: str, target_repo: str | None = None) -> lis
     if not thin_repos:
         return signals
 
-    issues = _search_issues(f"author:{username} is:issue", per_page=50)
+    if issues is None:
+        issues = _search_issues(f"author:{username} is:issue", per_page=50)
     if not issues:
         return signals
+
+    # Track per-repo promoting orgs for coordinated promotion detection
+    repo_org_map: dict[str, set[str]] = {}
 
     for thin in thin_repos:
         repo_name = thin["name"].lower()
         full_name = thin["full_name"].lower()
-        promoting_orgs = set()
+        promoting_orgs: set[str] = set()
 
         for issue in issues:
             body = (issue.get("body") or "").lower()
@@ -485,6 +568,8 @@ def check_thin_credibility(username: str, target_repo: str | None = None) -> lis
             if repo_name in body or repo_name in title or full_name in body:
                 if issue_org != username.lower():
                     promoting_orgs.add(issue_org)
+
+        repo_org_map[thin["name"]] = promoting_orgs
 
         if len(promoting_orgs) >= 2:
             signals.append(Signal(
@@ -507,59 +592,179 @@ def check_thin_credibility(username: str, target_repo: str | None = None) -> lis
                 value=len(promoting_orgs),
             ))
 
+    # Coordinated promotion: multiple thin repos targeting the same org set
+    promoted_repos = {k: v for k, v in repo_org_map.items() if len(v) >= 2}
+    if len(promoted_repos) >= 3:
+        # Check pairwise Jaccard overlap
+        org_sets = list(promoted_repos.values())
+        high_overlap_count = 0
+        for i in range(len(org_sets)):
+            for j in range(i + 1, len(org_sets)):
+                intersection = len(org_sets[i] & org_sets[j])
+                union = len(org_sets[i] | org_sets[j])
+                if union > 0 and intersection / union >= 0.6:
+                    high_overlap_count += 1
+
+        total_pairs = len(org_sets) * (len(org_sets) - 1) // 2
+        if total_pairs > 0 and high_overlap_count / total_pairs >= 0.5:
+            all_orgs = set()
+            for s in org_sets:
+                all_orgs |= s
+            signals.append(Signal(
+                name="coordinated_promotion",
+                severity="HIGH",
+                detail=(
+                    f"{len(promoted_repos)} thin repos promoted to overlapping org set "
+                    f"({', '.join(sorted(all_orgs)[:5])}...)"
+                ),
+                value=len(promoted_repos),
+            ))
+
     return signals
 
 
-def check_spray_pattern(username: str) -> list[Signal]:
-    """Check if user filed similar issues across many repos."""
+def check_spray_pattern(
+    username: str,
+    issues: list[dict] | None = None,
+    user_repos: list[dict] | None = None,
+) -> list[Signal]:
+    """Check if user filed similar issues across many repos.
+
+    Args:
+        username: GitHub username.
+        issues: Pre-fetched issues (avoids redundant API call).
+        user_repos: Pre-fetched user repos for self-promotion detection.
+    """
     signals: list[Signal] = []
 
-    issues = _search_issues(f"author:{username} is:issue", per_page=100)
+    if issues is None:
+        issues = _search_issues(f"author:{username} is:issue", per_page=100)
     if not issues:
         return signals
 
-    # Group by repo
-    repos_hit: dict[str, list[dict]] = {}
+    # Build (created_at, repo_name) pairs keeping them aligned
+    entries: list[tuple[datetime, str]] = []
     for issue in issues:
+        created = datetime.fromisoformat(issue["created_at"].replace("Z", "+00:00"))
         repo_url = issue.get("repository_url", "")
         repo_name = repo_url.replace("https://api.github.com/repos/", "")
-        repos_hit.setdefault(repo_name, []).append(issue)
+        entries.append((created, repo_name))
 
-    # Check for spray: many repos with similar issue titles
-    unique_repos = len(repos_hit)
-    if unique_repos >= 5:
-        # Check if issues were filed in a short window
-        dates = []
-        for issue in issues:
-            created = datetime.fromisoformat(issue["created_at"].replace("Z", "+00:00"))
-            dates.append(created)
+    unique_repos = {repo for _, repo in entries}
+    if len(unique_repos) >= 5:
+        entries.sort(key=lambda e: e[0])
 
-        if dates:
-            dates.sort()
-            # Check if 5+ repos were hit within 7 days
-            window_repos = set()
-            for i, d in enumerate(dates):
-                window_repos_local = {
-                    issues[j].get("repository_url", "").replace("https://api.github.com/repos/", "")
-                    for j, d2 in enumerate(dates)
-                    if abs((d2 - d).days) <= 7
-                }
-                window_repos = max(window_repos, window_repos_local, key=len)
+        # Find the largest set of distinct repos hit within any 7-day window
+        best_window_repos: set[str] = set()
+        for i, (d, _) in enumerate(entries):
+            window_repos = {
+                repo for d2, repo in entries
+                if abs((d2 - d).days) <= 7
+            }
+            if len(window_repos) > len(best_window_repos):
+                best_window_repos = window_repos
 
-            if len(window_repos) >= 5:
-                signals.append(Signal(
-                    name="cross_repo_spray",
-                    severity="HIGH",
-                    detail=f"Issues filed in {len(window_repos)} repos within 7 days",
-                    value=len(window_repos),
-                ))
-            elif unique_repos >= 8:
-                signals.append(Signal(
-                    name="cross_repo_spread",
-                    severity="MEDIUM",
-                    detail=f"Issues filed across {unique_repos} different repos",
-                    value=unique_repos,
-                ))
+        if len(best_window_repos) >= 5:
+            signals.append(Signal(
+                name="cross_repo_spray",
+                severity="HIGH",
+                detail=f"Issues filed in {len(best_window_repos)} repos within 7 days",
+                value=len(best_window_repos),
+            ))
+        elif len(unique_repos) >= 8:
+            signals.append(Signal(
+                name="cross_repo_spread",
+                severity="MEDIUM",
+                detail=f"Issues filed across {len(unique_repos)} different repos",
+                value=len(unique_repos),
+            ))
+
+    # Self-promotion: check if sprayed issues mention the author's own repos
+    signals.extend(_check_self_promotion(username, issues, user_repos))
+
+    return signals
+
+
+def _check_self_promotion(
+    username: str,
+    issues: list[dict],
+    user_repos: list[dict] | None = None,
+) -> list[Signal]:
+    """Detect issues that promote the author's own repos across other orgs."""
+    signals: list[Signal] = []
+    if not user_repos:
+        return signals
+
+    # Build lookup of user's non-fork repo identifiers
+    own_repo_names: set[str] = set()
+    own_repo_full: set[str] = set()
+    for repo in user_repos:
+        if repo.get("fork"):
+            continue
+        name = repo.get("name", "").lower()
+        full = repo.get("full_name", f"{username}/{name}").lower()
+        own_repo_names.add(name)
+        own_repo_full.add(full)
+
+    if not own_repo_names:
+        return signals
+
+    username_lower = username.lower()
+    promo_orgs: set[str] = set()
+    promo_issues = 0
+
+    for issue in issues:
+        repo_url = issue.get("repository_url", "")
+        issue_org = repo_url.replace("https://api.github.com/repos/", "").split("/")[0].lower()
+
+        # Skip issues in the user's own repos/org
+        if issue_org == username_lower:
+            continue
+
+        body = (issue.get("body") or "").lower()
+        title = (issue.get("title") or "").lower()
+        text = f"{title} {body}"
+
+        # Strong match: full_name or GitHub URL
+        has_promo = False
+        for full in own_repo_full:
+            if full in text or f"github.com/{full}" in text:
+                has_promo = True
+                break
+
+        if not has_promo:
+            # Weaker match: repo name as a whole word, but only for
+            # distinctive names (>= 4 chars, not generic)
+            generic = {"app", "api", "cli", "web", "bot", "docs", "test", "demo", "core", "data", "main"}
+            for name in own_repo_names:
+                if len(name) >= 4 and name not in generic and name in text:
+                    has_promo = True
+                    break
+
+        if has_promo:
+            promo_issues += 1
+            promo_orgs.add(issue_org)
+
+    if promo_issues >= 5 and len(promo_orgs) >= 3:
+        signals.append(Signal(
+            name="self_promotion_spray",
+            severity="HIGH",
+            detail=(
+                f"{promo_issues} issues promoting own repos across "
+                f"{len(promo_orgs)} orgs ({', '.join(sorted(promo_orgs)[:5])})"
+            ),
+            value=promo_issues,
+        ))
+    elif promo_issues >= 3 and len(promo_orgs) >= 2:
+        signals.append(Signal(
+            name="self_promotion_spray",
+            severity="MEDIUM",
+            detail=(
+                f"{promo_issues} issues promoting own repos across "
+                f"{len(promo_orgs)} orgs"
+            ),
+            value=promo_issues,
+        ))
 
     return signals
 
@@ -650,22 +855,28 @@ def check_contributor(username: str, target_repo: str | None = None) -> Reputati
         "repos_per_day": round(user.get("public_repos", 0) / max(age_days, 1), 3),
     }
 
-    # Run checks
+    # Shared data fetches (avoids redundant API calls across checkers)
+    repos = _api(f"/users/{username}/repos", {"per_page": "100", "sort": "created"}) or []
+    issues = _search_issues(f"author:{username} is:issue", per_page=100)
+
+    # Run checks with shared data
     for signal in check_account_shape(user):
         report.add(signal)
 
-    for signal in check_repo_themes(username):
+    for signal in check_repo_themes(username, repos=repos):
         report.add(signal)
 
-    for signal in check_spray_pattern(username):
+    for signal in check_spray_pattern(username, issues=issues, user_repos=repos):
+        report.add(signal)
+
+    # thin_credibility runs regardless of target_repo
+    for signal in check_thin_credibility(username, target_repo, repos=repos, issues=issues):
         report.add(signal)
 
     if target_repo:
         for signal in check_credential_spray(username, target_repo):
             report.add(signal)
         for signal in check_feature_overlap(username, target_repo):
-            report.add(signal)
-        for signal in check_thin_credibility(username, target_repo):
             report.add(signal)
 
     report.compute_risk()
