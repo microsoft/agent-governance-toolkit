@@ -51,7 +51,7 @@ RUN python -m pip install --no-cache-dir \
     && python -m pip install --no-cache-dir \
         -r agent-governance-python/agent-hypervisor/examples/dashboard/requirements.txt \
     && cd /workspace/agent-governance-typescript \
-    && npm ci
+    && npm ci --legacy-peer-deps
 
 ENTRYPOINT ["bash", "/workspace/scripts/docker/dev-entrypoint.sh"]
 CMD ["sleep", "infinity"]

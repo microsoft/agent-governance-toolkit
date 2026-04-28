@@ -18,7 +18,7 @@ services:
       target: test
     command: ["bash", "/workspace/scripts/docker/run-tests.sh"]
     init: true
-    user: "1000:1000"
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     working_dir: /workspace
     volumes:
       - .:/workspace

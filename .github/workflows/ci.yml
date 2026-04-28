@@ -28,6 +28,7 @@ jobs:
       go: ${{ steps.filter.outputs.go }}
       workflows: ${{ steps.filter.outputs.workflows }}
       docs-only: ${{ steps.filter.outputs.docs-only }}
+      docker: ${{ steps.filter.outputs.docker }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
@@ -42,6 +43,9 @@ jobs:
               - 'agent-governance-python/agent-compliance/**'
               - 'agent-governance-python/agent-runtime/**'
               - 'agent-governance-python/agent-lightning/**'
+              - 'agent-governance-python/agent-primitives/**'
+              - 'agent-governance-python/agent-mcp-governance/**'
+              - 'agent-governance-python/agent-marketplace/**'
               - 'scripts/**'
               - 'agent-governance-python/requirements/**'
             dotnet:
@@ -63,6 +67,14 @@ jobs:
               - '**/*.md'
               - 'agent-governance-python/notebooks/**'
               - 'docs/**'
+            docker:
+              - 'Dockerfile'
+              - 'docker-compose*.yml'
+              - 'scripts/docker/**'
+              - '.gitattributes'
+              - 'agent-governance-python/**/pyproject.toml'
+              - 'agent-governance-python/agent-hypervisor/examples/dashboard/requirements.txt'
+              - '.github/workflows/ci.yml'
 
   # ── Python lint + test (only when Python files change) ────────────────
   lint:
@@ -494,6 +506,79 @@ jobs:
         working-directory: agent-governance-golang
         run: go vet ./...
 
+  # ── Docker integrated test (matches the documented contributor flow) ──
+  # Runs the exact two commands from CONTRIBUTING.md "Docker Quickstart" so
+  # contributor-facing breakage is caught before merge to main. Catches
+  # shim/canonical drift, Dockerfile/compose drift, line-ending regressions,
+  # and any bug that only surfaces in the integrated install shape.
+  docker-compose-test:
+    needs: changes
+    if: |
+      needs.changes.outputs.docker == 'true' ||
+      needs.changes.outputs.python == 'true' ||
+      github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Diagnostic — Docker / Compose / Buildx versions
+        run: |
+          docker version
+          docker compose version
+          docker buildx version
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Run documented contributor flow
+        run: |
+          # Compute and validate host UID/GID so the test container can write
+          # to the bind-mounted workspace. Validate they are pure positive
+          # integers before exporting (defense-in-depth: the values come from
+          # `id` on the runner, but we still refuse to forward anything that
+          # is not a non-negative integer to docker compose).
+          HOST_UID="$(id -u)"
+          HOST_GID="$(id -g)"
+          if ! [[ "${HOST_UID}" =~ ^[0-9]+$ ]] || ! [[ "${HOST_GID}" =~ ^[0-9]+$ ]]; then
+            echo "::error::Refusing to run: id -u/-g returned non-numeric value (uid='${HOST_UID}' gid='${HOST_GID}')"
+            exit 1
+          fi
+          export HOST_UID HOST_GID
+          echo "Running compose with HOST_UID=${HOST_UID} HOST_GID=${HOST_GID}"
+          docker compose up --build dev -d
+          docker compose run --rm test
+
+      - name: Collect dev container logs
+        if: always()
+        run: |
+          # Capture and redact obvious secret-shaped tokens before the log is
+          # uploaded as a build artifact. The dev container does not receive
+          # GitHub secrets, but we still scrub conservatively so that any
+          # accidental leakage from a future change does not surface here.
+          docker compose logs dev > dev.log.raw 2>&1 || true
+          sed -E \
+            -e 's/(gh[pousr]_[A-Za-z0-9]{20,})/[REDACTED-GH-TOKEN]/g' \
+            -e 's/(sk-[A-Za-z0-9_-]{20,})/[REDACTED-API-KEY]/g' \
+            -e 's/(AKIA[A-Z0-9]{16})/[REDACTED-AWS-ACCESS-KEY]/g' \
+            -e 's/((password|secret|token|api_?key)[[:space:]]*[:=][[:space:]]*)[^[:space:]"]+/\1[REDACTED]/Ig' \
+            dev.log.raw > dev.log
+          rm -f dev.log.raw
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docker-compose-test-logs
+          path: dev.log
+          retention-days: 7
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
   # ── CI Gate — required status check that handles skipped jobs ────────
   # When path-filters skip jobs (e.g. docs-only PRs skip tests), those
   # jobs report "skipped" which doesn't satisfy required status checks.
@@ -516,6 +601,7 @@ jobs:
         build-npm,
         build-rust,
         build-go,
+        docker-compose-test,
       ]
     runs-on: ubuntu-latest
     steps:
@@ -524,8 +610,22 @@ jobs:
           results='${{ toJSON(needs.*.result) }}'
           echo "Job results: $results"
           if echo "$results" | grep -qE '"failure"|"cancelled"'; then
-            echo "One or more required jobs failed or were cancelled"
+            echo "::error::One or more required jobs failed or were cancelled"
             exit 1
           fi
+
+          # AC3.4 — docker-compose-test must not be silently skipped on relevant PRs
+          docker_changed='${{ needs.changes.outputs.docker }}'
+          python_changed='${{ needs.changes.outputs.python }}'
+          docker_test_result='${{ needs.docker-compose-test.result }}'
+          event_name='${{ github.event_name }}'
+          if [ "$docker_changed" = "true" ] || [ "$python_changed" = "true" ] || [ "$event_name" = "schedule" ]; then
+            if [ "$docker_test_result" = "skipped" ]; then
+              echo "::error::docker-compose-test was skipped on a PR that touched docker- or python-relevant paths."
+              echo "::error::This violates AC3.4 — the gate must run when changes.outputs.docker or python is true."
+              exit 1
+            fi
+          fi
+
           echo "All jobs passed or were correctly skipped"
 
