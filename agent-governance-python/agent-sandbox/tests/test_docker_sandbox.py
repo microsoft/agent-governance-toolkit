@@ -1,0 +1,1407 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+"""Comprehensive tests for the agent-sandbox package.
+
+Covers the SandboxProvider ABC, data types, enums, DockerSandboxProvider
+(with mocked Docker), SandboxStateManager, IsolationRuntime, container
+hardening, policy integration, async interface, multi-session isolation,
+and edge cases.
+
+All Docker interactions are mocked so tests run without a Docker daemon.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from agent_sandbox.sandbox_provider import (
+    ExecutionHandle,
+    ExecutionStatus,
+    SandboxConfig,
+    SandboxProvider,
+    SandboxResult,
+    SessionHandle,
+    SessionStatus,
+)
+from agent_sandbox.isolation_runtime import IsolationRuntime
+from agent_sandbox.docker_sandbox_provider import (
+    DockerSandboxProvider,
+    _is_protected_path,
+    _validate_mount_path,
+    docker_config_from_policy,
+)
+from agent_sandbox.state import SandboxCheckpoint, SandboxStateManager
+
+
+# =========================================================================
+# Section 1: Data types & enums
+# =========================================================================
+
+
+class TestSessionStatus:
+    def test_all_values(self):
+        assert SessionStatus.PROVISIONING == "provisioning"
+        assert SessionStatus.READY == "ready"
+        assert SessionStatus.EXECUTING == "executing"
+        assert SessionStatus.DESTROYING == "destroying"
+        assert SessionStatus.DESTROYED == "destroyed"
+        assert SessionStatus.FAILED == "failed"
+
+    def test_is_string_enum(self):
+        assert isinstance(SessionStatus.READY, str)
+
+
+class TestExecutionStatus:
+    def test_all_values(self):
+        assert ExecutionStatus.PENDING == "pending"
+        assert ExecutionStatus.RUNNING == "running"
+        assert ExecutionStatus.COMPLETED == "completed"
+        assert ExecutionStatus.CANCELLED == "cancelled"
+        assert ExecutionStatus.FAILED == "failed"
+
+
+class TestSandboxConfig:
+    def test_defaults(self):
+        cfg = SandboxConfig()
+        assert cfg.timeout_seconds == 60.0
+        assert cfg.memory_mb == 512
+        assert cfg.cpu_limit == 1.0
+        assert cfg.network_enabled is False
+        assert cfg.read_only_fs is True
+        assert cfg.env_vars == {}
+        assert cfg.input_dir is None
+        assert cfg.output_dir is None
+        assert cfg.runtime is None
+
+    def test_custom_values(self):
+        cfg = SandboxConfig(
+            timeout_seconds=30,
+            memory_mb=1024,
+            cpu_limit=2.0,
+            network_enabled=True,
+            read_only_fs=False,
+            env_vars={"KEY": "VAL"},
+            input_dir="/data/in",
+            output_dir="/data/out",
+            runtime="runsc",
+        )
+        assert cfg.memory_mb == 1024
+        assert cfg.input_dir == "/data/in"
+        assert cfg.runtime == "runsc"
+
+
+class TestSandboxResult:
+    def test_defaults(self):
+        r = SandboxResult(success=True)
+        assert r.exit_code == 0
+        assert r.stdout == ""
+        assert r.stderr == ""
+        assert r.killed is False
+
+    def test_failure_result(self):
+        r = SandboxResult(
+            success=False, exit_code=1, stderr="error",
+            killed=True, kill_reason="oom",
+        )
+        assert not r.success
+        assert r.kill_reason == "oom"
+
+
+class TestSessionHandle:
+    def test_creation(self):
+        h = SessionHandle(agent_id="a1", session_id="s1")
+        assert h.agent_id == "a1"
+        assert h.session_id == "s1"
+        assert h.status == SessionStatus.READY
+
+    def test_custom_status(self):
+        h = SessionHandle(
+            agent_id="a1", session_id="s1",
+            status=SessionStatus.FAILED,
+        )
+        assert h.status == SessionStatus.FAILED
+
+
+class TestExecutionHandle:
+    def test_creation(self):
+        h = ExecutionHandle(
+            execution_id="e1", agent_id="a1", session_id="s1",
+        )
+        assert h.execution_id == "e1"
+        assert h.status == ExecutionStatus.COMPLETED
+        assert h.result is None
+
+    def test_with_result(self):
+        r = SandboxResult(success=True, stdout="hello")
+        h = ExecutionHandle(
+            execution_id="e1", agent_id="a1", session_id="s1",
+            result=r,
+        )
+        assert h.result.stdout == "hello"
+
+
+class TestIsolationRuntime:
+    def test_values(self):
+        assert IsolationRuntime.RUNC == "runc"
+        assert IsolationRuntime.GVISOR == "runsc"
+        assert IsolationRuntime.KATA == "kata-runtime"
+        assert IsolationRuntime.AUTO == "auto"
+
+    def test_is_str_enum(self):
+        assert isinstance(IsolationRuntime.RUNC, str)
+
+
+class TestSandboxCheckpoint:
+    def test_creation(self):
+        cp = SandboxCheckpoint(
+            agent_id="a1", name="cp1",
+            image_tag="agent-sandbox-a1:cp1",
+        )
+        assert cp.agent_id == "a1"
+        assert cp.name == "cp1"
+        assert cp.image_tag == "agent-sandbox-a1:cp1"
+        assert cp.created_at  # non-empty
+
+
+# =========================================================================
+# Section 2: SandboxProvider ABC
+# =========================================================================
+
+
+class TestSandboxProviderABC:
+    def test_cannot_instantiate(self):
+        with pytest.raises(TypeError):
+            SandboxProvider()
+
+    def test_default_get_session_status(self):
+        """Default returns DESTROYED for unknown sessions."""
+
+        class Minimal(SandboxProvider):
+            def create_session(self, agent_id, policy=None, config=None):
+                return SessionHandle(agent_id=agent_id, session_id="x")
+
+            def execute_code(self, agent_id, session_id, code, *, context=None):
+                return ExecutionHandle(
+                    execution_id="x", agent_id=agent_id,
+                    session_id=session_id,
+                )
+
+            def destroy_session(self, agent_id, session_id):
+                pass
+
+            def is_available(self):
+                return True
+
+        p = Minimal()
+        assert p.get_session_status("a", "s") == SessionStatus.DESTROYED
+
+    def test_default_cancel(self):
+        class Minimal(SandboxProvider):
+            def create_session(self, agent_id, policy=None, config=None):
+                return SessionHandle(agent_id=agent_id, session_id="x")
+
+            def execute_code(self, agent_id, session_id, code, *, context=None):
+                return ExecutionHandle(
+                    execution_id="x", agent_id=agent_id,
+                    session_id=session_id,
+                )
+
+            def destroy_session(self, agent_id, session_id):
+                pass
+
+            def is_available(self):
+                return True
+
+        assert Minimal().cancel_execution("a", "s", "e") is False
+
+    def test_default_run_raises(self):
+        class Minimal(SandboxProvider):
+            def create_session(self, agent_id, policy=None, config=None):
+                return SessionHandle(agent_id=agent_id, session_id="x")
+
+            def execute_code(self, agent_id, session_id, code, *, context=None):
+                return ExecutionHandle(
+                    execution_id="x", agent_id=agent_id,
+                    session_id=session_id,
+                )
+
+            def destroy_session(self, agent_id, session_id):
+                pass
+
+            def is_available(self):
+                return True
+
+        with pytest.raises(NotImplementedError):
+            Minimal().run("a", ["echo"])
+
+    def test_async_delegates_to_sync(self):
+        class Minimal(SandboxProvider):
+            def create_session(self, agent_id, policy=None, config=None):
+                return SessionHandle(agent_id=agent_id, session_id="abc")
+
+            def execute_code(self, agent_id, session_id, code, *, context=None):
+                return ExecutionHandle(
+                    execution_id="x", agent_id=agent_id,
+                    session_id=session_id,
+                    result=SandboxResult(success=True, stdout=code),
+                )
+
+            def destroy_session(self, agent_id, session_id):
+                pass
+
+            def is_available(self):
+                return True
+
+        p = Minimal()
+        h = asyncio.run(p.create_session_async("a1"))
+        assert h.session_id == "abc"
+        eh = asyncio.run(p.execute_code_async("a1", "abc", "hello"))
+        assert eh.result.stdout == "hello"
+        asyncio.run(p.destroy_session_async("a1", "abc"))
+        r = asyncio.run(p.cancel_execution_async("a1", "abc", "e1"))
+        assert r is False
+
+
+# =========================================================================
+# Section 3: Path validation helpers
+# =========================================================================
+
+
+class TestPathValidation:
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/", "/etc", "/proc", "/sys", "/usr", "/var",
+            "/boot", "/dev", "/sbin", "/bin", "/lib",
+        ],
+    )
+    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    def test_unix_protected_paths(self, mock_platform, path):
+        mock_platform.system.return_value = "Linux"
+        assert _is_protected_path(path) is True
+
+    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    def test_unix_safe_path(self, mock_platform):
+        mock_platform.system.return_value = "Linux"
+        assert _is_protected_path("/home/user/data") is False
+
+    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    def test_validate_mount_raises_for_protected(self, mock_platform):
+        mock_platform.system.return_value = "Linux"
+        with pytest.raises(ValueError, match="protected system directory"):
+            _validate_mount_path("/etc", "input_dir")
+
+    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    def test_validate_mount_safe(self, mock_platform):
+        mock_platform.system.return_value = "Linux"
+        _validate_mount_path("/home/user/data", "input_dir")  # no exception
+
+
+# =========================================================================
+# Section 4: docker_config_from_policy
+# =========================================================================
+
+
+class TestDockerConfigFromPolicy:
+    def test_no_policy_attributes(self):
+        policy = SimpleNamespace()
+        base = SandboxConfig()
+        cfg = docker_config_from_policy(policy, base)
+        assert cfg.memory_mb == base.memory_mb
+        assert cfg.network_enabled is False
+
+    def test_network_allowlist_enables_network(self):
+        policy = SimpleNamespace(network_allowlist=["api.example.com"])
+        cfg = docker_config_from_policy(policy, SandboxConfig())
+        assert cfg.network_enabled is True
+
+    def test_no_network_allowlist(self):
+        policy = SimpleNamespace(network_allowlist=None)
+        cfg = docker_config_from_policy(policy, SandboxConfig())
+        assert cfg.network_enabled is False
+
+    def test_sandbox_mounts(self):
+        mounts = SimpleNamespace(
+            input_dir="/data/in", output_dir="/data/out",
+        )
+        policy = SimpleNamespace(sandbox_mounts=mounts)
+        cfg = docker_config_from_policy(policy, SandboxConfig())
+        assert cfg.input_dir == "/data/in"
+        assert cfg.output_dir == "/data/out"
+
+    def test_resource_limits_from_defaults(self):
+        defaults = SimpleNamespace(max_memory_mb=2048, max_cpu=4.0)
+        policy = SimpleNamespace(defaults=defaults)
+        cfg = docker_config_from_policy(policy, SandboxConfig())
+        assert cfg.memory_mb == 2048
+        assert cfg.cpu_limit == 4.0
+
+    def test_preserves_base_values(self):
+        """Unrelated base config values are preserved."""
+        base = SandboxConfig(
+            timeout_seconds=120, read_only_fs=False,
+            env_vars={"A": "1"},
+        )
+        policy = SimpleNamespace()
+        cfg = docker_config_from_policy(policy, base)
+        assert cfg.timeout_seconds == 120
+        assert cfg.read_only_fs is False
+        assert cfg.env_vars == {"A": "1"}
+
+
+# =========================================================================
+# Section 5: DockerSandboxProvider (mocked Docker)
+# =========================================================================
+
+
+def _make_mock_docker_client():
+    """Create a mock Docker client with sensible defaults."""
+    client = MagicMock()
+    client.ping.return_value = True
+    client.info.return_value = {"Runtimes": {"runc": {}}}
+    return client
+
+
+def _make_mock_container(agent_id="a1", session_id="s1"):
+    """Create a mock container with exec_run support."""
+    container = MagicMock()
+    container.name = f"agent-sandbox-{agent_id}-{session_id}"
+    container.status = "running"
+    container.attrs = {
+        "NetworkSettings": {"IPAddress": "172.17.0.2"},
+    }
+    container.exec_run.return_value = MagicMock(
+        exit_code=0, output=(b"hello\n", b""),
+    )
+    container.labels = {
+        "agent-sandbox.managed": "true",
+        "agent-sandbox.agent-id": agent_id,
+    }
+    return container
+
+
+@pytest.fixture
+def docker_provider():
+    """DockerSandboxProvider with a fully mocked Docker client."""
+    with patch(
+        "agent_sandbox.docker_sandbox_provider.DockerSandboxProvider.__init__",
+        return_value=None,
+    ):
+        provider = DockerSandboxProvider.__new__(DockerSandboxProvider)
+        provider._image = "python:3.11-slim"
+        provider._tools = {}
+        provider._requested_runtime = IsolationRuntime.AUTO
+        provider._containers = {}
+        provider._evaluators = {}
+        provider._tool_proxy = None
+        provider._network_proxy = None
+        provider._state_manager = None
+        provider._client = _make_mock_docker_client()
+        provider._available = True
+        provider._runtime = IsolationRuntime.RUNC
+
+        def _create_container(agent_id, session_id, config):
+            return _make_mock_container(agent_id, session_id)
+
+        provider._create_container = MagicMock(
+            side_effect=_create_container,
+        )
+        return provider
+
+
+# -- create_session --------------------------------------------------------
+
+
+class TestDockerCreateSession:
+    def test_basic_create(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        assert h.agent_id == "a1"
+        assert len(h.session_id) == 8
+        assert h.status == SessionStatus.READY
+        assert (h.agent_id, h.session_id) in docker_provider._containers
+
+    def test_unique_sessions(self, docker_provider):
+        h1 = docker_provider.create_session("a1")
+        h2 = docker_provider.create_session("a1")
+        assert h1.session_id != h2.session_id
+
+    def test_unavailable_raises(self, docker_provider):
+        docker_provider._available = False
+        with pytest.raises(RuntimeError, match="not available"):
+            docker_provider.create_session("a1")
+
+    def test_with_config(self, docker_provider):
+        cfg = SandboxConfig(memory_mb=1024, cpu_limit=2.0)
+        h = docker_provider.create_session("a1", config=cfg)
+        assert h.status == SessionStatus.READY
+        call_args = docker_provider._create_container.call_args
+        assert call_args[0][2].memory_mb == 1024
+
+    def test_with_policy_stores_evaluator(self, docker_provider):
+        try:
+            from agent_os.policies.schema import (
+                PolicyDocument,
+                PolicyRule,
+                PolicyCondition,
+                PolicyAction,
+            )
+        except ImportError:
+            pytest.skip("agent-os-kernel not installed")
+
+        doc = PolicyDocument(
+            name="test",
+            rules=[
+                PolicyRule(
+                    name="deny_dangerous",
+                    condition=PolicyCondition(
+                        field="action", operator="eq", value="delete",
+                    ),
+                    action=PolicyAction.DENY,
+                    message="No deleting",
+                )
+            ],
+        )
+        h = docker_provider.create_session("a1", policy=doc)
+        assert (h.agent_id, h.session_id) in docker_provider._evaluators
+
+    def test_without_policy_no_evaluator(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        assert ("a1", h.session_id) not in docker_provider._evaluators
+
+
+# -- execute_code ----------------------------------------------------------
+
+
+class TestDockerExecuteCode:
+    def test_basic_execution(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        eh = docker_provider.execute_code(
+            "a1", h.session_id, "print('hello')",
+        )
+        assert eh.status == ExecutionStatus.COMPLETED
+        assert eh.result.success
+        assert "hello" in eh.result.stdout
+
+    def test_without_session_raises(self, docker_provider):
+        with pytest.raises(RuntimeError, match="No active session"):
+            docker_provider.execute_code("a1", "nonexistent", "pass")
+
+    def test_failure(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.exec_run.return_value = MagicMock(
+            exit_code=1, output=(b"", b"error\n"),
+        )
+        eh = docker_provider.execute_code("a1", h.session_id, "bad")
+        assert eh.status == ExecutionStatus.FAILED
+        assert "error" in eh.result.stderr
+
+    def test_with_context(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        eh = docker_provider.execute_code(
+            "a1", h.session_id, "pass", context={"task": "test"},
+        )
+        assert eh.status == ExecutionStatus.COMPLETED
+
+    def test_policy_deny(self, docker_provider):
+        try:
+            from agent_os.policies.schema import (
+                PolicyDocument, PolicyRule,
+                PolicyCondition, PolicyAction,
+            )
+        except ImportError:
+            pytest.skip("agent-os-kernel not installed")
+
+        doc = PolicyDocument(
+            name="strict",
+            rules=[
+                PolicyRule(
+                    name="deny_exec",
+                    condition=PolicyCondition(
+                        field="action", operator="eq", value="execute",
+                    ),
+                    action=PolicyAction.DENY,
+                    message="All execution denied",
+                )
+            ],
+        )
+        h = docker_provider.create_session("a1", policy=doc)
+        with pytest.raises(PermissionError, match="Policy denied"):
+            docker_provider.execute_code(
+                "a1", h.session_id, "print('hi')",
+            )
+
+    def test_policy_allow(self, docker_provider):
+        try:
+            from agent_os.policies.schema import (
+                PolicyDocument, PolicyRule,
+                PolicyCondition, PolicyAction,
+            )
+        except ImportError:
+            pytest.skip("agent-os-kernel not installed")
+
+        doc = PolicyDocument(
+            name="permissive",
+            rules=[
+                PolicyRule(
+                    name="allow_all",
+                    condition=PolicyCondition(
+                        field="action", operator="eq", value="execute",
+                    ),
+                    action=PolicyAction.ALLOW,
+                    message="Allowed",
+                )
+            ],
+        )
+        h = docker_provider.create_session("a1", policy=doc)
+        eh = docker_provider.execute_code(
+            "a1", h.session_id, "print('hi')",
+        )
+        assert eh.status == ExecutionStatus.COMPLETED
+
+    def test_execution_handle_fields(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        eh = docker_provider.execute_code("a1", h.session_id, "pass")
+        assert eh.agent_id == "a1"
+        assert eh.session_id == h.session_id
+        assert len(eh.execution_id) == 8
+        assert eh.result is not None
+
+
+# -- destroy_session -------------------------------------------------------
+
+
+class TestDockerDestroySession:
+    def test_basic_destroy(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        docker_provider.destroy_session("a1", h.session_id)
+        c.stop.assert_called_once_with(timeout=5)
+        c.remove.assert_called_once_with(force=True)
+        assert ("a1", h.session_id) not in docker_provider._containers
+
+    def test_nonexistent_is_noop(self, docker_provider):
+        docker_provider.destroy_session("a1", "nonexistent")
+
+    def test_cleans_evaluator(self, docker_provider):
+        try:
+            from agent_os.policies.schema import PolicyDocument
+        except ImportError:
+            pytest.skip("agent-os-kernel not installed")
+
+        doc = PolicyDocument(name="test")
+        h = docker_provider.create_session("a1", policy=doc)
+        assert (h.agent_id, h.session_id) in docker_provider._evaluators
+        docker_provider.destroy_session("a1", h.session_id)
+        assert ("a1", h.session_id) not in docker_provider._evaluators
+
+    def test_tolerates_stop_error(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.stop.side_effect = Exception("already stopped")
+        docker_provider.destroy_session("a1", h.session_id)
+        assert ("a1", h.session_id) not in docker_provider._containers
+
+    def test_tolerates_remove_error(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.remove.side_effect = Exception("already removed")
+        docker_provider.destroy_session("a1", h.session_id)
+
+    def test_idempotent(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        docker_provider.destroy_session("a1", h.session_id)
+        docker_provider.destroy_session("a1", h.session_id)
+
+
+# -- get_session_status ----------------------------------------------------
+
+
+class TestDockerSessionStatus:
+    def test_active(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        assert (
+            docker_provider.get_session_status("a1", h.session_id)
+            == SessionStatus.READY
+        )
+
+    def test_destroyed(self, docker_provider):
+        assert (
+            docker_provider.get_session_status("a1", "missing")
+            == SessionStatus.DESTROYED
+        )
+
+
+# -- run -------------------------------------------------------------------
+
+
+class TestDockerRun:
+    def test_no_container_returns_failure(self, docker_provider):
+        r = docker_provider.run("a1", ["echo", "hi"])
+        assert not r.success
+        assert "No container found" in r.stderr
+
+    def test_with_session_id(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        r = docker_provider.run(
+            "a1", ["python", "-c", "pass"],
+            session_id=h.session_id,
+        )
+        assert r.success
+
+    def test_restarts_stopped_container(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.status = "exited"
+        r = docker_provider.run(
+            "a1", ["python", "-c", "pass"],
+            session_id=h.session_id,
+        )
+        c.start.assert_called_once()
+        assert r.success
+
+    def test_handles_exception(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.exec_run.side_effect = Exception("docker error")
+        r = docker_provider.run(
+            "a1", ["python", "-c", "pass"],
+            session_id=h.session_id,
+        )
+        assert not r.success
+        assert "docker error" in r.stderr
+
+    def test_output_truncation(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.exec_run.return_value = MagicMock(
+            exit_code=0, output=(b"x" * 20000, b""),
+        )
+        r = docker_provider.run(
+            "a1", ["echo"], session_id=h.session_id,
+        )
+        assert len(r.stdout) == 10000
+
+    def test_none_output_handled(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.exec_run.return_value = MagicMock(
+            exit_code=0, output=(None, None),
+        )
+        r = docker_provider.run(
+            "a1", ["echo"], session_id=h.session_id,
+        )
+        assert r.success
+        assert r.stdout == ""
+        assert r.stderr == ""
+
+    def test_legacy_lookup_by_agent_id(self, docker_provider):
+        """Without session_id, finds any container for the agent."""
+        h = docker_provider.create_session("a1")
+        r = docker_provider.run("a1", ["python", "-c", "pass"])
+        assert r.success
+
+
+# -- properties ------------------------------------------------------------
+
+
+class TestDockerProperties:
+    def test_runtime(self, docker_provider):
+        assert docker_provider.runtime == IsolationRuntime.RUNC
+
+    def test_kernel_isolated_runc(self, docker_provider):
+        assert docker_provider.kernel_isolated is False
+
+    def test_kernel_isolated_gvisor(self, docker_provider):
+        docker_provider._runtime = IsolationRuntime.GVISOR
+        assert docker_provider.kernel_isolated is True
+
+    def test_kernel_isolated_kata(self, docker_provider):
+        docker_provider._runtime = IsolationRuntime.KATA
+        assert docker_provider.kernel_isolated is True
+
+    def test_is_available(self, docker_provider):
+        assert docker_provider.is_available() is True
+
+    def test_not_available(self, docker_provider):
+        docker_provider._available = False
+        assert docker_provider.is_available() is False
+
+
+# =========================================================================
+# Section 6: Container creation hardening
+# =========================================================================
+
+
+class TestContainerCreationHardening:
+    def _make_raw_provider(self):
+        with patch(
+            "agent_sandbox.docker_sandbox_provider.DockerSandboxProvider.__init__",
+            return_value=None,
+        ):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = "python:3.11-slim"
+            p._runtime = IsolationRuntime.RUNC
+            mock_client = _make_mock_docker_client()
+            mock_client.containers.run.return_value = _make_mock_container()
+            p._client = mock_client
+            return p, mock_client
+
+    def test_hardening_flags(self):
+        p, client = self._make_raw_provider()
+        p._create_container("a1", "s1", SandboxConfig())
+        kw = client.containers.run.call_args[1]
+        assert kw["security_opt"] == ["no-new-privileges"]
+        assert kw["cap_drop"] == ["ALL"]
+        assert kw["read_only"] is True
+        assert kw["user"] == "65534:65534"
+        assert kw["working_dir"] == "/workspace"
+        assert kw["pids_limit"] == 256
+        assert kw["network_disabled"] is True
+        assert kw["mem_limit"] == "512m"
+        assert kw["detach"] is True
+        assert kw["command"] == ["sleep", "infinity"]
+
+    def test_tmpfs_mounts_readonly(self):
+        p, client = self._make_raw_provider()
+        p._create_container("a1", "s1", SandboxConfig(read_only_fs=True))
+        kw = client.containers.run.call_args[1]
+        assert "/workspace" in kw["tmpfs"]
+        assert "/tmp" in kw["tmpfs"]
+
+    def test_tmpfs_no_tmp_when_writable(self):
+        p, client = self._make_raw_provider()
+        p._create_container("a1", "s1", SandboxConfig(read_only_fs=False))
+        kw = client.containers.run.call_args[1]
+        assert "/workspace" in kw["tmpfs"]
+        assert "/tmp" not in kw["tmpfs"]
+
+    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    def test_volume_mounts(self, mock_platform):
+        mock_platform.system.return_value = "Linux"
+        p, client = self._make_raw_provider()
+        cfg = SandboxConfig(input_dir="/data/in", output_dir="/data/out")
+        p._create_container("a1", "s1", cfg)
+        kw = client.containers.run.call_args[1]
+        assert "/data/in" in kw["volumes"]
+        assert kw["volumes"]["/data/in"]["mode"] == "ro"
+        assert kw["volumes"]["/data/out"]["mode"] == "rw"
+
+    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    def test_protected_input_dir_raises(self, mock_platform):
+        mock_platform.system.return_value = "Linux"
+        p, _ = self._make_raw_provider()
+        with pytest.raises(ValueError, match="protected system directory"):
+            p._create_container(
+                "a1", "s1", SandboxConfig(input_dir="/etc"),
+            )
+
+    def test_runtime_gvisor(self):
+        p, client = self._make_raw_provider()
+        p._runtime = IsolationRuntime.GVISOR
+        p._create_container("a1", "s1", SandboxConfig())
+        kw = client.containers.run.call_args[1]
+        assert kw["runtime"] == "runsc"
+
+    def test_config_runtime_overrides(self):
+        p, client = self._make_raw_provider()
+        p._create_container(
+            "a1", "s1", SandboxConfig(runtime="kata-runtime"),
+        )
+        kw = client.containers.run.call_args[1]
+        assert kw["runtime"] == "kata-runtime"
+
+    def test_network_enabled(self):
+        p, client = self._make_raw_provider()
+        p._create_container(
+            "a1", "s1", SandboxConfig(network_enabled=True),
+        )
+        kw = client.containers.run.call_args[1]
+        assert kw["network_disabled"] is False
+
+    def test_container_name_format(self):
+        p, client = self._make_raw_provider()
+        p._create_container("research-agent", "abc12345", SandboxConfig())
+        kw = client.containers.run.call_args[1]
+        assert kw["name"] == "agent-sandbox-research-agent-abc12345"
+
+    def test_labels(self):
+        p, client = self._make_raw_provider()
+        p._create_container("a1", "s1", SandboxConfig())
+        kw = client.containers.run.call_args[1]
+        assert kw["labels"]["agent-sandbox.managed"] == "true"
+        assert kw["labels"]["agent-sandbox.agent-id"] == "a1"
+
+    def test_nano_cpus_calculation(self):
+        p, client = self._make_raw_provider()
+        p._create_container("a1", "s1", SandboxConfig(cpu_limit=2.5))
+        kw = client.containers.run.call_args[1]
+        assert kw["nano_cpus"] == 2_500_000_000
+
+
+# =========================================================================
+# Section 7: Runtime detection
+# =========================================================================
+
+
+class TestRuntimeDetection:
+    def test_detect_kata(self, docker_provider):
+        docker_provider._client.info.return_value = {
+            "Runtimes": {"runc": {}, "kata-runtime": {}},
+        }
+        assert docker_provider._detect_runtime() == IsolationRuntime.KATA
+
+    def test_detect_gvisor(self, docker_provider):
+        docker_provider._client.info.return_value = {
+            "Runtimes": {"runc": {}, "runsc": {}},
+        }
+        assert docker_provider._detect_runtime() == IsolationRuntime.GVISOR
+
+    def test_detect_fallback_runc(self, docker_provider):
+        docker_provider._client.info.return_value = {
+            "Runtimes": {"runc": {}},
+        }
+        assert docker_provider._detect_runtime() == IsolationRuntime.RUNC
+
+    def test_detect_no_client(self, docker_provider):
+        docker_provider._client = None
+        assert docker_provider._detect_runtime() == IsolationRuntime.RUNC
+
+    def test_detect_exception(self, docker_provider):
+        docker_provider._client.info.side_effect = Exception("oops")
+        assert docker_provider._detect_runtime() == IsolationRuntime.RUNC
+
+    def test_detect_prefers_kata_over_gvisor(self, docker_provider):
+        docker_provider._client.info.return_value = {
+            "Runtimes": {"runc": {}, "runsc": {}, "kata-runtime": {}},
+        }
+        assert docker_provider._detect_runtime() == IsolationRuntime.KATA
+
+    def test_validate_installed(self, docker_provider):
+        docker_provider._client.info.return_value = {
+            "Runtimes": {"runc": {}, "runsc": {}},
+        }
+        docker_provider._validate_runtime(IsolationRuntime.GVISOR)
+
+    def test_validate_not_installed(self, docker_provider):
+        docker_provider._client.info.return_value = {
+            "Runtimes": {"runc": {}},
+        }
+        with pytest.raises(RuntimeError, match="not installed"):
+            docker_provider._validate_runtime(IsolationRuntime.GVISOR)
+
+    def test_validate_no_client(self, docker_provider):
+        docker_provider._client = None
+        with pytest.raises(RuntimeError, match="not available"):
+            docker_provider._validate_runtime(IsolationRuntime.GVISOR)
+
+
+# =========================================================================
+# Section 8: SandboxStateManager
+# =========================================================================
+
+
+class TestSandboxStateManager:
+    @pytest.fixture
+    def provider_with_session(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        return docker_provider, h
+
+    def test_save_checkpoint(self, provider_with_session):
+        provider, h = provider_with_session
+        cp = provider.save_state("a1", h.session_id, "cp1")
+        assert cp.agent_id == "a1"
+        assert cp.name == "cp1"
+        assert cp.image_tag == "agent-sandbox-a1:cp1"
+        c = provider._containers[(h.agent_id, h.session_id)]
+        c.commit.assert_called_once()
+        kw = c.commit.call_args[1]
+        assert kw["repository"] == "agent-sandbox-a1"
+        assert kw["tag"] == "cp1"
+
+    def test_save_no_container_raises(self, docker_provider):
+        with pytest.raises(RuntimeError, match="No active container"):
+            docker_provider.save_state("a1", "nonexistent", "cp1")
+
+    def test_list_checkpoints(self, docker_provider):
+        mock_img = MagicMock()
+        mock_img.tags = ["agent-sandbox-a1:cp1", "agent-sandbox-a1:cp2"]
+        mock_img.labels = {
+            "agent-sandbox.created-at": "2026-04-20T00:00:00+00:00",
+        }
+        docker_provider._client.images.list.return_value = [mock_img]
+        cps = docker_provider.list_checkpoints("a1")
+        assert len(cps) == 2
+        assert cps[0].name == "cp1"
+        assert cps[1].name == "cp2"
+
+    def test_list_checkpoints_empty(self, docker_provider):
+        docker_provider._client.images.list.return_value = []
+        assert docker_provider.list_checkpoints("a1") == []
+
+    def test_list_checkpoints_exception(self, docker_provider):
+        docker_provider._client.images.list.side_effect = Exception("err")
+        assert docker_provider.list_checkpoints("a1") == []
+
+    def test_delete_checkpoint(self, docker_provider):
+        docker_provider.delete_checkpoint("a1", "cp1")
+        docker_provider._client.images.remove.assert_called_once_with(
+            image="agent-sandbox-a1:cp1", force=True,
+        )
+
+    def test_delete_checkpoint_error(self, docker_provider):
+        docker_provider._client.images.remove.side_effect = Exception(
+            "not found",
+        )
+        with pytest.raises(RuntimeError, match="Failed to delete"):
+            docker_provider.delete_checkpoint("a1", "cp1")
+
+    def test_restore_checkpoint(self, provider_with_session):
+        provider, h = provider_with_session
+        provider._client.images.get.return_value = MagicMock()
+        provider.restore_state("a1", h.session_id, "cp1")
+        assert ("a1", h.session_id) in provider._containers
+
+    def test_restore_nonexistent_raises(self, provider_with_session):
+        provider, h = provider_with_session
+        provider._client.images.get.side_effect = Exception("not found")
+        with pytest.raises(RuntimeError, match="not found"):
+            provider.restore_state("a1", h.session_id, "missing")
+
+
+# =========================================================================
+# Section 9: Multi-session isolation
+# =========================================================================
+
+
+class TestMultiSessionIsolation:
+    def test_separate_containers(self, docker_provider):
+        h1 = docker_provider.create_session("a1")
+        h2 = docker_provider.create_session("a2")
+        assert h1.session_id != h2.session_id
+        c1 = docker_provider._containers[("a1", h1.session_id)]
+        c2 = docker_provider._containers[("a2", h2.session_id)]
+        assert c1 is not c2
+
+    def test_destroy_one_preserves_other(self, docker_provider):
+        h1 = docker_provider.create_session("a1")
+        h2 = docker_provider.create_session("a2")
+        docker_provider.destroy_session("a1", h1.session_id)
+        assert ("a1", h1.session_id) not in docker_provider._containers
+        assert ("a2", h2.session_id) in docker_provider._containers
+
+    def test_same_agent_multiple_sessions(self, docker_provider):
+        h1 = docker_provider.create_session("a1")
+        h2 = docker_provider.create_session("a1")
+        assert h1.session_id != h2.session_id
+        assert ("a1", h1.session_id) in docker_provider._containers
+        assert ("a1", h2.session_id) in docker_provider._containers
+
+
+# =========================================================================
+# Section 10: Async interface (DockerSandboxProvider)
+# =========================================================================
+
+
+class TestDockerProviderAsync:
+    def test_create_session_async(self, docker_provider):
+        h = asyncio.run(docker_provider.create_session_async("a1"))
+        assert h.agent_id == "a1"
+        assert h.status == SessionStatus.READY
+
+    def test_execute_code_async(self, docker_provider):
+        h = asyncio.run(docker_provider.create_session_async("a1"))
+        eh = asyncio.run(
+            docker_provider.execute_code_async(
+                "a1", h.session_id, "pass",
+            )
+        )
+        assert eh.status == ExecutionStatus.COMPLETED
+
+    def test_destroy_session_async(self, docker_provider):
+        h = asyncio.run(docker_provider.create_session_async("a1"))
+        asyncio.run(
+            docker_provider.destroy_session_async("a1", h.session_id)
+        )
+        assert ("a1", h.session_id) not in docker_provider._containers
+
+    def test_cancel_execution_async(self, docker_provider):
+        r = asyncio.run(
+            docker_provider.cancel_execution_async("a1", "s", "e")
+        )
+        assert r is False
+
+
+# =========================================================================
+# Section 11: Edge cases & error handling
+# =========================================================================
+
+
+class TestEdgeCases:
+    def test_exec_run_exception(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.exec_run.side_effect = Exception("OOM killed")
+        eh = docker_provider.execute_code("a1", h.session_id, "pass")
+        assert eh.status == ExecutionStatus.FAILED
+        assert "OOM killed" in eh.result.stderr
+
+    def test_empty_code(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        eh = docker_provider.execute_code("a1", h.session_id, "")
+        assert eh.status == ExecutionStatus.COMPLETED
+
+    def test_destroy_twice(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        docker_provider.destroy_session("a1", h.session_id)
+        docker_provider.destroy_session("a1", h.session_id)
+
+    def test_different_configs(self, docker_provider):
+        cfg1 = SandboxConfig(memory_mb=256)
+        cfg2 = SandboxConfig(memory_mb=1024, cpu_limit=4.0)
+        docker_provider.create_session("a1", config=cfg1)
+        docker_provider.create_session("a2", config=cfg2)
+        calls = docker_provider._create_container.call_args_list
+        assert calls[0][0][2].memory_mb == 256
+        assert calls[1][0][2].memory_mb == 1024
+
+    def test_duration_measured(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        eh = docker_provider.execute_code("a1", h.session_id, "pass")
+        assert eh.result.duration_seconds >= 0
+
+    def test_full_lifecycle(self, docker_provider):
+        """End-to-end: create → execute → checkpoint → destroy."""
+        h = docker_provider.create_session("a1")
+        eh = docker_provider.execute_code(
+            "a1", h.session_id, "print('step1')",
+        )
+        assert eh.result.success
+
+        cp = docker_provider.save_state("a1", h.session_id, "step1")
+        assert cp.name == "step1"
+
+        docker_provider.destroy_session("a1", h.session_id)
+        assert ("a1", h.session_id) not in docker_provider._containers
+
+    def test_package_import(self):
+        """Verify top-level package exports work."""
+        from agent_sandbox import (
+            DockerSandboxProvider,
+            ExecutionHandle,
+            ExecutionStatus,
+            IsolationRuntime,
+            SandboxCheckpoint,
+            SandboxConfig,
+            SandboxProvider,
+            SandboxResult,
+            SandboxStateManager,
+            SessionHandle,
+            SessionStatus,
+        )
+
+        assert SandboxProvider is not None
+        assert DockerSandboxProvider is not None
+
+
+# =========================================================================
+# Section 12: Container env_vars and extra_hosts
+# =========================================================================
+
+
+class TestContainerEnvVarsAndHosts:
+    """Verify env_vars are passed to containers.run() and extra_hosts is set."""
+
+    def _make_raw_provider(self):
+        with patch(
+            "agent_sandbox.docker_sandbox_provider.DockerSandboxProvider.__init__",
+            return_value=None,
+        ):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = "python:3.11-slim"
+            p._runtime = IsolationRuntime.RUNC
+            mock_client = _make_mock_docker_client()
+            mock_client.containers.run.return_value = _make_mock_container()
+            p._client = mock_client
+            return p, mock_client
+
+    def test_env_vars_passed_to_container(self):
+        p, client = self._make_raw_provider()
+        cfg = SandboxConfig(
+            env_vars={"HTTP_PROXY": "http://host:9101", "FOO": "bar"},
+        )
+        p._create_container("a1", "s1", cfg)
+        kw = client.containers.run.call_args[1]
+        assert kw["environment"] == {
+            "HTTP_PROXY": "http://host:9101",
+            "FOO": "bar",
+        }
+
+    def test_empty_env_vars_not_passed(self):
+        p, client = self._make_raw_provider()
+        p._create_container("a1", "s1", SandboxConfig())
+        kw = client.containers.run.call_args[1]
+        assert "environment" not in kw
+
+    def test_extra_hosts_always_set(self):
+        p, client = self._make_raw_provider()
+        p._create_container("a1", "s1", SandboxConfig())
+        kw = client.containers.run.call_args[1]
+        assert kw["extra_hosts"] == {
+            "host.docker.internal": "host-gateway",
+        }
+
+    def test_env_vars_are_defensive_copy(self):
+        """Mutating config.env_vars after creation must not affect container."""
+        p, client = self._make_raw_provider()
+        env = {"KEY": "val"}
+        cfg = SandboxConfig(env_vars=env)
+        p._create_container("a1", "s1", cfg)
+        kw = client.containers.run.call_args[1]
+        env["INJECTED"] = "bad"
+        assert "INJECTED" not in kw["environment"]
+
+
+# =========================================================================
+# Section 13: Restore preserves policy evaluator
+# =========================================================================
+
+
+class TestRestorePreservesEvaluator:
+    """restore_state must re-attach the PolicyEvaluator after destroy+recreate."""
+
+    def test_evaluator_preserved_across_restore(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        # Manually inject a fake evaluator
+        fake_evaluator = MagicMock()
+        docker_provider._evaluators[("a1", h.session_id)] = fake_evaluator
+
+        docker_provider._client.images.get.return_value = MagicMock()
+        docker_provider.restore_state("a1", h.session_id, "cp1")
+
+        # The evaluator must be re-attached after restore
+        assert ("a1", h.session_id) in docker_provider._evaluators
+        assert docker_provider._evaluators[("a1", h.session_id)] is fake_evaluator
+
+    def test_no_evaluator_stays_none_after_restore(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        assert ("a1", h.session_id) not in docker_provider._evaluators
+
+        docker_provider._client.images.get.return_value = MagicMock()
+        docker_provider.restore_state("a1", h.session_id, "cp1")
+
+        assert ("a1", h.session_id) not in docker_provider._evaluators
+
+
+# =========================================================================
+# Section 14: get_execution_status default
+# =========================================================================
+
+
+class TestGetExecutionStatus:
+    """ABC default and DockerSandboxProvider behavior."""
+
+    def test_abc_default_returns_completed(self):
+        class Minimal(SandboxProvider):
+            def create_session(self, agent_id, policy=None, config=None):
+                return SessionHandle(agent_id=agent_id, session_id="x")
+
+            def execute_code(self, agent_id, session_id, code, *, context=None):
+                return ExecutionHandle(
+                    execution_id="x", agent_id=agent_id,
+                    session_id=session_id,
+                )
+
+            def destroy_session(self, agent_id, session_id):
+                pass
+
+            def is_available(self):
+                return True
+
+        p = Minimal()
+        eh = p.get_execution_status("a1", "s1", "e1")
+        assert eh.execution_id == "e1"
+        assert eh.status == ExecutionStatus.COMPLETED
+
+    def test_docker_provider_inherits_default(self, docker_provider):
+        eh = docker_provider.get_execution_status("a1", "s1", "e1")
+        assert eh.execution_id == "e1"
+        assert eh.status == ExecutionStatus.COMPLETED
+
+
+# =========================================================================
+# Section 15: stderr truncation
+# =========================================================================
+
+
+class TestOutputTruncation:
+    """Both stdout and stderr are truncated to 10000 chars."""
+
+    def test_stderr_truncated(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.exec_run.return_value = MagicMock(
+            exit_code=1, output=(b"", b"e" * 20000),
+        )
+        r = docker_provider.run(
+            "a1", ["bad"], session_id=h.session_id,
+        )
+        assert len(r.stderr) == 10000
+
+    def test_both_truncated(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.exec_run.return_value = MagicMock(
+            exit_code=0, output=(b"o" * 20000, b"e" * 20000),
+        )
+        r = docker_provider.run(
+            "a1", ["cmd"], session_id=h.session_id,
+        )
+        assert len(r.stdout) == 10000
+        assert len(r.stderr) == 10000
+
+
+# =========================================================================
+# Section 16: docker_config_from_policy edge cases
+# =========================================================================
+
+
+class TestDockerConfigFromPolicyAdvanced:
+    """Additional policy extraction tests from the design doc."""
+
+    def test_empty_network_allowlist_keeps_network_disabled(self):
+        policy = SimpleNamespace(network_allowlist=[])
+        cfg = docker_config_from_policy(policy, SandboxConfig())
+        assert cfg.network_enabled is False
+
+    def test_mounts_with_only_input(self):
+        mounts = SimpleNamespace(input_dir="/data/in", output_dir=None)
+        policy = SimpleNamespace(sandbox_mounts=mounts)
+        cfg = docker_config_from_policy(policy, SandboxConfig())
+        assert cfg.input_dir == "/data/in"
+        assert cfg.output_dir is None
+
+    def test_mounts_with_only_output(self):
+        mounts = SimpleNamespace(input_dir=None, output_dir="/data/out")
+        policy = SimpleNamespace(sandbox_mounts=mounts)
+        cfg = docker_config_from_policy(policy, SandboxConfig())
+        assert cfg.input_dir is None
+        assert cfg.output_dir == "/data/out"
+
+    def test_partial_defaults_only_memory(self):
+        defaults = SimpleNamespace(max_memory_mb=4096)
+        policy = SimpleNamespace(defaults=defaults)
+        cfg = docker_config_from_policy(policy, SandboxConfig())
+        assert cfg.memory_mb == 4096
+        assert cfg.cpu_limit == 1.0  # unchanged
+
+    def test_partial_defaults_only_cpu(self):
+        defaults = SimpleNamespace(max_cpu=8.0)
+        policy = SimpleNamespace(defaults=defaults)
+        cfg = docker_config_from_policy(policy, SandboxConfig())
+        assert cfg.memory_mb == 512  # unchanged
+        assert cfg.cpu_limit == 8.0
+
+    def test_base_env_vars_not_mutated(self):
+        """Ensure docker_config_from_policy makes a copy of env_vars."""
+        base = SandboxConfig(env_vars={"A": "1"})
+        policy = SimpleNamespace()
+        cfg = docker_config_from_policy(policy, base)
+        cfg.env_vars["B"] = "2"
+        assert "B" not in base.env_vars
+
+
+# =========================================================================
+# Section 17: Session lifecycle — context manager pattern
+# =========================================================================
+
+
+class TestSessionLifecyclePattern:
+    """Test patterns from the design doc's session lifecycle section."""
+
+    def test_create_execute_checkpoint_restore_destroy(self, docker_provider):
+        """Full lifecycle: create → execute → save → restore → execute → destroy."""
+        h = docker_provider.create_session("a1")
+
+        # Execute
+        eh1 = docker_provider.execute_code("a1", h.session_id, "pass")
+        assert eh1.result.success
+
+        # Checkpoint
+        cp = docker_provider.save_state("a1", h.session_id, "mid")
+        assert cp.name == "mid"
+
+        # Restore
+        docker_provider._client.images.get.return_value = MagicMock()
+        docker_provider.restore_state("a1", h.session_id, "mid")
+        assert ("a1", h.session_id) in docker_provider._containers
+
+        # Execute again after restore
+        eh2 = docker_provider.execute_code("a1", h.session_id, "pass")
+        assert eh2.result.success
+
+        # Destroy
+        docker_provider.destroy_session("a1", h.session_id)
+        assert ("a1", h.session_id) not in docker_provider._containers
+
+    def test_execute_after_destroy_raises(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        docker_provider.destroy_session("a1", h.session_id)
+        with pytest.raises(RuntimeError, match="No active session"):
+            docker_provider.execute_code("a1", h.session_id, "pass")
+
+    def test_save_state_after_destroy_raises(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        docker_provider.destroy_session("a1", h.session_id)
+        with pytest.raises(RuntimeError, match="No active container"):
+            docker_provider.save_state("a1", h.session_id, "cp1")
+
+    def test_concurrent_agents_isolated(self, docker_provider):
+        """Two agents with different configs don't interfere."""
+        h1 = docker_provider.create_session(
+            "agent-a", config=SandboxConfig(memory_mb=256),
+        )
+        h2 = docker_provider.create_session(
+            "agent-b", config=SandboxConfig(memory_mb=1024),
+        )
+
+        # Execute on both
+        eh1 = docker_provider.execute_code("agent-a", h1.session_id, "a")
+        eh2 = docker_provider.execute_code("agent-b", h2.session_id, "b")
+        assert eh1.result.success
+        assert eh2.result.success
+
+        # Destroy one — other remains
+        docker_provider.destroy_session("agent-a", h1.session_id)
+        assert docker_provider.get_session_status(
+            "agent-a", h1.session_id
+        ) == SessionStatus.DESTROYED
+        assert docker_provider.get_session_status(
+            "agent-b", h2.session_id
+        ) == SessionStatus.READY
+
+
+# =========================================================================
+# Section 18: Windows path protection
+# =========================================================================
+
+
+class TestWindowsPathProtection:
+    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    def test_drive_root_blocked(self, mock_platform):
+        mock_platform.system.return_value = "Windows"
+        assert _is_protected_path("C:\\") is True
+
+    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    def test_drive_letter_only_blocked(self, mock_platform):
+        mock_platform.system.return_value = "Windows"
+        assert _is_protected_path("D:") is True
+
+    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    def test_windows_safe_path(self, mock_platform):
+        mock_platform.system.return_value = "Windows"
+        assert _is_protected_path("C:\\Users\\agent\\data") is False
