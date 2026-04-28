@@ -13,7 +13,7 @@ echo "Copying docs to $SITE_DOCS..."
 mkdir -p "$SITE_DOCS"/{packages,tutorials,deployment,security,adr,reference}
 
 # Top-level docs
-cp docs/QUICKSTART.md "$SITE_DOCS/quickstart.md"
+cp docs/quickstart.md "$SITE_DOCS/quickstart.md"
 cp docs/ARCHITECTURE.md "$SITE_DOCS/architecture.md"
 cp docs/GLOSSARY.md "$SITE_DOCS/glossary.md"
 

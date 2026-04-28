@@ -171,4 +171,4 @@ For production agentic systems, you likely need the Agent Governance Toolkit **p
 
 ---
 
-*See also: [OWASP Compliance Mapping](OWASP-COMPLIANCE.md) · [Architecture Overview](../README.md#architecture) · [Quick Start](../QUICKSTART.md)*
+*See also: [OWASP Compliance Mapping](OWASP-COMPLIANCE.md) · [Architecture Overview](../README.md#architecture) · [Quick Start](../quickstart.md)*
