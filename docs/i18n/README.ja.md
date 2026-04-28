@@ -34,7 +34,7 @@
 > ガバナンスします。モデルレベルの安全性については、
 > [Azure AI Content Safety](https://learn.microsoft.com/azure/ai-services/content-safety/) をご参照ください。
 
-AI エージェントのためのランタイムガバナンス — **OWASP Agentic リスク全10項目**を **9,500 以上のテスト**でカバーする唯一のツールキット。エージェントが*何を言うか*ではなく、*何をするか*をガバナンス — 決定論的ポリシー適用、ゼロトラストID、実行サンドボックス、SRE — **Python · TypeScript · .NET · Rust · Go**
+AI エージェントのためのランタイムガバナンス — **OWASP Agentic リスク全10項目**を **13,000 以上のテスト**でカバーする唯一のツールキット。エージェントが*何を言うか*ではなく、*何をするか*をガバナンス — 決定論的ポリシー適用、ゼロトラストID、実行サンドボックス、SRE — **Python · TypeScript · .NET · Rust · Go**
 
 > **あらゆるスタックに対応** — AWS Bedrock、Google ADK、Azure AI、LangChain、CrewAI、AutoGen、OpenAI Agents、LlamaIndex など。`pip install` のみでベンダーロックインなし。
 

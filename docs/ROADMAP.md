@@ -7,11 +7,11 @@ reflect current direction and priorities. Community input is welcome via
 ## Current Release: v3.2.0 (Public Preview)
 
 ### Shipped
-- 8 Python packages (agent-os, agent-mesh, agent-hypervisor, agent-sre, agent-compliance, agent-runtime, agent-lightning, agent-marketplace)
+- 11 Python core packages + 19 framework integrations + agent-os modules
 - 5 SDK languages (Python, TypeScript, .NET, Rust, Go)
-- 12+ framework integrations (Semantic Kernel, AutoGen, LangChain, CrewAI, Google ADK, OpenAI Agents, MCP, A2A, etc.)
+- 19 framework integrations (Semantic Kernel, AutoGen, LangChain, CrewAI, Google ADK, OpenAI Agents, MCP, A2A, Haystack, LangFlow, LangGraph, LlamaIndex, Flowise, Mastra, Pydantic AI, etc.)
 - 32 tutorials + 7 policy-as-code chapters
-- 9,500+ tests, 10/10 OWASP Agentic coverage
+- 13,000+ tests, 10/10 OWASP Agentic coverage
 - OpenClaw sidecar for Kubernetes governance
 - Container images on GHCR (trust-engine, policy-server, audit-collector, api-gateway)
 

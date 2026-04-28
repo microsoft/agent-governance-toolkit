@@ -27,7 +27,7 @@
 > (LLM)的输入/输出，也不执行内容审核。它是在应用层对 *代理的行为* (工具调用、资源访问、
 > 代理间通信)进行治理。对于模型层面的安全，请参考[Azure AI Content Safety](https://learn.microsoft.com/azure/ai-services/content-safety/)。
 
-面向 AI 代理的运行时治理 — 唯一一个覆盖全部 **10 项 OWASP Agentic 风险** 并提供 **9,500+ 测试** 的工具包。 它治理的是代理 *做什么*, 而不仅仅是说什么 — 包括确定性策略执行、零信任身份认证、执行沙箱，以及站点可靠性工程(SRE) — 支持 **Python · TypeScript · .NET · Rust · Go**
+面向 AI 代理的运行时治理 — 唯一一个覆盖全部 **10 项 OWASP Agentic 风险** 并提供 **13,000+ 测试** 的工具包。 它治理的是代理 *做什么*, 而不仅仅是说什么 — 包括确定性策略执行、零信任身份认证、执行沙箱，以及站点可靠性工程(SRE) — 支持 **Python · TypeScript · .NET · Rust · Go**
 
 > **适用于任何技术栈** — 支持 AWS Bedrock, Google ADK, Azure AI, LangChain, CrewAI, AutoGen, OpenAI Agents, LlamaIndex 等。 只需通过 `pip install` 即可使用，无厂商锁定。
 
