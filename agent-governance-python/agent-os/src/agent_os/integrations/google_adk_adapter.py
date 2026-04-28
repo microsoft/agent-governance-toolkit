@@ -842,15 +842,23 @@ class GovernancePlugin(_PluginBase):  # type: ignore[misc]
     async def on_user_message_callback(
         self, *, invocation_context: Any, user_message: Any
     ) -> Any:
-        """Content-filter the raw user message."""
+        """Content-filter the raw user message.
+
+        Validates the ``user_message`` structure defensively: if ``parts``
+        is not iterable or individual parts lack a ``text`` attribute the
+        method degrades gracefully without raising.
+        """
         cancelled = self._check_cancelled(invocation_context)
         if cancelled:
             return cancelled  # type: ignore[return-value]
 
-        # Extract text from Content object
+        # Extract text from Content object — defensive against malformed input
         text = ""
         parts = getattr(user_message, "parts", None)
-        if parts:
+        if parts is not None:
+            # Ensure parts is actually iterable (not a scalar or string)
+            if not hasattr(parts, "__iter__") or isinstance(parts, (str, bytes)):
+                parts = []
             for part in parts:
                 t = getattr(part, "text", None)
                 if t:

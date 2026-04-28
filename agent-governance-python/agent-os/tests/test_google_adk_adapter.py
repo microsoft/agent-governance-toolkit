@@ -1171,3 +1171,175 @@ class TestEnhancedHealthCheck:
         assert k._model_call_count == 0
         assert k._prompt_tokens == 0
         assert k._completion_tokens == 0
+
+
+# ── Edge-Case / Robustness Tests ─────────────────────────────────────
+
+class TestEdgeCases:
+    """Edge-case tests for malformed inputs, boundary conditions,
+    and graceful degradation — requested by CI review bots."""
+
+    # -- Malformed user_message inputs --
+
+    @pytest.mark.asyncio
+    async def test_user_message_none_parts(self):
+        """on_user_message_callback handles user_message with parts=None."""
+        k = GoogleADKKernel(blocked_patterns=["DROP TABLE"])
+        plugin = k.as_plugin()
+        msg = MagicMock()
+        msg.parts = None
+        inv = MagicMock()
+        inv.invocation_id = "inv-edge-1"
+        result = await plugin.on_user_message_callback(
+            invocation_context=inv, user_message=msg
+        )
+        assert result is None  # no crash, no false positive
+
+    @pytest.mark.asyncio
+    async def test_user_message_parts_is_string(self):
+        """on_user_message_callback handles parts being a raw string (not list)."""
+        k = GoogleADKKernel(blocked_patterns=["DROP TABLE"])
+        plugin = k.as_plugin()
+        msg = MagicMock()
+        msg.parts = "this is not a list"
+        inv = MagicMock()
+        inv.invocation_id = "inv-edge-2"
+        result = await plugin.on_user_message_callback(
+            invocation_context=inv, user_message=msg
+        )
+        assert result is None  # graceful degradation
+
+    @pytest.mark.asyncio
+    async def test_user_message_parts_is_integer(self):
+        """on_user_message_callback handles parts being an integer."""
+        k = GoogleADKKernel(blocked_patterns=["DROP TABLE"])
+        plugin = k.as_plugin()
+        msg = MagicMock()
+        msg.parts = 42
+        inv = MagicMock()
+        inv.invocation_id = "inv-edge-3"
+        result = await plugin.on_user_message_callback(
+            invocation_context=inv, user_message=msg
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_user_message_missing_parts_attr(self):
+        """on_user_message_callback handles user_message without parts attr."""
+        k = GoogleADKKernel(blocked_patterns=["DROP TABLE"])
+        plugin = k.as_plugin()
+        msg = object()  # no .parts at all
+        inv = MagicMock()
+        inv.invocation_id = "inv-edge-4"
+        result = await plugin.on_user_message_callback(
+            invocation_context=inv, user_message=msg
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_user_message_parts_with_no_text(self):
+        """Parts that lack a .text attribute are silently skipped."""
+        k = GoogleADKKernel(blocked_patterns=["DROP TABLE"])
+        plugin = k.as_plugin()
+        part_no_text = MagicMock(spec=[])  # no attributes at all
+        msg = MagicMock()
+        msg.parts = [part_no_text]
+        inv = MagicMock()
+        inv.invocation_id = "inv-edge-5"
+        result = await plugin.on_user_message_callback(
+            invocation_context=inv, user_message=msg
+        )
+        assert result is None
+
+    # -- ADKExecutionContext boundary conditions --
+
+    def test_context_empty_invocation_id(self):
+        """ADKExecutionContext works with an empty invocation_id."""
+        ctx = ADKExecutionContext(
+            agent_id="test", session_id="sess",
+            policy=GovernancePolicy(), invocation_id=""
+        )
+        assert ctx.invocation_id == ""
+        assert ctx.cancelled is False
+
+    def test_context_large_token_counts(self):
+        """ADKExecutionContext supports very large token counts."""
+        ctx = ADKExecutionContext(
+            agent_id="test", session_id="sess",
+            policy=GovernancePolicy(),
+            prompt_tokens=10**9, completion_tokens=10**9,
+            model_calls=10**6,
+        )
+        assert ctx.prompt_tokens == 10**9
+        assert ctx.completion_tokens == 10**9
+        assert ctx.model_calls == 10**6
+
+    # -- cancel_run edge cases --
+
+    def test_cancel_run_nonexistent_context(self):
+        """cancel_run for an ID with no context doesn't raise."""
+        k = GoogleADKKernel()
+        # No context exists for this ID — should not raise
+        k.cancel_run("does-not-exist")
+        assert k.is_cancelled("does-not-exist")
+
+    def test_cancel_run_empty_string_id(self):
+        """cancel_run works with empty string invocation ID."""
+        k = GoogleADKKernel()
+        k.cancel_run("")
+        assert k.is_cancelled("")
+
+    # -- GovernancePlugin fallback base class --
+
+    def test_governance_plugin_is_class(self):
+        """GovernancePlugin is always a usable class regardless of ADK install."""
+        assert isinstance(GovernancePlugin, type)
+        k = GoogleADKKernel()
+        plugin = k.as_plugin()
+        assert hasattr(plugin, "before_run_callback")
+        assert hasattr(plugin, "after_run_callback")
+        assert hasattr(plugin, "before_tool_callback")
+        assert hasattr(plugin, "after_tool_callback")
+
+    # -- health_check resilience --
+
+    def test_health_check_negative_counters(self):
+        """health_check returns data even if counters are unexpected values."""
+        k = GoogleADKKernel()
+        k._model_call_count = -1  # shouldn't happen, but shouldn't crash
+        k._prompt_tokens = -100
+        hc = k.health_check()
+        assert hc["model_calls"] == -1
+        assert hc["token_usage"]["prompt"] == -100
+        assert "status" in hc
+
+    @pytest.mark.asyncio
+    async def test_before_tool_malformed_tool_context(self):
+        """before_tool_callback handles tool_context without expected attrs."""
+        k = GoogleADKKernel(blocked_tools=["shell"])
+        plugin = k.as_plugin()
+        inv = MagicMock()
+        inv.invocation_id = "inv-edge-6"
+        # tool_context without .function_name or .tool_name
+        tc = object()
+        result = await plugin.before_tool_callback(
+            tool=MagicMock(name="safe_tool"),
+            tool_args={"input": "hello"},
+            tool_context=tc,
+        )
+        # Should not crash — falls back to tool.name or "unknown"
+        assert result is None or isinstance(result, dict)
+
+    @pytest.mark.asyncio
+    async def test_on_model_error_none_error(self):
+        """on_model_error_callback handles error=None gracefully."""
+        k = GoogleADKKernel()
+        plugin = k.as_plugin()
+        result = await plugin.on_model_error_callback(
+            callback_context=MagicMock(),
+            llm_request=None,
+            error=None,
+        )
+        assert result is None
+        # Should have recorded an audit event with "unknown" error
+        assert any(e.event_type == "model_error" for e in k._audit_log)

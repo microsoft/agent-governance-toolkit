@@ -25,6 +25,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AGENT_OS_EXECUTION_TOKENS="agent-id=token"` for packaged-server bootstrap
   credentials. These tokens remain valid for the life of the process unless
   revoked explicitly.
+- **Google ADK `GovernancePlugin`**: Runner-scoped governance via ADK's
+  `BasePlugin` with all 12 lifecycle hooks (before/after run, model, tool,
+  agent, plus event and user-message callbacks).
+- **`ADKExecutionContext`**: Per-run state tracking dataclass with invocation
+  ID, agent names, token usage (`prompt_tokens`, `completion_tokens`),
+  model call count, and cancellation flag.
+- **SIGKILL / cancellation**: `GoogleADKKernel.cancel_run()` and
+  `is_cancelled()` for immediate run termination with audit trail.
+- **`GoogleADKKernel.as_plugin()`**: Factory method for one-line `Runner`
+  plugin registration.
+- **Enhanced `health_check()`**: Now includes `model_calls`, `token_usage`,
+  `cancelled_runs`, and `context_count` metrics.
 
 ### Migration Notes
 - Configure `GovServer(execute_authenticator=...)` or set
