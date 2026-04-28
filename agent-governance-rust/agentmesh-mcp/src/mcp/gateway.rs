@@ -487,8 +487,7 @@ mod tests {
 
     #[test]
     fn authenticated_requests_record_audit_entries() {
-        let (gateway, session_token, audit) =
-            gateway_with_limit(McpGatewayConfig::default(), 2);
+        let (gateway, session_token, audit) = gateway_with_limit(McpGatewayConfig::default(), 2);
         let request = McpGatewayRequest {
             agent_id: "did:agentmesh:test".into(),
             tool_name: "db.read".into(),
