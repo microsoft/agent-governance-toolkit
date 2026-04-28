@@ -63,7 +63,13 @@ from agent_os.integrations.anthropic_adapter import AnthropicKernel, GovernedAnt
 from agent_os.integrations.autogen_adapter import AutoGenKernel
 from agent_os.integrations.crewai_adapter import CrewAIKernel
 from agent_os.integrations.gemini_adapter import GeminiKernel, GovernedGeminiModel
-from agent_os.integrations.google_adk_adapter import GoogleADKKernel
+from agent_os.integrations.google_adk_adapter import (
+    ADKExecutionContext,
+    AuditEvent as ADKAuditEvent,
+    GovernancePlugin as ADKGovernancePlugin,
+    GoogleADKKernel,
+    PolicyConfig as ADKPolicyConfig,
+)
 from agent_os.integrations.guardrails_adapter import GuardrailsKernel
 from agent_os.integrations.langchain_adapter import LangChainKernel
 try:
@@ -179,6 +185,10 @@ __all__ = [
     "GuardrailsKernel",
     # Google ADK
     "GoogleADKKernel",
+    "ADKGovernancePlugin",
+    "ADKExecutionContext",
+    "ADKPolicyConfig",
+    "ADKAuditEvent",
     # A2A (Agent-to-Agent)
     "A2AGovernanceAdapter",
     "A2APolicy",

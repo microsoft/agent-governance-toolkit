@@ -84,7 +84,7 @@
 | Semantic Kernel | 27K ⭐ | [microsoft/semantic-kernel#13556](https://github.com/microsoft/semantic-kernel/issues/13556) |
 | smolagents | 25K ⭐ | ✅ Adapter built — [huggingface/smolagents#1989](https://github.com/huggingface/smolagents/issues/1989) |
 | LangGraph | 24K ⭐ | [langchain-ai/langgraph#6824](https://github.com/langchain-ai/langgraph/issues/6824) |
-| Google ADK | 18K ⭐ | ✅ Adapter built — [google/adk-python#4517](https://github.com/google/adk-python/issues/4517) |
+| Google ADK | 18K ⭐ | ✅ Adapter + GovernancePlugin — [google/adk-python#4517](https://github.com/google/adk-python/issues/4517) |
 | PydanticAI | 15K ⭐ | ✅ Adapter built — [pydantic/pydantic-ai#4335](https://github.com/pydantic/pydantic-ai/issues/4335) |
 | OpenAI Agents SDK | — | [openai/openai-agents-python#2515](https://github.com/openai/openai-agents-python/issues/2515) |
 | A2A Protocol | 21K ⭐ | [a2aproject/A2A#1501](https://github.com/a2aproject/A2A/issues/1501) |
