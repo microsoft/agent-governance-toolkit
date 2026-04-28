@@ -535,6 +535,9 @@ jobs:
 
       - name: Run documented contributor flow
         run: |
+          export HOST_UID="$(id -u)"
+          export HOST_GID="$(id -g)"
+          echo "Running compose with HOST_UID=${HOST_UID} HOST_GID=${HOST_GID}"
           docker compose up --build dev -d
           docker compose run --rm test
 
