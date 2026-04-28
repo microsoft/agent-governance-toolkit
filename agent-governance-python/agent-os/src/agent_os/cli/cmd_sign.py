@@ -113,7 +113,7 @@ def cmd_sign_keygen(args: argparse.Namespace) -> int:
     )
     fingerprint = base64.b64encode(raw_pub).decode()[:16]
 
-    print(f"✅ Keypair generated:")
+    print("✅ Keypair generated:")
     print(f"   Private key: {priv_path}")
     print(f"   Public key:  {pub_path}")
     print(f"   Fingerprint: {fingerprint}...")
