@@ -460,13 +460,6 @@ stages:
                     "parameters": [],
                     "toolName": "sign",
                     "toolVersion": "1.0"
-                  },
-                  {
-                    "keyCode": "CP-401405",
-                    "operationSetCode": "NuGetVerify",
-                    "parameters": [],
-                    "toolName": "sign",
-                    "toolVersion": "1.0"
                   }
                 ]
 
