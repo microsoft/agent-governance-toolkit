@@ -191,6 +191,50 @@ To launch the optional Agent Hypervisor dashboard:
 docker compose --profile dashboard up --build dashboard
 ```
 
+### Pre-push checklist (recommended)
+
+Run these before pushing a PR. Each step catches a different class of bug
+and has a different cycle-time cost.
+
+1. **Inner loop — test the package you changed:**
+
+   ```bash
+   cd agent-governance-python/<package>
+   pytest tests/ -q
+   ```
+
+   *Cycle time: seconds. Catches: the bug you just wrote.*
+
+2. **Inner loop — lint the package you changed:**
+
+   ```bash
+   ruff check agent-governance-python/<package>/src --select E,F,W --ignore E501
+   ```
+
+   *Cycle time: seconds. Catches: lint failures CI would flag.*
+
+3. **Pre-push integration — run the full Docker test suite:**
+
+   ```bash
+   docker compose up --build dev -d
+   docker compose run --rm test
+   ```
+
+   *Cycle time: ~3 min cold, ~30 s warm. **This catches integration bugs
+   that per-package tests cannot see**, including shim/canonical drift,
+   sibling-package conflicts, Dockerfile drift, and line-ending issues.
+   This is the same flow CI gates on (`docker-compose-test` job).*
+
+4. **Push and let CI handle the rest** — multi-version Python, .NET,
+   TypeScript, Rust, Go, lint, build, security scanners, supply-chain
+   audits. Don't try to replicate all of CI locally.
+
+> **Why step 3 matters:** PR #1517 hardened a `trusted_keys` field but
+> missed the canonical implementation behind a backward-compat shim.
+> Per-package CI passed (the canonical impl wasn't installed in
+> isolation). The bug only surfaced under `docker compose run --rm test`,
+> which exercises the integrated install end users actually receive.
+
 ### Package Structure
 
 This repo includes these core packages and standalone SDKs today:
