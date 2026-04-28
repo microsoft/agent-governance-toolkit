@@ -4,12 +4,17 @@
 package agentmesh
 
 import (
+	"crypto/ed25519"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
 	"sync"
 )
+
+// ErrPeerVerificationEvidenceRequired is returned when VerifyPeer lacks independent verification evidence.
+var ErrPeerVerificationEvidenceRequired = errors.New("peer verification requires independent evidence")
 
 // TrustScore represents an agent's current trust standing.
 type TrustScore struct {
@@ -51,15 +56,33 @@ func NewTrustManager(config TrustConfig) *TrustManager {
 	return tm
 }
 
-// VerifyPeer verifies a peer's identity and returns the current trust score.
+// VerifyPeer returns the current trust score but fails closed unless the caller has
+// independent verification evidence beyond the peer's self-attested identity data.
 func (tm *TrustManager) VerifyPeer(peerID string, peerIdentity *AgentIdentity) (*TrustVerificationResult, error) {
-	verified := peerIdentity != nil && peerIdentity.PublicKey != nil && len(peerIdentity.PublicKey) == 32
 	score := tm.GetTrustScore(peerID)
-	return &TrustVerificationResult{
+	result := &TrustVerificationResult{
 		PeerID:   peerID,
-		Verified: verified,
+		Verified: false,
 		Score:    score,
-	}, nil
+	}
+
+	if peerIdentity == nil {
+		return result, fmt.Errorf("%w: no peer identity provided for %q", ErrPeerVerificationEvidenceRequired, peerID)
+	}
+	if len(peerIdentity.PublicKey) != ed25519.PublicKeySize {
+		return result, fmt.Errorf(
+			"%w: peer %q presented a self-attested public key with invalid length %d",
+			ErrPeerVerificationEvidenceRequired,
+			peerID,
+			len(peerIdentity.PublicKey),
+		)
+	}
+
+	return result, fmt.Errorf(
+		"%w: peer %q only presented self-attested identity data",
+		ErrPeerVerificationEvidenceRequired,
+		peerID,
+	)
 }
 
 // GetTrustScore returns the current trust score for an agent.

@@ -1,8 +1,8 @@
 package agentmesh
 
 import (
+	"errors"
 	"path/filepath"
-
 	"sync"
 	"testing"
 )
@@ -74,15 +74,18 @@ func TestTierAssignment(t *testing.T) {
 	}
 }
 
-func TestVerifyPeer(t *testing.T) {
+func TestVerifyPeerFailsClosedForSelfAttestedIdentity(t *testing.T) {
 	tm := NewTrustManager(DefaultTrustConfig())
 	id, _ := GenerateIdentity("peer1", nil)
 	result, err := tm.VerifyPeer("peer1", id)
-	if err != nil {
-		t.Fatal(err)
+	if !errors.Is(err, ErrPeerVerificationEvidenceRequired) {
+		t.Fatalf("expected ErrPeerVerificationEvidenceRequired, got %v", err)
 	}
-	if !result.Verified {
-		t.Error("expected peer to be verified")
+	if result.Verified {
+		t.Error("self-attested identity should not be verified")
+	}
+	if result.Score.Overall != 0.5 {
+		t.Errorf("score = %f, want default 0.5", result.Score.Overall)
 	}
 }
 
@@ -255,10 +258,10 @@ func TestTrustTierBoundaries(t *testing.T) {
 		{0.0, "low"},
 		{0.1, "low"},
 		{0.49, "low"},
-{0.5, "medium"},  // boundary: exactly at medium threshold
+		{0.5, "medium"}, // boundary: exactly at medium threshold
 		{0.6, "medium"},
 		{0.79, "medium"},
-{0.8, "high"},    // boundary: exactly at high threshold
+		{0.8, "high"}, // boundary: exactly at high threshold
 		{0.9, "high"},
 		{1.0, "high"},
 	}
@@ -301,8 +304,8 @@ func TestGetTrustScoreForUnknownAgent(t *testing.T) {
 func TestVerifyPeerWithNilIdentity(t *testing.T) {
 	tm := NewTrustManager(DefaultTrustConfig())
 	result, err := tm.VerifyPeer("nil-peer", nil)
-	if err != nil {
-		t.Fatal(err)
+	if !errors.Is(err, ErrPeerVerificationEvidenceRequired) {
+		t.Fatalf("expected ErrPeerVerificationEvidenceRequired, got %v", err)
 	}
 	if result.Verified {
 		t.Error("nil identity should not be verified")
@@ -316,8 +319,8 @@ func TestVerifyPeerWithInvalidKeyLength(t *testing.T) {
 		PublicKey: []byte("too-short"),
 	}
 	result, err := tm.VerifyPeer("short-key-peer", id)
-	if err != nil {
-		t.Fatal(err)
+	if !errors.Is(err, ErrPeerVerificationEvidenceRequired) {
+		t.Fatalf("expected ErrPeerVerificationEvidenceRequired, got %v", err)
 	}
 	if result.Verified {
 		t.Error("identity with short key should not be verified")
