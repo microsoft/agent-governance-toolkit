@@ -34,9 +34,8 @@ jobs:
     name: ${{ matrix.label }}
     runs-on: ubuntu-latest
     if: >-
-      github.event.pull_request.draft == false &&
-      github.actor != 'dependabot[bot]' &&
-      github.actor != 'github-actions[bot]'
+      github.event.pull_request.draft != true &&
+      github.actor != 'dependabot[bot]'
     continue-on-error: true
     strategy:
       fail-fast: false
