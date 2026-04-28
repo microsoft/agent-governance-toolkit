@@ -181,15 +181,21 @@ impl TrustManager {
             .collect()
     }
 
-    /// Verify a peer agent's identity via challenge-response.
+    /// Verify a peer agent's signed proof for a caller-provided challenge.
     ///
-    /// Generates a random 32-byte challenge, asks the peer to sign it,
-    /// then verifies the signature against the peer's public key.
-    pub fn verify_peer(&self, _peer_id: &str, peer_identity: &AgentIdentity) -> bool {
-        let mut challenge = [0u8; 32];
-        rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut challenge);
-        let signature = peer_identity.sign(&challenge);
-        peer_identity.verify(&challenge, &signature)
+    /// The caller is responsible for generating the challenge and collecting the
+    /// peer's signature. This method fails closed unless the claimed peer
+    /// identifier matches the supplied identity and the signature verifies
+    /// against the provided challenge.
+    pub fn verify_peer(
+        &self,
+        peer_id: &str,
+        peer_identity: &AgentIdentity,
+        challenge: &[u8],
+        signature: &[u8],
+    ) -> bool {
+        claimed_peer_matches_identity(peer_id, peer_identity)
+            && peer_identity.verify(challenge, signature)
     }
 
     /// Apply time-based decay to a raw score.
@@ -234,6 +240,15 @@ fn epoch_now() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+fn claimed_peer_matches_identity(peer_id: &str, peer_identity: &AgentIdentity) -> bool {
+    if peer_id.is_empty() {
+        return false;
+    }
+
+    peer_id == peer_identity.did
+        || peer_identity.did.strip_prefix("did:agentmesh:") == Some(peer_id)
 }
 
 #[cfg(test)]
@@ -422,11 +437,39 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_peer_valid_identity() {
+    fn test_verify_peer_accepts_valid_peer_signature() {
         let tm = TrustManager::with_defaults();
         let peer =
             crate::identity::AgentIdentity::generate("peer-agent", vec!["cap".into()]).unwrap();
-        assert!(tm.verify_peer("peer-agent", &peer));
+        let challenge = b"peer-auth-challenge";
+        let signature = peer.sign(challenge);
+
+        assert!(tm.verify_peer("peer-agent", &peer, challenge, &signature));
+        assert!(tm.verify_peer(&peer.did, &peer, challenge, &signature));
+    }
+
+    #[test]
+    fn test_verify_peer_rejects_mismatched_claimed_peer() {
+        let tm = TrustManager::with_defaults();
+        let peer =
+            crate::identity::AgentIdentity::generate("peer-agent", vec!["cap".into()]).unwrap();
+        let challenge = b"peer-auth-challenge";
+        let signature = peer.sign(challenge);
+
+        assert!(!tm.verify_peer("other-peer", &peer, challenge, &signature));
+    }
+
+    #[test]
+    fn test_verify_peer_rejects_signature_not_created_by_peer() {
+        let tm = TrustManager::with_defaults();
+        let peer =
+            crate::identity::AgentIdentity::generate("peer-agent", vec!["cap".into()]).unwrap();
+        let impostor =
+            crate::identity::AgentIdentity::generate("impostor-agent", vec!["cap".into()]).unwrap();
+        let challenge = b"peer-auth-challenge";
+        let signature = impostor.sign(challenge);
+
+        assert!(!tm.verify_peer("peer-agent", &peer, challenge, &signature));
     }
 
     #[test]
