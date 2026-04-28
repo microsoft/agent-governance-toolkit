@@ -94,6 +94,44 @@ func TestGovernanceMiddlewareStackPromptDefenseDenies(t *testing.T) {
 	}
 }
 
+func TestGovernanceMiddlewareStackKillSwitchDenies(t *testing.T) {
+	policy := NewPolicyEngine([]PolicyRule{{
+		Action: "tool.run",
+		Effect: Allow,
+	}})
+	registry := NewKillSwitchRegistry()
+	if _, err := registry.Activate(AgentKillSwitchScope("agent-1"), KillSwitchReasonSecurityIncident, "containment"); err != nil {
+		t.Fatalf("Activate: %v", err)
+	}
+
+	stack, err := CreateGovernanceMiddlewareStack(MiddlewareStackConfig{
+		Policy:       policy,
+		KillSwitches: registry,
+	})
+	if err != nil {
+		t.Fatalf("CreateGovernanceMiddlewareStack: %v", err)
+	}
+
+	operation := &GovernedOperation{
+		AgentID:  "agent-1",
+		Action:   "tool.run",
+		ToolName: "calculator",
+	}
+	err = stack.Execute(operation, func(*GovernedOperation) error {
+		t.Fatal("expected kill switch denial before handler execution")
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected kill switch denial")
+	}
+	if !errors.Is(err, ErrKillSwitchActive) {
+		t.Fatalf("expected ErrKillSwitchActive, got %v", err)
+	}
+	if operation.Metadata == nil {
+		t.Fatal("expected kill switch metadata to be populated")
+	}
+}
+
 func TestNewHTTPGovernanceMiddleware(t *testing.T) {
 	policy := NewPolicyEngine([]PolicyRule{{
 		Action:     "http.post",
@@ -157,6 +195,38 @@ func TestNewHTTPGovernanceMiddlewareFailsClosedWithoutVerifiedIdentity(t *testin
 	}
 	if !strings.Contains(response.Body.String(), ErrVerifiedAgentIdentityRequired.Error()) {
 		t.Fatalf("body = %q, want verified identity error", response.Body.String())
+	}
+}
+
+func TestNewHTTPGovernanceMiddlewareKillSwitchReturnsForbidden(t *testing.T) {
+	policy := NewPolicyEngine([]PolicyRule{{
+		Action: "http.post",
+		Effect: Allow,
+	}})
+	registry := NewKillSwitchRegistry()
+	if _, err := registry.Activate(GlobalKillSwitchScope(), KillSwitchReasonOperatorRequest, "maintenance"); err != nil {
+		t.Fatalf("Activate: %v", err)
+	}
+
+	middleware, err := NewHTTPGovernanceMiddleware(HTTPMiddlewareConfig{
+		Policy:          policy,
+		KillSwitches:    registry,
+		AgentIDResolver: LegacyTrustedHeaderAgentIDResolver("X-Agent-ID"),
+	})
+	if err != nil {
+		t.Fatalf("NewHTTPGovernanceMiddleware: %v", err)
+	}
+
+	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("expected kill switch to short-circuit request")
+	}))
+
+	request := httptest.NewRequest(http.MethodPost, "/run", nil)
+	request.Header.Set("X-Agent-ID", "did:agentmesh:kill-switch")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
 	}
 }
 
@@ -411,5 +481,50 @@ func TestGovernOperationDenied(t *testing.T) {
 	}
 	if !errors.Is(err, ErrPolicyDenied) {
 		t.Fatalf("expected ErrPolicyDenied, got %v", err)
+	}
+}
+
+func TestGovernOperationKillSwitchDenied(t *testing.T) {
+	policy := NewPolicyEngine([]PolicyRule{{
+		Action: "tool.run",
+		Effect: Allow,
+	}})
+	registry := NewKillSwitchRegistry()
+	if _, err := registry.Activate(CapabilityKillSwitchScope("calculator"), KillSwitchReasonOperatorRequest, "maintenance"); err != nil {
+		t.Fatalf("Activate: %v", err)
+	}
+
+	handlerCalled := false
+	err := GovernOperation(
+		"tool.run",
+		map[string]interface{}{"agent_id": "agent-1", "tool_name": "calculator"},
+		policy,
+		nil,
+		nil,
+		"",
+		func() error {
+			handlerCalled = true
+			return nil
+		},
+		WithGovernOperationKillSwitches(registry),
+	)
+	if err == nil {
+		t.Fatal("expected kill switch denial")
+	}
+	if !errors.Is(err, ErrKillSwitchActive) {
+		t.Fatalf("expected ErrKillSwitchActive, got %v", err)
+	}
+	if handlerCalled {
+		t.Fatal("expected kill switch to stop operation handler")
+	}
+}
+
+func TestKillSwitchDecisionErrorFailsClosedWithoutScope(t *testing.T) {
+	err := killSwitchDecisionError(KillSwitchDecision{Allowed: false})
+	if err == nil {
+		t.Fatal("expected kill switch denial")
+	}
+	if !errors.Is(err, ErrKillSwitchActive) {
+		t.Fatalf("expected ErrKillSwitchActive, got %v", err)
 	}
 }
