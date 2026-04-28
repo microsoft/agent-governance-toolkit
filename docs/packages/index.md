@@ -1,6 +1,6 @@
 # Packages
 
-AGT provides 12 packages covering every layer of agent governance.
+AGT provides 50+ packages across 5 ecosystems covering every layer of agent governance.
 
 ```
 +------------------+     +------------------+     +------------------+
@@ -39,5 +39,32 @@ AGT provides 12 packages covering every layer of agent governance.
 
 | Package | Language | Install |
 |---------|---------|---------|
+| [TypeScript SDK](typescript-sdk.md) | TypeScript | `npm install @agent-governance/sdk` |
 | [.NET package](dotnet-sdk.md) | C# / .NET | `dotnet add package Microsoft.AgentGovernance` |
+| [Rust crate](rust-sdk.md) | Rust | `cargo add agentmesh` |
+| [Go module](go-sdk.md) | Go | `go get github.com/microsoft/agent-governance-toolkit` |
 | [VS Code Extension](agent-os-vscode.md) | VS Code | Install from marketplace |
+
+## Framework Integrations (19)
+
+| Integration | Framework | Install |
+|-------------|----------|---------|
+| langchain-agentmesh | LangChain | `pip install langchain-agentmesh` |
+| langgraph-trust | LangGraph | `pip install langgraph-trust` |
+| crewai-agentmesh | CrewAI | `pip install crewai-agentmesh` |
+| adk-agentmesh | Google ADK | `pip install adk-agentmesh` |
+| openai-agents-agentmesh | OpenAI Agents | `pip install openai-agents-agentmesh` |
+| llamaindex-agentmesh | LlamaIndex | `pip install llamaindex-agentmesh` |
+| haystack-agentmesh | Haystack | `pip install haystack-agentmesh` |
+| flowise-agentmesh | Flowise | `pip install flowise-agentmesh` |
+| langflow-agentmesh | LangFlow | `pip install langflow-agentmesh` |
+| mastra-agentmesh | Mastra | `npm install @agentmesh/mastra` |
+| copilot-governance | GitHub Copilot | `npm install @agentmesh/copilot-governance` |
+| pydantic-ai-governance | Pydantic AI | `pip install pydantic-ai-governance` |
+| a2a-protocol | A2A Protocol | `pip install a2a-protocol` |
+| mcp-trust-proxy | MCP | `pip install mcp-trust-proxy` |
+| openshell-skill | NVIDIA OpenShell | `pip install openshell-skill` |
+| agentmesh-avp | Amazon Verified Permissions | `pip install agentmesh-avp` |
+| structural-authz-agentmesh | Structural Authorization | `pip install structural-authz-agentmesh` |
+| nostr-wot | Nostr Web-of-Trust | `pip install nostr-wot` |
+| openai-agents-trust | OpenAI Trust | `pip install openai-agents-trust` |
