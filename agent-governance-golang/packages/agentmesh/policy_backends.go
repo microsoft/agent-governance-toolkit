@@ -29,27 +29,27 @@ const (
 
 // OPAOptions configures an OPA/Rego backend.
 type OPAOptions struct {
-	Mode OPAMode
+	Mode        OPAMode
+	OPAURL      string
+	RegoPath    string
+	RegoContent string
+	Package     string
+	Query       string
+	Timeout     time.Duration
 	// AllowBuiltinFallback permits auto mode to use the builtin evaluator when the OPA CLI is unavailable.
 	AllowBuiltinFallback bool
-	OPAURL               string
-	RegoPath             string
-	RegoContent          string
-	Package              string
-	Query                string
-	Timeout              time.Duration
 }
 
 // OPABackend evaluates execution contexts using OPA/Rego.
 type OPABackend struct {
-	mode                 OPAMode
+	mode        OPAMode
+	opaURL      string
+	regoContent string
+	packageName string
+	query       string
+	timeout     time.Duration
+	httpClient  *http.Client
 	allowBuiltinFallback bool
-	opaURL               string
-	regoContent          string
-	packageName          string
-	query                string
-	timeout              time.Duration
-	httpClient           *http.Client
 }
 
 var opaLookPath = exec.LookPath
@@ -90,16 +90,16 @@ func NewOPABackend(options OPAOptions) *OPABackend {
 	}
 
 	return &OPABackend{
-		mode:                 mode,
-		allowBuiltinFallback: options.AllowBuiltinFallback,
-		opaURL:               strings.TrimRight(opaURL, "/"),
-		regoContent:          regoContent,
-		packageName:          packageName,
-		query:                query,
-		timeout:              timeout,
+		mode:        mode,
+		opaURL:      strings.TrimRight(opaURL, "/"),
+		regoContent: regoContent,
+		packageName: packageName,
+		query:       query,
+		timeout:     timeout,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
+		allowBuiltinFallback: options.AllowBuiltinFallback,
 	}
 }
 
@@ -403,25 +403,25 @@ const (
 
 // CedarOptions configures a Cedar backend.
 type CedarOptions struct {
-	Mode CedarMode
+	Mode          CedarMode
+	PolicyPath    string
+	PolicyContent string
+	EntitiesPath  string
+	Entities      []map[string]interface{}
+	SchemaPath    string
+	Timeout       time.Duration
 	// AllowBuiltinFallback permits auto mode to use the builtin evaluator when the Cedar CLI is unavailable.
 	AllowBuiltinFallback bool
-	PolicyPath           string
-	PolicyContent        string
-	EntitiesPath         string
-	Entities             []map[string]interface{}
-	SchemaPath           string
-	Timeout              time.Duration
 }
 
 // CedarBackend evaluates execution contexts using Cedar policies.
 type CedarBackend struct {
-	mode                 CedarMode
+	mode          CedarMode
+	policyContent string
+	entities      []map[string]interface{}
+	schemaPath    string
+	timeout       time.Duration
 	allowBuiltinFallback bool
-	policyContent        string
-	entities             []map[string]interface{}
-	schemaPath           string
-	timeout              time.Duration
 }
 
 var cedarLookPath = exec.LookPath
@@ -455,12 +455,12 @@ func NewCedarBackend(options CedarOptions) *CedarBackend {
 	}
 
 	return &CedarBackend{
-		mode:                 mode,
+		mode:          mode,
+		policyContent: policyContent,
+		entities:      entities,
+		schemaPath:    options.SchemaPath,
+		timeout:       timeout,
 		allowBuiltinFallback: options.AllowBuiltinFallback,
-		policyContent:        policyContent,
-		entities:             entities,
-		schemaPath:           options.SchemaPath,
-		timeout:              timeout,
 	}
 }
 
