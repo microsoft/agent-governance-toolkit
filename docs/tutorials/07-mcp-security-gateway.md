@@ -1,7 +1,19 @@
 # Tutorial 07 — MCP Security Gateway
 
+> **Package:** `agent-os-kernel` · **Time:** 30 minutes · **Prerequisites:** Python 3.10+
+
+---
+
+## What You'll Learn
+
+- Tool poisoning detection and definition drift monitoring
+- Parameter sanitization and schema enforcement
+- Human-in-the-loop approval workflows for sensitive tools
+
+---
+
 The MCP Security Gateway is a governance layer that sits between MCP clients and
-servers, enforcing policy-based controls on every tool call.  It defends against
+servers, enforcing policy-based controls on every tool call.It defends against
 tool misuse ([OWASP ASI02](https://genai.owasp.org/)) and MCP-layer attacks such
 as tool poisoning, rug pulls, and cross-server impersonation—before an agent can
 act on a compromised tool definition.
@@ -1061,13 +1073,13 @@ disclaimer: "Custom rules for production deployment"
 
 | Component | Path |
 |-----------|------|
-| MCPGateway, AuditEntry, GatewayConfig | `packages/agent-os/src/agent_os/mcp_gateway.py` |
-| MCPSecurityScanner, MCPThreat, MCPThreatType | `packages/agent-os/src/agent_os/mcp_security.py` |
-| CLI (`mcp-scan`) | `packages/agent-os/src/agent_os/cli/mcp_scan.py` |
-| Gateway tests | `packages/agent-os/tests/test_mcp_gateway.py` |
-| Scanner tests | `packages/agent-os/tests/test_mcp_security.py` |
-| CLI tests | `packages/agent-os/tests/test_mcp_scan_cli.py` |
-| GovernancePolicy | `packages/agent-os/src/agent_os/integrations/base.py` |
+| MCPGateway, AuditEntry, GatewayConfig | `agent-governance-python/agent-os/src/agent_os/mcp_gateway.py` |
+| MCPSecurityScanner, MCPThreat, MCPThreatType | `agent-governance-python/agent-os/src/agent_os/mcp_security.py` |
+| CLI (`mcp-scan`) | `agent-governance-python/agent-os/src/agent_os/cli/mcp_scan.py` |
+| Gateway tests | `agent-governance-python/agent-os/tests/test_mcp_gateway.py` |
+| Scanner tests | `agent-governance-python/agent-os/tests/test_mcp_security.py` |
+| CLI tests | `agent-governance-python/agent-os/tests/test_mcp_scan_cli.py` |
+| GovernancePolicy | `agent-governance-python/agent-os/src/agent_os/integrations/base.py` |
 
 ---
 

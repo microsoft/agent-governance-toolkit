@@ -1,4 +1,16 @@
-# 🛑 Tutorial 14 — Kill Switch & Rate Limiting
+# Tutorial 14 — Kill Switch & Rate Limiting
+
+> **Package:** `agentmesh-runtime` · **Time:** 20 minutes · **Prerequisites:** Python 3.11+
+
+---
+
+## What You'll Learn
+
+- Emergency termination with KillSwitch and audit trails
+- Rate limiting with per-agent token bucket enforcement
+- Ring elevation and breach detection
+
+---
 
 **Emergency controls for autonomous agents — the "big red button", rate governors, and ring-breach detection.**
 
@@ -99,7 +111,7 @@ history. The rest of this tutorial covers every component in detail.
 
 ## 3. KillSwitch — Immediate Termination
 
-**Source:** `packages/agent-hypervisor/src/hypervisor/security/kill_switch.py`
+**Source:** `agent-governance-python/agent-hypervisor/src/hypervisor/security/kill_switch.py`
 
 The `KillSwitch` provides immediate, hard termination of an agent with a full
 audit trail. In the public preview, all in-flight saga steps are
@@ -259,7 +271,7 @@ The `KillResult` dataclass is returned from every `kill()` call:
 
 ## 4. AgentRateLimiter — Per-Ring Token Buckets
 
-**Source:** `packages/agent-hypervisor/src/hypervisor/security/rate_limiter.py`
+**Source:** `agent-governance-python/agent-hypervisor/src/hypervisor/security/rate_limiter.py`
 
 The `AgentRateLimiter` enforces per-agent, per-ring rate limits inside the
 hypervisor runtime layer using the token bucket algorithm. Higher-privilege rings
@@ -438,7 +450,7 @@ assert bucket.consume(1.0) is False
 
 ## 5. RateLimiter (Agent Mesh) — HTTP Service Limits
 
-**Source:** `packages/agent-mesh/src/agentmesh/services/rate_limiter.py`
+**Source:** `agent-governance-python/agent-mesh/src/agentmesh/services/rate_limiter.py`
 
 While `AgentRateLimiter` operates inside the hypervisor runtime, the Agent Mesh
 `RateLimiter` applies limits at the trust-proxy service layer. It uses two
@@ -637,7 +649,7 @@ where multiple HTTP handler threads may be checking limits concurrently.
 
 ## 6. RateLimitMiddleware — HTTP Edge Enforcement
 
-**Source:** `packages/agent-mesh/src/agentmesh/services/rate_limit_middleware.py`
+**Source:** `agent-governance-python/agent-mesh/src/agentmesh/services/rate_limit_middleware.py`
 
 The `RateLimitMiddleware` integrates rate limiting with HTTP request handling.
 It extracts agent identity from request headers, checks limits, and decorates
@@ -757,7 +769,7 @@ assert response.status_code == 200
 
 ## 7. RingElevationManager — Temporary Privilege Escalation
 
-**Source:** `packages/agent-hypervisor/src/hypervisor/rings/elevation.py`
+**Source:** `agent-governance-python/agent-hypervisor/src/hypervisor/rings/elevation.py`
 
 The `RingElevationManager` controls temporary ring elevation — allowing an
 agent to operate at a higher privilege level for a limited time. In the
@@ -923,7 +935,7 @@ print(RingElevationManager.DEFAULT_TTL)          # 300 seconds
 
 ## 8. RingBreachDetector — Anomaly Detection
 
-**Source:** `packages/agent-hypervisor/src/hypervisor/rings/breach_detector.py`
+**Source:** `agent-governance-python/agent-hypervisor/src/hypervisor/rings/breach_detector.py`
 
 The `RingBreachDetector` monitors agent behavior for two classes of anomaly:
 
@@ -1436,3 +1448,11 @@ print(f"HTTP: {http_status['agent_tokens']:.0f}/{http_status['agent_capacity']} 
 | **Ring Enforcement** | `RingElevationManager` | Temporary privilege escalation with TTL |
 | **Ring Enforcement** | `RingBreachDetector` | Behavioral anomaly detection with circuit breaker |
 | **Ring Enforcement** | `BreachSeverity` | 5-level severity classification (NONE→CRITICAL) |
+
+---
+
+## Next Steps
+
+- **Execution Sandboxing:** [Tutorial 06 — Execution Sandboxing](06-execution-sandboxing.md)
+- **Observability:** [Tutorial 13 — Observability & Distributed Tracing](13-observability-and-tracing.md)
+- **Agent Reliability:** [Tutorial 05 — Agent Reliability Engineering](05-agent-reliability.md)

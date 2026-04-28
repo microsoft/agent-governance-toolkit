@@ -4,6 +4,14 @@
 
 The Agent Governance Toolkit provides **deterministic application-layer interception** — every agent action is evaluated against policy **before execution**, at sub-millisecond latency. For high-security environments, composes with container/VM isolation for defense-in-depth.
 
+## Video Walkthrough Series
+
+Community video series covering the toolkit architecture:
+
+1. [Agent OS & Policy Engine](https://www.youtube.com/watch?v=jq-3FWk5KlI)
+2. [Agent Mesh & Trust Layer](https://www.youtube.com/watch?v=pCJWqCWpXRI)
+3. [Agent SRE & Observability](https://youtu.be/5Rey8lzgVvs)
+
 ## System Architecture
 
 ```
@@ -68,10 +76,10 @@ AgentMesh assigns trust scores on a 0–1000 scale with the following tiers:
 | 300–499 | Probationary | Limited privileges, under observation |
 | 0–299 | Untrusted | Restricted to read-only or blocked |
 
-Default score for new agents: **500** (Standard tier). Score changes are driven by policy compliance history, successful task completions, and trust boundary violations. Full algorithm documentation is in [`packages/agent-mesh/docs/TRUST-SCORING.md`](../packages/agent-mesh/docs/TRUST-SCORING.md).
+Default score for new agents: **500** (Standard tier). Score changes are driven by policy compliance history, successful task completions, and trust boundary violations. Full algorithm documentation is in [`agent-governance-python/agent-mesh/docs/TRUST-SCORING.md`](../agent-governance-python/agent-mesh/docs/TRUST-SCORING.md).
 
 ## Benchmark Methodology
 
-Policy enforcement benchmarks are measured on a **30-scenario test suite** covering the OWASP Agentic Top 10 risk categories. Results (e.g., policy violation rates, latency) are specific to this test suite and should not be interpreted as universal guarantees. See [`packages/agent-os/modules/control-plane/benchmark/`](../packages/agent-os/modules/control-plane/benchmark/) for methodology, datasets, and reproduction instructions.
+Policy enforcement benchmarks are measured on a **30-scenario test suite** covering the OWASP Agentic Top 10 risk categories. Results (e.g., policy violation rates, latency) are specific to this test suite and should not be interpreted as universal guarantees. See [`agent-governance-python/agent-os/modules/control-plane/benchmark/`](../agent-governance-python/agent-os/modules/control-plane/benchmark/) for methodology, datasets, and reproduction instructions.
 
 Full benchmark results: **[BENCHMARKS.md](../BENCHMARKS.md)**

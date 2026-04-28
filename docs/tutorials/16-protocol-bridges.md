@@ -1,5 +1,18 @@
 # Tutorial 16 — Protocol Bridges (A2A, MCP, IATP)
 
+> **Package:** `agentmesh-platform` · **Time:** 30 minutes · **Prerequisites:** Python 3.11+
+
+---
+
+## What You'll Learn
+
+- A2A task envelopes and trust-gated communication
+- MCP proxy with policy enforcement and trust thresholds
+- IATP attestation and cross-protocol message translation
+- Trust-gated communication between heterogeneous agents
+
+---
+
 ## Connecting Agents Across Protocols with Trust-Gated Communication
 
 **Prerequisites:** `pip install agentmesh-platform a2a-agentmesh mcp-trust-proxy`
@@ -357,7 +370,7 @@ re-verification. Handshakes that exceed the timeout raise
 
 ### 5.3 IATP Protocol Buffer Definitions
 
-IATP is defined in Protocol Buffers (`packages/agent-os/modules/iatp/proto/iatp.proto`).
+IATP is defined in Protocol Buffers (`agent-governance-python/agent-os/modules/iatp/proto/iatp.proto`).
 Key messages:
 
 | Message | Purpose |

@@ -1,7 +1,19 @@
-# Tutorial 4 — Audit Logging & Compliance
+# Tutorial 04 — Audit Logging & Compliance
+
+> **Package:** `agent-governance-toolkit` · **Time:** 25 minutes · **Prerequisites:** Python 3.10+
+
+---
+
+## What You'll Learn
+
+- Append-only audit logs with cryptographic integrity
+- Hash chains for tamper-evident event recording
+- OWASP ASI 2026 compliance mapping and verification
+
+---
 
 Every action an AI agent takes — tool calls, policy decisions, trust
-handshakes — must be recorded in a **tamper-proof** log. Without it,
+handshakes — must be recorded in a **tamper-proof** log.Without it,
 you cannot answer the question every auditor will ask: *"What exactly did
 this agent do, and who authorised it?"*
 
@@ -419,7 +431,7 @@ class PostgresSink:
 
 
 # Use it
-sink = PostgresSink(dsn="postgresql://user:pass@localhost/agents")
+sink = PostgresSink(dsn=os.environ["DATABASE_URL"])  # e.g., postgresql://user:***@host/agents
 audit = AuditLog(sink=sink)
 ```
 
@@ -443,7 +455,7 @@ pip install agent-governance-toolkit
 
 ```bash
 # Human-readable summary
-agent-governance verify
+agt verify
 ```
 
 Output:
@@ -467,12 +479,12 @@ Coverage: 10/10 (100%)
 
 ```bash
 # Machine-readable JSON
-agent-governance verify --json
+agt verify --json
 ```
 
 ```bash
 # Shields.io badge for your README
-agent-governance verify --badge
+agt verify --badge
 ```
 
 ### Secure Audit Handling
@@ -517,15 +529,15 @@ been tampered with:
 
 ```bash
 # Generate a baseline manifest
-agent-governance integrity --generate integrity.json
+agt integrity --generate integrity.json
 
 # Later, verify against it
-agent-governance integrity --manifest integrity.json
+agt integrity --manifest integrity.json
 ```
 
 ```bash
 # JSON output for automation
-agent-governance integrity --manifest integrity.json --json
+agt integrity --manifest integrity.json --json
 ```
 
 The integrity checker verifies:
@@ -684,13 +696,13 @@ jobs:
           pip install agentmesh-platform agent-governance
 
       - name: Generate integrity manifest
-        run: agent-governance integrity --generate integrity.json
+        run: agt integrity --generate integrity.json
 
       - name: Verify OWASP ASI 2026 coverage
-        run: agent-governance verify --json > asi_report.json
+        run: agt verify --json > asi_report.json
 
       - name: Verify supply-chain integrity
-        run: agent-governance integrity --manifest integrity.json --json > integrity_report.json
+        run: agt integrity --manifest integrity.json --json > integrity_report.json
 
       - name: Upload compliance artifacts
         if: always()
@@ -703,7 +715,7 @@ jobs:
             integrity.json
 ```
 
-> **Tip:** `agent-governance verify` exits with code **1** if any
+> **Tip:** `agt verify` exits with code **1** if any
 > control is missing, so the pipeline step will fail automatically.
 
 ---
@@ -747,4 +759,4 @@ entry.to_cloudevent()   # CloudEvents v1.0 JSON envelope
 * **[OWASP ASI 2026](https://owaspai.org/asi/)** — Read the full
   specification for context on each control.
 * **`examples/quickstart.py`** and **`examples/governed_agent.py`** in
-  `packages/agent-compliance/` — runnable demos you can adapt.
+  `agent-governance-python/agent-compliance/` — runnable demos you can adapt.

@@ -1,0 +1,63 @@
+{
+  "name": "@microsoft/agentos-mcp-server",
+  "version": "3.2.2",
+  "description": "Public Preview \u2014 AgentOS MCP Server for Claude Desktop: Build, deploy, and manage policy-compliant autonomous agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "agentos-mcp": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/cli.js",
+    "start:stdio": "node dist/cli.js --stdio",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "agent-os",
+    "claude-desktop",
+    "ai-agents",
+    "agent-safety",
+    "policy-enforcement",
+    "autonomous-agents",
+    "anthropic"
+  ],
+  "author": "Microsoft Corporation",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/agent-governance-toolkit"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "uuid": "14.0.0",
+    "winston": "3.19.0",
+    "yaml": "2.8.3",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "25.6.0",
+    "@types/uuid": "11.0.0",
+    "@typescript-eslint/eslint-plugin": "8.59.1",
+    "@typescript-eslint/parser": "8.59.0",
+    "@vitest/coverage-v8": "4.1.5",
+    "eslint": "10.2.1",
+    "typescript": "6.0.3",
+    "vitest": "4.1.5"
+  },
+  "files": [
+    "dist",
+    "src/templates"
+  ],
+  "mcpName": "io.github.microsoft/agentos"
+}

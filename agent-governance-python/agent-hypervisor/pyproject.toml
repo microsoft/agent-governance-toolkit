@@ -1,0 +1,122 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent_hypervisor"
+version = "3.2.2"
+description = "Public Preview — Agent Hypervisor: Runtime supervisor for multi-agent Shared Sessions with Execution Rings, Joint Liability, Saga Orchestration, and hash-chained audit trails"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
+]
+maintainers = [
+    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
+]
+keywords = [
+    "ai", "agents", "hypervisor", "trust", "multi-agent",
+    "shared-sessions", "liability", "execution-rings", "saga",
+    "governance", "safety", "audit", "hash-chain",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
+# Core: only pydantic required. Integration adapters use Protocol-based
+# interfaces (duck typing), so external backends are optional.
+dependencies = [
+    "pydantic>=2.4.0,<3.0",
+]
+
+[project.optional-dependencies]
+# Integration adapters (optional — hypervisor works standalone)
+nexus = [
+    "structlog>=24.1.0,<26.0",
+]
+api = [
+    "fastapi>=0.115.0,<1.0",
+    "uvicorn>=0.27.0,<1.0",
+]
+full = [
+    "agent-hypervisor[nexus]",
+]
+dev = [
+    "pytest>=8.0.0,<10.0",
+    "pytest-asyncio>=0.23.0,<2.0",
+    "pytest-cov>=4.0.0,<8.0",
+    "hypothesis>=6.0.0,<7.0",
+    "ruff>=0.4.0,<1.0",
+    "mypy>=1.8.0,<2.0",
+    "jsonschema>=4.0.0,<5.0",
+]
+blockchain = [
+    "web3>=6.0.0,<8.0",  # Reserved for future blockchain anchoring — not yet used
+]
+observability = [
+    "agent-sre>=1.1.0,<4.0",  # PrometheusExporter bridge for RingMetricsCollector
+]
+otel = [
+    "opentelemetry-api>=1.20,<2.0",  # OTel span creation for SagaSpanExporter
+]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit#readme"
+"Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
+"Agent OS" = "https://github.com/microsoft/agent-governance-toolkit"
+"Agent Mesh" = "https://github.com/microsoft/agent-governance-toolkit"
+"Agent SRE" = "https://github.com/microsoft/agent-governance-toolkit"
+
+[project.scripts]
+hypervisor = "hypervisor.cli.session_commands:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hypervisor"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+markers = [
+    "slow: long-running tests (skip with -m 'not slow')",
+    "integration: end-to-end integration tests",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "C4", "UP"]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "E741",   # ambiguous variable name
+    "B904",   # raise-without-from-inside-except
+    "B017",   # assert-raises-exception
+    "UP042",  # str+Enum → StrEnum (needs py311+)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["F401"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.coverage.run]
+source = ["src/hypervisor"]
+branch = true

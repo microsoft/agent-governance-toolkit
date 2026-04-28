@@ -1,0 +1,127 @@
+# Weekly sync of the ATR community detection-rule corpus into examples/atr-community-rules/.
+#
+# Runs every Monday at 09:00 UTC (matching the ai-repo-health cadence) or on manual
+# workflow_dispatch. Pulls the latest `agent-threat-rules` npm package, regenerates
+# atr_community_policy_full.yaml via the committed sync_atr_rules.py, and opens a
+# pull request for human review if the full policy has changed.
+#
+# Design notes:
+#   * Opens a PR; never commits directly. Maintainers retain full veto.
+#   * Uses the built-in gh CLI, no third-party GitHub Actions beyond pinned
+#     actions/checkout and actions/setup-python / setup-node (Scorecard requirement).
+#   * npm dependency is installed with --no-save so the main repo lock files stay clean.
+#   * No changes to the curated atr_security_policy.yaml — that file remains hand-maintained.
+#   * Runs sync WITHOUT --strict-regex: a small number of ATR rules use Unicode escape
+#     sequences valid in PCRE/JS but not Python re; strict mode would abort the sync.
+#     Invalid patterns are skipped with a WARNING and logged in the PR body.
+#
+# Scope limits: this workflow only updates one auto-synced YAML. It does not touch
+# the curated policy, tests, or source code.
+
+name: Sync ATR Community Rules
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Monday 09:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-atr-community-rules
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Regenerate full ATR policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "20"
+
+      - name: Install Python dependencies
+        run: pip install --no-cache-dir pyyaml --quiet
+
+      - name: Pull latest ATR package
+        id: atr
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-package-lock agent-threat-rules@2.0.12 --silent
+          ATR_VERSION=$(node -p "require('./node_modules/agent-threat-rules/package.json').version")
+          echo "version=$ATR_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Pulled agent-threat-rules@$ATR_VERSION"
+
+      - name: Regenerate full policy
+        id: regen
+        run: |
+          set -euo pipefail
+          # Note: intentionally NOT using --strict-regex here.
+          # ATR v2.0.12+ contains a small number of rules with Unicode escape sequences
+          # (e.g. \uE0000 tag characters) that are valid PCRE/JS but not Python re.
+          # Strict mode would abort the sync; lenient mode skips them with a WARNING.
+          python examples/atr-community-rules/sync_atr_rules.py \
+            --atr-dir node_modules/agent-threat-rules/rules/ \
+            --output examples/atr-community-rules/atr_community_policy_full.yaml \
+            2>&1 | tee /tmp/sync_output.txt
+          RULE_COUNT=$(python -c "import yaml,sys; d=yaml.safe_load(open(sys.argv[1])); print(len(d.get('rules', [])))" examples/atr-community-rules/atr_community_policy_full.yaml)
+          SKIPPED=$(grep -c "^WARNING: skipping" /tmp/sync_output.txt || true)
+          echo "rule_count=$RULE_COUNT" >> "$GITHUB_OUTPUT"
+          echo "skipped_count=$SKIPPED" >> "$GITHUB_OUTPUT"
+
+      - name: Detect changes
+        id: diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet --exit-code examples/atr-community-rules/atr_community_policy_full.yaml; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No changes — skipping PR."
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open pull request
+        if: steps.diff.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH="bot/sync-atr-${{ steps.atr.outputs.version }}-${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add examples/atr-community-rules/atr_community_policy_full.yaml
+          git commit -m "chore(examples/atr-community-rules): sync ATR v${{ steps.atr.outputs.version }}"
+          git push -u origin "$BRANCH"
+
+          BODY=$(cat <<BODYEOF
+          Automated weekly sync of the ATR community detection-rule corpus.
+
+          - Source: \`agent-threat-rules@${{ steps.atr.outputs.version }}\` on npm
+          - Patterns in refreshed \`atr_community_policy_full.yaml\`: ${{ steps.regen.outputs.rule_count }}
+          - Patterns skipped (invalid Python regex, e.g. Unicode escape sequences): ${{ steps.regen.outputs.skipped_count }}
+
+          This PR is opened for human review — the curated \`atr_security_policy.yaml\` is **not** modified.
+
+          Reviewer checklist:
+          - [ ] Glance at the diff; reject if any rule looks off-scope.
+          - [ ] If ATR upstream is compromised, close this PR without merging and rotate the sync workflow token.
+          - [ ] On merge, the new full policy is available as an opt-in resource; no AGT behaviour changes automatically.
+          BODYEOF
+          )
+
+          gh pr create \
+            --title "chore(examples/atr-community-rules): sync ATR v${{ steps.atr.outputs.version }}" \
+            --body "$BODY" \
+            --base main \
+            --head "$BRANCH"

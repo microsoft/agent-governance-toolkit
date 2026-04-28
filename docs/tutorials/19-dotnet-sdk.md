@@ -1,9 +1,13 @@
-# Tutorial 19 — .NET SDK (Microsoft.AgentGovernance)
+# Tutorial 19 — .NET package (Microsoft.AgentGovernance)
+
+> **Package:** `Microsoft.AgentGovernance` · **Time:** 30 minutes · **Prerequisites:** .NET 8.0+
+
+---
 
 Full agent governance in C# / .NET 8 — the same policy engine, execution rings,
 circuit breakers, prompt injection detection, SLO tracking, saga orchestration,
 rate limiting, zero-trust identity, and OpenTelemetry metrics you get from the
-Python SDK, packaged as a single NuGet library with **zero external dependencies
+Python packages, packaged as a single NuGet library with **zero external dependencies
 beyond YamlDotNet**.
 
 > **Target runtime:** .NET 8.0+
@@ -41,11 +45,28 @@ dotnet add package Microsoft.AgentGovernance
 Or add it to your `.csproj` directly:
 
 ```xml
-<PackageReference Include="Microsoft.AgentGovernance" Version="2.1.0" />
+<PackageReference Include="Microsoft.AgentGovernance" Version="3.2.2" />
 ```
 
 The package targets `net8.0` and has a single dependency — `YamlDotNet` for
 policy parsing.
+
+### Companion extension packages
+
+For official Model Context Protocol servers built with the C# SDK:
+
+```bash
+dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol
+```
+
+For agents built with the real Microsoft Agent Framework (`Microsoft.Agents.AI`):
+
+```bash
+dotnet add package Microsoft.AgentGovernance.Extensions.Microsoft.Agents
+```
+
+See [Tutorial 43 — .NET MAF Hook Integration](43-dotnet-maf-hook-integration.md)
+for the Microsoft Agent Framework hook walkthrough.
 
 ---
 
@@ -1017,7 +1038,7 @@ var result = kernel.EvaluateToolCall("did:mesh:agent", "http_request");
 
 ## OpenTelemetry Metrics
 
-The SDK includes built-in instrumentation using `System.Diagnostics.Metrics` —
+The package includes built-in instrumentation using `System.Diagnostics.Metrics` —
 the .NET standard for metrics that works with any OpenTelemetry-compatible
 exporter (Prometheus, Azure Monitor, Datadog, etc.).
 
@@ -1100,7 +1121,7 @@ using var meterProvider = Sdk.CreateMeterProviderBuilder()
 
 ## Semantic Kernel Integration
 
-The .NET SDK works seamlessly with
+The .NET package works seamlessly with
 [Microsoft Semantic Kernel](https://github.com/microsoft/semantic-kernel) as a
 pre-execution governance filter.
 
@@ -1185,7 +1206,7 @@ var result = govKernel.EvaluateToolCall(
 
 ## Cross-reference: Python tutorials
 
-Every feature in the .NET SDK has an equivalent in the Python SDK. Use these
+Every feature in the .NET package has an equivalent in the Python packages. Use these
 tutorials for deeper conceptual coverage:
 
 | .NET Feature | Python Tutorial | Notes |
@@ -1201,11 +1222,11 @@ tutorials for deeper conceptual coverage:
 
 ## Next Steps
 
-1. **Run the tests** — The SDK includes comprehensive tests in
-   `packages/agent-governance-dotnet/tests/`. Run them with:
+1. **Run the tests** — The package includes comprehensive tests in
+   `agent-governance-dotnet/tests/`. Run them with:
 
    ```bash
-   dotnet test packages/agent-governance-dotnet/AgentGovernance.sln
+   dotnet test agent-governance-dotnet/AgentGovernance.sln
    ```
 
 2. **Write your first policy** — Create a YAML file under `policies/` with
@@ -1232,5 +1253,10 @@ tutorials for deeper conceptual coverage:
    ```
 
 6. **Read the OWASP coverage** — The
-   [.NET SDK README](../../packages/agent-governance-dotnet/README.md) maps
-   each OWASP Agentic AI Top 10 risk to the SDK's mitigation.
+   [.NET package README](../../agent-governance-dotnet/README.md) maps
+   each OWASP Agentic AI Top 10 risk to the package's mitigation.
+
+7. **Explore build-time enforcement** — The .NET SDK enforces nullable
+   reference types, warnings-as-errors, strong-name signing, and deterministic
+   builds at compile time. See [Tutorial 45 — Shift-Left Governance](45-shift-left-governance.md)
+   for the full shift-left story across all SDKs.

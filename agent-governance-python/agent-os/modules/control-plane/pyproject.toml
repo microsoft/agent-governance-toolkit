@@ -1,0 +1,129 @@
+[build-system]
+requires = ["setuptools>=45,<46.0", "wheel", "setuptools_scm[toml]>=6.2,<7.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent_control_plane"
+version = "3.2.2"
+description = "Layer 3: The Framework - A deterministic kernel for zero-violation governance in agentic AI systems with POSIX-style signals, VFS, and kernel/user space separation"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" },
+]
+maintainers = [
+    { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" },
+]
+keywords = [
+    "ai",
+    "agents",
+    "governance",
+    "control-plane",
+    "safety",
+    "policy",
+    "framework",
+    "agentic-ai",
+    "llm",
+    "guardrails",
+    "deterministic",
+    "kernel",
+    "signals",
+    "vfs",
+    "syscall",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Typing :: Typed",
+]
+
+# Core dependencies - standard library only for zero external deps
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/docs"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+"Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
+
+[project.optional-dependencies]
+# Development dependencies
+dev = [
+    "pytest>=7.0.0,<8.0",
+    "pytest-cov>=4.0.0,<5.0",
+    "black>=25.1.0,<26.0",
+    "flake8>=6.0.0,<7.0",
+    "mypy>=1.0.0,<2.0",
+    "pre-commit>=3.0.0,<4.0",
+]
+
+# SQL AST parsing for robust policy enforcement (recommended)
+sql = [
+    "sqlglot>=23.0.0,<24.0",
+]
+
+# Hugging Face Hub integration (for datasets and model cards)
+hf = [
+    "huggingface_hub>=0.20.0,<1.0",
+    "datasets>=2.14.0,<3.0",
+]
+
+# Allowed Layer 2 protocol dependencies (optional integrations)
+# These are the ONLY external agent-related dependencies allowed
+protocols = [
+    # iatp: Inter-Agent Transport Protocol (for message security)
+    # "iatp>=1.0.0",
+    # cmvk: Cryptographic Message Verification Kit (for verification)
+    # "cmvk>=1.0.0",
+    # caas: Context-as-a-Service (for context routing)
+    # "caas>=1.0.0",
+]
+
+# Full installation with all protocol integrations
+full = [
+    # "iatp>=1.0.0",
+    # "cmvk>=1.0.0",
+    # "caas>=1.0.0",
+]
+
+# NOTE: The following dependencies are STRICTLY FORBIDDEN as hard imports:
+# - scak (Self-Correcting Agent Kernel) - should implement KernelInterface
+# - mute-agent - should use ValidatorInterface
+# These packages may depend on agent-control-plane, but NOT vice versa.
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --strict-markers"
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false

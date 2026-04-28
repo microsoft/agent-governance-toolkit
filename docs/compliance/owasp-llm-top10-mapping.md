@@ -1,5 +1,8 @@
 # OWASP Top 10 for LLM Applications — Coverage Mapping
 
+> **Disclaimer**: This document is an internal self-assessment mapping, NOT a validated certification or third-party audit. It documents how the toolkit's capabilities align with the referenced standard. Organizations must perform their own compliance assessments with qualified auditors.
+
+
 **Mapping Version:** 1.0
 **OWASP Reference:** [OWASP Top 10 for LLM Applications (2025)](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 **Toolkit Version:** v1.1.0
@@ -37,7 +40,7 @@ The widest gaps are in output sanitization and sensitive data protection.
 | LLM03 | Training Data Poisoning | Partial | MemoryGuard for runtime memory stores | Training pipeline out of scope; MemoryGuard not wired into adapters |
 | LLM04 | Model Denial of Service | Partial | Token/call/timeout limits + concurrency semaphore + circuit breakers | TokenBudgetTracker advisory-only; RateLimiter not wired; no payload size limits |
 | LLM05 | Supply Chain Vulnerabilities | Partial | SBOM + Ed25519 signing + MCP fingerprinting + ContentHashInterceptor | SupplyChainGuard reporting-only; signing opt-in |
-| LLM06 | Sensitive Information Disclosure | Partial | PII patterns in MCP gateway + secret detection in codegen + egress policy | Only 2 PII patterns; no output text filtering; audit logs record full parameters |
+| LLM06 | Sensitive Information Disclosure | Partial | PII patterns in MCP gateway + secret detection in codegen + egress policy | Only 2 PII patterns; no output text filtering; audit-log PII minimization remains incomplete |
 | LLM07 | Insecure Plugin Design | Partial | MCPGateway 5-stage pipeline + rug-pull detection + schema abuse scanning | JSON Schema composition ($ref/oneOf) unexamined; gateway and scanner disconnected |
 | LLM08 | Excessive Agency | Partial | Execution rings + kill switch + rogue detection + scope guard | Kill switch manual-only; detection modules advisory, not auto-wired to enforcement |
 | LLM09 | Overreliance | Partial | Drift detection + confidence threshold + adversarial evaluator | No fact-checking; confidence attribute never provided by frameworks |

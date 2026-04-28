@@ -1,13 +1,13 @@
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
-# Tutorial 22 — Go SDK (`agentmesh` module)
+# Tutorial 22 — Go module (`agentmesh`)
 
 Build governance-aware AI agents in Go. The `agentmesh` module provides
 Ed25519 cryptographic identity, trust scoring, declarative policy evaluation,
 and hash-chain audit logging — all in a single `go get`.
 
 > **Target runtime:** Go 1.21+
-> **Module:** `github.com/microsoft/agent-governance-toolkit/sdks/go`
+> **Module:** `github.com/microsoft/agent-governance-toolkit/agent-governance-golang`
 > **Package:** `agentmesh`
 
 ---
@@ -41,7 +41,7 @@ and hash-chain audit logging — all in a single `go get`.
 ## Installation
 
 ```bash
-go get github.com/microsoft/agent-governance-toolkit/sdks/go
+go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang
 ```
 
 The module has a single external dependency — `gopkg.in/yaml.v3` for YAML
@@ -49,7 +49,7 @@ policy parsing.
 
 ```bash
 # Verify the install
-go list -m github.com/microsoft/agent-governance-toolkit/sdks/go
+go list -m github.com/microsoft/agent-governance-toolkit/agent-governance-golang
 ```
 
 ---
@@ -63,7 +63,7 @@ package main
 
 import (
     "fmt"
-    agentmesh "github.com/microsoft/agent-governance-toolkit/sdks/go"
+    agentmesh "github.com/microsoft/agent-governance-toolkit/agent-governance-golang"
 )
 
 func main() {
@@ -566,7 +566,7 @@ import (
     "fmt"
     "log"
 
-    agentmesh "github.com/microsoft/agent-governance-toolkit/sdks/go"
+    agentmesh "github.com/microsoft/agent-governance-toolkit/agent-governance-golang"
 )
 
 func main() {
@@ -631,16 +631,16 @@ Audit JSON: [{"timestamp":"2025-07-15T10:30:00Z","agent_id":"did:agentmesh:resea
 
 ## Cross-Reference
 
-| Go SDK Feature | Python Equivalent | Tutorial |
+| Go module feature | Python Equivalent | Tutorial |
 |----------------|-------------------|----------|
 | `PolicyEngine` | `agent_os.policy` | [Tutorial 01 — Policy Engine](./01-policy-engine.md) |
 | `TrustManager` | `agent_os.trust` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
 | `AuditLogger` | `agent_os.audit` | [Tutorial 04 — Audit & Compliance](./04-audit-and-compliance.md) |
 | `AgentIdentity` | `agent_os.identity` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
-| `AgentMeshClient` | `AgentMeshClient` | [Tutorial 20 — TypeScript SDK](./20-typescript-sdk.md) |
+| `AgentMeshClient` | `AgentMeshClient` | [Tutorial 20 — TypeScript package](./20-typescript-sdk.md) |
 
-> **Note:** The Go SDK uses a 0.0–1.0 trust scale with three tiers, while the
-> Rust SDK uses 0–1000 with five tiers. Both use the same governance concepts
+> **Note:** The Go module uses a 0.0–1.0 trust scale with three tiers, while the
+> Rust crate uses 0–1000 with five tiers. Both use the same governance concepts
 > and YAML policy format.
 
 ---
@@ -649,23 +649,23 @@ Audit JSON: [{"timestamp":"2025-07-15T10:30:00Z","agent_id":"did:agentmesh:resea
 
 | Component | Location |
 |-----------|----------|
-| Client + options | `packages/agent-mesh/sdks/go/client.go` |
-| Type definitions | `packages/agent-mesh/sdks/go/types.go` |
-| `PolicyEngine` | `packages/agent-mesh/sdks/go/policy.go` |
-| `TrustManager` | `packages/agent-mesh/sdks/go/trust.go` |
-| `AuditLogger` | `packages/agent-mesh/sdks/go/audit.go` |
-| `AgentIdentity` | `packages/agent-mesh/sdks/go/identity.go` |
-| Conflict resolution | `packages/agent-mesh/sdks/go/conflict.go` |
-| Metrics | `packages/agent-mesh/sdks/go/metrics.go` |
-| Tests | `packages/agent-mesh/sdks/go/*_test.go` |
+| Client + options | `agent-governance-golang/client.go` |
+| Type definitions | `agent-governance-golang/types.go` |
+| `PolicyEngine` | `agent-governance-golang/policy.go` |
+| `TrustManager` | `agent-governance-golang/trust.go` |
+| `AuditLogger` | `agent-governance-golang/audit.go` |
+| `AgentIdentity` | `agent-governance-golang/identity.go` |
+| Conflict resolution | `agent-governance-golang/conflict.go` |
+| Metrics | `agent-governance-golang/metrics.go` |
+| Tests | `agent-governance-golang/*_test.go` |
 
 ---
 
 ## Next Steps
 
-- **Run the tests** to see the SDK in action:
+- **Run the tests** to see the module in action:
   ```bash
-  cd packages/agent-mesh/sdks/go
+  cd agent-governance-golang
   go test ./...
   ```
 - **Load YAML policies** from the repository's `policies/` directory
@@ -673,6 +673,6 @@ Audit JSON: [{"timestamp":"2025-07-15T10:30:00Z","agent_id":"did:agentmesh:resea
   restarts
 - **Verify audit chains** in your CI/CD pipeline — call `Verify()` as a
   post-deployment check
-- **Explore the Rust SDK** tutorial ([Tutorial 21](./21-rust-sdk.md)) for the
+- **Explore the Rust crate** tutorial ([Tutorial 21](./21-rust-sdk.md)) for the
   Rust equivalent
 - **Read the Python tutorials** (01–04) for detailed governance concepts

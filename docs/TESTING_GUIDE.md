@@ -35,9 +35,9 @@ scenarios with a real LLM and shows you policy enforcement in action.
 ```bash
 git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agent-governance-toolkit
-pip install -e "packages/agent-os[dev]"
-pip install -e "packages/agent-mesh"
-pip install -e "packages/agent-compliance"
+pip install -e "agent-os[dev]"
+pip install -e "agent-mesh"
+pip install -e "agent-compliance"
 pip install httpx pyyaml
 ```
 
@@ -62,7 +62,7 @@ On Windows PowerShell, use `$env:OPENAI_API_KEY = "sk-..."` instead of `export`.
 ### Step 3: Run the demo
 
 ```bash
-python demo/maf_governance_demo.py
+python examples/demos/maf_governance_demo.py
 ```
 
 You'll see 4 scenarios:
@@ -77,7 +77,7 @@ You'll see 4 scenarios:
 ### Step 4: Run adversarial attacks
 
 ```bash
-python demo/maf_governance_demo.py --include-attacks
+python examples/demos/maf_governance_demo.py --include-attacks
 ```
 
 This adds a 5th scenario that tries to break governance:
@@ -200,13 +200,13 @@ This tests the specific security policies that were recently hardened.
 ### Step 1: Install
 
 ```bash
-pip install -e "packages/agent-os[dev]"
+pip install -e "agent-os[dev]"
 ```
 
 ### Step 2: Run the SQL policy tests
 
 ```bash
-cd packages/agent-os
+cd agent-os
 python -m pytest modules/control-plane/tests/test_sql_policy.py -v
 ```
 
@@ -239,7 +239,7 @@ rules = create_policies_from_config("examples/policies/sql-readonly.yaml")
 
 ```bash
 # Run all 6,100+ tests
-cd packages/agent-os && python -m pytest tests/ -q
+cd agent-os && python -m pytest tests/ -q
 cd ../agent-mesh && python -m pytest tests/ -q
 cd ../agent-hypervisor && python -m pytest tests/ -q
 cd ../agent-sre && python -m pytest tests/ -q
@@ -253,8 +253,8 @@ cd ../agent-compliance && python -m pytest tests/ -q
 | Area | How to Test | Expected Result |
 |------|------------|-----------------|
 | **Install** | `pip install agent-governance-toolkit[full]` | Installs cleanly, no errors |
-| **Demo** | `python demo/maf_governance_demo.py` | 4 scenarios run, blocked actions shown |
-| **Adversarial** | `python demo/maf_governance_demo.py --include-attacks` | All 4 attacks blocked |
+| **Demo** | `python examples/demos/maf_governance_demo.py` | 4 scenarios run, blocked actions shown |
+| **Adversarial** | `python examples/demos/maf_governance_demo.py --include-attacks` | All 4 attacks blocked |
 | **Policy loading** | Load YAML from `examples/policies/` | Policies parse without errors |
 | **SQL safety** | Run `test_sql_policy.py` | 40 tests pass |
 | **Framework integration** | Run any `examples/quickstart/*.py` | Governed agent works end-to-end |

@@ -1,0 +1,161 @@
+site_name: Agent Governance Toolkit
+site_description: Governance, trust, identity, and compliance for AI agents
+site_url: https://microsoft.github.io/agent-governance-toolkit
+repo_url: https://github.com/microsoft/agent-governance-toolkit
+repo_name: microsoft/agent-governance-toolkit
+edit_uri: edit/main/docs/
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+  font:
+    text: Inter
+    code: JetBrains Mono
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/microsoft/agent-governance-toolkit
+  generator: false
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Quick Start: quickstart.md
+    - Architecture: architecture.md
+    - Glossary: glossary.md
+  - Packages:
+    - Overview: packages/index.md
+    - Agent OS: packages/agent-os.md
+    - Agent Mesh: packages/agent-mesh.md
+    - Agent Runtime: packages/agent-runtime.md
+    - Agent SRE: packages/agent-sre.md
+    - Agent Compliance: packages/agent-compliance.md
+    - Agent Marketplace: packages/agent-marketplace.md
+    - Agent Lightning: packages/agent-lightning.md
+    - Agent Hypervisor: packages/agent-hypervisor.md
+    - .NET package: packages/dotnet-sdk.md
+    - VS Code Extension: packages/agent-os-vscode.md
+  - Tutorials:
+    - Overview: tutorials/index.md
+    - Policy Engine: tutorials/01-policy-engine.md
+    - Trust & Identity: tutorials/02-trust-and-identity.md
+    - Framework Integrations: tutorials/03-framework-integrations.md
+    - Audit & Compliance: tutorials/04-audit-and-compliance.md
+    - Agent Reliability: tutorials/05-agent-reliability.md
+    - Execution Sandboxing: tutorials/06-execution-sandboxing.md
+    - MCP Security Gateway: tutorials/07-mcp-security-gateway.md
+    - OPA / Rego / Cedar Policies: tutorials/08-opa-rego-cedar-policies.md
+    - Prompt Injection Detection: tutorials/09-prompt-injection-detection.md
+    - Plugin Marketplace: tutorials/10-plugin-marketplace.md
+    - Saga Orchestration: tutorials/11-saga-orchestration.md
+    - Liability & Attribution: tutorials/12-liability-and-attribution.md
+    - Observability & Tracing: tutorials/13-observability-and-tracing.md
+    - Kill Switch & Rate Limiting: tutorials/14-kill-switch-and-rate-limiting.md
+    - RL Training Governance: tutorials/15-rl-training-governance.md
+    - Protocol Bridges: tutorials/16-protocol-bridges.md
+    - Advanced Trust: tutorials/17-advanced-trust-and-behavior.md
+    - Compliance Verification: tutorials/18-compliance-verification.md
+    - .NET package: tutorials/19-dotnet-sdk.md
+    - C# MCP extension: tutorials/42-csharp-mcp-extension.md
+    - TypeScript package: tutorials/20-typescript-sdk.md
+    - Rust crate: tutorials/21-rust-sdk.md
+    - Go module: tutorials/22-go-sdk.md
+    - Delegation Chains: tutorials/23-delegation-chains.md
+    - Cost & Token Budgets: tutorials/24-cost-and-token-budgets.md
+    - Security Hardening: tutorials/25-security-hardening.md
+    - SBOM & Signing: tutorials/26-sbom-and-signing.md
+    - MCP Scan CLI: tutorials/27-mcp-scan-cli.md
+    - Build Custom Integration: tutorials/28-build-custom-integration.md
+    - Agent Discovery: tutorials/29-agent-discovery.md
+    - Agent Lifecycle: tutorials/30-agent-lifecycle.md
+    - Entra Agent ID Bridge: tutorials/31-entra-agent-id-bridge.md
+    - Chaos Testing Agents: tutorials/32-chaos-testing-agents.md
+    - E2E Encrypted Messaging: tutorials/32-e2e-encrypted-messaging.md
+    - Offline Verifiable Receipts: tutorials/33-offline-verifiable-receipts.md
+    - MAF Integration: tutorials/34-maf-integration.md
+    - .NET MAF Hook Integration: tutorials/43-dotnet-maf-hook-integration.md
+    - A2A Conversation Policy: tutorials/44-a2a-conversation-policy.md
+    - Shift-Left Governance: tutorials/45-shift-left-governance.md
+  - Deployment:
+    - Overview: deployment/index.md
+    - Azure Container Apps: deployment/azure-container-apps.md
+    - Azure Foundry Agent Service: deployment/azure-foundry-agent-service.md
+    - OpenClaw Sidecar: deployment/openclaw-sidecar.md
+    - Private Endpoints: deployment/private-endpoints.md
+  - Security:
+    - Threat Model: security/threat-model.md
+    - OWASP Compliance: security/owasp-compliance.md
+    - Security Scanning: security/scanning.md
+    - Tenant Isolation: security/tenant-isolation.md
+  - Architecture Decisions:
+    - Overview: adr/index.md
+    - "ADR-0001: Ed25519 for Identity": adr/0001-use-ed25519-for-agent-identity.md
+    - "ADR-0002: Four Execution Rings": adr/0002-use-four-execution-rings-for-runtime-privilege.md
+    - "ADR-0003: IATP Handshake 200ms": adr/0003-keep-iatp-handshake-within-200ms.md
+    - "ADR-0004: Deterministic Policy": adr/0004-keep-policy-evaluation-deterministic.md
+    - "ADR-0005: Liveness Attestation": adr/0005-add-liveness-attestation-to-trust-handshake.md
+    - "ADR-0006: Constitutional Constraints": adr/0006-constitutional-constraint-layer-as-community-extension.md
+  - Reference:
+    - Benchmarks: reference/benchmarks.md
+    - Comparison: reference/comparison.md
+    - NIST RFI Mapping: reference/nist-rfi-mapping.md
+    - Changelog: reference/changelog.md
+    - Contributing: reference/contributing.md
+  - 🌍 Languages:
+    - 日本語 README: i18n/README.ja.md
+    - 日本語 クイックスタート: i18n/QUICKSTART.ja.md
+    - 简体中文 README: i18n/README.zh-CN.md
+    - 简体中文 快速入门: i18n/QUICKSTART.zh-CN.md

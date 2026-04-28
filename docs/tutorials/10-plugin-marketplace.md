@@ -1,5 +1,17 @@
 # Tutorial 10 — Plugin Marketplace
 
+> **Package:** `agentmesh-marketplace` · **Time:** 25 minutes · **Prerequisites:** Python 3.11+
+
+---
+
+## What You'll Learn
+
+- Plugin signing and Ed25519 verification
+- CLI commands for plugin lifecycle management
+- Supply-chain security and sandboxed execution
+
+---
+
 The Plugin Marketplace is the supply-chain layer of the Agent Governance Toolkit.
 It manages the full lifecycle of plugins — discovery, installation, verification,
 sandboxed execution, and removal — so your agent mesh can safely extend its
@@ -898,14 +910,14 @@ print(result)
 
 | Component | Location |
 |-----------|----------|
-| PluginManifest / PluginType | `packages/agent-marketplace/src/agent_marketplace/manifest.py` |
-| PluginRegistry | `packages/agent-marketplace/src/agent_marketplace/registry.py` |
-| PluginInstaller | `packages/agent-marketplace/src/agent_marketplace/installer.py` |
-| PluginSigner / verify_signature | `packages/agent-marketplace/src/agent_marketplace/signing.py` |
-| CLI commands | `packages/agent-marketplace/src/agent_marketplace/cli_commands.py` |
-| PluginSandbox | `packages/agent-mesh/src/agentmesh/marketplace/sandbox.py` |
-| Backward-compat shim | `packages/agent-mesh/src/agentmesh/marketplace/__init__.py` |
-| Tests | `packages/agent-marketplace/tests/test_marketplace.py` |
+| PluginManifest / PluginType | `agent-governance-python/agent-marketplace/src/agent_marketplace/manifest.py` |
+| PluginRegistry | `agent-governance-python/agent-marketplace/src/agent_marketplace/registry.py` |
+| PluginInstaller | `agent-governance-python/agent-marketplace/src/agent_marketplace/installer.py` |
+| PluginSigner / verify_signature | `agent-governance-python/agent-marketplace/src/agent_marketplace/signing.py` |
+| CLI commands | `agent-governance-python/agent-marketplace/src/agent_marketplace/cli_commands.py` |
+| PluginSandbox | `agent-governance-python/agent-mesh/src/agentmesh/marketplace/sandbox.py` |
+| Backward-compat shim | `agent-governance-python/agent-mesh/src/agentmesh/marketplace/__init__.py` |
+| Tests | `agent-governance-python/agent-marketplace/tests/test_marketplace.py` |
 
 ---
 

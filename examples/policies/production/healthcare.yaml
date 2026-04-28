@@ -1,0 +1,43 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Production Policy: Healthcare (HIPAA)
+# Risk profile: HIGH
+
+version: "1.0"
+name: healthcare-governance
+description: HIPAA-regulated governance with PHI filtering.
+
+rules:
+  - name: block-phi-ssn
+    condition: {field: output, operator: matches, value: "\\b\\d{3}-\\d{2}-\\d{4}\\b"}
+    action: deny
+    priority: 100
+    message: "PHI: SSN pattern detected"
+
+  - name: block-phi-mrn
+    condition: {field: output, operator: matches, value: "(?i)MRN[:\\s]*\\d{6,}"}
+    action: deny
+    priority: 100
+    message: "PHI: Medical Record Number detected"
+
+  - name: block-delete
+    condition: {field: action, operator: matches, value: "^delete_"}
+    action: deny
+    priority: 95
+    message: "Deletion prohibited in healthcare"
+
+  - name: escalate-clinical
+    condition: {field: action, operator: matches, value: "patient_|clinical_|medical_"}
+    action: escalate
+    priority: 80
+    message: "Clinical data requires clinician approval"
+
+  - name: allow-read
+    condition: {field: action, operator: matches, value: "^(read_|search_|lookup_)"}
+    action: allow
+    priority: 50
+
+defaults:
+  action: deny
+  max_tool_calls: 25

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.4.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AgentGovernance\AgentGovernance.csproj" />
+    <ProjectReference Include="..\..\src\AgentGovernance.Extensions.Microsoft.Agents\AgentGovernance.Extensions.Microsoft.Agents.csproj" />
+    <ProjectReference Include="..\..\src\AgentGovernance.Extensions.ModelContextProtocol\AgentGovernance.Extensions.ModelContextProtocol.csproj" />
+  </ItemGroup>
+
+</Project>

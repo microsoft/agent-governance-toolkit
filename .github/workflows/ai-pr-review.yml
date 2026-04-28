@@ -1,0 +1,279 @@
+# Consolidated AI PR review pipeline for agent-governance-toolkit.
+# Runs 5 AI analysis agents in parallel on every PR:
+#   code-review, security-scan, breaking-change, docs-sync, test-coverage
+# Results are posted as individual PR comments, then summarized by the
+# "Post unified summary" job into a single verdict table.
+#
+# Replaces: ai-code-review.yml, ai-security-scan.yml (PR job only),
+#           ai-breaking-change-detector.yml, ai-docs-sync.yml, ai-test-generator.yml,
+#           ai-pr-summary.yml
+name: AI PR Review
+
+# SECURITY: Uses pull_request_target for write access to post PR comments.
+# All checkouts pin to BASE ref (never HEAD) to prevent RCE via modified
+# composite actions in fork PRs. See workflow security audit.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  models: read
+
+# SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
+jobs:
+  ai-agents:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.pull_request.draft != true &&
+      github.actor != 'dependabot[bot]'
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - agent-type: code-reviewer
+            label: "Code Review"
+            icon: "🔍"
+            max-tokens: "4000"
+            paths-changed: "any"
+            custom-instructions: |
+              You are reviewing the microsoft/agent-governance-toolkit, a security-focused Python library.
+
+              Stack: Python 3.9-3.12, monorepo with 8 packages, pytest, ruff.
+
+              Focus areas:
+              - Policy engine correctness (false negatives = security bypass)
+              - Trust/identity: cryptographic operations, credential handling, SPIFFE/SVID
+              - Sandbox escape vectors
+              - Thread safety in concurrent agent execution
+              - OWASP Agentic Top 10 compliance
+              - Type safety and Pydantic model validation
+              - Backward compatibility (public API changes)
+
+              Provide actionable feedback. Flag security issues as CRITICAL.
+              Flag potential breaking changes as WARNING.
+              Suggest improvements as SUGGESTION.
+
+          - agent-type: security-scanner
+            label: "Security Scan"
+            icon: "🛡️"
+            max-tokens: "1500"
+            paths-changed: "code"
+            custom-instructions: |
+              You are a security analyst reviewing changes to microsoft/agent-governance-toolkit.
+
+              BE CONCISE. Only report actual findings, not a methodology walkthrough.
+              Skip categories with no issues. No boilerplate.
+
+              Scan for:
+              1. Prompt injection defense bypass
+              2. Policy engine circumvention
+              3. Trust chain weaknesses
+              4. Credential exposure
+              5. Sandbox escape
+              6. Deserialization attacks
+              7. Race conditions
+              8. Supply chain risks
+
+              Format (compact):
+              ### Security Review
+              | Severity | Finding | Fix |
+              |----------|---------|-----|
+
+              If NO security issues found, reply only: No security issues found.
+
+          - agent-type: breaking-change-detector
+            label: "Breaking Changes"
+            icon: "🔄"
+            max-tokens: "1000"
+            paths-changed: "src"
+            custom-instructions: |
+              You are an API compatibility analyzer for microsoft/agent-governance-toolkit.
+              These packages are published to PyPI/NuGet/crates.io.
+
+              BE CONCISE. Only list actual breaking or potentially breaking changes.
+              Do NOT list additive (non-breaking) changes.
+
+              Format:
+              ### API Compatibility
+              | Severity | Change | Impact |
+              |----------|--------|--------|
+
+              If NO breaking changes: No breaking changes detected.
+
+          - agent-type: docs-sync-checker
+            label: "Docs Sync"
+            icon: "📝"
+            max-tokens: "1000"
+            paths-changed: "src"
+            custom-instructions: |
+              You are a documentation freshness checker for microsoft/agent-governance-toolkit.
+
+              BE CONCISE. Only flag actual issues, no suggestions or nice-to-haves.
+
+              Check for:
+              1. New public APIs without docstrings
+              2. README sections outdated by this change
+              3. CHANGELOG missing entry for behavioral changes
+
+              Format:
+              ### Docs Sync
+              - `func()` in `module.py` -- missing docstring
+              - `README.md` -- section X needs update
+
+              If everything is in sync: Documentation is in sync.
+
+          - agent-type: test-generator
+            label: "Test Coverage"
+            icon: "🧪"
+            max-tokens: "4000"
+            paths-changed: "src"
+            custom-instructions: |
+              You are a test coverage advisor for microsoft/agent-governance-toolkit.
+
+              For each changed file, analyze:
+              1. Does a corresponding test file exist in tests/?
+              2. Are the changed code paths covered by existing tests?
+              3. What NEW test cases would improve coverage?
+
+              Focus on domain-specific edge cases:
+              - Policy evaluation: boundary conditions, conflicting policies
+              - Trust scoring: edge scores (0.0, 1.0), expired certificates
+              - Chaos experiments: timeout handling, partial failures
+              - Concurrency: race conditions in shared state
+              - Input validation: malformed inputs, injection attempts
+
+              Format:
+              ## Test Coverage Analysis
+              ### `filename.py`
+              - Existing coverage: (what's covered)
+              - Missing coverage: (what's not)
+              - Suggested test cases:
+                1. `test_xxx` -- description
+
+    steps:
+      - name: Fork safety check
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: echo "::notice::Running on fork PR -- composite action resolved from base branch (safe)"
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # SECURITY: pull_request_target defaults to base branch checkout (safe).
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Run ${{ matrix.label }}
+        uses: ./.github/actions/ai-agent-runner
+        with:
+          agent-type: ${{ matrix.agent-type }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          model: gpt-4o
+          fallback-model: gpt-4o-mini
+          max-tokens: ${{ matrix.max-tokens }}
+          context-mode: pr-diff
+          output-mode: pr-comment
+          custom-instructions: ${{ matrix.custom-instructions }}
+
+  # ── Unified summary ────────────────────────────────────────────────────
+  # Waits for all agents, then posts/updates a single summary table.
+  summary:
+    name: Post unified summary
+    runs-on: ubuntu-latest
+    needs: [ai-agents]
+    if: always()
+    steps:
+      - name: Collect agent comments and post summary
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prNumber = context.payload.pull_request.number;
+            const SUMMARY_MARKER = '<!-- ai-pr-summary -->';
+
+            const AGENTS = [
+              { marker: '<!-- ai-agent:code-reviewer -->',           icon: '🔍', label: 'Code Review' },
+              { marker: '<!-- ai-agent:security-scanner -->',        icon: '🛡️', label: 'Security Scan' },
+              { marker: '<!-- ai-agent:breaking-change-detector -->', icon: '🔄', label: 'Breaking Changes' },
+              { marker: '<!-- ai-agent:docs-sync-checker -->',       icon: '📝', label: 'Docs Sync' },
+              { marker: '<!-- ai-agent:test-generator -->',          icon: '🧪', label: 'Test Coverage' },
+            ];
+
+            let allComments = [];
+            let page = 1;
+            while (true) {
+              const { data: batch } = await github.rest.issues.listComments({
+                owner, repo, issue_number: prNumber, per_page: 100, page,
+              });
+              if (!batch.length) break;
+              allComments = allComments.concat(batch);
+              if (batch.length < 100) break;
+              page++;
+            }
+
+            function parseVerdict(body) {
+              if (!body) return { status: '⏳', statusLabel: 'Pending', detail: 'Awaiting results' };
+              if (/critical|error|vulnerabilit(y|ies)\s+found|high\s+severity/i.test(body)) {
+                return { status: '❌', statusLabel: 'Failed', detail: 'Issues detected' };
+              }
+              if (/warning|⚠️|potential|breaking\s+change|minor/i.test(body)) {
+                return { status: '⚠️', statusLabel: 'Warning', detail: 'See details' };
+              }
+              if (/no issues|pass(ed)?|clean|no vulnerab|no breaking|all good|in sync/i.test(body)) {
+                return { status: '✅', statusLabel: 'Passed', detail: 'No issues found' };
+              }
+              return { status: '✅', statusLabel: 'Completed', detail: 'Analysis complete' };
+            }
+
+            const rows = AGENTS.map(agent => {
+              const comment = allComments.find(c => c.body && c.body.includes(agent.marker));
+              const verdict = comment ? parseVerdict(comment.body) : { status: '⏳', statusLabel: 'Pending', detail: 'Awaiting results' };
+              return `| ${agent.icon} ${agent.label} | ${verdict.status} ${verdict.statusLabel} | ${verdict.detail} |`;
+            });
+
+            const allVerdicts = rows.join('\n');
+            let overallVerdict;
+            if (allVerdicts.includes('❌')) {
+              overallVerdict = '**Verdict: ❌ Changes needed**';
+            } else if (allVerdicts.includes('⚠️')) {
+              overallVerdict = '**Verdict: ⚠️ Ready for human review**';
+            } else if (allVerdicts.includes('⏳')) {
+              overallVerdict = '**Verdict: ⏳ Still running**';
+            } else {
+              overallVerdict = '**Verdict: ✅ Ready for human review**';
+            }
+
+            const summaryBody = [
+              SUMMARY_MARKER,
+              '## PR Review Summary',
+              '',
+              '| Check | Status | Details |',
+              '|-------|--------|---------|',
+              ...rows,
+              '',
+              overallVerdict,
+            ].join('\n');
+
+            const existing = allComments.find(c => c.body && c.body.includes(SUMMARY_MARKER));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body: summaryBody,
+              });
+              core.info(`Updated summary comment ${existing.id}`);
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: prNumber, body: summaryBody,
+              });
+              core.info('Created summary comment');
+            }

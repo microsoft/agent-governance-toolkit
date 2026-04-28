@@ -1,0 +1,56 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Production Policy: Enterprise
+# Risk profile: MEDIUM
+
+version: "1.0"
+name: enterprise-governance
+description: Standard enterprise governance with escalation.
+
+rules:
+  - name: block-delete-file
+    condition: {field: action, operator: eq, value: delete_file}
+    action: deny
+    priority: 100
+    message: "File deletion is not permitted"
+
+  - name: block-execute-code
+    condition: {field: action, operator: eq, value: execute_code}
+    action: deny
+    priority: 100
+    message: "Code execution is blocked"
+
+  - name: block-ssh
+    condition: {field: action, operator: eq, value: ssh_connect}
+    action: deny
+    priority: 100
+    message: "SSH is not permitted"
+
+  - name: block-ssn-leak
+    condition: {field: output, operator: matches, value: "\\b\\d{3}-\\d{2}-\\d{4}\\b"}
+    action: deny
+    priority: 95
+    message: "SSN pattern detected in output"
+
+  - name: escalate-write-file
+    condition: {field: action, operator: eq, value: write_file}
+    action: escalate
+    priority: 80
+    message: "File writes require approval"
+
+  - name: escalate-send-email
+    condition: {field: action, operator: eq, value: send_email}
+    action: escalate
+    priority: 80
+    message: "Email requires review"
+
+  - name: escalate-deploy
+    condition: {field: action, operator: eq, value: deploy}
+    action: escalate
+    priority: 80
+    message: "Deployments require sign-off"
+
+defaults:
+  action: deny
+  max_tool_calls: 50

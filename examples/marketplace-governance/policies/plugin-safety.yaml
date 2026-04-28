@@ -62,11 +62,12 @@ rules:
     severity: medium
     suggestion: "Verify the endpoint is on the approved external services list"
 
-  # -------------------------------------------------------------------
-  # Token budget enforcement
-  # -------------------------------------------------------------------
-  # Caps the maximum tokens per tool invocation to prevent runaway costs.
+# -------------------------------------------------------------------
+# Plugin requirements
+# -------------------------------------------------------------------
+# Constraints enforced during batch policy evaluation.
 
+plugin_requirements:
   require_capabilities: true
   min_description_length: 10
   max_dependencies: 10

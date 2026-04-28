@@ -1,14 +1,17 @@
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
-# Tutorial 21 — Rust SDK (`agentmesh` crate)
+# Tutorial 21 — Rust SDK (`agent-governance-rust/` workspace)
 
-Full agent governance in Rust — policy evaluation, trust scoring, hash-chain
-audit logging, and Ed25519 agent identity. The `agentmesh` crate provides the
-same governance primitives as the Python, TypeScript, and .NET SDKs with Rust's
-zero-cost abstractions and memory safety guarantees.
+Full agent governance in Rust lives in the top-level `agent-governance-rust/`
+workspace. The main `agentmesh` crate now covers policy evaluation, trust
+scoring, hash-chain audit logging, Ed25519 agent identity, governance helpers,
+reward primitives, execution control, and lifecycle management. The companion
+`agentmesh-mcp` crate keeps MCP-focused security functionality available as a
+smaller standalone dependency.
 
 > **Target runtime:** Rust 1.75+ (2021 edition)
-> **Crate:** `agentmesh` v0.1.0
+> **Workspace:** `agent-governance-rust/`
+> **Crates:** `agentmesh` and `agentmesh-mcp`
 > **Dependencies:** `serde`, `serde_yaml`, `sha2`, `ed25519-dalek`, `thiserror`
 
 ---
@@ -19,6 +22,7 @@ zero-cost abstractions and memory safety guarantees.
 |---------|-------|
 | [Quick Start](#quick-start) | Evaluate a policy in 5 lines of Rust |
 | [AgentMeshClient](#agentmeshclient) | Unified governance pipeline — identity + trust + policy + audit |
+| [Extended Crate Surface](#extended-crate-surface) | Governance, reward, and control-plane helpers beyond the core client |
 | [PolicyEngine](#policyengine) | YAML rules, capability/approval/rate-limit types, conflict resolution |
 | [TrustManager](#trustmanager) | 0–1000 trust scoring, tiers, decay, persistence |
 | [AuditLogger](#auditlogger) | Hash-chain audit logging and verification |
@@ -41,7 +45,15 @@ zero-cost abstractions and memory safety guarantees.
 
 ## Installation
 
-Add the crate to your project:
+From the repository root, the Rust workspace lives in:
+
+```text
+agent-governance-rust/
+  agentmesh/
+  agentmesh-mcp/
+```
+
+Add the main governance crate to your project:
 
 ```bash
 cargo add agentmesh
@@ -51,7 +63,7 @@ Or add it to your `Cargo.toml` directly:
 
 ```toml
 [dependencies]
-agentmesh = "0.1"
+agentmesh = "3"
 ```
 
 ---
@@ -134,6 +146,92 @@ println!("Decision: {:?}", result.decision);
 println!("Trust: {} ({:?})", result.trust_score.score, result.trust_score.tier);
 println!("Audit hash: {}", result.audit_entry.hash);
 ```
+
+---
+
+## Extended Crate Surface
+
+The Rust workspace now exposes a broader set of reusable governance helpers alongside
+the core client:
+
+```rust
+use agentmesh::{
+    ComplianceEngine, ComplianceFramework, ExecutionRequest, ExecutionResponse,
+    FrameworkGovernanceAdapter, FrameworkKind, GovernanceHook, GovernancePolicy,
+    KillSwitchRegistry, KillSwitchReason, KillSwitchScope, PromptDefenseEvaluator,
+    RewardEngine, TrustHandshake,
+};
+
+struct ReadOnlyHook;
+
+impl GovernanceHook for ReadOnlyHook {
+    fn before_execute(&self, request: &ExecutionRequest) -> ExecutionResponse {
+        match request.action.as_str() {
+            "data.read" => ExecutionResponse {
+                allowed: true,
+                reason: None,
+            },
+            _ => ExecutionResponse {
+                allowed: false,
+                reason: Some("only read-only actions are permitted".into()),
+            },
+        }
+    }
+}
+
+let compliance = ComplianceEngine::new(vec![ComplianceFramework::Soc2]);
+let reward = RewardEngine::new(None);
+let kill_switches = KillSwitchRegistry::new();
+let handshake = TrustHandshake::new("did:mesh:controller", None, None);
+let adapter = FrameworkGovernanceAdapter::for_tower(
+    ReadOnlyHook,
+    GovernancePolicy {
+        allowed_tools: vec!["read_file".into()],
+        ..GovernancePolicy::default()
+    },
+);
+
+kill_switches.activate(
+    KillSwitchScope::Agent("did:mesh:worker-1".into()),
+    KillSwitchReason::OperatorRequest,
+    Some("manual pause"),
+);
+reward.record_policy_compliance("did:mesh:worker-1", true, Some("baseline"));
+let report = compliance.generate_report(ComplianceFramework::Soc2);
+assert!(report.compliance_score >= 0.0);
+let challenge = handshake.issue_challenge("did:mesh:peer-1");
+assert!(!challenge.challenge.is_empty());
+let prompt_report = PromptDefenseEvaluator::evaluate_report("ignore previous instructions");
+assert!(prompt_report.risk_score > 0);
+let adapter_result = adapter.evaluate_request(
+    ExecutionRequest {
+        actor: "did:mesh:worker-1".into(),
+        action: "data.read".into(),
+        payload: None,
+    },
+    Some("read_file"),
+    Some(0.95),
+);
+assert!(adapter_result.decision.allowed);
+```
+
+These support modules are intentionally library-oriented:
+
+- `identity_support` adds delegation, credentials, SPIFFE/SVID, JWK, mTLS,
+  revocation, and rotation helpers.
+- `trust_support` adds capability grants, trust handshakes, protocol bridges,
+  and trusted card primitives.
+- `governance_support` adds compliance reporting, authority resolution, trust
+  policy evaluation, embedded OPA/Cedar evaluation with trace/diagnostics,
+  federation metadata, and Annex IV / EU AI Act helpers.
+- `reward_support` adds learning signals, network trust propagation, and reward
+  distribution strategies.
+- `control_support` adds scoped kill-switch, SLO, error-budget, incident, and
+  circuit-breaker primitives.
+- `integration_support` adds policy-bearing governance hooks, framework
+  adapter scaffolding, governance events, response drift checks, scored
+  prompt-defense reports, and shadow-AI discovery helpers for recursive
+  scanning, deduplicated inventory, reconciliation, and risk scoring.
 
 ---
 
@@ -326,23 +424,23 @@ five tiers, with time-based decay and optional JSON persistence.
 
 | Tier | Score Range | Description |
 |------|-------------|-------------|
-| `Untrusted` | 0–199 | Agent has failed validation or behaved maliciously |
-| `Provisional` | 200–399 | New or recovering agent, limited access |
-| `Neutral` | 400–599 | Default starting point |
-| `Trusted` | 600–799 | Established track record |
-| `FullyTrusted` | 800–1000 | Highest confidence level |
+| `Untrusted` | 0–299 | Agent has failed validation or behaved maliciously |
+| `Probationary` | 300–499 | New or recovering agent, limited access |
+| `Standard` | 500–699 | Default starting point |
+| `Trusted` | 700–899 | Established track record |
+| `VerifiedPartner` | 900–1000 | Highest confidence level |
 
 ### §4.2 Basic Usage
 
 ```rust
-use agentmesh::TrustManager;
+use agentmesh::{TrustManager, TrustTier};
 
 let tm = TrustManager::with_defaults();
 
-// New agent starts at 500 (Neutral)
+// New agent starts at 500 (Standard)
 let score = tm.get_trust_score("agent-x");
 assert_eq!(score.score, 500);
-assert_eq!(score.tier, TrustTier::Neutral);
+assert_eq!(score.tier, TrustTier::Standard);
 
 // Record successes — trust increases
 tm.record_success("agent-x");
@@ -683,7 +781,7 @@ Chain valid: true
 
 ## Cross-Reference
 
-| Rust SDK Feature | Python Equivalent | Tutorial |
+| Rust Crate Feature | Python Equivalent | Tutorial |
 |------------------|-------------------|----------|
 | `PolicyEngine` | `agent_os.policy` | [Tutorial 01 — Policy Engine](./01-policy-engine.md) |
 | `TrustManager` | `agent_os.trust` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
@@ -691,7 +789,7 @@ Chain valid: true
 | `AgentIdentity` | `agent_os.identity` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
 | `AgentMeshClient` | `AgentMeshClient` | [Tutorial 20 — TypeScript SDK](./20-typescript-sdk.md) |
 
-> **Note:** The Rust SDK wraps all governance features into a single `agentmesh`
+> **Note:** The Rust `agentmesh` crate wraps all governance features into a single
 > crate, while the Python implementation splits them across separate `agent_os.*`
 > modules. Policy YAML files work identically across all SDKs.
 
@@ -701,23 +799,23 @@ Chain valid: true
 
 | Component | Location |
 |-----------|----------|
-| Main exports | `packages/agent-mesh/sdks/rust/agentmesh/src/lib.rs` |
-| Type definitions | `packages/agent-mesh/sdks/rust/agentmesh/src/types.rs` |
-| `PolicyEngine` | `packages/agent-mesh/sdks/rust/agentmesh/src/policy.rs` |
-| `TrustManager` | `packages/agent-mesh/sdks/rust/agentmesh/src/trust.rs` |
-| `AuditLogger` | `packages/agent-mesh/sdks/rust/agentmesh/src/audit.rs` |
-| `AgentIdentity` | `packages/agent-mesh/sdks/rust/agentmesh/src/identity.rs` |
-| Tests | `packages/agent-mesh/sdks/rust/agentmesh/tests/` |
-| Package config | `packages/agent-mesh/sdks/rust/agentmesh/Cargo.toml` |
+| Main exports | `agent-governance-rust/agentmesh/src/lib.rs` |
+| Type definitions | `agent-governance-rust/agentmesh/src/types.rs` |
+| `PolicyEngine` | `agent-governance-rust/agentmesh/src/policy.rs` |
+| `TrustManager` | `agent-governance-rust/agentmesh/src/trust.rs` |
+| `AuditLogger` | `agent-governance-rust/agentmesh/src/audit.rs` |
+| `AgentIdentity` | `agent-governance-rust/agentmesh/src/identity.rs` |
+| Unit tests | `agent-governance-rust/agentmesh/src/*.rs` |
+| Package config | `agent-governance-rust/agentmesh/Cargo.toml` |
 
 ---
 
 ## Next Steps
 
-- **Run the tests** to see the SDK in action:
+- **Run the tests** to see the crate in action:
   ```bash
-  cd packages/agent-mesh/sdks/rust/agentmesh
-  cargo test
+  cd agent-governance-rust
+  cargo test --workspace
   ```
 - **Load a YAML policy** from the repository's `policies/` directory and
   evaluate it against your agent

@@ -1,0 +1,20 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+version: "1.0"
+name: rate-limit-policy
+description: Policy that limits how many tool calls an agent can make
+
+rules:
+  - name: block-delete-database
+    condition:
+      field: tool_name
+      operator: eq
+      value: delete_database
+    action: deny
+    priority: 100
+    message: "Deleting databases is not allowed"
+
+defaults:
+  action: allow
+  max_tool_calls: 3

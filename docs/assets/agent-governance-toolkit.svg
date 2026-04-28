@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0078D4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#005A9E;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="meshGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#50E6FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0078D4;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Shield body -->
+  <path d="M64 8 L112 28 L112 60 C112 88 92 108 64 120 C36 108 16 88 16 60 L16 28 Z" 
+        fill="url(#shieldGrad)" stroke="none"/>
+  
+  <!-- Inner shield highlight -->
+  <path d="M64 16 L104 33 L104 60 C104 84 87 101 64 112 C41 101 24 84 24 60 L24 33 Z" 
+        fill="none" stroke="#50E6FF" stroke-width="1.5" opacity="0.6"/>
+  
+  <!-- Agent mesh network nodes -->
+  <!-- Center node -->
+  <circle cx="64" cy="58" r="8" fill="url(#meshGrad)" stroke="white" stroke-width="1.5"/>
+  
+  <!-- Top node -->
+  <circle cx="64" cy="36" r="5" fill="#50E6FF" stroke="white" stroke-width="1"/>
+  
+  <!-- Left node -->
+  <circle cx="42" cy="72" r="5" fill="#50E6FF" stroke="white" stroke-width="1"/>
+  
+  <!-- Right node -->
+  <circle cx="86" cy="72" r="5" fill="#50E6FF" stroke="white" stroke-width="1"/>
+  
+  <!-- Bottom node -->
+  <circle cx="64" cy="90" r="4" fill="#50E6FF" stroke="white" stroke-width="1" opacity="0.8"/>
+  
+  <!-- Mesh connections -->
+  <line x1="64" y1="36" x2="64" y2="50" stroke="#50E6FF" stroke-width="1.5" opacity="0.7"/>
+  <line x1="64" y1="66" x2="42" y2="72" stroke="#50E6FF" stroke-width="1.5" opacity="0.7"/>
+  <line x1="64" y1="66" x2="86" y2="72" stroke="#50E6FF" stroke-width="1.5" opacity="0.7"/>
+  <line x1="42" y1="72" x2="64" y2="90" stroke="#50E6FF" stroke-width="1" opacity="0.5"/>
+  <line x1="86" y1="72" x2="64" y2="90" stroke="#50E6FF" stroke-width="1" opacity="0.5"/>
+  <line x1="42" y1="72" x2="64" y2="36" stroke="#50E6FF" stroke-width="1" opacity="0.4"/>
+  <line x1="86" y1="72" x2="64" y2="36" stroke="#50E6FF" stroke-width="1" opacity="0.4"/>
+  
+  <!-- Checkmark in center node -->
+  <polyline points="59,58 63,63 70,53" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

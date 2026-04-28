@@ -1,0 +1,37 @@
+<Project>
+  <PropertyGroup>
+    <Authors>Microsoft</Authors>
+    <Company>Microsoft Corporation</Company>
+    <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
+    <PackageProjectUrl>https://github.com/microsoft/agent-governance-toolkit</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/microsoft/agent-governance-toolkit</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageTags>ai;agents;governance;security;policy;owasp;trust;audit;dotnet</PackageTags>
+    <PackageReleaseNotes>https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md</PackageReleaseNotes>
+
+    <!-- Build quality -->
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- SourceLink for debugging into NuGet packages -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <!-- Strong naming for Microsoft packages -->
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)AgentGovernance.snk</AssemblyOriginatorKeyFile>
+
+    <!-- Deterministic builds for reproducibility -->
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.203" PrivateAssets="All" />
+  </ItemGroup>
+</Project>

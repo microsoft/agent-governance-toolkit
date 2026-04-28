@@ -1,57 +1,23 @@
 # 🏥 MedAssist — HIPAA Patient Data Governance Demo (.NET)
 
-**Part of the [Agent Governance Toolkit (AGT)](https://github.com/microsoft/agent-governance-toolkit)**
+This example uses a **real Microsoft Agent Framework agent** with native
+`Microsoft.Agents.AI` middleware to demonstrate HIPAA-focused governance controls.
 
-This demo shows how an AI clinical assistant agent is governed in real-time using AGT's four core middleware layers integrated with the Microsoft Agent Framework (MAF).
+## What it demonstrates
 
-## What This Demo Shows
+1. **Policy Enforcement** — PHI requests are denied before the clinical assistant runs
+2. **Capability Sandboxing** — governed MAF tools allow symptom and guideline lookups while blocking patient record access
+3. **Rogue Agent Detection** — bulk patient-record access attempts trigger anomaly scoring and quarantine
+4. **Audit Trail** — governance events are mirrored into a Merkle-chained HIPAA-friendly audit log
 
-| Governance Layer | What It Does |
-|---|---|
-| **Policy Enforcement** | YAML-driven rules block PHI/PII access (SSN, insurance ID, MRN, DOB) before the LLM sees them |
-| **Capability Sandboxing** | Allow/deny tool lists restrict which clinical APIs the agent can call |
-| **Rogue Agent Detection** | Z-score frequency analysis and entropy scoring detect data exfiltration patterns |
-| **Audit Trail** | SHA-256 Merkle-chained log provides tamper-proof HIPAA compliance records |
+## Runtime model
 
-## Prerequisites
+- `Program.cs` builds the agent with `BuildAIAgent(...)` plus native `.Use(...)` middleware
+- `policies/healthcare_governance.yaml` uses simple local rule expressions for prompt and tool checks
+- Output is deterministic and requires no live LLM credentials
 
-- **.NET 8.0 SDK**
-- (Optional) `GITHUB_TOKEN` for live LLM calls via GitHub Models
-- (Optional) Azure OpenAI credentials
-
-## Quick Start
+## Run it
 
 ```bash
-# 1. Run the demo (dependencies restore automatically)
 dotnet run
-
-# 2. (Optional) With live LLM
-GITHUB_TOKEN=ghp_your_token_here dotnet run
 ```
-
-The demo works **with or without an API key**. Without one, it uses simulated LLM responses while still enforcing all governance rules.
-
-## LLM Configuration
-
-The demo auto-detects your LLM backend in this order:
-
-| Priority | Backend | Environment Variables |
-|---|---|---|
-| 1 | **GitHub Models** (recommended, free) | `GITHUB_TOKEN` |
-| 2 | Azure OpenAI | `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` |
-| 3 | Simulated | (none needed) |
-
-## Understanding the Output
-
-| Act | What It Demonstrates |
-|---|---|
-| **Act 1** | YAML policy rules block PHI/PII requests (SSN, insurance ID, MRN) before the LLM |
-| **Act 2** | Tool allow/deny lists prevent the agent from accessing restricted clinical APIs |
-| **Act 3** | Rapid-fire patient record access attempts trigger anomaly detection and quarantine |
-| **Act 4** | Merkle chain integrity verification and HIPAA compliance proof generation |
-
-## Learn More
-
-- [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
-- [AGT Documentation](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs)
-- [MAF Integration Guide](https://github.com/microsoft/agent-governance-toolkit/tree/main/packages/agent-os/src/agent_os/integrations)

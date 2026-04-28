@@ -74,6 +74,10 @@ detection_patterns:
 suspicious_decoded_keywords:
   - ignore
   - override
+
+# For extended detection rules (86+ patterns across 9 categories including
+# privilege escalation, credential theft, supply chain, and excessive autonomy),
+# see atr-community-rules.yaml in this directory.
   - system
   - password
   - secret
@@ -85,3 +89,5 @@ suspicious_decoded_keywords:
   - send
   - curl
   - fetch
+
+# For extended detection rules (87+ patterns), see atr-community-rules.yaml

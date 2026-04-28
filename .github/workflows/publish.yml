@@ -30,7 +30,7 @@ jobs:
   # Build Python packages and attest provenance.
   #
   # IMPORTANT: Actual PyPI publishing is done via the ADO pipeline
-  # (pipelines/pypi-publish.yml) using ESRP Release. GitHub Actions
+  # (.github/pipelines/pypi-publish.yml) using ESRP Release. GitHub Actions
   # Trusted Publishers are NOT compliant for Microsoft PyPI publishing.
   # See: docs/internal/pypi-publishing.md
   # -------------------------------------------------------------------
@@ -62,11 +62,11 @@ jobs:
             build==1.2.1 --hash=sha256:75e10f767a433d9a86e50d83f418e83efc18ede923ee5ff7df93b6cb0306c5d4
 
       - name: Build ${{ matrix.package }}
-        working-directory: packages/${{ matrix.package }}
+        working-directory: ${{ matrix.package }}
         run: python -m build
 
       - name: Validate build artifacts
-        working-directory: packages/${{ matrix.package }}
+        working-directory: ${{ matrix.package }}
         run: |
           echo "=== Built artifacts for ${{ matrix.package }} ==="
           ls -la dist/
@@ -79,25 +79,25 @@ jobs:
       - name: Sign release artifacts with sigstore
         uses: sigstore/gh-action-sigstore-python@04cffa1d795717b140764e8b640de88853c92acc # v3.3.0
         with:
-          inputs: packages/${{ matrix.package }}/dist/*
+          inputs: ${{ matrix.package }}/dist/*
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
-          subject-path: packages/${{ matrix.package }}/dist/*
+          subject-path: ${{ matrix.package }}/dist/*
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: pypi-${{ matrix.package }}
-          path: packages/${{ matrix.package }}/dist/
+          path: ${{ matrix.package }}/dist/
           retention-days: 30
 
   # -------------------------------------------------------------------
   # Build npm packages, pack .tgz, and upload artifacts.
   #
   # IMPORTANT: Actual npm publishing is done via the ADO pipeline
-  # (pipelines/npm-publish.yml) using ESRP Release. GitHub Actions
+  # (.github/pipelines/npm-publish.yml) using ESRP Release. GitHub Actions
   # is NOT compliant for Microsoft npm publishing.
   # See: PUBLISHING.md
   # -------------------------------------------------------------------
@@ -109,23 +109,23 @@ jobs:
       matrix:
         include:
           - name: agentmesh-copilot-governance
-            path: packages/agentmesh-integrations/copilot-governance
+            path: agent-governance-python/agentmesh-integrations/copilot-governance
           - name: agentmesh-mastra
-            path: packages/agentmesh-integrations/mastra-agentmesh
+            path: agent-governance-python/agentmesh-integrations/mastra-agentmesh
           - name: agentmesh-api
-            path: packages/agent-mesh/services/api
+            path: agent-governance-python/agent-mesh/services/api
           - name: agentmesh-mcp-proxy
-            path: packages/agent-mesh/packages/mcp-proxy
+            path: agent-governance-python/agent-mesh/packages/mcp-proxy
           - name: agentmesh-sdk
-            path: packages/agent-mesh/sdks/typescript
+            path: agent-governance-typescript
           - name: agent-os-copilot-extension
-            path: packages/agent-os/extensions/copilot
+            path: agent-governance-python/agent-os/extensions/copilot
           - name: agentos-mcp-server
-            path: packages/agent-os/extensions/mcp-server
+            path: agent-governance-python/agent-os/extensions/mcp-server
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "20"
 
@@ -151,7 +151,7 @@ jobs:
           subject-path: ${{ matrix.path }}/tgz-output/*.tgz
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: npm-${{ matrix.name }}
           path: ${{ matrix.path }}/tgz-output/*.tgz
@@ -161,6 +161,8 @@ jobs:
     if: ${{ github.event_name == 'release' || github.event.inputs.package == 'agent-governance-dotnet' || github.event.inputs.package == 'all' }}
     runs-on: ubuntu-latest
     environment: nuget
+    env:
+      ESRP_CONFIGURED: ${{ secrets.ESRP_AAD_ID != '' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -179,15 +181,15 @@ jobs:
           echo 'alias nuget="mono /usr/local/bin/nuget.exe"' >> ~/.bashrc
 
       - name: Build .NET SDK
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: dotnet build --configuration Release
 
       - name: Test .NET SDK
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: dotnet test --configuration Release --no-build
 
       - name: Pack NuGet package
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: dotnet pack src/AgentGovernance/AgentGovernance.csproj --configuration Release --no-build --output ./nupkg
 
       # ----------------------------------------------------------------
@@ -198,29 +200,36 @@ jobs:
       # ESRP signing — activate when PRSS certificates are generated and uploaded to Key Vault
       # ----------------------------------------------------------------
       - name: Authenticode sign assemblies (ESRP)
-        if: ${{ env.ESRP_AAD_ID != '' }}
+        if: ${{ env.ESRP_CONFIGURED == 'true' }}
         env:
           ESRP_AAD_ID: ${{ secrets.ESRP_AAD_ID }}
           ESRP_KEYVAULT_NAME: ${{ secrets.ESRP_KEYVAULT_NAME }}
+          ESRP_CERT_IDENTIFIER: ${{ secrets.ESRP_CERT_IDENTIFIER }}
         run: |
           echo "Submitting DLLs for Authenticode signing via ESRP..."
-          find packages/agent-governance-dotnet -name '*.dll' -path '*/Release/*' | head -20
-          echo "::warning::ESRP Authenticode signing configured — activate when PRSS certs are generated."
+          find agent-governance-dotnet -name '*.dll' -path '*/Release/*' | head -20
+          # TODO: Replace this block with actual ESRP signing invocation once
+          # PRSS certificates are generated and uploaded to Key Vault.
+          # Until then, fail to prevent publishing unsigned assemblies.
+          echo "::error::ESRP Authenticode signing not yet implemented — PRSS certs required. Use the ADO pipeline (.github/pipelines/esrp-publish.yml) for production publishing."
+          exit 1
 
       - name: Sign NuGet package (ESRP)
-        if: ${{ env.ESRP_AAD_ID != '' }}
+        if: ${{ env.ESRP_CONFIGURED == 'true' }}
         env:
           ESRP_AAD_ID: ${{ secrets.ESRP_AAD_ID }}
           ESRP_KEYVAULT_NAME: ${{ secrets.ESRP_KEYVAULT_NAME }}
+          ESRP_CERT_IDENTIFIER: ${{ secrets.ESRP_CERT_IDENTIFIER }}
         run: |
           echo "Submitting NuGet packages for signing via ESRP..."
-          # ESRP signing — activate when PRSS certificates are generated and uploaded to Key Vault
-          #   KeyCode: CP-401405
-          #   OperationCode: NuGetSign + NuGetVerify
-          echo "::warning::ESRP NuGet signing configured — activate when PRSS certs are generated."
+          # TODO: Replace this block with actual ESRP NuGetSign + NuGetVerify
+          # invocation (KeyCode: CP-401405) once PRSS certs are ready.
+          # Until then, fail to prevent publishing unsigned packages.
+          echo "::error::ESRP NuGet signing not yet implemented — PRSS certs required. Use the ADO pipeline (.github/pipelines/esrp-publish.yml) for production publishing."
+          exit 1
 
       - name: Validate NuGet package metadata
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: |
           echo "=== Validating Microsoft NuGet compliance ==="
           for pkg in ./nupkg/*.nupkg; do
@@ -233,27 +242,22 @@ jobs:
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
-          subject-path: packages/agent-governance-dotnet/nupkg/*.nupkg
+          subject-path: agent-governance-dotnet/nupkg/*.nupkg
 
       - name: Attest symbol package provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
-          subject-path: packages/agent-governance-dotnet/nupkg/*.snupkg
+          subject-path: agent-governance-dotnet/nupkg/*.snupkg
         continue-on-error: true
 
       - name: Publish to NuGet
-        working-directory: packages/agent-governance-dotnet
+        if: ${{ env.ESRP_CONFIGURED == 'true' }}
+        working-directory: agent-governance-dotnet
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-          ESRP_AAD_ID: ${{ secrets.ESRP_AAD_ID }}
         run: |
           if [ -z "$NUGET_API_KEY" ]; then
             echo "::warning::NUGET_API_KEY not set, skipping NuGet publish"
-            exit 0
-          fi
-          if [ -z "$ESRP_AAD_ID" ]; then
-            echo "::warning::ESRP signing not configured — NuGet.org requires Microsoft-signed packages for the Microsoft.* prefix. Skipping publish until ESRP certificates are provisioned."
-            echo "::warning::Build artifacts are available as workflow artifacts for manual signing and upload."
             exit 0
           fi
           # Push both .nupkg and .snupkg (symbol package)

@@ -164,7 +164,7 @@ A CycloneDX SBOM includes:
 Use the toolkit's Ed25519 identity system to sign any artifact — release
 binaries, SBOMs, policy files, or audit logs.
 
-### §3.1 Signing with the TypeScript SDK
+### §3.1 Signing with the TypeScript package
 
 ```typescript
 import { AgentIdentity } from '@microsoft/agentmesh-sdk';
@@ -200,7 +200,7 @@ console.log('Signature:', Buffer.from(signature).toString('hex').slice(0, 32) + 
 console.log('Signer DID:', signer.did);
 ```
 
-### §3.2 Signing with the Rust SDK
+### §3.2 Signing with the Rust crate
 
 ```rust
 use agentmesh::AgentIdentity;
@@ -229,7 +229,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### §3.3 Signing with the Go SDK
+### §3.3 Signing with the Go module
 
 ```go
 package main
@@ -238,7 +238,7 @@ import (
     "log"
     "os"
 
-    agentmesh "github.com/microsoft/agent-governance-toolkit/sdks/go"
+    agentmesh "github.com/microsoft/agent-governance-toolkit/agent-governance-golang"
 )
 
 func main() {
@@ -274,7 +274,7 @@ func main() {
 
 ## Verifying Signatures
 
-### §4.1 Verification with the TypeScript SDK
+### §4.1 Verification with the TypeScript package
 
 ```typescript
 import { AgentIdentity } from '@microsoft/agentmesh-sdk';
@@ -305,7 +305,7 @@ if (valid) {
 }
 ```
 
-### §4.2 Verification with the Go SDK
+### §4.2 Verification with the Go module
 
 ```go
 // Load signer's public identity
@@ -477,6 +477,7 @@ gh attestation verify dist/artifact.whl \
 | Compliance verification | [Tutorial 18 — Compliance Verification](./18-compliance-verification.md) |
 | Plugin marketplace signing | [Tutorial 10 — Plugin Marketplace](./10-plugin-marketplace.md) |
 | Ed25519 identity | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
+| Shift-left governance | [Tutorial 45 — Shift-Left Governance](./45-shift-left-governance.md) |
 
 ---
 
@@ -484,12 +485,12 @@ gh attestation verify dist/artifact.whl \
 
 | Component | Location |
 |-----------|----------|
-| Security scanner | `packages/agent-compliance/src/agent_compliance/security/scanner.py` |
+| Security scanner | `agent-governance-python/agent-compliance/src/agent_compliance/security/scanner.py` |
 | SBOM workflow | `.github/workflows/sbom.yml` |
 | Publish workflow | `.github/workflows/publish.yml` |
-| Ed25519 identity (TS) | `packages/agent-mesh/sdks/typescript/src/identity.ts` |
-| Ed25519 identity (Rust) | `packages/agent-mesh/sdks/rust/agentmesh/src/identity.rs` |
-| Ed25519 identity (Go) | `packages/agent-mesh/sdks/go/identity.go` |
+| Ed25519 identity (TS) | `agent-governance-typescript/src/identity.ts` |
+| Ed25519 identity (Rust) | `agent-governance-rust/agentmesh/src/identity.rs` |
+| Ed25519 identity (Go) | `agent-governance-golang/identity.go` |
 
 ---
 

@@ -10,7 +10,7 @@ the threat scenarios described in the Irregular Labs paper:
     "Emergent Cyber Behavior: When AI Agents Become Offensive Threat Actors"
 
 Run:
-    cd packages/agent-os
+    cd agent-os
     python ../../docs/demos/conversation-guardian-demo.py
 
 What this demo shows:
@@ -425,9 +425,9 @@ def main():
     print(c("dim", "  * Configurable thresholds and policy integration"))
     print()
     print(c("bold", "  For more information:"))
-    print(c("cyan", "  * Code: packages/agent-os/src/agent_os/integrations/conversation_guardian.py"))
-    print(c("cyan", "  * Tests: packages/agent-os/tests/test_conversation_guardian.py"))
-    print(c("cyan", "  * Policy: packages/agent-os/src/agent_os/policies/policy_schema.json"))
+    print(c("cyan", "  * Code: agent-governance-python/agent-os/src/agent_os/integrations/conversation_guardian.py"))
+    print(c("cyan", "  * Tests: agent-governance-python/agent-os/tests/test_conversation_guardian.py"))
+    print(c("cyan", "  * Policy: agent-governance-python/agent-os/src/agent_os/policies/policy_schema.json"))
     print()
 
 

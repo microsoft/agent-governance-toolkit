@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>AgentGovernance.Extensions.Microsoft.Agents</RootNamespace>
+    <AssemblyName>AgentGovernance.Extensions.Microsoft.Agents</AssemblyName>
+    <Version>3.2.2</Version>
+    <Description>Public Preview companion package for Microsoft.AgentGovernance that makes hooking the real Microsoft.Agents.AI surface into AGT governance middleware easy via AIAgentBuilder.WithGovernance(...).</Description>
+    <PackageId>Microsoft.AgentGovernance.Extensions.Microsoft.Agents</PackageId>
+    <Authors>Microsoft</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/microsoft/agent-governance-toolkit</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/microsoft/agent-governance-toolkit.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>agent;governance;microsoftagents;microsoftagentsai;dotnet;security;policy</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\icon.png" Pack="true" PackagePath="\" />
+    <None Include="..\..\..\NOTICE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgentGovernance\AgentGovernance.csproj" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.3.0" />
+  </ItemGroup>
+
+</Project>

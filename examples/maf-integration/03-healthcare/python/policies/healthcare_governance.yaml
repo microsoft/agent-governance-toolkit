@@ -1,60 +1,57 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-
 version: "1.0"
 name: "medassist-healthcare-governance"
 description: >
-  Governance policy for the MedAssist AI Clinical Assistant agent.
-  Blocks PHI/PII access (SSN, insurance ID, full MRN, date of birth),
-  enforces prescription safety (controlled substances, dosage limits),
-  restricts cross-department record access, and permits standard
-  clinical query operations. All actions are audit-logged.
+  Governance policy for the MedAssist clinical assistant. Blocks PHI disclosure,
+  controlled-substance workflows, and cross-department record access while
+  allowing normal clinical guidance and de-identified summaries.
 
 rules:
   - name: "block_phi_access"
     condition:
       field: "message"
-      operator: "contains_any"
-      value: "SSN,social security,insurance ID,insurance id,full medical record,full MRN,date of birth,DOB,birth date"
+      operator: "matches"
+      value: '(?i)(\b\d{3}-\d{2}-\d{4}\b|insurance id|medical record|mrn|date of birth|\bdob\b|birth date)'
     action: "deny"
     priority: 100
-    message: "Access to SSN, insurance ID, full MRN, and date of birth is prohibited by HIPAA PHI/PII governance policy"
+    message: "Direct PHI and PII disclosure is prohibited by HIPAA policy"
 
   - name: "prescription_safety"
     condition:
       field: "message"
-      operator: "contains_any"
-      value: "oxycodone,fentanyl,morphine,hydrocodone,adderall,ritalin,xanax,valium,ambien,schedule II,schedule III,schedule IV,schedule V,controlled substance,80mg,100mg,200mg"
+      operator: "matches"
+      value: '(?i)(oxycodone|fentanyl|morphine|hydrocodone|schedule ii|schedule iii|schedule iv|controlled substance|80mg|100mg|200mg)'
     action: "deny"
     priority: 95
-    message: "Prescribing controlled substances (Schedule II-V) or dosages above safety limits requires physician override"
+    message: "Controlled substances and unsafe dosages require physician override"
 
   - name: "block_cross_department"
     condition:
       field: "message"
-      operator: "contains_any"
-      value: "radiology records,billing records,HR records,human resources,payroll,financial records,radiology_records,billing_records"
+      operator: "matches"
+      value: '(?i)(radiology records|billing records|hr records|payroll|financial records)'
     action: "deny"
     priority: 90
-    message: "Cross-department record access (radiology, billing, HR) requires departmental authorization"
+    message: "Cross-department record access requires separate authorization"
 
   - name: "allow_clinical_queries"
     condition:
       field: "message"
-      operator: "contains_any"
-      value: "symptom,drug interaction,treatment guideline,treatment option,diagnosis,clinical,medication guide,drug interactions"
+      operator: "matches"
+      value: '(?i)(symptom|drug interaction|interaction|treatment|treatment guideline|diagnosis|clinical|diabetes|warfarin|aspirin)'
     action: "allow"
     priority: 50
-    message: "Standard clinical query operations are permitted"
+    message: "Clinical guidance queries are permitted"
 
   - name: "allow_patient_summary"
     condition:
       field: "message"
-      operator: "contains_any"
-      value: "patient summary,de-identified,anonymized,aggregate data,population health"
+      operator: "matches"
+      value: '(?i)(de-identified|anonymized|aggregate data|patient summary)'
     action: "allow"
-    priority: 50
-    message: "De-identified patient summaries and aggregate data access is permitted"
+    priority: 45
+    message: "De-identified summaries and aggregate views are permitted"
 
   - name: "audit_all_actions"
     condition:
@@ -63,7 +60,7 @@ rules:
       value: 0
     action: "audit"
     priority: 10
-    message: "All agent actions are audit-logged for HIPAA compliance"
+    message: "All clinical assistant activity is audit logged"
 
 defaults:
   action: "allow"

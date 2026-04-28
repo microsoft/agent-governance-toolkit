@@ -1,7 +1,20 @@
 # Tutorial 03 — Wrapping AI Frameworks with Governance
 
+> **Package:** `agent-os-kernel` · **Time:** 25 minutes · **Prerequisites:** Python 3.10+
+
+---
+
+## What You'll Learn
+
+- Govern LangChain agents with policy-aware wrappers
+- Govern CrewAI multi-agent workflows
+- Govern AutoGen conversational agents
+- Govern OpenAI Agents and Google ADK pipelines
+
+---
+
 Every adapter in Agent OS follows the same pattern: **create a policy, create a
-kernel, wrap the framework object, use the governed object as normal**.  The
+kernel, wrap the framework object, use the governed object as normal**.The
 kernel sits between your code and the LLM framework—intercepting calls,
 enforcing limits, blocking disallowed tools, and logging everything.
 
@@ -18,7 +31,7 @@ enforcing limits, blocking disallowed tools, and logging everything.
                      audit log
 ```
 
-All adapters live in `packages/agent-os/src/agent_os/integrations/` and inherit
+All adapters live in `agent-governance-python/agent-os/src/agent_os/integrations/` and inherit
 from `BaseIntegration` (defined in `base.py`).  Every kernel exposes:
 
 | Hook | When it fires | What it does |
@@ -759,5 +772,5 @@ violations route to the same handler, and the audit trail is unified.
 - [Tutorial 01 — Policy Engine](./01-policy-engine.md)
 - [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md)
 - [OWASP Compliance Mapping](../OWASP-COMPLIANCE.md)
-- [API Reference — `BaseIntegration`](../../packages/agent-os/src/agent_os/integrations/base.py)
-- [All 22+ adapters](../../packages/agent-os/src/agent_os/integrations/)
+- [API Reference — `BaseIntegration`](../../agent-governance-python/agent-os/src/agent_os/integrations/base.py)
+- [All 22+ adapters](../../agent-governance-python/agent-os/src/agent_os/integrations/)

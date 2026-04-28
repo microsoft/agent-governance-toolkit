@@ -1,4 +1,17 @@
-# Tutorial 20 — TypeScript SDK (@agentmesh/sdk)
+# Tutorial 20 — TypeScript package (@microsoft/agentmesh-sdk)
+
+> **Package:** `@microsoft/agentmesh-sdk` · **Time:** 30 minutes · **Prerequisites:** Node.js 18+
+
+---
+
+## What You'll Learn
+
+- Identity and Ed25519 DIDs in TypeScript/Node.js
+- Trust scoring and peer verification
+- Declarative policy evaluation
+- Hash-chain audit logging
+
+---
 
 Build governance-aware AI agents in TypeScript and Node.js.
 The `@microsoft/agentmesh-sdk` package provides cryptographic identity (Ed25519 DIDs),
@@ -34,7 +47,7 @@ a single npm install.
 npm install @microsoft/agentmesh-sdk
 ```
 
-The SDK has two runtime dependencies — `@noble/ed25519` for cryptography and
+The package has two runtime dependencies — `@noble/ed25519` for cryptography and
 `js-yaml` for YAML policy parsing. Both are installed automatically.
 
 For TypeScript projects, types are included — no separate `@types/` package is
@@ -1044,7 +1057,7 @@ async function governedCompletion(
 
 ### §9.2 Environment Variables
 
-The SDK itself is configuration-object driven, but you can wire environment variables
+The package itself is configuration-object driven, but you can wire environment variables
 into your configuration:
 
 ```typescript
@@ -1078,7 +1091,7 @@ const client = AgentMeshClient.create(
 
 ### §9.3 TypeScript Configuration
 
-The SDK targets ES2020 and uses Node16 module resolution. Ensure your `tsconfig.json`
+The package targets ES2020 and uses Node16 module resolution. Ensure your `tsconfig.json`
 includes:
 
 ```json
@@ -1209,10 +1222,10 @@ async function safeExecute(
 
 ## Cross-Reference
 
-The TypeScript SDK mirrors the Python packages. Use this table to find the
+The TypeScript package mirrors the Python packages. Use this table to find the
 equivalent Python tutorial for each topic:
 
-| TypeScript SDK | Python Package | Tutorial |
+| TypeScript package | Python Package | Tutorial |
 |---------------|---------------|----------|
 | `PolicyEngine` | `agent_os.policies` | [Tutorial 01 — Policy Engine](./01-policy-engine.md) |
 | `AgentIdentity`, `IdentityRegistry` | `agent_os.identity` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
@@ -1220,7 +1233,7 @@ equivalent Python tutorial for each topic:
 | Framework integration | `agent_os.integrations` | [Tutorial 03 — Framework Integrations](./03-framework-integrations.md) |
 | `AuditLogger` | `agent_os.audit` | [Tutorial 04 — Audit & Compliance](./04-audit-and-compliance.md) |
 
-> **Note:** The TypeScript SDK wraps all governance features into a single
+> **Note:** The TypeScript package wraps all governance features into a single
 > `@microsoft/agentmesh-sdk` package, while the Python implementation splits
 > them across separate `agent_os.*` modules. The APIs are designed for
 > cross-language parity — policy YAML files work identically in both.
@@ -1231,23 +1244,23 @@ equivalent Python tutorial for each topic:
 
 | Component | Location |
 |-----------|----------|
-| Main exports | `packages/agent-mesh/sdks/typescript/src/index.ts` |
-| Type definitions | `packages/agent-mesh/sdks/typescript/src/types.ts` |
-| `AgentIdentity` | `packages/agent-mesh/sdks/typescript/src/identity.ts` |
-| `TrustManager` | `packages/agent-mesh/sdks/typescript/src/trust.ts` |
-| `PolicyEngine` | `packages/agent-mesh/sdks/typescript/src/policy.ts` |
-| `AuditLogger` | `packages/agent-mesh/sdks/typescript/src/audit.ts` |
-| `AgentMeshClient` | `packages/agent-mesh/sdks/typescript/src/client.ts` |
-| Tests | `packages/agent-mesh/sdks/typescript/tests/*.test.ts` |
-| Package config | `packages/agent-mesh/sdks/typescript/package.json` |
+| Main exports | `agent-governance-typescript/src/index.ts` |
+| Type definitions | `agent-governance-typescript/src/types.ts` |
+| `AgentIdentity` | `agent-governance-typescript/src/identity.ts` |
+| `TrustManager` | `agent-governance-typescript/src/trust.ts` |
+| `PolicyEngine` | `agent-governance-typescript/src/policy.ts` |
+| `AuditLogger` | `agent-governance-typescript/src/audit.ts` |
+| `AgentMeshClient` | `agent-governance-typescript/src/client.ts` |
+| Tests | `agent-governance-typescript/tests/*.test.ts` |
+| Package config | `agent-governance-typescript/package.json` |
 
 ---
 
 ## Next Steps
 
-- **Run the tests** to see the SDK in action:
+- **Run the tests** to see the package in action:
   ```bash
-  cd packages/agent-mesh/sdks/typescript
+  cd agent-governance-typescript
   npm install && npm test
   ```
 - **Load a YAML policy** from the repository's `policies/` directory and evaluate it
@@ -1256,4 +1269,4 @@ equivalent Python tutorial for each topic:
   establish peer trust between cooperating agents
 - **Add audit export** to your CI/CD pipeline — call `logger.exportJSON()` and
   persist the trail for compliance reviews
-- **Explore the Python SDK** tutorials (01–04) for equivalent patterns in Python
+- **Explore the Python tutorials** (01–04) for equivalent patterns in Python

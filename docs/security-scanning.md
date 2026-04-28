@@ -330,6 +330,69 @@ Security exemptions are reviewed:
 - **On promotion** - All exemptions reviewed before moving to curated marketplace
 - **Security audits** - Periodic review of all exempted findings
 
+## Plugin Signature Enforcement (Fail-Closed)
+
+> **Since PR #921**, the `PluginInstaller` enforces a **fail-closed** policy for
+> unsigned plugins.
+
+When signature verification is enabled (the default), plugins **without** a valid
+Ed25519 signature are rejected at install time. This means:
+
+- A plugin with no `signature` field → install raises `MarketplaceError`
+- A plugin signed by an author not in `trusted_keys` → install raises `MarketplaceError`
+- A plugin whose signature does not verify → install raises `MarketplaceError`
+
+### Constructing a Trusted Key Store
+
+```python
+from cryptography.hazmat.primitives.asymmetric import ed25519
+from agentmesh.marketplace import PluginInstaller, PluginRegistry
+
+# Load or generate the author's public key
+public_key = ed25519.Ed25519PublicKey.from_public_bytes(raw_bytes)
+
+# Construct the installer with a trusted key mapping.
+# The mapping is frozen at construction time — later mutations are rejected.
+installer = PluginInstaller(
+    plugins_dir=plugins_dir,
+    registry=PluginRegistry(),
+    trusted_keys={"author@example.com": public_key},
+)
+```
+
+> **⚠️ Breaking Change (v3.3+):** `trusted_keys` is now frozen at construction
+> using `types.MappingProxyType`. Code that previously mutated
+> `installer._trusted_keys` after construction will raise `TypeError`.
+> Pass the complete key mapping at construction time instead.
+
+### Development Override
+
+To install an unsigned plugin during development, pass `verify=False` explicitly:
+
+```python
+installer.install("my-dev-plugin", verify=False)
+```
+
+> **🔴 CAUTION:** Never use `verify=False` in production. It disables signature
+> verification entirely, allowing any plugin — including potentially malicious
+> ones — to be installed. Gate this behind an environment check:
+>
+> ```python
+> installer.install(name, verify=not os.getenv("AGT_PRODUCTION", False))
+> ```
+
+## Python Version Requirements
+
+The `agent-sre` SLI persistence module uses `pathlib.Path.is_relative_to()` for
+safe directory confinement checks. This method was introduced in **Python 3.9**.
+The package's `pyproject.toml` requires **Python ≥ 3.10**.
+
+> **⚠️ Breaking Change:** If you are running Python < 3.9, path validation will
+> raise `AttributeError`. Upgrade to Python 3.10+ (the minimum supported version).
+
+If you encounter `AttributeError: 'PosixPath' object has no attribute 'is_relative_to'`,
+upgrade your Python installation to 3.10 or later.
+
 ## Questions?
 
 - **Security concerns:** Contact @security-team

@@ -67,28 +67,31 @@ Neither replaces the other — they're complementary layers in a defense-in-dept
 
 ## Setup
 
-### Option A: Governance Skill Inside the Sandbox
+### Option A: Governance Skill Inside the Sandbox (Python Library)
 
-Install the toolkit as an [OpenClaw skill](../packages/agentmesh-integrations/openclaw-skill/) that the agent invokes before each action:
+Install the [OpenShell governance skill](../../agent-governance-python/agentmesh-integrations/openshell-skill/) and use it from your agent's code:
 
-```bash
+```python
 # Inside the sandbox
-pip install agentmesh-platform
+# pip install openshell-agentmesh  (or install from repo)
+from openshell_agentmesh import GovernanceSkill
 
-# Use the skill scripts
-scripts/check-policy.sh --action "web_search" --tokens 1500 --policy policy.yaml
-scripts/trust-score.sh --agent "did:mesh:abc123"
-scripts/verify-identity.sh --did "did:mesh:abc123" --message "hello" --signature "base64sig"
+skill = GovernanceSkill(policy_dir="./policies")
+
+# Before each tool call, check policy
+decision = skill.check_policy("shell:curl https://api.example.com")
+if not decision.allowed:
+    print(f"Blocked: {decision.reason}")
 ```
 
-This approach is lightweight and works with any agent that supports OpenClaw skills.
+See the [runnable example](../../examples/openshell-governed/) for a complete demo.
 
 ### Option B: Governance Sidecar (Production)
 
-Run the toolkit as a sidecar proxy that intercepts all tool calls transparently:
+Run the governance API server as a sidecar container. Your agent (or orchestration layer) calls the sidecar's HTTP API before executing actions:
 
 ```yaml
-# openshell-governance-policy.yaml
+# openshell-governance-policy.yaml — OpenShell sandbox network rules
 network:
   outbound:
     - match:
@@ -99,19 +102,11 @@ network:
         host: "*.openai.com"
       action: allow          # Allow approved LLM calls
     - action: deny           # Block everything else
-
-filesystem:
-  read:
-    - /workspace/**
-    - /policies/**
-  write:
-    - /workspace/**
-    - /var/log/governance/**
 ```
 
 ```bash
-# Start the governance sidecar inside the sandbox
-python -m agentmesh.server --port 8081 --policy /policies/ &
+# Start the governance sidecar (Agent OS server)
+python -m agent_os.server --host 127.0.0.1 --port 8081 &
 
 # Create the sandbox with the policy
 openshell sandbox create \
@@ -119,7 +114,9 @@ openshell sandbox create \
   -- claude
 ```
 
-See the full [OpenClaw sidecar deployment guide](../deployment/openclaw-sidecar.md) for AKS and Docker Compose configurations.
+> **Note:** The sidecar does not yet transparently intercept tool calls — your agent must call `http://localhost:8081/api/v1/detect/injection` or `/api/v1/execute` explicitly. See the [sidecar API docs](../deployment/openclaw-sidecar.md#sidecar-api-endpoints).
+
+See the full [OpenClaw sidecar deployment guide](../deployment/openclaw-sidecar.md) for Docker Compose and AKS configurations.
 
 ---
 
@@ -187,7 +184,7 @@ When running both layers, you get two complementary telemetry streams:
 - Process execution logs
 - Inference routing logs
 
-Both can feed into the same Grafana dashboard for a unified view. See the [Agent SRE monitoring guide](../../packages/agent-sre/README.md) for SLO configuration.
+Both can feed into the same Grafana dashboard for a unified view. See the [Agent SRE monitoring guide](../../agent-governance-python/agent-sre/README.md) for SLO configuration.
 
 ---
 
@@ -209,7 +206,8 @@ OpenShell can *host* the sidecar. The governance sidecar runs inside or alongsid
 
 ## Related
 
-- [OpenClaw Skill](../../packages/agentmesh-integrations/openclaw-skill/) — Lightweight skill for OpenClaw agents
+- [OpenShell Governance Skill](../../agent-governance-python/agentmesh-integrations/openshell-skill/) — Python skill package for OpenShell agents
+- [Runnable Example](../../examples/openshell-governed/) — Self-contained demo with policy enforcement
 - [OpenClaw Sidecar Deployment](../deployment/openclaw-sidecar.md) — AKS and Docker Compose guide
 - [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) — Runtime sandbox for AI agents
 - [Architecture](../ARCHITECTURE.md) — Full toolkit architecture

@@ -3,7 +3,7 @@
 # Licensed under the MIT License.
 set -euo pipefail
 
-sdk_dir="/workspace/packages/agent-mesh/sdks/typescript"
+sdk_dir="/workspace/agent-governance-typescript"
 
 if [[ -f "${sdk_dir}/package.json" && ! -d "${sdk_dir}/node_modules" ]]; then
     echo "Installing TypeScript SDK dependencies..."

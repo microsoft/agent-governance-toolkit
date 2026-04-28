@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "audit_accountability_export"
+version = "0.1.0"
+description = "Example adapter from AgentMesh AuditEntry output to an external accountability export shape"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    { name = "Microsoft Corporation" }
+]
+keywords = ["agents", "audit", "accountability", "agentmesh", "governance", "interoperability"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/issues/1314"
+
+[tool.hatch.build.targets.wheel]
+packages = ["audit_accountability_export"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0,<62.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pharma_compliance_demo"
+version = "3.2.2"
+description = "Pharma Compliance demo using Agent OS"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.4.0,<3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0,<8.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

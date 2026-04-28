@@ -552,10 +552,10 @@ print(f"  Exceeded:      {final.is_exceeded}")
 
 | Component | Location |
 |-----------|----------|
-| `TokenBudgetTracker` | `packages/agent-os/src/agent_os/integrations/token_budget.py` |
-| `ContextScheduler` | `packages/agent-os/src/agent_os/context_budget.py` |
-| `BudgetExceeded` | `packages/agent-os/src/agent_os/context_budget.py` |
-| `AgentSignal` | `packages/agent-os/src/agent_os/context_budget.py` |
+| `TokenBudgetTracker` | `agent-governance-python/agent-os/src/agent_os/integrations/token_budget.py` |
+| `ContextScheduler` | `agent-governance-python/agent-os/src/agent_os/context_budget.py` |
+| `BudgetExceeded` | `agent-governance-python/agent-os/src/agent_os/context_budget.py` |
+| `AgentSignal` | `agent-governance-python/agent-os/src/agent_os/context_budget.py` |
 
 ---
 

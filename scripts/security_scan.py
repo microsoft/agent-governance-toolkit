@@ -8,7 +8,7 @@ Can be used as a standalone CLI tool, pre-commit hook, or CI step.
 
 Usage:
     # Scan a directory
-    python scripts/security_scan.py packages/agent-os/src/
+    python scripts/security_scan.py agent-governance-python/agent-os/src/
 
     # Scan specific files
     python scripts/security_scan.py path/to/file.py
@@ -17,10 +17,10 @@ Usage:
     python scripts/security_scan.py --staged
 
     # JSON output for CI
-    python scripts/security_scan.py packages/ --format json
+    python scripts/security_scan.py . --format json
 
     # Fail only on critical/high
-    python scripts/security_scan.py packages/ --min-severity high
+    python scripts/security_scan.py . --min-severity high
 """
 
 from __future__ import annotations

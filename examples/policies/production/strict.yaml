@@ -1,0 +1,41 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Production Policy: Strict (Maximum Security)
+# Risk profile: MAXIMUM - defense, critical infrastructure
+
+version: "1.0"
+name: strict-governance
+description: Maximum-security allowlist-only governance.
+
+rules:
+  - name: block-secrets-in-output
+    condition: {field: output, operator: matches, value: "(?i)(api[_-]?key|password|secret|token)[:\\s=]+\\S{8,}"}
+    action: deny
+    priority: 100
+    message: "Credential pattern detected in output"
+
+  - name: block-pii
+    condition: {field: output, operator: matches, value: "\\b\\d{3}-\\d{2}-\\d{4}\\b"}
+    action: deny
+    priority: 100
+    message: "PII detected in output"
+
+  - name: allow-read-file
+    condition: {field: action, operator: eq, value: read_file}
+    action: allow
+    priority: 50
+
+  - name: allow-search
+    condition: {field: action, operator: eq, value: web_search}
+    action: allow
+    priority: 50
+
+  - name: allow-summarize
+    condition: {field: action, operator: eq, value: summarize}
+    action: allow
+    priority: 50
+
+defaults:
+  action: deny
+  max_tool_calls: 10

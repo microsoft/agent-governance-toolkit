@@ -1,0 +1,38 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Production Policy: Minimal
+# Risk profile: LOW - startups, internal tools, experimentation
+
+version: "1.0"
+name: minimal-governance
+description: Minimal governance for low-risk environments.
+
+rules:
+  - name: block-delete-file
+    condition: {field: action, operator: eq, value: delete_file}
+    action: deny
+    priority: 100
+    message: "File deletion requires manual intervention"
+
+  - name: block-drop-table
+    condition: {field: action, operator: eq, value: drop_table}
+    action: deny
+    priority: 100
+    message: "Database schema changes are not permitted"
+
+  - name: block-execute-code
+    condition: {field: action, operator: eq, value: execute_code}
+    action: deny
+    priority: 100
+    message: "Arbitrary code execution is blocked"
+
+  - name: block-ssh
+    condition: {field: action, operator: eq, value: ssh_connect}
+    action: deny
+    priority: 100
+    message: "Direct SSH access is not permitted"
+
+defaults:
+  action: allow
+  max_tool_calls: 100

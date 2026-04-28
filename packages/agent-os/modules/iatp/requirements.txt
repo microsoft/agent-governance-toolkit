@@ -1,6 +1,0 @@
-fastapi==0.115.0
-uvicorn==0.27.0
-pydantic==2.10.3
-httpx==0.26.0
-python-dateutil==2.8.2
-agent-primitives @ file:../primitives  # local-only package, not on PyPI

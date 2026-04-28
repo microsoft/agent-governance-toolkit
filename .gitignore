@@ -246,7 +246,7 @@ PublishScripts/
 # NuGet Symbol Packages
 *.snupkg
 # The packages folder can be ignored because of Package Restore
-# DISABLED: mono-repo uses /packages/ for source code
+# DISABLED: mono-repo; source code starts at repo root
 # **/[Pp]ackages/*
 # !**/[Pp]ackages/build/
 # #!**/[Pp]ackages/repositories.config
@@ -454,3 +454,11 @@ FodyWeavers.xsd
 *.token
 .env
 .env.*
+_site/
+
+# Build artifacts and caches
+dist/
+.hypothesis/
+.pytest_cache/
+.ruff_cache/
+_site/

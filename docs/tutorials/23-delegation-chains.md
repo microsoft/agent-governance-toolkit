@@ -19,7 +19,7 @@ that enforce the principle of least privilege across multi-agent systems.
 |---------|-------|
 | [What is Delegation?](#what-is-delegation) | Why agents need to delegate and the risks involved |
 | [Monotonic Scope Narrowing](#monotonic-scope-narrowing) | Why authority can only decrease |
-| [Creating a Delegation Chain](#creating-a-delegation-chain) | TypeScript SDK: `delegate()` with capability subsets |
+| [Creating a Delegation Chain](#creating-a-delegation-chain) | TypeScript package: `delegate()` with capability subsets |
 | [Delegation Depth Tracking](#delegation-depth-tracking) | Tracking how many hops from the root authority |
 | [Scope Chain Verification](#scope-chain-verification) | Validating the entire delegation chain |
 | [Cross-Agent Trust Propagation](#cross-agent-trust-propagation) | How trust flows through delegation |
@@ -34,7 +34,7 @@ that enforce the principle of least privilege across multi-agent systems.
 - **Node.js 18+** with TypeScript 5.4+
 - `npm install @microsoft/agentmesh-sdk`
 - Recommended: read [Tutorial 02 — Trust & Identity](02-trust-and-identity.md)
-  and [Tutorial 20 — TypeScript SDK](20-typescript-sdk.md)
+  and [Tutorial 20 — TypeScript package](20-typescript-sdk.md)
 
 ---
 
@@ -495,8 +495,8 @@ with delegated authority.
 | Concept | Tutorial |
 |---------|----------|
 | Ed25519 identity basics | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
-| TypeScript SDK overview | [Tutorial 20 — TypeScript SDK](./20-typescript-sdk.md) |
-| Rust SDK delegation | [Tutorial 21 — Rust SDK](./21-rust-sdk.md) |
+| TypeScript package overview | [Tutorial 20 — TypeScript package](./20-typescript-sdk.md) |
+| Rust crate delegation | [Tutorial 21 — Rust crate](./21-rust-sdk.md) |
 | Policy evaluation | [Tutorial 01 — Policy Engine](./01-policy-engine.md) |
 | Liability & attribution | [Tutorial 12 — Liability & Attribution](./12-liability-and-attribution.md) |
 
@@ -506,9 +506,9 @@ with delegated authority.
 
 | Component | Location |
 |-----------|----------|
-| `AgentIdentity` (TypeScript) | `packages/agent-mesh/sdks/typescript/src/identity.ts` |
-| `IdentityRegistry` (TypeScript) | `packages/agent-mesh/sdks/typescript/src/identity.ts` |
-| Tests | `packages/agent-mesh/sdks/typescript/tests/identity.test.ts` |
+| `AgentIdentity` (TypeScript) | `agent-governance-typescript/src/identity.ts` |
+| `IdentityRegistry` (TypeScript) | `agent-governance-typescript/src/identity.ts` |
+| Tests | `agent-governance-typescript/tests/identity.test.ts` |
 
 ---
 

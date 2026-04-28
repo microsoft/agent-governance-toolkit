@@ -21,9 +21,22 @@ jobs:
           echo "Checking for ^ or ~ version ranges in package.json files..."
           VIOLATIONS=0
           for f in $(find packages -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*'); do
-            if grep -P '": "[\^~]' "$f" 2>/dev/null; then
-              echo "VIOLATION: $f has unpinned version ranges"
-              VIOLATIONS=$((VIOLATIONS + 1))
+            # Exclude engines block (VS Code extensions require ^ ranges for engine compat)
+            if python3 -c "
+          import json, sys
+          data = json.load(open('$f'))
+          for section in ('dependencies', 'devDependencies', 'peerDependencies'):
+              for pkg, ver in data.get(section, {}).items():
+                  if any(ver.startswith(c) for c in ('^', '~')):
+                      print(f'    \"{pkg}\": \"{ver}\"')
+                      sys.exit(1)
+          " 2>/dev/null; then
+              :
+            else
+              if [ $? -eq 1 ]; then
+                echo "VIOLATION: $f has unpinned version ranges"
+                VIOLATIONS=$((VIOLATIONS + 1))
+              fi
             fi
           done
           if [ $VIOLATIONS -gt 0 ]; then

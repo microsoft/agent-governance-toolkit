@@ -1,0 +1,370 @@
+# Default values for agentmesh
+# Production-grade defaults for enterprise deployment.
+
+# -- Global configuration shared across all components
+global:
+  # -- Kubernetes namespace for deployment (string)
+  namespace: agentmesh
+  # -- Docker registry secrets for pulling private images (list of secret names)
+  imagePullSecrets: []
+  # -- Default image tag applied to all components unless overridden (string, semver)
+  imageTag: "0.3.0"
+  tls:
+    # -- Enable TLS for inter-component communication (bool)
+    enabled: true
+    # -- Name of the Kubernetes Secret containing the TLS cert and key (string)
+    certSecretName: agentmesh-tls
+  spiffe:
+    # -- Enable SPIFFE-based workload identity (bool)
+    enabled: false
+    # -- SPIFFE trust domain, e.g. "agentmesh.local" (string)
+    trustDomain: agentmesh.local
+    # -- Path to the SPIRE agent UNIX socket (string, file path)
+    socketPath: /run/spire/sockets/agent.sock
+
+# -- Override the chart name in resource names (string)
+nameOverride: ""
+# -- Fully override the release name in resource names (string)
+fullnameOverride: ""
+
+# -- Service account configuration
+serviceAccount:
+  # -- Create a dedicated ServiceAccount for agentmesh pods (bool)
+  create: true
+  # -- Annotations to add to the ServiceAccount, e.g. for IAM roles (map)
+  annotations: {}
+  # -- Explicit ServiceAccount name; auto-generated from release name if empty (string)
+  name: ""
+
+# -- Pod-level security context applied to all pods
+podSecurityContext:
+  # -- Require containers to run as non-root (bool)
+  runAsNonRoot: true
+  # -- UID for the container process (int)
+  runAsUser: 1000
+  # -- GID for volume mounts (int)
+  fsGroup: 1000
+  seccompProfile:
+    # -- Seccomp profile type: RuntimeDefault, Localhost, or Unconfined (string)
+    type: RuntimeDefault
+
+# -- Container-level security context applied to all containers
+securityContext:
+  capabilities:
+    # -- Linux capabilities to drop (list)
+    drop:
+      - ALL
+  # -- Mount the root filesystem as read-only (bool)
+  readOnlyRootFilesystem: true
+  # -- Prevent privilege escalation via setuid/setgid (bool)
+  allowPrivilegeEscalation: false
+
+# ---------------------------------------------------------------------------
+# Trust Engine - validates agent identity and issues trust tokens
+# ---------------------------------------------------------------------------
+trustEngine:
+  # -- Number of Trust Engine replicas (int, >= 1)
+  replicas: 2
+  image:
+    # -- Container image repository (string)
+    repository: ghcr.io/microsoft/agentmesh/trust-engine
+    # -- Image tag; defaults to global.imageTag when empty (string)
+    tag: ""
+    # -- Image pull policy: Always, IfNotPresent, or Never (string)
+    pullPolicy: IfNotPresent
+  service:
+    # -- Service type: ClusterIP, NodePort, or LoadBalancer (string)
+    type: ClusterIP
+    # -- Primary service port (int, 1-65535)
+    port: 8443
+    # -- Prometheus metrics port (int, 1-65535)
+    metricsPort: 9090
+  resources:
+    requests:
+      # -- Minimum CPU allocation (string, Kubernetes resource quantity)
+      cpu: 100m
+      # -- Minimum memory allocation (string, Kubernetes resource quantity)
+      memory: 256Mi
+    limits:
+      # -- Maximum CPU allocation (string, Kubernetes resource quantity)
+      cpu: 500m
+      # -- Maximum memory allocation (string, Kubernetes resource quantity)
+      memory: 512Mi
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    # -- Seconds to wait before the first liveness check (int)
+    initialDelaySeconds: 30
+    # -- Interval between liveness checks (int, seconds)
+    periodSeconds: 10
+    # -- Timeout for each liveness check (int, seconds)
+    timeoutSeconds: 5
+    # -- Consecutive failures before restarting the pod (int)
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: http
+    # -- Seconds to wait before the first readiness check (int)
+    initialDelaySeconds: 10
+    # -- Interval between readiness checks (int, seconds)
+    periodSeconds: 5
+    # -- Timeout for each readiness check (int, seconds)
+    timeoutSeconds: 3
+    # -- Consecutive failures before marking pod unready (int)
+    failureThreshold: 3
+  # -- Node labels for pod scheduling (map)
+  nodeSelector: {}
+  # -- Tolerations for pod scheduling (list)
+  tolerations: []
+  # -- Affinity rules for pod scheduling (map)
+  affinity: {}
+
+# ---------------------------------------------------------------------------
+# Policy Server - evaluates governance policies against agent actions
+# ---------------------------------------------------------------------------
+policyServer:
+  # -- Number of Policy Server replicas (int, >= 1)
+  replicas: 2
+  image:
+    # -- Container image repository (string)
+    repository: ghcr.io/microsoft/agentmesh/policy-server
+    # -- Image tag; defaults to global.imageTag when empty (string)
+    tag: ""
+    # -- Image pull policy: Always, IfNotPresent, or Never (string)
+    pullPolicy: IfNotPresent
+  service:
+    # -- Service type: ClusterIP, NodePort, or LoadBalancer (string)
+    type: ClusterIP
+    # -- Primary service port (int, 1-65535)
+    port: 8444
+    # -- Prometheus metrics port (int, 1-65535)
+    metricsPort: 9091
+  resources:
+    requests:
+      # -- Minimum CPU allocation (string, Kubernetes resource quantity)
+      cpu: 100m
+      # -- Minimum memory allocation (string, Kubernetes resource quantity)
+      memory: 256Mi
+    limits:
+      # -- Maximum CPU allocation (string, Kubernetes resource quantity)
+      cpu: 500m
+      # -- Maximum memory allocation (string, Kubernetes resource quantity)
+      memory: 512Mi
+  # -- Mount path for YAML policy files inside the container (string, absolute path)
+  policyMountPath: /etc/agentmesh/policies
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    # -- Seconds to wait before the first liveness check (int)
+    initialDelaySeconds: 30
+    # -- Interval between liveness checks (int, seconds)
+    periodSeconds: 10
+    # -- Timeout for each liveness check (int, seconds)
+    timeoutSeconds: 5
+    # -- Consecutive failures before restarting the pod (int)
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: http
+    # -- Seconds to wait before the first readiness check (int)
+    initialDelaySeconds: 10
+    # -- Interval between readiness checks (int, seconds)
+    periodSeconds: 5
+    # -- Timeout for each readiness check (int, seconds)
+    timeoutSeconds: 3
+    # -- Consecutive failures before marking pod unready (int)
+    failureThreshold: 3
+  # -- Node labels for pod scheduling (map)
+  nodeSelector: {}
+  # -- Tolerations for pod scheduling (list)
+  tolerations: []
+  # -- Affinity rules for pod scheduling (map)
+  affinity: {}
+
+# ---------------------------------------------------------------------------
+# Audit Collector - captures and stores agent interaction audit logs
+# ---------------------------------------------------------------------------
+auditCollector:
+  # -- Number of Audit Collector replicas (int, >= 1)
+  replicas: 1
+  image:
+    # -- Container image repository (string)
+    repository: ghcr.io/microsoft/agentmesh/audit-collector
+    # -- Image tag; defaults to global.imageTag when empty (string)
+    tag: ""
+    # -- Image pull policy: Always, IfNotPresent, or Never (string)
+    pullPolicy: IfNotPresent
+  service:
+    # -- Service type: ClusterIP, NodePort, or LoadBalancer (string)
+    type: ClusterIP
+    # -- Primary service port (int, 1-65535)
+    port: 8445
+    # -- Prometheus metrics port (int, 1-65535)
+    metricsPort: 9092
+  resources:
+    requests:
+      # -- Minimum CPU allocation (string, Kubernetes resource quantity)
+      cpu: 100m
+      # -- Minimum memory allocation (string, Kubernetes resource quantity)
+      memory: 256Mi
+    limits:
+      # -- Maximum CPU allocation (string, Kubernetes resource quantity)
+      cpu: 500m
+      # -- Maximum memory allocation (string, Kubernetes resource quantity)
+      memory: 512Mi
+  persistence:
+    # -- Enable persistent storage for audit logs (bool)
+    enabled: true
+    # -- StorageClass name; empty uses the cluster default (string)
+    storageClass: ""
+    # -- Persistent volume size (string, Kubernetes resource quantity, e.g. "10Gi")
+    size: 10Gi
+    # -- PVC access modes (list)
+    accessModes:
+      - ReadWriteOnce
+  # -- Number of days to retain audit logs before automatic cleanup (int)
+  retentionDays: 90
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    # -- Seconds to wait before the first liveness check (int)
+    initialDelaySeconds: 30
+    # -- Interval between liveness checks (int, seconds)
+    periodSeconds: 10
+    # -- Timeout for each liveness check (int, seconds)
+    timeoutSeconds: 5
+    # -- Consecutive failures before restarting the pod (int)
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: http
+    # -- Seconds to wait before the first readiness check (int)
+    initialDelaySeconds: 10
+    # -- Interval between readiness checks (int, seconds)
+    periodSeconds: 5
+    # -- Timeout for each readiness check (int, seconds)
+    timeoutSeconds: 3
+    # -- Consecutive failures before marking pod unready (int)
+    failureThreshold: 3
+  # -- Node labels for pod scheduling (map)
+  nodeSelector: {}
+  # -- Tolerations for pod scheduling (list)
+  tolerations: []
+  # -- Affinity rules for pod scheduling (map)
+  affinity: {}
+
+# ---------------------------------------------------------------------------
+# API Gateway - external entry point for agent traffic
+# ---------------------------------------------------------------------------
+apiGateway:
+  # -- Number of API Gateway replicas (int, >= 1)
+  replicas: 2
+  image:
+    # -- Container image repository (string)
+    repository: ghcr.io/microsoft/agentmesh/api-gateway
+    # -- Image tag; defaults to global.imageTag when empty (string)
+    tag: ""
+    # -- Image pull policy: Always, IfNotPresent, or Never (string)
+    pullPolicy: IfNotPresent
+  service:
+    # -- Service type; LoadBalancer exposes the gateway externally (string)
+    type: LoadBalancer
+    # -- External HTTPS port (int, 1-65535)
+    port: 443
+    # -- Prometheus metrics port (int, 1-65535)
+    metricsPort: 9093
+  resources:
+    requests:
+      # -- Minimum CPU allocation (string, Kubernetes resource quantity)
+      cpu: 100m
+      # -- Minimum memory allocation (string, Kubernetes resource quantity)
+      memory: 256Mi
+    limits:
+      # -- Maximum CPU allocation (string, Kubernetes resource quantity)
+      cpu: 500m
+      # -- Maximum memory allocation (string, Kubernetes resource quantity)
+      memory: 512Mi
+  # -- Maximum API requests per minute per client before throttling (int)
+  rateLimitPerMinute: 1000
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    # -- Seconds to wait before the first liveness check (int)
+    initialDelaySeconds: 30
+    # -- Interval between liveness checks (int, seconds)
+    periodSeconds: 10
+    # -- Timeout for each liveness check (int, seconds)
+    timeoutSeconds: 5
+    # -- Consecutive failures before restarting the pod (int)
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: http
+    # -- Seconds to wait before the first readiness check (int)
+    initialDelaySeconds: 10
+    # -- Interval between readiness checks (int, seconds)
+    periodSeconds: 5
+    # -- Timeout for each readiness check (int, seconds)
+    timeoutSeconds: 3
+    # -- Consecutive failures before marking pod unready (int)
+    failureThreshold: 3
+  # -- Node labels for pod scheduling (map)
+  nodeSelector: {}
+  # -- Tolerations for pod scheduling (list)
+  tolerations: []
+  # -- Affinity rules for pod scheduling (map)
+  affinity: {}
+
+# ---------------------------------------------------------------------------
+# Monitoring - Prometheus metrics collection
+# ---------------------------------------------------------------------------
+monitoring:
+  prometheus:
+    # -- Enable Prometheus metrics endpoints on all components (bool)
+    enabled: true
+    # -- How often Prometheus scrapes metrics (string, duration, e.g. "15s")
+    scrapeInterval: 15s
+  serviceMonitor:
+    # -- Create a Prometheus ServiceMonitor resource (bool; requires prometheus-operator)
+    enabled: false
+    # -- Namespace for the ServiceMonitor; empty uses the release namespace (string)
+    namespace: ""
+    # -- Extra labels to match the Prometheus selector (map)
+    additionalLabels: {}
+
+# ---------------------------------------------------------------------------
+# Autoscaling (HPA) - Horizontal Pod Autoscaler
+# ---------------------------------------------------------------------------
+autoscaling:
+  # -- Enable HPA for all components (bool)
+  enabled: true
+  # -- Minimum number of replicas (int, >= 1)
+  minReplicas: 2
+  # -- Maximum number of replicas (int)
+  maxReplicas: 10
+  # -- Target average CPU usage before scaling up (int, percent 1-100)
+  targetCPUUtilizationPercentage: 70
+
+# ---------------------------------------------------------------------------
+# Pod Disruption Budget
+# ---------------------------------------------------------------------------
+podDisruptionBudget:
+  # -- Enable PDB to protect availability during voluntary disruptions (bool)
+  enabled: true
+  # -- Minimum pods that must remain available during disruptions (int or percentage)
+  minAvailable: 1
+
+# ---------------------------------------------------------------------------
+# Network Policy
+# ---------------------------------------------------------------------------
+networkPolicy:
+  # -- Enable Kubernetes NetworkPolicy to restrict pod-to-pod traffic (bool)
+  enabled: true

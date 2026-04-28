@@ -2,11 +2,15 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
   schedule:
-    - cron: '0 6 * * *'  # Daily at 06:00 UTC
+    - cron: "0 6 * * *" # Daily at 06:00 UTC
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -31,33 +35,33 @@ jobs:
         with:
           filters: |
             python:
-              - 'packages/agent-os/**'
-              - 'packages/agent-mesh/**'
-              - 'packages/agent-hypervisor/**'
-              - 'packages/agent-sre/**'
-              - 'packages/agent-compliance/**'
-              - 'packages/agent-runtime/**'
-              - 'packages/agent-lightning/**'
+              - 'agent-governance-python/agent-os/**'
+              - 'agent-governance-python/agent-mesh/**'
+              - 'agent-governance-python/agent-hypervisor/**'
+              - 'agent-governance-python/agent-sre/**'
+              - 'agent-governance-python/agent-compliance/**'
+              - 'agent-governance-python/agent-runtime/**'
+              - 'agent-governance-python/agent-lightning/**'
               - 'scripts/**'
-              - 'requirements/**'
+              - 'agent-governance-python/requirements/**'
             dotnet:
-              - 'packages/agent-governance-dotnet/**'
+              - 'agent-governance-dotnet/**'
             typescript:
-              - 'packages/agent-mesh/sdks/typescript/**'
-              - 'packages/agent-os/extensions/**'
-              - 'packages/agentmesh-integrations/mastra-agentmesh/**'
-              - 'packages/agentmesh-integrations/copilot-governance/**'
+              - 'agent-governance-typescript/**'
+              - 'agent-governance-python/agent-os/extensions/**'
+              - 'agent-governance-python/agentmesh-integrations/mastra-agentmesh/**'
+              - 'agent-governance-python/agentmesh-integrations/copilot-governance/**'
             integrations:
-              - 'packages/agentmesh-integrations/**'
+              - 'agent-governance-python/agentmesh-integrations/**'
             workflows:
               - '.github/workflows/**'
             rust:
-              - 'packages/agent-mesh/sdks/rust/**'
+              - 'agent-governance-rust/**'
             go:
-              - 'packages/agent-mesh/sdks/go/**'
+              - 'agent-governance-golang/**'
             docs-only:
               - '**/*.md'
-              - 'notebooks/**'
+              - 'agent-governance-python/notebooks/**'
               - 'docs/**'
 
   # ── Python lint + test (only when Python files change) ────────────────
@@ -67,16 +71,26 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [agent-os, agent-mesh, agent-hypervisor, agent-sre, agent-compliance, agent-runtime, agent-lightning]
+        package:
+          [
+            agent-os,
+            agent-mesh,
+            agent-hypervisor,
+            agent-sre,
+            agent-compliance,
+            agent-runtime,
+            agent-lightning,
+          ]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.11"
       - name: Install ruff
-        run: pip install --require-hashes --no-cache-dir -r requirements/ci-lint.txt
+        run: pip install --require-hashes --no-cache-dir -r agent-governance-python/requirements/ci-lint.txt
       - name: Lint ${{ matrix.package }}
-        run: ruff check packages/${{ matrix.package }}/src/ --select E,F,W --ignore E501
+        working-directory: agent-governance-python/${{ matrix.package }}
+        run: ruff check src/ --select E,F,W --ignore E501
 
   # ── Python test (only when Python files change) ───────────────────────
   test:
@@ -86,9 +100,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [agent-os, agent-mesh, agent-hypervisor, agent-sre, agent-compliance, agent-runtime, agent-lightning]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        package:
+          [
+            agent-os,
+            agent-mesh,
+            agent-hypervisor,
+            agent-sre,
+            agent-compliance,
+            agent-runtime,
+            agent-lightning,
+          ]
+        python-version: [ "3.10", "3.11", "3.12", "3.13" ]
         exclude:
+          - package: agent-os
+            python-version: "3.10"
           - package: agent-mesh
             python-version: "3.10"
           - package: agent-hypervisor
@@ -104,13 +129,21 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install local sibling dependencies
+        run: |
+          # agent-os depends on agent_primitives (local, not on PyPI at >=3.x)
+          # and agentmesh (test_cmd_sign.py imports agentmesh.marketplace)
+          if [ "${{ matrix.package }}" = "agent-os" ]; then
+            pip install --no-cache-dir -e agent-governance-python/agent-primitives
+            pip install --no-cache-dir -e agent-governance-python/agent-mesh
+          fi
       - name: Install ${{ matrix.package }}
-        working-directory: packages/${{ matrix.package }}
+        working-directory: agent-governance-python/${{ matrix.package }}
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
           pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==0.26.0 2>/dev/null || true
       - name: Test ${{ matrix.package }}
-        working-directory: packages/${{ matrix.package }}
+        working-directory: agent-governance-python/${{ matrix.package }}
         run: pytest tests/ -q --tb=short
 
   # ── PyPI package build (only when Python files change) ────────────────
@@ -121,7 +154,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [agent-os, agent-mesh, agent-hypervisor, agent-sre, agent-compliance, agent-runtime, agent-lightning]
+        package:
+          [
+            agent-os,
+            agent-mesh,
+            agent-hypervisor,
+            agent-sre,
+            agent-compliance,
+            agent-runtime,
+            agent-lightning,
+          ]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -130,10 +172,10 @@ jobs:
       - name: Install build tools
         run: pip install --no-cache-dir build==1.2.2 setuptools==75.8.0
       - name: Build ${{ matrix.package }}
-        working-directory: packages/${{ matrix.package }}
+        working-directory: agent-governance-python/${{ matrix.package }}
         run: python -m build
       - name: Verify wheel
-        working-directory: packages/${{ matrix.package }}
+        working-directory: agent-governance-python/${{ matrix.package }}
         run: ls -la dist/*.whl
 
   # ── Python dependency safety (only when Python files change) ──────────
@@ -155,7 +197,7 @@ jobs:
         run: |
           for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance agent-runtime agent-lightning; do
             echo "=== $pkg ==="
-            cd packages/$pkg
+            cd agent-governance-python/$pkg
             pip install --no-cache-dir -e . 2>/dev/null || true  # Install local package (Scorecard: pinned via pyproject.toml)
             cd ../..
           done
@@ -172,22 +214,38 @@ jobs:
         with:
           dotnet-version: "8.0.x"
       - name: Build .NET SDK
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: dotnet build --configuration Release --verbosity quiet
       - name: Test .NET SDK
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: dotnet test --configuration Release --verbosity normal --no-build
       - name: Pack NuGet
-        working-directory: packages/agent-governance-dotnet
-        run: dotnet pack src/AgentGovernance/AgentGovernance.csproj --configuration Release --no-build --output ./nupkg
+        working-directory: agent-governance-dotnet
+        run: dotnet pack src/AgentGovernance/AgentGovernance.csproj --configuration
+          Release --no-build --output ./nupkg
       - name: Verify NuGet package
-        working-directory: packages/agent-governance-dotnet
+        working-directory: agent-governance-dotnet
         run: ls -la ./nupkg/*.nupkg
+      - name: BinSkim — binary security analysis
+        working-directory: agent-governance-dotnet
+        run: |
+          dotnet tool install --global Microsoft.CodeAnalysis.BinSkim --version 4.* 2>/dev/null || true
+          BinSkim analyze "src/AgentGovernance/bin/Release/net8.0/*.dll" \
+            --output binskim-results.sarif \
+            --verbose 2>/dev/null || echo "BinSkim completed with warnings"
+      - name: Upload BinSkim SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4.35.2
+        with:
+          sarif_file: agent-governance-dotnet/binskim-results.sarif
+          category: binskim
+        continue-on-error: true
 
   # ── Integration tests (only when integration packages change) ────────
   test-integrations:
     needs: changes
-    if: needs.changes.outputs.integrations == 'true' || needs.changes.outputs.python == 'true' || github.event_name == 'schedule'
+    if: needs.changes.outputs.integrations == 'true' || needs.changes.outputs.python
+      == 'true' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -225,12 +283,12 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install ${{ matrix.package }}
-        working-directory: packages/agentmesh-integrations/${{ matrix.package }}
+        working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
           pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==0.26.0 2>/dev/null || true
       - name: Validate Python syntax
-        working-directory: packages/agentmesh-integrations/${{ matrix.package }}
+        working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
           python -c "
           import ast, glob, sys
@@ -250,7 +308,7 @@ jobs:
         run: python -c "import ${{ matrix.import-module }}"
         continue-on-error: true
       - name: Run tests
-        working-directory: packages/agentmesh-integrations/${{ matrix.package }}
+        working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
           if [ -d tests ]; then
             pytest tests/ -q --tb=short
@@ -338,59 +396,62 @@ jobs:
   # ── TypeScript integration tests (only when TS files change) ─────────
   test-integrations-ts:
     needs: changes
-    if: needs.changes.outputs.typescript == 'true' || github.event_name == 'schedule'
+    if: needs.changes.outputs.typescript == 'true' || github.event_name ==
+      'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "20"
       - name: Install mastra-agentmesh
-        working-directory: packages/agentmesh-integrations/mastra-agentmesh
+        working-directory: agent-governance-python/agentmesh-integrations/mastra-agentmesh
         run: npm ci 2>/dev/null || npm install --ignore-scripts
       - name: Lint mastra-agentmesh
-        working-directory: packages/agentmesh-integrations/mastra-agentmesh
+        working-directory: agent-governance-python/agentmesh-integrations/mastra-agentmesh
         run: npm run lint 2>/dev/null || true
       - name: Test mastra-agentmesh
-        working-directory: packages/agentmesh-integrations/mastra-agentmesh
+        working-directory: agent-governance-python/agentmesh-integrations/mastra-agentmesh
         run: npm test
       - name: Install copilot-governance
-        working-directory: packages/agentmesh-integrations/copilot-governance
+        working-directory: agent-governance-python/agentmesh-integrations/copilot-governance
         run: npm ci 2>/dev/null || npm install --ignore-scripts
       - name: Lint copilot-governance
-        working-directory: packages/agentmesh-integrations/copilot-governance
+        working-directory: agent-governance-python/agentmesh-integrations/copilot-governance
         run: npm run lint 2>/dev/null || true
       - name: Test copilot-governance
-        working-directory: packages/agentmesh-integrations/copilot-governance
+        working-directory: agent-governance-python/agentmesh-integrations/copilot-governance
         run: npm test
 
   # ── npm package build + test (only when TS files change) ──────────────
   build-npm:
     needs: changes
-    if: needs.changes.outputs.typescript == 'true' || github.event_name == 'schedule'
+    if: needs.changes.outputs.typescript == 'true' || github.event_name ==
+      'schedule'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: agentmesh-mcp-proxy
-            path: packages/agent-mesh/packages/mcp-proxy
-          - name: agentmesh-sdk
-            path: packages/agent-mesh/sdks/typescript
+            path: agent-governance-python/agent-mesh/packages/mcp-proxy
+          - name: agent-governance-sdk
+            path: agent-governance-typescript
           - name: agentmesh-api
-            path: packages/agent-mesh/services/api
+            path: agent-governance-python/agent-mesh/services/api
           - name: agent-os-copilot-extension
-            path: packages/agent-os/extensions/copilot
+            path: agent-governance-python/agent-os/extensions/copilot
           - name: agentos-mcp-server
-            path: packages/agent-os/extensions/mcp-server
+            path: agent-governance-python/agent-os/extensions/mcp-server
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "20"
       - name: Install dependencies
         working-directory: ${{ matrix.path }}
-        run: npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps --ignore-scripts
+        run: npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps
+          --ignore-scripts
       - name: Build ${{ matrix.name }}
         working-directory: ${{ matrix.path }}
         run: npm run build
@@ -407,11 +468,11 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
       - name: Build
-        working-directory: packages/agent-mesh/sdks/rust/agentmesh
-        run: cargo build --release
+        working-directory: agent-governance-rust
+        run: cargo build --release --workspace
       - name: Test
-        working-directory: packages/agent-mesh/sdks/rust/agentmesh
-        run: cargo test --release
+        working-directory: agent-governance-rust
+        run: cargo test --release --workspace
 
   # ── Go build + test (only when Go files change) ─────────────────────
   build-go:
@@ -424,13 +485,13 @@ jobs:
         with:
           go-version: "1.22"
       - name: Build
-        working-directory: packages/agent-mesh/sdks/go
+        working-directory: agent-governance-golang
         run: go build ./...
       - name: Test
-        working-directory: packages/agent-mesh/sdks/go
+        working-directory: agent-governance-golang
         run: go test ./...
       - name: Vet
-        working-directory: packages/agent-mesh/sdks/go
+        working-directory: agent-governance-golang
         run: go vet ./...
 
   # ── CI Gate — required status check that handles skipped jobs ────────
@@ -440,7 +501,22 @@ jobs:
   # success. Configure this as the single required status check.
   ci-complete:
     if: always()
-    needs: [changes, lint, test, build-pypi, security, test-dotnet, test-integrations, dependency-scan, workflow-security, test-integrations-ts, build-npm, build-rust, build-go]
+    needs:
+      [
+        changes,
+        lint,
+        test,
+        build-pypi,
+        security,
+        test-dotnet,
+        test-integrations,
+        dependency-scan,
+        workflow-security,
+        test-integrations-ts,
+        build-npm,
+        build-rust,
+        build-go,
+      ]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
@@ -452,3 +528,4 @@ jobs:
             exit 1
           fi
           echo "All jobs passed or were correctly skipped"
+

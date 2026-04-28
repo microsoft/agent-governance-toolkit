@@ -11,18 +11,208 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Security
-- **Hardened CLI Error Handling** — standardized sanitized JSON error output across all 7 ecosystem tools to prevent internal information disclosure (CWE-209).
-- **Audit Log Whitelisting** — implemented strict key-whitelisting in `agentmesh audit` JSON output to prevent accidental leakage of sensitive agent internal state.
-- **CLI Input Validation** — added regex-based validation for agent identifiers (DIDs/names) in registration and verification commands to prevent injection attacks.
+
+## [3.3.0] - 2026-04-27
+
+### Highlights
+
+**Contributor Reputation Check** — a new reusable GitHub Action that screens PR and issue authors for coordinated inauthentic behavior. Detects following farming, cross-repo spray, credential laundering, and network coordination. Any OSS repo can adopt it. Part of AGT's shift-left governance strategy.
+
+**Repo Reorganization** — all SDK packages now live under language-specific directories (`agent-governance-python/`, `agent-governance-typescript/`, `agent-governance-dotnet/`, `agent-governance-rust/`, `agent-governance-golang/`). Root directory is clean and navigable.
 
 ### Added
-- **EU AI Act Risk Classifier** (`agentmesh.governance.EUAIActRiskClassifier`) — structured risk classification per Article 6 and Annex III, with Art. 6(1) Annex I safety-component path, Art. 6(3) exemptions, GDPR Art. 4(4) profiling override, and configurable YAML categories for regulatory updates (#756).
+- **Contributor Reputation Action** — reusable composite action at `.github/actions/contributor-check/` for any OSS repo (#1479, #1483, #1484, #1496, #1497)
+  - `contributor_check.py`: Account shape analysis, repo velocity, following farming, spray pattern detection
+  - `credential_audit.py`: Detects credential laundering (merged PRs cited as credentials in spray issues)
+  - `cluster_detect.py`: Maps coordination networks via shared forks, co-comments, synchronized filing
+  - Runs automatically on PR/issue open, labels MEDIUM/HIGH risk, posts structured comment
+  - 38 tests across all three tools
+- **Sentry integration** for Agent SRE — native error tracking exporter (#1469, #1493)
+- **ADR 0010** — TEE keystore design with SEV-SNP attestation (#1492)
+- **RFC 9334 RATS** architecture alignment for trust framework (#1480)
+- **Tutorial 45** — Shift-left governance with contributor reputation as the leftmost check (#1450)
+- **Sigstore provenance**, plugin lifecycle management, EU AI Act evidence pipeline (#1448)
+- **MCP CVE feed** and CLI vs IDE governance parity detection (#1446)
+- **MCP auth method enforcement** in allowlist (#1444)
+- **A2A tutorial** and governance operations docs (#1442)
+- **EU AI Act compliance templates** — FRIA, post-market monitoring, data provenance (#1441, #1439)
+- **CIS Controls v8.1 mapping** for AI agent governance (#1447)
+- **Quality gate scripts** inspired by AzureClaw Phase 0 (#1440)
+- **ATR Community Rules** upgraded from 15 to 287 rules (ATR v2.0.12) with weekly sync workflow (#1277)
+- **Microsoft.Agents governance extension** for .NET (#1420)
+- **SDK parity improvements** across .NET (#1424), TypeScript (#1425), Rust (#1426), Go (#1419)
+- **MAF integration demos** and Tutorial 34 (#1387, #1388)
+- **Advisory layer** — optional classifier-based defense-in-depth (#1390)
+- **OpenTelemetry native observability** (#1389)
+- **Attribute ratchets** — monotonic session state (#1384)
+- **Human-in-the-loop approval workflows** (#1383)
+- **Multi-stage policy pipeline** — pre_input, pre_tool, post_tool, pre_output (#1381)
+- **2-line governance wrapper** — `govern()` function (#1380)
+- **Policy composition with inheritance** via `extends` (#1379)
+- **Folder-level governance** — discovery, merge, evaluator (#1352)
+- **Bilateral receipt signing** — pre-execution + post-execution (#1333)
+- **MCP governance extension** for .NET (#1330)
+- **Cognitive attestation** example (#1328)
+- **OCI manifest adapter** for AI Card spec alignment (#1456)
+- **Context poisoning detection** for agent memory (OWASP ASI-06) (#1455)
+- **Cascading failure containment** for multi-agent systems (#1454)
+- **Inbox replay on reconnect** (#1451)
+
+### Changed
+- **Repo structure**: All packages reorganized under language-specific SDK directories (#1459, #1471)
+  - `agent-governance-python/` — 10 Python packages
+  - `agent-governance-typescript/` — VS Code extension and TS SDK
+  - `agent-governance-dotnet/` — .NET SDK
+  - `agent-governance-rust/` — Rust SDK
+  - `agent-governance-golang/` — Go SDK
+- Root folders consolidated: `ci/` to `scripts/ci/`, `demo/` to `examples/demos/`, `releases/` to `docs/releases/`, `pipelines/` to `.github/pipelines/` (#1488)
+- `fuzz/`, `notebooks/`, `benchmarks/`, `requirements/` moved under `agent-governance-python/` (#1481)
+- Duplicate root `QUICKSTART.md` removed (canonical version at `docs/QUICKSTART.md`) (#1490)
+- SDK packages renamed with standardized naming (#1343)
+- Tutorials verified: all 42 tutorials pass 68 checks (#1408)
+
+### Security
+- **Contributor reputation tools** hardened: URL encoding for Python 3.13+, retry-with-backoff for rate limits, real usernames scrubbed (#1491)
+- ScopeBlind content removed after credential laundering detection (#1498)
+- Example Sentry DSN replaced to avoid secret scanning (#1494)
+- X3DH signed pre-key signature verification (#1437, #1428)
+- Adversarial X3DH signature verification tests (#1443)
+- Self-promotional content removed from ADRs (#1449)
+
+### Fixed
+- CI workflow paths updated for reorganized package directories (#1482, #1491)
+- `sentry-sdk` added to dependency scan allowlist (#1491)
+- 13 ruff lint errors in agent-mesh (#1491)
+- Docs audit: CLI name, package names, broken links, YAML, prereqs (#1378)
+- OpenClaw demo docker build context and Windows test (#1353)
+- TypeScript SDK build for TypeScript 6 (#1409, #1411)
+- Rust crate directory rename (#1347, #1345)
+- ESRP and CI pipeline updates for new SDK package names (#1344)
+
+## [3.2.2] - 2026-04-22
+
+### Fixed
+- **Docker**: OpenClaw sidecar docker compose fix
+- **TypeScript SDK**: Encryption module exports for npm package
+
+## [3.2.1] - 2026-04-22
+
+### Fixed
+- **TypeScript SDK**: Fixed build compatibility with TypeScript 6.0 — encryption modules (X3DHKeyManager, MeshClient, SecureChannel, DoubleRatchet) now correctly exported from npm package
+- **TypeScript SDK**: Fixed `@noble/hashes` import paths (`sha256` → `sha2` module rename)
+- **TypeScript SDK**: Replaced removed `edwardsToMontgomeryPriv/Pub` with manual SHA-512 + RFC 7748 clamping
+- **TypeScript SDK**: Added Jest `moduleNameMapper` + `transformIgnorePatterns` for ESM `@noble/*` packages
+
+## [3.2.0] - 2026-04-22
+
+### Added
+- **AgentMesh Wire Protocol v1.0** specification (`docs/specs/AGENTMESH-WIRE-1.0.md`)
+- **TypeScript E2E Encryption** — X3DH + Double Ratchet + SecureChannel ported to `@microsoft/agentmesh-sdk`
+- **MeshClient** — high-level relay transport with plaintext peers, KNOCK pending queue, wsFactory hook
+- **Registry Service** — first-party agent registry with pre-key bundles, discovery, presence, reputation
+- **Relay Service** — store-and-forward WebSocket relay with 72h TTL offline inbox
+- Clean-room IP statement and recommended crypto libraries (Appendix A-B of wire spec)
+
+### Fixed
+- CI lint errors in encryption modules
+- Dependency scan allowlist for mkdocs-minify-plugin## [3.1.1] - 2026-04-21
+
+### Added
+- **E2E Encrypted Agent Messaging** — Signal protocol (X3DH + Double Ratchet) for agent-to-agent channels with per-message forward secrecy (#1222, #1223, #1224, #1226)
+  - `agentmesh.encryption.x3dh` — X3DH key agreement using Ed25519 identity keys
+  - `agentmesh.encryption.ratchet` — Double Ratchet with ChaCha20-Poly1305 encryption
+  - `agentmesh.encryption.channel` — SecureChannel high-level send/receive API
+  - `agentmesh.encryption.bridge` — EncryptedTrustBridge gates channels on trust verification
+  - 61 tests across all encryption modules
+- **GitHub Pages documentation site** — MkDocs Material at microsoft.github.io/agent-governance-toolkit (#1186)
+- **BinSkim binary security analysis** for .NET SDK in CI (#1245)
+- **Customer FAQ** — 13 technical Q&As for customers, partners, and evaluators (#1171, #1185)
+- **Tutorial 32** — E2E Encrypted Agent Messaging (#1227)
+- **Tutorial 33** — Offline-Verifiable Decision Receipts (#1197)
+- **Entra Agent ID bridge tutorial** — DID ↔ Entra identity integration (#1166)
+- **Chaos testing tutorial** for AI agents with Agent SRE (#1184)
+- **ISO 42001 alignment assessment** (#1183)
+- **Container images** — GHCR publishing for AgentMesh components (#1192)
+- **.NET SDK**: MCP security namespace, kill switch, lifecycle management (#1021, #1065)
+- **Go SDK**: MCP security, execution rings, lifecycle management (#1066)
+- **Rust SDK**: Execution rings and lifecycle management (#1067)
+- **Graph API group membership sync** for Entra Agent ID bridge (#1191)
+- **Workshop materials** — 2-hour AI agent governance session (#1195)
+
+### Security
+- Address all 106 open code scanning alerts (#1211)
+- Address 14 code scanning alerts (#1211)
+- Remove hardcoded credentials flagged by generic secret scanning (#1217)
+- Upgrade axios to 1.15.0 for CVE-2026-40175, CVE-2025-62718 (#966)
+- Address 6 Dependabot security vulnerabilities (#1212)
+- Resolve CodeQL syntax errors (#1213)
+- Harden new packages against audit findings (#944)
+- XSS, curl|bash, CORS, PII leak, path traversal fixes (#945)
+
+### Fixed
+- **ESRP NuGet signing** — add AuthCertName for cert-based auth, fix Windows agent requirement (#1022, #1207, #1208, #1210, #1214, #1232, #1233)
+- **CI path filters** — docs-only PRs drop from ~14 checks to ~4 (#1019)
+- **CI concurrency groups** — cancel stale duplicate runs on branch updates (#1019)
+- Remove pi-mono integration breaking dependency scan (#1190)
+- Fix lint errors in encryption modules (#1248)
+- Add mkdocs-minify-plugin to dep scan allowlist (#1247)
+- Align lotl_prevention_policy.yaml with PolicyDocument schema
+- Standardize DID method to did:agentmesh across all SDKs (#1170)
+- Downgrade rand 0.9.3 to 0.8.5 for ed25519-dalek compatibility (#1178)
+- Fix container publish workflow matrix issues (#1239, #1240, #1241, #1243)
+- Rewrite production policy examples to valid PolicyDocument schema (#1011)
 
 ### Documentation
-- Added `EUAIActRiskClassifier` usage example and API docs to `packages/agent-mesh/README.md`.
-- Updated `QUICKSTART.md` and `Tutorial 04 — Audit & Compliance` with secure JSON error handling examples and schema details.
-- Added "Secure Error Handling" sections to primary documentation to guide users on interpreting sanitized machine-readable outputs.
+- **OpenClaw sidecar** — comprehensive rewrite with verified API examples and working demo (#1163, #1164, #1167)
+- v3.1.0 release announcement in README with PyPI badge (#1019)
+- OWASP ASI-07 updated with Signal protocol E2E encryption (#1242)
+- Governance Maturity Model blog post (#1182)
+- Blog post comparing AI agent governance approaches (#1193)
+- docs/GOVERNANCE.md, docs/MAINTAINERS.md, docs/ROADMAP.md for foundation submission (#1215)
+- Attribution & prior art policy (#1219)
+- Sync audit redaction wording with current code (#1014)
+- Address external critic gaps in limitations and threat model (#1017, #1025)
+
+### Dependencies
+- Bump 25+ dependencies across Python, TypeScript, .NET, and Rust packages
+
+
+## [3.1.0] - 2026-04-11
+
+### Added
+- **Unified `agt` CLI** with plugin discovery, doctor command, and 79 tests (#924)
+- **Governance Dashboard** — real-time agent fleet visibility (#925)
+- **Agent Lifecycle Management** — provisioning to decommission (#923)
+- **Agent Discovery Package** — shadow AI discovery & inventory (#921)
+- **Quantum-Safe Signing** — ML-DSA-65 alongside Ed25519 (#927)
+- **Vendor Independence Enforcement** across all core packages
+- **OWASP ASI 2026 Taxonomy Migration** with reference architecture
+- **PromptDefenseEvaluator** — 12-vector prompt audit (#854)
+- **EU AI Act Risk Classifier** (`agentmesh.governance.EUAIActRiskClassifier`) — structured risk classification per Article 6 and Annex III, with Art. 6(1) Annex I safety-component path, Art. 6(3) exemptions, GDPR Art. 4(4) profiling override, and configurable YAML categories for regulatory updates (#756)
+
+### Security
+- Patched dependency verification bypass and trust handshake DID forgery (#920)
+- **Hardened CLI Error Handling** — standardized sanitized JSON error output across all 7 ecosystem tools to prevent internal information disclosure (CWE-209)
+- **Audit Log Whitelisting** — implemented strict key-whitelisting in `agentmesh audit` JSON output to prevent accidental leakage of sensitive agent internal state
+- **CLI Input Validation** — added regex-based validation for agent identifiers (DIDs/names) in registration and verification commands to prevent injection attacks
+
+### Fixed
+- Repo hygiene: MIT headers, compliance disclaimers, dependency confusion, network bindings (#926)
+- CI: pyyaml added to agent-compliance direct dependencies
+- Code samples updated to v3 API
+- Various dependency bumps (cryptography, path-to-regexp, etc.)
+
+### Documentation
+- Modern Agent Architecture overview for enterprise sharing
+- NIST AI RMF 1.0 alignment assessment
+- MCP governance consolidated into docs/compliance/
+- Policy-as-code tutorial chapter 4
+- Added `EUAIActRiskClassifier` usage example and API docs to `agent-governance-python/agent-mesh/README.md`
+- Updated `QUICKSTART.md` and `Tutorial 04 — Audit & Compliance` with secure JSON error handling examples and schema details
+- Added "Secure Error Handling" sections to primary documentation to guide users on interpreting sanitized machine-readable outputs
+
+### Added
+- Added optional runtime evidence mode for `agt verify` with `--evidence` and `--strict`.
 
 
 ## [3.0.2] - 2026-04-02
@@ -65,7 +255,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Notebook dependency scanner regex hardened
 
 ### Changed
-- PUBLISHING.md rewritten with full Microsoft compliance policies (MCR, ESRP, Conda, PMC)
+- docs/PUBLISHING.md rewritten with full Microsoft compliance policies (MCR, ESRP, Conda, PMC)
 - Branch protection: 13 required status checks, dismiss stale reviews, squash-only merges
 - README updated with 5 SDK languages, 20+ framework integrations, security tooling table
 
@@ -133,13 +323,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.2.0] - 2026-03-17
 
 ### Added
-- ESRP Release ADO pipeline for PyPI publishing (`pipelines/pypi-publish.yml`)
-- ESRP Release ADO pipeline for npm publishing (`pipelines/npm-publish.yml`)
+- ESRP Release ADO pipeline for PyPI publishing (`.github/pipelines/pypi-publish.yml`)
+- ESRP Release ADO pipeline for npm publishing (`.github/pipelines/npm-publish.yml`)
 - npm build + pack job in GitHub Actions publish workflow
 - Community preview disclaimers across all READMEs, release notes, and package descriptions
-- `PUBLISHING.md` guide covering PyPI, npm, and NuGet publishing requirements
+- `docs/PUBLISHING.md` guide covering PyPI, npm, and NuGet publishing requirements
 - `agent-runtime` re-export wrapper package (`src/agent_runtime/__init__.py`)
-- `RELEASE_NOTES_v2.2.0.md`
+- `docs/releases/RELEASE_NOTES_v2.2.0.md`
 - `create_policies_from_config()` API — load security policies from YAML config files
 - `SQLPolicyConfig` dataclass and `load_sql_policy_config()` for structured policy loading
 - 10 sample policy configs in `examples/policies/` (sql-safety, sql-strict, sql-readonly, sandbox-safety, prompt-injection-safety, mcp-security, semantic-policy, pii-detection, conversation-guardian, cli-security-rules)
@@ -174,7 +364,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **TypeScript SDK full parity** (— PolicyEngine + AgentIdentity) — rich policy evaluation with 4 conflict resolution strategies, expression evaluator, rate limiting, YAML/JSON policy documents, Ed25519 identity with lifecycle/delegation/JWK/JWKS/DID export, IdentityRegistry with cascade revocation. 136 tests passing. (#269)
-- **@agentmesh/sdk 1.0.0** — TypeScript package now publish-ready with `exports` field, `prepublishOnly` build hook, correct `repository.directory`, MIT license.
+- **@microsoft/agentmesh-sdk 1.0.0** — TypeScript package now publish-ready with `exports` field, `prepublishOnly` build hook, correct `repository.directory`, MIT license.
 - **Multi-language README** — root README now surfaces Python (PyPI), TypeScript (npm), and .NET (NuGet) install sections, badges, quickstart code, and a multi-SDK packages table.
 - **Multi-language QUICKSTART** — getting started guide now covers all three SDKs with code examples.
 - **Semantic Kernel + Azure AI Foundry** added to framework integration table.
@@ -183,7 +373,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GitHub Copilot Extension** — agent governance code review extension for Copilot.
 - **Observability integrations** — Prometheus, OpenTelemetry, PagerDuty, Grafana (#49).
 - **NIST RFI mapping** — question-by-question mapping to NIST AI Agent Security RFI 2026-00206 (#29).
-- **Performance benchmarks** — published BENCHMARKS.md with p50/p99 latency, throughput at 50 concurrent agents (#231).
+- **Performance benchmarks** — published docs/BENCHMARKS.md with p50/p99 latency, throughput at 50 concurrent agents (#231).
 - **6 comprehensive governance tutorials** — policy engine, trust & identity, framework integrations, audit & compliance, agent reliability, execution sandboxing (#187).
 - **Azure deployment guides** — AKS, Azure AI Foundry, Container Apps, OpenClaw sidecar.
 
@@ -195,12 +385,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **.NET NuGet metadata** enhanced — Authors, License, RepositoryUrl, Tags, ReadmeFile in csproj.
 - All example install strings updated from `ai-agent-compliance[full]` to `agent-governance[full]`.
 - Demo fixed: legacy `agent-hypervisor` path → `agent-runtime`.
-- BENCHMARKS.md: fixed stale "VADP version" reference.
+- docs/BENCHMARKS.md: fixed stale "VADP version" reference.
 
 ### Fixed
 
 - Demo fixed: legacy `agent-hypervisor` path → `agent-runtime`.
-- BENCHMARKS.md: fixed stale "VADP version" reference.
+- docs/BENCHMARKS.md: fixed stale "VADP version" reference.
 - **.NET bug sweep** — thread safety, error surfacing, caching, disposal fixes (#252).
 - **Behavioral anomaly detection** implemented in RingBreachDetector.
 - **CLI edge case tests** and input validation for agent-compliance (#234).
@@ -232,7 +422,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 pip install agent-governance-toolkit[full]
 
 # TypeScript
-npm install @agentmesh/sdk
+npm install @microsoft/agentmesh-sdk
 
 # .NET
 dotnet add package Microsoft.AgentGovernance

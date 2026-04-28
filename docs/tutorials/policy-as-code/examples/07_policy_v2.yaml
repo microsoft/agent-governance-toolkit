@@ -1,0 +1,75 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Chapter 7: Policy Versioning — version 2.0 update.
+#
+# Changes from v1:
+#   1. Version bumped from 1.0 to 2.0
+#   2. block-write-file priority raised from 70 to 95
+#      (fixes the Chapter 6 surprise where environment policy
+#       at priority 90 overrode the block at priority 70)
+#   3. escalate-send-email converted to hard deny — legal decided
+#      send_email should be fully blocked, not escalated
+#   4. escalate-transfer-funds message accidentally edited
+#      (removes "requires human approval" — introduces a regression)
+
+version: "2.0"
+name: production-policy
+description: >
+  Company-wide production policy — version 2.0 update.
+  Blocks send_email outright, fixes write_file priority.
+
+rules:
+  # Tier 1: Always denied — irreversibly destructive
+  - name: block-delete-database
+    condition:
+      field: tool_name
+      operator: eq
+      value: delete_database
+    action: deny
+    priority: 100
+    message: "Destructive action: deleting databases is never allowed"
+
+  # Tier 2: Escalation — needs human review
+  - name: escalate-transfer-funds
+    condition:
+      field: tool_name
+      operator: eq
+      value: transfer_funds
+    action: deny
+    priority: 90
+    message: "Sensitive action: transfer_funds is blocked"
+
+  # Changed: send_email is now a hard deny, no longer escalated
+  - name: escalate-send-email
+    condition:
+      field: tool_name
+      operator: eq
+      value: send_email
+    action: deny
+    priority: 85
+    message: "Communication: send_email is blocked by policy"
+
+  # Tier 3: Always allowed — safe, read-only actions
+  - name: allow-search-documents
+    condition:
+      field: tool_name
+      operator: eq
+      value: search_documents
+    action: allow
+    priority: 80
+    message: "Safe action: searching documents is always allowed"
+
+  # Tier 4: Explicit deny — priority raised to beat environment rules
+  - name: block-write-file
+    condition:
+      field: tool_name
+      operator: eq
+      value: write_file
+    action: deny
+    priority: 95
+    message: "Write access is not permitted for this agent"
+
+defaults:
+  action: allow
+  max_tool_calls: 10

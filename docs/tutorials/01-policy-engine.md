@@ -1,4 +1,17 @@
-# Tutorial: Policy Engine
+# Tutorial 01 — Policy Engine
+
+> **Package:** `agent-os-kernel` · **Time:** 30 minutes · **Prerequisites:** Python 3.10+
+
+---
+
+## What You'll Learn
+
+- YAML rules for declarative governance policies
+- Operators for matching agent context and tool calls
+- Conflict resolution strategies for competing rules
+- Middleware integration with AI frameworks
+
+---
 
 The policy engine is the governance backbone of the Agent Governance Toolkit. It
 evaluates declarative YAML rules against runtime context and returns
@@ -791,10 +804,18 @@ if decision:
 
 | Component | Location |
 |-----------|----------|
-| Schema models | `packages/agent-os/src/agent_os/policies/schema.py` |
-| Evaluator | `packages/agent-os/src/agent_os/policies/evaluator.py` |
-| GovernancePolicy | `packages/agent-os/src/agent_os/integrations/base.py` |
-| MAF middleware | `packages/agent-os/src/agent_os/integrations/maf_adapter.py` |
-| Conflict resolution | `packages/agent-mesh/src/agentmesh/governance/conflict_resolution.py` |
-| Policy examples | `packages/agent-os/examples/policies/` |
-| Research demo | `demo/policies/research_policy.yaml` |
+| Schema models | `agent-governance-python/agent-os/src/agent_os/policies/schema.py` |
+| Evaluator | `agent-governance-python/agent-os/src/agent_os/policies/evaluator.py` |
+| GovernancePolicy | `agent-governance-python/agent-os/src/agent_os/integrations/base.py` |
+| MAF middleware | `agent-governance-python/agent-os/src/agent_os/integrations/maf_adapter.py` |
+| Conflict resolution | `agent-governance-python/agent-mesh/src/agentmesh/governance/conflict_resolution.py` |
+| Policy examples | `agent-governance-python/agent-os/examples/policies/` |
+| Research demo | `examples/demos/policies/research_policy.yaml` |
+
+---
+
+## Next Steps
+
+- **Trust & Identity:** [Tutorial 02 — Trust and Identity](02-trust-and-identity.md)
+- **Framework Integrations:** [Tutorial 03 — Framework Integrations](03-framework-integrations.md)
+- **Audit & Compliance:** [Tutorial 04 — Audit Logging & Compliance](04-audit-and-compliance.md)

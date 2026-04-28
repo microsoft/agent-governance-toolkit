@@ -54,7 +54,7 @@ jobs:
       - name: Run security skills scan
         continue-on-error: true
         run: |
-          python scripts/security_scan.py packages/ \
+          python scripts/security_scan.py . \
             --exclude-tests \
             --min-severity high \
             --format text | tee security-report.txt
@@ -62,13 +62,13 @@ jobs:
       - name: Generate JSON report
         if: always()
         run: |
-          python scripts/security_scan.py packages/ \
+          python scripts/security_scan.py . \
             --exclude-tests \
             --format json > weekly-security-report.json || true
 
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
         with:
           name: weekly-security-audit
           path: |
@@ -85,7 +85,7 @@ jobs:
       - name: Check for MD5/SHA1 in non-test code
         run: |
           echo "### Weak Cryptography Check" >> "$GITHUB_STEP_SUMMARY"
-          FINDINGS=$(grep -rn "hashlib\.md5\|hashlib\.sha1" --include="*.py" packages/ \
+          FINDINGS=$(grep -rn "hashlib\.md5\|hashlib\.sha1" --include="*.py" . \
             | grep -v "test_" | grep -v "text_tool" | grep -v "security_skills" \
             | grep -v "example" | grep -v "benchmark" | grep -v "red_team" || true)
           if [ -n "$FINDINGS" ]; then
@@ -99,7 +99,7 @@ jobs:
 
       - name: Check for pickle in non-test code
         run: |
-          FINDINGS=$(grep -rn "pickle\.load" --include="*.py" packages/ \
+          FINDINGS=$(grep -rn "pickle\.load" --include="*.py" . \
             | grep -v "test_" | grep -v "security_skills" | grep -v "# " || true)
           if [ -n "$FINDINGS" ]; then
             echo "⚠️ pickle usage found:" >> "$GITHUB_STEP_SUMMARY"
@@ -223,7 +223,7 @@ jobs:
 
       - name: Check for wildcard CORS
         run: |
-          CORS=$(grep -rn 'allow_origins.*\[.*"\*"' --include="*.py" packages/ \
+          CORS=$(grep -rn 'allow_origins.*\[.*"\*"' --include="*.py" . \
             | grep -v test_ | grep -v example || true)
           if [ -n "$CORS" ]; then
             echo "⚠️ Wildcard CORS found:" >> "$GITHUB_STEP_SUMMARY"
@@ -237,7 +237,7 @@ jobs:
       - name: Check for hardcoded passwords
         run: |
           PASSWORDS=$(grep -rn 'PASSWORD.*=.*["\x27]' --include="*.yml" --include="*.yaml" \
-            packages/ docker-compose*.yml \
+            . docker-compose*.yml \
             | grep -vi 'CHANGE_ME\|example\|template\|\${' || true)
           if [ -n "$PASSWORDS" ]; then
             echo "⚠️ Potential hardcoded passwords:" >> "$GITHUB_STEP_SUMMARY"
@@ -250,7 +250,7 @@ jobs:
 
       - name: Check for 0.0.0.0 bindings
         run: |
-          BINDINGS=$(grep -rn 'host.*=.*"0\.0\.0\.0"\|default.*"0\.0\.0\.0"' --include="*.py" packages/ \
+          BINDINGS=$(grep -rn 'host.*=.*"0\.0\.0\.0"\|default.*"0\.0\.0\.0"' --include="*.py" . \
             | grep -v test_ | grep -v example || true)
           if [ -n "$BINDINGS" ]; then
             echo "⚠️ Services binding to 0.0.0.0:" >> "$GITHUB_STEP_SUMMARY"
@@ -273,7 +273,7 @@ jobs:
           echo "### XSS & Unsafe DOM Check" >> "$GITHUB_STEP_SUMMARY"
 
           # innerHTML in TypeScript (excluding test files and node_modules)
-          INNERHTML=$(grep -rn 'innerHTML' --include="*.ts" --include="*.tsx" packages/ \
+          INNERHTML=$(grep -rn 'innerHTML' --include="*.ts" --include="*.tsx" . \
             | grep -v node_modules | grep -v test | grep -v "\.d\.ts" \
             | grep -v "escHtml\|escapeHtml\|esc(" || true)
           if [ -n "$INNERHTML" ]; then
@@ -288,7 +288,7 @@ jobs:
       - name: Check for unsafe Python patterns
         run: |
           # eval/exec in production code
-          EVALS=$(grep -rn 'eval(\|exec(' --include="*.py" packages/ \
+          EVALS=$(grep -rn 'eval(\|exec(' --include="*.py" . \
             | grep -v test_ | grep -v security_skills | grep -v "# " \
             | grep -v scanner | grep -v detect | grep -v "example" || true)
           if [ -n "$EVALS" ]; then
@@ -301,7 +301,7 @@ jobs:
           fi
 
           # yaml.load (not safe_load)
-          YAML_UNSAFE=$(grep -rn 'yaml\.load(' --include="*.py" packages/ \
+          YAML_UNSAFE=$(grep -rn 'yaml\.load(' --include="*.py" . \
             | grep -v safe_load | grep -v test_ | grep -v "# " | grep -v scanner || true)
           if [ -n "$YAML_UNSAFE" ]; then
             echo "⚠️ Unsafe yaml.load() found:" >> "$GITHUB_STEP_SUMMARY"
@@ -313,7 +313,7 @@ jobs:
           fi
 
           # shell=True in subprocess
-          SHELL_TRUE=$(grep -rn 'shell=True' --include="*.py" packages/ \
+          SHELL_TRUE=$(grep -rn 'shell=True' --include="*.py" . \
             | grep -v test_ | grep -v "# " | grep -v scanner || true)
           if [ -n "$SHELL_TRUE" ]; then
             echo "⚠️ subprocess shell=True found:" >> "$GITHUB_STEP_SUMMARY"
@@ -360,7 +360,7 @@ jobs:
           echo "### Version Pinning Compliance" >> "$GITHUB_STEP_SUMMARY"
 
           # Find >= without < upper bound in pyproject.toml
-          UNBOUNDED=$(grep -rn '>=.*"' --include="pyproject.toml" packages/ \
+          UNBOUNDED=$(grep -rn '>=.*"' --include="pyproject.toml" . \
             | grep -v '<' | grep -v '#' | grep -v 'requires-python' || true)
           if [ -n "$UNBOUNDED" ]; then
             echo "⚠️ Dependencies without upper bounds:" >> "$GITHUB_STEP_SUMMARY"
@@ -374,7 +374,7 @@ jobs:
       - name: Check Docker image pinning
         run: |
           LATEST=$(grep -rn ':latest' --include="*.yml" --include="*.yaml" \
-            --include="Dockerfile*" packages/ docker-compose*.yml \
+            --include="Dockerfile*" . docker-compose*.yml \
             | grep -v '#' | grep -v node_modules || true)
           if [ -n "$LATEST" ]; then
             echo "⚠️ Docker images using :latest tag:" >> "$GITHUB_STEP_SUMMARY"
@@ -388,8 +388,8 @@ jobs:
       - name: Check license field format (PyPI compliance)
         run: |
           # Cargo.toml must use bare string, pyproject.toml must use table
-          CARGO_BAD=$(grep -rn 'license = {' --include="Cargo.toml" packages/ || true)
-          PYPI_BAD=$(grep -rn '^license = "' --include="pyproject.toml" packages/ || true)
+          CARGO_BAD=$(grep -rn 'license = {' --include="Cargo.toml" . || true)
+          PYPI_BAD=$(grep -rn '^license = "' --include="pyproject.toml" . || true)
           if [ -n "$CARGO_BAD" ] || [ -n "$PYPI_BAD" ]; then
             echo "⚠️ License format issues:" >> "$GITHUB_STEP_SUMMARY"
             [ -n "$CARGO_BAD" ] && echo "Cargo.toml should use bare string: $CARGO_BAD" >> "$GITHUB_STEP_SUMMARY"

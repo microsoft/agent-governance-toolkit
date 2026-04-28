@@ -1,0 +1,8 @@
+version: "3.9"
+
+services:
+  dashboard:
+    build: .
+    ports:
+      - "8501:8501"
+    restart: unless-stopped

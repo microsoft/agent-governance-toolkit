@@ -8,7 +8,7 @@
 AgentMesh treats identity as the first layer of trust. The repository README,
 architecture docs, tutorial 02, JSON schemas, and service API docs all describe
 `did:mesh:*` identities backed by Ed25519 keys, short-lived credentials,
-sponsor signatures, and cross-language SDKs. The same identity primitive must
+sponsor signatures, and cross-language packages. The same identity primitive must
 work in Python, Node.js, and .NET-facing documentation, and it must support
 repeated signing and verification during registration, delegation, and trust
 handshakes. A heavier RSA-based default would increase key, signature, and

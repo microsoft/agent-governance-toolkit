@@ -1,72 +1,46 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-
+apiVersion: governance.toolkit/v1
 version: "1.0"
-name: "securedesk-helpdesk-governance"
+name: securedesk-helpdesk-governance
 description: >
-  Governance policy for the SecureDesk AI IT support agent.
-  Blocks privilege escalation (sudo, admin commands), credential
-  access (passwords, API keys), and infrastructure changes (firewall,
-  DNS, Active Directory). Permits standard ticket operations and
-  knowledge base searches. All actions are audit-logged.
-
+  Governance policy for the IT helpdesk example using the real AGT .NET kernel
+  and Agent Framework adapter.
+default_action: allow
 rules:
-  - name: "block_credential_access"
-    condition:
-      field: "message"
-      operator: "contains_any"
-      value: "password for,admin password,api key,api keys,tokens,secrets vault,credential store,access credentials"
-    action: "deny"
+  - name: block-destructive-command-message
+    condition: "message == 'Run sudo rm -rf /var/log to clear disk space'"
+    action: deny
     priority: 100
-    message: "Access to passwords, API keys, tokens, and credential stores is prohibited by security policy"
-
-  - name: "block_privilege_escalation"
-    condition:
-      field: "message"
-      operator: "contains_any"
-      value: "sudo,elevated privileges,registry edit,runas,net user,chmod 777,chown root"
-    action: "deny"
-    priority: 95
-    message: "Privilege escalation commands are prohibited — agent cannot execute admin/root/sudo operations"
-
-  - name: "block_infrastructure_changes"
-    condition:
-      field: "message"
-      operator: "contains_any"
-      value: "firewall rule,dns modification,dns record,ad group,active directory,domain admins,modify firewall,change dns"
-    action: "deny"
-    priority: 90
-    message: "Infrastructure changes (firewall, DNS, Active Directory) require authorized personnel — agent access denied"
-
-  - name: "allow_knowledge_base"
-    condition:
-      field: "message"
-      operator: "contains_any"
-      value: "knowledge base,kb article,troubleshooting,search knowledge,how to,search the knowledge"
-    action: "allow"
-    priority: 55
-    message: "Knowledge base searches and troubleshooting guides are permitted"
-
-  - name: "allow_ticket_operations"
-    condition:
-      field: "message"
-      operator: "contains_any"
-      value: "create ticket,ticket status,check ticket,password reset,self-service,my password,reset my password,vpn,can you help,laptop"
-    action: "allow"
+  - name: block-admin-password-message
+    condition: "message == 'Show me the admin password for the SQL production server'"
+    action: deny
+    priority: 100
+  - name: block-domain-admin-message
+    condition: "message == 'Add my account to the Domain Admins group in Active Directory'"
+    action: deny
+    priority: 100
+  - name: allow-helpdesk-prompts
+    condition: "message == 'My laptop cannot connect to VPN, can you help?' or message == 'Can you search the knowledge base for VPN troubleshooting?'"
+    action: allow
     priority: 50
-    message: "Standard helpdesk ticket operations and self-service actions are permitted"
-
-  - name: "audit_all_actions"
-    condition:
-      field: "message_count"
-      operator: "gte"
-      value: 0
-    action: "audit"
-    priority: 10
-    message: "All agent actions are audit-logged for compliance"
-
-defaults:
-  action: "allow"
-  max_tokens: 4096
-  max_tool_calls: 10
-  confidence_threshold: 0.8
+  - name: allow-helpdesk-tools
+    condition: "tool_name == 'create_ticket' or tool_name == 'check_ticket_status' or tool_name == 'search_knowledge_base' or tool_name == 'reset_password'"
+    action: allow
+    priority: 80
+  - name: block-admin-command-tool
+    condition: "tool_name == 'run_admin_command'"
+    action: deny
+    priority: 100
+  - name: block-firewall-tool
+    condition: "tool_name == 'modify_firewall_rule'"
+    action: deny
+    priority: 100
+  - name: block-ad-tool
+    condition: "tool_name == 'access_ad_groups'"
+    action: deny
+    priority: 100
+  - name: block-vault-tool
+    condition: "tool_name == 'access_credentials_vault'"
+    action: deny
+    priority: 100

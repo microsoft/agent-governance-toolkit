@@ -1,0 +1,62 @@
+name: Contributor Reputation Check
+
+on:
+  pull_request_target:
+    types: [opened]
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      username:
+        description: "GitHub username to check"
+        required: true
+      run_cluster:
+        description: "Run cluster detection (API-heavy, opt-in)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+concurrency:
+  group: contributor-check-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.actor != 'dependabot[bot]' &&
+       github.actor != 'github-actions[bot]' &&
+       github.actor != 'copilot-swe-agent[bot]' &&
+       github.actor != 'imran-siddique' &&
+       github.actor != 'eltoncarr-ms')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          sparse-checkout: |
+            scripts
+            .github/actions/contributor-check
+
+      - name: Run contributor reputation check
+        id: reputation
+        uses: ./.github/actions/contributor-check
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          checks: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_cluster == 'true' && 'profile,credential,cluster' || 'profile,credential' }}
+
+      - name: Log results
+        if: always()
+        run: |
+          echo "Overall risk: ${{ steps.reputation.outputs.risk }}"
+          echo "Profile risk: ${{ steps.reputation.outputs.profile-risk }}"
+          echo "Credential risk: ${{ steps.reputation.outputs.credential-risk }}"
+          echo "Cluster risk: ${{ steps.reputation.outputs.cluster-risk }}"
