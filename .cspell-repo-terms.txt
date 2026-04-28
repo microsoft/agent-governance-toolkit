@@ -81,3 +81,6 @@ Rego
 Sandboxed
 Serialise
 sybil
+davidequarracino
+Marp
+Slidev
