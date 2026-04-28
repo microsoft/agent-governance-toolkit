@@ -49,7 +49,7 @@
     "@types/node": "25.6.0",
     "@types/uuid": "11.0.0",
     "@typescript-eslint/eslint-plugin": "8.59.1",
-    "@typescript-eslint/parser": "8.59.0",
+    "@typescript-eslint/parser": "8.59.1",
     "@vitest/coverage-v8": "4.1.5",
     "eslint": "10.2.1",
     "typescript": "6.0.3",
