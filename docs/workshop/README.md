@@ -59,4 +59,4 @@ a laptop and the prerequisites below.
 - [Tutorial 01 — Policy Engine](../tutorials/01-policy-engine.md) — deep-dive after Lab 1
 - [Tutorial 02 — Trust & Identity](../tutorials/02-trust-and-identity.md) — deep-dive after Lab 2
 - [Tutorial 04 — Audit & Compliance](../tutorials/04-audit-and-compliance.md) — deep-dive after Lab 3
-- [QUICKSTART.md](../../QUICKSTART.md) — 10-minute overview of the full toolkit
+- [QUICKSTART.md](../QUICKSTART.md) — 10-minute overview of the full toolkit
