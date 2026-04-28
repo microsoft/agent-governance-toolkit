@@ -27,6 +27,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install agent-primitives (local sibling)
+        run: pip install --no-cache-dir -e agent-governance-python/agent-primitives
+
       - name: Install agent-os-kernel
         working-directory: agent-governance-python/agent-os
         run: |
@@ -59,6 +62,9 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.11"
+
+      - name: Install agent-primitives (local sibling)
+        run: pip install --no-cache-dir -e agent-governance-python/agent-primitives
 
       - name: Install agent-os-kernel
         working-directory: agent-governance-python/agent-os
