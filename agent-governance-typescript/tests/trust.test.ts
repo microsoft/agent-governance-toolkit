@@ -80,6 +80,36 @@ describe('TrustManager', () => {
       const result = await tm.verifyPeer('peer-agent', peer);
       expect(result.trustScore.overall).toBeGreaterThan(0.5);
     });
+
+    it('rejects an identity whose DID does not match the claimed peer ID', async () => {
+      const peer = AgentIdentity.generate('other-agent');
+      const result = await tm.verifyPeer('peer-agent', peer);
+
+      expect(result.verified).toBe(false);
+      expect(result.reason).toBe('Peer identity DID does not match the claimed peer ID');
+    });
+
+    it('rejects an identity with a tampered DID fingerprint', async () => {
+      const peer = AgentIdentity.generate('peer-agent');
+      Object.defineProperty(peer, 'did', {
+        value: 'did:agentmesh:peer-agent:deadbeefdeadbeef',
+      });
+
+      const result = await tm.verifyPeer('peer-agent', peer);
+
+      expect(result.verified).toBe(false);
+      expect(result.reason).toBe('Peer identity DID fingerprint does not match the public key');
+    });
+
+    it('rejects an inactive peer identity', async () => {
+      const peer = AgentIdentity.generate('peer-agent');
+      peer.revoke();
+
+      const result = await tm.verifyPeer('peer-agent', peer);
+
+      expect(result.verified).toBe(false);
+      expect(result.reason).toBe('Peer identity is inactive or expired');
+    });
   });
 
   describe('custom config', () => {
