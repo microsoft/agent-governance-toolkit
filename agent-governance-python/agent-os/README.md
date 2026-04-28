@@ -931,10 +931,10 @@ See [MCP server documentation](extensions/mcp-server/README.md) for full details
 | [Policy Engine](notebooks/06-policy-engine.ipynb) | Deep dive into policies | 15 min |
 
 ### Reference
-- [Quickstart Guide](docs/quickstart.md) — 60 seconds to first agent
+- [Quickstart Guide](docs/QUICKSTART.md) — 60 seconds to first agent
 - [Framework Integrations](docs/integrations.md) — LangChain, OpenAI, etc.
 - [Kernel Internals](docs/kernel-internals.md) — How the kernel works
-- [Architecture Overview](docs/quickstart.md) — Getting started
+- [Architecture Overview](docs/QUICKSTART.md) — Getting started
 - [Kernel Internals](docs/kernel-internals.md) — How the kernel works
 - [RFC-003: Agent Signals](docs/rfcs/RFC-003-Agent-Signals.md) — POSIX-style signals
 - [RFC-004: Agent Primitives](docs/rfcs/RFC-004-Agent-Primitives.md) — Core primitives

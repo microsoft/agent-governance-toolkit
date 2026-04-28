@@ -73,7 +73,7 @@ extra:
 nav:
   - Home: index.md
   - Getting Started:
-    - Quick Start: quickstart.md
+    - Quick Start: QUICKSTART.md
     - Architecture: architecture.md
     - Glossary: glossary.md
   - Packages:
