@@ -19,7 +19,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Protocol
+from typing import TYPE_CHECKING, Any, Callable, Protocol
+
+if TYPE_CHECKING:
+    from agent_os.policies.decision import PolicyCheckResult
 
 logger = logging.getLogger(__name__)
 
@@ -678,34 +681,45 @@ class PolicyInterceptor:
         self.context = context
 
     def intercept(self, request: ToolCallRequest) -> ToolCallResult:
+        from agent_os.policies.decision_factory import (
+            deny_blocked_pattern_tool,
+            deny_human_approval,
+            deny_max_tool_calls,
+            deny_not_allowed_tool,
+        )
+
         # Check human approval requirement
         if self.policy.require_human_approval:
+            result = deny_human_approval(request.tool_name)
             return ToolCallResult(
                 allowed=False,
-                reason=f"Tool '{request.tool_name}' requires human approval per governance policy",
+                reason=result.reason,
             )
 
         # Check allowed tools
         if self.policy.allowed_tools and request.tool_name not in self.policy.allowed_tools:
+            result = deny_not_allowed_tool(request.tool_name, self.policy.allowed_tools)
             return ToolCallResult(
                 allowed=False,
-                reason=f"Tool '{request.tool_name}' not in allowed list: {self.policy.allowed_tools}",
+                reason=result.reason,
             )
 
         # Check blocked patterns
         args_str = str(request.arguments)
         matched = self.policy.matches_pattern(args_str)
         if matched:
+            result = deny_blocked_pattern_tool(matched[0])
             return ToolCallResult(
                 allowed=False,
-                reason=f"Blocked pattern '{matched[0]}' detected in tool arguments",
+                reason=result.reason,
             )
 
         # Check call count
         if self.context and self.context.call_count >= self.policy.max_tool_calls:
+            result = deny_max_tool_calls(self.policy.max_tool_calls, self.context.call_count)
             return ToolCallResult(
                 allowed=False,
-                reason=f"Max tool calls exceeded ({self.policy.max_tool_calls})",
+                reason=result.reason,
             )
 
         return ToolCallResult(allowed=True)
@@ -956,7 +970,7 @@ class BaseIntegration(ABC):
         policy_content: str | None = None,
         entities: list[dict[str, Any]] | None = None,
         **kwargs: Any,
-    ) -> "BaseIntegration":
+    ) -> BaseIntegration:
         """Create an integration with Cedar policy evaluation.
 
         Convenience factory that configures a ``PolicyEvaluator`` with a
@@ -1036,16 +1050,26 @@ class BaseIntegration(ABC):
                     event_type, exc, exc_info=True,
                 )
 
-    def pre_execute(self, ctx: ExecutionContext, input_data: Any) -> tuple[bool, str | None]:
-        """
-        Pre-execution policy check.
+    def pre_execute_check(self, ctx: ExecutionContext, input_data: Any) -> PolicyCheckResult:
+        """Run pre-execution policy checks and return a structured result.
 
-        When a ``PolicyEvaluator`` is configured, it is consulted **before**
-        the standard ``GovernancePolicy`` checks so that enterprise Cedar/OPA
-        policies always take precedence.
+        Args:
+            ctx: Execution context for the governed operation.
+            input_data: Input payload to validate before execution.
 
-        Returns (allowed, reason) tuple.
+        Returns:
+            A structured policy-check result.
         """
+        from agent_os.policies.decision import PolicyCheckResult
+        from agent_os.policies.decision_factory import (
+            deny_blocked_pattern_input,
+            deny_confidence_threshold,
+            deny_human_approval,
+            deny_max_tool_calls,
+            deny_policy_error,
+            deny_timeout,
+        )
+
         event_base = {"agent_id": ctx.agent_id, "timestamp": datetime.now().isoformat()}
 
         self.emit(GovernanceEventType.POLICY_CHECK, {**event_base, "phase": "pre_execute"})
@@ -1071,67 +1095,90 @@ class BaseIntegration(ABC):
             )
             allowed, reason = self._evaluate_policy(cedar_ctx)
             if not allowed:
+                result = deny_policy_error(reason)
                 self.emit(
                     GovernanceEventType.TOOL_CALL_BLOCKED,
-                    {**event_base, "reason": reason, "source": "cedar"},
+                    {**event_base, "reason": result.reason, "source": "cedar"},
                 )
-                return False, reason
+                return result
 
         # Check call count
         if ctx.call_count >= self.policy.max_tool_calls:
-            reason = f"Max tool calls exceeded ({self.policy.max_tool_calls})"
-            self.emit(GovernanceEventType.POLICY_VIOLATION, {**event_base, "reason": reason})
-            return False, reason
+            result = deny_max_tool_calls(self.policy.max_tool_calls, ctx.call_count)
+            self.emit(
+                GovernanceEventType.POLICY_VIOLATION,
+                {**event_base, "reason": result.reason},
+            )
+            return result
 
         # Check timeout
         elapsed = (datetime.now() - ctx.start_time).total_seconds()
         if elapsed > self.policy.timeout_seconds:
-            reason = f"Timeout exceeded ({self.policy.timeout_seconds}s)"
-            self.emit(GovernanceEventType.POLICY_VIOLATION, {**event_base, "reason": reason})
-            return False, reason
+            result = deny_timeout(self.policy.timeout_seconds, elapsed)
+            self.emit(
+                GovernanceEventType.POLICY_VIOLATION,
+                {**event_base, "reason": result.reason},
+            )
+            return result
 
         # Check blocked patterns
         input_str = str(input_data)
         matched = self.policy.matches_pattern(input_str)
         if matched:
-            reason = f"Blocked pattern detected: {matched[0]}"
-            self.emit(GovernanceEventType.TOOL_CALL_BLOCKED, {**event_base, "reason": reason, "pattern": matched[0]})
-            return False, reason
+            result = deny_blocked_pattern_input(matched[0], input_str)
+            self.emit(
+                GovernanceEventType.TOOL_CALL_BLOCKED,
+                {**event_base, "reason": result.reason, "pattern": matched[0]},
+            )
+            return result
 
         # Check human approval requirement
         if self.policy.require_human_approval:
-            reason = "Execution requires human approval per governance policy"
-            self.emit(GovernanceEventType.POLICY_VIOLATION, {**event_base, "reason": reason})
-            return False, reason
+            result = deny_human_approval()
+            self.emit(
+                GovernanceEventType.POLICY_VIOLATION,
+                {**event_base, "reason": result.reason},
+            )
+            return result
 
         # Check confidence threshold
         if self.policy.confidence_threshold > 0.0:
-            confidence = getattr(input_data, 'confidence', None)
+            confidence = getattr(input_data, "confidence", None)
             if isinstance(confidence, (int, float)) and confidence < self.policy.confidence_threshold:
-                reason = (
-                    f"Confidence {confidence:.2f} below threshold "
-                    f"{self.policy.confidence_threshold:.2f}"
+                result = deny_confidence_threshold(self.policy.confidence_threshold, confidence)
+                self.emit(
+                    GovernanceEventType.POLICY_VIOLATION,
+                    {**event_base, "reason": result.reason},
                 )
-                self.emit(GovernanceEventType.POLICY_VIOLATION, {**event_base, "reason": reason})
-                return False, reason
+                return result
 
-        return True, None
+        return PolicyCheckResult()
 
-    def post_execute(self, ctx: ExecutionContext, output_data: Any) -> tuple[bool, str | None]:
+    def pre_execute(self, ctx: ExecutionContext, input_data: Any) -> tuple[bool, str | None]:
+        """Run pre-execution policy checks and return the legacy tuple.
+
+        Args:
+            ctx: Execution context for the governed operation.
+            input_data: Input payload to validate before execution.
+
+        Returns:
+            The legacy ``(allowed, reason)`` tuple.
         """
-        Post-execution validation including drift detection.
 
-        Computes a similarity score between the serialized output and the
-        baseline (first output) using ``SequenceMatcher``.  The drift score
-        is ``1.0 - similarity`` (0.0 = identical, 1.0 = completely different).
+        return self.pre_execute_check(ctx, input_data).to_legacy_tuple()
 
-        When the score exceeds ``policy.drift_threshold`` a
-        ``DRIFT_DETECTED`` governance event is emitted and a warning is
-        logged.  Callers can register listeners for this event to enforce
-        blocking behaviour if desired.
+    def post_execute_check(self, ctx: ExecutionContext, output_data: Any) -> PolicyCheckResult:
+        """Run post-execution validation and return a structured result.
 
-        Returns (valid, reason) tuple.
+        Args:
+            ctx: Execution context for the governed operation.
+            output_data: Output payload to validate after execution.
+
+        Returns:
+            A structured policy-check result.
         """
+        from agent_os.policies.decision import PolicyCheckResult
+
         ctx.call_count += 1
 
         # Drift detection: compare output against baseline
@@ -1178,16 +1225,29 @@ class BaseIntegration(ABC):
                 "call_count": ctx.call_count,
             })
 
-        return True, None
+        return PolicyCheckResult()
+
+    def post_execute(self, ctx: ExecutionContext, output_data: Any) -> tuple[bool, str | None]:
+        """Run post-execution validation and return the legacy tuple.
+
+        Args:
+            ctx: Execution context for the governed operation.
+            output_data: Output payload to validate after execution.
+
+        Returns:
+            The legacy ``(valid, reason)`` tuple.
+        """
+
+        return self.post_execute_check(ctx, output_data).to_legacy_tuple()
 
     @staticmethod
     def compute_drift(ctx: ExecutionContext, output_data: Any) -> DriftResult | None:
         """Compute drift between *output_data* and the baseline stored in *ctx*.
 
         On the first call the output is recorded as the baseline and ``None``
-        is returned (no comparison possible).  Subsequent calls use
+        is returned (no comparison possible). Subsequent calls use
         ``SequenceMatcher`` to compute a similarity ratio between the
-        serialised baseline and the current output.  The drift score is
+        serialised baseline and the current output. The drift score is
         ``1.0 - similarity`` (0.0 = identical, 1.0 = completely different).
         """
         current_text = str(output_data)
@@ -1212,23 +1272,75 @@ class BaseIntegration(ABC):
             current_hash=current_hash,
         )
 
-    async def async_pre_execute(self, ctx: ExecutionContext, input_data: Any) -> tuple[bool, str | None]:
-        """
-        Async pre-execution policy check.
+    async def async_pre_execute_check(
+        self,
+        ctx: ExecutionContext,
+        input_data: Any,
+    ) -> PolicyCheckResult:
+        """Run async pre-execution policy checks and return a structured result.
 
-        Defaults to calling the sync version. Override in subclasses
-        to add async-specific logic (e.g., async database lookups).
-        """
-        return self.pre_execute(ctx, input_data)
+        Args:
+            ctx: Execution context for the governed operation.
+            input_data: Input payload to validate before execution.
 
-    async def async_post_execute(self, ctx: ExecutionContext, output_data: Any) -> tuple[bool, str | None]:
+        Returns:
+            A structured policy-check result.
         """
-        Async post-execution validation.
 
-        Defaults to calling the sync version. Override in subclasses
-        to add async-specific logic.
+        return self.pre_execute_check(ctx, input_data)
+
+    async def async_pre_execute(
+        self,
+        ctx: ExecutionContext,
+        input_data: Any,
+    ) -> tuple[bool, str | None]:
+        """Run async pre-execution policy checks and return the legacy tuple.
+
+        Args:
+            ctx: Execution context for the governed operation.
+            input_data: Input payload to validate before execution.
+
+        Returns:
+            The legacy ``(allowed, reason)`` tuple.
         """
-        return self.post_execute(ctx, output_data)
+
+        result = await self.async_pre_execute_check(ctx, input_data)
+        return result.to_legacy_tuple()
+
+    async def async_post_execute_check(
+        self,
+        ctx: ExecutionContext,
+        output_data: Any,
+    ) -> PolicyCheckResult:
+        """Run async post-execution validation and return a structured result.
+
+        Args:
+            ctx: Execution context for the governed operation.
+            output_data: Output payload to validate after execution.
+
+        Returns:
+            A structured policy-check result.
+        """
+
+        return self.post_execute_check(ctx, output_data)
+
+    async def async_post_execute(
+        self,
+        ctx: ExecutionContext,
+        output_data: Any,
+    ) -> tuple[bool, str | None]:
+        """Run async post-execution validation and return the legacy tuple.
+
+        Args:
+            ctx: Execution context for the governed operation.
+            output_data: Output payload to validate after execution.
+
+        Returns:
+            The legacy ``(valid, reason)`` tuple.
+        """
+
+        result = await self.async_post_execute_check(ctx, output_data)
+        return result.to_legacy_tuple()
 
     def on_signal(self, signal: str, handler: Callable[..., Any]) -> None:
         """Register a signal handler."""
@@ -1261,17 +1373,17 @@ class AsyncGovernedWrapper:
     async def __call__(self, *args: Any, **kwargs: Any) -> Any:
         async with self._lock:
             # Pre-execution check
-            allowed, reason = await self._integration.async_pre_execute(self._ctx, (args, kwargs))
-            if not allowed:
-                raise PolicyViolationError(reason or "Policy check failed")
+            pre_result = await self._integration.async_pre_execute_check(self._ctx, (args, kwargs))
+            if not pre_result.allowed:
+                raise PolicyViolationError(pre_result.reason or "Policy check failed")
 
             # Execute the wrapped callable
             result = await self._fn(*args, **kwargs)
 
             # Post-execution validation
-            valid, reason = await self._integration.async_post_execute(self._ctx, result)
-            if not valid:
-                raise PolicyViolationError(reason or "Post-execution validation failed")
+            post_result = await self._integration.async_post_execute_check(self._ctx, result)
+            if not post_result.allowed:
+                raise PolicyViolationError(post_result.reason or "Post-execution validation failed")
 
             return result
 

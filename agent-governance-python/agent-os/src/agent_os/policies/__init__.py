@@ -8,6 +8,12 @@ enabling policies to be authored, versioned, and shared as plain files.
 """
 
 from .async_evaluator import AsyncPolicyEvaluator, ConcurrencyStats
+from .backends import (
+    BackendDecision,
+    CedarBackend,
+    ExternalPolicyBackend,
+    OPABackend,
+)
 from .bridge import document_to_governance, governance_to_document
 from .conflict_resolution import (
     CandidateDecision,
@@ -16,12 +22,7 @@ from .conflict_resolution import (
     PolicyScope,
     ResolutionResult,
 )
-from .backends import (
-    BackendDecision,
-    CedarBackend,
-    ExternalPolicyBackend,
-    OPABackend,
-)
+from .decision import PolicyCheckResult, ViolationCategory
 from .evaluator import PolicyDecision, PolicyEvaluator
 from .rate_limiting import RateLimitConfig, RateLimitExceeded, TokenBucket
 from .schema import (
@@ -53,6 +54,7 @@ __all__ = [
     "ExternalPolicyBackend",
     "OPABackend",
     "PolicyAction",
+    "PolicyCheckResult",
     "PolicyCondition",
     "PolicyConflictResolver",
     "PolicyDecision",
@@ -66,6 +68,7 @@ __all__ = [
     "RateLimitExceeded",
     "ResolutionResult",
     "TokenBucket",
+    "ViolationCategory",
     "SharedPolicyDecision",
     "SharedPolicyEvaluator",
     "SharedPolicyRule",
