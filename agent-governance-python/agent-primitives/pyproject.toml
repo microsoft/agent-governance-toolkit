@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent_primitives"
-version = "3.2.2"
+version = "3.3.0"
 description = "Shared primitive data models for Agent OS - failure types, severity levels, and base structures"
 readme = "README.md"
 license = {text = "MIT"}
