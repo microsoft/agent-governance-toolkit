@@ -15,6 +15,8 @@ on:
           - policy-server
           - audit-collector
           - api-gateway
+          - registry
+          - relay
           - governance-sidecar
       tag:
         description: "Image tag (default: latest)"
@@ -56,6 +58,14 @@ jobs:
             dockerfile: agent-governance-python/agent-mesh/docker/Dockerfile
             context: .
             port: 8446
+          - component: registry
+            dockerfile: agent-governance-python/agent-mesh/docker/Dockerfile
+            context: .
+            port: 8082
+          - component: relay
+            dockerfile: agent-governance-python/agent-mesh/docker/Dockerfile
+            context: .
+            port: 8083
           - component: governance-sidecar
             dockerfile: agent-governance-python/agent-os/Dockerfile.sidecar
             context: .
