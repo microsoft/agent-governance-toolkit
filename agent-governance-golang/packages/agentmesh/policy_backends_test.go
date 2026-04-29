@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -177,5 +178,127 @@ func TestOPABackendRemote(t *testing.T) {
 	}
 	if !result.Allowed || result.Decision != Allow {
 		t.Fatalf("result = %+v, want allow", result)
+	}
+}
+
+func TestOPABackendAutoFailsClosedWithoutCLI(t *testing.T) {
+	previous := opaLookPath
+	opaLookPath = func(file string) (string, error) {
+		return "", fmt.Errorf("%s not found", file)
+	}
+	t.Cleanup(func() {
+		opaLookPath = previous
+	})
+
+	backend := NewOPABackend(OPAOptions{
+		Mode: OPAAuto,
+		RegoContent: `package agentmesh
+default allow = false
+allow {
+  input.tool_name == "data.read"
+}`,
+	})
+
+	result, err := backend.Evaluate(map[string]interface{}{"tool_name": "data.read"})
+	if err == nil {
+		t.Fatalf("Evaluate error = nil, want error")
+	}
+	if result.Decision != "" || result.Allowed {
+		t.Fatalf("result = %+v, want zero decision on error", result)
+	}
+	if !strings.Contains(err.Error(), "AllowBuiltinFallback") {
+		t.Fatalf("error = %q, want AllowBuiltinFallback guidance", err)
+	}
+}
+
+func TestOPABackendAutoUsesBuiltinWhenFallbackExplicitlyEnabled(t *testing.T) {
+	previous := opaLookPath
+	opaLookPath = func(file string) (string, error) {
+		return "", fmt.Errorf("%s not found", file)
+	}
+	t.Cleanup(func() {
+		opaLookPath = previous
+	})
+
+	backend := NewOPABackend(OPAOptions{
+		Mode:                 OPAAuto,
+		AllowBuiltinFallback: true,
+		RegoContent: `package agentmesh
+default allow = false
+allow {
+  input.tool_name == "data.read"
+}`,
+	})
+
+	result, err := backend.Evaluate(map[string]interface{}{"tool_name": "data.read"})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if !result.Allowed || result.Decision != Allow {
+		t.Fatalf("result = %+v, want allow", result)
+	}
+	if !strings.Contains(result.Reason, "auto fallback enabled") {
+		t.Fatalf("reason = %q, want explicit fallback marker", result.Reason)
+	}
+}
+
+func TestCedarBackendAutoFailsClosedWithoutCLI(t *testing.T) {
+	previous := cedarLookPath
+	cedarLookPath = func(file string) (string, error) {
+		return "", fmt.Errorf("%s not found", file)
+	}
+	t.Cleanup(func() {
+		cedarLookPath = previous
+	})
+
+	backend := NewCedarBackend(CedarOptions{
+		Mode: CedarAuto,
+		PolicyContent: `permit(
+    principal,
+    action == Action::"DataRead",
+    resource
+);`,
+	})
+
+	result, err := backend.Evaluate(map[string]interface{}{"tool_name": "data.read"})
+	if err == nil {
+		t.Fatalf("Evaluate error = nil, want error")
+	}
+	if result.Decision != "" || result.Allowed {
+		t.Fatalf("result = %+v, want zero decision on error", result)
+	}
+	if !strings.Contains(err.Error(), "AllowBuiltinFallback") {
+		t.Fatalf("error = %q, want AllowBuiltinFallback guidance", err)
+	}
+}
+
+func TestCedarBackendAutoUsesBuiltinWhenFallbackExplicitlyEnabled(t *testing.T) {
+	previous := cedarLookPath
+	cedarLookPath = func(file string) (string, error) {
+		return "", fmt.Errorf("%s not found", file)
+	}
+	t.Cleanup(func() {
+		cedarLookPath = previous
+	})
+
+	backend := NewCedarBackend(CedarOptions{
+		Mode:                 CedarAuto,
+		AllowBuiltinFallback: true,
+		PolicyContent: `permit(
+    principal,
+    action == Action::"DataRead",
+    resource
+);`,
+	})
+
+	result, err := backend.Evaluate(map[string]interface{}{"tool_name": "data.read"})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if !result.Allowed || result.Decision != Allow {
+		t.Fatalf("result = %+v, want allow", result)
+	}
+	if !strings.Contains(result.Reason, "auto fallback enabled") {
+		t.Fatalf("reason = %q, want explicit fallback marker", result.Reason)
 	}
 }

@@ -28,7 +28,7 @@
 > [!TIP]
 > **v3.3.0 is out!** Contributor Reputation Check (reusable GitHub Action for any OSS repo), repo reorganization under language-specific SDK dirs, Sentry integration, shift-left governance tutorial, policy composition, multi-stage pipelines, and 80+ other improvements. [Changelog →](CHANGELOG.md)
 
-**Runtime governance for AI agents** — deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents. Covers all **10 OWASP Agentic risks** with **9,500+ tests**.
+**Runtime governance for AI agents** -- deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents. Covers all **10 OWASP Agentic risks** with **13,000+ tests**.
 
 **Works with any stack** — AWS Bedrock, Google ADK, Azure AI, LangChain, CrewAI, AutoGen, OpenAI Agents, and 20+ more. Python · TypeScript · .NET · Rust · Go.
 

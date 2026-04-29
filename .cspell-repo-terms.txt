@@ -121,3 +121,6 @@ Unregisters
 unregisters
 unsets
 urlopen
+davidequarracino
+Marp
+Slidev

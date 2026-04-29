@@ -62,7 +62,7 @@ Decay-based trust scoring with asymmetric reward/penalty.
 | Function / Method | Description |
 |---|---|
 | `NewTrustManager(config)` | Create a trust manager |
-| `(*TrustManager).VerifyPeer(id, identity)` | Verify a peer |
+| `(*TrustManager).VerifyPeer(id, identity)` | Fail closed unless independent verification evidence is available |
 | `(*TrustManager).GetTrustScore(agentID)` | Get current trust score |
 | `(*TrustManager).RecordSuccess(agentID, reward)` | Record a successful interaction |
 | `(*TrustManager).RecordFailure(agentID, penalty)` | Record a failed interaction |

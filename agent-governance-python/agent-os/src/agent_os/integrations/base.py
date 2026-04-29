@@ -866,15 +866,127 @@ class BaseIntegration(ABC):
     Wraps any agent framework with Agent OS governance:
     - Pre-execution policy checks
     - Post-execution validation
+    - Cedar/OPA declarative policy evaluation
     - Flight recording
     - Signal handling
     """
 
-    def __init__(self, policy: GovernancePolicy | None = None) -> None:
+    def __init__(
+        self,
+        policy: GovernancePolicy | None = None,
+        evaluator: Any | None = None,
+    ) -> None:
         self.policy: GovernancePolicy = policy or GovernancePolicy()
+        self._evaluator: Any | None = evaluator
         self.contexts: dict[str, ExecutionContext] = {}
         self._signal_handlers: dict[str, Callable[..., Any]] = {}
         self._event_listeners: dict[GovernanceEventType, list[Callable[..., Any]]] = {}
+
+    # ------------------------------------------------------------------
+    # Cedar / PolicyEvaluator integration
+    # ------------------------------------------------------------------
+
+    def _build_cedar_context(
+        self,
+        *,
+        agent_id: str = "",
+        action_type: str = "",
+        tool_name: str = "",
+        tool_args: dict[str, Any] | None = None,
+        **extra: Any,
+    ) -> dict[str, Any]:
+        """Build a context dict for PolicyEvaluator/CedarBackend.
+
+        Constructs the principal/action/resource triple that Cedar and OPA
+        backends expect.  Subclasses should override this method to add
+        framework-specific fields (e.g. token budgets, handoff counts).
+
+        Args:
+            agent_id: The agent identifier (maps to Cedar principal).
+            action_type: ``"tool_call"``, ``"model_call"``, ``"handoff"``.
+            tool_name: Name of the tool being invoked.
+            tool_args: Tool arguments for context enrichment.
+            **extra: Additional framework-specific context fields.
+
+        Returns:
+            A context dict consumable by ``PolicyEvaluator.evaluate()``.
+        """
+        return {
+            "agent_id": agent_id,
+            "action_type": action_type,
+            "tool_name": tool_name,
+            "tool_args": tool_args or {},
+            **extra,
+        }
+
+    def _evaluate_policy(
+        self,
+        context: dict[str, Any],
+    ) -> tuple[bool, str]:
+        """Consult the PolicyEvaluator if one is configured.
+
+        Returns ``(allowed, reason)``.  When no evaluator is set, returns
+        ``(True, "")`` so callers can fall through to ``GovernancePolicy``
+        checks.
+
+        **Fail-closed**: if the evaluator raises an exception, access is
+        denied.  This ensures that a misconfigured policy engine never
+        silently permits an action.
+        """
+        if self._evaluator is None:
+            return True, ""
+
+        try:
+            decision = self._evaluator.evaluate(context)
+            if not decision.allowed:
+                return False, decision.reason or "Policy denied by evaluator"
+            return True, ""
+        except Exception as exc:
+            logger.error(
+                "PolicyEvaluator error — denying access (fail-closed): %s",
+                exc,
+                exc_info=True,
+            )
+            return False, f"Policy evaluation error (fail-closed): {exc}"
+
+    @classmethod
+    def from_cedar(
+        cls,
+        policy_path: str | None = None,
+        policy_content: str | None = None,
+        entities: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> "BaseIntegration":
+        """Create an integration with Cedar policy evaluation.
+
+        Convenience factory that configures a ``PolicyEvaluator`` with a
+        ``CedarBackend`` and passes it to the constructor.  All standard
+        kwargs are forwarded to ``__init__``.
+
+        Example::
+
+            kernel = CrewAIKernel.from_cedar(
+                policy_path="policies/governance.cedar",
+            )
+
+        Args:
+            policy_path: Path to a ``.cedar`` policy file.
+            policy_content: Inline Cedar policy string.
+            entities: Cedar entities for authorization context.
+            **kwargs: Forwarded to ``cls.__init__``.
+
+        Returns:
+            A configured integration with Cedar evaluation enabled.
+        """
+        from agent_os.policies.evaluator import PolicyEvaluator
+
+        evaluator = PolicyEvaluator()
+        evaluator.load_cedar(
+            policy_path=policy_path,
+            policy_content=policy_content,
+            entities=entities,
+        )
+        return cls(evaluator=evaluator, **kwargs)
 
     @abstractmethod
     def wrap(self, agent: Any) -> Any:
@@ -928,11 +1040,42 @@ class BaseIntegration(ABC):
         """
         Pre-execution policy check.
 
+        When a ``PolicyEvaluator`` is configured, it is consulted **before**
+        the standard ``GovernancePolicy`` checks so that enterprise Cedar/OPA
+        policies always take precedence.
+
         Returns (allowed, reason) tuple.
         """
         event_base = {"agent_id": ctx.agent_id, "timestamp": datetime.now().isoformat()}
 
         self.emit(GovernanceEventType.POLICY_CHECK, {**event_base, "phase": "pre_execute"})
+
+        # ── Cedar / PolicyEvaluator gate (runs first) ──────────────
+        if self._evaluator is not None:
+            # Extract tool identity from input_data when available so
+            # Cedar policies can gate on tool_name / tool_args.
+            _tool_name = ""
+            _tool_args: dict[str, Any] = {}
+            if isinstance(input_data, dict):
+                _tool_name = input_data.get("tool_name", "")
+                _tool_args = input_data.get("tool_args", {})
+            elif hasattr(input_data, "tool_name"):
+                _tool_name = getattr(input_data, "tool_name", "")
+                _tool_args = getattr(input_data, "tool_args", {}) or {}
+
+            cedar_ctx = self._build_cedar_context(
+                agent_id=ctx.agent_id,
+                action_type="tool_call",
+                tool_name=_tool_name,
+                tool_args=_tool_args,
+            )
+            allowed, reason = self._evaluate_policy(cedar_ctx)
+            if not allowed:
+                self.emit(
+                    GovernanceEventType.TOOL_CALL_BLOCKED,
+                    {**event_base, "reason": reason, "source": "cedar"},
+                )
+                return False, reason
 
         # Check call count
         if ctx.call_count >= self.policy.max_tool_calls:

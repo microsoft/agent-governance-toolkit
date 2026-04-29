@@ -91,6 +91,7 @@ class SemanticKernelWrapper(BaseIntegration):
         kernel: Any = None,
         policy: Optional[GovernancePolicy] = None,
         timeout_seconds: float = 300.0,
+        evaluator: Any = None,
     ):
         """Initialise the Semantic Kernel governance wrapper.
 
@@ -100,8 +101,10 @@ class SemanticKernelWrapper(BaseIntegration):
             policy: Governance policy to enforce. When ``None`` the default
                 ``GovernancePolicy`` is used.
             timeout_seconds: Default timeout in seconds (default 300).
+            evaluator: Optional ``PolicyEvaluator`` for Cedar/OPA policy
+                evaluation.
         """
-        super().__init__(policy)
+        super().__init__(policy, evaluator=evaluator)
         self._kernel = kernel
         self._stopped = False
         self._killed = False

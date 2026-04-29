@@ -47,6 +47,17 @@ When merging PRs, follow this sequence for EACH PR (do not batch):
 
 This prevents PRs from stacking in the merge queue behind stale branches.
 
+## PR Comment Etiquette — Read Before Writing
+
+Before commenting on ANY PR or pinging a reviewer:
+
+1. **Read ALL existing comments and review threads first** — never post feedback that duplicates, contradicts, or ignores prior discussion
+2. **Check resolved threads** — don't re-raise issues that were already addressed
+3. **Review the full conversation timeline** — understand what was already requested, what was fixed, and what decisions were made before adding your input
+4. **Don't ping reviewers until you've verified** there are no unaddressed comments from previous rounds that you should handle first
+
+Ignoring existing PR context wastes reviewer time and erodes trust.
+
 ## PR Review — Mandatory Before Merge
 
 NEVER merge a PR without thorough code review. CI passing is NOT sufficient.

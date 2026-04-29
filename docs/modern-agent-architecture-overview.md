@@ -343,4 +343,4 @@ Works with **20+ agent frameworks** — no vendor lock-in:
 
 ---
 
-*Agent Governance Toolkit is a Microsoft open-source project (MIT License). Public Preview — production-quality with 9,500+ tests.*
+*Agent Governance Toolkit is a Microsoft open-source project (MIT License). Public Preview -- production-quality with 13,000+ tests.*

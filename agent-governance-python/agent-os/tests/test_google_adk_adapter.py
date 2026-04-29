@@ -16,13 +16,17 @@ from unittest.mock import MagicMock
 import pytest
 
 from agent_os.integrations.google_adk_adapter import (
+    ADKExecutionContext,
     AuditEvent,
+    GovernancePlugin,
     GoogleADKKernel,
     PolicyConfig,
     PolicyViolationError,
     _HAS_ADK,
+    _HAS_ADK_PLUGINS,
     _check_adk_available,
 )
+from agent_os.integrations.base import GovernancePolicy
 
 
 # =============================================================================
@@ -746,3 +750,596 @@ class TestIntegration:
         assert result is not None
         assert "blocked" in result["error"].lower()
 
+
+# =============================================================================
+# Fake ADK objects for Plugin testing
+# =============================================================================
+
+
+@dataclass
+class FakeInvocationContext:
+    """Simulates ADK InvocationContext."""
+    invocation_id: str = "inv-001"
+    session_id: str = "sess-001"
+    agent_name: str = "root-agent"
+
+
+@dataclass
+class FakePart:
+    text: str = "hello world"
+
+
+@dataclass
+class FakeContent:
+    parts: list = field(default_factory=lambda: [FakePart(text="hello")])
+    role: str = "user"
+
+
+@dataclass
+class FakeAgent:
+    name: str = "my-agent"
+
+
+@dataclass
+class FakeUsageMetadata:
+    """Simulates Gemini-style usage metadata."""
+    prompt_token_count: int = 100
+    candidates_token_count: int = 50
+
+
+@dataclass
+class FakeLlmResponse:
+    usage_metadata: Optional[FakeUsageMetadata] = None
+
+
+@dataclass
+class FakeEvent:
+    author: str = "agent"
+
+
+# =============================================================================
+# ADKExecutionContext tests
+# =============================================================================
+
+
+class TestADKExecutionContext:
+    def test_construction_defaults(self):
+        ctx = ADKExecutionContext(
+            agent_id="test-agent",
+            session_id="sess-123",
+            policy=GovernancePolicy(name="test"),
+        )
+        assert ctx.invocation_id == ""
+        assert ctx.agent_names == []
+        assert ctx.run_history == []
+        assert ctx.prompt_tokens == 0
+        assert ctx.completion_tokens == 0
+        assert ctx.model_calls == 0
+        assert ctx.cancelled is False
+
+    def test_construction_with_values(self):
+        ctx = ADKExecutionContext(
+            agent_id="test-agent",
+            session_id="sess-123",
+            policy=GovernancePolicy(name="test"),
+            invocation_id="inv-42",
+            prompt_tokens=100,
+            completion_tokens=50,
+            model_calls=3,
+            cancelled=True,
+        )
+        assert ctx.invocation_id == "inv-42"
+        assert ctx.prompt_tokens == 100
+        assert ctx.completion_tokens == 50
+        assert ctx.model_calls == 3
+        assert ctx.cancelled is True
+
+    def test_inherits_execution_context(self):
+        from agent_os.integrations.base import ExecutionContext
+
+        assert issubclass(ADKExecutionContext, ExecutionContext)
+
+    def test_validation_from_parent(self):
+        """Parent ExecutionContext validation still applies."""
+        with pytest.raises(ValueError, match="agent_id"):
+            ADKExecutionContext(
+                agent_id="",
+                session_id="sess",
+                policy=GovernancePolicy(name="test"),
+            )
+
+
+# =============================================================================
+# SIGKILL / Cancellation tests
+# =============================================================================
+
+
+class TestSIGKILL:
+    def test_cancel_run(self):
+        k = GoogleADKKernel()
+        assert k.is_cancelled("inv-001") is False
+        k.cancel_run("inv-001")
+        assert k.is_cancelled("inv-001") is True
+
+    def test_cancel_marks_context(self):
+        k = GoogleADKKernel()
+        ctx = ADKExecutionContext(
+            agent_id="test",
+            session_id="sess",
+            policy=GovernancePolicy(name="test"),
+            invocation_id="inv-002",
+        )
+        k._contexts["inv-002"] = ctx
+        assert ctx.cancelled is False
+        k.cancel_run("inv-002")
+        assert ctx.cancelled is True
+
+    def test_cancel_records_audit(self):
+        k = GoogleADKKernel()
+        k.cancel_run("inv-003")
+        events = [e for e in k.get_audit_log() if e.event_type == "run_cancelled"]
+        assert len(events) == 1
+        assert events[0].details["invocation_id"] == "inv-003"
+
+    def test_multiple_cancels_idempotent(self):
+        k = GoogleADKKernel()
+        k.cancel_run("inv-004")
+        k.cancel_run("inv-004")
+        assert k.is_cancelled("inv-004") is True
+
+
+# =============================================================================
+# GovernancePlugin tests
+# =============================================================================
+
+
+class TestGovernancePlugin:
+    def _make_plugin(self, **kwargs):
+        k = GoogleADKKernel(**kwargs)
+        p = k.as_plugin()
+        return k, p
+
+    def test_as_plugin_returns_governance_plugin(self):
+        k, p = self._make_plugin()
+        assert isinstance(p, GovernancePlugin)
+        assert p.plugin_name == "governance"
+
+    def test_custom_name(self):
+        k = GoogleADKKernel()
+        p = k.as_plugin(name="my-gov")
+        assert p.plugin_name == "my-gov"
+
+    @pytest.mark.asyncio
+    async def test_before_run_creates_context(self):
+        k, p = self._make_plugin()
+        inv = FakeInvocationContext(invocation_id="inv-10")
+        result = await p.before_run_callback(invocation_context=inv)
+        assert result is None
+        assert "inv-10" in k._contexts
+        ctx = k._contexts["inv-10"]
+        assert ctx.invocation_id == "inv-10"
+
+    @pytest.mark.asyncio
+    async def test_before_run_blocked_when_cancelled(self):
+        k, p = self._make_plugin()
+        k.cancel_run("inv-11")
+        inv = FakeInvocationContext(invocation_id="inv-11")
+        result = await p.before_run_callback(invocation_context=inv)
+        assert result is not None
+        assert "cancelled" in str(result["error"]).lower()
+
+    @pytest.mark.asyncio
+    async def test_before_model_increments_count(self):
+        k, p = self._make_plugin()
+        ctx = FakeCallbackContext(agent_name="test-agent")
+        ctx.invocation_id = "inv-20"  # type: ignore[attr-defined]
+        await p.before_model_callback(callback_context=ctx)
+        assert k._model_call_count == 1
+        await p.before_model_callback(callback_context=ctx)
+        assert k._model_call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_after_model_tracks_tokens(self):
+        k, p = self._make_plugin()
+        # Create context so token tracking works
+        inv = FakeInvocationContext(invocation_id="inv-30")
+        await p.before_run_callback(invocation_context=inv)
+
+        ctx = FakeCallbackContext(agent_name="test-agent")
+        ctx.invocation_id = "inv-30"  # type: ignore[attr-defined]
+        resp = FakeLlmResponse(usage_metadata=FakeUsageMetadata(
+            prompt_token_count=100, candidates_token_count=50
+        ))
+        await p.after_model_callback(callback_context=ctx, llm_response=resp)
+
+        assert k._prompt_tokens == 100
+        assert k._completion_tokens == 50
+        exec_ctx = k._contexts["inv-30"]
+        assert exec_ctx.prompt_tokens == 100
+        assert exec_ctx.completion_tokens == 50
+
+    @pytest.mark.asyncio
+    async def test_after_model_graceful_no_usage(self):
+        k, p = self._make_plugin()
+        ctx = FakeCallbackContext(agent_name="test-agent")
+        resp = FakeLlmResponse(usage_metadata=None)
+        # Should not raise
+        await p.after_model_callback(callback_context=ctx, llm_response=resp)
+        assert k._prompt_tokens == 0
+        assert k._completion_tokens == 0
+
+    @pytest.mark.asyncio
+    async def test_on_model_error_records_audit(self):
+        k, p = self._make_plugin()
+        ctx = FakeCallbackContext(agent_name="test-agent")
+        err = RuntimeError("boom")
+        result = await p.on_model_error_callback(
+            callback_context=ctx, llm_request=None, error=err
+        )
+        assert result is None  # don't swallow the error
+        events = [e for e in k.get_audit_log() if e.event_type == "model_error"]
+        assert len(events) == 1
+        assert "boom" in events[0].details["error"]
+
+    @pytest.mark.asyncio
+    async def test_before_tool_delegates_to_kernel(self):
+        k, p = self._make_plugin(blocked_tools=["shell"])
+        tool = FakeAgent(name="shell")
+        result = await p.before_tool_callback(
+            tool=tool, tool_args={}, tool_context=FakeToolContext(tool_name="shell")
+        )
+        assert result is not None
+        assert "blocked" in result["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_before_tool_cancelled(self):
+        k, p = self._make_plugin()
+        k.cancel_run("inv-40")
+        ctx = FakeToolContext()
+        ctx.invocation_id = "inv-40"  # type: ignore[attr-defined]
+        result = await p.before_tool_callback(
+            tool=FakeAgent(name="safe_tool"), tool_args={}, tool_context=ctx
+        )
+        assert result is not None
+        assert "cancelled" in str(result["error"]).lower()
+
+    @pytest.mark.asyncio
+    async def test_after_tool_delegates_to_kernel(self):
+        k, p = self._make_plugin(blocked_patterns=["DROP TABLE"])
+        tool = FakeAgent(name="sql")
+        result = await p.after_tool_callback(
+            tool=tool, tool_args={}, tool_context=FakeToolContext(),
+            tool_result="DROP TABLE users"
+        )
+        assert result is not None  # blocked
+
+    @pytest.mark.asyncio
+    async def test_on_tool_error_records_audit(self):
+        k, p = self._make_plugin()
+        tool = FakeAgent(name="broken_tool")
+        err = ValueError("tool failed")
+        result = await p.on_tool_error_callback(
+            tool=tool, tool_args={}, tool_context=FakeToolContext(), error=err
+        )
+        assert result is None
+        events = [e for e in k.get_audit_log() if e.event_type == "tool_error"]
+        assert len(events) == 1
+        assert events[0].details["tool"] == "broken_tool"
+
+    @pytest.mark.asyncio
+    async def test_before_agent_tracks_name(self):
+        k, p = self._make_plugin()
+        # Setup context
+        inv = FakeInvocationContext(invocation_id="inv-50")
+        await p.before_run_callback(invocation_context=inv)
+
+        agent = FakeAgent(name="report-agent")
+        ctx = FakeCallbackContext(agent_name="report-agent")
+        ctx.invocation_id = "inv-50"  # type: ignore[attr-defined]
+        await p.before_agent_callback(agent=agent, callback_context=ctx)
+
+        exec_ctx = k._contexts["inv-50"]
+        assert "report-agent" in exec_ctx.agent_names
+
+    @pytest.mark.asyncio
+    async def test_after_agent_records_audit(self):
+        k, p = self._make_plugin()
+        agent = FakeAgent(name="search-agent")
+        await p.after_agent_callback(agent=agent, callback_context=FakeCallbackContext())
+        events = [e for e in k.get_audit_log() if e.event_type == "after_agent"]
+        assert len(events) == 1
+
+    @pytest.mark.asyncio
+    async def test_on_event_records_audit(self):
+        k, p = self._make_plugin()
+        event = FakeEvent(author="my-agent")
+        await p.on_event_callback(
+            invocation_context=FakeInvocationContext(), event=event
+        )
+        events = [e for e in k.get_audit_log() if e.event_type == "event"]
+        assert len(events) == 1
+        assert events[0].agent_name == "my-agent"
+
+    @pytest.mark.asyncio
+    async def test_after_run_records_summary(self):
+        k, p = self._make_plugin()
+        # Setup full lifecycle
+        inv = FakeInvocationContext(invocation_id="inv-60")
+        await p.before_run_callback(invocation_context=inv)
+        await p.after_run_callback(invocation_context=inv)
+
+        events = [e for e in k.get_audit_log() if e.event_type == "run_completed"]
+        assert len(events) == 1
+        assert events[0].details["invocation_id"] == "inv-60"
+
+    @pytest.mark.asyncio
+    async def test_on_user_message_flags_violation(self):
+        violations = []
+        k = GoogleADKKernel(
+            blocked_patterns=["DROP TABLE"],
+            on_violation=lambda v: violations.append(v),
+        )
+        p = k.as_plugin()
+        inv = FakeInvocationContext()
+        msg = FakeContent(parts=[FakePart(text="DROP TABLE users")])
+        await p.on_user_message_callback(
+            invocation_context=inv, user_message=msg
+        )
+        assert len(violations) > 0
+
+    @pytest.mark.asyncio
+    async def test_full_plugin_lifecycle(self):
+        """End-to-end: run → agent → model → tool → complete."""
+        k, p = self._make_plugin()
+        inv = FakeInvocationContext(invocation_id="inv-100")
+
+        # 1. Start run
+        await p.before_run_callback(invocation_context=inv)
+        assert "inv-100" in k._contexts
+
+        # 2. Before agent
+        agent = FakeAgent(name="worker")
+        cb = FakeCallbackContext(agent_name="worker")
+        cb.invocation_id = "inv-100"  # type: ignore[attr-defined]
+        await p.before_agent_callback(agent=agent, callback_context=cb)
+
+        # 3. Model call
+        await p.before_model_callback(callback_context=cb)
+        resp = FakeLlmResponse(usage_metadata=FakeUsageMetadata(
+            prompt_token_count=200, candidates_token_count=80
+        ))
+        await p.after_model_callback(callback_context=cb, llm_response=resp)
+
+        # 4. After agent
+        await p.after_agent_callback(agent=agent, callback_context=cb)
+
+        # 5. End run
+        await p.after_run_callback(invocation_context=inv)
+
+        # Verify final state
+        ctx = k._contexts["inv-100"]
+        assert "worker" in ctx.agent_names
+        assert ctx.model_calls == 1
+        assert ctx.prompt_tokens == 200
+        assert ctx.completion_tokens == 80
+        assert k.health_check()["model_calls"] == 1
+
+
+# =============================================================================
+# Enhanced health_check tests
+# =============================================================================
+
+
+class TestEnhancedHealthCheck:
+    def test_includes_new_fields(self):
+        k = GoogleADKKernel()
+        health = k.health_check()
+        assert "model_calls" in health
+        assert "token_usage" in health
+        assert "cancelled_runs" in health
+        assert "context_count" in health
+        assert "adk_plugins_available" in health
+
+    def test_token_usage_structure(self):
+        k = GoogleADKKernel()
+        health = k.health_check()
+        usage = health["token_usage"]
+        assert "prompt" in usage
+        assert "completion" in usage
+        assert "total" in usage
+        assert usage["total"] == usage["prompt"] + usage["completion"]
+
+    def test_cancelled_runs_count(self):
+        k = GoogleADKKernel()
+        assert k.health_check()["cancelled_runs"] == 0
+        k.cancel_run("inv-1")
+        k.cancel_run("inv-2")
+        assert k.health_check()["cancelled_runs"] == 2
+
+    def test_model_calls_tracked(self):
+        k = GoogleADKKernel()
+        assert k.health_check()["model_calls"] == 0
+        k._model_call_count = 5
+        assert k.health_check()["model_calls"] == 5
+
+    def test_reset_clears_model_counters(self):
+        k = GoogleADKKernel()
+        k._model_call_count = 10
+        k._prompt_tokens = 500
+        k._completion_tokens = 200
+        k.reset()
+        assert k._model_call_count == 0
+        assert k._prompt_tokens == 0
+        assert k._completion_tokens == 0
+
+
+# ── Edge-Case / Robustness Tests ─────────────────────────────────────
+
+class TestEdgeCases:
+    """Edge-case tests for malformed inputs, boundary conditions,
+    and graceful degradation — requested by CI review bots."""
+
+    # -- Malformed user_message inputs --
+
+    @pytest.mark.asyncio
+    async def test_user_message_none_parts(self):
+        """on_user_message_callback handles user_message with parts=None."""
+        k = GoogleADKKernel(blocked_patterns=["DROP TABLE"])
+        plugin = k.as_plugin()
+        msg = MagicMock()
+        msg.parts = None
+        inv = MagicMock()
+        inv.invocation_id = "inv-edge-1"
+        result = await plugin.on_user_message_callback(
+            invocation_context=inv, user_message=msg
+        )
+        assert result is None  # no crash, no false positive
+
+    @pytest.mark.asyncio
+    async def test_user_message_parts_is_string(self):
+        """on_user_message_callback handles parts being a raw string (not list)."""
+        k = GoogleADKKernel(blocked_patterns=["DROP TABLE"])
+        plugin = k.as_plugin()
+        msg = MagicMock()
+        msg.parts = "this is not a list"
+        inv = MagicMock()
+        inv.invocation_id = "inv-edge-2"
+        result = await plugin.on_user_message_callback(
+            invocation_context=inv, user_message=msg
+        )
+        assert result is None  # graceful degradation
+
+    @pytest.mark.asyncio
+    async def test_user_message_parts_is_integer(self):
+        """on_user_message_callback handles parts being an integer."""
+        k = GoogleADKKernel(blocked_patterns=["DROP TABLE"])
+        plugin = k.as_plugin()
+        msg = MagicMock()
+        msg.parts = 42
+        inv = MagicMock()
+        inv.invocation_id = "inv-edge-3"
+        result = await plugin.on_user_message_callback(
+            invocation_context=inv, user_message=msg
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_user_message_missing_parts_attr(self):
+        """on_user_message_callback handles user_message without parts attr."""
+        k = GoogleADKKernel(blocked_patterns=["DROP TABLE"])
+        plugin = k.as_plugin()
+        msg = object()  # no .parts at all
+        inv = MagicMock()
+        inv.invocation_id = "inv-edge-4"
+        result = await plugin.on_user_message_callback(
+            invocation_context=inv, user_message=msg
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_user_message_parts_with_no_text(self):
+        """Parts that lack a .text attribute are silently skipped."""
+        k = GoogleADKKernel(blocked_patterns=["DROP TABLE"])
+        plugin = k.as_plugin()
+        part_no_text = MagicMock(spec=[])  # no attributes at all
+        msg = MagicMock()
+        msg.parts = [part_no_text]
+        inv = MagicMock()
+        inv.invocation_id = "inv-edge-5"
+        result = await plugin.on_user_message_callback(
+            invocation_context=inv, user_message=msg
+        )
+        assert result is None
+
+    # -- ADKExecutionContext boundary conditions --
+
+    def test_context_empty_invocation_id(self):
+        """ADKExecutionContext works with an empty invocation_id."""
+        ctx = ADKExecutionContext(
+            agent_id="test", session_id="sess",
+            policy=GovernancePolicy(), invocation_id=""
+        )
+        assert ctx.invocation_id == ""
+        assert ctx.cancelled is False
+
+    def test_context_large_token_counts(self):
+        """ADKExecutionContext supports very large token counts."""
+        ctx = ADKExecutionContext(
+            agent_id="test", session_id="sess",
+            policy=GovernancePolicy(),
+            prompt_tokens=10**9, completion_tokens=10**9,
+            model_calls=10**6,
+        )
+        assert ctx.prompt_tokens == 10**9
+        assert ctx.completion_tokens == 10**9
+        assert ctx.model_calls == 10**6
+
+    # -- cancel_run edge cases --
+
+    def test_cancel_run_nonexistent_context(self):
+        """cancel_run for an ID with no context doesn't raise."""
+        k = GoogleADKKernel()
+        # No context exists for this ID — should not raise
+        k.cancel_run("does-not-exist")
+        assert k.is_cancelled("does-not-exist")
+
+    def test_cancel_run_empty_string_id(self):
+        """cancel_run works with empty string invocation ID."""
+        k = GoogleADKKernel()
+        k.cancel_run("")
+        assert k.is_cancelled("")
+
+    # -- GovernancePlugin fallback base class --
+
+    def test_governance_plugin_is_class(self):
+        """GovernancePlugin is always a usable class regardless of ADK install."""
+        assert isinstance(GovernancePlugin, type)
+        k = GoogleADKKernel()
+        plugin = k.as_plugin()
+        assert hasattr(plugin, "before_run_callback")
+        assert hasattr(plugin, "after_run_callback")
+        assert hasattr(plugin, "before_tool_callback")
+        assert hasattr(plugin, "after_tool_callback")
+
+    # -- health_check resilience --
+
+    def test_health_check_negative_counters(self):
+        """health_check returns data even if counters are unexpected values."""
+        k = GoogleADKKernel()
+        k._model_call_count = -1  # shouldn't happen, but shouldn't crash
+        k._prompt_tokens = -100
+        hc = k.health_check()
+        assert hc["model_calls"] == -1
+        assert hc["token_usage"]["prompt"] == -100
+        assert "status" in hc
+
+    @pytest.mark.asyncio
+    async def test_before_tool_malformed_tool_context(self):
+        """before_tool_callback handles tool_context without expected attrs."""
+        k = GoogleADKKernel(blocked_tools=["shell"])
+        plugin = k.as_plugin()
+        inv = MagicMock()
+        inv.invocation_id = "inv-edge-6"
+        # tool_context without .function_name or .tool_name
+        tc = object()
+        result = await plugin.before_tool_callback(
+            tool=MagicMock(name="safe_tool"),
+            tool_args={"input": "hello"},
+            tool_context=tc,
+        )
+        # Should not crash — falls back to tool.name or "unknown"
+        assert result is None or isinstance(result, dict)
+
+    @pytest.mark.asyncio
+    async def test_on_model_error_none_error(self):
+        """on_model_error_callback handles error=None gracefully."""
+        k = GoogleADKKernel()
+        plugin = k.as_plugin()
+        result = await plugin.on_model_error_callback(
+            callback_context=MagicMock(),
+            llm_request=None,
+            error=None,
+        )
+        assert result is None
+        # Should have recorded an audit event with "unknown" error
+        assert any(e.event_type == "model_error" for e in k._audit_log)
