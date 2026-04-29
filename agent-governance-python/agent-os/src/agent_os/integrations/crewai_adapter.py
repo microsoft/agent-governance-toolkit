@@ -54,8 +54,8 @@ class CrewAIKernel(BaseIntegration):
       and sub-agent delegation detection (when ``deep_hooks_enabled`` is True).
     """
 
-    def __init__(self, policy: Optional[GovernancePolicy] = None, deep_hooks_enabled: bool = True):
-        super().__init__(policy)
+    def __init__(self, policy: Optional[GovernancePolicy] = None, deep_hooks_enabled: bool = True, evaluator: Any = None):
+        super().__init__(policy, evaluator=evaluator)
         self.deep_hooks_enabled = deep_hooks_enabled
         self._wrapped_crews: dict[int, Any] = {}
         self._step_log: list[dict[str, Any]] = []

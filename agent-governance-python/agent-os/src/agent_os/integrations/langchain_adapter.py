@@ -52,6 +52,7 @@ class LangChainKernel(BaseIntegration):
         policy: Optional[GovernancePolicy] = None,
         timeout_seconds: float = 300.0,
         deep_hooks_enabled: bool = True,
+        evaluator: Any = None,
     ):
         """Initialise the LangChain governance kernel.
 
@@ -64,8 +65,11 @@ class LangChainKernel(BaseIntegration):
                 apply deep integration hooks — tool registry interception,
                 memory write validation, and sub-agent spawn detection —
                 during :meth:`wrap`.
+            evaluator: Optional ``PolicyEvaluator`` for Cedar/OPA policy
+                evaluation. When set, Cedar policies are consulted before
+                standard ``GovernancePolicy`` checks.
         """
-        super().__init__(policy)
+        super().__init__(policy, evaluator=evaluator)
         self.timeout_seconds = timeout_seconds
         self.deep_hooks_enabled = deep_hooks_enabled
         self._wrapped_agents: dict[int, Any] = {}  # id(wrapped) -> original

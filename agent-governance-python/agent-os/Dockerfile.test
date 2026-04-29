@@ -1,0 +1,27 @@
+# Cedar BaseIntegration test runner
+# Build context: agent-governance-python/
+# Usage:
+#   cd agent-governance-python
+#   docker build -t agt-cedar-test -f agent-os/Dockerfile.test .
+#   docker run --rm agt-cedar-test
+
+FROM python:3.12-slim
+
+WORKDIR /build
+
+# Install system deps
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+
+# Copy everything in agent-governance-python
+COPY . .
+
+# Install agent-primitives first (sibling dependency)
+RUN pip install --no-cache-dir ./agent-primitives
+
+# Install agent-os with dev extras
+RUN pip install --no-cache-dir -e "./agent-os[dev]"
+
+WORKDIR /build/agent-os
+
+# Default: run all tests including Cedar integration suite
+CMD ["python", "-m", "pytest", "tests/", "-v", "--tb=short", "-x"]

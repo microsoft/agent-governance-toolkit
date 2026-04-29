@@ -88,8 +88,9 @@ class PydanticAIKernel(BaseIntegration):
         self,
         policy: GovernancePolicy | None = None,
         approval_callback: Callable[[str, dict[str, Any]], bool] | None = None,
+        evaluator: Any = None,
     ) -> None:
-        super().__init__(policy)
+        super().__init__(policy, evaluator=evaluator)
         self._wrapped_agents: dict[int, Any] = {}
         self._audit_log: list[dict[str, Any]] = []
         self._approval_callback = approval_callback

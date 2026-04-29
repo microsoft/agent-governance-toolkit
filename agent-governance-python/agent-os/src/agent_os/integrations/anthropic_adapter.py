@@ -113,6 +113,7 @@ class AnthropicKernel(BaseIntegration):
         policy: GovernancePolicy | None = None,
         max_retries: int = 3,
         timeout_seconds: float = 300.0,
+        evaluator: Any = None,
     ) -> None:
         """Initialise the Anthropic governance kernel.
 
@@ -120,8 +121,10 @@ class AnthropicKernel(BaseIntegration):
             policy: Governance policy to enforce. Uses default when ``None``.
             max_retries: Maximum retry attempts for transient errors.
             timeout_seconds: Default timeout for operations.
+            evaluator: Optional ``PolicyEvaluator`` for Cedar/OPA policy
+                evaluation.
         """
-        super().__init__(policy)
+        super().__init__(policy, evaluator=evaluator)
         self.max_retries = max_retries
         self.timeout_seconds = timeout_seconds
         self._wrapped_clients: dict[int, Any] = {}
