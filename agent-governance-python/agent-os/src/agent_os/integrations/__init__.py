@@ -59,7 +59,11 @@ from agent_os.exceptions import (
     RateLimitError,
 )
 from agent_os.integrations.a2a_adapter import A2AEvaluation, A2AGovernanceAdapter, A2APolicy
-from agent_os.integrations.anthropic_adapter import AnthropicKernel, GovernedAnthropicClient
+from agent_os.integrations.anthropic_adapter import (
+    AnthropicKernel,
+    GovernedAnthropicClient,
+    GovernanceMessageHook as AnthropicGovernanceHook,
+)
 from agent_os.integrations.autogen_adapter import (
     AutoGenKernel,
     GovernanceInterventionHandler as AutoGenGovernanceHandler,
@@ -101,10 +105,18 @@ from agent_os.integrations.llamafirewall import (
 from agent_os.integrations.llamaindex_adapter import LlamaIndexKernel
 from agent_os.integrations.mistral_adapter import GovernedMistralClient, MistralKernel
 from agent_os.integrations.openai_adapter import GovernedAssistant, OpenAIKernel
-from agent_os.integrations.pydantic_ai_adapter import PydanticAIKernel
+from agent_os.integrations.pydantic_ai_adapter import (
+    GovernanceCapability as PydanticAIGovernanceCapability,
+    PydanticAIKernel,
+)
 from agent_os.integrations.semantic_kernel_adapter import (
+    GovernanceFunctionFilter as SKGovernanceFilter,
     GovernedSemanticKernel,
     SemanticKernelWrapper,
+)
+from agent_os.integrations.smolagents_adapter import (
+    GovernanceStepCallback as SmolagentsGovernanceCallback,
+    SmolagentsKernel,
 )
 
 from .base import (
@@ -183,7 +195,7 @@ __all__ = [
     # Anthropic Claude
     "AnthropicKernel",
     "GovernedAnthropicClient",
-    # Google Gemini
+    "AnthropicGovernanceHook",
     "GeminiKernel",
     "GovernedGeminiModel",
     # Mistral AI
@@ -192,6 +204,7 @@ __all__ = [
     # Semantic Kernel
     "SemanticKernelWrapper",
     "GovernedSemanticKernel",
+    "SKGovernanceFilter",
     # Guardrails
     "GuardrailsKernel",
     # Google ADK
@@ -215,6 +228,10 @@ __all__ = [
     "OffensiveIntentDetector",
     # PydanticAI
     "PydanticAIKernel",
+    "PydanticAIGovernanceCapability",
+    # Smolagents
+    "SmolagentsKernel",
+    "SmolagentsGovernanceCallback",
     # Microsoft Agent Framework (MAF)
     "MAFGovernancePolicyMiddleware",
     "MAFCapabilityGuardMiddleware",
