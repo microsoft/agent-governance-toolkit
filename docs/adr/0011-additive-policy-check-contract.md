@@ -110,7 +110,7 @@ message fragments to the new categories as follows:
 | `Confidence below threshold` | `CONFIDENCE_THRESHOLD` |
 | Any unclassified policy denial | `POLICY_ERROR` |
 
-Before, a host such as Zava sanitized by substring-matching free-form text:
+Before, a host sanitized by substring-matching free-form text:
 
 ```python
 except Exception as e:
@@ -183,5 +183,4 @@ contract at the source while hosts keep filters only as defense in depth.
 
 ## References
 
-- [Unify Policy Decisions plan](file:///C:/Users/eltonc/OneDrive%20-%20Microsoft/C%26E/AGT/.plans/agt-unify-policy-decisions.md)
-- [Policy leak surface inventory](file:///C:/Users/eltonc/OneDrive%20-%20Microsoft/C%26E/AGT/.plans/agt-policy-leak-surface-inventory.md)
+- `agent-governance-python/agent-os/AGENTS.md` — opt-in snippet for adapter authors
