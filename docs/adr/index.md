@@ -13,3 +13,4 @@ Key architectural decisions and their rationale.
 | [ADR-0007](0007-external-jwks-federation-for-cross-org-identity.md) | External JWKS federation for cross-org identity |
 | [ADR-0008](0008-cross-org-policy-federation.md) | Cross-org policy federation above identity |
 | [ADR-0009](0009-rfc-9334-rats-architecture-alignment.md) | RFC 9334 (RATS) architecture alignment |
+| [ADR-0011](0011-additive-policy-check-contract.md) | Additive policy check contract |
