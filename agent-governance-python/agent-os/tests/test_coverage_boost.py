@@ -16,32 +16,26 @@ import pytest
 # 1. OpenAI Agents SDK Integration
 # ---------------------------------------------------------------------------
 from agent_os.integrations.openai_agents_sdk import (
-    GovernancePolicy as OAIGovernancePolicy,
-    ExecutionContext as OAIExecutionContext,
-    PolicyViolationError as OAIPolicyViolationError,
     OpenAIAgentsKernel,
+    GovernanceRunHooks,
 )
+from agent_os.integrations.base import GovernancePolicy as OAIGovernancePolicy
+from agent_os.integrations.base import ExecutionContext as OAIExecutionContext
+from agent_os.exceptions import PolicyViolationError as OAIPolicyViolationError
 
 
 class TestOAIGovernancePolicy:
     def test_defaults(self):
         p = OAIGovernancePolicy()
-        assert p.max_tool_calls == 50
-        assert p.max_handoffs == 5
+        assert p.max_tool_calls == 10
         assert p.timeout_seconds == 300
         assert p.allowed_tools == []
-        assert p.blocked_tools == []
         assert p.blocked_patterns == []
-        assert p.pii_detection is True
         assert p.require_human_approval is False
-        assert p.approval_threshold == 0.8
-        assert p.log_all_calls is True
-        assert p.checkpoint_frequency == 5
 
     def test_custom(self):
-        p = OAIGovernancePolicy(max_tool_calls=10, blocked_tools=["rm"])
+        p = OAIGovernancePolicy(max_tool_calls=10)
         assert p.max_tool_calls == 10
-        assert p.blocked_tools == ["rm"]
 
 
 class TestOAIExecutionContext:
@@ -50,39 +44,32 @@ class TestOAIExecutionContext:
         ctx = OAIExecutionContext(session_id="s1", agent_id="a1", policy=p)
         assert ctx.session_id == "s1"
         assert ctx.agent_id == "a1"
-        assert ctx.tool_calls == 0
-        assert ctx.handoffs == 0
-        assert ctx.events == []
-        assert isinstance(ctx.started_at, datetime)
+        assert ctx.tool_calls == []
+        assert ctx.call_count == 0
 
-    def test_record_event(self):
+    def test_tool_calls_list(self):
         p = OAIGovernancePolicy()
         ctx = OAIExecutionContext(session_id="s1", agent_id="a1", policy=p)
-        ctx.record_event("test_event", {"key": "val"})
-        assert len(ctx.events) == 1
-        assert ctx.events[0]["type"] == "test_event"
-        assert ctx.events[0]["data"] == {"key": "val"}
-        assert "timestamp" in ctx.events[0]
+        ctx.tool_calls.append({"type": "test_event", "data": {"key": "val"}})
+        assert len(ctx.tool_calls) == 1
+        assert ctx.tool_calls[0]["type"] == "test_event"
 
 
 class TestOAIPolicyViolationError:
     def test_basic(self):
-        err = OAIPolicyViolationError("tool_filter", "blocked tool")
-        assert err.policy_name == "tool_filter"
-        assert err.description == "blocked tool"
-        assert err.severity == "high"
-        assert "tool_filter" in str(err)
+        err = OAIPolicyViolationError("blocked tool")
+        assert "blocked tool" in str(err)
 
-    def test_custom_severity(self):
-        err = OAIPolicyViolationError("x", "y", severity="low")
-        assert err.severity == "low"
+    def test_is_exception(self):
+        err = OAIPolicyViolationError("something")
+        assert isinstance(err, Exception)
 
 
 class TestOpenAIAgentsKernel:
     def test_init_defaults(self):
         k = OpenAIAgentsKernel()
         assert isinstance(k.policy, OAIGovernancePolicy)
-        assert k._contexts == {}
+        assert k._agent_contexts == {}
         assert k._wrapped_agents == {}
 
     def test_init_custom_policy(self):
@@ -97,7 +84,7 @@ class TestOpenAIAgentsKernel:
 
     def test_default_violation_handler_logs(self):
         k = OpenAIAgentsKernel()
-        err = OAIPolicyViolationError("p", "d")
+        err = OAIPolicyViolationError("d")
         # Should not raise
         k._default_violation_handler(err)
 
@@ -109,22 +96,19 @@ class TestOpenAIAgentsKernel:
         assert reason == ""
 
     def test_tool_blocked(self):
-        p = OAIGovernancePolicy(blocked_tools=["dangerous"])
-        k = OpenAIAgentsKernel(policy=p)
+        k = OpenAIAgentsKernel(blocked_tools=["dangerous"])
         ok, reason = k._check_tool_allowed("dangerous")
         assert ok is False
         assert "blocked" in reason
 
     def test_tool_not_in_allowed_list(self):
-        p = OAIGovernancePolicy(allowed_tools=["safe"])
-        k = OpenAIAgentsKernel(policy=p)
+        k = OpenAIAgentsKernel(allowed_tools=["safe"])
         ok, reason = k._check_tool_allowed("unsafe")
         assert ok is False
         assert "not in allowed" in reason
 
     def test_tool_in_allowed_list(self):
-        p = OAIGovernancePolicy(allowed_tools=["safe"])
-        k = OpenAIAgentsKernel(policy=p)
+        k = OpenAIAgentsKernel(allowed_tools=["safe"])
         ok, reason = k._check_tool_allowed("safe")
         assert ok is True
 
@@ -135,43 +119,50 @@ class TestOpenAIAgentsKernel:
         assert ok is True
 
     def test_content_blocked(self):
-        p = OAIGovernancePolicy(blocked_patterns=["DROP TABLE"])
-        k = OpenAIAgentsKernel(policy=p)
+        k = OpenAIAgentsKernel(blocked_patterns=["DROP TABLE"])
         ok, reason = k._check_content("please DROP TABLE users")
         assert ok is False
         assert "DROP TABLE" in reason
 
     def test_content_blocked_case_insensitive(self):
-        p = OAIGovernancePolicy(blocked_patterns=["secret"])
-        k = OpenAIAgentsKernel(policy=p)
+        k = OpenAIAgentsKernel(blocked_patterns=["secret"])
         ok, reason = k._check_content("this is SECRET data")
         assert ok is False
 
-    # wrap / unwrap
+    # wrap / unwrap (deprecated)
     def test_wrap_creates_governed_agent(self):
+        import warnings
         k = OpenAIAgentsKernel()
         agent = MagicMock()
         agent.name = "test-agent"
         agent.model = "gpt-4o"
         agent.instructions = "do stuff"
         agent.tools = []
-        wrapped = k.wrap(agent)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            wrapped = k.wrap(agent)
         assert wrapped.name == "test-agent"
         assert wrapped.original is agent
-        assert len(k._contexts) == 1
+        assert "test-agent" in k._agent_contexts
         assert "test-agent" in k._wrapped_agents
 
     def test_wrap_agent_without_name(self):
+        import warnings
         k = OpenAIAgentsKernel()
         agent = MagicMock(spec=[])  # no 'name' attribute
-        wrapped = k.wrap(agent)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            wrapped = k.wrap(agent)
         assert wrapped._original is agent
 
     def test_unwrap_returns_original(self):
+        import warnings
         k = OpenAIAgentsKernel()
         agent = MagicMock()
         agent.name = "a"
-        wrapped = k.wrap(agent)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            wrapped = k.wrap(agent)
         assert k.unwrap(wrapped) is agent
 
     def test_unwrap_non_wrapped(self):
@@ -180,18 +171,24 @@ class TestOpenAIAgentsKernel:
         assert k.unwrap(obj) is obj
 
     def test_wrapped_getattr_passthrough(self):
+        import warnings
         k = OpenAIAgentsKernel()
         agent = MagicMock()
         agent.name = "a"
         agent.custom_field = 42
-        wrapped = k.wrap(agent)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            wrapped = k.wrap(agent)
         assert wrapped.custom_field == 42
 
     # create_tool_guard
     @pytest.mark.asyncio
     async def test_tool_guard_allows(self):
+        import warnings
         k = OpenAIAgentsKernel()
-        guard = k.create_tool_guard()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            guard = k.create_tool_guard()
 
         @guard
         async def my_tool(x):
@@ -202,9 +199,11 @@ class TestOpenAIAgentsKernel:
 
     @pytest.mark.asyncio
     async def test_tool_guard_blocks_tool(self):
-        p = OAIGovernancePolicy(blocked_tools=["blocked_func"])
-        k = OpenAIAgentsKernel(policy=p)
-        guard = k.create_tool_guard()
+        import warnings
+        k = OpenAIAgentsKernel(blocked_tools=["blocked_func"])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            guard = k.create_tool_guard()
 
         @guard
         async def blocked_func():
@@ -215,9 +214,11 @@ class TestOpenAIAgentsKernel:
 
     @pytest.mark.asyncio
     async def test_tool_guard_blocks_content_in_args(self):
-        p = OAIGovernancePolicy(blocked_patterns=["rm -rf"])
-        k = OpenAIAgentsKernel(policy=p)
-        guard = k.create_tool_guard()
+        import warnings
+        k = OpenAIAgentsKernel(blocked_patterns=["rm -rf"])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            guard = k.create_tool_guard()
 
         @guard
         async def run_cmd(cmd):
@@ -228,9 +229,11 @@ class TestOpenAIAgentsKernel:
 
     @pytest.mark.asyncio
     async def test_tool_guard_blocks_content_in_kwargs(self):
-        p = OAIGovernancePolicy(blocked_patterns=["DROP TABLE"])
-        k = OpenAIAgentsKernel(policy=p)
-        guard = k.create_tool_guard()
+        import warnings
+        k = OpenAIAgentsKernel(blocked_patterns=["DROP TABLE"])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            guard = k.create_tool_guard()
 
         @guard
         async def query(sql=""):
@@ -241,8 +244,11 @@ class TestOpenAIAgentsKernel:
 
     @pytest.mark.asyncio
     async def test_tool_guard_sync_function(self):
+        import warnings
         k = OpenAIAgentsKernel()
-        guard = k.create_tool_guard()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            guard = k.create_tool_guard()
 
         @guard
         def sync_tool(x):
@@ -261,8 +267,7 @@ class TestOpenAIAgentsKernel:
 
     @pytest.mark.asyncio
     async def test_guardrail_blocks_content(self):
-        p = OAIGovernancePolicy(blocked_patterns=["bad_word"])
-        k = OpenAIAgentsKernel(policy=p)
+        k = OpenAIAgentsKernel(blocked_patterns=["bad_word"])
         guardrail = k.create_guardrail()
         result = await guardrail(MagicMock(), MagicMock(), "this has bad_word")
         assert result is not None
@@ -270,8 +275,7 @@ class TestOpenAIAgentsKernel:
 
     @pytest.mark.asyncio
     async def test_guardrail_blocks_tool_calls(self):
-        p = OAIGovernancePolicy(blocked_tools=["evil_tool"])
-        k = OpenAIAgentsKernel(policy=p)
+        k = OpenAIAgentsKernel(blocked_tools=["evil_tool"])
         guardrail = k.create_guardrail()
         ctx = MagicMock()
         tc = MagicMock()
@@ -281,41 +285,28 @@ class TestOpenAIAgentsKernel:
         assert result is not None
         assert "blocked" in result.lower()
 
-    # get_context / get_audit_log / get_stats
-    def test_get_context_found(self):
+    # get_audit_log / get_stats
+    def test_get_audit_log(self):
         k = OpenAIAgentsKernel()
-        agent = MagicMock()
-        agent.name = "x"
-        wrapped = k.wrap(agent)
-        session_id = wrapped._context.session_id
-        assert k.get_context(session_id) is wrapped._context
-
-    def test_get_context_not_found(self):
-        k = OpenAIAgentsKernel()
-        assert k.get_context("nonexistent") is None
-
-    def test_get_audit_log_with_events(self):
-        k = OpenAIAgentsKernel()
-        agent = MagicMock()
-        agent.name = "a"
-        wrapped = k.wrap(agent)
-        session_id = wrapped._context.session_id
-        wrapped._context.record_event("test", {"x": 1})
-        log = k.get_audit_log(session_id)
+        k._record_event("test", {"x": 1})
+        log = k.get_audit_log()
         assert len(log) == 1
         assert log[0]["type"] == "test"
 
-    def test_get_audit_log_no_session(self):
+    def test_get_audit_log_empty(self):
         k = OpenAIAgentsKernel()
-        assert k.get_audit_log("nope") == []
+        assert k.get_audit_log() == []
 
     def test_get_stats(self):
+        import warnings
         k = OpenAIAgentsKernel()
         agent = MagicMock()
         agent.name = "s"
-        k.wrap(agent)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            k.wrap(agent)
         stats = k.get_stats()
-        assert stats["total_sessions"] == 1
+        assert stats["total_sessions"] >= 1
         assert stats["wrapped_agents"] == 1
         assert stats["total_tool_calls"] == 0
         assert stats["total_handoffs"] == 0
