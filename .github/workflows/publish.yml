@@ -57,9 +57,9 @@ jobs:
 
       - name: Install build tools
         run: |
-          # Require hash verification — no fallback to unverified install (CWE-295)
-          pip install --no-cache-dir --require-hashes \
-            build==1.2.1 --hash=sha256:75e10f767a433d9a86e50d83f418e83efc18ede923ee5ff7df93b6cb0306c5d4
+          # Require hash verification via requirements file (CWE-295)
+          printf 'build==1.2.1 --hash=sha256:75e10f767a433d9a86e50d83f418e83efc18ede923ee5ff7df93b6cb0306c5d4\n' > /tmp/build-req.txt
+          pip install --no-cache-dir --require-hashes -r /tmp/build-req.txt
 
       - name: Build ${{ matrix.package }}
         working-directory: ${{ matrix.package }}
@@ -197,36 +197,39 @@ jobs:
       # All config sourced from GitHub Secrets:
       #   ESRP_AAD_ID, ESRP_KEYVAULT_NAME, ESRP_CERT_IDENTIFIER
       # Key code CP-401405 is the Microsoft NuGet signing certificate.
-      # ESRP signing — activate when PRSS certificates are generated and uploaded to Key Vault
+      #
+      # TODO: Replace the placeholder steps below with actual ESRP
+      # signing invocations once PRSS certificates are generated and
+      # uploaded to Key Vault. Until then, packages are built, tested,
+      # attested, and uploaded as artifacts but NOT published to NuGet.
+      # Production publishing uses the ADO pipeline
+      # (.github/pipelines/esrp-publish.yml).
       # ----------------------------------------------------------------
       - name: Authenticode sign assemblies (ESRP)
+        id: sign-dll
         if: ${{ env.ESRP_CONFIGURED == 'true' }}
         env:
           ESRP_AAD_ID: ${{ secrets.ESRP_AAD_ID }}
           ESRP_KEYVAULT_NAME: ${{ secrets.ESRP_KEYVAULT_NAME }}
           ESRP_CERT_IDENTIFIER: ${{ secrets.ESRP_CERT_IDENTIFIER }}
         run: |
-          echo "Submitting DLLs for Authenticode signing via ESRP..."
+          echo "DLLs awaiting Authenticode signing:"
           find agent-governance-dotnet -name '*.dll' -path '*/Release/*' | head -20
-          # TODO: Replace this block with actual ESRP signing invocation once
-          # PRSS certificates are generated and uploaded to Key Vault.
-          # Until then, fail to prevent publishing unsigned assemblies.
-          echo "::error::ESRP Authenticode signing not yet implemented — PRSS certs required. Use the ADO pipeline (.github/pipelines/esrp-publish.yml) for production publishing."
-          exit 1
+          echo "::warning::ESRP Authenticode signing pending PRSS certificate setup. Packages will not be published to NuGet from this workflow. Use the ADO pipeline for production publishing."
+          echo "signed=false" >> "$GITHUB_OUTPUT"
 
       - name: Sign NuGet package (ESRP)
+        id: sign-nuget
         if: ${{ env.ESRP_CONFIGURED == 'true' }}
         env:
           ESRP_AAD_ID: ${{ secrets.ESRP_AAD_ID }}
           ESRP_KEYVAULT_NAME: ${{ secrets.ESRP_KEYVAULT_NAME }}
           ESRP_CERT_IDENTIFIER: ${{ secrets.ESRP_CERT_IDENTIFIER }}
         run: |
-          echo "Submitting NuGet packages for signing via ESRP..."
-          # TODO: Replace this block with actual ESRP NuGetSign + NuGetVerify
-          # invocation (KeyCode: CP-401405) once PRSS certs are ready.
-          # Until then, fail to prevent publishing unsigned packages.
-          echo "::error::ESRP NuGet signing not yet implemented — PRSS certs required. Use the ADO pipeline (.github/pipelines/esrp-publish.yml) for production publishing."
-          exit 1
+          echo "NuGet packages awaiting ESRP signing (KeyCode CP-401405):"
+          ls -la agent-governance-dotnet/nupkg/*.nupkg 2>/dev/null || true
+          echo "::warning::ESRP NuGet signing pending PRSS certificate setup. Use the ADO pipeline for production publishing."
+          echo "signed=false" >> "$GITHUB_OUTPUT"
 
       - name: Validate NuGet package metadata
         working-directory: agent-governance-dotnet
@@ -251,7 +254,7 @@ jobs:
         continue-on-error: true
 
       - name: Publish to NuGet
-        if: ${{ env.ESRP_CONFIGURED == 'true' }}
+        if: ${{ env.ESRP_CONFIGURED == 'true' && steps.sign-dll.outputs.signed == 'true' && steps.sign-nuget.outputs.signed == 'true' }}
         working-directory: agent-governance-dotnet
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
@@ -264,3 +267,10 @@ jobs:
           dotnet nuget push ./nupkg/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
           echo "=== Verifying published package signature ==="
           echo "Run: NuGet.exe verify -Signatures <pkg> -CertificateFingerprint 3F9001EA83C560D712C24CF213C3D312CB3BFF51EE89435D3430BD06B5D0EECE;AA12DA22A49BCE7D5C1AE64CC1F3D892F150DA76140F210ABD2CBFFCA2C18A27;566A31882BE208BE4422F7CFD66ED09F5D4524A5994F50CCC8B05EC0528C1353"
+
+      - name: Upload NuGet artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nuget-packages
+          path: agent-governance-dotnet/nupkg/*
+          retention-days: 30
