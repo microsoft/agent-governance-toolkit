@@ -89,30 +89,30 @@ parameters:
         path: agent-governance-python/agent-marketplace
       - name: agent-mcp-governance
         path: agent-governance-python/agent-mcp-governance
-      - name: agent-discovery
+      - name: agentmesh-discovery
         path: agent-governance-python/agent-discovery
-      - name: agent-primitives
+      - name: agentmesh-primitives
         path: agent-governance-python/agent-primitives
       # Agent-OS modules (10)
       - name: agentmesh-message-bus
         path: agent-governance-python/agent-os/modules/amb
-      - name: agent-tool-registry
+      - name: agentmesh-tool-registry
         path: agent-governance-python/agent-os/modules/atr
       - name: agentmesh-context
         path: agent-governance-python/agent-os/modules/caas
       - name: agentmesh-drift
         path: agent-governance-python/agent-os/modules/cmvk
-      - name: agent-control-plane
+      - name: agentmesh-control-plane
         path: agent-governance-python/agent-os/modules/control-plane
       - name: agentmesh-memory
         path: agent-governance-python/agent-os/modules/emk
-      - name: agent-trust-protocol
+      - name: agentmesh-trust-protocol
         path: agent-governance-python/agent-os/modules/iatp
       - name: agentmesh-mcp-server
         path: agent-governance-python/agent-os/modules/mcp-kernel-server
       - name: agentmesh-nexus
         path: agent-governance-python/agent-os/modules/nexus
-      - name: agent-observability
+      - name: agentmesh-observability
         path: agent-governance-python/agent-os/modules/observability
       # AgentMesh sub-packages (1)
       - name: agentmesh-mcp-trust

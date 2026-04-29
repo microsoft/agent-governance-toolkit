@@ -18,7 +18,7 @@ Layer 4/5 (Intelligence): scak, mute-agent
 ## Installation
 
 ```bash
-pip install agent-primitives
+pip install agentmesh-primitives
 ```
 
 ## Models

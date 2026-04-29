@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent_discovery"
+name = "agentmesh_discovery"
 version = "3.3.0"
 description = "Shadow AI agent discovery and inventory for the Agent Governance Toolkit"
 readme = "README.md"
@@ -51,7 +51,7 @@ agentmesh = [
     "agentmesh_platform>=3.0.0,<4.0",
 ]
 all = [
-    "agent-discovery[github,agentmesh]",
+    "agentmesh-discovery[github,agentmesh]",
 ]
 dev = [
     "pytest>=7.4.0,<9.0",

@@ -13,7 +13,7 @@ The Agent Control Plane provides a governance layer that sits between your AI ag
 ## Installation
 
 ```bash
-pip install agent-control-plane
+pip install agentmesh-control-plane
 ```
 
 ## Quick Start

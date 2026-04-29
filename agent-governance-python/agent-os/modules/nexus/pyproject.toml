@@ -25,7 +25,7 @@ dependencies = [
     "pyyaml>=6.0.0,<7.0",
     "structlog>=24.1.0,<25.0",
     "aiohttp>=3.13.3,<4.0",
-    "inter-agent-trust-protocol>=0.4.0,<1.0",
+    "agentmesh-trust-protocol>=0.4.0,<1.0",
 ]
 
 [project.urls]

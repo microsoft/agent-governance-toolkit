@@ -51,7 +51,7 @@ IATP eliminates implicit trust through two key features:
 ## Installation
 
 ```bash
-pip install inter-agent-trust-protocol
+pip install agentmesh-trust-protocol
 ```
 
 ---

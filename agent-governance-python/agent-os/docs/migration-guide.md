@@ -44,7 +44,7 @@ Convert each prompt instruction to an Agent OS policy:
 ### Step 3: Install Agent OS
 
 ```bash
-pip install agent-control-plane
+pip install agentmesh-control-plane
 ```
 
 ### Step 4: Create Your Policy Configuration

@@ -20,9 +20,9 @@ The Agent Governance Toolkit governs agents that register with it — but **you 
 ### Install
 
 ```bash
-pip install agent-discovery                  # Core (process + config scanners)
-pip install agent-discovery[github]          # + GitHub scanner
-pip install agent-discovery[all]             # Everything including AgentMesh integration
+pip install agentmesh-discovery                  # Core (process + config scanners)
+pip install agentmesh-discovery[github]          # + GitHub scanner
+pip install agentmesh-discovery[all]             # Everything including AgentMesh integration
 ```
 
 ### Scan Your Environment
@@ -133,7 +133,7 @@ Searches repositories for agent indicators:
 - Known config files in repo contents
 - Agent framework dependencies in `requirements.txt`, `pyproject.toml`, `package.json`
 
-Requires `httpx`: `pip install agent-discovery[github]`
+Requires `httpx`: `pip install agentmesh-discovery[github]`
 
 ---
 

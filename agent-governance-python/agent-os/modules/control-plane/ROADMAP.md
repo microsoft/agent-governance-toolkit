@@ -13,7 +13,7 @@ This document outlines the development roadmap for Agent Control Plane in 2026 a
 ## Q1 2026 (January - March) - Foundation & Distribution
 
 ### Critical: Distribution & Accessibility
-- [x] **PyPI Package Publishing** - Enable `pip install agent-control-plane`
+- [x] **PyPI Package Publishing** - Enable `pip install agentmesh-control-plane`
   - Set up automated PyPI publishing workflow
   - Configure Test PyPI for pre-release testing
   - Add PyPI badges and installation instructions
