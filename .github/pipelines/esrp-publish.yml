@@ -69,6 +69,7 @@ parameters:
     type: object
     displayName: 'Python packages to publish'
     default:
+      # Core packages (7)
       - name: agent-os
         path: agent-governance-python/agent-os
       - name: agent-mesh
@@ -83,8 +84,78 @@ parameters:
         path: agent-governance-python/agent-runtime
       - name: agent-lightning
         path: agent-governance-python/agent-lightning
+      # Standalone packages (4)
       - name: agent-marketplace
         path: agent-governance-python/agent-marketplace
+      - name: agent-mcp-governance
+        path: agent-governance-python/agent-mcp-governance
+      - name: agent-discovery
+        path: agent-governance-python/agent-discovery
+      - name: agent-primitives
+        path: agent-governance-python/agent-primitives
+      # Agent-OS modules (10)
+      - name: amb
+        path: agent-governance-python/agent-os/modules/amb
+      - name: atr
+        path: agent-governance-python/agent-os/modules/atr
+      - name: caas
+        path: agent-governance-python/agent-os/modules/caas
+      - name: cmvk
+        path: agent-governance-python/agent-os/modules/cmvk
+      - name: control-plane
+        path: agent-governance-python/agent-os/modules/control-plane
+      - name: emk
+        path: agent-governance-python/agent-os/modules/emk
+      - name: iatp
+        path: agent-governance-python/agent-os/modules/iatp
+      - name: mcp-kernel-server
+        path: agent-governance-python/agent-os/modules/mcp-kernel-server
+      - name: nexus
+        path: agent-governance-python/agent-os/modules/nexus
+      - name: observability
+        path: agent-governance-python/agent-os/modules/observability
+      # AgentMesh sub-packages (1)
+      - name: mcp-trust-server
+        path: agent-governance-python/agent-mesh/packages/mcp-trust-server
+      # Framework integrations (18)
+      - name: a2a-protocol
+        path: agent-governance-python/agentmesh-integrations/a2a-protocol
+      - name: adk-agentmesh
+        path: agent-governance-python/agentmesh-integrations/adk-agentmesh
+      - name: agentmesh-avp
+        path: agent-governance-python/agentmesh-integrations/agentmesh-avp
+      - name: audit-accountability-export
+        path: agent-governance-python/agentmesh-integrations/audit-accountability-export
+      - name: crewai-agentmesh
+        path: agent-governance-python/agentmesh-integrations/crewai-agentmesh
+      - name: flowise-agentmesh
+        path: agent-governance-python/agentmesh-integrations/flowise-agentmesh
+      - name: haystack-agentmesh
+        path: agent-governance-python/agentmesh-integrations/haystack-agentmesh
+      - name: langchain-agentmesh
+        path: agent-governance-python/agentmesh-integrations/langchain-agentmesh
+      - name: langflow-agentmesh
+        path: agent-governance-python/agentmesh-integrations/langflow-agentmesh
+      - name: langgraph-trust
+        path: agent-governance-python/agentmesh-integrations/langgraph-trust
+      - name: llamaindex-agentmesh
+        path: agent-governance-python/agentmesh-integrations/llamaindex-agentmesh
+      - name: mcp-receipt-governed
+        path: agent-governance-python/agentmesh-integrations/mcp-receipt-governed
+      - name: mcp-trust-proxy
+        path: agent-governance-python/agentmesh-integrations/mcp-trust-proxy
+      - name: nostr-wot
+        path: agent-governance-python/agentmesh-integrations/nostr-wot
+      - name: openai-agents-agentmesh
+        path: agent-governance-python/agentmesh-integrations/openai-agents-agentmesh
+      - name: openai-agents-trust
+        path: agent-governance-python/agentmesh-integrations/openai-agents-trust
+      - name: openshell-skill
+        path: agent-governance-python/agentmesh-integrations/openshell-skill
+      - name: pydantic-ai-governance
+        path: agent-governance-python/agentmesh-integrations/pydantic-ai-governance
+      - name: structural-authz-agentmesh
+        path: agent-governance-python/agentmesh-integrations/structural-authz-agentmesh
 
   - name: npmPackages
     type: object
@@ -133,7 +204,7 @@ pool:
 
 stages:
   # =======================================================
-  # PYTHON (PyPI) — 8 packages
+  # PYTHON (PyPI) — 41 packages
   # =======================================================
   - stage: Build_PyPI
     displayName: 'Build Python Packages'

@@ -6,19 +6,12 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: "Package to publish"
+        description: >
+          Package to publish. Use "all" for everything, "all-python" for all
+          Python packages, or a specific name (e.g. "agent-os", "langchain-agentmesh").
         required: true
-        type: choice
-        options:
-          - agent-os
-          - agent-mesh
-          - agent-hypervisor
-          - agent-sre
-          - agent-compliance
-          - agent-runtime
-          - agent-lightning
-          - agent-governance-dotnet
-          - all
+        type: string
+        default: "all"
 
 permissions:
   contents: read
@@ -34,20 +27,89 @@ jobs:
   # Trusted Publishers are NOT compliant for Microsoft PyPI publishing.
   # See: docs/internal/pypi-publishing.md
   # -------------------------------------------------------------------
+  resolve-python-matrix:
+    if: >-
+      github.event_name == 'release' ||
+      github.event.inputs.package != 'agent-governance-dotnet'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+      any: ${{ steps.resolve.outputs.any }}
+    steps:
+      - name: Resolve Python package matrix
+        id: resolve
+        run: |
+          # Complete list of publishable Python packages (41 packages)
+          ALL='[
+            {"name":"agent-os","path":"agent-governance-python/agent-os"},
+            {"name":"agent-mesh","path":"agent-governance-python/agent-mesh"},
+            {"name":"agent-hypervisor","path":"agent-governance-python/agent-hypervisor"},
+            {"name":"agent-sre","path":"agent-governance-python/agent-sre"},
+            {"name":"agent-compliance","path":"agent-governance-python/agent-compliance"},
+            {"name":"agent-runtime","path":"agent-governance-python/agent-runtime"},
+            {"name":"agent-lightning","path":"agent-governance-python/agent-lightning"},
+            {"name":"agent-marketplace","path":"agent-governance-python/agent-marketplace"},
+            {"name":"agent-mcp-governance","path":"agent-governance-python/agent-mcp-governance"},
+            {"name":"agent-discovery","path":"agent-governance-python/agent-discovery"},
+            {"name":"agent-primitives","path":"agent-governance-python/agent-primitives"},
+            {"name":"amb","path":"agent-governance-python/agent-os/modules/amb"},
+            {"name":"atr","path":"agent-governance-python/agent-os/modules/atr"},
+            {"name":"caas","path":"agent-governance-python/agent-os/modules/caas"},
+            {"name":"cmvk","path":"agent-governance-python/agent-os/modules/cmvk"},
+            {"name":"control-plane","path":"agent-governance-python/agent-os/modules/control-plane"},
+            {"name":"emk","path":"agent-governance-python/agent-os/modules/emk"},
+            {"name":"iatp","path":"agent-governance-python/agent-os/modules/iatp"},
+            {"name":"mcp-kernel-server","path":"agent-governance-python/agent-os/modules/mcp-kernel-server"},
+            {"name":"nexus","path":"agent-governance-python/agent-os/modules/nexus"},
+            {"name":"observability","path":"agent-governance-python/agent-os/modules/observability"},
+            {"name":"mcp-trust-server","path":"agent-governance-python/agent-mesh/packages/mcp-trust-server"},
+            {"name":"a2a-protocol","path":"agent-governance-python/agentmesh-integrations/a2a-protocol"},
+            {"name":"adk-agentmesh","path":"agent-governance-python/agentmesh-integrations/adk-agentmesh"},
+            {"name":"agentmesh-avp","path":"agent-governance-python/agentmesh-integrations/agentmesh-avp"},
+            {"name":"audit-accountability-export","path":"agent-governance-python/agentmesh-integrations/audit-accountability-export"},
+            {"name":"crewai-agentmesh","path":"agent-governance-python/agentmesh-integrations/crewai-agentmesh"},
+            {"name":"flowise-agentmesh","path":"agent-governance-python/agentmesh-integrations/flowise-agentmesh"},
+            {"name":"haystack-agentmesh","path":"agent-governance-python/agentmesh-integrations/haystack-agentmesh"},
+            {"name":"langchain-agentmesh","path":"agent-governance-python/agentmesh-integrations/langchain-agentmesh"},
+            {"name":"langflow-agentmesh","path":"agent-governance-python/agentmesh-integrations/langflow-agentmesh"},
+            {"name":"langgraph-trust","path":"agent-governance-python/agentmesh-integrations/langgraph-trust"},
+            {"name":"llamaindex-agentmesh","path":"agent-governance-python/agentmesh-integrations/llamaindex-agentmesh"},
+            {"name":"mcp-receipt-governed","path":"agent-governance-python/agentmesh-integrations/mcp-receipt-governed"},
+            {"name":"mcp-trust-proxy","path":"agent-governance-python/agentmesh-integrations/mcp-trust-proxy"},
+            {"name":"nostr-wot","path":"agent-governance-python/agentmesh-integrations/nostr-wot"},
+            {"name":"openai-agents-agentmesh","path":"agent-governance-python/agentmesh-integrations/openai-agents-agentmesh"},
+            {"name":"openai-agents-trust","path":"agent-governance-python/agentmesh-integrations/openai-agents-trust"},
+            {"name":"openshell-skill","path":"agent-governance-python/agentmesh-integrations/openshell-skill"},
+            {"name":"pydantic-ai-governance","path":"agent-governance-python/agentmesh-integrations/pydantic-ai-governance"},
+            {"name":"structural-authz-agentmesh","path":"agent-governance-python/agentmesh-integrations/structural-authz-agentmesh"}
+          ]'
+          # Compact the JSON
+          ALL=$(echo "$ALL" | jq -c '.')
+
+          INPUT="${{ github.event.inputs.package }}"
+          if [ "${{ github.event_name }}" = "release" ] || [ "$INPUT" = "all" ] || [ "$INPUT" = "all-python" ]; then
+            echo "matrix={\"include\":$ALL}" >> "$GITHUB_OUTPUT"
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$INPUT" ] && [ "$INPUT" != "agent-governance-dotnet" ]; then
+            FILTERED=$(echo "$ALL" | jq -c "[.[] | select(.name == \"$INPUT\")]")
+            if [ "$FILTERED" = "[]" ]; then
+              echo "::error::Unknown package '$INPUT'. Run with 'all' to see available packages."
+              echo "any=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "matrix={\"include\":$FILTERED}" >> "$GITHUB_OUTPUT"
+              echo "any=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build-python:
-    if: ${{ github.event_name == 'release' || github.event.inputs.package != 'agent-governance-dotnet' }}
+    needs: resolve-python-matrix
+    if: needs.resolve-python-matrix.outputs.any == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        package:
-          - agent-os
-          - agent-mesh
-          - agent-hypervisor
-          - agent-sre
-          - agent-compliance
-          - agent-runtime
-          - agent-lightning
+      matrix: ${{ fromJson(needs.resolve-python-matrix.outputs.matrix) }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -61,36 +123,36 @@ jobs:
           printf 'build==1.2.1 --hash=sha256:75e10f767a433d9a86e50d83f418e83efc18ede923ee5ff7df93b6cb0306c5d4\n' > /tmp/build-req.txt
           pip install --no-cache-dir --require-hashes -r /tmp/build-req.txt
 
-      - name: Build ${{ matrix.package }}
-        working-directory: ${{ matrix.package }}
+      - name: Build ${{ matrix.name }}
+        working-directory: ${{ matrix.path }}
         run: python -m build
 
       - name: Validate build artifacts
-        working-directory: ${{ matrix.package }}
+        working-directory: ${{ matrix.path }}
         run: |
-          echo "=== Built artifacts for ${{ matrix.package }} ==="
+          echo "=== Built artifacts for ${{ matrix.name }} ==="
           ls -la dist/
           # At least one wheel is required by Microsoft Python team policy
           if ! ls dist/*.whl 1>/dev/null 2>&1; then
-            echo "::error::No wheel (.whl) found for ${{ matrix.package }} — at least one wheel is required"
+            echo "::error::No wheel (.whl) found for ${{ matrix.name }} — at least one wheel is required"
             exit 1
           fi
 
       - name: Sign release artifacts with sigstore
         uses: sigstore/gh-action-sigstore-python@04cffa1d795717b140764e8b640de88853c92acc # v3.3.0
         with:
-          inputs: ${{ matrix.package }}/dist/*
+          inputs: ${{ matrix.path }}/dist/*
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
-          subject-path: ${{ matrix.package }}/dist/*
+          subject-path: ${{ matrix.path }}/dist/*
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: pypi-${{ matrix.package }}
-          path: ${{ matrix.package }}/dist/
+          name: pypi-${{ matrix.name }}
+          path: ${{ matrix.path }}/dist/
           retention-days: 30
 
   # -------------------------------------------------------------------
