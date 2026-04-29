@@ -44,25 +44,31 @@ jobs:
           - agent-type: code-reviewer
             label: "Code Review"
             icon: "🔍"
-            max-tokens: "4000"
+            max-tokens: "2000"
             paths-changed: "any"
             custom-instructions: |
-              You are reviewing the microsoft/agent-governance-toolkit, a security-focused Python library.
+              You are reviewing microsoft/agent-governance-toolkit, a security-focused Python monorepo (8 packages, pytest, ruff).
 
-              Stack: Python 3.9-3.12, monorepo with 8 packages, pytest, ruff.
+              CRITICAL OUTPUT RULES -- your review MUST follow this exact format:
+              1. Start with: **TL;DR**: N blockers, M warnings. [one-sentence verdict].
+              2. Summary table (one row per finding, one-line descriptions only):
+                 | # | Sev | Issue | Where |
+                 |---|-----|-------|-------|
+              3. Action items: one sentence per blocker only. No code blocks in the summary.
+              4. Warnings: list in table, mark as "fine as follow-up PRs."
+              5. Nits: do NOT include. Omit entirely.
 
-              Focus areas:
+              DO NOT write multi-paragraph explanations, conclusions, or suggestions sections.
+              DO NOT use headers like "CRITICAL", "WARNING", "SUGGESTIONS", "Conclusion".
+              DO NOT exceed 200 words total. The contributor knows how to code.
+              If no issues found, reply only: No issues found. Clean change.
+
+              Focus areas (what to flag, not what to write about):
               - Policy engine correctness (false negatives = security bypass)
-              - Trust/identity: cryptographic operations, credential handling, SPIFFE/SVID
-              - Sandbox escape vectors
-              - Thread safety in concurrent agent execution
-              - OWASP Agentic Top 10 compliance
-              - Type safety and Pydantic model validation
-              - Backward compatibility (public API changes)
-
-              Provide actionable feedback. Flag security issues as CRITICAL.
-              Flag potential breaking changes as WARNING.
-              Suggest improvements as SUGGESTION.
+              - Trust/identity: crypto, credentials, SPIFFE
+              - Sandbox escape, thread safety, OWASP Agentic Top 10
+              - Backward compatibility (public API surface changes)
+              - Pydantic model validation gaps
 
           - agent-type: security-scanner
             label: "Security Scan"
@@ -136,30 +142,30 @@ jobs:
           - agent-type: test-generator
             label: "Test Coverage"
             icon: "🧪"
-            max-tokens: "4000"
+            max-tokens: "2000"
             paths-changed: "src"
             custom-instructions: |
               You are a test coverage advisor for microsoft/agent-governance-toolkit.
 
-              For each changed file, analyze:
-              1. Does a corresponding test file exist in tests/?
-              2. Are the changed code paths covered by existing tests?
-              3. What NEW test cases would improve coverage?
-
-              Focus on domain-specific edge cases:
-              - Policy evaluation: boundary conditions, conflicting policies
-              - Trust scoring: edge scores (0.0, 1.0), expired certificates
-              - Chaos experiments: timeout handling, partial failures
-              - Concurrency: race conditions in shared state
-              - Input validation: malformed inputs, injection attempts
+              CRITICAL OUTPUT RULES -- be concise:
+              1. Only list files with ACTUAL coverage gaps (skip files with adequate coverage).
+              2. For each gap, list the test name and a one-line description. No paragraphs.
+              3. Group by file. Skip files where changes are already well-tested.
+              4. DO NOT list every possible edge case. Focus on the 3-5 highest-value missing tests.
+              5. DO NOT write "General Recommendations" or "Summary" sections.
+              6. DO NOT exceed 300 words total.
 
               Format:
-              ## Test Coverage Analysis
               ### `filename.py`
-              - Existing coverage: (what's covered)
-              - Missing coverage: (what's not)
-              - Suggested test cases:
-                1. `test_xxx` -- description
+              - `test_name` -- one-line description of what it validates
+              - `test_name` -- one-line description
+
+              If coverage is adequate: Test coverage looks good. No gaps identified.
+
+              Priority for gap detection:
+              - Untested new public methods/classes
+              - Security-critical paths without negative tests
+              - Missing boundary/error cases on policy evaluation
 
     steps:
       - name: Fork safety check
@@ -224,10 +230,10 @@ jobs:
 
             function parseVerdict(body) {
               if (!body) return { status: '⏳', statusLabel: 'Pending', detail: 'Awaiting results' };
-              if (/critical|error|vulnerabilit(y|ies)\s+found|high\s+severity/i.test(body)) {
+              if (/block(er)?|critical|error|vulnerabilit(y|ies)\s+found|high\s+severity/i.test(body)) {
                 return { status: '❌', statusLabel: 'Failed', detail: 'Issues detected' };
               }
-              if (/warning|⚠️|potential|breaking\s+change|minor/i.test(body)) {
+              if (/warn(ing)?|⚠️|potential|breaking\s+change|minor/i.test(body)) {
                 return { status: '⚠️', statusLabel: 'Warning', detail: 'See details' };
               }
               if (/no issues|pass(ed)?|clean|no vulnerab|no breaking|all good|in sync/i.test(body)) {

@@ -62,6 +62,36 @@ Ignoring existing PR context wastes reviewer time and erodes trust.
 
 NEVER merge a PR without thorough code review. CI passing is NOT sufficient.
 
+### Review Output Style
+
+All PR reviews (human and bot) MUST follow this concise format. Verbose essay-style reviews waste contributor time.
+
+```
+**TL;DR**: N blockers, M warnings. Fix #1 and #2 and this ships.
+
+| # | Sev | Issue | Where |
+|---|-----|-------|-------|
+| 1 | Block | One-line description | function/file |
+| 2 | Warn | One-line description | function/file |
+
+**#1**: One sentence explaining what to fix.
+**#2**: One sentence explaining what to fix.
+
+Warnings are fine as follow-up PRs.
+```
+
+Rules:
+- Lead with verdict, not analysis. TL;DR line is mandatory.
+- Summary table: one row per finding, one-line descriptions only.
+- Action items: only for blockers. One sentence each, no code blocks.
+- Warnings: list in table, mark as "fine as follow-ups."
+- Nits: do NOT include in posted reviews. Drop entirely on external contributor PRs.
+- No multi-paragraph explanations, "Conclusion" sections, or suggestion lists.
+- No inline code suggestions in the summary. Trust the contributor.
+- 200 words max per review. If no issues: "No issues found. Clean change."
+
+### Review Checklist
+
 Before approving or merging ANY PR, verify ALL of the following:
 
 1. **Read the actual diff** — don't rely on PR description alone
