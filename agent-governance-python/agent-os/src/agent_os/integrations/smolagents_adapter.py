@@ -122,6 +122,7 @@ class SmolagentsKernel(BaseIntegration):
         policy: PolicyConfig | None = None,
         on_violation: Callable[[PolicyViolationError], None] | None = None,
         *,
+        evaluator: Any = None,
         # Convenience kwargs (create PolicyConfig automatically)
         max_tool_calls: int = 50,
         max_agent_calls: int = 20,
@@ -157,7 +158,7 @@ class SmolagentsKernel(BaseIntegration):
             require_human_approval=self._sm_config.require_human_approval,
             log_all_calls=self._sm_config.log_all_calls,
         )
-        super().__init__(policy=governance_policy)
+        super().__init__(policy=governance_policy, evaluator=evaluator)
 
         self.on_violation = on_violation or self._default_violation_handler
 
