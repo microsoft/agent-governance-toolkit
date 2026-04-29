@@ -1,5 +1,7 @@
 # Agent-OS — Coding Agent Instructions
 
+<!-- cspell:ignore pytest mypy isort pyupgrade Pydantic Docstrings -->
+
 ## Project Overview
 
 Agent-OS is a **governance-first kernel for AI agents** — a Python framework providing policy enforcement, semantic intent classification, identity management, and execution control for autonomous AI agents.
