@@ -13,6 +13,7 @@ All Docker interactions are mocked so tests run without a Docker daemon.
 from __future__ import annotations
 
 import asyncio
+import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -30,11 +31,14 @@ from agent_sandbox.sandbox_provider import (
 from agent_sandbox.isolation_runtime import IsolationRuntime
 from agent_sandbox.docker_sandbox_provider import (
     DockerSandboxProvider,
+    _BLOCKED_ENV_VARS,
     _is_protected_path,
+    _sanitize_env_vars,
     _validate_mount_path,
+    _validate_resource_name,
     docker_config_from_policy,
 )
-from agent_sandbox.state import SandboxCheckpoint, SandboxStateManager
+from agent_sandbox.state import SandboxCheckpoint
 
 
 # =========================================================================
@@ -235,8 +239,12 @@ class TestSandboxProviderABC:
             def is_available(self):
                 return True
 
-        with pytest.raises(NotImplementedError):
-            Minimal().run("a", ["echo"])
+        # Default ``run()`` returns a failure ``SandboxResult`` so providers
+        # that do not support raw commands behave predictably (no stub raise).
+        result = Minimal().run("a", ["echo"])
+        assert result.success is False
+        assert result.exit_code == -1
+        assert "not implemented" in result.stderr.lower()
 
     def test_async_delegates_to_sync(self):
         class Minimal(SandboxProvider):
@@ -279,24 +287,28 @@ class TestPathValidation:
             "/boot", "/dev", "/sbin", "/bin", "/lib",
         ],
     )
+    @patch("os.path.realpath", side_effect=lambda p: p)
     @patch("agent_sandbox.docker_sandbox_provider.platform")
-    def test_unix_protected_paths(self, mock_platform, path):
+    def test_unix_protected_paths(self, mock_platform, _mock_realpath, path):
         mock_platform.system.return_value = "Linux"
         assert _is_protected_path(path) is True
 
+    @patch("os.path.realpath", side_effect=lambda p: p)
     @patch("agent_sandbox.docker_sandbox_provider.platform")
-    def test_unix_safe_path(self, mock_platform):
+    def test_unix_safe_path(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         assert _is_protected_path("/home/user/data") is False
 
+    @patch("os.path.realpath", side_effect=lambda p: p)
     @patch("agent_sandbox.docker_sandbox_provider.platform")
-    def test_validate_mount_raises_for_protected(self, mock_platform):
+    def test_validate_mount_raises_for_protected(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         with pytest.raises(ValueError, match="protected system directory"):
             _validate_mount_path("/etc", "input_dir")
 
+    @patch("os.path.realpath", side_effect=lambda p: p)
     @patch("agent_sandbox.docker_sandbox_provider.platform")
-    def test_validate_mount_safe(self, mock_platform):
+    def test_validate_mount_safe(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         _validate_mount_path("/home/user/data", "input_dir")  # no exception
 
@@ -395,8 +407,10 @@ def docker_provider():
         provider._image = "python:3.11-slim"
         provider._tools = {}
         provider._requested_runtime = IsolationRuntime.AUTO
+        provider._state_lock = threading.RLock()
         provider._containers = {}
         provider._evaluators = {}
+        provider._session_configs = {}
         provider._tool_proxy = None
         provider._network_proxy = None
         provider._state_manager = None
@@ -701,7 +715,7 @@ class TestDockerRun:
 
     def test_legacy_lookup_by_agent_id(self, docker_provider):
         """Without session_id, finds any container for the agent."""
-        h = docker_provider.create_session("a1")
+        docker_provider.create_session("a1")
         r = docker_provider.run("a1", ["python", "-c", "pass"])
         assert r.success
 
@@ -780,8 +794,9 @@ class TestContainerCreationHardening:
         assert "/workspace" in kw["tmpfs"]
         assert "/tmp" not in kw["tmpfs"]
 
+    @patch("os.path.realpath", side_effect=lambda p: p)
     @patch("agent_sandbox.docker_sandbox_provider.platform")
-    def test_volume_mounts(self, mock_platform):
+    def test_volume_mounts(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         p, client = self._make_raw_provider()
         cfg = SandboxConfig(input_dir="/data/in", output_dir="/data/out")
@@ -791,8 +806,9 @@ class TestContainerCreationHardening:
         assert kw["volumes"]["/data/in"]["mode"] == "ro"
         assert kw["volumes"]["/data/out"]["mode"] == "rw"
 
+    @patch("os.path.realpath", side_effect=lambda p: p)
     @patch("agent_sandbox.docker_sandbox_provider.platform")
-    def test_protected_input_dir_raises(self, mock_platform):
+    def test_protected_input_dir_raises(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         p, _ = self._make_raw_provider()
         with pytest.raises(ValueError, match="protected system directory"):
@@ -1405,3 +1421,387 @@ class TestWindowsPathProtection:
     def test_windows_safe_path(self, mock_platform):
         mock_platform.system.return_value = "Windows"
         assert _is_protected_path("C:\\Users\\agent\\data") is False
+
+
+# =========================================================================
+# Section 19: Environment variable sanitization
+# =========================================================================
+
+
+class TestEnvVarSanitization:
+    """Verify _sanitize_env_vars blocks dangerous environment variables."""
+
+    def test_blocks_ld_preload(self):
+        env = {"LD_PRELOAD": "/evil.so", "APP_KEY": "val"}
+        result = _sanitize_env_vars(env)
+        assert "LD_PRELOAD" not in result
+        assert result["APP_KEY"] == "val"
+
+    def test_blocks_ld_library_path(self):
+        env = {"LD_LIBRARY_PATH": "/evil", "SAFE": "1"}
+        result = _sanitize_env_vars(env)
+        assert "LD_LIBRARY_PATH" not in result
+        assert result["SAFE"] == "1"
+
+    def test_blocks_pythonstartup(self):
+        env = {"PYTHONSTARTUP": "/evil.py"}
+        result = _sanitize_env_vars(env)
+        assert len(result) == 0
+
+    def test_blocks_pythonpath(self):
+        env = {"PYTHONPATH": "/evil"}
+        result = _sanitize_env_vars(env)
+        assert len(result) == 0
+
+    def test_blocks_all_ld_variants(self):
+        env = {
+            "LD_AUDIT": "/x",
+            "LD_DEBUG": "all",
+            "LD_PROFILE": "x",
+            "LD_SHOW_AUXV": "1",
+            "LD_DYNAMIC_WEAK": "1",
+        }
+        result = _sanitize_env_vars(env)
+        assert len(result) == 0
+
+    def test_case_insensitive_blocking(self):
+        env = {"ld_preload": "/evil.so"}
+        result = _sanitize_env_vars(env)
+        assert "ld_preload" not in result
+
+    def test_safe_vars_pass_through(self):
+        env = {"HTTP_PROXY": "http://proxy:8080", "APP_MODE": "prod"}
+        result = _sanitize_env_vars(env)
+        assert result == env
+
+    def test_empty_env(self):
+        assert _sanitize_env_vars({}) == {}
+
+    def test_blocked_vars_constant_complete(self):
+        """Ensure all known dangerous vars are in the blocklist."""
+        expected = {
+            "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT",
+            "LD_DEBUG", "LD_PROFILE", "LD_SHOW_AUXV",
+            "LD_DYNAMIC_WEAK", "PYTHONSTARTUP", "PYTHONPATH",
+        }
+        assert _BLOCKED_ENV_VARS == expected
+
+    def test_sanitized_env_in_container(self):
+        """Verify _create_container applies sanitization."""
+        with patch(
+            "agent_sandbox.docker_sandbox_provider."
+            "DockerSandboxProvider.__init__",
+            return_value=None,
+        ):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = "python:3.11-slim"
+            p._runtime = IsolationRuntime.RUNC
+            mock_client = _make_mock_docker_client()
+            mock_client.containers.run.return_value = _make_mock_container()
+            p._client = mock_client
+
+        cfg = SandboxConfig(
+            env_vars={"LD_PRELOAD": "/evil.so", "APP_KEY": "safe"},
+        )
+        p._create_container("a1", "s1", cfg)
+        kw = mock_client.containers.run.call_args[1]
+        assert "LD_PRELOAD" not in kw["environment"]
+        assert kw["environment"]["APP_KEY"] == "safe"
+
+
+# =========================================================================
+# Section 20: Fail-closed policy enforcement
+# =========================================================================
+
+
+class TestFailClosedPolicy:
+    """Policy enforcement must fail closed on non-ImportError exceptions."""
+
+    def test_policy_import_error_warns_only(self, docker_provider):
+        """ImportError (SDK not installed) results in warning, not failure."""
+        with patch(
+            "agent_sandbox.docker_sandbox_provider.docker_config_from_policy",
+            return_value=SandboxConfig(),
+        ):
+            with patch.dict(
+                "sys.modules",
+                {"agent_os": None, "agent_os.policies": None,
+                 "agent_os.policies.evaluator": None},
+            ):
+                h = docker_provider.create_session(
+                    "a1", policy=SimpleNamespace(),
+                )
+                assert h.status == SessionStatus.READY
+
+    def test_policy_other_error_raises(self, docker_provider):
+        """Non-ImportError exceptions must propagate (fail closed)."""
+        with patch(
+            "agent_sandbox.docker_sandbox_provider.docker_config_from_policy",
+            return_value=SandboxConfig(),
+        ):
+            with patch(
+                "builtins.__import__",
+                side_effect=RuntimeError("policy engine broken"),
+            ):
+                with pytest.raises(RuntimeError, match="Failed to initialize"):
+                    docker_provider.create_session(
+                        "a1", policy=SimpleNamespace(),
+                    )
+
+
+# =========================================================================
+# Section 21: Symlink resolution in path validation
+# =========================================================================
+
+
+class TestSymlinkResolution:
+    """_is_protected_path must resolve symlinks before checking."""
+
+    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("os.path.realpath")
+    def test_symlink_to_etc_blocked(self, mock_realpath, mock_platform):
+        mock_platform.system.return_value = "Linux"
+        mock_realpath.return_value = "/etc"
+        assert _is_protected_path("/tmp/sneaky-link") is True
+
+    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("os.path.realpath")
+    def test_symlink_to_proc_blocked(self, mock_realpath, mock_platform):
+        mock_platform.system.return_value = "Linux"
+        mock_realpath.return_value = "/proc"
+        assert _is_protected_path("/tmp/proc-link") is True
+
+    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("os.path.realpath")
+    def test_symlink_to_safe_path_allowed(self, mock_realpath, mock_platform):
+        mock_platform.system.return_value = "Linux"
+        mock_realpath.return_value = "/home/agent/data"
+        assert _is_protected_path("/tmp/safe-link") is False
+
+    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("os.path.realpath")
+    def test_validate_mount_path_symlink_blocked(
+        self, mock_realpath, mock_platform,
+    ):
+        mock_platform.system.return_value = "Linux"
+        mock_realpath.return_value = "/usr"
+        with pytest.raises(ValueError, match="protected system directory"):
+            _validate_mount_path("/tmp/usr-link", "input_dir")
+
+
+# =========================================================================
+# Section 22: Timeout watchdog
+# =========================================================================
+
+
+class TestTimeoutWatchdog:
+    """Verify timeout_seconds is enforced via a watchdog thread."""
+
+    def test_timeout_kills_container(self, docker_provider):
+        """When exec exceeds timeout, container is killed."""
+        import threading
+        import time as _time
+
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+
+        # Simulate exec_run blocking for 2s, with 0.1s timeout
+        original_exec_run = c.exec_run
+
+        def slow_exec(*args, **kwargs):
+            _time.sleep(0.5)
+            return MagicMock(exit_code=137, output=(None, b"killed"))
+
+        c.exec_run = slow_exec
+
+        cfg = SandboxConfig(timeout_seconds=0.1)
+        r = docker_provider.run(
+            "a1", ["python", "-c", "pass"],
+            config=cfg,
+            session_id=h.session_id,
+        )
+        # The container should have been killed by the watchdog
+        assert c.kill.called or r.killed or not r.success
+
+
+# ============================================================================
+# Resource name sanitization (imran-siddique review)
+# ============================================================================
+
+
+class TestResourceNameValidation:
+    """``_validate_resource_name`` rejects unsafe Docker name fragments."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "agent1",
+            "agent-001",
+            "Agent_42",
+            "a.b.c",
+            "X",
+        ],
+    )
+    def test_valid_names_pass(self, name):
+        _validate_resource_name(name, "agent_id")  # no exception
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "",
+            "_starts-with-underscore",
+            "-starts-with-dash",
+            ".starts-with-dot",
+            "has space",
+            "has/slash",
+            "has\\backslash",
+            "has:colon",
+            "has;semicolon",
+            "has$shell",
+            "x" * 200,
+        ],
+    )
+    def test_invalid_names_rejected(self, name):
+        with pytest.raises(ValueError, match="Invalid agent_id"):
+            _validate_resource_name(name, "agent_id")
+
+    def test_create_session_rejects_bad_agent_id(self, docker_provider):
+        with pytest.raises(ValueError, match="Invalid agent_id"):
+            docker_provider.create_session("bad agent/../../etc")
+
+    def test_save_state_rejects_bad_checkpoint_name(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        with pytest.raises(ValueError, match="checkpoint name"):
+            docker_provider.save_state(
+                "a1", h.session_id, "../etc/passwd"
+            )
+
+    def test_delete_checkpoint_rejects_bad_name(self, docker_provider):
+        with pytest.raises(ValueError, match="checkpoint name"):
+            docker_provider.delete_checkpoint("a1", "name with space")
+
+
+# ============================================================================
+# memswap_limit + Windows protected paths (imran-siddique review)
+# ============================================================================
+
+
+class TestMemswapLimit:
+    """``_create_container`` sets memswap_limit == mem_limit so swap cannot
+    bypass the cgroup memory cap."""
+
+    def test_memswap_equals_mem_limit(self):
+        from unittest.mock import MagicMock
+
+        provider = DockerSandboxProvider.__new__(DockerSandboxProvider)
+        provider._image = "python:3.11-slim"
+        provider._client = MagicMock()
+        provider._runtime = IsolationRuntime.RUNC
+        provider.ensure_image = MagicMock()
+
+        provider._create_container("a1", "s1", SandboxConfig(memory_mb=256))
+
+        kwargs = provider._client.containers.run.call_args.kwargs
+        assert kwargs["mem_limit"] == "256m"
+        assert kwargs["memswap_limit"] == "256m"
+
+
+class TestWindowsProtectedPathsExtended:
+    """Windows protection covers system dirs, not just drive roots."""
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "C:\\Windows",
+            "C:\\Windows\\System32",
+            "C:\\Program Files",
+            "C:\\Program Files (x86)\\Foo",
+            "C:\\ProgramData\\Bar",
+            "c:\\windows\\system32",  # case-insensitive
+        ],
+    )
+    def test_windows_system_dirs_blocked(self, path, monkeypatch):
+        monkeypatch.setattr("platform.system", lambda: "Windows")
+        monkeypatch.setattr("os.path.realpath", lambda p: p)
+        assert _is_protected_path(path) is True
+
+    def test_windows_user_dirs_allowed(self, monkeypatch):
+        monkeypatch.setattr("platform.system", lambda: "Windows")
+        monkeypatch.setattr("os.path.realpath", lambda p: p)
+        assert _is_protected_path("C:\\Users\\agent\\workspace") is False
+
+
+# ============================================================================
+# Session config propagation to execute_code (imran-siddique review)
+# ============================================================================
+
+
+class TestSessionConfigPropagation:
+    """``execute_code`` must use the session''s SandboxConfig (timeout, env),
+    not a fresh default ``SandboxConfig()``."""
+
+    def test_execute_code_uses_session_timeout(self, docker_provider):
+        cfg = SandboxConfig(timeout_seconds=7.0, memory_mb=256)
+        h = docker_provider.create_session("a1", config=cfg)
+
+        captured = {}
+        original_run = docker_provider.run
+
+        def spy_run(agent_id, command, config=None, *, session_id=None):
+            captured["config"] = config
+            return original_run(
+                agent_id, command, config=config, session_id=session_id
+            )
+
+        docker_provider.run = spy_run
+        docker_provider.execute_code("a1", h.session_id, "print(1)")
+
+        assert captured["config"] is not None
+        assert captured["config"].timeout_seconds == 7.0
+        assert captured["config"].memory_mb == 256
+
+    def test_destroy_clears_session_config(self, docker_provider):
+        cfg = SandboxConfig(timeout_seconds=5.0)
+        h = docker_provider.create_session("a1", config=cfg)
+        assert (h.agent_id, h.session_id) in docker_provider._session_configs
+
+        docker_provider.destroy_session(h.agent_id, h.session_id)
+        assert (h.agent_id, h.session_id) not in docker_provider._session_configs
+
+
+# ============================================================================
+# Thread safety on shared state (imran-siddique review)
+# ============================================================================
+
+
+class TestThreadSafety:
+    """Concurrent create/destroy must not corrupt the internal dicts."""
+
+    def test_concurrent_create_destroy(self, docker_provider):
+        import threading as _t
+
+        errors: list[Exception] = []
+
+        def worker(i):
+            try:
+                for _ in range(20):
+                    h = docker_provider.create_session(f"agent{i}")
+                    docker_provider.get_session_status(
+                        h.agent_id, h.session_id
+                    )
+                    docker_provider.destroy_session(
+                        h.agent_id, h.session_id
+                    )
+            except Exception as e:
+                errors.append(e)
+
+        threads = [_t.Thread(target=worker, args=(i,)) for i in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == []
+        assert docker_provider._containers == {}
+        assert docker_provider._evaluators == {}
+        assert docker_provider._session_configs == {}

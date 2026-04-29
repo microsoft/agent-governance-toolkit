@@ -8,6 +8,8 @@ with policy-driven resource limits, tool/network proxies, and filesystem
 checkpointing via ``docker commit``.
 """
 
+from importlib.metadata import PackageNotFoundError, version
+
 from agent_sandbox.sandbox_provider import (
     ExecutionHandle,
     ExecutionStatus,
@@ -18,10 +20,18 @@ from agent_sandbox.sandbox_provider import (
     SessionStatus,
 )
 from agent_sandbox.isolation_runtime import IsolationRuntime
-from agent_sandbox.docker_sandbox_provider import DockerSandboxProvider
 from agent_sandbox.state import SandboxCheckpoint, SandboxStateManager
 
-__version__ = "3.2.2"
+# Lazy import: DockerSandboxProvider requires the optional ``docker`` SDK.
+try:
+    from agent_sandbox.docker_sandbox_provider import DockerSandboxProvider
+except ImportError:
+    DockerSandboxProvider = None  # type: ignore[assignment,misc]
+
+try:
+    __version__ = version("agent-sandbox")
+except PackageNotFoundError:
+    __version__ = "0.0.0"
 __author__ = "Microsoft Corporation"
 
 __all__ = [

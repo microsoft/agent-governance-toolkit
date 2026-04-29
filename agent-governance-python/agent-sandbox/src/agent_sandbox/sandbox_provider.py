@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -136,7 +135,6 @@ class SandboxProvider(ABC):
         config: SandboxConfig | None = None,
     ) -> SessionHandle:
         """Provision a sandbox with optional policy-driven constraints."""
-        ...
 
     @abstractmethod
     def execute_code(
@@ -148,17 +146,14 @@ class SandboxProvider(ABC):
         context: dict[str, Any] | None = None,
     ) -> ExecutionHandle:
         """Evaluate policy allow/deny, then run code in a session."""
-        ...
 
     @abstractmethod
     def destroy_session(self, agent_id: str, session_id: str) -> None:
         """Tear down the sandbox and release resources."""
-        ...
 
     @abstractmethod
     def is_available(self) -> bool:
         """Check if this sandbox provider is available."""
-        ...
 
     def run(
         self,
@@ -166,8 +161,21 @@ class SandboxProvider(ABC):
         command: list[str],
         config: SandboxConfig | None = None,
     ) -> SandboxResult:
-        """Run a raw command in the sandbox (low-level helper)."""
-        raise NotImplementedError
+        """Run a raw command in the sandbox (low-level helper).
+
+        The default implementation returns a failure result so that
+        providers that do not support raw commands behave predictably
+        instead of raising ``NotImplementedError``.  Subclasses such as
+        :class:`DockerSandboxProvider` override this with a real impl.
+        """
+        return SandboxResult(
+            success=False,
+            exit_code=-1,
+            stderr=(
+                f"{type(self).__name__}.run() is not implemented for "
+                f"this provider"
+            ),
+        )
 
     # --- Status tracking (defaults; cloud providers override) ---------------
 
