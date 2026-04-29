@@ -526,6 +526,60 @@ class TestEndToEndCedarGovernance:
         assert evaluator.last_context is not None
         assert evaluator.last_context["agent_id"] == "hero-oracle-agent"
 
+    def test_pre_execute_threads_tool_name_from_dict_input(self):
+        """pre_execute extracts tool_name/tool_args from dict input_data."""
+        evaluator = _FakeEvaluator(allowed=True)
+        integration = _ConcreteIntegration(evaluator=evaluator)
+        ctx = _make_ctx()
+
+        input_data = {
+            "tool_name": "oracle_query",
+            "tool_args": {"sql": "SELECT 1"},
+        }
+        integration.pre_execute(ctx, input_data)
+
+        assert evaluator.last_context["tool_name"] == "oracle_query"
+        assert evaluator.last_context["tool_args"]["sql"] == "SELECT 1"
+
+    def test_pre_execute_threads_tool_name_from_object_input(self):
+        """pre_execute extracts tool_name/tool_args from object attributes."""
+        evaluator = _FakeEvaluator(allowed=True)
+        integration = _ConcreteIntegration(evaluator=evaluator)
+        ctx = _make_ctx()
+
+        class _ToolRequest:
+            tool_name = "send_email"
+            tool_args = {"to": "user@example.com"}
+
+        integration.pre_execute(ctx, _ToolRequest())
+
+        assert evaluator.last_context["tool_name"] == "send_email"
+        assert evaluator.last_context["tool_args"]["to"] == "user@example.com"
+
+    def test_pre_execute_cedar_gates_on_tool_name(self):
+        """Cedar policies that match on tool_name correctly block via pre_execute."""
+        class ToolBlockEvaluator:
+            def evaluate(self, ctx):
+                if ctx.get("tool_name") == "shell_exec":
+                    return _FakeDecision(allowed=False, reason="shell blocked")
+                return _FakeDecision(allowed=True)
+
+        integration = _ConcreteIntegration(evaluator=ToolBlockEvaluator())
+        ctx = _make_ctx()
+
+        # Blocked tool via dict
+        allowed, reason = integration.pre_execute(
+            ctx, {"tool_name": "shell_exec", "tool_args": {}}
+        )
+        assert allowed is False
+        assert "shell blocked" in reason
+
+        # Allowed tool
+        allowed, _ = integration.pre_execute(
+            ctx, {"tool_name": "safe_search", "tool_args": {}}
+        )
+        assert allowed is True
+
     def test_backward_compatibility_no_evaluator(self):
         """Existing code without evaluator works identically to before."""
         policy = GovernancePolicy(

@@ -1052,9 +1052,22 @@ class BaseIntegration(ABC):
 
         # ── Cedar / PolicyEvaluator gate (runs first) ──────────────
         if self._evaluator is not None:
+            # Extract tool identity from input_data when available so
+            # Cedar policies can gate on tool_name / tool_args.
+            _tool_name = ""
+            _tool_args: dict[str, Any] = {}
+            if isinstance(input_data, dict):
+                _tool_name = input_data.get("tool_name", "")
+                _tool_args = input_data.get("tool_args", {})
+            elif hasattr(input_data, "tool_name"):
+                _tool_name = getattr(input_data, "tool_name", "")
+                _tool_args = getattr(input_data, "tool_args", {}) or {}
+
             cedar_ctx = self._build_cedar_context(
                 agent_id=ctx.agent_id,
                 action_type="tool_call",
+                tool_name=_tool_name,
+                tool_args=_tool_args,
             )
             allowed, reason = self._evaluate_policy(cedar_ctx)
             if not allowed:
