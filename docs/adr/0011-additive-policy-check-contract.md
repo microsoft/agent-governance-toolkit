@@ -51,7 +51,7 @@ category and places sensitive values only in restricted fields such as `detail`,
 `matched_pattern`, and `audit_entry`.
 
 Extend the canonical `agent_os.exceptions.PolicyViolationError` with an
-additive `from_check_result` class method. The existing constructor forms remain
+additive `from_check_result` classmethod. The existing constructor forms remain
 valid, `str(e)` remains based on `args[0]`, and legacy instances have
 `e.check_result is None`. Exceptions created from a `PolicyCheckResult` surface
 only the sanitized `public_message` through `str(e)` while retaining structured
@@ -76,7 +76,7 @@ denials with `decision_factory` results and
 `PolicyViolationError.from_check_result(...)`. Adapter-local
 `PolicyViolationError` symbols become re-exports of the canonical class rather
 than deleted symbols. A parametrized parity harness tracks every surface from
-the discovery inventory, starts with expected failures, and removes each entry
+the discovery inventory, starts with expected failures, and removes each xfail
 as one surface is converted.
 
 ### Host Migration Guide
