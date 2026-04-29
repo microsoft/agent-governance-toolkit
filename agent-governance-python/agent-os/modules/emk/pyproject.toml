@@ -3,7 +3,7 @@ requires = ["setuptools>=45,<46.0", "wheel", "setuptools_scm[toml]>=6.2,<7.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "emk"
+name = "agentmesh_memory"
 version = "3.2.2"
 description = "Public Preview — Episodic Memory Kernel for AI agent experience storage"
 authors = [

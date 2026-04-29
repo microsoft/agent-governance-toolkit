@@ -351,7 +351,7 @@ jobs:
               'scipy','openai','anthropic','langchain','crewai',
               'streamlit','plotly','pandas','networkx','aioredis',
               'langchain-openai','langchain-core','python-dotenv',
-              'agent-primitives','emk',
+              'agent-primitives','agentmesh-memory',
           }
           bad = []
           for nb in glob.glob('**/*.ipynb', recursive=True):

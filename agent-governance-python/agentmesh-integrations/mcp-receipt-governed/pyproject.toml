@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mcp_receipt_governed"
+name = "agentmesh_mcp_receipts"
 version = "0.1.0"
 description = "MCP tool-call receipt signing — Cedar policy decisions linked to governance receipts"
 readme = "README.md"

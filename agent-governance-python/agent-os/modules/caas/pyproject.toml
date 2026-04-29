@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0,<62.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "caas_core"
+name = "agentmesh_context"
 version = "3.2.2"
 description = "A pure, logic-only library for routing context, handling RAG fallacies, and managing context windows. Layer 1 Primitive - no agent dependencies."
 readme = "README.md"

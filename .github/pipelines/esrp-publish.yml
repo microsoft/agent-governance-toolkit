@@ -94,37 +94,37 @@ parameters:
       - name: agent-primitives
         path: agent-governance-python/agent-primitives
       # Agent-OS modules (10)
-      - name: amb
+      - name: agentmesh-message-bus
         path: agent-governance-python/agent-os/modules/amb
-      - name: atr
+      - name: agent-tool-registry
         path: agent-governance-python/agent-os/modules/atr
-      - name: caas
+      - name: agentmesh-context
         path: agent-governance-python/agent-os/modules/caas
-      - name: cmvk
+      - name: agentmesh-drift
         path: agent-governance-python/agent-os/modules/cmvk
-      - name: control-plane
+      - name: agent-control-plane
         path: agent-governance-python/agent-os/modules/control-plane
-      - name: emk
+      - name: agentmesh-memory
         path: agent-governance-python/agent-os/modules/emk
-      - name: iatp
+      - name: agent-trust-protocol
         path: agent-governance-python/agent-os/modules/iatp
-      - name: mcp-kernel-server
+      - name: agentmesh-mcp-server
         path: agent-governance-python/agent-os/modules/mcp-kernel-server
-      - name: nexus
+      - name: agentmesh-nexus
         path: agent-governance-python/agent-os/modules/nexus
-      - name: observability
+      - name: agent-observability
         path: agent-governance-python/agent-os/modules/observability
       # AgentMesh sub-packages (1)
-      - name: mcp-trust-server
+      - name: agentmesh-mcp-trust
         path: agent-governance-python/agent-mesh/packages/mcp-trust-server
       # Framework integrations (18)
       - name: a2a-protocol
         path: agent-governance-python/agentmesh-integrations/a2a-protocol
       - name: adk-agentmesh
         path: agent-governance-python/agentmesh-integrations/adk-agentmesh
-      - name: agentmesh-avp
+      - name: avp-agentmesh
         path: agent-governance-python/agentmesh-integrations/agentmesh-avp
-      - name: audit-accountability-export
+      - name: agentmesh-audit-export
         path: agent-governance-python/agentmesh-integrations/audit-accountability-export
       - name: crewai-agentmesh
         path: agent-governance-python/agentmesh-integrations/crewai-agentmesh
@@ -136,15 +136,15 @@ parameters:
         path: agent-governance-python/agentmesh-integrations/langchain-agentmesh
       - name: langflow-agentmesh
         path: agent-governance-python/agentmesh-integrations/langflow-agentmesh
-      - name: langgraph-trust
+      - name: langgraph-agentmesh
         path: agent-governance-python/agentmesh-integrations/langgraph-trust
       - name: llamaindex-agentmesh
         path: agent-governance-python/agentmesh-integrations/llamaindex-agentmesh
-      - name: mcp-receipt-governed
+      - name: agentmesh-mcp-receipts
         path: agent-governance-python/agentmesh-integrations/mcp-receipt-governed
-      - name: mcp-trust-proxy
+      - name: agentmesh-mcp-proxy
         path: agent-governance-python/agentmesh-integrations/mcp-trust-proxy
-      - name: nostr-wot
+      - name: nostr-wot-agentmesh
         path: agent-governance-python/agentmesh-integrations/nostr-wot
       - name: openai-agents-agentmesh
         path: agent-governance-python/agentmesh-integrations/openai-agents-agentmesh
@@ -152,7 +152,7 @@ parameters:
         path: agent-governance-python/agentmesh-integrations/openai-agents-trust
       - name: openshell-skill
         path: agent-governance-python/agentmesh-integrations/openshell-skill
-      - name: pydantic-ai-governance
+      - name: pydantic-ai-agentmesh
         path: agent-governance-python/agentmesh-integrations/pydantic-ai-governance
       - name: structural-authz-agentmesh
         path: agent-governance-python/agentmesh-integrations/structural-authz-agentmesh

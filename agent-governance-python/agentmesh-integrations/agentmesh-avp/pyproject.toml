@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0,<69.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agentmesh_avp"
+name = "avp_agentmesh"
 version = "0.1.0"
 description = "Agent Veil Protocol integration for AgentMesh trust engine"
 readme = "README.md"

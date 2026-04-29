@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mcp_trust_server"
+name = "agentmesh_mcp_trust"
 version = "3.2.2"
 description = "MCP server exposing AgentMesh trust management tools for Claude, GPT, and other AI agents"
 readme = "README.md"

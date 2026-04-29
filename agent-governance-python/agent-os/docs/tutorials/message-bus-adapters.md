@@ -11,19 +11,19 @@ Agent OS provides the Agent Message Bus (AMB) for decoupled agent communication.
 | Adapter | Use Case | Install |
 |---------|----------|---------|
 | **Memory** | Testing, development | Included |
-| **Redis** | Low-latency, pub/sub | `pip install amb-core[redis]` |
-| **Kafka** | High-throughput, durability | `pip install amb-core[kafka]` |
-| **RabbitMQ** | Complex routing, enterprise | `pip install amb-core[rabbitmq]` |
-| **NATS** | Cloud-native, lightweight | `pip install amb-core[nats]` |
-| **Azure Service Bus** | Azure ecosystem | `pip install amb-core[azure]` |
-| **AWS SQS** | AWS ecosystem | `pip install amb-core[aws]` |
+| **Redis** | Low-latency, pub/sub | `pip install agentmesh-message-bus[redis]` |
+| **Kafka** | High-throughput, durability | `pip install agentmesh-message-bus[kafka]` |
+| **RabbitMQ** | Complex routing, enterprise | `pip install agentmesh-message-bus[rabbitmq]` |
+| **NATS** | Cloud-native, lightweight | `pip install agentmesh-message-bus[nats]` |
+| **Azure Service Bus** | Azure ecosystem | `pip install agentmesh-message-bus[azure]` |
+| **AWS SQS** | AWS ecosystem | `pip install agentmesh-message-bus[aws]` |
 
 ## Quick Start with Redis
 
 ### 1. Install
 
 ```bash
-pip install amb-core[redis]
+pip install agentmesh-message-bus[redis]
 ```
 
 ### 2. Start Redis

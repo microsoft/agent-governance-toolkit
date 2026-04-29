@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "structural-authz-agentmesh"
+name = "structural_authz_agentmesh"
 version = "3.2.2"
 description = "AgentMesh adapter for structural authorization gates — consumes external policy decisions, trust grades, and delegation scope chains as AGT trust signals"
 readme = "README.md"

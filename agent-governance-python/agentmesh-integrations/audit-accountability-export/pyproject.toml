@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "audit_accountability_export"
+name = "agentmesh_audit_export"
 version = "0.1.0"
 description = "Example adapter from AgentMesh AuditEntry output to an external accountability export shape"
 readme = "README.md"

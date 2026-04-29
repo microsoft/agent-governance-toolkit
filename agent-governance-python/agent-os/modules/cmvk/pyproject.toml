@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cmvk"
+name = "agentmesh_drift"
 version = "3.2.2"
 description = "Mathematical drift detection library for calculating drift/hallucination scores between outputs"
 readme = "README.md"

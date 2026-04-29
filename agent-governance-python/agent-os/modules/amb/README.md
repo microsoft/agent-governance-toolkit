@@ -20,15 +20,15 @@ By removing the requirement for agents to know about each other, we eliminate O(
 ## Installation
 
 ```bash
-pip install amb-core
+pip install agentmesh-message-bus
 ```
 
 For production deployments with Redis, RabbitMQ, or Kafka:
 ```bash
-pip install amb-core[redis]      # Redis support
-pip install amb-core[rabbitmq]   # RabbitMQ support
-pip install amb-core[kafka]      # Kafka support
-pip install amb-core[all]        # All adapters
+pip install agentmesh-message-bus[redis]      # Redis support
+pip install agentmesh-message-bus[rabbitmq]   # RabbitMQ support
+pip install agentmesh-message-bus[kafka]      # Kafka support
+pip install agentmesh-message-bus[all]        # All adapters
 ```
 
 ## Quick Start
