@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>AgentGovernance.Extensions.Microsoft.Agents</RootNamespace>
     <AssemblyName>AgentGovernance.Extensions.Microsoft.Agents</AssemblyName>
-    <Version>3.2.2</Version>
+    <Version>3.3.0</Version>
     <Description>Public Preview companion package for Microsoft.AgentGovernance that makes hooking the real Microsoft.Agents.AI surface into AGT governance middleware easy via AIAgentBuilder.WithGovernance(...).</Description>
     <PackageId>Microsoft.AgentGovernance.Extensions.Microsoft.Agents</PackageId>
     <Authors>Microsoft</Authors>

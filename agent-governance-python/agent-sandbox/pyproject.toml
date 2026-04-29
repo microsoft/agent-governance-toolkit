@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent_sandbox"
-version = "3.2.2"
+version = "3.3.0"
 description = "Public Preview — Agent Sandbox: Docker-based execution isolation for AI agents with policy-driven resource limits, tool proxies, network enforcement, and filesystem checkpointing"
 readme = "README.md"
 license = {text = "MIT"}
