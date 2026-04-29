@@ -124,3 +124,11 @@ urlopen
 davidequarracino
 Marp
 Slidev
+classmethod
+Docstrings
+isort
+mypy
+Pydantic
+pytest
+pyupgrade
+xfail
