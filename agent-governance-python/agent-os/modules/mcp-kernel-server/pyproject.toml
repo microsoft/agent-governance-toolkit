@@ -39,9 +39,9 @@ dependencies = [
 
 [project.optional-dependencies]
 full = [
-    "agent-control-plane>=0.4.0,<1.0",
+    "agentmesh-control-plane>=0.4.0,<1.0",
     "cmvk>=0.3.0,<1.0",
-    "inter-agent-trust-protocol>=0.5.0,<1.0",
+    "agentmesh-trust-protocol>=0.5.0,<1.0",
 ]
 dev = [
     "pytest>=7.0.0,<8.0",

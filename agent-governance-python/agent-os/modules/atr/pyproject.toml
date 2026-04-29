@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0,<62.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent_tool_registry"
+name = "agentmesh_tool_registry"
 version = "3.3.0"
 description = "A decentralized marketplace for agent capabilities - The Hands of AI Agents"
 readme = "README.md"
@@ -66,7 +66,7 @@ hf = [
     "datasets>=2.14.0,<3.0",
 ]
 all = [
-    "agent-tool-registry[dev,docs,hf,sandbox]",
+    "agentmesh-tool-registry[dev,docs,hf,sandbox]",
 ]
 
 [project.urls]

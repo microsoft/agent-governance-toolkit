@@ -25,13 +25,13 @@ This is **Scale by Subtraction** applied to the agent capability layer.
 ## Installation
 
 ```bash
-pip install agent-tool-registry
+pip install agentmesh-tool-registry
 ```
 
 For sandboxed execution with Docker:
 
 ```bash
-pip install agent-tool-registry[sandbox]
+pip install agentmesh-tool-registry[sandbox]
 ```
 
 ---

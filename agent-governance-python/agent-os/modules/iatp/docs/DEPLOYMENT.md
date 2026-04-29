@@ -33,7 +33,7 @@ curl -X POST http://localhost:8081/proxy \
 ### Option 1: PyPI (Recommended)
 
 ```bash
-pip install inter-agent-trust-protocol
+pip install agentmesh-trust-protocol
 ```
 
 ### Option 2: From Source
