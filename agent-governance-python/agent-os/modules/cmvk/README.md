@@ -12,7 +12,7 @@ CMVK provides lightweight functions for comparing text and embeddings to detect 
 ## Installation
 
 ```bash
-pip install cmvk
+pip install agentmesh-drift
 ```
 
 ## Quick Start

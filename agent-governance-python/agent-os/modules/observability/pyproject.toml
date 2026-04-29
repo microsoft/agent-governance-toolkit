@@ -19,7 +19,7 @@ keywords = [
     "grafana",
     "agent-os",
     "monitoring",
-    "cmvk"
+    "agentmesh-drift"
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pydantic_ai_governance"
+name = "pydantic_ai_agentmesh"
 version = "3.2.2"
 description = "Governance middleware for PydanticAI — semantic policy enforcement, trust scoring, and audit trails for agent tool execution"
 readme = "README.md"

@@ -36,7 +36,7 @@ print(f"Signed: {receipt.signature is not None}")
 - **Ed25519 signatures**: Non-repudiable receipt signing with HMAC-SHA256 fallback
 - **Canonical JSON hashing**: JCS-style deterministic serialization for verifiable receipts
 - **Receipt store**: In-memory audit trail with filtering by agent, tool, or decision
-- **Zero required dependencies**: Works with stdlib only; Ed25519 signing available via `pip install mcp_receipt_governed[crypto]`
+- **Zero required dependencies**: Works with stdlib only; Ed25519 signing available via `pip install agentmesh-mcp-receipts[crypto]`
 
 ## Installation
 

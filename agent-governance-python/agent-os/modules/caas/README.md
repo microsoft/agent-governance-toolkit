@@ -12,7 +12,7 @@ CaaS provides stateless utilities for routing, prioritizing, and filtering conte
 ## Installation
 
 ```bash
-pip install caas-core
+pip install agentmesh-context
 ```
 
 ## Quick Start

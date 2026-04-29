@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent-discovery"
+name = "agent_discovery"
 version = "0.1.0"
 description = "Shadow AI agent discovery and inventory for the Agent Governance Toolkit"
 readme = "README.md"
