@@ -89,10 +89,10 @@ Total: **120 new tests, all passing.** Combined run on touched packages
 = 3428 passed**, 52 skipped, 0 failed. Full Docker test suite green across all
 packages.
 
-A manual smoke script at `agent-governance-python/agent-os/smoketest_policy_check.py`
-exercises the legacy-tuple parity, structured `PolicyCheckResult`, sanitized
-exception, legacy constructor preservation, and `redact_user_text` honoring in
-five end-to-end checks.
+A local manual verification script (run by the author, not committed) exercises
+the legacy-tuple parity, structured `PolicyCheckResult`, sanitized exception,
+legacy constructor preservation, and `redact_user_text` honoring in five
+end-to-end checks.
 
 ## Reviewer focus
 
