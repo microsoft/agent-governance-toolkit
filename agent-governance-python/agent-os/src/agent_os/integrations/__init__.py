@@ -71,7 +71,10 @@ from agent_os.integrations.google_adk_adapter import (
     PolicyConfig as ADKPolicyConfig,
 )
 from agent_os.integrations.guardrails_adapter import GuardrailsKernel
-from agent_os.integrations.langchain_adapter import LangChainKernel
+from agent_os.integrations.langchain_adapter import (
+    GovernanceMiddleware as LangChainGovernanceMiddleware,
+    LangChainKernel,
+)
 try:
     from agent_os.integrations.maf_adapter import (
         AuditTrailMiddleware as MAFAuditTrailMiddleware,
