@@ -191,6 +191,56 @@ To launch the optional Agent Hypervisor dashboard:
 docker compose --profile dashboard up --build dashboard
 ```
 
+### Pre-push checklist (recommended)
+
+Run these before pushing a PR. Each step catches a different class of bug
+and has a different cycle-time cost.
+
+**Local prerequisites:**
+
+- **Python 3.10+** (CI tests on 3.10, 3.11, 3.12, and 3.13)
+- **pytest** — `pip install pytest` (or install the package's dev extras)
+- **ruff** — `pip install ruff==0.12.4` (matches `agent-governance-python/requirements/ci-lint.txt`)
+- **Docker** with Compose v2 — required for step 3
+- For a given package, run `pip install -e .` from inside the package
+  directory before its first `pytest`. Sibling packages (e.g.
+  `agent-mesh`) may also need to be installed when their canonical
+  modules are imported by the package under test. Step 3's Docker flow
+  handles this automatically.
+
+1. **Inner loop — test the package you changed:**
+
+   ```bash
+   cd agent-governance-python/<package>
+   pytest tests/ -q
+   ```
+
+   *Cycle time: seconds. Catches: the bug you just wrote.*
+
+2. **Inner loop — lint the package you changed:**
+
+   ```bash
+   ruff check agent-governance-python/<package>/src --select E,F,W --ignore E501
+   ```
+
+   *Cycle time: seconds. Catches: lint failures CI would flag.*
+
+3. **Pre-push integration — run the full Docker test suite:**
+
+   ```bash
+   docker compose up --build dev -d
+   docker compose run --rm test
+   ```
+
+   *Cycle time: ~3 min cold, ~30 s warm. **This catches integration bugs
+   that per-package tests cannot see**, including shim/canonical drift,
+   sibling-package conflicts, Dockerfile drift, and line-ending issues.
+   This is the same flow CI gates on (`docker-compose-test` job).*
+
+4. **Push and let CI handle the rest** — multi-version Python, .NET,
+   TypeScript, Rust, Go, lint, build, security scanners, supply-chain
+   audits. Don't try to replicate all of CI locally.
+
 ### Package Structure
 
 This repo includes these core packages and standalone SDKs today:
