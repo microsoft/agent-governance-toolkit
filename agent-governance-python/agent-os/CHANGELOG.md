@@ -37,6 +37,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin registration.
 - **Enhanced `health_check()`**: Now includes `model_calls`, `token_usage`,
   `cancelled_runs`, and `context_count` metrics.
+- **Cedar / OPA policy integration**: `GoogleADKKernel` now accepts an optional
+  `PolicyEvaluator` for external policy backends (Cedar, OPA/Rego). Cedar
+  evaluation runs before built-in `PolicyConfig` checks with fail-closed
+  composition — the more restrictive result always wins.
+- **`GoogleADKKernel.from_cedar()`**: Convenience factory method for one-line
+  Cedar policy configuration: `GoogleADKKernel.from_cedar(policy_path="...")`.
+- **`_build_cedar_context()`**: Maps ADK lifecycle data (agent, tool, tokens,
+  budget) to the principal/action/resource triple that Cedar backends expect.
+- **Model-call authorization**: `GovernancePlugin.before_model_callback` now
+  consults the `PolicyEvaluator` to authorize LLM invocations, not just tools.
 
 ### Migration Notes
 - Configure `GovServer(execute_authenticator=...)` or set

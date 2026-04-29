@@ -19,6 +19,7 @@ Features:
 - Token/call budget tracking
 - SIGKILL / cancellation support for running invocations
 - Full audit trail of tool calls and agent runs
+- Cedar/OPA policy integration via PolicyEvaluator
 - Works without google-adk installed (graceful import handling)
 - Compatible with LlmAgent, SequentialAgent, ParallelAgent, LoopAgent
 
@@ -47,6 +48,16 @@ Example:
     >>>
     >>> # Option C: Runner-scoped plugin (recommended for production)
     >>> from google.adk import Runner
+    >>> runner = Runner(
+    ...     agent=root_agent,
+    ...     plugins=[kernel.as_plugin()],
+    ... )
+    >>>
+    >>> # Option D: Cedar policy integration
+    >>> kernel = GoogleADKKernel.from_cedar(
+    ...     policy_path="policies/agent-governance.cedar",
+    ...     blocked_tools=["shell"],
+    ... )
     >>> runner = Runner(
     ...     agent=root_agent,
     ...     plugins=[kernel.as_plugin()],
@@ -196,6 +207,7 @@ class GoogleADKKernel(BaseIntegration):
         require_human_approval: bool = False,
         sensitive_tools: list[str] | None = None,
         max_budget: float | None = None,
+        evaluator: Any | None = None,
     ):
         if policy is not None:
             self._adk_config = policy
@@ -211,6 +223,9 @@ class GoogleADKKernel(BaseIntegration):
                 sensitive_tools=sensitive_tools or [],
                 max_budget=max_budget,
             )
+
+        # Optional Cedar/OPA policy evaluator
+        self._evaluator = evaluator
 
         # Initialize BaseIntegration with a GovernancePolicy mapped from PolicyConfig
         governance_policy = GovernancePolicy(
@@ -422,6 +437,10 @@ class GoogleADKKernel(BaseIntegration):
         """
         ADK before_tool_callback — called before each tool execution.
 
+        When a ``PolicyEvaluator`` is configured, it is consulted
+        **before** the built-in PolicyConfig checks (fail-closed
+        composition: the *more restrictive* result wins).
+
         Compatible with ADK's ToolContext. If tool_context is not an ADK
         ToolContext (e.g., in tests), falls back to kwargs for tool_name/tool_args.
 
@@ -433,6 +452,22 @@ class GoogleADKKernel(BaseIntegration):
         agent_name = getattr(tool_context, "agent_name", kwargs.get("agent_name", "unknown"))
 
         self._record("before_tool", agent_name, {"tool": tool_name, "args": tool_args})
+
+        # ── Cedar / PolicyEvaluator gate (runs first) ──────────────
+        ok, reason = self._evaluate_policy(
+            action=tool_name,
+            agent_name=agent_name,
+            tool_args=tool_args if isinstance(tool_args, dict) else {},
+        )
+        if not ok:
+            error = self._raise_violation("cedar_policy", reason)
+            self._record(
+                "cedar_denied", agent_name,
+                {"tool": tool_name, "reason": reason, "policy_backend": "cedar"},
+            )
+            return {"error": str(error)}
+
+        # ── PolicyConfig checks ────────────────────────────────────
 
         # Check timeout
         ok, reason = self._check_timeout()
@@ -737,6 +772,124 @@ class GoogleADKKernel(BaseIntegration):
         return invocation_id in self._cancelled_runs
 
     # ------------------------------------------------------------------
+    # Cedar / PolicyEvaluator integration
+    # ------------------------------------------------------------------
+
+    def _build_cedar_context(
+        self,
+        *,
+        action: str,
+        agent_name: str = "unknown",
+        tool_args: dict[str, Any] | None = None,
+        resource: str = "default",
+    ) -> dict[str, Any]:
+        """Build a context dict for PolicyEvaluator/CedarBackend.
+
+        Maps ADK lifecycle data to the principal/action/resource triple
+        that Cedar and OPA backends expect.
+
+        Args:
+            action: Tool name, ``"model_call"``, or ``"agent_call"``.
+            agent_name: The ADK agent name (maps to Cedar principal).
+            tool_args: Tool arguments for context enrichment.
+            resource: Resource identifier for the Cedar request.
+
+        Returns:
+            A context dict consumable by ``PolicyEvaluator.evaluate()``.
+        """
+        return {
+            "agent_id": agent_name,
+            "tool_name": action,
+            "resource": resource,
+            "token_count": self._prompt_tokens + self._completion_tokens,
+            "tool_call_count": self._tool_call_count,
+            "model_call_count": self._model_call_count,
+            "budget_spent": self._budget_spent,
+            "tool_args": tool_args or {},
+        }
+
+    def _evaluate_policy(
+        self,
+        *,
+        action: str,
+        agent_name: str = "unknown",
+        tool_args: dict[str, Any] | None = None,
+        resource: str = "default",
+    ) -> tuple[bool, str]:
+        """Consult the PolicyEvaluator if one is configured.
+
+        Returns (allowed, reason).  When no evaluator is set, returns
+        ``(True, "")`` so callers can fall through to PolicyConfig.
+
+        Fail-closed: if the evaluator raises, the call is denied.
+        """
+        if self._evaluator is None:
+            return True, ""
+
+        try:
+            ctx = self._build_cedar_context(
+                action=action,
+                agent_name=agent_name,
+                tool_args=tool_args,
+                resource=resource,
+            )
+            decision = self._evaluator.evaluate(ctx)
+            if not decision.allowed:
+                return False, decision.reason
+            return True, ""
+        except Exception as exc:
+            logger.error(
+                "PolicyEvaluator error — denying access (fail-closed): %s",
+                exc,
+                exc_info=True,
+            )
+            return False, f"Policy evaluation error (fail-closed): {exc}"
+
+    @classmethod
+    def from_cedar(
+        cls,
+        policy_path: str | None = None,
+        policy_content: str | None = None,
+        entities: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> "GoogleADKKernel":
+        """Create a kernel with Cedar policy evaluation.
+
+        Convenience factory that configures a ``PolicyEvaluator`` with a
+        ``CedarBackend`` and passes it to the kernel constructor.  All
+        standard ``GoogleADKKernel`` kwargs are forwarded.
+
+        Example::
+
+            kernel = GoogleADKKernel.from_cedar(
+                policy_path="policies/agent-governance.cedar",
+                blocked_tools=["shell"],
+            )
+            runner = Runner(
+                agent=root_agent,
+                plugins=[kernel.as_plugin()],
+            )
+
+        Args:
+            policy_path: Path to a ``.cedar`` policy file.
+            policy_content: Inline Cedar policy string.
+            entities: Cedar entities for authorization context.
+            **kwargs: Forwarded to ``GoogleADKKernel.__init__``.
+
+        Returns:
+            A configured GoogleADKKernel with Cedar evaluation enabled.
+        """
+        from agent_os.policies.evaluator import PolicyEvaluator
+
+        evaluator = PolicyEvaluator()
+        evaluator.load_cedar(
+            policy_path=policy_path,
+            policy_content=policy_content,
+            entities=entities,
+        )
+        return cls(evaluator=evaluator, **kwargs)
+
+    # ------------------------------------------------------------------
     # Plugin Factory
     # ------------------------------------------------------------------
 
@@ -942,10 +1095,25 @@ class GovernancePlugin(_PluginBase):  # type: ignore[misc]
     async def before_model_callback(
         self, *, callback_context: Any = None, llm_request: Any = None
     ) -> Any:
-        """Token budget pre-check and model call counting."""
+        """Token budget pre-check, model call counting, and Cedar policy."""
         cancelled = self._check_cancelled(callback_context)
         if cancelled:
             return cancelled  # type: ignore[return-value]
+
+        agent_name = self._extract_agent_name(ctx=callback_context)
+
+        # Cedar / PolicyEvaluator gate for model calls
+        ok, reason = self._kernel._evaluate_policy(
+            action="model_call",
+            agent_name=agent_name,
+        )
+        if not ok:
+            self._kernel._raise_violation("cedar_policy", reason)
+            self._kernel._record(
+                "cedar_denied", agent_name,
+                {"action": "model_call", "reason": reason, "policy_backend": "cedar"},
+            )
+            return {"error": reason}
 
         self._kernel._model_call_count += 1
 
@@ -956,7 +1124,7 @@ class GovernancePlugin(_PluginBase):  # type: ignore[misc]
 
         self._kernel._record(
             "before_model",
-            self._extract_agent_name(ctx=callback_context),
+            agent_name,
             {"model_call": self._kernel._model_call_count},
         )
         return None

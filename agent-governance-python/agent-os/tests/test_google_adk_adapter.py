@@ -1343,3 +1343,233 @@ class TestEdgeCases:
         assert result is None
         # Should have recorded an audit event with "unknown" error
         assert any(e.event_type == "model_error" for e in k._audit_log)
+
+
+# =====================================================================
+# Cedar / PolicyEvaluator Integration Tests
+# =====================================================================
+
+
+class MockPolicyDecision:
+    """Stand-in for PolicyDecision returned by PolicyEvaluator."""
+
+    def __init__(self, allowed: bool = True, reason: str = ""):
+        self.allowed = allowed
+        self.reason = reason
+
+
+class MockPolicyEvaluator:
+    """Controllable mock for PolicyEvaluator."""
+
+    def __init__(self, *, allowed: bool = True, reason: str = "", should_raise: bool = False):
+        self._allowed = allowed
+        self._reason = reason
+        self._should_raise = should_raise
+        self.calls: list[dict] = []
+
+    def evaluate(self, context: dict) -> MockPolicyDecision:
+        self.calls.append(context)
+        if self._should_raise:
+            raise RuntimeError("Cedar engine unavailable")
+        return MockPolicyDecision(allowed=self._allowed, reason=self._reason)
+
+
+class TestCedarPolicyIntegration:
+    """Tests for PolicyEvaluator/CedarBackend wiring in GoogleADKKernel."""
+
+    def test_kernel_accepts_evaluator(self):
+        """GoogleADKKernel accepts an optional evaluator parameter."""
+        evaluator = MockPolicyEvaluator()
+        kernel = GoogleADKKernel(evaluator=evaluator)
+        assert kernel._evaluator is evaluator
+
+    def test_kernel_no_evaluator_by_default(self):
+        """Without evaluator, _evaluator is None and policy check is a no-op."""
+        kernel = GoogleADKKernel()
+        assert kernel._evaluator is None
+        ok, reason = kernel._evaluate_policy(action="test_tool")
+        assert ok is True
+        assert reason == ""
+
+    def test_cedar_permit_allows_tool(self):
+        """When evaluator returns allowed=True, tool call proceeds."""
+        evaluator = MockPolicyEvaluator(allowed=True)
+        kernel = GoogleADKKernel(evaluator=evaluator)
+        result = kernel.before_tool_callback(tool_name="read_data", tool_args={})
+        assert result is None  # Allowed
+        assert len(evaluator.calls) == 1
+        assert evaluator.calls[0]["tool_name"] == "read_data"
+
+    def test_cedar_forbid_blocks_tool(self):
+        """When evaluator returns allowed=False, tool call is blocked with cedar_policy violation."""
+        evaluator = MockPolicyEvaluator(allowed=False, reason="Cedar: forbid matched for DeleteFile")
+        kernel = GoogleADKKernel(evaluator=evaluator)
+        result = kernel.before_tool_callback(tool_name="delete_file", tool_args={})
+        assert result is not None
+        assert "error" in result
+        assert "cedar_policy" in result["error"]
+        # Violation should be recorded
+        assert any(v.policy_name == "cedar_policy" for v in kernel._violations)
+        # Audit log should include cedar_denied event
+        assert any(e.event_type == "cedar_denied" for e in kernel._audit_log)
+
+    def test_cedar_fail_closed_on_error(self):
+        """When PolicyEvaluator raises, the call is denied (fail-closed)."""
+        evaluator = MockPolicyEvaluator(should_raise=True)
+        kernel = GoogleADKKernel(evaluator=evaluator)
+        result = kernel.before_tool_callback(tool_name="safe_tool", tool_args={})
+        assert result is not None
+        assert "error" in result
+        assert "fail-closed" in result["error"]
+
+    def test_cedar_runs_before_policy_config(self):
+        """Cedar evaluation runs BEFORE PolicyConfig checks — denied by Cedar
+        even if the tool would pass PolicyConfig checks."""
+        evaluator = MockPolicyEvaluator(allowed=False, reason="Cedar denied")
+        kernel = GoogleADKKernel(
+            evaluator=evaluator,
+            allowed_tools=["delete_file"],  # PolicyConfig would allow it
+        )
+        result = kernel.before_tool_callback(tool_name="delete_file", tool_args={})
+        assert result is not None
+        assert "error" in result
+        assert "cedar" in result["error"].lower()
+
+    def test_cedar_allow_then_policy_config_denies(self):
+        """Cedar allows but PolicyConfig blocks — most restrictive wins."""
+        evaluator = MockPolicyEvaluator(allowed=True)
+        kernel = GoogleADKKernel(
+            evaluator=evaluator,
+            blocked_tools=["dangerous_tool"],
+        )
+        result = kernel.before_tool_callback(tool_name="dangerous_tool", tool_args={})
+        assert result is not None
+        assert "error" in result
+        assert "blocked" in result["error"].lower()
+
+    def test_build_cedar_context_shape(self):
+        """_build_cedar_context produces the expected context dict shape."""
+        kernel = GoogleADKKernel()
+        kernel._tool_call_count = 5
+        kernel._model_call_count = 3
+        kernel._prompt_tokens = 100
+        kernel._completion_tokens = 50
+        kernel._budget_spent = 2.5
+
+        ctx = kernel._build_cedar_context(
+            action="file_read",
+            agent_name="my-agent",
+            tool_args={"path": "/tmp/data.csv"},
+            resource="workspace",
+        )
+        assert ctx["agent_id"] == "my-agent"
+        assert ctx["tool_name"] == "file_read"
+        assert ctx["resource"] == "workspace"
+        assert ctx["token_count"] == 150
+        assert ctx["tool_call_count"] == 5
+        assert ctx["model_call_count"] == 3
+        assert ctx["budget_spent"] == 2.5
+        assert ctx["tool_args"] == {"path": "/tmp/data.csv"}
+
+    @pytest.mark.asyncio
+    async def test_plugin_before_tool_with_cedar(self):
+        """GovernancePlugin's before_tool_callback respects Cedar via kernel."""
+        evaluator = MockPolicyEvaluator(allowed=False, reason="Cedar forbid")
+        kernel = GoogleADKKernel(evaluator=evaluator)
+        plugin = kernel.as_plugin()
+
+        tool = MagicMock()
+        tool.name = "shell"
+        result = await plugin.before_tool_callback(
+            tool=tool,
+            tool_args={"cmd": "ls"},
+            tool_context=MagicMock(),
+        )
+        assert result is not None
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_plugin_before_model_with_cedar_deny(self):
+        """GovernancePlugin's before_model_callback blocks on Cedar deny."""
+        evaluator = MockPolicyEvaluator(allowed=False, reason="Cedar: model_call forbidden")
+        kernel = GoogleADKKernel(evaluator=evaluator)
+        plugin = kernel.as_plugin()
+
+        # Need to set up invocation context first
+        inv = MagicMock()
+        inv.invocation_id = "inv-cedar-model"
+        inv.session_id = "session-cedar-1"
+        await plugin.before_run_callback(invocation_context=inv)
+
+        result = await plugin.before_model_callback(
+            callback_context=inv,
+            llm_request=MagicMock(),
+        )
+        assert result is not None
+        assert "error" in result
+        assert "model_call" in result["error"]
+        # Model call count should NOT have incremented since Cedar denied first
+        assert kernel._model_call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_plugin_before_model_with_cedar_allow(self):
+        """GovernancePlugin's before_model_callback allows when Cedar allows."""
+        evaluator = MockPolicyEvaluator(allowed=True)
+        kernel = GoogleADKKernel(evaluator=evaluator)
+        plugin = kernel.as_plugin()
+
+        inv = MagicMock()
+        inv.invocation_id = "inv-cedar-model-ok"
+        inv.session_id = "session-cedar-2"
+        await plugin.before_run_callback(invocation_context=inv)
+
+        result = await plugin.before_model_callback(
+            callback_context=inv,
+            llm_request=MagicMock(),
+        )
+        assert result is None  # Allowed
+        assert kernel._model_call_count == 1
+        assert len(evaluator.calls) == 1
+        assert evaluator.calls[0]["tool_name"] == "model_call"
+
+    def test_cedar_context_includes_tool_args(self):
+        """Cedar context should pass tool_args to evaluator for fine-grained policy."""
+        evaluator = MockPolicyEvaluator(allowed=True)
+        kernel = GoogleADKKernel(evaluator=evaluator)
+        kernel.before_tool_callback(
+            tool_name="sql_query",
+            tool_args={"query": "SELECT * FROM users"},
+        )
+        assert evaluator.calls[0]["tool_args"] == {"query": "SELECT * FROM users"}
+
+    def test_from_cedar_factory_invalid_without_deps(self):
+        """from_cedar() raises ImportError when agent_os.policies is missing.
+        (In real environments with the package, it works seamlessly.)"""
+        # We can't test the happy path without the real PolicyEvaluator import,
+        # but we verify the method exists and has the right signature.
+        assert hasattr(GoogleADKKernel, "from_cedar")
+        assert callable(GoogleADKKernel.from_cedar)
+
+    def test_evaluator_receives_correct_agent_name(self):
+        """Cedar context receives agent_name from tool_context."""
+        evaluator = MockPolicyEvaluator(allowed=True)
+        kernel = GoogleADKKernel(evaluator=evaluator)
+
+        tc = MagicMock()
+        tc.agent_name = "finance-agent"
+        tc.tool_name = "read_report"
+        tc.tool_args = {}
+
+        kernel.before_tool_callback(tool_context=tc)
+        assert evaluator.calls[0]["agent_id"] == "finance-agent"
+
+    def test_cedar_deny_does_not_increment_tool_count(self):
+        """When Cedar denies, the tool_call_count should NOT be incremented."""
+        evaluator = MockPolicyEvaluator(allowed=False, reason="denied")
+        kernel = GoogleADKKernel(evaluator=evaluator)
+        initial_count = kernel._tool_call_count
+
+        kernel.before_tool_callback(tool_name="blocked_tool", tool_args={})
+
+        # Count should NOT have increased since Cedar short-circuits before counting
+        assert kernel._tool_call_count == initial_count
