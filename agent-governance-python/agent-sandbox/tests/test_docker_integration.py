@@ -14,14 +14,12 @@ from __future__ import annotations
 
 import asyncio
 import textwrap
-import time
 
 import pytest
 
 from agent_sandbox.sandbox_provider import (
     ExecutionStatus,
     SandboxConfig,
-    SandboxResult,
     SessionStatus,
 )
 from agent_sandbox.isolation_runtime import IsolationRuntime
@@ -67,6 +65,7 @@ def provider():
         try:
             p.destroy_session(agent_id, session_id)
         except Exception:
+             # Best-effort teardown: ignore cleanup failures to avoid masking test outcomes.
             pass
 
 

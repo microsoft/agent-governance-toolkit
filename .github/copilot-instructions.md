@@ -56,7 +56,7 @@ Before approving or merging ANY PR, verify ALL of the following:
 1. **Read the actual diff** — don't rely on PR description alone
 2. **Attribution & prior art** — check if the PR implements patterns similar to known open-source projects. If it does, verify proper attribution exists in the PR description and code. Check whether the PR arrived shortly after a community member proposed similar work in an issue — if so, verify the contributor isn't submitting an uncredited derivative. **PRs without proper attribution will not be merged.**
 3. **Dependency confusion scan** — check every `pip install`, `npm install`, `cargo add` command in docs/code for unregistered package names. The registered names are:
-   - **PyPI:** `agent-os-kernel`, `agentmesh-platform`, `agent-hypervisor`, `agentmesh-runtime`, `agent-sre`, `agent-governance-toolkit`, `agentmesh-lightning`, `agentmesh-marketplace`
+   - **PyPI:** `agent-os-kernel`, `agentmesh-platform`, `agent-hypervisor`, `agentmesh-runtime`, `agent-sre`, `agent-governance-toolkit`, `agentmesh-lightning`, `agentmesh-marketplace`, `agent-sandbox`
    - **PyPI (local-only, not published):** `agent-governance-dotnet`, `agentmesh-integrations`, `agent-primitives`, `emk`
    - **PyPI (common deps):** `streamlit`, `plotly`, `pandas`, `networkx`, `aioredis`, `pypdf`, `spacy`, `slack-sdk`, `docker`, `langchain-openai`
    - **npm:** `@microsoft/agent-os-kernel`

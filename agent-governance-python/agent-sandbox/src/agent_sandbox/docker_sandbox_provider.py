@@ -580,7 +580,6 @@ class DockerSandboxProvider(SandboxProvider):
                 if timer is not None:
                     timer.cancel()
 
-            duration = time.monotonic() - start
             killed = timed_out.is_set()
             kill_reason = (
                 f"Execution exceeded timeout of "

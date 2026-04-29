@@ -1606,7 +1606,6 @@ class TestTimeoutWatchdog:
         c = docker_provider._containers[(h.agent_id, h.session_id)]
 
         # Simulate exec_run blocking for 2s, with 0.1s timeout
-        original_exec_run = c.exec_run
 
         def slow_exec(*args, **kwargs):
             _time.sleep(0.5)

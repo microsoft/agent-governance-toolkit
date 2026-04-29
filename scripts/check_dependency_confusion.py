@@ -34,6 +34,7 @@ REGISTERED_PACKAGES = {
     "agentmesh-lightning", "agentmesh_lightning",
     "agentmesh-marketplace", "agentmesh_marketplace",
     "agent-discovery", "agent_discovery",
+    "agent-sandbox", "agent_sandbox",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
     "fastapi", "uvicorn", "structlog", "click", "rich", "numpy", "scipy",
