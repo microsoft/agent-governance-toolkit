@@ -60,7 +60,10 @@ from agent_os.exceptions import (
 )
 from agent_os.integrations.a2a_adapter import A2AEvaluation, A2AGovernanceAdapter, A2APolicy
 from agent_os.integrations.anthropic_adapter import AnthropicKernel, GovernedAnthropicClient
-from agent_os.integrations.autogen_adapter import AutoGenKernel
+from agent_os.integrations.autogen_adapter import (
+    AutoGenKernel,
+    GovernanceInterventionHandler as AutoGenGovernanceHandler,
+)
 from agent_os.integrations.crewai_adapter import CrewAIKernel
 from agent_os.integrations.gemini_adapter import GeminiKernel, GovernedGeminiModel
 from agent_os.integrations.google_adk_adapter import (
@@ -166,6 +169,7 @@ __all__ = [
     "CrewAIKernel",
     # AutoGen
     "AutoGenKernel",
+    "AutoGenGovernanceHandler",
     # OpenAI Assistants
     "OpenAIKernel",
     "GovernedAssistant",
