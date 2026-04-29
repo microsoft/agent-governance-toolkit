@@ -53,6 +53,7 @@ class AutoGenKernel(BaseIntegration):
         timeout_seconds: float = 300.0,
         on_error: Optional[Callable[[Exception, str], Any]] = None,
         deep_hooks_enabled: bool = True,
+        evaluator: Any = None,
     ):
         """Initialise the AutoGen governance kernel.
 
@@ -66,8 +67,10 @@ class AutoGenKernel(BaseIntegration):
             deep_hooks_enabled: When ``True`` (default), apply deep
                 integration hooks — function call pipeline interception,
                 GroupChat message routing, and state change tracking.
+            evaluator: Optional ``PolicyEvaluator`` for Cedar/OPA policy
+                evaluation.
         """
-        super().__init__(policy)
+        super().__init__(policy, evaluator=evaluator)
         self.timeout_seconds = timeout_seconds
         self.on_error = on_error
         self.deep_hooks_enabled = deep_hooks_enabled
