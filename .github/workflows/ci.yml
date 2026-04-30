@@ -579,6 +579,20 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  # ── Markdown link checker (always runs — catches broken docs links) ─
+  # Checks all .md files for broken links. External URLs may fail
+  # gracefully due to rate limiting; the config retries on HTTP 429.
+  markdown-link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check markdown links
+        uses: gaurav-nelson/github-action-markdown-link-check@4a1af151f4d7cf4d8f8ac5780597672a3671b88b # v1.0.17
+        with:
+          config-file: ".github/workflows/markdown-link-check.json"
+          use-quiet-mode: "yes"
+          use-verbose-mode: "no"
+
   # ── CI Gate — required status check that handles skipped jobs ────────
   # When path-filters skip jobs (e.g. docs-only PRs skip tests), those
   # jobs report "skipped" which doesn't satisfy required status checks.
@@ -602,6 +616,7 @@ jobs:
         build-rust,
         build-go,
         docker-compose-test,
+        markdown-link-check,
       ]
     runs-on: ubuntu-latest
     steps:
