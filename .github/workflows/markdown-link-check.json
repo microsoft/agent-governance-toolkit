@@ -1,0 +1,19 @@
+{
+  "ignorePatterns": [
+    { "pattern": "^https?://localhost" },
+    { "pattern": "^https?://127\\.0\\.0\\.1" },
+    { "pattern": "^#" },
+    { "pattern": "mailto:" },
+    { "pattern": "^https?://example\\.com" }
+  ],
+  "retryOn429": true,
+  "retryCount": 3,
+  "aliveStatusCodes": [200, 206, 301, 302, 403],
+  "timeout": "30s",
+  "httpHeaders": [
+    {
+      "urls": ["https://docs.github.com"],
+      "headers": { "Accept": "text/html" }
+    }
+  ]
+}
