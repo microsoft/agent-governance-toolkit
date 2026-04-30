@@ -17,6 +17,19 @@ Provides six trust-management tools over MCP:
 
 Trust is scored across multiple dimensions (0–1000 each).
 
+## Getting Started
+
+Prerequisites: Python 3.11 or newer, `pip`, and an MCP-capable client such as Claude Desktop.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install mcp-trust-server
+AGENTMESH_AGENT_NAME=my-trust-server mcp-trust-server
+```
+
+The server starts with in-memory storage by default. Set `AGENTMESH_MIN_TRUST_SCORE` or `AGENTMESH_STORAGE_BACKEND` before launch to customize the local policy.
+
 ## Installation
 
 ```bash
