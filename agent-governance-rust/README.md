@@ -14,6 +14,23 @@ This top-level language home contains the Rust publishable crates:
 - [`agentmesh/`](./agentmesh/) — the full Rust governance crate
 - [`agentmesh-mcp/`](./agentmesh-mcp/) — the standalone MCP governance and security crate
 
+## Add to Your Project
+
+```bash
+cargo add agentmesh
+```
+
+```rust
+use agentmesh::AgentMeshClient;
+
+let client = AgentMeshClient::new("my-agent")?;
+let result = client.execute_with_governance("data.read", None);
+println!("allowed: {}", result.allowed);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+See the full API docs at [docs.rs/agentmesh](https://docs.rs/agentmesh).
+
 ## Workspace Commands
 
 ```bash
