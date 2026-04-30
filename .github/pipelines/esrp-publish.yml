@@ -315,7 +315,7 @@ stages:
                   connectedservicename: 'Agent Governance Toolkit'
                   usemanagedidentity: true
                   keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-                  signcertname: '$(ESRP_CERT_IDENTIFIER)'
+                  signcertname: '$(ESRP_SIGN_CERT_IDENTIFIER)'
                   clientid: '$(ESRP_CLIENT_ID)'
                   intent: 'PackageDistribution'
                   contenttype: 'PyPi'
@@ -351,7 +351,7 @@ stages:
                   connectedservicename: 'Agent Governance Toolkit'
                   usemanagedidentity: true
                   keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-                  signcertname: '$(ESRP_CERT_IDENTIFIER)'
+                  signcertname: '$(ESRP_SIGN_CERT_IDENTIFIER)'
                   clientid: '$(ESRP_CLIENT_ID)'
                   intent: 'PackageDistribution'
                   contenttype: 'PyPi'
@@ -387,7 +387,7 @@ stages:
                   connectedservicename: 'Agent Governance Toolkit'
                   usemanagedidentity: true
                   keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-                  signcertname: '$(ESRP_CERT_IDENTIFIER)'
+                  signcertname: '$(ESRP_SIGN_CERT_IDENTIFIER)'
                   clientid: '$(ESRP_CLIENT_ID)'
                   intent: 'PackageDistribution'
                   contenttype: 'PyPi'
@@ -476,7 +476,7 @@ stages:
               connectedservicename: 'Agent Governance Toolkit'
               usemanagedidentity: true
               keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              signcertname: '$(ESRP_CERT_IDENTIFIER)'
+              signcertname: '$(ESRP_SIGN_CERT_IDENTIFIER)'
               clientid: '$(ESRP_CLIENT_ID)'
               intent: 'PackageDistribution'
               contenttype: 'npm'
@@ -753,7 +753,7 @@ stages:
               connectedservicename: 'Agent Governance Toolkit'
               usemanagedidentity: true
               keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              signcertname: '$(ESRP_CERT_IDENTIFIER)'
+              signcertname: '$(ESRP_SIGN_CERT_IDENTIFIER)'
               clientid: '$(ESRP_CLIENT_ID)'
               intent: 'PackageDistribution'
               contenttype: 'Rust'
