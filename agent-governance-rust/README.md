@@ -1,5 +1,12 @@
 # Agent Governance Rust Workspace
 
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
+[![agentmesh crate](https://img.shields.io/crates/v/agentmesh.svg)](https://crates.io/crates/agentmesh)
+[![agentmesh downloads](https://img.shields.io/crates/d/agentmesh.svg)](https://crates.io/crates/agentmesh)
+[![agentmesh-mcp crate](https://img.shields.io/crates/v/agentmesh-mcp.svg)](https://crates.io/crates/agentmesh-mcp)
+[![agentmesh-mcp downloads](https://img.shields.io/crates/d/agentmesh-mcp.svg)](https://crates.io/crates/agentmesh-mcp)
+
 Rust workspace for the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit).
 
 This top-level language home contains the Rust publishable crates:
