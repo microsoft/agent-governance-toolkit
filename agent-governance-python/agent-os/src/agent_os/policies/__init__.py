@@ -22,6 +22,7 @@ from .backends import (
     ExternalPolicyBackend,
     OPABackend,
 )
+from .decision import PolicyCheckResult, ViolationCategory
 from .evaluator import PolicyDecision, PolicyEvaluator
 from .rate_limiting import RateLimitConfig, RateLimitExceeded, TokenBucket
 from .schema import (
@@ -53,6 +54,7 @@ __all__ = [
     "ExternalPolicyBackend",
     "OPABackend",
     "PolicyAction",
+    "PolicyCheckResult",
     "PolicyCondition",
     "PolicyConflictResolver",
     "PolicyDecision",
@@ -66,6 +68,7 @@ __all__ = [
     "RateLimitExceeded",
     "ResolutionResult",
     "TokenBucket",
+    "ViolationCategory",
     "SharedPolicyDecision",
     "SharedPolicyEvaluator",
     "SharedPolicyRule",

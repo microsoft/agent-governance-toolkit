@@ -62,6 +62,20 @@ ruff format .
 - Event types: `GovernanceEventType.POLICY_CHECK`, `.POLICY_VIOLATION`, `.TOOL_CALL_BLOCKED`, `.CHECKPOINT_CREATED`
 - Tests go in `tests/` (unit) or `modules/*/tests/` (module-specific)
 
+## Policy Check Result (additive)
+
+Policy checks should prefer the additive `*_execute_check` methods when new code needs structured denial data, while preserving the legacy tuple-returning methods for compatibility. Raise the canonical `PolicyViolationError.from_check_result(result)` for new typed flows; hosts should surface `str(e)` and use `e.check_result.category` for dispatch instead of substring-matching internal details.
+
+```python
+from agent_os.policies.decision import ViolationCategory
+from agent_os.exceptions import PolicyViolationError
+
+result = kernel.pre_execute_check(ctx, input_data)
+if not result.allowed:
+    raise PolicyViolationError.from_check_result(result)
+# Hosts: surface str(e); switch on e.check_result.category for typed dispatch.
+```
+
 ## Boundaries
 
 - **Never modify** `tests/test_mcp_server.py` (known pre-existing failure, excluded from CI)

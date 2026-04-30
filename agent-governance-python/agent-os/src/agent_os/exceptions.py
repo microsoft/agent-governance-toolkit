@@ -8,7 +8,13 @@ Each exception carries an error_code, optional details dict, and timestamp
 for structured error handling and logging.
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from agent_os.policies.decision import PolicyCheckResult
 
 
 class AgentOSError(Exception):
@@ -43,6 +49,24 @@ class PolicyViolationError(PolicyError):
 
     def __init__(self, message, error_code=None, details=None):
         super().__init__(message, error_code or "POLICY_VIOLATION", details)
+        self.check_result = None
+
+    @classmethod
+    def from_check_result(cls, result: PolicyCheckResult) -> PolicyViolationError:
+        """Create a policy violation error from a structured check result."""
+
+        details = {
+            "category": result.category.value if result.category else None,
+            "matched_rule": result.matched_rule,
+            "detail": result.detail,
+            "scope": result.scope,
+            "operation": result.operation,
+            "tool_name": result.tool_name,
+            **result.audit_entry,
+        }
+        e = cls(result.public_message, "POLICY_VIOLATION", details)
+        e.check_result = result
+        return e
 
 
 class PolicyDeniedError(PolicyError):
