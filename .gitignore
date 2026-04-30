@@ -462,3 +462,6 @@ dist/
 .pytest_cache/
 .ruff_cache/
 _site/
+
+# Code Security Assessment artifacts
+.security-assessment/

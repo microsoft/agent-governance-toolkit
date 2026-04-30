@@ -11,6 +11,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import secrets
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -18,6 +20,14 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from agentmesh.relay.store import InMemoryInboxStore, InboxStore, StoredMessage
 
 logger = logging.getLogger(__name__)
+
+# Shared-secret token for relay authentication (optional, backward-compatible).
+_RELAY_TOKEN: str | None = os.environ.get("AGENTMESH_RELAY_TOKEN")
+if not _RELAY_TOKEN:
+    logger.warning(
+        "AGENTMESH_RELAY_TOKEN is not set — the relay will accept "
+        "unauthenticated connections.  Set this env var in production."
+    )
 
 HEARTBEAT_INTERVAL = 30  # seconds
 OFFLINE_THRESHOLD = 90  # seconds — 3 missed heartbeats
@@ -103,6 +113,18 @@ class RelayServer:
                     await ws.send_json({"type": "error", "detail": "Missing 'from' field"})
                     await ws.close(code=4002)
                     return
+
+                # Authenticate: require token when AGENTMESH_RELAY_TOKEN is set
+                if _RELAY_TOKEN is not None:
+                    client_token = frame.get("token")
+                    if not client_token or not secrets.compare_digest(
+                        client_token, _RELAY_TOKEN
+                    ):
+                        await ws.send_json(
+                            {"type": "error", "detail": "Authentication failed"}
+                        )
+                        await ws.close(code=4003)
+                        return
 
                 # Register connection
                 self._connections[agent_did] = ConnectedAgent(agent_did, ws)

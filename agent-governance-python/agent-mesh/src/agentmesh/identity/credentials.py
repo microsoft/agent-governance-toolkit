@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from typing import Callable, Optional, Literal
 from pydantic import BaseModel, Field
 import hashlib
+import hmac
 import logging
 import uuid
 import secrets
@@ -134,7 +135,7 @@ class Credential(BaseModel):
         Returns:
             True if the SHA-256 hash of the token matches the stored hash.
         """
-        return hashlib.sha256(token.encode()).hexdigest() == self.token_hash
+        return hmac.compare_digest(hashlib.sha256(token.encode()).hexdigest(), self.token_hash)
 
     def revoke(self, reason: str) -> None:
         """Revoke this credential immediately.

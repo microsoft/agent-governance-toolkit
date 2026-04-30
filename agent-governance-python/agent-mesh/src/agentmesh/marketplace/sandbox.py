@@ -51,6 +51,7 @@ _EXTRA_BLOCKED = frozenset({
     "pickle", "shelve", "marshal", "code", "codeop", "compileall",
     "multiprocessing", "signal", "resource", "pty", "termios",
     "fcntl", "mmap", "winreg", "_winapi",
+    "sys", "builtins",
 })
 
 ALL_BLOCKED_MODULES = RESTRICTED_MODULES | _EXTRA_BLOCKED
@@ -108,7 +109,7 @@ _RUNNER_TEMPLATE = textwrap.dedent("""\
     # ── 4. Strip dangerous builtins AFTER import ─────────────────
     # exec/eval/compile are needed by importlib during module loading,
     # but must be blocked before running plugin entry code.
-    _STRIP = ("exec", "eval", "breakpoint")
+    _STRIP = ("exec", "eval", "breakpoint", "compile", "open", "__import__")
     if isinstance(__builtins__, dict):
         for _b in _STRIP:
             __builtins__.pop(_b, None)
