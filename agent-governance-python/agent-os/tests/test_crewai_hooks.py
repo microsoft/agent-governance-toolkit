@@ -51,6 +51,14 @@ _crewai_module = types.ModuleType("crewai")
 sys.modules["crewai"] = _crewai_module
 sys.modules["crewai.hooks"] = _hooks_module
 
+# The adapter may have been imported before the stubs were installed (e.g.
+# via __init__.py), so _HOOKS_AVAILABLE could already be False.  Force a
+# reload so the try/except picks up our stub module.
+import importlib
+import agent_os.integrations.crewai_adapter as _crewai_adapter_mod
+
+importlib.reload(_crewai_adapter_mod)
+
 from agent_os.integrations.crewai_adapter import (
     CrewAIKernel,
     GovernanceHooks,

@@ -52,7 +52,6 @@ _PENDING_CONVERSION = pytest.mark.xfail(
         ),
         pytest.param(
             "agent_os.integrations.openai_agents_sdk",
-            marks=_PENDING_CONVERSION,
             id="openai_agents_sdk",
         ),
         pytest.param(
