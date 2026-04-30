@@ -157,6 +157,9 @@ regardless of how they were produced. For AI-assisted changes to security-critic
 - Review AI output for hallucinated package names, deprecated crypto algorithms, or insecure
   defaults.
 
+For detailed checklists and additional requirements, see
+[docs/policies/ai-security-guidance.md](docs/policies/ai-security-guidance.md).
+
 **Legal obligations:**
 
 Contributors using AI development tools must ensure that the tool's terms of service do not conflict
