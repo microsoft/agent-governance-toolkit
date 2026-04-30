@@ -113,9 +113,29 @@ class SemanticKernelWrapper(BaseIntegration):
         self._start_time = time.monotonic()
         self._last_error: Optional[str] = None
 
-    def wrap(self, kernel: Any) -> "GovernedSemanticKernel":
+    def as_filter(self) -> "GovernanceFunctionFilter":
+        """Create a governance filter for Semantic Kernel's native filter system.
+
+        Returns a ``GovernanceFunctionFilter`` that can be registered with::
+
+            kernel.add_filter("auto_function_invocation", wrapper.as_filter())
+            kernel.add_filter("function_invocation", wrapper.as_filter())
+
+        This is the **recommended** integration pattern for Semantic Kernel
+        as it uses the framework's native ``add_filter()`` API instead of
+        proxying the kernel object.
+
+        Returns:
+            A ``GovernanceFunctionFilter`` instance.
         """
-        Wrap a Semantic Kernel with governance.
+        return GovernanceFunctionFilter(self)
+
+    def wrap(self, kernel: Any) -> "GovernedSemanticKernel":
+        """Wrap a Semantic Kernel with governance.
+
+        .. deprecated::
+            Use :meth:`as_filter` with ``kernel.add_filter()`` instead
+            for a non-invasive integration.
 
         Args:
             kernel: Semantic Kernel instance
@@ -123,6 +143,14 @@ class SemanticKernelWrapper(BaseIntegration):
         Returns:
             GovernedSemanticKernel with full governance
         """
+        import warnings
+        warnings.warn(
+            "SemanticKernelWrapper.wrap() is deprecated. Use as_filter() with "
+            "kernel.add_filter('auto_function_invocation', wrapper.as_filter()) "
+            "for a non-invasive integration.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         kernel_id = f"sk-{id(kernel)}"
         ctx = SKContext(
             agent_id=kernel_id,
@@ -758,8 +786,11 @@ def wrap_kernel(
     policy: Optional[GovernancePolicy] = None,
     timeout_seconds: float = 300.0,
 ) -> GovernedSemanticKernel:
-    """
-    Quick wrapper for Semantic Kernel.
+    """Quick wrapper for Semantic Kernel.
+
+    .. deprecated::
+        Use ``SemanticKernelWrapper.as_filter()`` with
+        ``kernel.add_filter()`` instead.
 
     Example:
         from agent_os.integrations.semantic_kernel_adapter import wrap_kernel
@@ -767,6 +798,157 @@ def wrap_kernel(
         governed = wrap_kernel(my_kernel)
         result = await governed.invoke("plugin", "function")
     """
-    return SemanticKernelWrapper(
-        policy=policy, timeout_seconds=timeout_seconds
-    ).wrap(kernel)
+    import warnings
+    warnings.warn(
+        "wrap_kernel() is deprecated. Use SemanticKernelWrapper(policy=...).as_filter() "
+        "with kernel.add_filter('auto_function_invocation', ...) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    wrapper = SemanticKernelWrapper(policy=policy, timeout_seconds=timeout_seconds)
+    # Suppress the deprecation from wrap() since we already emitted one
+    import contextlib
+    with contextlib.suppress(Exception), warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        return wrapper.wrap(kernel)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Native Hook: GovernanceFunctionFilter
+# ═══════════════════════════════════════════════════════════════════
+#
+# Semantic Kernel provides kernel.add_filter() for registering
+# function invocation and auto-function-invocation filters.
+# GovernanceFunctionFilter implements the filter protocol:
+#
+#     async def __call__(self, context, next):
+#         ...
+#         await next(context)
+#         ...
+#
+# Usage:
+#     wrapper = SemanticKernelWrapper(policy=policy)
+#     sk_kernel.add_filter("auto_function_invocation", wrapper.as_filter())
+#     sk_kernel.add_filter("function_invocation", wrapper.as_filter())
+# ═══════════════════════════════════════════════════════════════════
+
+
+class GovernanceFunctionFilter:
+    """Governance filter for Semantic Kernel's native ``add_filter()`` system.
+
+    Implements the SK filter protocol (``async __call__(context, next)``)
+    and intercepts function invocations for policy enforcement.
+
+    The filter:
+    - Validates function names against ``allowed_tools``
+    - Scans function arguments for ``blocked_patterns``
+    - Enforces ``max_tool_calls`` limits
+    - Runs Cedar/OPA ``pre_execute`` checks
+    - Runs ``post_execute`` drift detection on results
+
+    Example::
+
+        wrapper = SemanticKernelWrapper(policy=GovernancePolicy(
+            allowed_tools=["MyPlugin.safe_func"],
+            blocked_patterns=["DROP TABLE"],
+        ))
+        governance_filter = wrapper.as_filter()
+
+        sk_kernel.add_filter("auto_function_invocation", governance_filter)
+        sk_kernel.add_filter("function_invocation", governance_filter)
+    """
+
+    def __init__(self, wrapper: SemanticKernelWrapper) -> None:
+        self._wrapper = wrapper
+        self._ctx = SKContext(
+            agent_id="sk-filter",
+            session_id=f"sk-filter-{int(datetime.now().timestamp())}",
+            policy=wrapper.policy,
+            kernel_id="sk-filter",
+        )
+        wrapper._contexts["sk-filter"] = self._ctx
+
+    @property
+    def wrapper(self) -> SemanticKernelWrapper:
+        """Return the parent ``SemanticKernelWrapper``."""
+        return self._wrapper
+
+    @property
+    def context(self) -> SKContext:
+        """Return the execution context."""
+        return self._ctx
+
+    async def __call__(self, context: Any, next: Any) -> None:
+        """Filter protocol implementation for Semantic Kernel.
+
+        Called by the SK runtime before/after each function invocation.
+        Validates the function against governance policy, calls ``next()``
+        to proceed, then runs post-execution checks.
+
+        Args:
+            context: SK's ``FunctionInvocationContext`` or
+                ``AutoFunctionInvocationContext``.
+            next: Async callable to continue the filter chain or execute
+                the function.
+
+        Raises:
+            PolicyViolationError: If the function violates governance policy.
+        """
+        # Extract function identity
+        func = getattr(context, "function", None)
+        func_name = getattr(func, "name", None) or "unknown"
+        plugin_name = getattr(func, "plugin_name", None) or ""
+        full_name = f"{plugin_name}.{func_name}" if plugin_name else func_name
+
+        # Record invocation
+        self._ctx.functions_invoked.append({
+            "function": full_name,
+            "timestamp": datetime.now().isoformat(),
+        })
+
+        # Check allowed_tools
+        if self._wrapper.policy.allowed_tools:
+            if full_name not in self._wrapper.policy.allowed_tools:
+                wildcard = f"{plugin_name}.*" if plugin_name else None
+                if not wildcard or wildcard not in self._wrapper.policy.allowed_tools:
+                    raise PolicyViolationError(f"Function not allowed: {full_name}")
+
+        # Check blocked patterns in arguments
+        args = getattr(context, "arguments", None)
+        if args:
+            args_str = str(args)
+            for pattern in self._wrapper.policy.blocked_patterns:
+                pat = pattern if isinstance(pattern, str) else pattern[0]
+                if pat.lower() in args_str.lower():
+                    raise PolicyViolationError(
+                        f"Blocked pattern '{pat}' in arguments for {full_name}"
+                    )
+
+        # Check call count
+        self._ctx.call_count += 1
+        if self._ctx.call_count > self._wrapper.policy.max_tool_calls:
+            raise PolicyViolationError(
+                f"Tool call limit exceeded: "
+                f"{self._ctx.call_count} > {self._wrapper.policy.max_tool_calls}"
+            )
+
+        # Pre-execute (Cedar/OPA)
+        allowed, reason = self._wrapper.pre_execute(self._ctx, {
+            "function": full_name,
+            "arguments": str(args) if args else "",
+        })
+        if not allowed:
+            raise PolicyViolationError(f"Invocation blocked: {reason}")
+
+        # Proceed with execution
+        await next(context)
+
+        # Post-execute drift detection
+        result = getattr(context, "result", None)
+        valid, reason = self._wrapper.post_execute(self._ctx, result)
+        if not valid:
+            raise PolicyViolationError(f"Result blocked: {reason}")
+
+    def __repr__(self) -> str:
+        return "GovernanceFunctionFilter(wrapper=SemanticKernelWrapper)"
+

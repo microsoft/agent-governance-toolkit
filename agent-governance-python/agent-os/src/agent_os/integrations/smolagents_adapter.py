@@ -186,9 +186,36 @@ class SmolagentsKernel(BaseIntegration):
     # BaseIntegration abstract methods
     # ------------------------------------------------------------------
 
-    def wrap(self, agent: Any) -> Any:
+    def as_step_callback(self) -> "GovernanceStepCallback":
+        """Create a governance callback for smolagents' native ``step_callbacks``.
+
+        Returns a ``GovernanceStepCallback`` that can be passed directly to
+        a smolagents agent's ``step_callbacks`` list::
+
+            kernel = SmolagentsKernel(policy=config)
+            callback = kernel.as_step_callback()
+
+            agent = CodeAgent(
+                tools=[...],
+                model=model,
+                step_callbacks=[callback],
+            )
+
+        This is the **recommended** integration pattern for smolagents,
+        as it uses the framework's native callback system instead of
+        monkey-patching tool ``forward`` methods.
+
+        Returns:
+            A ``GovernanceStepCallback`` instance.
         """
-        Wrap a smolagents agent with governance.
+        return GovernanceStepCallback(self)
+
+    def wrap(self, agent: Any) -> Any:
+        """Wrap a smolagents agent with governance.
+
+        .. deprecated::
+            Use :meth:`as_step_callback` with ``step_callbacks=`` instead
+            for a non-invasive integration.
 
         Intercepts each tool's ``forward`` method so that every tool call
         passes through policy checks before execution.  The agent's
@@ -197,6 +224,14 @@ class SmolagentsKernel(BaseIntegration):
 
         Works without smolagents installed (for testing with mocks).
         """
+        import warnings
+        warnings.warn(
+            "SmolagentsKernel.wrap() is deprecated. Use as_step_callback() "
+            "with agent = Agent(step_callbacks=[kernel.as_step_callback()]) "
+            "for a non-invasive integration.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         agent_name = getattr(agent, "name", None) or str(id(agent))
 
         # smolagents stores tools in agent.toolbox (dict-like or has .tools)
@@ -620,11 +655,172 @@ class SmolagentsKernel(BaseIntegration):
         }
 
 
+# ═══════════════════════════════════════════════════════════════════
+# Native Hook: GovernanceStepCallback
+# ═══════════════════════════════════════════════════════════════════
+#
+# smolagents provides ``step_callbacks`` — a list of callables
+# invoked after each agent step with (step, agent) signature.
+# GovernanceStepCallback implements this protocol.
+#
+# Usage:
+#     kernel = SmolagentsKernel(policy=config)
+#     agent = CodeAgent(
+#         tools=[...], model=model,
+#         step_callbacks=[kernel.as_step_callback()],
+#     )
+# ═══════════════════════════════════════════════════════════════════
+
+
+class GovernanceStepCallback:
+    """Governance callback for smolagents' native ``step_callbacks`` system.
+
+    Implements the smolagents step-callback protocol
+    (``__call__(step, agent)``) and inspects each completed step for
+    governance violations.
+
+    The callback:
+    - Validates tool names in ``step.tool_calls`` against ``allowed_tools``
+      and ``blocked_tools``
+    - Scans tool arguments and observations for ``blocked_patterns``
+    - Enforces ``max_tool_calls`` limits
+    - Records an audit trail for every step
+
+    Example::
+
+        kernel = SmolagentsKernel(
+            allowed_tools=["web_search"],
+            blocked_patterns=["DROP TABLE"],
+        )
+        callback = kernel.as_step_callback()
+
+        agent = CodeAgent(
+            tools=[web_search_tool],
+            model=model,
+            step_callbacks=[callback],
+        )
+    """
+
+    def __init__(self, kernel: SmolagentsKernel) -> None:
+        self._kernel = kernel
+        self._step_count: int = 0
+
+    @property
+    def kernel(self) -> SmolagentsKernel:
+        """Return the governing kernel."""
+        return self._kernel
+
+    @property
+    def step_count(self) -> int:
+        """Return the number of steps processed."""
+        return self._step_count
+
+    def __call__(self, step: Any, agent: Any) -> None:
+        """Step-callback protocol implementation for smolagents.
+
+        Called by the smolagents runtime after each agent step completes.
+        Inspects the step for tool calls and validates them against the
+        governance policy.
+
+        Args:
+            step: A ``smolagents.MemoryStep`` (or similar) containing
+                step details such as ``tool_calls`` or ``action``.
+            agent: The smolagents agent instance.
+
+        Raises:
+            PolicyViolationError: If the step violates governance policy.
+        """
+        self._step_count += 1
+        agent_name = getattr(agent, "name", None) or str(id(agent))
+        config = self._kernel._sm_config
+
+        # Extract tool calls from the step
+        tool_calls = getattr(step, "tool_calls", None) or []
+        action = getattr(step, "action", None)
+        observation = getattr(step, "observation", None)
+
+        # If the step has an action with a tool call
+        if action and hasattr(action, "tool_name"):
+            tool_calls = [action]
+
+        for tc in tool_calls:
+            tool_name = getattr(tc, "tool_name", None) or getattr(tc, "name", str(tc))
+            tool_args = getattr(tc, "tool_arguments", None) or getattr(tc, "arguments", {})
+
+            # Blocked tools
+            if tool_name in config.blocked_tools:
+                self._kernel._record(
+                    "tool_blocked", agent_name,
+                    {"tool": tool_name, "reason": "blocked_tool"},
+                )
+                raise PolicyViolationError(
+                    "blocked_tool",
+                    f"Tool '{tool_name}' is explicitly blocked",
+                )
+
+            # Allowed tools check
+            if config.allowed_tools and tool_name not in config.allowed_tools:
+                self._kernel._record(
+                    "tool_blocked", agent_name,
+                    {"tool": tool_name, "reason": "not_in_allowlist"},
+                )
+                raise PolicyViolationError(
+                    "tool_not_allowed",
+                    f"Tool '{tool_name}' is not in the allowed list",
+                )
+
+            # Blocked patterns in arguments
+            args_str = str(tool_args)
+            for pattern in config.blocked_patterns:
+                if pattern.lower() in args_str.lower():
+                    self._kernel._record(
+                        "pattern_blocked", agent_name,
+                        {"tool": tool_name, "pattern": pattern},
+                    )
+                    raise PolicyViolationError(
+                        "blocked_pattern",
+                        f"Blocked pattern '{pattern}' in arguments for '{tool_name}'",
+                    )
+
+            # Increment and check call count
+            self._kernel._tool_call_count += 1
+            if self._kernel._tool_call_count > config.max_tool_calls:
+                raise PolicyViolationError(
+                    "max_tool_calls_exceeded",
+                    f"Tool call limit exceeded: "
+                    f"{self._kernel._tool_call_count} > {config.max_tool_calls}",
+                )
+
+            # Audit
+            self._kernel._record(
+                "tool_executed", agent_name,
+                {"tool": tool_name, "step": self._step_count},
+            )
+
+        # Scan observation for blocked patterns
+        if observation:
+            obs_str = str(observation)
+            for pattern in config.blocked_patterns:
+                if pattern.lower() in obs_str.lower():
+                    self._kernel._record(
+                        "observation_blocked", agent_name,
+                        {"pattern": pattern, "step": self._step_count},
+                    )
+                    raise PolicyViolationError(
+                        "blocked_pattern_in_observation",
+                        f"Blocked pattern '{pattern}' in step observation",
+                    )
+
+    def __repr__(self) -> str:
+        return f"GovernanceStepCallback(steps={self._step_count})"
+
+
 __all__ = [
     "SmolagentsKernel",
     "PolicyConfig",
     "PolicyViolationError",
     "AuditEvent",
+    "GovernanceStepCallback",
     "_HAS_SMOLAGENTS",
     "_check_smolagents_available",
 ]

@@ -132,8 +132,33 @@ class AnthropicKernel(BaseIntegration):
         self._start_time = time.monotonic()
         self._last_error: str | None = None
 
-    def wrap(self, client: Any) -> GovernedAnthropicClient:
+    def as_message_hook(self, *, name: str = "anthropic-governance") -> "GovernanceMessageHook":
+        """Create a ``GovernanceMessageHook`` for non-invasive integration.
+
+        The hook governs ``messages.create()`` calls without wrapping or
+        proxying the Anthropic client.  This is the **recommended**
+        integration pattern.
+
+        Args:
+            name: Human-readable identifier for audit logging.
+
+        Returns:
+            A ``GovernanceMessageHook`` instance.
+
+        Example::
+
+            kernel = AnthropicKernel(policy=policy)
+            hook = kernel.as_message_hook()
+            response = hook.create(client, model="claude-sonnet-4-20250514", ...)
+        """
+        return GovernanceMessageHook(self, name=name)
+
+    def wrap(self, client: Any) -> "GovernedAnthropicClient":
         """Wrap an Anthropic client with governance.
+
+        .. deprecated::
+            Use :meth:`as_message_hook` instead for a non-invasive
+            integration that does not proxy the client object.
 
         Args:
             client: An ``anthropic.Anthropic`` client instance.
@@ -142,6 +167,13 @@ class AnthropicKernel(BaseIntegration):
             A ``GovernedAnthropicClient`` that enforces policy on all
             ``messages.create()`` calls.
         """
+        import warnings
+        warnings.warn(
+            "AnthropicKernel.wrap() is deprecated. Use as_message_hook() "
+            "for a non-invasive governance pattern that doesn't proxy the client.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         _check_anthropic_available()
         client_id = id(client)
         ctx = AnthropicContext(
@@ -402,11 +434,175 @@ class GovernedAnthropicClient:
         return getattr(self._client, name)
 
 
+# ═══════════════════════════════════════════════════════════════════
+# Native Hook: GovernanceMessageHook
+# ═══════════════════════════════════════════════════════════════════
+#
+# Anthropic's Python SDK does not expose a formal middleware/plugin
+# system.  However, the recommended integration pattern is a
+# composable "message hook" that wraps messages.create() calls
+# with governance checks — without creating a proxy client object.
+#
+# Usage:
+#     kernel = AnthropicKernel(policy=policy)
+#     hook = kernel.as_message_hook()
+#
+#     # Use the hook to govern individual calls
+#     response = hook.create(client, model="claude-sonnet-4-20250514", ...)
+# ═══════════════════════════════════════════════════════════════════
+
+
+class GovernanceMessageHook:
+    """Stateless governance hook for Anthropic ``messages.create()`` calls.
+
+    Unlike ``GovernedAnthropicClient``, this does **not** wrap or proxy the
+    client object.  Instead, it provides a ``create()`` method that governs
+    a single ``messages.create()`` invocation on any client you pass in.
+
+    This is the recommended integration pattern for Anthropic because the
+    SDK does not expose a native plugin/middleware system.
+
+    Example::
+
+        kernel = AnthropicKernel(policy=GovernancePolicy(
+            blocked_patterns=["password"],
+            allowed_tools=["web_search"],
+        ))
+        hook = kernel.as_message_hook()
+
+        response = hook.create(client, model="claude-sonnet-4-20250514",
+                               max_tokens=1024, messages=[...])
+    """
+
+    def __init__(self, kernel: AnthropicKernel, *, name: str = "anthropic-governance") -> None:
+        self._kernel = kernel
+        self._name = name
+        self._ctx = AnthropicContext(
+            agent_id=name,
+            session_id=f"ant-hook-{int(time.time())}",
+            policy=kernel.policy,
+        )
+        kernel.contexts[name] = self._ctx
+
+    @property
+    def kernel(self) -> AnthropicKernel:
+        """Return the governing kernel."""
+        return self._kernel
+
+    @property
+    def context(self) -> AnthropicContext:
+        """Return the execution context."""
+        return self._ctx
+
+    def create(self, client: Any, **kwargs: Any) -> Any:
+        """Govern a single ``messages.create()`` call.
+
+        Validates message content against blocked patterns, enforces
+        tool-call allowlists, checks token limits after completion,
+        and records an audit trail — all without mutating the client.
+
+        Args:
+            client: An ``anthropic.Anthropic`` client instance.
+            **kwargs: Forwarded to ``client.messages.create()``.
+
+        Returns:
+            The Anthropic message response.
+
+        Raises:
+            PolicyViolationError: If a governance policy is violated.
+        """
+        # --- pre-execution checks ---
+        messages = kwargs.get("messages", [])
+        for msg in messages:
+            content = msg.get("content", "") if isinstance(msg, dict) else str(msg)
+            allowed, reason = self._kernel.pre_execute(self._ctx, content)
+            if not allowed:
+                raise PolicyViolationError(f"Message blocked: {reason}")
+
+        # Validate requested tools against policy
+        tools = kwargs.get("tools")
+        if tools and self._kernel.policy.allowed_tools:
+            for tool in tools:
+                name = tool.get("name") if isinstance(tool, dict) else getattr(tool, "name", None)
+                if name and name not in self._kernel.policy.allowed_tools:
+                    raise PolicyViolationError(f"Tool not allowed: {name}")
+
+        # Enforce max_tokens cap from policy
+        requested_max = kwargs.get("max_tokens", 0)
+        if requested_max > self._kernel.policy.max_tokens:
+            raise PolicyViolationError(
+                f"Requested max_tokens ({requested_max}) exceeds policy limit "
+                f"({self._kernel.policy.max_tokens})"
+            )
+
+        # Audit log
+        logger.info(
+            "Anthropic hook.create | agent=%s model=%s",
+            self._name,
+            kwargs.get("model", "unknown"),
+        )
+
+        # --- execute ---
+        response = client.messages.create(**kwargs)
+
+        # --- post-execution checks ---
+        response_id = getattr(response, "id", f"msg-{int(time.time())}")
+        self._ctx.message_ids.append(response_id)
+
+        # Track tokens
+        usage = getattr(response, "usage", None)
+        if usage:
+            self._ctx.prompt_tokens += getattr(usage, "input_tokens", 0)
+            self._ctx.completion_tokens += getattr(usage, "output_tokens", 0)
+
+            total = self._ctx.prompt_tokens + self._ctx.completion_tokens
+            if total > self._kernel.policy.max_tokens:
+                raise PolicyViolationError(
+                    f"Token limit exceeded: {total} > {self._kernel.policy.max_tokens}"
+                )
+
+        # Validate tool_use blocks in response
+        content_blocks = getattr(response, "content", [])
+        for block in content_blocks:
+            if getattr(block, "type", None) == "tool_use":
+                tool_name = getattr(block, "name", "")
+                self._ctx.tool_use_calls.append({
+                    "id": getattr(block, "id", ""),
+                    "name": tool_name,
+                    "input": getattr(block, "input", {}),
+                    "timestamp": datetime.now().isoformat(),
+                })
+                self._ctx.tool_calls.append({"name": tool_name})
+
+                if len(self._ctx.tool_calls) > self._kernel.policy.max_tool_calls:
+                    raise PolicyViolationError(
+                        f"Tool call limit exceeded: "
+                        f"{len(self._ctx.tool_calls)} > "
+                        f"{self._kernel.policy.max_tool_calls}"
+                    )
+
+                if self._kernel.policy.allowed_tools:
+                    if tool_name not in self._kernel.policy.allowed_tools:
+                        raise PolicyViolationError(f"Tool not allowed: {tool_name}")
+
+        # Post-execute bookkeeping
+        self._kernel.post_execute(self._ctx, response)
+
+        return response
+
+    def __repr__(self) -> str:
+        return f"GovernanceMessageHook(name={self._name!r})"
+
+
 def wrap_client(
     client: Any,
     policy: GovernancePolicy | None = None,
 ) -> GovernedAnthropicClient:
     """Quick wrapper for Anthropic clients.
+
+    .. deprecated::
+        Use ``AnthropicKernel.as_message_hook()`` instead for a
+        non-invasive integration that does not proxy the client.
 
     Args:
         client: An ``anthropic.Anthropic`` client instance.
@@ -420,4 +616,12 @@ def wrap_client(
         >>> governed = wrap_client(my_client)
         >>> response = governed.messages.create(model="claude-sonnet-4-20250514", ...)
     """
+    import warnings
+    warnings.warn(
+        "wrap_client() is deprecated. Use AnthropicKernel(policy=...).as_message_hook() "
+        "for a non-invasive governance pattern that doesn't proxy the client.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return AnthropicKernel(policy=policy).wrap(client)
+
