@@ -806,9 +806,8 @@ def wrap_kernel(
         stacklevel=2,
     )
     wrapper = SemanticKernelWrapper(policy=policy, timeout_seconds=timeout_seconds)
-    # Suppress the deprecation from wrap() since we already emitted one
-    import contextlib
-    with contextlib.suppress(Exception), warnings.catch_warnings():
+    # Suppress only the nested DeprecationWarning (not real errors)
+    with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         return wrapper.wrap(kernel)
 
@@ -859,14 +858,16 @@ class GovernanceFunctionFilter:
     """
 
     def __init__(self, wrapper: SemanticKernelWrapper) -> None:
+        import uuid
         self._wrapper = wrapper
+        _filter_id = f"sk-filter-{uuid.uuid4().hex[:12]}"
         self._ctx = SKContext(
-            agent_id="sk-filter",
-            session_id=f"sk-filter-{int(datetime.now().timestamp())}",
+            agent_id=_filter_id,
+            session_id=_filter_id,
             policy=wrapper.policy,
-            kernel_id="sk-filter",
+            kernel_id=_filter_id,
         )
-        wrapper._contexts["sk-filter"] = self._ctx
+        wrapper._contexts[_filter_id] = self._ctx
 
     @property
     def wrapper(self) -> SemanticKernelWrapper:

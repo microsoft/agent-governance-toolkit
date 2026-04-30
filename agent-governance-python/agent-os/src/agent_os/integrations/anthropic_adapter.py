@@ -175,10 +175,11 @@ class AnthropicKernel(BaseIntegration):
             stacklevel=2,
         )
         _check_anthropic_available()
+        import uuid
         client_id = id(client)
         ctx = AnthropicContext(
             agent_id=f"anthropic-{client_id}",
-            session_id=f"ant-{int(time.time())}",
+            session_id=f"ant-{uuid.uuid4().hex[:12]}",
             policy=self.policy,
         )
         self.contexts[ctx.agent_id] = ctx
@@ -475,11 +476,12 @@ class GovernanceMessageHook:
     """
 
     def __init__(self, kernel: AnthropicKernel, *, name: str = "anthropic-governance") -> None:
+        import uuid
         self._kernel = kernel
         self._name = name
         self._ctx = AnthropicContext(
             agent_id=name,
-            session_id=f"ant-hook-{int(time.time())}",
+            session_id=f"ant-hook-{uuid.uuid4().hex[:12]}",
             policy=kernel.policy,
         )
         kernel.contexts[name] = self._ctx
@@ -623,5 +625,9 @@ def wrap_client(
         DeprecationWarning,
         stacklevel=2,
     )
-    return AnthropicKernel(policy=policy).wrap(client)
+    # Suppress the nested DeprecationWarning from kernel.wrap() so users
+    # only see a single deprecation notice.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        return AnthropicKernel(policy=policy).wrap(client)
 

@@ -457,9 +457,8 @@ def wrap(agent: Any, policy: GovernancePolicy | None = None, **kwargs) -> Any:
         stacklevel=2,
     )
     kernel = PydanticAIKernel(policy, **kwargs)
-    # Suppress nested deprecation from kernel.wrap()
-    import contextlib
-    with contextlib.suppress(Exception), warnings.catch_warnings():
+    # Suppress only the nested DeprecationWarning (not real errors)
+    with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         return kernel.wrap(agent)
 

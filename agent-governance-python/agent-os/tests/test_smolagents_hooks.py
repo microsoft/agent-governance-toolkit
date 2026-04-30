@@ -134,23 +134,33 @@ class TestBlockedPatterns:
         with pytest.raises(Exception, match="Blocked pattern"):
             callback(step, mock_agent)
 
-    def test_blocks_pattern_in_observation(self, callback, mock_agent):
-        step = _make_step(observation="Result: rm -rf / completed")
-        callback(step, mock_agent)  # Step without tool calls passes...
-
-        # But a step with tool calls + blocked observation:
+    def test_blocks_pattern_in_observation(self, mock_agent):
+        # Observation scanning is unconditional — even steps with no tool
+        # calls raise PolicyViolationError if the observation is blocked.
         kernel2 = SmolagentsKernel(
             allowed_tools=["web_search"],
             blocked_patterns=["rm -rf"],
         )
         cb2 = kernel2.as_step_callback()
-        step2 = SimpleNamespace(
+
+        # A step with no tool calls but a blocked observation → should raise
+        step_no_calls = SimpleNamespace(
             tool_calls=[],
             action=None,
             observation="Dangerous output: rm -rf /",
         )
         with pytest.raises(Exception, match="Blocked pattern.*observation"):
-            cb2(step2, mock_agent)
+            cb2(step_no_calls, mock_agent)
+
+        # A step with an allowed tool call but a blocked observation → also raises
+        cb3 = kernel2.as_step_callback()
+        step_with_calls = SimpleNamespace(
+            tool_calls=[],
+            action=SimpleNamespace(tool_name="web_search", tool_arguments={}),
+            observation="rm -rf / executed successfully",
+        )
+        with pytest.raises(Exception, match="Blocked pattern.*observation"):
+            cb3(step_with_calls, mock_agent)
 
     def test_clean_args_pass(self, callback, mock_agent):
         step = _make_step(
