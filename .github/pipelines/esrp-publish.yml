@@ -219,13 +219,16 @@ parameters:
 # ESRP Configuration
 # Service connection name is hardcoded (required at compile time by ADO).
 # All other values sourced from ADO pipeline variables (mark as secret):
-#   ESRP_KEYVAULT_NAME, ESRP_CERT_IDENTIFIER, ESRP_SIGN_CERT_IDENTIFIER,
-#   ESRP_NUGET_SIGN_CERT_IDENTIFIER, ESRP_CLIENT_ID, ESRP_OWNERS, ESRP_APPROVERS
+#   ESRP_KEYVAULT_NAME, ESRP_AUTH_CERT_IDENTIFIER, ESRP_SIGN_CERT_IDENTIFIER,
+#   ESRP_RELEASE_CERT_IDENTIFIER, ESRP_NUGET_SIGN_CERT_IDENTIFIER,
+#   ESRP_CLIENT_ID, ESRP_OWNERS, ESRP_APPROVERS
 #
-# ESRP_CERT_IDENTIFIER        = authentication certificate (issued by Public CA)
-# ESRP_SIGN_CERT_IDENTIFIER   = signing certificate for Authenticode (issued by Private CA)
-# ESRP_NUGET_SIGN_CERT_IDENTIFIER = signing certificate for NuGet package signing (may differ from Authenticode)
+# ESRP_AUTH_CERT_IDENTIFIER    = authentication certificate for EsrpCodeSigning (Public CA)
+# ESRP_SIGN_CERT_IDENTIFIER   = signing certificate for Authenticode (Private CA)
+# ESRP_RELEASE_CERT_IDENTIFIER = release certificate for EsrpRelease tasks (separate from sign cert)
+# ESRP_NUGET_SIGN_CERT_IDENTIFIER = signing certificate for NuGet package signing
 # These MUST be separate certificates from the appropriate CAs.
+# Do NOT reuse the signing certificate for release tasks.
 #
 # Note: ESRP_DOMAIN_TENANT_ID was removed from pipeline variables due to
 # cyclical reference. The ESRP cert lives in the PME (Partner Managed
@@ -315,7 +318,7 @@ stages:
                   connectedservicename: 'Agent Governance Toolkit'
                   usemanagedidentity: true
                   keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-                  signcertname: '$(ESRP_SIGN_CERT_IDENTIFIER)'
+                  signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
                   clientid: '$(ESRP_CLIENT_ID)'
                   intent: 'PackageDistribution'
                   contenttype: 'PyPi'
@@ -351,7 +354,7 @@ stages:
                   connectedservicename: 'Agent Governance Toolkit'
                   usemanagedidentity: true
                   keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-                  signcertname: '$(ESRP_SIGN_CERT_IDENTIFIER)'
+                  signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
                   clientid: '$(ESRP_CLIENT_ID)'
                   intent: 'PackageDistribution'
                   contenttype: 'PyPi'
@@ -387,7 +390,7 @@ stages:
                   connectedservicename: 'Agent Governance Toolkit'
                   usemanagedidentity: true
                   keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-                  signcertname: '$(ESRP_SIGN_CERT_IDENTIFIER)'
+                  signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
                   clientid: '$(ESRP_CLIENT_ID)'
                   intent: 'PackageDistribution'
                   contenttype: 'PyPi'
@@ -476,7 +479,7 @@ stages:
               connectedservicename: 'Agent Governance Toolkit'
               usemanagedidentity: true
               keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              signcertname: '$(ESRP_SIGN_CERT_IDENTIFIER)'
+              signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
               clientid: '$(ESRP_CLIENT_ID)'
               intent: 'PackageDistribution'
               contenttype: 'npm'
@@ -577,14 +580,14 @@ stages:
           # Microsoft compliance requires all binaries within .nupkg to be
           # Authenticode signed before NuGet package signing.
           # Ref: https://aka.ms/Microsoft-NuGet-Compliance
-          - task: EsrpCodeSigning@5
+          - task: EsrpCodeSigning@6
             displayName: 'ESRP Authenticode sign DLLs'
             inputs:
               ConnectedServiceName: 'Agent Governance Toolkit'
               AppRegistrationClientId: '$(ESRP_CLIENT_ID)'
               AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
               AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
-              AuthCertName: '$(ESRP_CERT_IDENTIFIER)'
+              AuthCertName: '$(ESRP_AUTH_CERT_IDENTIFIER)'
               AuthSignCertName: '$(ESRP_SIGN_CERT_IDENTIFIER)'
               FolderPath: '$(Pipeline.Workspace)\nuget-unsigned'
               Pattern: '*.dll'
@@ -630,14 +633,14 @@ stages:
 
           # Step 2: Sign the .nupkg with ESRP NuGet Signing (CP-401405)
           # Uses ESRP_NUGET_SIGN_CERT_IDENTIFIER (separate from Authenticode signing cert)
-          - task: EsrpCodeSigning@5
+          - task: EsrpCodeSigning@6
             displayName: 'ESRP Code Sign NuGet package'
             inputs:
               ConnectedServiceName: 'Agent Governance Toolkit'
               AppRegistrationClientId: '$(ESRP_CLIENT_ID)'
               AppRegistrationTenantId: '$(MICROSOFT_TENANT_ID)'
               AuthAKVName: '$(ESRP_KEYVAULT_NAME)'
-              AuthCertName: '$(ESRP_CERT_IDENTIFIER)'
+              AuthCertName: '$(ESRP_AUTH_CERT_IDENTIFIER)'
               AuthSignCertName: '$(ESRP_NUGET_SIGN_CERT_IDENTIFIER)'
               FolderPath: '$(Pipeline.Workspace)\nuget-unsigned'
               Pattern: '*.nupkg'
@@ -753,7 +756,7 @@ stages:
               connectedservicename: 'Agent Governance Toolkit'
               usemanagedidentity: true
               keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              signcertname: '$(ESRP_SIGN_CERT_IDENTIFIER)'
+              signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
               clientid: '$(ESRP_CLIENT_ID)'
               intent: 'PackageDistribution'
               contenttype: 'Rust'
