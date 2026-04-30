@@ -139,7 +139,9 @@ A human using an AI tool to *draft* any of the above, then reviewing, editing, a
 the output themselves, is an AI-assisted contribution and is acceptable.
 
 Authorized bots (Dependabot, Scorecard, CI bots) that predate this policy are governed by their
-own approval processes and are not subject to these restrictions.
+own approval processes and are not subject to these restrictions. For the full list of authorized
+bots and how to request authorization for new ones, see
+[docs/policies/autonomous-contributions.md](docs/policies/autonomous-contributions.md).
 
 **Do not use AI tools to generate synthetic community activity**: filing coordinated issues across
 repos, creating competing projects from existing issue descriptions, or manufacturing the appearance
