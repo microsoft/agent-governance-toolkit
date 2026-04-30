@@ -58,6 +58,34 @@ from hypervisor.observability.event_bus import EventType, HypervisorEventBus
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_cors_origins(raw: str) -> list[str]:
+    """Parse, validate, and return CORS origins.
+
+    Rejects ``*`` when credentials are enabled, and validates that each
+    origin has a scheme and a non-empty hostname.
+    """
+    origins: list[str] = []
+    for origin in raw.split(","):
+        origin = origin.strip()
+        if not origin:
+            continue
+        if origin == "*":
+            logger.warning(
+                "CORS origin '*' is not allowed with allow_credentials=True — skipping"
+            )
+            continue
+        from urllib.parse import urlparse
+        parsed = urlparse(origin)
+        if not parsed.scheme or not parsed.hostname:
+            logger.warning("Invalid CORS origin (missing scheme or host): %s — skipping", origin)
+            continue
+        origins.append(origin)
+    if not origins:
+        logger.warning("No valid CORS origins configured — falling back to localhost defaults")
+        origins = ["http://localhost:3000", "http://localhost:8080"]
+    return origins
+
 # ── Global state ────────────────────────────────────────────────────────────
 
 _hypervisor: Hypervisor | None = None
@@ -127,7 +155,7 @@ def create_app() -> FastAPI:
 
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8080").split(","),
+        allow_origins=_parse_cors_origins(os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8080")),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

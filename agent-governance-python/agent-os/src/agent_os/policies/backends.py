@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 import subprocess
 import tempfile
@@ -164,6 +165,16 @@ class OPABackend:
 
     def _evaluate_remote(self, context: dict[str, Any]) -> BackendDecision:
         import urllib.request
+
+        # Validate query to prevent path injection
+        if not re.fullmatch(r'[a-zA-Z0-9._\-]+', self._query):
+            return BackendDecision(
+                allowed=False,
+                action="deny",
+                reason=f"Invalid OPA query: {self._query!r}",
+                backend="opa",
+                error="Query contains invalid characters",
+            )
 
         path_parts = (
             self._query.replace("data.", "", 1).replace(".", "/")
