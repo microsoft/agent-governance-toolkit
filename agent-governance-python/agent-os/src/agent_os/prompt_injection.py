@@ -119,9 +119,14 @@ class DetectionConfig:
             ``"permissive"``.
         custom_patterns: Additional compiled regex patterns to check.
         blocklist: Exact strings that always trigger detection.
-        allowlist: Substrings that suppress detection.  Uses substring
-            matching (``allowed.lower() in text_lower``).  Entries must be
-            at least 3 characters after stripping whitespace.
+        allowlist: Substrings that suppress *individual matched patterns*
+            from triggering detection.  When an allowlisted term appears
+            in the input, any pattern match whose matched text overlaps
+            with the allowlisted region is suppressed.  Detection still
+            runs fully — the allowlist only filters results, never
+            short-circuits the pipeline.  Uses substring matching
+            (``allowed.lower() in text_lower``).  Entries must be at
+            least 3 characters after stripping whitespace.
 
     .. note::
 
@@ -447,19 +452,7 @@ class PromptInjectionDetector:
         canary_tokens: list[str] | None,
     ) -> DetectionResult:
         """Core detection logic — runs all check methods and aggregates."""
-        # Fast-path: allowlisted inputs
         text_lower = text.lower()
-        for allowed in self._config.allowlist:
-            if allowed.lower() in text_lower:
-                result = DetectionResult(
-                    is_injection=False,
-                    threat_level=ThreatLevel.NONE,
-                    injection_type=None,
-                    confidence=0.0,
-                    explanation="Input matched allowlist entry",
-                )
-                self._record_audit(text, source, result)
-                return result
 
         # Fast-path: blocklisted inputs
         for blocked in self._config.blocklist:
@@ -510,6 +503,10 @@ class PromptInjectionDetector:
             if f[2] >= threshold and _THREAT_ORDER[f[1]] >= _THREAT_ORDER[min_threat]
         ]
 
+        # Post-detection allowlist filtering
+        if filtered and self._config.allowlist:
+            filtered = self._filter_allowlisted(filtered, text_lower)
+
         if not filtered:
             result = DetectionResult(
                 is_injection=False,
@@ -540,6 +537,56 @@ class PromptInjectionDetector:
 
         self._record_audit(text, source, result)
         return result
+
+    # -- allowlist filtering ------------------------------------------------
+
+    def _filter_allowlisted(
+        self,
+        findings: list[tuple[InjectionType, ThreatLevel, float, str]],
+        text_lower: str,
+    ) -> list[tuple[InjectionType, ThreatLevel, float, str]]:
+        # Pre-compute allowlisted spans
+        allowed_spans: list[tuple[int, int]] = []
+        for allowed in self._config.allowlist:
+            allowed_lower = allowed.lower()
+            start = 0
+            while True:
+                idx = text_lower.find(allowed_lower, start)
+                if idx == -1:
+                    break
+                allowed_spans.append((idx, idx + len(allowed_lower)))
+                start = idx + 1
+
+        if not allowed_spans:
+            return findings
+
+        kept: list[tuple[InjectionType, ThreatLevel, float, str]] = []
+        for finding in findings:
+            _, _, raw_pattern = finding[3].partition(":")
+            if not raw_pattern:
+                kept.append(finding)
+                continue
+
+            try:
+                compiled = re.compile(raw_pattern, re.IGNORECASE)
+            except re.error:
+                kept.append(finding)  # fail-closed
+                continue
+
+            matches = list(compiled.finditer(text_lower))
+            if not matches:
+                kept.append(finding)
+                continue
+
+            # Keep finding unless ALL matches fall within allowed spans
+            all_covered = all(
+                any(a_s <= m.start() and m.end() <= a_e for a_s, a_e in allowed_spans)
+                for m in matches
+            )
+            if not all_covered:
+                kept.append(finding)
+
+        return kept
 
     # -- check methods ------------------------------------------------------
 
