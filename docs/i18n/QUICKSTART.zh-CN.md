@@ -121,7 +121,7 @@ python governed_agent.py
 工具包与所有主要智能体框架集成：
 
 ```bash
-pip install langchain-agentmesh      # LangChain 适配器
+pip install agentmesh-langchain      # LangChain 适配器
 pip install llamaindex-agentmesh     # LlamaIndex 适配器
 pip install crewai-agentmesh         # CrewAI 适配器
 ```

@@ -43,7 +43,7 @@ except MiddlewareTermination:
     # Governance blocked the request BEFORE the LLM was called
     pass
 
-# 3. Use openai-agents-trust for trust scoring
+# 3. Use agentmesh-openai-agents-trust for trust scoring
 scorer = TrustScorer(default_score=0.8)
 if scorer.check_trust("my-agent", min_score=0.6):
     # Agent is trusted enough for this operation
@@ -93,7 +93,7 @@ python examples/openai-agents-governed/openai_agents_governance_demo.py
 │  └──────────────────────┬──────────────────────────────────┘    │
 │                         │                                       │
 │  ┌──────────────────────┴──────────────────────────────────┐    │
-│  │          openai-agents-trust Integration                 │    │
+│  │          agentmesh-openai-agents-trust Integration          │    │
 │  │                                                         │    │
 │  │  TrustedFunctionGuard   (trust-scored tool gating)      │    │
 │  │  HandoffVerifier        (trust-gated agent handoffs)    │    │
@@ -158,7 +158,7 @@ Each agent has declared capabilities enforced at two levels:
 | Editor | `edit_text`, `check_grammar`, `read_file` | `shell_exec`, `publish_content` |
 | Publisher | `publish_content`, `read_file` | `shell_exec`, `write_file` |
 
-**Level 2 — TrustedFunctionGuard (openai-agents-trust):**
+**Level 2 — TrustedFunctionGuard (agentmesh-openai-agents-trust):**
 - Per-function trust thresholds (e.g., `publish_content` requires trust ≥ 500)
 - Globally blocked functions (e.g., `shell_exec`)
 - All decisions logged with trust scores
@@ -174,7 +174,7 @@ Policy evaluation happens **before** the LLM call, saving API tokens.
 
 ### 3. Output Quality Gates
 
-Uses `TrustScorer` from `openai-agents-trust`:
+Uses `TrustScorer` from `agentmesh-openai-agents-trust`:
 - Publisher starts with trust score 0.3 (below the 0.6 threshold)
 - Trust is earned through successful task completions (+0.05 per success)
 - After enough successful tasks, Publisher's trust reaches the threshold
@@ -264,8 +264,8 @@ The core governance middleware (`GovernancePolicyMiddleware`, `CapabilityGuardMi
 `RogueDetectionMiddleware`) works with any agent framework. Wrap your LLM calls with
 middleware `process()` to enforce governance before/after each call.
 
-### Approach 2: Native SDK Integration (openai-agents-trust)
-The `openai-agents-trust` package provides SDK-native constructs:
+### Approach 2: Native SDK Integration (agentmesh-openai-agents-trust)
+The `agentmesh-openai-agents-trust` package provides SDK-native constructs:
 - **Guardrails** — `trust_input_guardrail`, `policy_input_guardrail`, `content_output_guardrail`
 - **Hooks** — `GovernanceHooks` for lifecycle instrumentation
 - **Handoffs** — `trust_gated_handoff` for trust-scored agent delegation

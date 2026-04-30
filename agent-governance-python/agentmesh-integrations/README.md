@@ -40,7 +40,7 @@ AgentMesh core is a lean, zero-external-dependency library. Platform integration
 
 | Integration | Package | Status | Description |
 |---|---|---|---|
-| [LangChain](langchain-agentmesh/) | `langchain-agentmesh` | ✅ Stable | Ed25519 identity, trust-gated tools, scope chains, callbacks |
+| [LangChain](langchain-agentmesh/) | `agentmesh-langchain` | ✅ Stable | Ed25519 identity, trust-gated tools, scope chains, callbacks |
 | [LangGraph](langgraph-trust/) | [`langgraph-trust`](https://pypi.org/project/langgraph-trust/) | ✅ Published (PyPI) | Trust-gated checkpoint nodes, governance policy enforcement, trust-aware routing |
 | [LlamaIndex](llamaindex-agentmesh/) | `llama-index-agent-agentmesh` | ✅ Merged Upstream | Trust-verified workers, identity-aware query engines, scope chains |
 | [Agent Lightning](https://github.com/microsoft/agent-governance-python/agent-lightning/tree/main/contrib/recipes/agentos) | — | ✅ Merged Upstream | Agent-OS governance adapters, reward shaping, governed RL training — maintained in [microsoft/agent-lightning](https://github.com/microsoft/agent-lightning) |
@@ -48,7 +48,7 @@ AgentMesh core is a lean, zero-external-dependency library. Platform integration
 | [Dify Middleware](dify/) | — | 📦 Archived | Flask middleware (archived — use the plugin instead) |
 | [Moltbook](moltbook/) | — | ✅ Stable | AgentMesh governance skill for [Moltbook](https://moltbook.com) agent registry |
 | [Nostr Web of Trust](nostr-wot/) | `agentmesh-nostr-wot` | 🚧 Scaffold | Trust scoring via [MaximumSats](https://github.com/joelklabo/maximumsats-mcp) NIP-85 WoT |
-| [OpenAI Agents](openai-agents-trust/) | [`openai-agents-trust`](https://pypi.org/project/openai-agents-trust/) | ✅ Published (PyPI) | Trust guardrails, policy enforcement, governance hooks, trust-gated handoffs for OpenAI Agents SDK |
+| [OpenAI Agents](openai-agents-trust/) | [`agentmesh-openai-agents-trust`](https://pypi.org/project/agentmesh-openai-agents-trust/) | ✅ Published (PyPI) | Trust guardrails, policy enforcement, governance hooks, trust-gated handoffs for OpenAI Agents SDK |
 | [OpenClaw Skill](openclaw-skill/) | [`agentmesh-governance`](https://clawhub.ai/microsoft/agentmesh-governance) | ✅ Published (ClawHub) | Governance skill for [OpenClaw](https://openclaw.im) agents — policy enforcement, trust scoring, Ed25519 DIDs, hash-chain audit |
 
 ## Quick Start
@@ -56,7 +56,7 @@ AgentMesh core is a lean, zero-external-dependency library. Platform integration
 ### LangChain — Trust-Gated Tool Execution
 
 ```bash
-pip install langchain-agentmesh
+pip install agentmesh-langchain
 ```
 
 ```python

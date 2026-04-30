@@ -129,7 +129,7 @@ In practice:
 | AutoGen | Adapter | `AutoGenKernel` | Wrap your AutoGen agent. Governance injected at tool-call boundaries. |
 | LangChain / LangGraph | Adapter | `LangChainKernel` / `LangGraphKernel` | Wrap chains/graphs. Published on PyPI (`langgraph-trust`). |
 | CrewAI | Adapter | `CrewAIKernel` | Wrap crew tasks. Trust verification before inter-agent delegation. |
-| OpenAI Agents SDK | Middleware | `OpenAIAgentsKernel` | Async hooks on tool calls. Published on PyPI (`openai-agents-trust`). |
+| OpenAI Agents SDK | Middleware | `OpenAIAgentsKernel` | Async hooks on tool calls. Published on PyPI (`agentmesh-openai-agents-trust`). |
 | Google ADK | Adapter | `GoogleADKKernel` | Plugin-style integration via ADK's extension system. |
 | LlamaIndex | Middleware | `LlamaIndexAdapter` | `TrustedAgentWorker` + `TrustGatedQueryEngine` merged upstream. |
 | Haystack | Pipeline | `HaystackAdapter` | `GovernancePolicyChecker` + `TrustGate` pipeline components. |
@@ -346,7 +346,7 @@ In sidecar deployments, the governance sidecar can be updated independently of t
 
 | Ecosystem | Package | Status |
 |-----------|---------|--------|
-| PyPI | `agent-governance-toolkit[full]`, `agent-os-kernel`, `agentmesh-platform`, `agentmesh-runtime`, `agent-sre`, `agentmesh-marketplace`, `agentmesh-lightning`, `openai-agents-trust`, `langgraph-trust` | ✅ Published |
+| PyPI | `agent-governance-toolkit[full]`, `agent-os-kernel`, `agentmesh-platform`, `agentmesh-runtime`, `agent-sre`, `agentmesh-marketplace`, `agentmesh-lightning`, `agentmesh-openai-agents-trust`, `langgraph-trust` | ✅ Published |
 | npm | `@microsoft/agentmesh-sdk` | ✅ Published |
 | NuGet | `Microsoft.AgentGovernance` | ✅ Published |
 | crates.io | `agentmesh` | ✅ Published |

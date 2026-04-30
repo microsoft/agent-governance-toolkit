@@ -262,7 +262,7 @@ else:
 For deeper integration, use framework-specific adapters:
 
 ```bash
-pip install langchain-agentmesh      # LangChain
+pip install agentmesh-langchain      # LangChain
 pip install llamaindex-agentmesh     # LlamaIndex
 pip install crewai-agentmesh         # CrewAI
 ```

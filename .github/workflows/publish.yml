@@ -8,7 +8,7 @@ on:
       package:
         description: >
           Package to publish. Use "all" for everything, "all-python" for all
-          Python packages, or a specific name (e.g. "agent-os", "langchain-agentmesh").
+          Python packages, or a specific name (e.g. "agent-os", "agentmesh-langchain").
         required: true
         type: string
         default: "all"
@@ -70,7 +70,7 @@ jobs:
             {"name":"crewai-agentmesh","path":"agent-governance-python/agentmesh-integrations/crewai-agentmesh"},
             {"name":"flowise-agentmesh","path":"agent-governance-python/agentmesh-integrations/flowise-agentmesh"},
             {"name":"haystack-agentmesh","path":"agent-governance-python/agentmesh-integrations/haystack-agentmesh"},
-            {"name":"langchain-agentmesh","path":"agent-governance-python/agentmesh-integrations/langchain-agentmesh"},
+            {"name":"agentmesh-langchain","path":"agent-governance-python/agentmesh-integrations/langchain-agentmesh"},
             {"name":"langflow-agentmesh","path":"agent-governance-python/agentmesh-integrations/langflow-agentmesh"},
             {"name":"langgraph-agentmesh","path":"agent-governance-python/agentmesh-integrations/langgraph-trust"},
             {"name":"llamaindex-agentmesh","path":"agent-governance-python/agentmesh-integrations/llamaindex-agentmesh"},
@@ -78,7 +78,7 @@ jobs:
             {"name":"agentmesh-mcp-proxy","path":"agent-governance-python/agentmesh-integrations/mcp-trust-proxy"},
             {"name":"nostr-wot-agentmesh","path":"agent-governance-python/agentmesh-integrations/nostr-wot"},
             {"name":"openai-agents-agentmesh","path":"agent-governance-python/agentmesh-integrations/openai-agents-agentmesh"},
-            {"name":"openai-agents-trust","path":"agent-governance-python/agentmesh-integrations/openai-agents-trust"},
+            {"name":"agentmesh-openai-agents-trust","path":"agent-governance-python/agentmesh-integrations/openai-agents-trust"},
             {"name":"openshell-skill","path":"agent-governance-python/agentmesh-integrations/openshell-skill"},
             {"name":"pydantic-ai-agentmesh","path":"agent-governance-python/agentmesh-integrations/pydantic-ai-governance"},
             {"name":"structural-authz-agentmesh","path":"agent-governance-python/agentmesh-integrations/structural-authz-agentmesh"}

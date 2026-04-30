@@ -18,7 +18,7 @@ AgentMesh core is a lean, zero-external-dependency library. Moving integrations 
 
 - **Core stays stable** — no risk of breaking changes from integration dependencies
 - **Independent releases** — integrations ship on their own cadence
-- **Clean installs** — users only install what they need (`pip install langchain-agentmesh`)
+- **Clean installs** — users only install what they need (`pip install agentmesh-langchain`)
 - **Community ownership** — contributors can own their integrations end-to-end
 
 ## Contributing New Integrations

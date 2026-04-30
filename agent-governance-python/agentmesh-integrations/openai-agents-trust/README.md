@@ -1,4 +1,4 @@
-# openai-agents-trust
+# agentmesh-openai-agents-trust
 
 Trust & governance layer for the [OpenAI Agents SDK](https://github.com/openai/openai-agents-python). Adds policy enforcement, trust-gated handoffs, and tamper-evident audit trails using native SDK guardrails and hooks.
 
@@ -7,7 +7,7 @@ Trust & governance layer for the [OpenAI Agents SDK](https://github.com/openai/o
 ## Install
 
 ```bash
-pip install openai-agents-trust
+pip install agentmesh-openai-agents-trust
 ```
 
 ## Quick Start
