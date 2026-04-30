@@ -1,0 +1,32 @@
+name: fixture
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-default:
+    runs-on: ubuntu-latest
+    steps:
+      - name: default bash
+        run: |
+          echo "default"
+          python3 - <<'PY'
+          print("nested")
+          PY
+      - name: explicit bash
+        shell: bash
+        run: |
+          echo "explicit"
+      - name: powershell skipped
+        shell: pwsh
+        run: |
+          Write-Output "skip"
+  windows-default:
+    runs-on: windows-latest
+    steps:
+      - name: implied pwsh skipped
+        run: |
+          Write-Output "windows"
