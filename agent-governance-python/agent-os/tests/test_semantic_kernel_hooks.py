@@ -93,7 +93,7 @@ class TestFunctionAllowlist:
         ctx = _make_context("safe_func", "MyPlugin")
         next_fn = AsyncMock()
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             governance_filter(ctx, next_fn)
         )
         next_fn.assert_awaited_once_with(ctx)
@@ -102,7 +102,7 @@ class TestFunctionAllowlist:
         ctx = _make_context("any_func", "MyPlugin")
         next_fn = AsyncMock()
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             governance_filter(ctx, next_fn)
         )
         next_fn.assert_awaited_once()
@@ -112,7 +112,7 @@ class TestFunctionAllowlist:
         next_fn = AsyncMock()
 
         with pytest.raises(Exception, match="Function not allowed"):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 governance_filter(ctx, next_fn)
             )
         next_fn.assert_not_awaited()
@@ -129,7 +129,7 @@ class TestBlockedPatterns:
         next_fn = AsyncMock()
 
         with pytest.raises(Exception, match="Blocked pattern"):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 governance_filter(ctx, next_fn)
             )
 
@@ -137,7 +137,7 @@ class TestBlockedPatterns:
         ctx = _make_context("safe_func", "MyPlugin", args={"query": "SELECT * FROM users"})
         next_fn = AsyncMock()
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             governance_filter(ctx, next_fn)
         )
         next_fn.assert_awaited_once()
@@ -155,14 +155,14 @@ class TestCallCount:
         # Exhaust the call limit
         for i in range(5):
             ctx = _make_context("safe_func", "MyPlugin")
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 governance_filter(ctx, next_fn)
             )
 
         # 6th call should be blocked
         ctx = _make_context("safe_func", "MyPlugin")
         with pytest.raises(Exception, match="Tool call limit exceeded"):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 governance_filter(ctx, next_fn)
             )
 
@@ -170,7 +170,7 @@ class TestCallCount:
         next_fn = AsyncMock()
         ctx = _make_context("safe_func", "MyPlugin")
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             governance_filter(ctx, next_fn)
         )
         assert governance_filter.context.call_count == 1
@@ -186,7 +186,7 @@ class TestAuditTrail:
         next_fn = AsyncMock()
         ctx = _make_context("safe_func", "MyPlugin")
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             governance_filter(ctx, next_fn)
         )
         assert len(governance_filter.context.functions_invoked) == 1

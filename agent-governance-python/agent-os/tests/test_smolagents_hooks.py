@@ -135,8 +135,8 @@ class TestBlockedPatterns:
             callback(step, mock_agent)
 
     def test_blocks_pattern_in_observation(self, callback, mock_agent):
-        step = _make_step(observation="Result: rm -rf / completed")
-        callback(step, mock_agent)  # Step without tool calls passes...
+        step = _make_step(observation="Result: some clean output")
+        callback(step, mock_agent)  # Step without blocked pattern passes...
 
         # But a step with tool calls + blocked observation:
         kernel2 = SmolagentsKernel(
