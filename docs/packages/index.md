@@ -49,7 +49,7 @@ AGT provides 50+ packages across 5 ecosystems covering every layer of agent gove
 
 | Integration | Framework | Install |
 |-------------|----------|---------|
-| langchain-agentmesh | LangChain | `pip install langchain-agentmesh` |
+| langchain-agentmesh | LangChain | `pip install agentmesh-langchain` |
 | langgraph-trust | LangGraph | `pip install langgraph-trust` |
 | crewai-agentmesh | CrewAI | `pip install crewai-agentmesh` |
 | adk-agentmesh | Google ADK | `pip install adk-agentmesh` |
@@ -67,4 +67,4 @@ AGT provides 50+ packages across 5 ecosystems covering every layer of agent gove
 | agentmesh-avp | Amazon Verified Permissions | `pip install agentmesh-avp` |
 | structural-authz-agentmesh | Structural Authorization | `pip install structural-authz-agentmesh` |
 | nostr-wot | Nostr Web-of-Trust | `pip install nostr-wot` |
-| openai-agents-trust | OpenAI Trust | `pip install openai-agents-trust` |
+| openai-agents-trust | OpenAI Trust | `pip install agentmesh-openai-agents-trust` |

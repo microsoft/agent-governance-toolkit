@@ -5,7 +5,7 @@ Cryptographic identity verification and trust-gated tool execution for LangChain
 ## Installation
 
 ```bash
-pip install langchain-agentmesh
+pip install agentmesh-langchain
 ```
 
 ## Features

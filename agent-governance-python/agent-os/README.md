@@ -35,7 +35,7 @@
   <a href="https://github.com/run-llama/llama_index/pull/20644"><img src="https://img.shields.io/badge/LlamaIndex-Merged-success?style=flat-square" alt="LlamaIndex"></a>
   <a href="https://github.com/microsoft/agent-governance-python/agent-lightning/pull/478"><img src="https://img.shields.io/badge/Agent--Lightning-Merged-success?style=flat-square" alt="Agent-Lightning"></a>
   <a href="https://pypi.org/project/langgraph-trust/"><img src="https://img.shields.io/badge/LangGraph-PyPI-blue?style=flat-square" alt="LangGraph"></a>
-  <a href="https://pypi.org/project/openai-agents-trust/"><img src="https://img.shields.io/badge/OpenAI_Agents-PyPI-blue?style=flat-square" alt="OpenAI Agents"></a>
+  <a href="https://pypi.org/project/agentmesh-openai-agents-trust/"><img src="https://img.shields.io/badge/OpenAI_Agents-PyPI-blue?style=flat-square" alt="OpenAI Agents"></a>
   <a href="https://clawhub.ai/microsoft/agentmesh-governance"><img src="https://img.shields.io/badge/OpenClaw-ClawHub-purple?style=flat-square" alt="OpenClaw"></a>
 </p>
 
@@ -48,7 +48,7 @@
   <a href="https://github.com/heilcheng/awesome-agent-skills/pull/34"><img src="https://img.shields.io/badge/awesome--agent--skills-listed-orange?style=flat-square" alt="awesome-agent-skills"></a>
   <a href="https://github.com/TensorBlock/awesome-mcp-servers/pull/66"><img src="https://img.shields.io/badge/awesome--mcp--servers-listed-orange?style=flat-square" alt="awesome-mcp-servers"></a>
   <a href="https://github.com/rohitg00/awesome-devops-mcp-servers/pull/27"><img src="https://img.shields.io/badge/awesome--devops--mcp-listed-orange?style=flat-square" alt="awesome-devops-mcp"></a>
-</p>across 170K+ GitHub stars. Governance for [Dify](https://github.com/langgenius/dify-plugins/pull/2060) (65K ⭐), [LlamaIndex](https://github.com/run-llama/llama_index/pull/20644) (47K ⭐), [LangGraph](https://pypi.org/project/langgraph-trust/), [OpenAI Agents](https://pypi.org/project/openai-agents-trust/), [Agent-Lightning](https://github.com/microsoft/agent-governance-python/agent-lightning/pull/478), and [OpenClaw](https://clawhub.ai/microsoft/agentmesh-governance).
+</p>across 170K+ GitHub stars. Governance for [Dify](https://github.com/langgenius/dify-plugins/pull/2060) (65K ⭐), [LlamaIndex](https://github.com/run-llama/llama_index/pull/20644) (47K ⭐), [LangGraph](https://pypi.org/project/langgraph-trust/), [OpenAI Agents](https://pypi.org/project/agentmesh-openai-agents-trust/), [Agent-Lightning](https://github.com/microsoft/agent-governance-python/agent-lightning/pull/478), and [OpenClaw](https://clawhub.ai/microsoft/agentmesh-governance).
 
 ## 📊 By The Numbers
 
@@ -70,7 +70,7 @@
 | **LlamaIndex** | 47K ⭐ | ✅ Merged | [llama_index#20644](https://github.com/run-llama/llama_index/pull/20644) |
 | **Microsoft Agent-Lightning** | 15K ⭐ | ✅ Merged | [agent-lightning#478](https://github.com/microsoft/agent-governance-python/agent-lightning/pull/478) |
 | **LangGraph** | 24K ⭐ | 📦 Published on PyPI | [langgraph-trust](https://pypi.org/project/langgraph-trust/) |
-| **OpenAI Agents SDK** | — | 📦 Published on PyPI | [openai-agents-trust](https://pypi.org/project/openai-agents-trust/) |
+| **OpenAI Agents SDK** | — | 📦 Published on PyPI | [agentmesh-openai-agents-trust](https://pypi.org/project/agentmesh-openai-agents-trust/) |
 | **OpenClaw** | — | 📦 Published on ClawHub | [agentmesh-governance](https://clawhub.ai/microsoft/agentmesh-governance) |
 
 <details>
@@ -1138,7 +1138,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 Prompt-based guardrails ask the LLM to self-police, which is probabilistic. Agent OS enforces governance at the middleware level using deterministic policy engines and POSIX-inspired access controls. It controls what agents *can* do (capability-based), not just what they *should not* do (filter-based).
 
 **How does Agent OS work with other frameworks?**
-Agent OS integrates with 14+ frameworks via adapters. Install the governance layer alongside your existing framework: use `langgraph-trust` for LangGraph, `openai-agents-trust` for OpenAI Agents, or the MCP server for any MCP-compatible client. Agent OS acts as a kernel layer underneath your agent framework.
+Agent OS integrates with 14+ frameworks via adapters. Install the governance layer alongside your existing framework: use `langgraph-trust` for LangGraph, `agentmesh-openai-agents-trust` for OpenAI Agents, or the MCP server for any MCP-compatible client. Agent OS acts as a kernel layer underneath your agent framework.
 
 **What is the Agent Governance Ecosystem?**
 Agent OS is part of a suite of seven packages: Agent OS (policy engine), [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) (trust infrastructure), [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) (execution supervisor), [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) (reliability), [Agent Compliance](https://github.com/microsoft/agent-governance-toolkit) (regulatory compliance), [Agent Marketplace](https://github.com/microsoft/agent-governance-toolkit) (plugin lifecycle), and [Agent Lightning](https://github.com/microsoft/agent-governance-toolkit) (RL training governance). Together they provide 4,310+ tests across 17 modules.

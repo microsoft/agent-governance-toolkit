@@ -33,7 +33,7 @@ Framework integrations are published as **separate packages** that depend on AGT
 
 | Adapter Package | Framework | Install |
 |-----------------|-----------|---------|
-| `langchain-agentmesh` | LangChain | `pip install langchain-agentmesh` |
+| `langchain-agentmesh` | LangChain | `pip install agentmesh-langchain` |
 | `llamaindex-agentmesh` | LlamaIndex | `pip install llamaindex-agentmesh` |
 | `crewai-agentmesh` | CrewAI | `pip install crewai-agentmesh` |
 | `openai-agents-agentmesh` | OpenAI Agents | `pip install openai-agents-agentmesh` |
