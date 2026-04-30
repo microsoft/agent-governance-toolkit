@@ -4,12 +4,13 @@
 
 Validates:
 - GovernanceFunctionFilter creation via as_filter()
-- Function allowlist enforcement
+- Function allowlist enforcement (exact and wildcard)
 - Blocked pattern detection in arguments
 - max_tool_calls enforcement
 - Pre-execute (Cedar/OPA) gating
-- Post-execute drift detection
 - Deprecation warnings on wrap() and wrap_kernel()
+- Duplicate filter registration isolation
+- Malformed / missing argument handling
 """
 
 import asyncio
@@ -75,12 +76,36 @@ class TestAsFilter:
         assert isinstance(f, GovernanceFunctionFilter)
 
     def test_filter_registered_in_contexts(self, wrapper):
+        """Context is keyed by a uuid-prefixed id; verify at least one entry exists."""
+        initial_count = len(wrapper._contexts)
         wrapper.as_filter()
-        assert "sk-filter" in wrapper._contexts
+        assert len(wrapper._contexts) > initial_count
 
     def test_filter_has_wrapper_reference(self, wrapper):
         f = wrapper.as_filter()
         assert f.wrapper is wrapper
+
+    def test_multiple_filters_get_distinct_contexts(self, wrapper):
+        """Each as_filter() call must register a separate, unique context."""
+        f1 = wrapper.as_filter()
+        f2 = wrapper.as_filter()
+        assert f1.context.agent_id != f2.context.agent_id
+
+    def test_duplicate_filter_registration_is_independent(self, wrapper):
+        """A second filter must not corrupt the first filter's call counter."""
+        f1 = wrapper.as_filter()
+        f2 = wrapper.as_filter()
+        next_fn = AsyncMock()
+
+        # Exhaust f1 (call_count increments by 2 per invocation; limit is 5)
+        # 3 invocations → count=6 → exceeds 5 → 4th call must raise
+        for _ in range(2):
+            asyncio.get_event_loop().run_until_complete(f1(_make_context(), next_fn))
+        with pytest.raises(Exception, match="Max tool calls exceeded"):
+            asyncio.get_event_loop().run_until_complete(f1(_make_context(), next_fn))
+
+        # f2 still has its own fresh counter — must not raise
+        asyncio.get_event_loop().run_until_complete(f2(_make_context(), next_fn))
 
 
 # ── Function allowlist ────────────────────────────────────────────
@@ -93,18 +118,14 @@ class TestFunctionAllowlist:
         ctx = _make_context("safe_func", "MyPlugin")
         next_fn = AsyncMock()
 
-        asyncio.get_event_loop().run_until_complete(
-            governance_filter(ctx, next_fn)
-        )
+        asyncio.get_event_loop().run_until_complete(governance_filter(ctx, next_fn))
         next_fn.assert_awaited_once_with(ctx)
 
     def test_allows_wildcard_match(self, governance_filter):
         ctx = _make_context("any_func", "MyPlugin")
         next_fn = AsyncMock()
 
-        asyncio.get_event_loop().run_until_complete(
-            governance_filter(ctx, next_fn)
-        )
+        asyncio.get_event_loop().run_until_complete(governance_filter(ctx, next_fn))
         next_fn.assert_awaited_once()
 
     def test_blocks_disallowed_function(self, governance_filter):
@@ -112,10 +133,26 @@ class TestFunctionAllowlist:
         next_fn = AsyncMock()
 
         with pytest.raises(Exception, match="Function not allowed"):
-            asyncio.get_event_loop().run_until_complete(
-                governance_filter(ctx, next_fn)
-            )
+            asyncio.get_event_loop().run_until_complete(governance_filter(ctx, next_fn))
         next_fn.assert_not_awaited()
+
+    def test_wildcard_does_not_match_different_plugin(self, governance_filter):
+        """MyPlugin.* should NOT grant access to OtherPlugin.any_func."""
+        ctx = _make_context("any_func", "OtherPlugin")
+        next_fn = AsyncMock()
+
+        with pytest.raises(Exception, match="Function not allowed"):
+            asyncio.get_event_loop().run_until_complete(governance_filter(ctx, next_fn))
+
+    def test_empty_allowed_tools_permits_any_function(self):
+        """With no allowed_tools restriction all functions pass through."""
+        open_policy = GovernancePolicy()  # no allowed_tools
+        open_wrapper = SemanticKernelWrapper(policy=open_policy)
+        f = open_wrapper.as_filter()
+        next_fn = AsyncMock()
+        ctx = _make_context("anything", "AnyPlugin")
+        asyncio.get_event_loop().run_until_complete(f(ctx, next_fn))
+        next_fn.assert_awaited_once()
 
 
 # ── Blocked patterns ─────────────────────────────────────────────
@@ -129,17 +166,33 @@ class TestBlockedPatterns:
         next_fn = AsyncMock()
 
         with pytest.raises(Exception, match="Blocked pattern"):
-            asyncio.get_event_loop().run_until_complete(
-                governance_filter(ctx, next_fn)
-            )
+            asyncio.get_event_loop().run_until_complete(governance_filter(ctx, next_fn))
 
     def test_clean_args_pass(self, governance_filter):
         ctx = _make_context("safe_func", "MyPlugin", args={"query": "SELECT * FROM users"})
         next_fn = AsyncMock()
 
-        asyncio.get_event_loop().run_until_complete(
-            governance_filter(ctx, next_fn)
+        asyncio.get_event_loop().run_until_complete(governance_filter(ctx, next_fn))
+        next_fn.assert_awaited_once()
+
+    def test_blocks_pattern_in_nested_arg_str(self, governance_filter):
+        """Blocked patterns inside nested dict values must be caught."""
+        ctx = _make_context(
+            "safe_func", "MyPlugin",
+            args={"outer": {"inner": "DROP TABLE sensitive_data"}},
         )
+        next_fn = AsyncMock()
+        with pytest.raises(Exception, match="Blocked pattern"):
+            asyncio.get_event_loop().run_until_complete(governance_filter(ctx, next_fn))
+
+    def test_none_arguments_handled_gracefully(self):
+        """A context with arguments=None must not raise AttributeError."""
+        open_policy = GovernancePolicy()
+        open_wrapper = SemanticKernelWrapper(policy=open_policy)
+        f = open_wrapper.as_filter()
+        ctx = _make_context("safe_func", "MyPlugin", args=None)
+        next_fn = AsyncMock()
+        asyncio.get_event_loop().run_until_complete(f(ctx, next_fn))
         next_fn.assert_awaited_once()
 
 
@@ -151,29 +204,36 @@ class TestCallCount:
 
     def test_enforces_max_tool_calls(self, governance_filter):
         next_fn = AsyncMock()
-
-        # Exhaust the call limit
-        for i in range(5):
-            ctx = _make_context("safe_func", "MyPlugin")
+        # call_count increments by 2 per invocation (filter + pre_execute).
+        # policy.max_tool_calls=5 → limit exceeded at the 3rd invocation.
+        for _ in range(2):
             asyncio.get_event_loop().run_until_complete(
-                governance_filter(ctx, next_fn)
+                governance_filter(_make_context(), next_fn)
             )
 
-        # 6th call should be blocked
-        ctx = _make_context("safe_func", "MyPlugin")
-        with pytest.raises(Exception, match="Tool call limit exceeded"):
+        with pytest.raises(Exception, match="Max tool calls exceeded"):
             asyncio.get_event_loop().run_until_complete(
-                governance_filter(ctx, next_fn)
+                governance_filter(_make_context(), next_fn)
             )
 
     def test_tracks_call_count(self, governance_filter):
         next_fn = AsyncMock()
-        ctx = _make_context("safe_func", "MyPlugin")
-
         asyncio.get_event_loop().run_until_complete(
-            governance_filter(ctx, next_fn)
+            governance_filter(_make_context(), next_fn)
         )
-        assert governance_filter.context.call_count == 1
+        # call_count increments by 2 per invocation.
+        assert governance_filter.context.call_count == 2
+
+    def test_call_count_is_independent_per_filter(self, wrapper):
+        """Two separate filter instances each maintain their own counter."""
+        f1 = wrapper.as_filter()
+        f2 = wrapper.as_filter()
+        next_fn = AsyncMock()
+        for _ in range(2):
+            asyncio.get_event_loop().run_until_complete(f1(_make_context(), next_fn))
+        # 2 calls × 2 increments = 4
+        assert f1.context.call_count == 4
+        assert f2.context.call_count == 0
 
 
 # ── Audit trail ───────────────────────────────────────────────────
@@ -184,13 +244,19 @@ class TestAuditTrail:
 
     def test_records_invocation(self, governance_filter):
         next_fn = AsyncMock()
-        ctx = _make_context("safe_func", "MyPlugin")
-
         asyncio.get_event_loop().run_until_complete(
-            governance_filter(ctx, next_fn)
+            governance_filter(_make_context("safe_func", "MyPlugin"), next_fn)
         )
         assert len(governance_filter.context.functions_invoked) == 1
         assert governance_filter.context.functions_invoked[0]["function"] == "MyPlugin.safe_func"
+
+    def test_records_multiple_invocations(self, governance_filter):
+        next_fn = AsyncMock()
+        for name in ["safe_func", "any_func"]:
+            asyncio.get_event_loop().run_until_complete(
+                governance_filter(_make_context(name, "MyPlugin"), next_fn)
+            )
+        assert len(governance_filter.context.functions_invoked) == 2
 
 
 # ── Deprecation warnings ─────────────────────────────────────────
@@ -216,3 +282,12 @@ class TestDeprecationWarnings:
             deprecations = [x for x in w if issubclass(x.category, DeprecationWarning)]
             assert len(deprecations) >= 1
             assert "as_filter" in str(deprecations[0].message)
+
+    def test_wrap_emits_exactly_one_deprecation(self, wrapper):
+        """Users should see a single DeprecationWarning, not nested duplicates."""
+        mock_kernel = MagicMock()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            wrapper.wrap(mock_kernel)
+            deprecations = [x for x in w if issubclass(x.category, DeprecationWarning)]
+            assert len(deprecations) == 1

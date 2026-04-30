@@ -22,6 +22,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of running with a caller-supplied identity.
 
 ### Added
+- **Native hooks for Anthropic, Semantic Kernel, smolagents, PydanticAI**:
+  All four adapters now expose a non-invasive factory method that returns a
+  native framework hook instead of a proxy wrapper:
+  - `AnthropicKernel.as_message_hook()` → `GovernanceMessageHook`
+  - `SemanticKernelWrapper.as_filter()` → `GovernanceFunctionFilter`
+  - `SmolagentsKernel.as_step_callback()` → `GovernanceStepCallback`
+  - `PydanticAIKernel.as_capability()` → `GovernanceCapability`
+- All new hook classes exported from `agent_os.integrations`.
+- UUID-based session identifiers prevent collision on rapid instantiation.
+
+### Deprecated
+- `AnthropicKernel.wrap()` / `wrap_client()` → use `as_message_hook()`
+- `SemanticKernelWrapper.wrap()` / `wrap_kernel()` → use `as_filter()`
+- `SmolagentsKernel.wrap()` → use `as_step_callback()`
+- `PydanticAIKernel.wrap()` / module-level `wrap()` → use `as_capability()`
+
+  All deprecated methods emit a `DeprecationWarning` with a migration hint and
+  will be removed in the next major release.
+
 - `AGENT_OS_EXECUTION_TOKENS="agent-id=token"` for packaged-server bootstrap
   credentials. These tokens remain valid for the life of the process unless
   revoked explicitly.

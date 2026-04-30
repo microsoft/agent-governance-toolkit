@@ -4,11 +4,13 @@
 
 Validates:
 - GovernanceMessageHook creation via as_message_hook()
-- Message content scanning against blocked_patterns
+- Message content scanning against blocked_patterns (all fields)
 - Tool allowlist enforcement (pre-call and response)
-- Token limit enforcement
+- Token limit enforcement (boundary and cumulative)
 - Tool call count limits
 - Audit trail recording
+- Exception propagation from client.messages.create()
+- UUID-based session IDs (no time collisions)
 - Deprecation warnings on wrap() and wrap_client()
 """
 
@@ -88,6 +90,20 @@ class TestAsMessageHook:
         hook = kernel.as_message_hook()
         assert hook.kernel is kernel
 
+    def test_session_ids_are_unique(self, kernel):
+        """Rapid construction must not produce colliding session IDs."""
+        hooks = [kernel.as_message_hook(name=f"hook-{i}") for i in range(10)]
+        session_ids = {h.context.session_id for h in hooks}
+        assert len(session_ids) == 10, "Session IDs must be unique across instances"
+
+    def test_session_id_uses_uuid_not_timestamp(self, kernel):
+        """Session IDs must start with 'ant-hook-' followed by a hex string."""
+        import re
+        hook = kernel.as_message_hook()
+        assert re.match(r"ant-hook-[0-9a-f]{12}$", hook.context.session_id), (
+            f"Unexpected session_id format: {hook.context.session_id!r}"
+        )
+
 
 # ── Pre-execution checks ─────────────────────────────────────────
 
@@ -132,6 +148,87 @@ class TestPreExecutionChecks:
                 max_tokens=5000,
                 messages=[{"role": "user", "content": "Hello"}],
             )
+
+    def test_max_tokens_at_limit_is_allowed(self, hook, mock_client):
+        """Exactly at the policy limit must succeed."""
+        result = hook.create(
+            mock_client,
+            model="claude-sonnet-4-20250514",
+            max_tokens=1000,  # == policy.max_tokens
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+        assert result.id == "msg-test-123"
+
+    def test_no_tools_param_is_allowed(self, hook, mock_client):
+        """Requests with no 'tools' key must pass validation unconditionally."""
+        result = hook.create(
+            mock_client,
+            model="claude-sonnet-4-20250514",
+            max_tokens=100,
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+        assert result.id == "msg-test-123"
+        mock_client.messages.create.assert_called_once()
+
+    def test_blocks_pattern_in_assistant_message_content(self, hook, mock_client):
+        """Blocked patterns in non-user roles should also be caught."""
+        with pytest.raises(Exception, match="Message blocked"):
+            hook.create(
+                mock_client,
+                model="claude-sonnet-4-20250514",
+                max_tokens=100,
+                messages=[
+                    {"role": "user", "content": "Hi"},
+                    {"role": "assistant", "content": "The secret_key is abc123"},
+                ],
+            )
+
+    def test_empty_messages_list_does_not_raise(self, hook, mock_client):
+        """An empty messages list should not crash the pre-check."""
+        result = hook.create(
+            mock_client,
+            model="claude-sonnet-4-20250514",
+            max_tokens=100,
+            messages=[],
+        )
+        assert result.id == "msg-test-123"
+
+
+# ── Client exception propagation ────────────────────────────────
+
+
+class TestClientExceptions:
+    """Tests that exceptions from the real client propagate correctly."""
+
+    def test_client_error_propagates(self, hook):
+        """An exception from client.messages.create() must bubble up unchanged."""
+        failing_client = MagicMock()
+        failing_client.messages.create.side_effect = RuntimeError("API timeout")
+
+        with pytest.raises(RuntimeError, match="API timeout"):
+            hook.create(
+                failing_client,
+                model="claude-sonnet-4-20250514",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "Hello"}],
+            )
+
+    def test_no_audit_recorded_on_client_error(self, hook):
+        """Token state must not be updated when client raises."""
+        failing_client = MagicMock()
+        failing_client.messages.create.side_effect = ConnectionError("Network error")
+
+        tokens_before = hook.context.prompt_tokens
+        try:
+            hook.create(
+                failing_client,
+                model="claude-sonnet-4-20250514",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "Hello"}],
+            )
+        except ConnectionError:
+            pass
+        assert hook.context.prompt_tokens == tokens_before
 
 
 # ── Post-execution checks ────────────────────────────────────────
@@ -205,6 +302,18 @@ class TestPostExecutionChecks:
                 messages=[{"role": "user", "content": "Hello"}],
             )
 
+    def test_cumulative_tokens_tracked_across_calls(self, hook, mock_client):
+        """Tokens should accumulate across multiple create() invocations."""
+        for _ in range(3):
+            hook.create(
+                mock_client,
+                model="claude-sonnet-4-20250514",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "Hello"}],
+            )
+        assert hook.context.prompt_tokens == 150     # 50 × 3
+        assert hook.context.completion_tokens == 300  # 100 × 3
+
 
 # ── Deprecation warnings ─────────────────────────────────────────
 
@@ -227,6 +336,21 @@ class TestDeprecationWarnings:
             deprecations = [x for x in w if issubclass(x.category, DeprecationWarning)]
             assert len(deprecations) >= 1
             assert "as_message_hook" in str(deprecations[0].message)
+
+    def test_wrap_emits_exactly_one_deprecation(self, kernel, mock_client):
+        """wrap() must surface exactly one DeprecationWarning to the caller."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            kernel.wrap(mock_client)
+            deprecations = [x for x in w if issubclass(x.category, DeprecationWarning)]
+            assert len(deprecations) == 1
+
+    def test_wrap_client_emits_exactly_one_deprecation(self, mock_client):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            wrap_client(mock_client)
+            deprecations = [x for x in w if issubclass(x.category, DeprecationWarning)]
+            assert len(deprecations) == 1
 
 
 # ── Clean messages pass through ───────────────────────────────────
