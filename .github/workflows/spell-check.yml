@@ -5,13 +5,23 @@ on:
     branches: [main]
     paths:
       - "**/*.md"
+      - "**/*.txt"
+      - "**/*.rst"
+      - "**/*.py"
+      - "**/*.ts"
+      - "**/*.js"
+      - "**/*.go"
+      - "**/*.rs"
+      - "**/*.cs"
+      - "**/*.yml"
+      - "**/*.yaml"
       - ".cspell.json"
       - ".cspell-repo-terms.txt"
       - ".github/workflows/spell-check.yml"
+      - "scripts/ci/changed_lines.py"
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   spell-check:
@@ -21,18 +31,35 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get changed markdown files
-        id: changed-markdown
-        uses: tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96 # v47.0.6
-        with:
-          files: |
-            **/*.md
+      - name: Fetch PR base
+        run: |
+          set -e
+          git fetch origin "${{ github.base_ref }}" --depth=1 || \
+            git fetch --unshallow origin "${{ github.base_ref }}" || \
+            git fetch origin "${{ github.base_ref }}"
+
+      - name: Compute changed lines
+        id: diff
+        run: |
+          set -e
+          mkdir -p ci-diff
+          added_file="ci-diff/spell-check-added-lines.txt"
+          python scripts/ci/changed_lines.py \
+            --base "origin/${{ github.base_ref }}" \
+            --extensions ".md,.txt,.rst,.py,.ts,.js,.go,.rs,.cs,.yml,.yaml" \
+            --mode added-lines \
+            --output "$added_file"
+          if [ ! -s "$added_file" ]; then
+            echo "No changed lines to spell-check; skipping."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "added_file=$added_file" >> "$GITHUB_OUTPUT"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
       - name: Install cspell
         run: npm install --ignore-scripts --global cspell@8.17.3
 
-      - name: Check spelling
-        if: steps.changed-markdown.outputs.any_changed == 'true'
-        env:
-          CHANGED_FILES: ${{ steps.changed-markdown.outputs.all_changed_files }}
-        run: cspell --config .cspell.json --no-progress $CHANGED_FILES
+      - name: cspell on changed lines
+        if: steps.diff.outputs.has_changes == 'true'
+        run: cspell "${{ steps.diff.outputs.added_file }}" --config .cspell.json --no-progress --no-summary
