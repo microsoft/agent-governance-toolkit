@@ -52,7 +52,7 @@ _PII_PATTERNS = [
 
 try:
     from autogen_core import DropMessage
-    from autogen_core.intervention import DefaultInterventionHandler
+    from autogen_core import intervention as _autogen_intervention  # noqa: F401 — feature detection
     _INTERVENTION_AVAILABLE = True
 except ImportError:
     _INTERVENTION_AVAILABLE = False
