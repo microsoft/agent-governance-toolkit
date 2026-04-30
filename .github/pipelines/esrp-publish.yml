@@ -165,7 +165,7 @@ parameters:
       - name: haystack-agentmesh
         path: agent-governance-python/agentmesh-integrations/haystack-agentmesh
         wave: 3
-      - name: langchain-agentmesh
+      - name: agentmesh-langchain
         path: agent-governance-python/agentmesh-integrations/langchain-agentmesh
         wave: 3
       - name: langflow-agentmesh
@@ -183,7 +183,7 @@ parameters:
       - name: openai-agents-agentmesh
         path: agent-governance-python/agentmesh-integrations/openai-agents-agentmesh
         wave: 3
-      - name: openai-agents-trust
+      - name: agentmesh-openai-agents-trust
         path: agent-governance-python/agentmesh-integrations/openai-agents-trust
         wave: 3
       - name: openshell-skill
