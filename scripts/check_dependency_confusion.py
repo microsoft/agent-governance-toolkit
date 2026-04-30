@@ -34,6 +34,7 @@ REGISTERED_PACKAGES = {
     "agentmesh-lightning", "agentmesh_lightning",
     "agentmesh-marketplace", "agentmesh_marketplace",
     "agent-discovery", "agent_discovery",
+    "agentmesh-discovery", "agentmesh_discovery",
     "agent-sandbox", "agent_sandbox",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
@@ -83,7 +84,11 @@ REGISTERED_PACKAGES = {
     "cedarpy", "llama-index-core", "ddtrace",
     # Internal module references
     "inter-agent-trust-protocol", "agent-control-plane", "cmvk",
+    "agentmesh-trust-protocol", "agentmesh_trust_protocol",
+    "agentmesh-control-plane", "agentmesh_control_plane",
+    "agentmesh-observability", "agentmesh_observability",
     "agent-tool-registry", "cedar", "opa", "huggingface_hub",
+    "agentmesh-tool-registry", "agentmesh_tool_registry",
     # APS adapter optional deps
     "aps", "agent-passport-system",
     # Microsoft Agent Framework (MAF) — not yet on PyPI, used in examples
@@ -93,6 +98,7 @@ REGISTERED_PACKAGES = {
     # These are flagged as HIGH RISK if found in requirements.txt with version pins
     # instead of path references. See dependency confusion attack vector.
     "agent-primitives", "agent-mcp-governance", "agent_mcp_governance", "emk",
+    "agentmesh-primitives", "agentmesh_primitives",
     # With extras (base name is what matters)
 }
 
