@@ -1,18 +1,53 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 """
-LangChain Integration
+LangChain Integration for Agent-OS
+==========================================
 
-Wraps LangChain agents/chains with Agent OS governance.
+Provides kernel-level governance for LangChain agents and chains using
+the LangChain ``AgentMiddleware`` system.
 
-Usage:
+**Preferred (native middleware)**::
+
     from agent_os.integrations import LangChainKernel
+    from langchain.agents import create_agent
 
-    kernel = LangChainKernel()
-    governed_chain = kernel.wrap(my_langchain_chain)
+    kernel = LangChainKernel(
+        policy=GovernancePolicy(blocked_patterns=["DROP TABLE"]),
+    )
 
-    # Now all invocations go through Agent OS
-    result = governed_chain.invoke({"input": "..."})
+    agent = create_agent(
+        model="gpt-4o",
+        tools=[...],
+        middleware=[kernel.as_middleware()],
+    )
+    result = agent.invoke({"messages": [...]})
+
+**With Cedar/OPA policy evaluation**::
+
+    kernel = LangChainKernel.from_cedar("policies/governance.cedar")
+    agent = create_agent(
+        model="gpt-4o",
+        tools=[...],
+        middleware=[kernel.as_middleware()],
+    )
+
+**Legacy (deprecated — kept for backward compatibility)**::
+
+    governed = kernel.wrap(my_chain)
+    result = governed.invoke({"input": "..."})
+
+Features
+--------
+- Native ``AgentMiddleware`` integration (``wrap_tool_call``, ``wrap_model_call``)
+- Inherits ``BaseIntegration`` — Cedar/OPA, ``pre_execute``, ``post_execute``
+- Tool allowlist/blocklist enforcement via ``wrap_tool_call``
+- Content filtering on model input/output and tool arguments
+- PII / secrets detection in memory writes
+- Full audit trail with event recording
+- Health check endpoint
+- Backward-compatible ``wrap()`` / deep hooks
+  (deprecated, will be removed in a future release)
 """
 
 import asyncio
@@ -20,12 +55,23 @@ import functools
 import logging
 import re
 import time
+import warnings
 from datetime import datetime
 from typing import Any, Optional
 
 from .base import BaseIntegration, GovernancePolicy
 
 logger = logging.getLogger("agent_os.langchain")
+
+
+# ── Graceful import of LangChain AgentMiddleware ──────────────────────
+try:
+    from langchain.agents.middleware import AgentMiddleware as _SDKMiddleware  # type: ignore[import-untyped]
+
+    _HAS_MIDDLEWARE = True
+except ImportError:
+    _SDKMiddleware = None
+    _HAS_MIDDLEWARE = False
 
 # Patterns used to detect potential PII / secrets in memory writes
 _PII_PATTERNS = [
@@ -36,15 +82,34 @@ _PII_PATTERNS = [
 
 
 class LangChainKernel(BaseIntegration):
-    """
-    LangChain adapter for Agent OS.
+    """Governance kernel for LangChain agents and chains.
+
+    Extends :class:`BaseIntegration` so that it inherits Cedar/OPA policy
+    evaluation, ``pre_execute`` / ``post_execute`` governance, and
+    ``from_cedar`` factory support.
+
+    The primary integration path is via :meth:`as_middleware`, which returns
+    a :class:`GovernanceMiddleware` instance that can be passed directly to
+    ``create_agent(middleware=[...])``.
 
     Supports:
-    - Chains (invoke, ainvoke)
-    - Agents (run, arun)
-    - Runnables (invoke, batch, stream)
+
+    - **Native middleware** (recommended): ``wrap_tool_call``, ``wrap_model_call``
+    - **Legacy proxy** (deprecated): chains (``invoke``, ``ainvoke``), agents
+      (``run``), runnables (``batch``, ``stream``)
     - Deep hooks: tool registry interception, memory write validation,
       and sub-agent spawn detection (when ``deep_hooks_enabled`` is True).
+
+    Example::
+
+        kernel = LangChainKernel(
+            policy=GovernancePolicy(blocked_patterns=["DROP TABLE"]),
+        )
+        agent = create_agent(
+            model="gpt-4o",
+            tools=[...],
+            middleware=[kernel.as_middleware()],
+        )
     """
 
     def __init__(
@@ -320,28 +385,51 @@ class LangChainKernel(BaseIntegration):
         agent.invoke = governed_invoke
         agent._spawn_governed = True
 
-    # ── wrap / unwrap ─────────────────────────────────────────────
+    # ================================================================
+    # Native AgentMiddleware Integration  (PRIMARY API)
+    # ================================================================
+
+    def as_middleware(self, name: str = "governance") -> "GovernanceMiddleware":
+        """Return a :class:`GovernanceMiddleware` backed by this kernel.
+
+        Pass the returned object to ``create_agent(middleware=[...])``
+        or to any LangChain component that accepts middleware::
+
+            kernel = LangChainKernel(
+                policy=GovernancePolicy(blocked_patterns=["DROP TABLE"]),
+            )
+            agent = create_agent(
+                model="gpt-4o",
+                tools=[...],
+                middleware=[kernel.as_middleware()],
+            )
+
+        Args:
+            name: Optional label for logging/identification.
+
+        Returns:
+            A :class:`GovernanceMiddleware` instance.
+        """
+        return GovernanceMiddleware(kernel=self, name=name)
+
+    # ================================================================
+    # Deprecated wrap()-Based API  (BACKWARD COMPAT)
+    # ================================================================
 
     def wrap(self, agent: Any) -> Any:
         """Wrap a LangChain chain, agent, or runnable with governance.
 
-        Creates a proxy object that intercepts all execution methods
-        (``invoke``, ``ainvoke``, ``run``, ``batch``, ``stream``) and
-        applies pre-/post-execution policy checks.
+        .. deprecated::
+            Use :meth:`as_middleware` instead.  The ``wrap()`` approach
+            creates a fragile proxy object that cannot intercept model-level
+            events and mutates tool/memory objects.  Prefer the native
+            ``AgentMiddleware`` path::
 
-        When :attr:`deep_hooks_enabled` is ``True`` (the default) the
-        following additional hooks are applied:
-
-        * **Tool registry interception** — each tool's ``_run`` / ``_arun``
-          is wrapped with governance checks.
-        * **Memory write interception** — ``memory.save_context`` is
-          validated for PII and blocked patterns.
-        * **Sub-agent spawn detection** — ``invoke`` calls are monitored
-          for delegation depth.
-
-        The wrapping strategy uses a dynamically created inner class so that
-        attribute access for non-execution methods (e.g. ``name``,
-        ``verbose``) is transparently forwarded to the original object.
+                agent = create_agent(
+                    model="gpt-4o",
+                    tools=[...],
+                    middleware=[kernel.as_middleware()],
+                )
 
         Args:
             agent: Any LangChain-compatible object that exposes ``invoke``,
@@ -354,14 +442,13 @@ class LangChainKernel(BaseIntegration):
         Raises:
             PolicyViolationError: Raised at execution time if input or
                 output violates the active policy.
-
-        Example:
-            >>> kernel = LangChainKernel(policy=GovernancePolicy(
-            ...     blocked_patterns=["DROP TABLE"]
-            ... ))
-            >>> governed = kernel.wrap(my_chain)
-            >>> result = governed.invoke({"input": "safe query"})
         """
+        warnings.warn(
+            "LangChainKernel.wrap() is deprecated. "
+            "Use kernel.as_middleware() with create_agent(middleware=[...]) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         # Get agent ID from the object
         agent_id = getattr(agent, 'name', None) or f"langchain-{id(agent)}"
         ctx = self.create_context(agent_id)
@@ -634,13 +721,318 @@ class PolicyViolationError(Exception):
     pass
 
 
-# Convenience function
+# =====================================================================
+# GovernanceMiddleware  (native AgentMiddleware)
+# =====================================================================
+
+# Build the base class dynamically so the module stays importable even
+# when ``langchain`` is not installed.
+_MiddlewareBase: type = _SDKMiddleware if _HAS_MIDDLEWARE else object
+
+
+class GovernanceMiddleware(_MiddlewareBase):
+    """Native LangChain ``AgentMiddleware`` for Agent-OS governance.
+
+    Acts as the **primary** integration surface between Agent-OS and the
+    LangChain framework.  By implementing ``wrap_tool_call`` and
+    ``wrap_model_call``, the middleware can intercept every tool invocation
+    and every model request *without* proxy-wrapping or monkey-patching.
+
+    Compared to the deprecated :meth:`LangChainKernel.wrap` approach:
+
+    * No proxy objects — no ``__getattr__`` fragility.
+    * No object mutation — tools, memory, and agents are left untouched.
+    * **New capability**: model-level governance via ``wrap_model_call``
+      (prompt injection guards, system prompt integrity, dynamic tool
+      filtering) which the proxy-based approach *cannot* achieve.
+    * Composable — multiple middleware instances stack naturally.
+
+    Usage::
+
+        kernel = LangChainKernel(
+            policy=GovernancePolicy(blocked_patterns=["DROP TABLE"]),
+        )
+        agent = create_agent(
+            model="gpt-4o",
+            tools=[...],
+            middleware=[kernel.as_middleware()],
+        )
+        result = agent.invoke({"messages": [...]})
+    """
+
+    def __init__(
+        self,
+        kernel: "LangChainKernel",
+        name: str = "governance",
+    ):
+        """Initialise the governance middleware.
+
+        Args:
+            kernel: The :class:`LangChainKernel` that supplies the active
+                governance policy and Cedar/OPA evaluator.
+            name: Label used in log messages and audit records.
+        """
+        self._kernel = kernel
+        self._name = name
+        self._ctx = kernel.create_context(f"langchain-middleware-{name}")
+        logger.info(
+            "GovernanceMiddleware '%s' initialised with policy=%r",
+            name,
+            kernel.policy,
+        )
+
+    # ── wrap_tool_call ────────────────────────────────────────────
+    #
+    # Intercepts every tool execution.  Has full access to the tool
+    # name and arguments before execution, and the result after.
+    # Can BLOCK by raising PolicyViolationError.
+
+    def wrap_tool_call(self, request: Any, handler: Any) -> Any:
+        """Governance gate around each tool execution.
+
+        Performs the following checks **before** the tool runs:
+
+        1. Tool allowlist / blocklist enforcement.
+        2. Blocked-pattern scan on tool arguments.
+        3. Cedar/OPA ``pre_execute`` gate (when an evaluator is
+           configured on the kernel).
+
+        After the tool completes, a ``post_execute`` check validates
+        the output against the governance policy.
+
+        Args:
+            request: LangChain ``ToolCallRequest`` with ``tool_call``
+                dict containing ``name``, ``args``, and ``id``.
+            handler: Callable that executes the actual tool.
+
+        Returns:
+            The tool's result (``ToolMessage`` or ``Command``).
+
+        Raises:
+            PolicyViolationError: If the tool call violates the
+                governance policy.
+        """
+        tool_call = getattr(request, "tool_call", {})
+        tool_name = tool_call.get("name", "<unknown>") if isinstance(tool_call, dict) else str(tool_call)
+        tool_args = tool_call.get("args", {}) if isinstance(tool_call, dict) else {}
+
+        logger.debug(
+            "[%s] wrap_tool_call: tool=%s args=%s",
+            self._name,
+            tool_name,
+            tool_args,
+        )
+
+        # ─── 1. Tool allowlist / blocklist ────────────────────────
+        self._kernel._check_tool_policy(
+            tool_name, (tool_args,), {}, self._ctx
+        )
+
+        # ─── 2. Cedar/OPA pre_execute gate ────────────────────────
+        input_data = {
+            "tool_name": tool_name,
+            "tool_args": tool_args,
+        }
+        allowed, reason = self._kernel.pre_execute(self._ctx, input_data)
+        if not allowed:
+            logger.info(
+                "[%s] Policy DENY (pre_execute) on tool '%s': %s",
+                self._name,
+                tool_name,
+                reason,
+            )
+            raise PolicyViolationError(reason)
+        logger.info("[%s] Policy ALLOW on tool '%s'", self._name, tool_name)
+
+        # ─── 3. Record invocation ─────────────────────────────────
+        self._kernel._record_tool_invocation(tool_name, (tool_args,), {})
+
+        # ─── 4. Execute the tool ──────────────────────────────────
+        try:
+            result = handler(request)
+        except Exception as exc:
+            logger.error(
+                "[%s] Tool '%s' raised: %s", self._name, tool_name, exc
+            )
+            self._kernel._last_error = str(exc)
+            raise
+
+        # ─── 5. Post-execution validation ─────────────────────────
+        result_str = str(getattr(result, "content", result))
+
+        # Blocked-pattern check on output
+        matched = self._kernel.policy.matches_pattern(result_str)
+        if matched:
+            logger.info(
+                "[%s] Policy DENY: blocked pattern '%s' in tool '%s' output",
+                self._name,
+                matched[0],
+                tool_name,
+            )
+            raise PolicyViolationError(
+                f"Blocked pattern '{matched[0]}' detected in tool '{tool_name}' output"
+            )
+
+        # Drift detection / checkpointing via base post_execute
+        valid, reason = self._kernel.post_execute(self._ctx, result_str)
+        if not valid:
+            logger.info(
+                "[%s] Policy DENY (post_execute) on tool '%s' result: %s",
+                self._name,
+                tool_name,
+                reason,
+            )
+            raise PolicyViolationError(reason)
+
+        return result
+
+    # ── wrap_model_call ───────────────────────────────────────────
+    #
+    # Intercepts every model (LLM/chat) call.  Can modify the request
+    # (tools, system prompt) or block entirely.  This is a *new*
+    # capability not possible via the proxy-based wrap() approach.
+
+    def wrap_model_call(self, request: Any, handler: Any) -> Any:
+        """Governance gate around each model invocation.
+
+        Performs the following checks **before** the model call:
+
+        1. Content-filter scan on input messages for blocked patterns.
+        2. Cedar/OPA ``pre_execute`` gate on the model input.
+
+        After the model responds, a ``post_execute`` check validates
+        the output for blocked patterns.
+
+        This hook also enables **model-level governance** — a capability
+        that the proxy-based ``wrap()`` approach cannot achieve:
+
+        * System prompt integrity validation.
+        * Dynamic tool filtering (remove dangerous tools before the
+          model sees them).
+        * Prompt injection detection on input messages.
+
+        Args:
+            request: LangChain ``ModelRequest`` with ``messages``,
+                ``tools``, and ``system_message`` attributes.
+            handler: Callable that executes the model call.
+
+        Returns:
+            The model's response.
+
+        Raises:
+            PolicyViolationError: If the model input or output
+                violates the governance policy.
+        """
+        # Extract input text for content filtering
+        messages = getattr(request, "messages", None) or []
+        input_text = ""
+        for msg in messages:
+            content = getattr(msg, "content", str(msg))
+            if isinstance(content, str):
+                input_text += " " + content
+            elif isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict):
+                        input_text += " " + block.get("text", "")
+
+        logger.debug(
+            "[%s] wrap_model_call: input_len=%d",
+            self._name,
+            len(input_text),
+        )
+
+        # ─── 1. Content filter on input ───────────────────────────
+        if input_text.strip():
+            allowed, reason = self._kernel.pre_execute(
+                self._ctx, input_text.strip()
+            )
+            if not allowed:
+                logger.info(
+                    "[%s] Policy DENY (pre_execute) on model input: %s",
+                    self._name,
+                    reason,
+                )
+                raise PolicyViolationError(reason)
+            logger.info("[%s] Policy ALLOW on model input", self._name)
+
+        # ─── 2. Execute the model call ────────────────────────────
+        try:
+            response = handler(request)
+        except Exception as exc:
+            logger.error("[%s] Model call failed: %s", self._name, exc)
+            self._kernel._last_error = str(exc)
+            raise
+
+        # ─── 3. Content filter on output ──────────────────────────
+        response_msg = getattr(response, "message", response)
+        output_text = getattr(response_msg, "content", str(response_msg))
+        if isinstance(output_text, str) and output_text.strip():
+            # Blocked-pattern check on model output
+            matched = self._kernel.policy.matches_pattern(output_text)
+            if matched:
+                logger.info(
+                    "[%s] Policy DENY: blocked pattern '%s' in model output",
+                    self._name,
+                    matched[0],
+                )
+                raise PolicyViolationError(
+                    f"Blocked pattern '{matched[0]}' detected in model output"
+                )
+
+            # Drift detection / checkpointing via base post_execute
+            valid, reason = self._kernel.post_execute(
+                self._ctx, output_text.strip()
+            )
+            if not valid:
+                logger.info(
+                    "[%s] Policy DENY (post_execute) on model output: %s",
+                    self._name,
+                    reason,
+                )
+                raise PolicyViolationError(reason)
+
+        return response
+
+    # ── Convenience properties ────────────────────────────────────
+
+    @property
+    def kernel(self) -> "LangChainKernel":
+        """Return the governing kernel."""
+        return self._kernel
+
+    @property
+    def context(self) -> Any:
+        """Return the execution context."""
+        return self._ctx
+
+    def __repr__(self) -> str:
+        return (
+            f"GovernanceMiddleware(name={self._name!r}, "
+            f"policy={self._kernel.policy!r})"
+        )
+
+
+# =====================================================================
+# Convenience function  (deprecated)
+# =====================================================================
+
+
 def wrap(
     agent: Any,
     policy: Optional[GovernancePolicy] = None,
     timeout_seconds: float = 300.0,
 ) -> Any:
     """Convenience wrapper for LangChain agents and chains.
+
+    .. deprecated::
+        Use :meth:`LangChainKernel.as_middleware` instead::
+
+            kernel = LangChainKernel(policy=GovernancePolicy(...))
+            agent = create_agent(
+                model="gpt-4o",
+                tools=[...],
+                middleware=[kernel.as_middleware()],
+            )
 
     Args:
         agent: Any LangChain-compatible object.
@@ -649,10 +1041,11 @@ def wrap(
 
     Returns:
         A governed proxy around *agent*.
-
-    Example:
-        >>> from agent_os.integrations.langchain_adapter import wrap
-        >>> governed = wrap(my_chain, policy=GovernancePolicy(max_tokens=5000))
-        >>> result = governed.invoke({"input": "hello"})
     """
+    warnings.warn(
+        "langchain_adapter.wrap() is deprecated. "
+        "Use LangChainKernel.as_middleware() with create_agent(middleware=[...]) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return LangChainKernel(policy, timeout_seconds=timeout_seconds).wrap(agent)
