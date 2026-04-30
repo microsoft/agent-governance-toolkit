@@ -924,12 +924,12 @@ class GovernanceFunctionFilter:
                         f"Blocked pattern '{pat}' in arguments for {full_name}"
                     )
 
-        # Check call count
-        self._ctx.call_count += 1
-        if self._ctx.call_count > self._wrapper.policy.max_tool_calls:
+        # Check call count (post_execute_check also increments call_count,
+        # so we check against the current value before post_execute runs)
+        if self._ctx.call_count >= self._wrapper.policy.max_tool_calls:
             raise PolicyViolationError(
                 f"Tool call limit exceeded: "
-                f"{self._ctx.call_count} > {self._wrapper.policy.max_tool_calls}"
+                f"{self._ctx.call_count} >= {self._wrapper.policy.max_tool_calls}"
             )
 
         # Pre-execute (Cedar/OPA)
