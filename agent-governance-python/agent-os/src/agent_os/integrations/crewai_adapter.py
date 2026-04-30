@@ -3,15 +3,25 @@
 """
 CrewAI Integration
 
-Wraps CrewAI crews and agents with Agent OS governance.
+Provides governance for CrewAI crews and agents via **native execution hooks**
+(``@before_tool_call``, ``@after_tool_call``, ``@before_llm_call``,
+``@after_llm_call``) introduced in CrewAI 0.80+.
 
-Usage:
-    from agent_os.integrations import CrewAIKernel
+Recommended usage (native hooks)::
 
-    kernel = CrewAIKernel()
+    from agent_os.integrations.crewai_adapter import CrewAIKernel, GovernancePolicy
+
+    kernel = CrewAIKernel(policy=GovernancePolicy(
+        blocked_patterns=["DROP TABLE"],
+        allowed_tools=["search", "calculator"],
+    ))
+    hooks = kernel.as_hooks()        # registers governance hooks globally
+    result = my_crew.kickoff()       # hooks intercept every tool & LLM call
+    hooks.unregister()               # clean up when done
+
+Legacy usage (deprecated)::
+
     governed_crew = kernel.wrap(my_crew)
-
-    # Now all crew executions go through Agent OS
     result = governed_crew.kickoff()
 """
 
@@ -31,7 +41,21 @@ from .base import (
     ToolCallRequest,
 )
 
-logger = logging.getLogger(__name__)
+# ── Graceful import of CrewAI native hooks ────────────────────────
+# CrewAI 0.80+ provides decorator-based execution hooks.  When the
+# hooks module is unavailable (older CrewAI or CrewAI not installed),
+# we fall back to the legacy proxy approach.
+
+try:
+    from crewai.hooks import (
+        before_tool_call as _before_tool_call,
+        after_tool_call as _after_tool_call,
+        before_llm_call as _before_llm_call,
+        after_llm_call as _after_llm_call,
+    )
+    _HOOKS_AVAILABLE = True
+except ImportError:
+    _HOOKS_AVAILABLE = False
 
 # Patterns used to detect potential PII / secrets in memory writes
 _PII_PATTERNS = [
@@ -41,31 +65,519 @@ _PII_PATTERNS = [
 ]
 
 
+# ═══════════════════════════════════════════════════════════════════
+# GovernanceHooks  – native CrewAI execution hooks
+# ═══════════════════════════════════════════════════════════════════
+
+class GovernanceHooks:
+    """Native CrewAI governance hooks for Agent OS.
+
+    Registers four global execution hooks that intercept every tool call
+    and LLM call across all agents in a crew:
+
+    * ``before_tool_call`` – allowlist / blocklist, blocked-pattern scan,
+      Cedar/OPA ``pre_execute`` gate.
+    * ``after_tool_call``  – blocked-pattern scan on tool output, drift
+      detection via ``post_execute``.
+    * ``before_llm_call``  – content filter on input messages.
+    * ``after_llm_call``   – blocked-pattern scan on LLM response.
+
+    Parameters
+    ----------
+    kernel : CrewAIKernel
+        The governing kernel whose policy is enforced.
+    name : str, optional
+        Human-readable name for logging (default ``"governance"``).
+
+    Notes
+    -----
+    CrewAI hooks are **global** – they apply to every crew in the
+    current process.  Only one ``GovernanceHooks`` instance should be
+    active at a time.  Call :meth:`unregister` to deactivate.
+
+    Examples
+    --------
+    >>> kernel = CrewAIKernel(policy=GovernancePolicy(allowed_tools=["search"]))
+    >>> hooks = kernel.as_hooks()
+    >>> result = my_crew.kickoff()
+    >>> hooks.unregister()
+    """
+
+    def __init__(self, kernel: "CrewAIKernel", name: str = "governance"):
+        self._kernel = kernel
+        self._name = name
+        self._ctx = kernel.create_context(f"crewai-hooks-{name}")
+        self._registered = False
+        self._hook_fns: list[Any] = []
+        logger.debug(
+            "GovernanceHooks created: name=%s, hooks_available=%s",
+            name,
+            _HOOKS_AVAILABLE,
+        )
+
+    # ── Registration ──────────────────────────────────────────────
+
+    def register(self) -> "GovernanceHooks":
+        """Register the four governance hooks with CrewAI.
+
+        Returns
+        -------
+        GovernanceHooks
+            Self, for chaining.
+
+        Raises
+        ------
+        RuntimeError
+            If ``crewai.hooks`` is not available.
+        """
+        if not _HOOKS_AVAILABLE:
+            raise RuntimeError(
+                "crewai.hooks is not available. "
+                "Upgrade to CrewAI 0.80+ or use the legacy wrap() method."
+            )
+        if self._registered:
+            logger.debug("GovernanceHooks already registered, skipping")
+            return self
+
+        # Create governed hook functions and register them
+        bt = _before_tool_call(self._make_before_tool_call())
+        at = _after_tool_call(self._make_after_tool_call())
+        bl = _before_llm_call(self._make_before_llm_call())
+        al = _after_llm_call(self._make_after_llm_call())
+        self._hook_fns = [bt, at, bl, al]
+
+        self._registered = True
+        logger.info("[%s] Governance hooks registered with CrewAI", self._name)
+        return self
+
+    def unregister(self) -> None:
+        """Deactivate governance hooks.
+
+        .. note::
+           CrewAI's global hook registry currently does not expose an
+           ``unregister`` API.  This method clears the internal state
+           so re-registration is possible but does not remove the
+           previously registered functions from CrewAI's registry.
+        """
+        self._registered = False
+        self._hook_fns.clear()
+        logger.info("[%s] Governance hooks unregistered", self._name)
+
+    # ── Hook Factories ────────────────────────────────────────────
+
+    def _make_before_tool_call(self):
+        """Return the ``before_tool_call`` governance function.
+
+        Returns
+        -------
+        callable
+            A function conforming to CrewAI's ``ToolCallHookContext``
+            protocol that returns ``False`` to block or ``None`` to allow.
+        """
+        kernel = self._kernel
+        ctx = self._ctx
+        name = self._name
+
+        def governance_before_tool(context) -> "bool | None":
+            """Governance gate executed before every tool call.
+
+            Checks tool allowlist/blocklist, scans arguments for blocked
+            patterns, and runs Cedar/OPA ``pre_execute`` evaluation.
+
+            Parameters
+            ----------
+            context : ToolCallHookContext
+                CrewAI hook context with ``tool_name``, ``tool_input``,
+                ``agent``, ``task``, and ``crew`` attributes.
+
+            Returns
+            -------
+            bool | None
+                ``False`` to block the tool call, ``None`` to allow.
+            """
+            tool_name = getattr(context, "tool_name", "unknown")
+            tool_input = getattr(context, "tool_input", {})
+            agent_name = getattr(
+                getattr(context, "agent", None), "role",
+                getattr(getattr(context, "agent", None), "name", "unknown"),
+            )
+
+            logger.debug(
+                "[%s] before_tool_call: tool=%s agent=%s",
+                name, tool_name, agent_name,
+            )
+
+            # ─── 1. Tool allowlist check ───────────────────────
+            if kernel.policy.allowed_tools:
+                if tool_name not in kernel.policy.allowed_tools:
+                    logger.info(
+                        "[%s] Policy DENY: tool '%s' not in allowed_tools",
+                        name, tool_name,
+                    )
+                    return False
+
+            # ─── 2. Blocked-pattern scan on arguments ─────────────
+            args_str = str(tool_input)
+            matched = kernel.policy.matches_pattern(args_str)
+            if matched:
+                logger.info(
+                    "[%s] Policy DENY: blocked pattern '%s' in tool args",
+                    name, matched[0],
+                )
+                return False
+
+            # ─── 3. Blocked-pattern scan on tool name ─────────────
+            name_matched = kernel.policy.matches_pattern(tool_name)
+            if name_matched:
+                logger.info(
+                    "[%s] Policy DENY: blocked pattern '%s' in tool name",
+                    name, name_matched[0],
+                )
+                return False
+
+            # ─── 4. Cedar/OPA pre_execute gate ────────────────────
+            allowed, reason = kernel.pre_execute(
+                ctx, {"tool_name": tool_name, "tool_args": tool_input},
+            )
+            if not allowed:
+                logger.info(
+                    "[%s] Policy DENY (pre_execute): %s", name, reason,
+                )
+                return False
+
+            # ─── 5. Increment call count / max check ──────────────
+            ctx.call_count += 1
+            if kernel.policy.max_tool_calls and ctx.call_count > kernel.policy.max_tool_calls:
+                logger.info(
+                    "[%s] Policy DENY: max_tool_calls (%d) exceeded",
+                    name, kernel.policy.max_tool_calls,
+                )
+                return False
+
+            logger.debug(
+                "[%s] Tool ALLOW: tool=%s count=%d",
+                name, tool_name, ctx.call_count,
+            )
+            return None  # allow
+
+        return governance_before_tool
+
+    def _make_after_tool_call(self):
+        """Return the ``after_tool_call`` governance function.
+
+        Returns
+        -------
+        callable
+            A function that checks tool output for blocked patterns
+            and runs ``post_execute`` drift detection.
+        """
+        kernel = self._kernel
+        ctx = self._ctx
+        name = self._name
+
+        def governance_after_tool(context) -> None:
+            """Governance gate executed after every tool call.
+
+            Scans the tool result for blocked patterns and runs
+            drift detection via ``post_execute``.
+
+            Parameters
+            ----------
+            context : ToolCallHookContext
+                CrewAI hook context with ``tool_result`` available.
+
+            Returns
+            -------
+            None
+                Always returns ``None``.  Violations are raised as
+                ``PolicyViolationError``.
+
+            Raises
+            ------
+            PolicyViolationError
+                If the tool output contains a blocked pattern.
+            """
+            tool_name = getattr(context, "tool_name", "unknown")
+            tool_result = getattr(context, "tool_result", None)
+
+            if tool_result and isinstance(tool_result, str):
+                # Blocked-pattern check on output
+                matched = kernel.policy.matches_pattern(tool_result)
+                if matched:
+                    logger.info(
+                        "[%s] Policy DENY: blocked pattern '%s' in tool output",
+                        name, matched[0],
+                    )
+                    raise PolicyViolationError(
+                        f"Blocked pattern '{matched[0]}' detected in tool output"
+                    )
+
+                # Drift detection / checkpointing via base post_execute
+                valid, reason = kernel.post_execute(ctx, tool_result)
+                if not valid:
+                    logger.info(
+                        "[%s] Policy DENY (post_execute) on tool output: %s",
+                        name, reason,
+                    )
+                    raise PolicyViolationError(reason)
+
+            logger.debug("[%s] after_tool_call OK: tool=%s", name, tool_name)
+            return None
+
+        return governance_after_tool
+
+    def _make_before_llm_call(self):
+        """Return the ``before_llm_call`` governance function.
+
+        Returns
+        -------
+        callable
+            A function that scans LLM input messages for blocked
+            patterns and runs ``pre_execute`` checks.
+        """
+        kernel = self._kernel
+        ctx = self._ctx
+        name = self._name
+
+        def governance_before_llm(context) -> "bool | None":
+            """Governance gate executed before every LLM call.
+
+            Scans the message list for blocked patterns and runs
+            Cedar/OPA ``pre_execute`` checks.
+
+            Parameters
+            ----------
+            context : LLMCallHookContext
+                CrewAI context with ``messages``, ``agent``, ``task``,
+                ``iterations`` attributes.
+
+            Returns
+            -------
+            bool | None
+                ``False`` to block the LLM call, ``None`` to allow.
+            """
+            messages = getattr(context, "messages", None) or []
+
+            # ─── 1. Content filter on input messages ──────────────
+            for msg in messages:
+                content = None
+                if isinstance(msg, dict):
+                    content = msg.get("content", "")
+                elif isinstance(msg, str):
+                    content = msg
+                else:
+                    content = getattr(msg, "content", str(msg))
+
+                if content and isinstance(content, str):
+                    matched = kernel.policy.matches_pattern(content)
+                    if matched:
+                        logger.info(
+                            "[%s] Policy DENY: blocked pattern '%s' in LLM input",
+                            name, matched[0],
+                        )
+                        return False
+
+            # ─── 2. Cedar/OPA pre_execute gate ────────────────────
+            combined_input = " ".join(
+                str(m.get("content", m) if isinstance(m, dict) else m)
+                for m in messages
+            ) if messages else ""
+
+            if combined_input.strip():
+                allowed, reason = kernel.pre_execute(ctx, combined_input)
+                if not allowed:
+                    logger.info(
+                        "[%s] Policy DENY (pre_execute) on LLM input: %s",
+                        name, reason,
+                    )
+                    return False
+
+            return None  # allow
+
+        return governance_before_llm
+
+    def _make_after_llm_call(self):
+        """Return the ``after_llm_call`` governance function.
+
+        Returns
+        -------
+        callable
+            A function that scans LLM output for blocked patterns.
+        """
+        kernel = self._kernel
+        ctx = self._ctx
+        name = self._name
+
+        def governance_after_llm(context) -> "str | None":
+            """Governance gate executed after every LLM call.
+
+            Scans the LLM response for blocked patterns and runs
+            ``post_execute`` drift detection.
+
+            Parameters
+            ----------
+            context : LLMCallHookContext
+                CrewAI context with ``response`` available.
+
+            Returns
+            -------
+            str | None
+                ``None`` to keep original response.  Violations are
+                raised as ``PolicyViolationError``.
+
+            Raises
+            ------
+            PolicyViolationError
+                If the LLM output contains a blocked pattern.
+            """
+            response = getattr(context, "response", None)
+
+            if response and isinstance(response, str) and response.strip():
+                # Blocked-pattern check on LLM output
+                matched = kernel.policy.matches_pattern(response)
+                if matched:
+                    logger.info(
+                        "[%s] Policy DENY: blocked pattern '%s' in LLM output",
+                        name, matched[0],
+                    )
+                    raise PolicyViolationError(
+                        f"Blocked pattern '{matched[0]}' detected in LLM output"
+                    )
+
+                # Drift detection / checkpointing
+                valid, reason = kernel.post_execute(ctx, response.strip())
+                if not valid:
+                    logger.info(
+                        "[%s] Policy DENY (post_execute) on LLM output: %s",
+                        name, reason,
+                    )
+                    raise PolicyViolationError(reason)
+
+            return None  # keep original response
+
+        return governance_after_llm
+
+    # ── Convenience properties ────────────────────────────────────
+
+    @property
+    def kernel(self) -> "CrewAIKernel":
+        """Return the governing kernel."""
+        return self._kernel
+
+    @property
+    def context(self):
+        """Return the execution context."""
+        return self._ctx
+
+    @property
+    def is_registered(self) -> bool:
+        """Return whether hooks are currently registered."""
+        return self._registered
+
+    def __repr__(self) -> str:
+        return (
+            f"GovernanceHooks(name={self._name!r}, "
+            f"registered={self._registered})"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# CrewAIKernel  – main adapter
+# ═══════════════════════════════════════════════════════════════════
+
 class CrewAIKernel(BaseIntegration):
-    """
-    CrewAI adapter for Agent OS.
+    """CrewAI adapter for Agent OS.
 
-    Supports:
-    - Crew (kickoff, kickoff_async)
-    - Individual agents within crews
-    - Task execution monitoring
-    - Individual tool call interception (allowed_tools, blocked_patterns)
-    - Deep hooks: step-by-step task execution, memory interception,
-      and sub-agent delegation detection (when ``deep_hooks_enabled`` is True).
+    Provides governance for CrewAI crews via two mechanisms:
+
+    **Recommended (native hooks)**:
+        Use :meth:`as_hooks` to register global execution hooks that
+        intercept every tool and LLM call across all agents.
+
+    **Legacy (deprecated)**:
+        Use :meth:`wrap` to create a proxy crew object.
+
+    Parameters
+    ----------
+    policy : GovernancePolicy, optional
+        The governance policy to enforce.
+    deep_hooks_enabled : bool
+        When ``True`` (default), the legacy :meth:`wrap` method also
+        applies step-level, memory, and delegation interception.
+    evaluator : Any, optional
+        Cedar/OPA policy evaluator for fine-grained access control.
+
+    Examples
+    --------
+    >>> kernel = CrewAIKernel(policy=GovernancePolicy(allowed_tools=["search"]))
+    >>> hooks = kernel.as_hooks()
+    >>> # All crew executions now go through governance
+    >>> result = my_crew.kickoff({"topic": "AI governance"})
+    >>> hooks.unregister()
     """
 
-    def __init__(self, policy: Optional[GovernancePolicy] = None, deep_hooks_enabled: bool = True, evaluator: Any = None):
+    def __init__(
+        self,
+        policy: Optional[GovernancePolicy] = None,
+        deep_hooks_enabled: bool = True,
+        evaluator: Any = None,
+    ):
         super().__init__(policy, evaluator=evaluator)
         self.deep_hooks_enabled = deep_hooks_enabled
         self._wrapped_crews: dict[int, Any] = {}
         self._step_log: list[dict[str, Any]] = []
         self._memory_audit_log: list[dict[str, Any]] = []
         self._delegation_log: list[dict[str, Any]] = []
-        logger.debug("CrewAIKernel initialized with policy=%s deep_hooks_enabled=%s", policy, deep_hooks_enabled)
+        logger.debug(
+            "CrewAIKernel initialized with policy=%s deep_hooks_enabled=%s",
+            policy, deep_hooks_enabled,
+        )
+
+    # ── Native hooks (recommended) ────────────────────────────────
+
+    def as_hooks(self, name: str = "governance") -> GovernanceHooks:
+        """Create and register native CrewAI governance hooks.
+
+        This is the **recommended** integration path.  The returned
+        :class:`GovernanceHooks` instance registers four global hooks
+        (``before_tool_call``, ``after_tool_call``, ``before_llm_call``,
+        ``after_llm_call``) that enforce governance on every tool and
+        LLM call across all agents in any crew.
+
+        Parameters
+        ----------
+        name : str
+            Human-readable name for the hooks instance (used in logs).
+
+        Returns
+        -------
+        GovernanceHooks
+            The registered hooks instance.
+
+        Raises
+        ------
+        RuntimeError
+            If ``crewai.hooks`` module is not available.
+
+        Examples
+        --------
+        >>> hooks = kernel.as_hooks("prod-governance")
+        >>> result = my_crew.kickoff()
+        >>> hooks.unregister()
+        """
+        hooks = GovernanceHooks(self, name=name)
+        hooks.register()
+        return hooks
+
+    # ── Legacy proxy (deprecated) ─────────────────────────────────
 
     def wrap(self, crew: Any) -> Any:
-        """
-        Wrap a CrewAI crew with governance.
+        """Wrap a CrewAI crew with governance.
+
+        .. deprecated::
+            Use :meth:`as_hooks` instead.  The proxy-based approach
+            mutates tool, memory, and agent objects.  ``wrap()`` will
+            be removed in v1.0.
 
         Intercepts:
         - kickoff() / kickoff_async()
@@ -73,6 +585,15 @@ class CrewAIKernel(BaseIntegration):
         - Individual tool calls within agents
         - Task completions
         """
+        import warnings
+        warnings.warn(
+            "CrewAIKernel.wrap() is deprecated. Use kernel.as_hooks() instead, "
+            "which leverages CrewAI's native execution hooks. "
+            "wrap() will be removed in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         crew_id = getattr(crew, 'id', None) or f"crew-{id(crew)}"
         crew_name = getattr(crew, 'name', crew_id)
         ctx = self.create_context(crew_id)
@@ -84,7 +605,7 @@ class CrewAIKernel(BaseIntegration):
         kernel = self
 
         class GovernedCrewAICrew:
-            """CrewAI crew wrapped with Agent OS governance"""
+            """CrewAI crew wrapped with Agent OS governance."""
 
             def __init__(self):
                 self._original = original
@@ -93,7 +614,7 @@ class CrewAIKernel(BaseIntegration):
                 self._crew_name = crew_name
 
             def kickoff(self, inputs: dict = None) -> Any:
-                """Governed kickoff"""
+                """Governed kickoff."""
                 logger.info("Crew execution started: crew_name=%s", self._crew_name)
                 allowed, reason = self._kernel.pre_execute(self._ctx, inputs)
                 if not allowed:
@@ -116,7 +637,7 @@ class CrewAIKernel(BaseIntegration):
                 return result
 
             async def kickoff_async(self, inputs: dict = None) -> Any:
-                """Governed async kickoff"""
+                """Governed async kickoff."""
                 logger.info("Async crew execution started: crew_name=%s", self._crew_name)
                 allowed, reason = self._kernel.pre_execute(self._ctx, inputs)
                 if not allowed:
@@ -256,11 +777,11 @@ class CrewAIKernel(BaseIntegration):
         return GovernedCrewAICrew()
 
     def unwrap(self, governed_crew: Any) -> Any:
-        """Get original crew from wrapped version"""
+        """Get original crew from wrapped version."""
         logger.debug("Unwrapping governed crew")
         return governed_crew._original
 
-    # ── Deep Integration Hooks ────────────────────────────────────
+    # ── Deep Integration Hooks (legacy) ───────────────────────────
 
     def _intercept_task_steps(
         self, agent: Any, agent_name: str, crew_name: str
@@ -460,8 +981,20 @@ class CrewAIKernel(BaseIntegration):
         agent.delegate_work = governed_delegate
 
 
-# Convenience function
+# ── Convenience function (deprecated) ─────────────────────────────
+
 def wrap(crew: Any, policy: Optional[GovernancePolicy] = None) -> Any:
-    """Quick wrapper for CrewAI crews"""
+    """Quick wrapper for CrewAI crews.
+
+    .. deprecated::
+        Use ``CrewAIKernel(policy).as_hooks()`` instead.
+    """
+    import warnings
+    warnings.warn(
+        "crewai_adapter.wrap() is deprecated. "
+        "Use CrewAIKernel(policy).as_hooks() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     logger.debug("Using convenience wrap function for crew")
     return CrewAIKernel(policy).wrap(crew)
