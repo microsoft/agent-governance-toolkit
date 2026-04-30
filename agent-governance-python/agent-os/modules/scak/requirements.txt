@@ -35,7 +35,7 @@ pytest-asyncio==1.1.0
 # =============================================================================
 
 # Visualization and Developer Tools
-streamlit==1.41.0  # For telemetry dashboard
+streamlit>=1.54.0,<2.0  # For telemetry dashboard (>= 1.54.0 fixes SSRF CVE)
 jupyter==1.1.1  # For interactive notebooks
 
 # LangChain Integration
