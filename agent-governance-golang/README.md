@@ -1,11 +1,21 @@
 # AgentMesh Go module
 
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
+[![Go Reference](https://pkg.go.dev/badge/github.com/microsoft/agent-governance-toolkit/agent-governance-golang.svg)](https://pkg.go.dev/github.com/microsoft/agent-governance-toolkit/agent-governance-golang)
+
 Go module for the AgentMesh governance framework — identity, trust scoring, policy evaluation, tamper-evident audit logging, MCP security scanning, execution privilege rings, kill switches, agent lifecycle management, SLO tracking, shadow discovery, prompt defense, and native Go integrations.
 
 ## Install
 
 ```bash
 go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang
+```
+
+Verify the module is available:
+
+```bash
+go list -m github.com/microsoft/agent-governance-toolkit/agent-governance-golang
 ```
 
 ## Quick Start
