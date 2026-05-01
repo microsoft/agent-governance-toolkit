@@ -156,4 +156,64 @@ describe('PolicyEngine', () => {
       expect(engine.evaluate('extra')).toBe('review');
     });
   });
+
+  describe('loadJson()', () => {
+    it('throws for invalid JSON policy input', () => {
+      const engine = new PolicyEngine();
+      expect(() => engine.loadJson('{not valid json')).toThrow();
+      expect(engine.listPolicies()).toEqual([]);
+    });
+  });
+
+  describe('evaluateWithBackends()', () => {
+    it('does not call external backends when local policy denies', async () => {
+      const backend = jest.fn(() => 'allow' as const);
+      const engine = new PolicyEngine([{ action: 'data.read', effect: 'deny' }]);
+      engine.registerBackend({
+        name: 'network-policy',
+        evaluateAction: backend,
+      });
+
+      const result = await engine.evaluateWithBackends('data.read');
+
+      expect(result.effectiveDecision).toBe('deny');
+      expect(result.deniedBy).toEqual(['local']);
+      expect(result.backendResults).toEqual([]);
+      expect(backend).not.toHaveBeenCalled();
+    });
+
+    it('preserves backend review decisions for locally allowed actions', async () => {
+      const engine = new PolicyEngine([{ action: 'deploy.production', effect: 'allow' }]);
+      engine.registerBackend({
+        name: 'approval-service',
+        evaluateAction: () => 'review',
+      });
+
+      const result = await engine.evaluateWithBackends('deploy.production', {
+        environment: 'production',
+      });
+
+      expect(result.localDecision).toBe('allow');
+      expect(result.effectiveDecision).toBe('review');
+      expect(result.deniedBy).toEqual([]);
+      expect(result.backendResults).toEqual([{
+        backend: 'approval-service',
+        decision: 'review',
+      }]);
+    });
+
+    it('allows missing backend evaluators without blocking local allows', async () => {
+      const engine = new PolicyEngine([{ action: 'data.read', effect: 'allow' }]);
+      engine.registerBackend({ name: 'metadata-only-backend' });
+
+      const result = await engine.evaluateWithBackends('data.read');
+
+      expect(result.effectiveDecision).toBe('allow');
+      expect(result.backendResults).toEqual([{
+        backend: 'metadata-only-backend',
+        decision: 'allow',
+        reason: 'No action evaluator registered',
+      }]);
+    });
+  });
 });
