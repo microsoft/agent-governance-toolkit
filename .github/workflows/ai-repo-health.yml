@@ -65,9 +65,11 @@ jobs:
           METRICSEOF
           )
 
-          echo "data<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$METRICS" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "data<<EOF"
+            echo "$METRICS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
           echo "Metrics collected."
 
       - name: Generate health report

@@ -62,9 +62,11 @@ jobs:
           PRS=$(gh pr list --state merged --base main \
             --search "merged:>=${SINCE}" \
             --json number,title,labels,author,files --limit 100 2>/dev/null || echo "[]")
-          echo "prs<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$PRS" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "prs<<EOF"
+            echo "$PRS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Generate release notes
         id: notes

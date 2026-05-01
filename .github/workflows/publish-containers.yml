@@ -152,12 +152,14 @@ jobs:
       - name: Summary
         if: steps.check.outputs.skip != 'true'
         run: |
-          echo "### ✅ Published \`${{ matrix.component }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Image | \`${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Digest | \`${{ steps.build.outputs.digest }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Platforms | linux/amd64, linux/arm64 |" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Pull: \`docker pull ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### ✅ Published \`${{ matrix.component }}\`"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Image | \`${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }}\` |"
+            echo "| Digest | \`${{ steps.build.outputs.digest }}\` |"
+            echo "| Platforms | linux/amd64, linux/arm64 |"
+            echo ""
+            echo "Pull: \`docker pull ${{ env.IMAGE_PREFIX }}/${{ matrix.component }}:${{ steps.tag.outputs.tag }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

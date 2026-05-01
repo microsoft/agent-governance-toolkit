@@ -187,7 +187,8 @@ jobs:
 
           for pattern in "${UNSAFE_PATTERNS[@]}"; do
             # Find ${{ pattern }} in run: blocks (not in env: blocks which are safe)
-            MATCHES=$(grep -rn "\${{.*${pattern}" .github/workflows/*.yml \
+            GHA_OPEN='${{'
+            MATCHES=$(grep -rn "${GHA_OPEN}.*${pattern}" .github/workflows/*.yml \
               | grep -v "env:" | grep -v "#" || true)
             if [ -n "$MATCHES" ]; then
               {
@@ -249,7 +250,7 @@ jobs:
 
       - name: Check for hardcoded passwords
         run: |
-          # shellcheck disable=SC2016
+          # shellcheck disable=SC2016,SC2001
           PASSWORDS=$(grep -rn 'PASSWORD.*=.*["\x27]' --include="*.yml" --include="*.yaml" \
             . docker-compose*.yml \
             | grep -vi 'CHANGE_ME\|example\|template\|\${' || true)
