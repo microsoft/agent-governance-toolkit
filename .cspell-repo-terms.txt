@@ -132,3 +132,8 @@ Pydantic
 pytest
 pyupgrade
 xfail
+elif
+frozenset
+isinstance
+pathlib
+returncode
