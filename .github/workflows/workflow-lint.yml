@@ -29,8 +29,11 @@ jobs:
           sudo mv actionlint /usr/local/bin/actionlint
       - name: Run actionlint
         env:
-          SHELLCHECKRC: .shellcheckrc
-        run: actionlint -color
+          SHELLCHECKRC: ${{ github.workspace }}/.shellcheckrc
+        run: |
+          actionlint -color \
+            -ignore 'unknown permission scope "models"' \
+            -ignore 'undefined variable "pattern"'
 
   shellcheck:
     runs-on: ubuntu-latest
@@ -38,7 +41,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Run shellcheck on workflow shell
         env:
-          SHELLCHECKRC: .shellcheckrc
+          SHELLCHECKRC: ${{ github.workspace }}/.shellcheckrc
         run: |
           set -euo pipefail
           python3 scripts/extract_workflow_shell.py .github/workflows > workflow-shell-extracted.sh

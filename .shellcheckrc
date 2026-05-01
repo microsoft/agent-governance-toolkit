@@ -18,4 +18,7 @@
 #         word splitting in find-to-argument pipelines where each result is a
 #         separate positional argument.
 
-disable=SC2129,SC2001,SC2317,SC2050,SC2086
+# SC2016: "Expressions don't expand in single quotes" — intentional use of
+#         single-quoted strings for literal grep patterns and markdown fences.
+
+disable=SC2129,SC2001,SC2317,SC2050,SC2086,SC2016
