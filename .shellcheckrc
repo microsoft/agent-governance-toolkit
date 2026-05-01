@@ -11,4 +11,11 @@
 #         extract_workflow_shell.py concatenating independent run: blocks
 #         into a single script for analysis.
 
-disable=SC2129,SC2001,SC2317
+# SC2050: "This expression is constant" — false positive from GHA expression
+#         placeholders (__GHA_EXPR__) replacing ${{ }} in extracted scripts.
+#
+# SC2086: "Double quote to prevent globbing and word splitting" — intentional
+#         word splitting in find-to-argument pipelines where each result is a
+#         separate positional argument.
+
+disable=SC2129,SC2001,SC2317,SC2050,SC2086
