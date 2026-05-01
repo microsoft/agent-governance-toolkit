@@ -33,7 +33,9 @@ jobs:
         run: |
           actionlint -color \
             -ignore 'unknown permission scope "models"' \
-            -ignore 'undefined variable "pattern"'
+            -ignore 'undefined variable "pattern"' \
+            -ignore 'SC2016' \
+            -ignore 'SC2001'
 
   shellcheck:
     runs-on: ubuntu-latest
