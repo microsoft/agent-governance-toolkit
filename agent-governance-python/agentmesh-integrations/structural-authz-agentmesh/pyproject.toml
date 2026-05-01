@@ -22,10 +22,10 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-crypto = ["cryptography>=45.0.3,<47.0"]
+crypto = ["cryptography>=46.0.7,<47.0"]
 dev = [
     "pytest>=7.0,<8.0",
-    "cryptography>=45.0.3,<47.0",
+    "cryptography>=46.0.7,<47.0",
 ]
 
 [project.urls]

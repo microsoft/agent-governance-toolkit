@@ -24,7 +24,7 @@ sqlalchemy>=2.0.0
 asyncpg>=0.29.0
 
 # Async HTTP
-aiohttp>=3.13.3
+aiohttp>=3.13.4
 httpx>=0.26.0
 
 # Monitoring

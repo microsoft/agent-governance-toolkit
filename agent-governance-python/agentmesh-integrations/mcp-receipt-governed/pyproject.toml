@@ -22,8 +22,8 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-crypto = ["cryptography>=41.0,<45.0"]
-dev = ["pytest>=7.0", "cryptography>=41.0,<45.0"]
+crypto = ["cryptography>=46.0.7,<48.0"]
+dev = ["pytest>=7.0", "cryptography>=46.0.7,<48.0"]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"

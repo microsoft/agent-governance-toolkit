@@ -35,7 +35,7 @@ classifiers = [
 dependencies = [
     "mcp>=1.0.0,<2.0",
     "pydantic>=2.5.0,<3.0",
-    "cryptography>=46.0.5,<47.0",
+    "cryptography>=46.0.7,<47.0",
 ]
 
 [project.optional-dependencies]

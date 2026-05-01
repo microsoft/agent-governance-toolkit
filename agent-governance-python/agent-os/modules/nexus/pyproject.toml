@@ -24,7 +24,7 @@ dependencies = [
     "pydantic>=2.4.0,<3.0",
     "pyyaml>=6.0.0,<7.0",
     "structlog>=24.1.0,<25.0",
-    "aiohttp>=3.13.3,<4.0",
+    "aiohttp>=3.13.4,<4.0",
     "agentmesh-trust-protocol>=0.4.0,<1.0",
 ]
 
