@@ -21,6 +21,16 @@ cargo build --release --workspace
 cargo test --release --workspace
 ```
 
+## Contributing: Build, Test, and Lint
+
+Install Rust 1.70 or newer, then run these checks from `agent-governance-rust/`:
+
+```bash
+cargo build --workspace
+cargo test --workspace
+cargo clippy --workspace
+```
+
 ## Crates
 
 ### `agentmesh`
