@@ -162,6 +162,134 @@ func TestNewHTTPGovernanceMiddleware(t *testing.T) {
 	}
 }
 
+func TestNewHTTPGovernanceMiddlewareRequiresPolicy(t *testing.T) {
+	middleware, err := NewHTTPGovernanceMiddleware(HTTPMiddlewareConfig{})
+	if err == nil {
+		t.Fatal("expected missing policy to fail initialization")
+	}
+	if middleware != nil {
+		t.Fatal("expected middleware to be nil when initialization fails")
+	}
+	if !strings.Contains(err.Error(), "policy engine") {
+		t.Fatalf("error = %q, want policy engine requirement", err.Error())
+	}
+}
+
+func TestNewHTTPGovernanceMiddlewarePolicyDenialReturnsForbidden(t *testing.T) {
+	policy := NewPolicyEngine([]PolicyRule{{
+		Action:     "http.post",
+		Effect:     Allow,
+		Conditions: map[string]interface{}{"path": "/allowed"},
+	}})
+
+	middleware, err := NewHTTPGovernanceMiddleware(HTTPMiddlewareConfig{
+		Policy:          policy,
+		AgentIDResolver: LegacyTrustedHeaderAgentIDResolver("X-Agent-ID"),
+	})
+	if err != nil {
+		t.Fatalf("NewHTTPGovernanceMiddleware: %v", err)
+	}
+
+	handlerRan := false
+	request := httptest.NewRequest(http.MethodPost, "/blocked", nil)
+	request.Header.Set("X-Agent-ID", "did:agentmesh:policy-denied")
+	response := httptest.NewRecorder()
+	middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerRan = true
+		w.WriteHeader(http.StatusAccepted)
+	})).ServeHTTP(response, request)
+
+	if handlerRan {
+		t.Fatal("expected policy denial before handler execution")
+	}
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
+	}
+	if !strings.Contains(response.Body.String(), ErrPolicyDenied.Error()) {
+		t.Fatalf("body = %q, want policy denial", response.Body.String())
+	}
+}
+
+func TestNewHTTPGovernanceMiddlewareUsesCustomActionAndContext(t *testing.T) {
+	policy := NewPolicyEngine([]PolicyRule{{
+		Action: "tool.invoke",
+		Effect: Allow,
+		Conditions: map[string]interface{}{
+			"agent_id":      "did:agentmesh:custom-context",
+			"resource":      "vector-index",
+			"tenant":        "contoso",
+			"custom_action": "tool.invoke",
+		},
+	}})
+
+	middleware, err := NewHTTPGovernanceMiddleware(HTTPMiddlewareConfig{
+		Policy: policy,
+		AgentIDResolver: func(*http.Request) (HTTPResolvedAgentIdentity, error) {
+			return HTTPResolvedAgentIdentity{
+				AgentID:  "did:agentmesh:custom-context",
+				Verified: true,
+			}, nil
+		},
+		ActionResolver: func(request *http.Request) string {
+			if request.Header.Get("X-Tool-Action") == "invoke" {
+				return "tool.invoke"
+			}
+			return "tool.unknown"
+		},
+		ContextBuilder: func(request *http.Request) map[string]interface{} {
+			return map[string]interface{}{
+				"resource":      request.URL.Query().Get("resource"),
+				"tenant":        request.Header.Get("X-Tenant"),
+				"custom_action": "tool.invoke",
+			}
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewHTTPGovernanceMiddleware: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/invoke?resource=vector-index", nil)
+	request.Header.Set("X-Tool-Action", "invoke")
+	request.Header.Set("X-Tenant", "contoso")
+	response := httptest.NewRecorder()
+	middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	})).ServeHTTP(response, request)
+
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body = %q", response.Code, http.StatusAccepted, response.Body.String())
+	}
+}
+
+func TestNewHTTPGovernanceMiddlewarePreservesDownstreamErrorStatus(t *testing.T) {
+	policy := NewPolicyEngine([]PolicyRule{{
+		Action: "http.get",
+		Effect: Allow,
+	}})
+
+	middleware, err := NewHTTPGovernanceMiddleware(HTTPMiddlewareConfig{
+		Policy:          policy,
+		AgentIDResolver: LegacyTrustedHeaderAgentIDResolver("X-Agent-ID"),
+	})
+	if err != nil {
+		t.Fatalf("NewHTTPGovernanceMiddleware: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/run", nil)
+	request.Header.Set("X-Agent-ID", "did:agentmesh:downstream-error")
+	response := httptest.NewRecorder()
+	middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "downstream failed", http.StatusServiceUnavailable)
+	})).ServeHTTP(response, request)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+	}
+	if !strings.Contains(response.Body.String(), "downstream failed") {
+		t.Fatalf("body = %q, want downstream error", response.Body.String())
+	}
+}
+
 func TestNewHTTPGovernanceMiddlewareFailsClosedWithoutVerifiedIdentity(t *testing.T) {
 	policy := NewPolicyEngine([]PolicyRule{{
 		Action: "http.post",
