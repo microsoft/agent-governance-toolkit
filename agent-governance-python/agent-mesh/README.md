@@ -245,6 +245,22 @@ sequenceDiagram
 
 ## Quick Start
 
+### Install, Configure, Run
+
+```bash
+pip install agentmesh-platform
+```
+
+```python
+from agentmesh import AgentMeshClient
+
+client = AgentMeshClient("orders-agent", capabilities=["orders.read"])
+result = client.execute_with_governance("orders.read", {"resource": "orders"})
+print(result.decision, result.trust_score)
+```
+
+For the full registration flow, see the [Registration Hello World tutorial](./examples/00-registration-hello-world/).
+
 ### Option 1: Secure Claude Desktop (Recommended)
 
 ```bash
