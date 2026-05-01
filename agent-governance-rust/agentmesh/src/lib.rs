@@ -349,6 +349,38 @@ policies:
     }
 
     #[test]
+    fn test_approval_required_action_preserves_trust_and_audits_label() {
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: deploy-gate
+    type: approval
+    actions:
+      - "deploy.*"
+    min_approvals: 2
+"#;
+        let opts = ClientOptions {
+            policy_yaml: Some(yaml.to_string()),
+            ..Default::default()
+        };
+        let client = AgentMeshClient::with_options("approval-audit", opts).unwrap();
+        let did = client.identity.did.clone();
+        let before = client.trust.get_trust_score(&did).score;
+
+        let result = client.execute_with_governance("deploy.production", None);
+        let after = client.trust.get_trust_score(&did).score;
+
+        assert!(!result.allowed);
+        assert!(matches!(
+            result.decision,
+            PolicyDecision::RequiresApproval(_)
+        ));
+        assert_eq!(result.audit_entry.decision, "requires_approval");
+        assert_eq!(after, before);
+    }
+
+    #[test]
     fn test_governance_with_rate_limited_action() {
         let yaml = r#"
 version: "1.0"

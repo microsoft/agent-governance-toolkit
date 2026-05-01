@@ -820,6 +820,18 @@ policies:
     }
 
     #[test]
+    fn test_loading_from_missing_file_returns_io_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing-policy.yaml");
+        let engine = PolicyEngine::new();
+        let result = engine.load_from_file(path.to_str().unwrap());
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), PolicyError::Io(_)));
+        assert!(!engine.is_loaded());
+    }
+
+    #[test]
     fn test_multiple_rate_limit_rules_for_different_actions() {
         let yaml = r#"
 version: "1.0"
