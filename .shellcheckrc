@@ -1,0 +1,14 @@
+# Shellcheck configuration for GitHub Actions workflow scripts
+#
+# SC2129: "Consider using { cmd1; cmd2; } >> file instead of individual
+#         redirects" — style preference; individual redirects are clearer
+#         in workflow scripts where each echo is a distinct logical step.
+#
+# SC2001: "See if you can use ${variable//search/replace} instead" — sed
+#         is preferred for per-line substitution on multiline strings.
+#
+# SC2317: "Command appears to be unreachable" — false positive caused by
+#         extract_workflow_shell.py concatenating independent run: blocks
+#         into a single script for analysis.
+
+disable=SC2129,SC2001,SC2317
