@@ -9,7 +9,7 @@
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![PyPI](https://img.shields.io/pypi/v/agent-sre)](https://pypi.org/project/agent-governance-python/agent-sre/)
+[![PyPI](https://img.shields.io/pypi/v/agent-sre)](https://pypi.org/project/agent-sre/)
 
 > [!IMPORTANT]
 > **Public Preview** — The `agent-sre` package on PyPI is a Microsoft-signed
