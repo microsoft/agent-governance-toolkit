@@ -1,5 +1,9 @@
 # @microsoft/agent-governance-sdk
 
+[![npm](https://img.shields.io/npm/v/@microsoft/agent-governance-sdk)](https://www.npmjs.com/package/@microsoft/agent-governance-sdk)
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
+
 > [!IMPORTANT]
 > **Public Preview** ΓÇö This npm package is a Microsoft-signed public preview release.
 > APIs may change before GA.
