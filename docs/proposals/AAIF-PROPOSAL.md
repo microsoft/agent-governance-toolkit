@@ -6,7 +6,7 @@
 **Requested Level:** Sandbox → Incubation
 **License:** MIT
 **Primary Contact:** Agent Governance Toolkit Team (agentgovtoolkit@microsoft.com)
-**Status:** 🟢 Ready for submission -- Public Preview shipped (v3.2.0). 13,000+ tests. 5 SDK languages. 19 framework integrations. Microsoft-signed releases via ESRP.
+**Status:** 🟢 Ready for submission -- Public Preview shipped (v3.2.0). 5 SDK languages. 19 framework integrations. Microsoft-signed releases via ESRP.
 
 ---
 

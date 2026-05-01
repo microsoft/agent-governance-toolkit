@@ -7,6 +7,8 @@ Current maintainers of the Agent Governance Toolkit.
 | Name | GitHub | Role | Scope |
 |------|--------|------|-------|
 | Imran Siddique | [@imran-siddique](https://github.com/imran-siddique) | Project Lead | All packages |
+| Jack Batzner | [@jackbatzner](https://github.com/jackbatzner) | Maintainer | CI/CD, documentation |
+| Elton Carr | [@eltoncarr-ms](https://github.com/eltoncarr-ms) | Maintainer | CI workflows, security tooling |
 
 ## Maintainer Responsibilities
 

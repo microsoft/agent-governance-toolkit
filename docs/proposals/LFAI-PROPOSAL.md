@@ -28,7 +28,7 @@ The ecosystem consists of 5 interoperating packages:
 - **5 PyPI packages** published
 - **MCP server** on npm + [Glama listing](https://glama.ai/mcp/servers/@microsoft/agentos-mcp-server)
 - **10/10 OWASP Agentic Top 10** risks covered
-- **4 external contributors**
+- **20+ contributors** from multiple organizations
 - All repos: MIT license, CI/CD, branch protection, code of conduct
 
 ## Alignment with LF AI & Data Mission
