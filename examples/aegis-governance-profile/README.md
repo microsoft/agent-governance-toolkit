@@ -1,3 +1,5 @@
+<!-- cspell:words cedarpy pyyaml startswith stdlib -->
+
 # AEGIS Governance Profile
 
 > **Community-contributed and experimental, not an AGT-endorsed or recommended approach.**

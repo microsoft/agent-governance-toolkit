@@ -3,6 +3,8 @@
 #
 # Community-contributed example. Internal source content additionally
 # licensed Apache 2.0 (see LICENSE in this directory).
+#
+# cspell:words cedarpy pyyaml startswith stdlib
 """
 AEGIS governance profile compiler.
 
@@ -212,9 +214,7 @@ def _build_metadata(raw: dict[str, Any], source: str) -> ProfileMetadata:
 def _build_principal(raw: dict[str, Any], source: str) -> Principal:
     role = _require_str(raw, "role", f"{source}:principal")
     if not _is_snake_case(role):
-        raise ProfileError(
-            f"{source}:principal.role must be snake_case, got {role!r}"
-        )
+        raise ProfileError(f"{source}:principal.role must be snake_case, got {role!r}")
     return Principal(role=role)
 
 
@@ -228,18 +228,14 @@ def _build_resource_scopes(raw: dict[str, Any], source: str) -> ResourceScopes:
     allowed = _require_pattern_list(
         raw, "allowed_patterns", f"{source}:resource_scopes"
     )
-    denied = _require_pattern_list(
-        raw, "denied_patterns", f"{source}:resource_scopes"
-    )
+    denied = _require_pattern_list(raw, "denied_patterns", f"{source}:resource_scopes")
     return ResourceScopes(allowed_patterns=allowed, denied_patterns=denied)
 
 
 # ── Validators ────────────────────────────────────────────────
 
 
-def _require(
-    raw: dict[str, Any], key: str, source: str, expected_type: type
-) -> Any:
+def _require(raw: dict[str, Any], key: str, source: str, expected_type: type) -> Any:
     if key not in raw:
         raise ProfileError(f"{source}: missing required key {key!r}")
     value = raw[key]
@@ -258,9 +254,7 @@ def _require_str(raw: dict[str, Any], key: str, source: str) -> str:
     return str(value)
 
 
-def _require_action_list(
-    raw: dict[str, Any], key: str, source: str
-) -> tuple[str, ...]:
+def _require_action_list(raw: dict[str, Any], key: str, source: str) -> tuple[str, ...]:
     items = _require(raw, key, source, list)
     if not items:
         raise ProfileError(f"{source}: {key!r} must be non-empty")
@@ -268,8 +262,7 @@ def _require_action_list(
     for index, item in enumerate(items):
         if not isinstance(item, str):
             raise ProfileError(
-                f"{source}: {key}[{index}] must be a string, "
-                f"got {type(item).__name__}"
+                f"{source}: {key}[{index}] must be a string, got {type(item).__name__}"
             )
         if not _is_snake_case(item):
             raise ProfileError(
@@ -291,8 +284,7 @@ def _require_pattern_list(
     for index, item in enumerate(items):
         if not isinstance(item, str):
             raise ProfileError(
-                f"{source}: {key}[{index}] must be a string, "
-                f"got {type(item).__name__}"
+                f"{source}: {key}[{index}] must be a string, got {type(item).__name__}"
             )
         if not item.endswith("/*"):
             raise ProfileError(
@@ -315,7 +307,9 @@ def _is_snake_case(value: str) -> bool:
         return False
     if not value[0].isalpha():
         return False
-    return all(c.islower() or c.isdigit() or c == "_" for c in value) and "__" not in value
+    return (
+        all(c.islower() or c.isdigit() or c == "_" for c in value) and "__" not in value
+    )
 
 
 # ── Cedar emission ────────────────────────────────────────────
@@ -501,19 +495,13 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "--cedar-name",
         type=str,
         default=None,
-        help=(
-            "Filename for the generated Cedar policy "
-            "(default: <profile-id>.cedar)."
-        ),
+        help=("Filename for the generated Cedar policy (default: <profile-id>.cedar)."),
     )
     parser.add_argument(
         "--rego-name",
         type=str,
         default=None,
-        help=(
-            "Filename for the generated Rego policy "
-            "(default: <profile-id>.rego)."
-        ),
+        help=("Filename for the generated Rego policy (default: <profile-id>.rego)."),
     )
     return parser.parse_args(argv)
 
@@ -545,13 +533,9 @@ def main(argv: list[str] | None = None) -> int:
     rego_path.write_text(rego_text, encoding="utf-8")
 
     print(
-        f"[compile] {args.profile} -> {cedar_path} "
-        f"({cedar_text.count(chr(10))} lines)"
+        f"[compile] {args.profile} -> {cedar_path} ({cedar_text.count(chr(10))} lines)"
     )
-    print(
-        f"[compile] {args.profile} -> {rego_path} "
-        f"({rego_text.count(chr(10))} lines)"
-    )
+    print(f"[compile] {args.profile} -> {rego_path} ({rego_text.count(chr(10))} lines)")
     return 0
 
 

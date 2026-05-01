@@ -1,3 +1,5 @@
+# cspell:words startswith
+#
 # AEGIS Governance Profile — research agent
 #
 # A profile expresses *what an agent (or class of agents) is permitted
@@ -11,7 +13,7 @@ profile:
   version: 1.0.0
   description: >
     Standard governance profile for research-class agents. Permits
-    information-gathering and summarisation actions over public and
+    information-gathering and summarization actions over public and
     published-research scopes; denies destructive actions and access
     to confidential or PII-bearing scopes.
 

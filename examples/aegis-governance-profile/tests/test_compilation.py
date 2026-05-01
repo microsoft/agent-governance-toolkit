@@ -1,5 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+#
+# cspell:words cedarpy startswith
 """
 Tests for the AEGIS governance profile compiler.
 
@@ -100,9 +102,7 @@ class TestLoader:
 
     def test_rejects_missing_top_level_key(self, tmp_path: Path) -> None:
         bad = tmp_path / "bad.yaml"
-        bad.write_text(
-            'profile:\n  id: x\n  version: "1.0"\n  description: x\n'
-        )
+        bad.write_text('profile:\n  id: x\n  version: "1.0"\n  description: x\n')
         with pytest.raises(ProfileError, match="missing required key 'principal'"):
             load_profile(bad)
 
@@ -115,16 +115,16 @@ class TestLoader:
     def test_rejects_overlapping_actions(self, tmp_path: Path) -> None:
         bad = tmp_path / "bad.yaml"
         bad.write_text(
-            'profile:\n'
-            '  id: x\n'
+            "profile:\n"
+            "  id: x\n"
             '  version: "1.0"\n'
-            '  description: x\n'
-            'principal:\n'
-            '  role: r\n'
-            'capabilities:\n'
-            '  allowed_actions: [a]\n'
-            '  denied_actions: [a]\n'
-            'resource_scopes:\n'
+            "  description: x\n"
+            "principal:\n"
+            "  role: r\n"
+            "capabilities:\n"
+            "  allowed_actions: [a]\n"
+            "  denied_actions: [a]\n"
+            "resource_scopes:\n"
             "  allowed_patterns: ['p/*']\n"
             "  denied_patterns: ['q/*']\n"
         )
@@ -134,16 +134,16 @@ class TestLoader:
     def test_rejects_non_snake_case_action(self, tmp_path: Path) -> None:
         bad = tmp_path / "bad.yaml"
         bad.write_text(
-            'profile:\n'
-            '  id: x\n'
+            "profile:\n"
+            "  id: x\n"
             '  version: "1.0"\n'
-            '  description: x\n'
-            'principal:\n'
-            '  role: r\n'
-            'capabilities:\n'
-            '  allowed_actions: [WebSearch]\n'
-            '  denied_actions: [b]\n'
-            'resource_scopes:\n'
+            "  description: x\n"
+            "principal:\n"
+            "  role: r\n"
+            "capabilities:\n"
+            "  allowed_actions: [WebSearch]\n"
+            "  denied_actions: [b]\n"
+            "resource_scopes:\n"
             "  allowed_patterns: ['p/*']\n"
             "  denied_patterns: ['q/*']\n"
         )
@@ -153,16 +153,16 @@ class TestLoader:
     def test_rejects_pattern_without_glob_suffix(self, tmp_path: Path) -> None:
         bad = tmp_path / "bad.yaml"
         bad.write_text(
-            'profile:\n'
-            '  id: x\n'
+            "profile:\n"
+            "  id: x\n"
             '  version: "1.0"\n'
-            '  description: x\n'
-            'principal:\n'
-            '  role: r\n'
-            'capabilities:\n'
-            '  allowed_actions: [a]\n'
-            '  denied_actions: [b]\n'
-            'resource_scopes:\n'
+            "  description: x\n"
+            "principal:\n"
+            "  role: r\n"
+            "capabilities:\n"
+            "  allowed_actions: [a]\n"
+            "  denied_actions: [b]\n"
+            "resource_scopes:\n"
             "  allowed_patterns: ['public']\n"
             "  denied_patterns: ['q/*']\n"
         )
@@ -343,8 +343,12 @@ def _oracle_decision(profile: Profile, request: dict[str, str]) -> bool:
     if request["tool_name"] not in profile.capabilities.allowed_actions:
         return False
     if request["tool_name"] in profile.capabilities.denied_actions:
-        return False  # defensive — load_profile rejects overlap, but oracle is independent
-    if not _matches_any(request["resource_path"], profile.resource_scopes.allowed_patterns):
+        return (
+            False  # defensive — load_profile rejects overlap, but oracle is independent
+        )
+    if not _matches_any(
+        request["resource_path"], profile.resource_scopes.allowed_patterns
+    ):
         return False
     if _matches_any(request["resource_path"], profile.resource_scopes.denied_patterns):
         return False
@@ -471,15 +475,11 @@ def _eval_atom(expr: str, request: dict[str, str]) -> bool:
         return _eval_or(expr, request)
     if _split_top_level(expr, "&&") != [expr]:
         return _eval_and(expr, request)
-    eq_match = re.fullmatch(
-        r'context\.(\w+)\s*==\s*"([^"]+)"', expr, re.DOTALL
-    )
+    eq_match = re.fullmatch(r'context\.(\w+)\s*==\s*"([^"]+)"', expr, re.DOTALL)
     if eq_match:
         field, value = eq_match.group(1), eq_match.group(2)
         return request.get(field, "") == value
-    like_match = re.fullmatch(
-        r'context\.(\w+)\s+like\s+"([^"]+)"', expr, re.DOTALL
-    )
+    like_match = re.fullmatch(r'context\.(\w+)\s+like\s+"([^"]+)"', expr, re.DOTALL)
     if like_match:
         field, pattern = like_match.group(1), like_match.group(2)
         return fnmatch.fnmatchcase(request.get(field, ""), pattern)
@@ -538,9 +538,7 @@ def _rego_decide(rego_text: str, request: dict[str, str]) -> bool:
     plus the four supporting rules. We re-implement the membership and
     prefix checks in Python against the request.
     """
-    role_match = re.search(
-        r'input\.principal_role\s*==\s*"([^"]+)"', rego_text
-    )
+    role_match = re.search(r'input\.principal_role\s*==\s*"([^"]+)"', rego_text)
     assert role_match, "expected principal_role check in emitted Rego"
     expected_role = role_match.group(1)
     if request["principal_role"] != expected_role:
@@ -563,17 +561,13 @@ def _rego_decide(rego_text: str, request: dict[str, str]) -> bool:
 
 
 def _extract_rego_set(rego_text: str, name: str) -> set[str]:
-    match = re.search(
-        rf"{re.escape(name)}\s*:=\s*\{{(.*?)\}}", rego_text, re.DOTALL
-    )
+    match = re.search(rf"{re.escape(name)}\s*:=\s*\{{(.*?)\}}", rego_text, re.DOTALL)
     assert match, f"missing Rego set: {name}"
     return set(re.findall(r'"([^"]+)"', match.group(1)))
 
 
 def _extract_rego_array(rego_text: str, name: str) -> list[str]:
-    match = re.search(
-        rf"{re.escape(name)}\s*:=\s*\[(.*?)\]", rego_text, re.DOTALL
-    )
+    match = re.search(rf"{re.escape(name)}\s*:=\s*\[(.*?)\]", rego_text, re.DOTALL)
     assert match, f"missing Rego array: {name}"
     return re.findall(r'"([^"]+)"', match.group(1))
 
@@ -597,7 +591,11 @@ def _extract_when_clause(cedar_text: str, effect: str) -> str:
 
 
 def _extract_all_when_clauses(cedar_text: str, effect: str) -> list[str]:
-    return [s.when for s in _parse_cedar_statements(cedar_text) if s.effect == effect and s.when]
+    return [
+        s.when
+        for s in _parse_cedar_statements(cedar_text)
+        if s.effect == effect and s.when
+    ]
 
 
 # ── Oracle equivalence tests ──────────────────────────────────
@@ -639,8 +637,7 @@ class TestOracleEquivalence:
             cedar = _cedar_decide(cedar_text, request)
             rego = _rego_decide(rego_text, request)
             assert cedar == rego, (
-                f"Cedar/Rego disagreed for {request}: "
-                f"cedar={cedar}, rego={rego}"
+                f"Cedar/Rego disagreed for {request}: cedar={cedar}, rego={rego}"
             )
 
 
@@ -650,6 +647,7 @@ class TestOracleEquivalence:
 def _cedarpy_available() -> bool:
     try:
         import cedarpy  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -679,9 +677,7 @@ class TestCedarPyIntegration:
                     "resource_path": request["resource_path"],
                 },
             }
-            response = cedarpy.is_authorized(
-                cedar_request, cedar_text, entities=[]
-            )
+            response = cedarpy.is_authorized(cedar_request, cedar_text, entities=[])
             actual = response.decision == cedarpy.Decision.Allow
             assert actual == expected, (
                 f"cedarpy disagreed with oracle for {request}: "
@@ -727,10 +723,13 @@ def _opa_eval(rego_file: Path, request: dict[str, str]) -> bool:
     # Windows arg-handling quirk that mangles paths containing a drive letter.
     proc = subprocess.run(  # noqa: S603 — trusted: opa is opted-in via PATH presence
         [
-            "opa", "eval",
-            "--format", "json",
+            "opa",
+            "eval",
+            "--format",
+            "json",
             "--stdin-input",
-            "--data", rego_file.name,
+            "--data",
+            rego_file.name,
             "data.agentos.aegis.allow",
         ],
         input=json.dumps(request),
