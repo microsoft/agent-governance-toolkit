@@ -272,7 +272,7 @@ def check_repo_themes(username: str, repos: list[dict] | None = None) -> list[Si
         ))
 
     # Fork burst detection: many forks created in a short window
-    fork_signals = _check_fork_burst(repos)
+    fork_signals = _check_fork_burst(repos, username=username)
     signals.extend(fork_signals)
 
     # Batch naming detection: many repos with same suffix created together
@@ -282,8 +282,34 @@ def check_repo_themes(username: str, repos: list[dict] | None = None) -> list[Si
     return signals
 
 
-def _check_fork_burst(repos: list[dict]) -> list[Signal]:
-    """Detect credibility-farming fork bursts (e.g., forking awesome lists)."""
+_fork_pr_cache: dict[str, bool] = {}
+
+
+def _fork_has_outgoing_pr(username: str, fork_name: str) -> bool:
+    """Check if a fork has at least one PR (open, merged, or closed) to its parent."""
+    cache_key = f"{username}/{fork_name}"
+    if cache_key in _fork_pr_cache:
+        return _fork_pr_cache[cache_key]
+
+    result = False
+    try:
+        prs = _api(f"/repos/{username}/{fork_name}/pulls", {
+            "state": "all", "per_page": "1",
+        })
+        result = bool(prs)
+    except Exception:
+        pass
+    _fork_pr_cache[cache_key] = result
+    return result
+
+
+def _check_fork_burst(repos: list[dict], *, username: str = "") -> list[Signal]:
+    """Detect credibility-farming fork bursts (e.g., forking awesome lists).
+
+    Forks that have at least one outgoing PR to their parent repo are
+    excluded from the burst count, since those represent legitimate
+    contributions rather than profile padding.
+    """
     signals: list[Signal] = []
     now = datetime.now(timezone.utc)
 
@@ -302,6 +328,17 @@ def _check_fork_burst(repos: list[dict]) -> list[Signal]:
 
     if not forks:
         return signals
+
+    # Exclude forks that have outgoing PRs (legitimate contributions)
+    if username:
+        awesome_forks = [
+            f for f in awesome_forks
+            if not _fork_has_outgoing_pr(username, f["name"])
+        ]
+        forks = [
+            f for f in forks
+            if not _fork_has_outgoing_pr(username, f["name"])
+        ]
 
     forks.sort(key=lambda f: f["created"])
     max_window = 0

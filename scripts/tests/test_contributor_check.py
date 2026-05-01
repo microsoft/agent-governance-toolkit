@@ -27,6 +27,7 @@ from contributor_check import (
     _check_fork_burst,
     _check_batch_naming,
     _check_self_promotion,
+    _fork_has_outgoing_pr,
 )
 
 
@@ -267,6 +268,42 @@ class TestForkBurst:
         ]
         signals = _check_fork_burst(repos)
         assert len(signals) == 0
+
+    @patch("contributor_check._fork_has_outgoing_pr", return_value=True)
+    def test_awesome_forks_with_prs_excluded(self, mock_pr):
+        """Forks that have outgoing PRs are legitimate and should not trigger."""
+        now = datetime.now(timezone.utc)
+        repos = [
+            {"name": f"awesome-list-{i}", "fork": True, "description": "curated list", "created_at": (now - timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(5)
+        ]
+        signals = _check_fork_burst(repos, username="testuser")
+        names = [s.name for s in signals]
+        assert "awesome_fork_burst" not in names
+
+    @patch("contributor_check._fork_has_outgoing_pr", side_effect=lambda u, n: n == "awesome-list-0")
+    def test_mixed_forks_partial_prs(self, mock_pr):
+        """Only forks without PRs count toward the burst."""
+        now = datetime.now(timezone.utc)
+        repos = [
+            {"name": f"awesome-list-{i}", "fork": True, "description": "curated list", "created_at": (now - timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(4)
+        ]
+        # 4 forks, 1 has PR -> 3 remain, which hits >= 3 threshold
+        signals = _check_fork_burst(repos, username="testuser")
+        names = [s.name for s in signals]
+        assert "awesome_fork_burst" in names
+
+    def test_no_username_skips_pr_check(self):
+        """Without username, PR check is skipped (backward compat)."""
+        now = datetime.now(timezone.utc)
+        repos = [
+            {"name": f"awesome-list-{i}", "fork": True, "description": "curated list", "created_at": (now - timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(5)
+        ]
+        signals = _check_fork_burst(repos)
+        names = [s.name for s in signals]
+        assert "awesome_fork_burst" in names
 
 
 # ---------------------------------------------------------------------------
