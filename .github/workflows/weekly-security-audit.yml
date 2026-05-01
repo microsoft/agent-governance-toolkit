@@ -23,16 +23,19 @@ jobs:
       - name: Scan for unregistered pip install targets
         id: dep-check
         run: |
+          # shellcheck disable=SC2046
           python scripts/check_dependency_confusion.py --strict \
             $(find . -name "*.md" -o -name "*.py" -o -name "*.ts" -o -name "*.txt" -o -name "*.yaml" -o -name "*.svg" -o -name "*.ipynb" \
               | grep -v node_modules | grep -v .git | grep -v __pycache__ | grep -v .venv) \
             > dep-confusion-report.txt 2>&1 || true
           if [ -s dep-confusion-report.txt ]; then
             echo "has-findings=true" >> "$GITHUB_OUTPUT"
-            echo "### ⚠️ Dependency Confusion Findings" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            cat dep-confusion-report.txt >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "### ⚠️ Dependency Confusion Findings"
+              echo '```'
+              cat dep-confusion-report.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "has-findings=false" >> "$GITHUB_OUTPUT"
             echo "### ✅ No dependency confusion findings" >> "$GITHUB_STEP_SUMMARY"
@@ -89,10 +92,12 @@ jobs:
             | grep -v "test_" | grep -v "text_tool" | grep -v "security_skills" \
             | grep -v "example" | grep -v "benchmark" | grep -v "red_team" || true)
           if [ -n "$FINDINGS" ]; then
-            echo "⚠️ MD5/SHA1 found in production code:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "$FINDINGS" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "⚠️ MD5/SHA1 found in production code:"
+              echo '```'
+              echo "$FINDINGS"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "✅ No weak cryptography in production code" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -102,10 +107,12 @@ jobs:
           FINDINGS=$(grep -rn "pickle\.load" --include="*.py" . \
             | grep -v "test_" | grep -v "security_skills" | grep -v "# " || true)
           if [ -n "$FINDINGS" ]; then
-            echo "⚠️ pickle usage found:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "$FINDINGS" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "⚠️ pickle usage found:"
+              echo '```'
+              echo "$FINDINGS"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "✅ No pickle deserialization in production code" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -127,10 +134,12 @@ jobs:
           HEAD_REFS=$(grep -rn 'ref:.*head\.sha\|ref:.*head_sha' .github/workflows/*.yml \
             | grep -v '#' | grep -v 'workflow_run' || true)
           if [ -n "$HEAD_REFS" ]; then
-            echo "🔴 CRITICAL: pull_request_target workflow checks out HEAD ref:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "$HEAD_REFS" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "🔴 CRITICAL: pull_request_target workflow checks out HEAD ref:"
+              echo '```'
+              echo "$HEAD_REFS"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
             FAIL=1
           else
             echo "✅ No HEAD ref checkout in pull_request_target workflows" >> "$GITHUB_STEP_SUMMARY"
@@ -181,10 +190,12 @@ jobs:
             MATCHES=$(grep -rn "\${{.*${pattern}" .github/workflows/*.yml \
               | grep -v "env:" | grep -v "#" || true)
             if [ -n "$MATCHES" ]; then
-              echo "⚠️ Potential injection: \`${pattern}\` in run: block:" >> "$GITHUB_STEP_SUMMARY"
-              echo '```' >> "$GITHUB_STEP_SUMMARY"
-              echo "$MATCHES" >> "$GITHUB_STEP_SUMMARY"
-              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              {
+                echo "⚠️ Potential injection: \`${pattern}\` in run: block:"
+                echo '```'
+                echo "$MATCHES"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
               FAIL=1
             fi
           done
@@ -226,24 +237,29 @@ jobs:
           CORS=$(grep -rn 'allow_origins.*\[.*"\*"' --include="*.py" . \
             | grep -v test_ | grep -v example || true)
           if [ -n "$CORS" ]; then
-            echo "⚠️ Wildcard CORS found:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "$CORS" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "⚠️ Wildcard CORS found:"
+              echo '```'
+              echo "$CORS"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "✅ No wildcard CORS in production code" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Check for hardcoded passwords
         run: |
+          # shellcheck disable=SC2016
           PASSWORDS=$(grep -rn 'PASSWORD.*=.*["\x27]' --include="*.yml" --include="*.yaml" \
             . docker-compose*.yml \
             | grep -vi 'CHANGE_ME\|example\|template\|\${' || true)
           if [ -n "$PASSWORDS" ]; then
-            echo "⚠️ Potential hardcoded passwords:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "$PASSWORDS" | sed 's/=.*/=***REDACTED***/' >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "⚠️ Potential hardcoded passwords:"
+              echo '```'
+              echo "$PASSWORDS" | sed 's/=.*/=***REDACTED***/'
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "✅ No hardcoded passwords found" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -253,10 +269,12 @@ jobs:
           BINDINGS=$(grep -rn 'host.*=.*"0\.0\.0\.0"\|default.*"0\.0\.0\.0"' --include="*.py" . \
             | grep -v test_ | grep -v example || true)
           if [ -n "$BINDINGS" ]; then
-            echo "⚠️ Services binding to 0.0.0.0:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "$BINDINGS" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "⚠️ Services binding to 0.0.0.0:"
+              echo '```'
+              echo "$BINDINGS"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "✅ No all-interface bindings in production code" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -277,10 +295,12 @@ jobs:
             | grep -v node_modules | grep -v test | grep -v "\.d\.ts" \
             | grep -v "escHtml\|escapeHtml\|esc(" || true)
           if [ -n "$INNERHTML" ]; then
-            echo "⚠️ innerHTML usage without visible escaping:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "$INNERHTML" | head -20 >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "⚠️ innerHTML usage without visible escaping:"
+              echo '```'
+              echo "$INNERHTML" | head -20
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "✅ No unescaped innerHTML in TypeScript" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -292,10 +312,12 @@ jobs:
             | grep -v test_ | grep -v security_skills | grep -v "# " \
             | grep -v scanner | grep -v detect | grep -v "example" || true)
           if [ -n "$EVALS" ]; then
-            echo "⚠️ eval/exec in production code:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "$EVALS" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "⚠️ eval/exec in production code:"
+              echo '```'
+              echo "$EVALS"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "✅ No eval/exec in production code" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -304,10 +326,12 @@ jobs:
           YAML_UNSAFE=$(grep -rn 'yaml\.load(' --include="*.py" . \
             | grep -v safe_load | grep -v test_ | grep -v "# " | grep -v scanner || true)
           if [ -n "$YAML_UNSAFE" ]; then
-            echo "⚠️ Unsafe yaml.load() found:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "$YAML_UNSAFE" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "⚠️ Unsafe yaml.load() found:"
+              echo '```'
+              echo "$YAML_UNSAFE"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "✅ No unsafe yaml.load() in production code" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -316,10 +340,12 @@ jobs:
           SHELL_TRUE=$(grep -rn 'shell=True' --include="*.py" . \
             | grep -v test_ | grep -v "# " | grep -v scanner || true)
           if [ -n "$SHELL_TRUE" ]; then
-            echo "⚠️ subprocess shell=True found:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "$SHELL_TRUE" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "⚠️ subprocess shell=True found:"
+              echo '```'
+              echo "$SHELL_TRUE"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "✅ No shell=True in production code" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -340,10 +366,12 @@ jobs:
             | grep -v "./" | grep -v "#" \
             | grep -vE "@[a-f0-9]{40}" || true)
           if [ -n "$UNPINNED" ]; then
-            echo "⚠️ Unpinned actions found:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "$UNPINNED" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "⚠️ Unpinned actions found:"
+              echo '```'
+              echo "$UNPINNED"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "✅ All external actions are SHA-pinned" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -363,10 +391,12 @@ jobs:
           UNBOUNDED=$(grep -rn '>=.*"' --include="pyproject.toml" . \
             | grep -v '<' | grep -v '#' | grep -v 'requires-python' || true)
           if [ -n "$UNBOUNDED" ]; then
-            echo "⚠️ Dependencies without upper bounds:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "$UNBOUNDED" | head -20 >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "⚠️ Dependencies without upper bounds:"
+              echo '```'
+              echo "$UNBOUNDED" | head -20
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "✅ All pyproject.toml deps have upper bounds" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -377,10 +407,12 @@ jobs:
             --include="Dockerfile*" . docker-compose*.yml \
             | grep -v '#' | grep -v node_modules || true)
           if [ -n "$LATEST" ]; then
-            echo "⚠️ Docker images using :latest tag:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            echo "$LATEST" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "⚠️ Docker images using :latest tag:"
+              echo '```'
+              echo "$LATEST"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "✅ No :latest Docker image tags" >> "$GITHUB_STEP_SUMMARY"
           fi

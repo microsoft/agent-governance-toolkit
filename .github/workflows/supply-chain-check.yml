@@ -20,7 +20,7 @@ jobs:
         run: |
           echo "Checking for ^ or ~ version ranges in package.json files..."
           VIOLATIONS=0
-          for f in $(find packages -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*'); do
+          while IFS= read -r f; do
             # Exclude engines block (VS Code extensions require ^ ranges for engine compat)
             if python3 -c "
           import json, sys
@@ -38,7 +38,7 @@ jobs:
                 VIOLATIONS=$((VIOLATIONS + 1))
               fi
             fi
-          done
+          done < <(find packages -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*')
           if [ $VIOLATIONS -gt 0 ]; then
             echo ""
             echo "Found $VIOLATIONS package.json files with ^ or ~ version ranges."
@@ -50,8 +50,7 @@ jobs:
       - name: Check lockfile presence
         run: |
           echo "Checking for lockfiles..."
-          MISSING=0
-          for f in $(find packages -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*'); do
+          while IFS= read -r f; do
             DIR=$(dirname "$f")
             if [ ! -f "$DIR/package-lock.json" ] && [ ! -f "$DIR/pnpm-lock.yaml" ] && [ ! -f "$DIR/yarn.lock" ]; then
               # Only flag if there are actual dependencies (not just name+version)
@@ -59,5 +58,5 @@ jobs:
                 echo "WARNING: $DIR has dependencies but no lockfile"
               fi
             fi
-          done
+          done < <(find packages -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*')
           echo "Lockfile check complete"
