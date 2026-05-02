@@ -1,5 +1,5 @@
-# Copyright 2026 AEGIS Operations LLC.
-# Licensed under the Apache License, Version 2.0 (see LICENSE in this directory).
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 #
 # cspell:words cedarpy pyyaml startswith stdlib
 """

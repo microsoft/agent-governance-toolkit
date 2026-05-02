@@ -3,7 +3,7 @@
 # AEGIS Governance Profile
 
 > **Community-contributed and experimental, not an AGT-endorsed or recommended approach.**
-> The governance-profile format demonstrated here is not yet standardized and may evolve based on adopter feedback. The example is licensed Apache 2.0 (see `LICENSE` in this directory).
+> The governance-profile format demonstrated here is not yet standardized and may evolve based on adopter feedback.
 
 A self-contained example that compiles a single declarative **AEGIS governance profile** (YAML) into equivalent **Cedar** and **Rego** policies suitable for AGT's external policy backends.
 
@@ -14,7 +14,6 @@ The example targets operators who think in domain terms — role, allowed action
 ```
 aegis-governance-profile/
 ├── README.md                              # this file
-├── LICENSE                                # Apache 2.0
 ├── compile.py                             # standalone compiler (stdlib + PyYAML only)
 ├── profile-research-agent.yaml            # sample profile 1
 ├── profile-customer-support-agent.yaml    # sample profile 2
@@ -307,4 +306,4 @@ The example creates no other persistent state — no caches, no temporary files 
 
 ## License
 
-Apache 2.0. See `LICENSE` in this directory.
+MIT. See the [repository LICENSE](../../LICENSE).
