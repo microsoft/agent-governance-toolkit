@@ -230,10 +230,15 @@ jobs:
 
             function parseVerdict(body) {
               if (!body) return { status: '⏳', statusLabel: 'Pending', detail: 'Awaiting results' };
-              if (/block(er)?|critical|error|vulnerabilit(y|ies)\s+found|high\s+severity/i.test(body)) {
+              // Check positive / clean signals first — they are unambiguous
+              if (/no (issues|security issues|breaking changes)|clean change|is in sync|0 block(er)?s?,\s*0 warn/i.test(body)) {
+                return { status: '✅', statusLabel: 'Passed', detail: 'No issues found' };
+              }
+              // Real problems: require a non-zero count or strong phrasing
+              if (/[1-9]\d*\s+blocker|critical\s+(issue|bug)|vulnerabilit(y|ies)\s+found|high\s+severity/i.test(body)) {
                 return { status: '❌', statusLabel: 'Failed', detail: 'Issues detected' };
               }
-              if (/warn(ing)?|⚠️|potential|breaking\s+change|minor/i.test(body)) {
+              if (/[1-9]\d*\s+warning|potential\s+(issue|vuln)|breaking\s+change\s+(detect|found|introduc)/i.test(body)) {
                 return { status: '⚠️', statusLabel: 'Warning', detail: 'See details' };
               }
               if (/no issues|pass(ed)?|clean|no vulnerab|no breaking|all good|in sync/i.test(body)) {
