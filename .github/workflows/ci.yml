@@ -29,6 +29,7 @@ jobs:
       workflows: ${{ steps.filter.outputs.workflows }}
       docs-only: ${{ steps.filter.outputs.docs-only }}
       docker: ${{ steps.filter.outputs.docker }}
+      changed-py-pkgs: ${{ steps.py-pkgs.outputs.list }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
@@ -75,6 +76,43 @@ jobs:
               - 'agent-governance-python/**/pyproject.toml'
               - 'agent-governance-python/agent-hypervisor/examples/dashboard/requirements.txt'
               - '.github/workflows/ci.yml'
+            pkg-agent-os:
+              - 'agent-governance-python/agent-os/**'
+            pkg-agent-mesh:
+              - 'agent-governance-python/agent-mesh/**'
+            pkg-agent-hypervisor:
+              - 'agent-governance-python/agent-hypervisor/**'
+            pkg-agent-sre:
+              - 'agent-governance-python/agent-sre/**'
+            pkg-agent-compliance:
+              - 'agent-governance-python/agent-compliance/**'
+            pkg-agent-runtime:
+              - 'agent-governance-python/agent-runtime/**'
+            pkg-agent-lightning:
+              - 'agent-governance-python/agent-lightning/**'
+      - name: Compose changed-py-pkgs JSON list
+        id: py-pkgs
+        env:
+          AO: ${{ steps.filter.outputs.pkg-agent-os }}
+          AM: ${{ steps.filter.outputs.pkg-agent-mesh }}
+          AH: ${{ steps.filter.outputs.pkg-agent-hypervisor }}
+          AS: ${{ steps.filter.outputs.pkg-agent-sre }}
+          AC: ${{ steps.filter.outputs.pkg-agent-compliance }}
+          AR: ${{ steps.filter.outputs.pkg-agent-runtime }}
+          AL: ${{ steps.filter.outputs.pkg-agent-lightning }}
+        run: |
+          set -euo pipefail
+          pkgs=()
+          [ "$AO" = "true" ] && pkgs+=('"agent-os"')
+          [ "$AM" = "true" ] && pkgs+=('"agent-mesh"')
+          [ "$AH" = "true" ] && pkgs+=('"agent-hypervisor"')
+          [ "$AS" = "true" ] && pkgs+=('"agent-sre"')
+          [ "$AC" = "true" ] && pkgs+=('"agent-compliance"')
+          [ "$AR" = "true" ] && pkgs+=('"agent-runtime"')
+          [ "$AL" = "true" ] && pkgs+=('"agent-lightning"')
+          ifs=$IFS; IFS=,; list="[${pkgs[*]:-}]"; IFS=$ifs
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "Changed Python packages: $list"
 
   # ── Python lint + test (only when Python files change) ────────────────
   lint:
@@ -94,13 +132,33 @@ jobs:
             agent-lightning,
           ]
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - name: Determine if package changed
+        id: gate
+        env:
+          CHANGED: ${{ needs.changes.outputs.changed-py-pkgs }}
+          PKG: ${{ matrix.package }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "schedule" ] || [ "$EVENT" = "push" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$CHANGED" | grep -q "\"$PKG\""; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Package $PKG unchanged on this PR — skipping lint."
+          fi
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.11"
-      - name: Install ruff
+      - if: steps.gate.outputs.run == 'true'
+        name: Install ruff
         run: pip install --require-hashes --no-cache-dir -r agent-governance-python/requirements/ci-lint.txt
-      - name: Lint ${{ matrix.package }}
+      - if: steps.gate.outputs.run == 'true'
+        name: Lint ${{ matrix.package }}
         working-directory: agent-governance-python/${{ matrix.package }}
         run: ruff check src/ --select E,F,W --ignore E501
 
