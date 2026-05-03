@@ -339,29 +339,6 @@ jobs:
       - name: Dependency confusion scan
         run: python3 scripts/check_dependency_confusion.py --strict
 
-  # ── Compatibility shim: preserves the legacy `dependency-scan` check name
-  # so the existing branch-protection ruleset stays satisfied while it is
-  # migrated (independently) to require the two granular checks above.
-  # Remove this job in a follow-up PR after the ruleset is updated to require
-  # `dep-confusion-scan` and `notebook-pip-audit` directly.
-  dependency-scan:
-    needs: [dep-confusion-scan, notebook-pip-audit]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Aggregate dependency-scan result
-        env:
-          DEP_CONFUSION: ${{ needs.dep-confusion-scan.result }}
-          NOTEBOOK_AUDIT: ${{ needs.notebook-pip-audit.result }}
-        run: |
-          echo "dep-confusion-scan: $DEP_CONFUSION"
-          echo "notebook-pip-audit: $NOTEBOOK_AUDIT"
-          if [ "$DEP_CONFUSION" = "success" ] && [ "$NOTEBOOK_AUDIT" = "success" ]; then
-            exit 0
-          fi
-          echo "::error::dependency-scan compatibility shim failed: dep-confusion-scan=$DEP_CONFUSION, notebook-pip-audit=$NOTEBOOK_AUDIT"
-          exit 1
-
   # ── Notebook pip-install audit (always runs — security gate) ─────────
   notebook-pip-audit:
     runs-on: ubuntu-latest
@@ -630,7 +607,6 @@ jobs:
         test-integrations,
         dep-confusion-scan,
         notebook-pip-audit,
-        dependency-scan,
         workflow-security,
         test-integrations-ts,
         build-npm,
