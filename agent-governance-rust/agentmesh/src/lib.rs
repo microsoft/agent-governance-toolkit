@@ -29,6 +29,7 @@ pub mod mcp;
 pub mod policy;
 pub mod reward_support;
 pub mod rings;
+pub mod sandbox;
 pub mod trust;
 pub mod trust_support;
 pub mod types;
