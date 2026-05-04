@@ -305,15 +305,19 @@ class ExecutionContext:
     history: list[dict[str, Any]] = field(default_factory=list)
     state_ref: str | None = None  # Reference to external state
     metadata: dict[str, Any] = field(default_factory=dict)
+    intent_id: str | None = None  # Opt-in intent-based authorization
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "agent_id": self.agent_id,
             "policies": self.policies,
             "history": self.history,
             "state_ref": self.state_ref,
-            "metadata": self.metadata
+            "metadata": self.metadata,
         }
+        if self.intent_id is not None:
+            d["intent_id"] = self.intent_id
+        return d
 
 
 @dataclass
@@ -413,6 +417,7 @@ class StatelessKernel:
         policies: dict[str, Any] | None = None,
         enable_tracing: bool = False,
         circuit_breaker_config: CircuitBreakerConfig | None = None,
+        intent_manager: Any | None = None,
     ):
         self.backend = backend or MemoryBackend()
         self.policies = {**self.DEFAULT_POLICIES, **(policies or {})}
@@ -422,6 +427,7 @@ class StatelessKernel:
         )
         self._backend_type = type(self.backend).__name__
         self.circuit_breaker = CircuitBreaker(circuit_breaker_config)
+        self.intent_manager = intent_manager
 
     async def execute(
         self,
@@ -499,6 +505,38 @@ class StatelessKernel:
                 }
             )
 
+        # 2b. Check intent (opt-in: only when intent_id is present)
+        intent_metadata: dict[str, Any] = {}
+        if context.intent_id and self.intent_manager:
+            intent_check = await self.intent_manager.check_action(
+                intent_id=context.intent_id,
+                action=action,
+                params=params,
+                agent_id=context.agent_id,
+                request_id=request.request_id or "",
+            )
+            if not intent_check.allowed:
+                return ExecutionResult(
+                    success=False,
+                    data=None,
+                    error=intent_check.reason,
+                    signal="SIGKILL",
+                    metadata={
+                        "request_id": request.request_id,
+                        "intent_drift": True,
+                        "drift_policy": intent_check.drift_policy_applied.value
+                        if intent_check.drift_policy_applied else None,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+            if not intent_check.was_planned:
+                intent_metadata["intent_drift"] = True
+                intent_metadata["trust_penalty"] = intent_check.trust_penalty
+                intent_metadata["drift_policy"] = (
+                    intent_check.drift_policy_applied.value
+                    if intent_check.drift_policy_applied else None
+                )
+
         # 3. Execute action
         try:
             result = await self._execute_action(action, params, external_state)
@@ -528,17 +566,21 @@ class StatelessKernel:
                 "success": True
             }],
             state_ref=new_state_ref,
-            metadata=context.metadata
+            metadata=context.metadata,
+            intent_id=context.intent_id,
         )
+
+        result_metadata = {
+            "request_id": request.request_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **intent_metadata,
+        }
 
         return ExecutionResult(
             success=True,
             data=result.get("data"),
             updated_context=updated_context,
-            metadata={
-                "request_id": request.request_id,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
+            metadata=result_metadata,
         )
 
     def _check_policies(
