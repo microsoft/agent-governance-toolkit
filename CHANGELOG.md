@@ -67,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `agent-governance-golang/` — Go SDK
 - Root folders consolidated: `ci/` to `scripts/ci/`, `demo/` to `examples/demos/`, `releases/` to `docs/releases/`, `pipelines/` to `.github/pipelines/` (#1488)
 - `fuzz/`, `notebooks/`, `benchmarks/`, `requirements/` moved under `agent-governance-python/` (#1481)
-- Duplicate root `QUICKSTART.md` removed (canonical version at `docs/QUICKSTART.md`) (#1490)
+- Duplicate root `quickstart.md` removed (canonical version at `docs/quickstart.md`) (#1490)
 - SDK packages renamed with standardized naming (#1343)
 - Tutorials verified: all 42 tutorials pass 68 checks (#1408)
 
@@ -208,7 +208,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MCP governance consolidated into docs/compliance/
 - Policy-as-code tutorial chapter 4
 - Added `EUAIActRiskClassifier` usage example and API docs to `agent-governance-python/agent-mesh/README.md`
-- Updated `QUICKSTART.md` and `Tutorial 04 — Audit & Compliance` with secure JSON error handling examples and schema details
+- Updated `quickstart.md` and `Tutorial 04 — Audit & Compliance` with secure JSON error handling examples and schema details
 - Added "Secure Error Handling" sections to primary documentation to guide users on interpreting sanitized machine-readable outputs
 
 ### Added

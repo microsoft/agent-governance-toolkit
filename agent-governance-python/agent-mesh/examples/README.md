@@ -2,7 +2,7 @@
 
 Real-world examples and integrations showcasing how to secure AI agents with AgentMesh.
 
-## 🚀 [Quick Start Guide](./QUICKSTART.md)
+## 🚀 [Quick Start Guide](./quickstart.md)
 
 **New to AgentMesh?** Start here for a 5-minute tutorial to create your first governed agent.
 

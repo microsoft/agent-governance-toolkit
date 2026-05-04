@@ -83,7 +83,7 @@ pip install agentmesh-lightning        # 強化学習トレーニングガバナ
 
 ### 📚 ドキュメント
 
-- **[クイックスタート](../../QUICKSTART.md)** — ゼロからガバナンス付きエージェントを10分で構築（Python · TypeScript · .NET · Rust · Go）
+- **[クイックスタート](../../quickstart.md)** — ゼロからガバナンス付きエージェントを10分で構築（Python · TypeScript · .NET · Rust · Go）
 - **[TypeScript パッケージ](../../agent-governance-typescript/README.md)** — ID、トラスト、ポリシー、監査機能を備えた npm パッケージ
 - **[.NET パッケージ](../../agent-governance-dotnet/README.md)** — 完全な OWASP カバレッジを備えた NuGet パッケージ
 - **[Rust クレート](../../agent-governance-rust/agentmesh/README.md)** — ポリシー、トラスト、監査、ID、MCP ガバナンスプリミティブを備えた crates.io クレート

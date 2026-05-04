@@ -5,7 +5,7 @@
 Technical Q&A for customers, partners, and evaluators of the Agent Governance
 Toolkit.
 
-> **See also:** [Quick Start](../QUICKSTART.md) · [Architecture](ARCHITECTURE.md) · [Known Limitations](LIMITATIONS.md) · [OWASP Compliance](OWASP-COMPLIANCE.md)
+> **See also:** [Quick Start](../quickstart.md) · [Architecture](ARCHITECTURE.md) · [Known Limitations](LIMITATIONS.md) · [OWASP Compliance](OWASP-COMPLIANCE.md)
 
 ---
 
@@ -700,5 +700,5 @@ See [Tutorial 40 — OTel Observability](tutorials/40-otel-observability.md) for
 | NuGet (.NET) | `Microsoft.AgentGovernance` |
 | DeepWiki | https://deepwiki.com/microsoft/agent-governance-toolkit |
 | OWASP Agentic Top 10 | https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/ |
-| Quick Start Guide | [QUICKSTART.md](../QUICKSTART.md) |
+| Quick Start Guide | [quickstart.md](../quickstart.md) |
 | Deployment Guides | [docs/deployment/](deployment/) |
