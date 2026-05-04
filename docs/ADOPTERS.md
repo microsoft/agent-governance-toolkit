@@ -16,7 +16,7 @@ momentum and credibility. Submit a PR editing this file — see
 
 | Organization | Industry | Use Case | Contact |
 |---|---|---|---|
-| | | | |
+| [MythologIQ Labs, LLC](https://github.com/MythologIQ-Labs-LLC) | AI Governance / Agent Security | Evaluating AGT as an isolated upstream governance dependency for [Qortara](https://qortara.com), including LangChain/LangGraph tool-dispatch governance through [`qortara-governance-langchain`](https://github.com/MythologIQ-Labs-LLC/qortara-governance). | [@Knapp-Kevin](https://github.com/Knapp-Kevin) |
 
 ## Academic / Research
 
