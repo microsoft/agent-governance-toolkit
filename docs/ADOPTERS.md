@@ -10,14 +10,15 @@ momentum and credibility. Submit a PR editing this file — see
 
 | Organization | Industry | Use Case | Contact |
 |---|---|---|---|
-| | | | |
+| Microsoft (internal AI agent platform) | AI / Developer Tools | Policy enforcement and governance workflows for multi-agent orchestration | [@imran-siddique](https://github.com/imran-siddique) |
+| Microsoft (internal engineering tools) | Engineering Productivity | Agent SRE integration for incident management and reliability monitoring | [@imran-siddique](https://github.com/imran-siddique) |
 
 ## Evaluation / Pilot
 
 | Organization | Industry | Use Case | Contact |
 |---|---|---|---|
 | [GitHub — awesome-copilot](https://github.com/github/awesome-copilot) | Developer Tools | AGT contributor reputation check (`agt-contributor-check`) integrated into CI for PR risk scoring | [@imran-siddique](https://github.com/imran-siddique) |
-| [Azure — azureclaw](https://github.com/Azure/azureclaw) | Cloud Infrastructure | DID canonicalization using AGT identity layer for agent mesh trust verification | [@imran-siddique](https://github.com/imran-siddique) |
+| Azure (internal project) | Cloud Infrastructure | AGT identity layer integration for agent mesh trust verification | [@imran-siddique](https://github.com/imran-siddique) |
 | [chamber](https://github.com/ianphil/chamber) | AI Agent Infrastructure | AGT governance workflows for agent execution policy enforcement | [@ianphil](https://github.com/ianphil) |
 | [MythologIQ Labs, LLC](https://github.com/MythologIQ-Labs-LLC) | AI Governance / Agent Security | Evaluating AGT as an isolated upstream governance dependency for [Qortara](https://qortara.com), including LangChain/LangGraph tool-dispatch governance through [`qortara-governance-langchain`](https://github.com/MythologIQ-Labs-LLC/qortara-governance). | [@Knapp-Kevin](https://github.com/Knapp-Kevin) |
 
