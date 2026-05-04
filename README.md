@@ -65,6 +65,9 @@ agt verify --evidence ./agt-evidence.json
 
 # 5. Fail CI on weak runtime evidence
 agt verify --evidence ./agt-evidence.json --strict
+
+# 6. Red-team your agent's security posture
+agt red-team scan ./prompts/ --min-grade B --strict
 ```
 
 Then govern your first action:
@@ -175,7 +178,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 | **Shadow AI Discovery** | Find unregistered agents across processes, configs, and repos | [Agent Discovery](agent-governance-python/agent-discovery/) |
 | **Agent Lifecycle** | Provisioning → credential rotation → orphan detection → decommissioning | [Lifecycle](agent-governance-python/agent-mesh/src/agentmesh/lifecycle/) |
 | **Governance Dashboard** | Real-time fleet visibility — health, trust, compliance, audit events | [Dashboard](examples/demos/governance-dashboard/) |
-| **Unified CLI** | `agt verify`, `agt doctor`, `agt lint-policy` — one command for everything | [CLI](agent-governance-python/agent-compliance/src/agent_compliance/cli/agt.py) |
+| **Unified CLI** | `agt verify`, `agt red-team`, `agt doctor`, `agt lint-policy` — one command for everything | [CLI](agent-governance-python/agent-compliance/src/agent_compliance/cli/agt.py) |
 | **PromptDefense Evaluator** | 12-vector prompt injection audit for compliance testing | [Evaluator](agent-governance-python/agent-compliance/src/agent_compliance/prompt_defense.py) |
 
 ---
