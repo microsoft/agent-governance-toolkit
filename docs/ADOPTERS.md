@@ -12,6 +12,7 @@ momentum and credibility. Submit a PR editing this file — see
 |---|---|---|---|
 | Microsoft (internal AI agent platform) | AI / Developer Tools | Policy enforcement and governance workflows for multi-agent orchestration | [@imran-siddique](https://github.com/imran-siddique) |
 | Microsoft (internal engineering tools) | Engineering Productivity | Agent SRE integration for incident management and reliability monitoring | [@imran-siddique](https://github.com/imran-siddique) |
+| [Dayos](https://dayos.com) | Enterprise AI / ERP Automation | Policy enforcement and prompt-injection detection for a multi-agent system built on Google ADK — Cedar-based tool-dispatch governance across finance and operations workflows | [@miyannishar](https://github.com/miyannishar) |
 
 ## Evaluation / Pilot
 
