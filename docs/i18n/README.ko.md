@@ -159,7 +159,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 
 </details>
 
-> **전체 과정:** [QUICKSTART.md](../../docs/i18n/QUICKSTART.ko.md) - 10분만 투자하시면 YAML 정책 파일, OPA/Rego, Cedar 지원을 통해 에이전트 거버넌스를 처음부터 끝까지 체험해 볼 수 있습니다.
+> **전체 과정:** [QUICKSTART.md](../../docs/i18n/quickstart.ko.md) - 10분만 투자하시면 YAML 정책 파일, OPA/Rego, Cedar 지원을 통해 에이전트 거버넌스를 처음부터 끝까지 체험해 볼 수 있습니다.
 > 🌍 다음 언어로도 제공됩니다: [English](../../docs/quickstart.md) | [日本語](./quickstart.ja.md) | [简体中文](./quickstart.zh-CN.md)
 
 ---
