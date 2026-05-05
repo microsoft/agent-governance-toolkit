@@ -480,4 +480,5 @@ impl SandboxProvider for DockerSandboxProvider {
 }
 
 #[cfg(test)]
+#[path = "sandbox_test.rs"]
 mod sandbox_test;

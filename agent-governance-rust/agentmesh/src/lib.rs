@@ -20,6 +20,7 @@
 
 pub mod audit;
 pub mod control_support;
+#[allow(dead_code)]
 pub mod governance_support;
 pub mod identity;
 pub mod identity_support;
