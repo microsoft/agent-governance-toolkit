@@ -187,7 +187,7 @@ jobs:
 
           for pattern in "${UNSAFE_PATTERNS[@]}"; do
             # Find expression interpolation of pattern in run: blocks (not in env: which are safe)
-            GHA_OPEN='${{'
+            GHA_OPEN=$(printf '$')'{{'
             MATCHES=$(grep -rn "${GHA_OPEN}.*${pattern}" .github/workflows/*.yml \
               | grep -v "env:" | grep -v "#" || true)
             if [ -n "$MATCHES" ]; then
