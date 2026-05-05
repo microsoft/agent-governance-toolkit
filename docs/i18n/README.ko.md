@@ -160,6 +160,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 </details>
 
 > **전체 과정:** [QUICKSTART.md](../../docs/i18n/QUICKSTART.ko.md) - 10분만 투자하시면 YAML 정책 파일, OPA/Rego, Cedar 지원을 통해 에이전트 거버넌스를 처음부터 끝까지 체험해 볼 수 있습니다.
+> 🌍 다음 언어로도 제공됩니다: [English](../../docs/quickstart.md) | [日本語](docs/i18n/quickstart.ja.md) | [简体中文](docs/i18n/quickstart.zh-CN.md)
 
 ---
 
@@ -260,13 +261,13 @@ result := client.ExecuteWithGovernance("data.read", nil)
 |---------|------|-------------|
 | Agent OS | [`agent-os-kernel`]([https://pypi.org/project/agent-os-kernel/](https://pypi.org/project/agent-os-kernel/)) | 정책 엔진, 역량 모델, 감사 로그 기록, MCP 게이트웨이 |
 | AgentMesh | [`agentmesh-platform`]([https://pypi.org/project/agentmesh-platform/](https://pypi.org/project/agentmesh-platform/)) | 제로 트러스트 신원증명, 신뢰 점수 부여, A2A/MCP/IATP 브릿지 |
-| Agent Runtime | [`agentmesh-runtime`](agent-governance-python/agent-runtime/) | 권한 격리 링, 사가 오케스트레이션, 종료 제어 |
+| Agent Runtime | [`agentmesh-runtime`](../../agent-governance-python/agent-runtime/) | 권한 격리 링, 사가 오케스트레이션, 종료 제어 |
 | Agent SRE | [`agent-sre`]([https://pypi.org/project/agent-sre/](https://pypi.org/project/agent-sre/)) | SLO, 에러 버젯, 카오스 공학, 서킷 브레이커 |
 | Agent Compliance | [`agent-governance-toolkit`]([https://pypi.org/project/agent-governance-toolkit/](https://pypi.org/project/agent-governance-toolkit/)) | OWASP 검증, 무결성 체크, 정책 린팅(Linting) |
-| Agent Discovery | [`agent-discovery`](agent-governance-python/agent-discovery/) | 미등록 AI(Shadow AI) 감지, 인벤토리 관리, 리스크 점수화 |
-| Agent Hypervisor | [`agent-hypervisor`](agent-governance-python/agent-hypervisor/) | 가역성(Reversibility) 검증, 실행 계획 유효성 검사 |
-| Agent Marketplace | [`agentmesh-marketplace`](agent-governance-python/agent-marketplace/) | 플러그인 라이프사이클 관리 |
-| Agent Lightning | [`agentmesh-lightning`](agent-governance-python/agent-lightning/) | 강화학습(RL) 훈련 거버넌스 |
+| Agent Discovery | [`agent-discovery`](../../agent-governance-python/agent-discovery/) | 미등록 AI(Shadow AI) 감지, 인벤토리 관리, 리스크 점수화 |
+| Agent Hypervisor | [`agent-hypervisor`](../../agent-governance-python/agent-hypervisor/) | 가역성(Reversibility) 검증, 실행 계획 유효성 검사 |
+| Agent Marketplace | [`agentmesh-marketplace`](../../agent-governance-python/agent-marketplace/) | 플러그인 라이프사이클 관리 |
+| Agent Lightning | [`agentmesh-lightning`](../../agent-governance-python/agent-lightning/) | 강화학습(RL) 훈련 거버넌스 |
 
 </details>
 
@@ -275,7 +276,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 ## 문서 (Documentation)
 
 **시작하기**
-- [Quick Start](../../docs/QUICKSTART.md) — 10분 만에 끝내는 에이전트 거버넌스 시작 가이드
+- [Quick Start](./quickstart.ko.md) — 10분 만에 끝내는 에이전트 거버넌스 시작 가이드
 - [Tutorials](../../docs/tutorials/) — 40개 이상의 튜토리얼 및 7장으로 구성된 'Policy-as-Code' 심층 학습
 - [FAQ](../../docs/FAQ.md) — 고객, 파트너 및 평가자를 위한 기술 Q&A
 
