@@ -65,7 +65,7 @@ Notes on what to expect run-to-run:
 | File | Purpose |
 | --- | --- |
 | `main.py` | The runnable demo (single file, no async, no external services) |
-| `requirements.txt` | Pins `agentmesh-platform==3.3.0` |
+| `requirements.txt` | Pins `agentmesh-platform==3.4.0` |
 | `README.md` | This file |
 
 ## How It Maps to the SDK

@@ -269,7 +269,7 @@ const verifiedRuntime = new GovernanceVerifier().verify({
   runtimeEvidence: {
     schema: 'agt-runtime-evidence/v1',
     generatedAt: new Date().toISOString(),
-    toolkitVersion: '3.3.0',
+    toolkitVersion: '3.4.0',
     deployment: {
       identity: { enabled: true, did: 'did:mesh:agent-1' },
       policy: { failClosed: true, backends: ['opa'] },
