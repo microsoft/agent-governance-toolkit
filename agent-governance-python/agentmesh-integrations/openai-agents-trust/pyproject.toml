@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentmesh_openai_agents_trust"
-version = "3.3.0"
+version = "3.4.0"
 description = "Trust & governance layer for OpenAI Agents SDK — policy enforcement, trust-gated handoffs, and hash-chained audit trails"
 readme = "README.md"
 license = {text = "MIT"}

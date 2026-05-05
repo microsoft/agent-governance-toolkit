@@ -1,1 +1,1 @@
-agent-sre==3.3.0
+agent-sre==3.4.0

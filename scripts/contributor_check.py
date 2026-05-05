@@ -916,8 +916,71 @@ def check_contributor(username: str, target_repo: str | None = None) -> Reputati
         for signal in check_feature_overlap(username, target_repo):
             report.add(signal)
 
+    _dampen_for_established_accounts(report, user)
     report.compute_risk()
     return report
+
+
+# ---------------------------------------------------------------------------
+# Established-account dampening
+# ---------------------------------------------------------------------------
+
+# Signal names that indicate deliberate abuse patterns.  If any of these
+# are present, the account's age/followers should NOT soften the verdict.
+_ABUSE_SIGNALS = frozenset({
+    "thin_credibility",
+    "credential_laundering",
+    "coordinated_promotion",
+    "self_promotion_spray",
+    "feature_overlap",
+})
+
+# Signals eligible for dampening and the maximum value at which dampening
+# is applied.  Beyond the cap the signal keeps its original severity,
+# guarding against compromised or purchased mature accounts.
+_DAMPEN_RULES: dict[str, tuple[str, int | None]] = {
+    # name -> (new_severity, max_value_for_dampening)
+    "recent_repo_burst": ("LOW", 30),       # >30 repos in 90d stays HIGH
+    "cross_repo_spray":  ("MEDIUM", 8),     # >8 repos in 7d stays HIGH
+    "cross_repo_spread": ("LOW", None),     # always safe to lower
+}
+
+
+def _is_established(user: dict) -> bool:
+    """Return True if the account shows strong organic credibility."""
+    created = datetime.fromisoformat(user["created_at"].replace("Z", "+00:00"))
+    age_days = (datetime.now(timezone.utc) - created).days
+    followers = user.get("followers", 0)
+    public_repos = user.get("public_repos", 0)
+    return age_days >= 366 and followers >= 50 and public_repos >= 20
+
+
+def _dampen_for_established_accounts(report: ReputationReport, user: dict) -> None:
+    """Down-grade volume/activity signals for accounts with organic credibility.
+
+    Dampening is skipped entirely when abuse-pattern signals (credential
+    laundering, coordinated promotion, etc.) are present, so mature but
+    compromised accounts are not whitewashed.
+    """
+    if not _is_established(user):
+        return
+
+    # If any abuse-pattern signal exists, skip dampening entirely
+    signal_names = {s.name for s in report.signals}
+    if signal_names & _ABUSE_SIGNALS:
+        return
+
+    for signal in report.signals:
+        rule = _DAMPEN_RULES.get(signal.name)
+        if rule is None:
+            continue
+        new_severity, max_value = rule
+        if max_value is not None and signal.value is not None and signal.value > max_value:
+            continue  # extreme value, keep original severity
+        old = signal.severity
+        if old != new_severity:
+            signal.severity = new_severity
+            signal.detail += f" [dampened {old}\u2192{new_severity}: established account]"
 
 
 def format_report(report: ReputationReport, as_json: bool = False) -> str:
