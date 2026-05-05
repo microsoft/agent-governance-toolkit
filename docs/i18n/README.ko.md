@@ -160,7 +160,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 </details>
 
 > **전체 과정:** [QUICKSTART.md](../../docs/i18n/QUICKSTART.ko.md) - 10분만 투자하시면 YAML 정책 파일, OPA/Rego, Cedar 지원을 통해 에이전트 거버넌스를 처음부터 끝까지 체험해 볼 수 있습니다.
-> 🌍 다음 언어로도 제공됩니다: [English](../../docs/quickstart.md) | [日本語](docs/i18n/quickstart.ja.md) | [简体中文](docs/i18n/quickstart.zh-CN.md)
+> 🌍 다음 언어로도 제공됩니다: [English](../../docs/quickstart.md) | [日本語](./quickstart.ja.md) | [简体中文](./quickstart.zh-CN.md)
 
 ---
 
@@ -218,7 +218,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 | Human-Agent Trust Deficit | ASI-09 | 전체 감사 추적(full audit trails) 및 비행기록계(flight recorder) |
 | Rogue Agents | ASI-10 | 실행 격리, 킬스위치(kill switch), 이상 탐지(anomaly detection) |
 
-전체 목록: [OWASP-COMPLIANCE.md](../../docs/OWASP-COMPLIANCE.md) · 주요 규제 대응: [EU AI Act](docs/compliance/), [NIST AI RMF](../../docs/compliance/nist-ai-rmf-alignment.md), [Colorado AI Act](../../docs/compliance/)
+전체 목록: [OWASP-COMPLIANCE.md](../../docs/OWASP-COMPLIANCE.md) · 주요 규제 대응: [EU AI Act](../../docs/compliance/), [NIST AI RMF](../../docs/compliance/nist-ai-rmf-alignment.md), [Colorado AI Act](../../docs/compliance/)
 
 ---
 
@@ -245,14 +245,14 @@ result := client.ExecuteWithGovernance("data.read", nil)
 | 언어 | 패키지 | 명령어 |
 |----------|---------|---------|
 | **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
-| **TypeScript** | [`@microsoft/agent-governance-sdk`](agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
+| **TypeScript** | [`@microsoft/agent-governance-sdk`](../../agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 | **.NET MCP** | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` | `dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol` |
 | **Rust** | [`agent-governance`](https://crates.io/crates/agent-governance) | `cargo add agent-governance` |
-| **Go** | [`agent-governance-toolkit`](agent-governance-golang/) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
+| **Go** | [`agent-governance-toolkit`](../../agent-governance-golang/) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
 위에 명시된 5개 언어 패키지 모두 정책, 신원, 신뢰, 감사 등의 핵심 거버넌스 기능이 구현되어 있습니다. Python은 풀 스택을 지원합니다. 
-**[언어 패키지별 지원 현황](docs/PACKAGE-FEATURE-MATRIX.md)**을 참고하십시오. 
+**[언어 패키지별 지원 현황](../../docs/PACKAGE-FEATURE-MATRIX.md)**을 참고하십시오. 
 
 <details>
 <summary><b>개별 Python 패키지</b></summary>
