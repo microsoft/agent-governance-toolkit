@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentmesh_message_bus"
-version = "3.3.0"
+version = "3.4.0"
 description = "A lightweight, broker-agnostic message bus designed specifically for AI Agents"
 license = {text = "MIT"}
 readme = "README.md"

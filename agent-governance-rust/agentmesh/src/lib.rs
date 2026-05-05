@@ -20,6 +20,7 @@
 
 pub mod audit;
 pub mod control_support;
+#[allow(dead_code)]
 pub mod governance_support;
 pub mod identity;
 pub mod identity_support;
@@ -29,6 +30,7 @@ pub mod mcp;
 pub mod policy;
 pub mod reward_support;
 pub mod rings;
+pub mod sandbox;
 pub mod trust;
 pub mod trust_support;
 pub mod types;

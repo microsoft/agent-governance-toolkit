@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "template_agentmesh"
-version = "3.3.0"
+version = "3.4.0"
 description = "AgentMesh trust layer template — copy and rename for your framework"
 readme = "README.md"
 license = {text = "MIT"}

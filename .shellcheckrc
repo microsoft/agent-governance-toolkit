@@ -21,4 +21,8 @@
 # SC2016: "Expressions don't expand in single quotes" — intentional use of
 #         single-quoted strings for literal grep patterns and markdown fences.
 
-disable=SC2129,SC2001,SC2317,SC2050,SC2086,SC2016
+# SC2153: "Possible misspelling: VAR may not be assigned" — false positive
+#         from GHA env: variables (e.g. CHANGED, PKG) that shellcheck cannot
+#         see are set by the workflow runner.
+
+disable=SC2129,SC2001,SC2317,SC2050,SC2086,SC2016,SC2153

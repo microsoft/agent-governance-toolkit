@@ -223,7 +223,7 @@ go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang  # 
 
 ## More Resources
 
-- **[Quick Start](../../QUICKSTART.md)** — Zero to governed agents in 10 minutes
+- **[Quick Start](../../quickstart.md)** — Zero to governed agents in 10 minutes
 - **[Architecture](../ARCHITECTURE.md)** — System design and security model
 - **[OWASP Compliance](../OWASP-COMPLIANCE.md)** — ASI-01 through ASI-10 mapping
 - **[Benchmarks](../../BENCHMARKS.md)** — Performance data

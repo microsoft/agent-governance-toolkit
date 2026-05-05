@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent_mcp_governance"
-version = "3.3.0"
+version = "3.4.0"
 description = "Public Preview — MCP governance primitives for the Agent Governance Toolkit."
 readme = "README.md"
 license = {text = "MIT"}

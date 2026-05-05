@@ -17,7 +17,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -142,11 +141,6 @@ def scan(path: str, min_grade: str, output_json: bool, strict: bool) -> None:
             coverage = result["coverage"]
             missing = result.get("missing", [])
 
-            # Color-code grade
-            grade_style = {
-                "A": "green", "B": "green", "C": "yellow", "D": "red", "F": "red"
-            }.get(grade, "white")
-
             name = Path(filepath).name
             status = "PASS" if not _grade_below(grade, min_grade) else "FAIL"
             icon = "+" if status == "PASS" else "!"
@@ -229,7 +223,7 @@ def list_playbooks(output_json: bool) -> None:
         click.echo()
 
     click.echo(f"  {len(playbooks)} playbook(s) available")
-    click.echo(f"  Run with: agt red-team attack --playbook <id>\n")
+    click.echo("  Run with: agt red-team attack --playbook <id>\n")
 
 
 @red_team.command()
@@ -278,7 +272,7 @@ def attack(target: str, playbook_id: Optional[str], output_json: bool, threshold
     AdversarialRunner = adversarial["AdversarialRunner"]
     ChaosExperiment = adversarial["ChaosExperiment"]
     Fault = adversarial["Fault"]
-    FaultType = adversarial["FaultType"]
+    _ = adversarial["FaultType"]  # loaded for registration side-effects
 
     # Select playbooks
     if playbook_id:
@@ -345,7 +339,7 @@ def attack(target: str, playbook_id: Optional[str], output_json: bool, threshold
         click.echo(json.dumps(data, indent=2))
     else:
         click.echo(f"\n{'='*60}")
-        click.echo(f"  AGT Red-Team: Adversarial Attack Assessment")
+        click.echo("  AGT Red-Team: Adversarial Attack Assessment")
         click.echo(f"{'='*60}")
         click.echo(f"  Target: {target}")
         click.echo(f"  Experiment: {experiment.experiment_id}\n")

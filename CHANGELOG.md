@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [3.4.0] - 2026-05-05
+
+### Fixed
+- **Contributor Reputation Check** — false-positive HIGH risk for established accounts. Accounts with age > 1yr, 50+ followers, and 20+ repos now have `recent_repo_burst` and `cross_repo_spray` signals dampened to LOW with bounded caps and abuse-signal guards (#1725)
+
+### Changed
+- **CI** — fixed ruff lint errors in agent-compliance CLI tools, added SC2153 to shellcheck disable list (#1724)
+- **README** — removed duplicate Docs and PyPI shield badges
+
 ## [3.3.0] - 2026-04-27
 
 ### Highlights

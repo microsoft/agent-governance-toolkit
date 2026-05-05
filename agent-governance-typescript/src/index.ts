@@ -29,6 +29,19 @@ export { SurfaceParityChecker } from './surface-parity';
 export { CascadeContainmentManager } from './cascade-containment';
 export { ContextPoisoningDetector } from './context-poisoning';
 export { OciManifestAdapter } from './oci-manifest';
+export {
+  SessionStatus,
+  ExecutionStatus,
+  defaultSandboxConfig,
+  DockerSandboxProvider,
+} from './sandbox';
+export type {
+  SandboxConfig,
+  SandboxResult,
+  SessionHandle,
+  ExecutionHandle,
+  SandboxProvider,
+} from './sandbox';
 
 // E2E Encryption (AgentMesh Wire Protocol v1.0)
 export {

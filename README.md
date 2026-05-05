@@ -14,9 +14,7 @@
 </p>
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/badge/docs-microsoft.github.io%2Fagent--governance--toolkit-blue?logo=github)](https://microsoft.github.io/agent-governance-toolkit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/agent-governance-toolkit)](https://pypi.org/project/agent-governance-toolkit/)
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/OWASP-COMPLIANCE.md)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/microsoft/agent-governance-toolkit)
@@ -26,7 +24,7 @@
 > [Open a GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) for feedback.
 
 > [!TIP]
-> **v3.3.0 is out!** Contributor Reputation Check (reusable GitHub Action for any OSS repo), repo reorganization under language-specific SDK dirs, Sentry integration, shift-left governance tutorial, policy composition, multi-stage pipelines, and 80+ other improvements. [Changelog →](CHANGELOG.md)
+> **v3.4.0 is out!** False-positive fix for contributor reputation check on established accounts, CI lint fixes, and README cleanup. [Changelog →](CHANGELOG.md)
 
 **Runtime governance for AI agents** -- deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents. Covers all **10 OWASP Agentic risks** with **13,000+ tests**.
 
@@ -160,8 +158,8 @@ result := client.ExecuteWithGovernance("data.read", nil)
 
 </details>
 
-> **Full walkthrough:** [QUICKSTART.md](docs/QUICKSTART.md) — zero to governed agents in 10 minutes with YAML policies, OPA/Rego, and Cedar support.
-> 🌍 Also available in: [日本語](docs/i18n/QUICKSTART.ja.md) | [简体中文](docs/i18n/QUICKSTART.zh-CN.md)
+> **Full walkthrough:** [quickstart.md](docs/quickstart.md) — zero to governed agents in 10 minutes with YAML policies, OPA/Rego, and Cedar support.
+> 🌍 Also available in: [日本語](docs/i18n/quickstart.ja.md) | [简体中文](docs/i18n/quickstart.zh-CN.md)
 
 ---
 
@@ -278,7 +276,7 @@ See **[Language Package Matrix](docs/PACKAGE-FEATURE-MATRIX.md)** for detailed p
 ## Documentation
 
 **Getting Started**
-- [Quick Start](docs/QUICKSTART.md) — Zero to governed agents in 10 minutes
+- [Quick Start](docs/quickstart.md) — Zero to governed agents in 10 minutes
 - [Tutorials](docs/tutorials/) — 40+ numbered tutorials + 7-chapter Policy-as-Code deep dive
 - [FAQ](docs/FAQ.md) — Technical Q&A for customers, partners, and evaluators
 
