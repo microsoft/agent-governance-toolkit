@@ -43,7 +43,6 @@ classifiers = [
 
 # Core dependencies (minimal - just what's needed for kernel)
 dependencies = [
-    "agentmesh_primitives>=3.2.0,<4.0",
     "pydantic>=2.4.0,<3.0",
     "rich>=13.0.0,<16.0"
 ]

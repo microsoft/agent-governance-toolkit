@@ -278,7 +278,7 @@ else:
     print(f"Disagreement detected: {result.drift_scores}")
 ```
 
-**See:** [Jupyter Notebook: Verification](../../notebooks/04-verification.ipynb)
+**See:** [Jupyter Notebook: Verification](../../notebooks/04-cross-model-verification.ipynb)
 
 ---
 
