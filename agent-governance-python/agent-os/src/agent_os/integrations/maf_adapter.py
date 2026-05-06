@@ -41,7 +41,14 @@ from typing import Any, Awaitable, Callable
 
 from agent_os.policies import PolicyDecision, PolicyEvaluator
 from agentmesh.governance import AuditEntry, AuditLog
-from agent_sre.anomaly import RiskLevel, RogueAgentDetector, RogueDetectorConfig
+
+# rogue_detector symbols may not be available in older agent-sre releases
+try:
+    from agent_sre.anomaly import RiskLevel, RogueAgentDetector, RogueDetectorConfig
+except ImportError:
+    RiskLevel = None  # type: ignore[assignment,misc]
+    RogueAgentDetector = None  # type: ignore[assignment,misc]
+    RogueDetectorConfig = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 

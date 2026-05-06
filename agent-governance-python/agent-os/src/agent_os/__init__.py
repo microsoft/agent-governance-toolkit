@@ -161,12 +161,15 @@ from agent_os.context_budget import (
 )
 
 # LlamaFirewall Integration
-from agent_os.integrations.llamafirewall import (
-    FirewallMode,
-    FirewallResult,
-    FirewallVerdict,
-    LlamaFirewallAdapter,
-)
+try:
+    from agent_os.integrations.llamafirewall import (
+        FirewallMode,
+        FirewallResult,
+        FirewallVerdict,
+        LlamaFirewallAdapter,
+    )
+except ImportError:
+    pass
 
 # MCP Security — tool poisoning defense
 from agent_os.mcp_security import (
@@ -389,29 +392,48 @@ __all__ = [
 # Content Governance (v3.0.2+)
 # ============================================================================
 
-from agent_os.content_governance import (
-    ContentDimension,
-    ContentQualityEvaluator,
-    ContentQualityReport,
-    QualityGate,
-)
+try:
+    from agent_os.content_governance import (
+        ContentDimension,
+        ContentQualityEvaluator,
+        ContentQualityReport,
+        QualityGate,
+    )
+except ImportError:
+    pass
 
-from agent_os.execution_context_policy import (
-    ContextualPolicyEngine,
-    EnforcementLevel,
-    ExecutionContext as ContextualExecutionContext,
-)
+try:
+    from agent_os.execution_context_policy import (
+        ContextualPolicyEngine,
+        EnforcementLevel,
+        ExecutionContext as ContextualExecutionContext,
+    )
+except ImportError:
+    pass
 
-from agent_os.github_enterprise import (
-    EnterpriseGovernanceManager,
-    GovernanceTier,
-)
+try:
+    from agent_os.github_enterprise import (
+        EnterpriseGovernanceManager,
+        GovernanceTier,
+    )
+except ImportError:
+    pass
 
-from agent_os.shift_left_metrics import (
-    ShiftLeftTracker,
-    ViolationStage,
-)
+try:
+    from agent_os.shift_left_metrics import (
+        ShiftLeftTracker,
+        ViolationStage,
+    )
+except ImportError:
+    pass
 
-from agent_os.audit_logger import GovernanceAuditLogger
-from agent_os.otel_audit_backend import OTelLogsBackend
+try:
+    from agent_os.audit_logger import GovernanceAuditLogger
+except ImportError:
+    pass
+
+try:
+    from agent_os.otel_audit_backend import OTelLogsBackend
+except ImportError:
+    pass
 

@@ -58,66 +58,68 @@ from agent_os.exceptions import (
     PolicyViolationError,
     RateLimitError,
 )
-from agent_os.integrations.a2a_adapter import A2AEvaluation, A2AGovernanceAdapter, A2APolicy
-from agent_os.integrations.anthropic_adapter import (
-    AnthropicKernel,
-    GovernedAnthropicClient,
-    GovernanceMessageHook as AnthropicGovernanceHook,
-)
-from agent_os.integrations.autogen_adapter import (
-    AutoGenKernel,
-    GovernanceInterventionHandler as AutoGenGovernanceHandler,
-)
-from agent_os.integrations.crewai_adapter import CrewAIKernel
-try:
-    from agent_os.integrations.crewai_adapter import GovernanceHooks as CrewAIGovernanceHooks
-except ImportError:
-    pass
-from agent_os.integrations.gemini_adapter import GeminiKernel, GovernedGeminiModel
-from agent_os.integrations.google_adk_adapter import (
-    ADKExecutionContext,
-    AuditEvent as ADKAuditEvent,
-    GovernancePlugin as ADKGovernancePlugin,
-    GoogleADKKernel,
-    PolicyConfig as ADKPolicyConfig,
-)
-from agent_os.integrations.guardrails_adapter import GuardrailsKernel
-from agent_os.integrations.langchain_adapter import (
-    GovernanceMiddleware as LangChainGovernanceMiddleware,
-    LangChainKernel,
-)
-try:
-    from agent_os.integrations.maf_adapter import (
-        AuditTrailMiddleware as MAFAuditTrailMiddleware,
-        CapabilityGuardMiddleware as MAFCapabilityGuardMiddleware,
-        GovernancePolicyMiddleware as MAFGovernancePolicyMiddleware,
-        RogueDetectionMiddleware as MAFRogueDetectionMiddleware,
-        create_governance_middleware as maf_create_governance_middleware,
-    )
-except ImportError:  # agent_framework is an optional dependency
-    pass
-from agent_os.integrations.llamafirewall import (
-    FirewallMode,
-    FirewallResult,
-    FirewallVerdict,
-    LlamaFirewallAdapter,
-)
-from agent_os.integrations.llamaindex_adapter import LlamaIndexKernel
-from agent_os.integrations.mistral_adapter import GovernedMistralClient, MistralKernel
-from agent_os.integrations.openai_adapter import GovernedAssistant, OpenAIKernel
-from agent_os.integrations.pydantic_ai_adapter import (
-    GovernanceCapability as PydanticAIGovernanceCapability,
-    PydanticAIKernel,
-)
-from agent_os.integrations.semantic_kernel_adapter import (
-    GovernanceFunctionFilter as SKGovernanceFilter,
-    GovernedSemanticKernel,
-    SemanticKernelWrapper,
-)
-from agent_os.integrations.smolagents_adapter import (
-    GovernanceStepCallback as SmolagentsGovernanceCallback,
-    SmolagentsKernel,
-)
+
+# ---------------------------------------------------------------------------
+# Framework adapters are loaded lazily via __getattr__ below to avoid a
+# 40-60 s cold-start penalty from eagerly importing heavy SDKs (anthropic,
+# google, chromadb, scipy, etc.) that most callers don't need at import time.
+# ---------------------------------------------------------------------------
+
+_LAZY_ADAPTER_MAP: dict[str, tuple[str, str]] = {
+    # name -> (module, real_name)
+    "A2AEvaluation": (".a2a_adapter", "A2AEvaluation"),
+    "A2AGovernanceAdapter": (".a2a_adapter", "A2AGovernanceAdapter"),
+    "A2APolicy": (".a2a_adapter", "A2APolicy"),
+    "AnthropicKernel": (".anthropic_adapter", "AnthropicKernel"),
+    "GovernedAnthropicClient": (".anthropic_adapter", "GovernedAnthropicClient"),
+    "AnthropicGovernanceHook": (".anthropic_adapter", "GovernanceMessageHook"),
+    "AutoGenKernel": (".autogen_adapter", "AutoGenKernel"),
+    "AutoGenGovernanceHandler": (".autogen_adapter", "GovernanceInterventionHandler"),
+    "CrewAIKernel": (".crewai_adapter", "CrewAIKernel"),
+    "CrewAIGovernanceHooks": (".crewai_adapter", "GovernanceHooks"),
+    "GeminiKernel": (".gemini_adapter", "GeminiKernel"),
+    "GovernedGeminiModel": (".gemini_adapter", "GovernedGeminiModel"),
+    "ADKExecutionContext": (".google_adk_adapter", "ADKExecutionContext"),
+    "ADKAuditEvent": (".google_adk_adapter", "AuditEvent"),
+    "ADKGovernancePlugin": (".google_adk_adapter", "GovernancePlugin"),
+    "GoogleADKKernel": (".google_adk_adapter", "GoogleADKKernel"),
+    "ADKPolicyConfig": (".google_adk_adapter", "PolicyConfig"),
+    "GuardrailsKernel": (".guardrails_adapter", "GuardrailsKernel"),
+    "LangChainGovernanceMiddleware": (".langchain_adapter", "GovernanceMiddleware"),
+    "LangChainKernel": (".langchain_adapter", "LangChainKernel"),
+    "MAFAuditTrailMiddleware": (".maf_adapter", "AuditTrailMiddleware"),
+    "MAFCapabilityGuardMiddleware": (".maf_adapter", "CapabilityGuardMiddleware"),
+    "MAFGovernancePolicyMiddleware": (".maf_adapter", "GovernancePolicyMiddleware"),
+    "MAFRogueDetectionMiddleware": (".maf_adapter", "RogueDetectionMiddleware"),
+    "maf_create_governance_middleware": (".maf_adapter", "create_governance_middleware"),
+    "FirewallMode": (".llamafirewall", "FirewallMode"),
+    "FirewallResult": (".llamafirewall", "FirewallResult"),
+    "FirewallVerdict": (".llamafirewall", "FirewallVerdict"),
+    "LlamaFirewallAdapter": (".llamafirewall", "LlamaFirewallAdapter"),
+    "LlamaIndexKernel": (".llamaindex_adapter", "LlamaIndexKernel"),
+    "GovernedMistralClient": (".mistral_adapter", "GovernedMistralClient"),
+    "MistralKernel": (".mistral_adapter", "MistralKernel"),
+    "GovernedAssistant": (".openai_adapter", "GovernedAssistant"),
+    "OpenAIKernel": (".openai_adapter", "OpenAIKernel"),
+    "PydanticAIGovernanceCapability": (".pydantic_ai_adapter", "GovernanceCapability"),
+    "PydanticAIKernel": (".pydantic_ai_adapter", "PydanticAIKernel"),
+    "SKGovernanceFilter": (".semantic_kernel_adapter", "GovernanceFunctionFilter"),
+    "GovernedSemanticKernel": (".semantic_kernel_adapter", "GovernedSemanticKernel"),
+    "SemanticKernelWrapper": (".semantic_kernel_adapter", "SemanticKernelWrapper"),
+    "SmolagentsGovernanceCallback": (".smolagents_adapter", "GovernanceStepCallback"),
+    "SmolagentsKernel": (".smolagents_adapter", "SmolagentsKernel"),
+}
+
+
+def __getattr__(name: str):
+    if name in _LAZY_ADAPTER_MAP:
+        mod_path, real_name = _LAZY_ADAPTER_MAP[name]
+        import importlib
+        mod = importlib.import_module(mod_path, __package__)
+        obj = getattr(mod, real_name)
+        globals()[name] = obj  # cache for next access
+        return obj
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 from .base import (
     AsyncGovernedWrapper,
