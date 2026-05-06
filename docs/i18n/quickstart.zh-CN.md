@@ -51,6 +51,12 @@ npm install @microsoft/agentmesh-sdk
 dotnet add package Microsoft.AgentGovernance
 ```
 
+如使用 Visual Studio 包管理器控制台，请改用 `Install-Package`：
+
+```powershell
+Install-Package Microsoft.AgentGovernance
+```
+
 ## 2. 验证安装
 
 运行内置的验证脚本：
