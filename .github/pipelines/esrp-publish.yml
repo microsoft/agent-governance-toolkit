@@ -802,6 +802,7 @@ stages:
             displayName: 'Vet Go module'
 
           - script: |
+              export CGO_ENABLED=1
               go test -v -race -coverprofile=coverage.out ./...
             workingDirectory: 'agent-governance-golang'
             displayName: 'Run tests with coverage'
