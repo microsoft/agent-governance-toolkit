@@ -85,7 +85,8 @@ def _api(path: str, params: dict[str, str] | None = None) -> Any:
                 wait = int(exc.headers.get("Retry-After", "10"))
                 wait = min(max(wait, 5), 60)
                 print(f"  Rate limited, waiting {wait}s...", file=sys.stderr)
-                import time; time.sleep(wait)
+                import time
+                time.sleep(wait)
                 continue
             if exc.code == 404:
                 return None

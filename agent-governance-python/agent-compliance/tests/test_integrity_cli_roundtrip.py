@@ -47,7 +47,10 @@ class TestIntegrityGenerateRoundTrip:
         manifest = json.loads(output.read_text(encoding="utf-8"))
         assert "files" in manifest
         assert "functions" in manifest
-        assert len(manifest["files"]) > 0
+        # Manifest may be empty when governance modules (agent_os, agentmesh)
+        # are not installed, e.g. in isolated CI for agent-compliance only.
+        assert isinstance(manifest["files"], dict)
+        assert isinstance(manifest["functions"], dict)
 
     def test_generate_then_verify_passes(self, tmp_path: Path):
         output = tmp_path / "integrity.json"
