@@ -33,13 +33,9 @@ The project lead sets overall technical direction, resolves disputes when consen
 
 ## Current Maintainers
 
-| Name | Organization | GitHub | Role |
-|------|-------------|--------|------|
-| Imran Siddique | Microsoft | [@imran-siddique](https://github.com/imran-siddique) | Project lead, creator |
-| Jack Batzner | Microsoft | [@jackbatzner](https://github.com/jackbatzner) | Maintainer |
-| Elton Carr | Microsoft | [@eltoncarr-ms](https://github.com/eltoncarr-ms) | Maintainer |
+See [MAINTAINERS.md](MAINTAINERS.md) for the full list of current maintainers, their areas of ownership, and affiliation details.
 
-We are actively working to grow the maintainer group to include contributors from other organizations. If you are interested in becoming a maintainer, start by contributing and engaging with the project.
+We are actively working to grow the maintainer group to include contributors from other organizations. If you are interested in becoming a maintainer, start by contributing and engaging with the project. Code ownership areas are defined in [CODEOWNERS](CODEOWNERS).
 
 ## Decision-Making
 

@@ -1,0 +1,29 @@
+# Core maintainers own everything by default
+* @imran-siddique @jackbatzner @eltoncarr-ms
+
+# Python packages
+/agent-governance-python/ @imran-siddique @jackbatzner
+
+# TypeScript packages
+/agent-governance-typescript/ @imran-siddique @jackbatzner
+
+# .NET packages
+/agent-governance-dotnet/ @eltoncarr-ms @imran-siddique
+
+# Rust packages
+/agent-governance-rust/ @imran-siddique
+
+# Go packages
+/agent-governance-golang/ @imran-siddique
+
+# CI/CD and workflows
+/.github/ @imran-siddique @eltoncarr-ms
+
+# Documentation
+/docs/ @imran-siddique @jackbatzner
+
+# Scripts (contributor check, security tooling)
+/scripts/ @imran-siddique
+
+# Examples
+/examples/ @imran-siddique @jackbatzner
