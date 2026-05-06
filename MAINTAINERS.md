@@ -18,6 +18,9 @@ see [GOVERNANCE.md](GOVERNANCE.md).
 |------|-------------|--------|------|-------|
 | Jack Batzner | Microsoft | [@jackbatzner](https://github.com/jackbatzner) | Python SDK, Agent OS | Jan 2025 |
 | Elton Carr | Microsoft | [@eltoncarr-ms](https://github.com/eltoncarr-ms) | .NET SDK, CI/CD | Feb 2025 |
+| Andrew Lee Rubinger | Aileron | [@ALRubinger](https://github.com/ALRubinger) | Governance runtime, integrations | May 2026 |
+| Kevin Knapp | MythologIQ | [@Knapp-Kevin](https://github.com/Knapp-Kevin) | Policy engine, LangChain integration | May 2026 |
+| Nishar Miya | Dayos | [@miyannishar](https://github.com/miyannishar) | Observability, adopter integrations | May 2026 |
 
 ## Package Maintainers
 
@@ -25,8 +28,8 @@ see [GOVERNANCE.md](GOVERNANCE.md).
 |------|-------------|--------|-----------|-------|
 | | | | | |
 
-_We are actively growing the maintainer group to include contributors from
-other organizations. See [Contributing](#becoming-a-maintainer) below._
+_We welcome additional maintainers from any organization. See
+[Contributing](#becoming-a-maintainer) below._
 
 ## Becoming a Maintainer
 
