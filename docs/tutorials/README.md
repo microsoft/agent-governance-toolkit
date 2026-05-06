@@ -47,6 +47,7 @@ guides.
 | 11 | [Saga Orchestration](11-saga-orchestration.md) | Multi-step transactions, DSL, fan-out, compensating actions | `agentmesh-runtime` |
 | 12 | [Liability & Attribution](12-liability-and-attribution.md) | Vouching, slashing, causal attribution, quarantine | `agentmesh-runtime` |
 | 14 | [Kill Switch & Rate Limiting](14-kill-switch-and-rate-limiting.md) | Emergency termination, rate limiting, ring elevation | `agentmesh-runtime` |
+| 51 | [Cost Governance](51-cost-governance.md) | Tiered budgets, auto-throttle, kill switch, anomaly detection, cost optimization | `agent-sre` |
 
 ## Trust & Networking
 
