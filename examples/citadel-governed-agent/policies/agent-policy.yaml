@@ -1,0 +1,62 @@
+# AGT Policy Bundle: Customer Support Agent
+# This policy bundle would normally be injected by a Citadel Access Contract
+# deployment. For this example, it is loaded from a local file.
+#
+# Bundle ID: customer-support-v2
+# Version: 1.3.0
+
+policy:
+  name: customer-support-policy
+  version: "1.3.0"
+  description: >
+    Governance policy for a customer support agent operating behind a
+    Citadel APIM gateway. Complements gateway-level controls with
+    agent-level action restrictions.
+
+  # Data classification (aligns with Citadel/Purview labels)
+  data_classification: confidential
+
+  # Actions the agent is allowed to perform
+  allowed_actions:
+    - query_customer_database
+    - search_knowledge_base
+    - send_email
+    - create_ticket
+    - escalate_to_human
+
+  # Actions explicitly blocked
+  blocked_actions:
+    - delete_customer_record
+    - modify_billing
+    - access_internal_systems
+    - execute_code
+
+  # Rate limits (complementary to Citadel gateway rate limits)
+  # Citadel enforces 100 calls/hour at gateway; AGT enforces
+  # tighter limits per action type.
+  rate_limits:
+    query_customer_database:
+      max_calls: 50
+      window_seconds: 3600
+    send_email:
+      max_calls: 10
+      window_seconds: 3600
+
+  # Actions requiring justification
+  requires_justification:
+    - send_email
+    - escalate_to_human
+
+  # Trust score thresholds
+  trust:
+    minimum_score: 400
+    degraded_threshold: 600
+    actions_when_degraded:
+      - query_customer_database
+      - search_knowledge_base
+
+  # Audit settings
+  audit:
+    log_all_decisions: true
+    hash_chain: true
+    export_to_citadel: true
