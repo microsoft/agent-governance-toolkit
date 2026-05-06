@@ -82,6 +82,7 @@ guides.
 |---|----------|-------------------|---------|
 | 23 | [Delegation Chains](23-delegation-chains.md) | Monotonic scope narrowing, multi-agent delegation, cascade revocation | `@microsoft/agentmesh-sdk` |
 | 24 | [Cost & Token Budgets](24-cost-and-token-budgets.md) | Per-session token limits, context scheduling, budget signals | `agent-os-kernel` |
+| 49 | [Multi-Agent Collective Policies](49-multi-agent-policies.md) | Aggregate constraints across agents: rate limits, concurrent caps, alert-only monitoring | `agentmesh-platform` |
 
 ## Supply Chain Security
 
