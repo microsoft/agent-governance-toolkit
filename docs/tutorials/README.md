@@ -65,6 +65,7 @@ guides.
 | 13 | [Observability & Tracing](13-observability-and-tracing.md) | Causal traces, event bus, Prometheus, OpenTelemetry | `agentmesh-runtime` |
 | 15 | [RL Training Governance](15-rl-training-governance.md) | GovernedRunner, PolicyReward, Gym-compatible environments | `agentmesh-lightning` |
 | 18 | [Compliance Verification](18-compliance-verification.md) | Governance grading, regulatory frameworks, attestation | `agent-governance-toolkit` |
+| 50 | [Decision BOM](50-decision-bom.md) | Reconstruct full decision context from observability signals, completeness scoring, batch audit | `agentmesh-platform` |
 
 ## Multi-Language Packages
 
