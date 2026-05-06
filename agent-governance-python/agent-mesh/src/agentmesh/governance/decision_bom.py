@@ -18,10 +18,13 @@ Design principles (from architecture review):
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional, Protocol, runtime_checkable
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -280,23 +283,32 @@ class DecisionBOMReconstructor:
         resolved_time = timestamp or self._time_from_audit(audit_entries)
 
         if resolved_agent and resolved_time:
-            trust_fields = self._gather_trust(resolved_agent, resolved_time)
-            if trust_fields:
-                sources_queried.append("trust")
-                fields.extend(trust_fields)
+            try:
+                trust_fields = self._gather_trust(resolved_agent, resolved_time)
+                if trust_fields:
+                    sources_queried.append("trust")
+                    fields.extend(trust_fields)
+            except Exception:
+                logger.warning("Trust source failed during BOM reconstruction", exc_info=True)
 
         # Phase 3: Gather policy evaluations
-        policy_fields = self._gather_policy(trace_id, resolved_time)
-        if policy_fields:
-            sources_queried.append("policy")
-            fields.extend(policy_fields)
+        try:
+            policy_fields = self._gather_policy(trace_id, resolved_time)
+            if policy_fields:
+                sources_queried.append("policy")
+                fields.extend(policy_fields)
+        except Exception:
+            logger.warning("Policy source failed during BOM reconstruction", exc_info=True)
 
         # Phase 4: Gather trace spans
         if trace_id:
-            trace_fields = self._gather_trace(trace_id)
-            if trace_fields:
-                sources_queried.append("trace")
-                fields.extend(trace_fields)
+            try:
+                trace_fields = self._gather_trace(trace_id)
+                if trace_fields:
+                    sources_queried.append("trace")
+                    fields.extend(trace_fields)
+            except Exception:
+                logger.warning("Trace source failed during BOM reconstruction", exc_info=True)
 
         # Build the BOM
         bom = DecisionBOM(
