@@ -537,6 +537,10 @@ stages:
                 --configuration Release \
                 --no-build \
                 --output ./nupkg
+              dotnet pack src/AgentGovernance.Extensions.Microsoft.Agents/AgentGovernance.Extensions.Microsoft.Agents.csproj \
+                --configuration Release \
+                --no-build \
+                --output ./nupkg
               echo "=== Packed NuGet artifacts ==="
               ls -la ./nupkg/
             workingDirectory: 'agent-governance-dotnet'
@@ -844,4 +848,3 @@ stages:
                 echo "Tagged ${TAG} — Go module proxy will index automatically"
               fi
             displayName: 'Tag Go module for proxy indexing'
-

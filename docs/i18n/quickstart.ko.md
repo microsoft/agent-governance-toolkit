@@ -51,6 +51,18 @@ npm install @microsoft/agent-governance-sdk
 dotnet add package Microsoft.AgentGovernance
 ```
 
+`.csproj` 파일이 있는 디렉터리가 아니라면 프로젝트 경로를 명시해서 실행하세요.
+
+```bash
+dotnet add YourApp.csproj package Microsoft.AgentGovernance
+```
+
+Visual Studio Package Manager Console에서는 **Default project** 드롭다운에서 대상 프로젝트를 고른 뒤 다음 명령을 사용하세요.
+
+```powershell
+Install-Package Microsoft.AgentGovernance
+```
+
 ## 2. 설치 확인
 
 미리 포함된 점검 스크립트를 실행합니다.

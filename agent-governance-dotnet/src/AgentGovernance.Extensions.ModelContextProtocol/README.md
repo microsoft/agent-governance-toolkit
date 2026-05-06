@@ -4,6 +4,20 @@ Public Preview companion package for the official Model Context Protocol C# SDK.
 
 ## Install
 
+Run `dotnet add package` from the directory that contains your `.csproj`. If you're elsewhere, pass the project path explicitly:
+
+```bash
+dotnet add YourApp.csproj package Microsoft.AgentGovernance.Extensions.ModelContextProtocol
+```
+
+In Visual Studio Package Manager Console, use:
+
+```powershell
+Install-Package Microsoft.AgentGovernance.Extensions.ModelContextProtocol
+```
+
+Make sure the correct app is selected in the **Default project** dropdown. Typing the package name by itself at the prompt fails because PowerShell treats it as a command.
+
 ```bash
 dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol
 ```

@@ -51,6 +51,18 @@ npm install @microsoft/agent-governance-sdk
 dotnet add package Microsoft.AgentGovernance
 ```
 
+If you are not in the directory that contains your `.csproj`, use:
+
+```bash
+dotnet add YourApp.csproj package Microsoft.AgentGovernance
+```
+
+From Visual Studio Package Manager Console, use:
+
+```powershell
+Install-Package Microsoft.AgentGovernance
+```
+
 ## 2. Verify Your Installation
 
 Run the included verification script:
@@ -341,4 +353,3 @@ agt integrity --manifest integrity.json
 ---
 
 *Based on the initial quickstart contribution by [@davidequarracino](https://github.com/davidequarracino) ([#106](https://github.com/microsoft/agent-governance-toolkit/pull/106), [#108](https://github.com/microsoft/agent-governance-toolkit/pull/108)).*
-

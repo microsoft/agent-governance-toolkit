@@ -250,9 +250,12 @@ jobs:
         working-directory: agent-governance-dotnet
         run: dotnet test --configuration Release --no-build
 
-      - name: Pack NuGet package
+      - name: Pack NuGet packages
         working-directory: agent-governance-dotnet
-        run: dotnet pack src/AgentGovernance/AgentGovernance.csproj --configuration Release --no-build --output ./nupkg
+        run: |
+          dotnet pack src/AgentGovernance/AgentGovernance.csproj --configuration Release --no-build --output ./nupkg
+          dotnet pack src/AgentGovernance.Extensions.ModelContextProtocol/AgentGovernance.Extensions.ModelContextProtocol.csproj --configuration Release --no-build --output ./nupkg
+          dotnet pack src/AgentGovernance.Extensions.Microsoft.Agents/AgentGovernance.Extensions.Microsoft.Agents.csproj --configuration Release --no-build --output ./nupkg
 
       # ----------------------------------------------------------------
       # ESRP Signing — Authenticode sign DLLs + NuGet package signing
