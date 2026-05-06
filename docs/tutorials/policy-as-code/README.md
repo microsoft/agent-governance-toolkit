@@ -37,7 +37,7 @@ python examples/01_first_policy.py
 
 - [Tutorial 01 — Policy Engine](../01-policy-engine.md) — Full YAML syntax and operator reference
 - [Policy Schema Source](../../../agent-governance-python/agent-os/src/agent_os/policies/schema.py) — PolicyDocument and PolicyRule models
-- [QUICKSTART.md](../../../QUICKSTART.md) — 10-minute getting started guide
+- [quickstart.md](../../../quickstart.md) — 10-minute getting started guide
 
 ## Supplemental Guides
 

@@ -154,7 +154,7 @@ Added 5 comprehensive examples and 3 framework integration guides to demonstrate
 
 ## Supporting Documentation
 
-### QuickStart Guide (`examples/QUICKSTART.md`)
+### QuickStart Guide (`examples/quickstart.md`)
 - 5-minute tutorial for new users
 - Step-by-step agent creation
 - Common tasks and troubleshooting
@@ -224,7 +224,7 @@ All examples include:
 
 ## Next Steps for Users
 
-1. Start with [QUICKSTART.md](examples/QUICKSTART.md)
+1. Start with [quickstart.md](examples/quickstart.md)
 2. Try the MCP example (most popular protocol)
 3. Explore framework integration for their stack
 4. Adapt examples to their use case

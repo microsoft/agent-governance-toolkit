@@ -1,0 +1,45 @@
+# AEGIS Governance Profile — customer support agent
+#
+# Demonstrates the same schema applied to a different agent class — narrower
+# action surface, customer-data scope (with PII redaction expected upstream),
+# explicit denial of destructive or escalation-prone actions.
+#
+# Compiled with the same `compile.py` as profile-research-agent.yaml.
+
+profile:
+  id: customer-support-agent-standard
+  version: 1.0.0
+  description: >
+    Standard governance profile for customer-support-class agents. Permits
+    customer record lookup and reply drafting over the customer-support
+    scope; denies access to billing, internal escalation paths, and any
+    administrative actions.
+
+principal:
+  role: support_agent
+
+capabilities:
+  allowed_actions:
+    - customer_record_read
+    - ticket_read
+    - ticket_update
+    - draft_reply
+    - knowledge_base_search
+  denied_actions:
+    - customer_record_delete
+    - billing_modify
+    - account_close
+    - shell_exec
+    - send_external_email
+    - escalate_to_admin
+
+resource_scopes:
+  allowed_patterns:
+    - "customer/support/*"
+    - "knowledge_base/public/*"
+    - "knowledge_base/internal/*"
+  denied_patterns:
+    - "customer/pii/raw/*"
+    - "customer/billing/*"
+    - "internal/admin/*"
+    - "internal/finance/*"

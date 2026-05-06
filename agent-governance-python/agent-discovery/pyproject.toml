@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentmesh_discovery"
-version = "3.3.0"
+version = "3.4.0"
 description = "Shadow AI agent discovery and inventory for the Agent Governance Toolkit"
 readme = "README.md"
 license = {text = "MIT"}

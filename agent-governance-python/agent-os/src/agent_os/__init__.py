@@ -379,6 +379,10 @@ __all__ = [
     # Shift-Left Metrics
     "ShiftLeftTracker",
     "ViolationStage",
+
+    # Audit Logger + OTel Backend
+    "GovernanceAuditLogger",
+    "OTelLogsBackend",
 ]
 
 # ============================================================================
@@ -407,3 +411,7 @@ from agent_os.shift_left_metrics import (
     ShiftLeftTracker,
     ViolationStage,
 )
+
+from agent_os.audit_logger import GovernanceAuditLogger
+from agent_os.otel_audit_backend import OTelLogsBackend
+

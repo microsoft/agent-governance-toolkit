@@ -334,7 +334,7 @@ Works with **20+ agent frameworks** — no vendor lock-in:
 | Resource | Link |
 |----------|------|
 | GitHub Repo | [microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit) |
-| Quick Start Guide | [QUICKSTART.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/QUICKSTART.md) |
+| Quick Start Guide | [quickstart.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/quickstart.md) |
 | Architecture Docs | [docs/ARCHITECTURE.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/ARCHITECTURE.md) |
 | OWASP Compliance | [docs/OWASP-COMPLIANCE.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/OWASP-COMPLIANCE.md) |
 | Tutorials (27) | [docs/tutorials/](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs/tutorials) |

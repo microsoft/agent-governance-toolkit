@@ -171,6 +171,12 @@ def cli(
     )
 
 
+# Register the red-team subcommand group
+from agent_compliance.cli.red_team import red_team
+
+cli.add_command(red_team)
+
+
 @cli.command()
 @click.option("--badge", is_flag=True, default=False, help="Output markdown badge only.")
 @click.option(

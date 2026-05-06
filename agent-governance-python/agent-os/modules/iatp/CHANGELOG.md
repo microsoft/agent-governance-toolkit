@@ -41,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Renamed PyPI package from `iatp` to `inter-agent-trust-protocol` (name conflict)
-- Updated QUICKSTART.md with one-line deploy instructions
+- Updated quickstart.md with one-line deploy instructions
 - Improved documentation with access points and test commands
 
 ### Fixed
