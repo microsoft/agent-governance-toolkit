@@ -21,7 +21,7 @@
 
 > 📦 **Install the full stack:** `pip install agent-governance-toolkit[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
 
-[Quick Start](#-quick-start-in-30-seconds) • [Architecture](#-architecture-diagram) • [Examples](examples/) • [Benchmarks](benchmarks/results/BENCHMARKS.md) • [Docs](docs/) • [Agent OS](https://github.com/microsoft/agent-governance-toolkit) • [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) • [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit)
+[Quick Start](#-quick-start) • [Architecture](#-architecture-diagram) • [Examples](examples/) • [Benchmarks](benchmarks/results/BENCHMARKS.md) • [Docs](docs/) • [Agent OS](https://github.com/microsoft/agent-governance-toolkit) • [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) • [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit)
 
 </div>
 
@@ -131,39 +131,35 @@ flowchart LR
 
 ---
 
-## ⚡ Quick Start in 30 Seconds
+## ⚡ Quick Start
+
+### 1. Install
 
 ```bash
 pip install agent-sre
 ```
 
+### 2. Define your SLOs
+
 ```python
 from agent_sre import SLO, ErrorBudget
-from agent_sre.slo.indicators import TaskSuccessRate, CostPerTask, HallucinationRate
+from agent_sre.slo.indicators import TaskSuccessRate
 
-# Define what "reliable" means for your agent
-slo = SLO(
-    name="my-agent",
-    indicators=[
-        TaskSuccessRate(target=0.95, window="24h"),
-        CostPerTask(target_usd=0.50, window="24h"),
-        HallucinationRate(target=0.05, window="24h"),
-    ],
-    error_budget=ErrorBudget(total=0.05),
-)
+slo = SLO(name="my-agent",
+          indicators=[TaskSuccessRate(target=0.95, window="24h")],
+          error_budget=ErrorBudget(total=0.05))
+```
 
-# After each agent task
+### 3. Record events and check health
+
+```python
 slo.indicators[0].record_task(success=True)
-slo.indicators[1].record_cost(cost_usd=0.35)
-slo.indicators[2].record_evaluation(hallucinated=False)
 slo.record_event(good=True)
-
-# Check health
-status = slo.evaluate()  # HEALTHY, WARNING, CRITICAL, or EXHAUSTED
+status = slo.evaluate()  # HEALTHY | WARNING | CRITICAL | EXHAUSTED
 print(f"Budget remaining: {slo.error_budget.remaining_percent:.1f}%")
 ```
 
-That's it. Your agent now has SLOs, error budgets, and burn rate alerts. [See all examples →](examples/)
+For cost guardrails, chaos testing, and more, see the [examples directory](examples/) or run `python examples/quickstart.py`.
 
 ---
 
