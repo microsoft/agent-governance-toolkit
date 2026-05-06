@@ -79,6 +79,9 @@ python src/agent.py
 | `src/citadel_config.py` | Citadel gateway configuration and helpers |
 | `policies/agent-policy.yaml` | AGT policy bundle for this agent |
 | `sample-access-contract/main.bicepparam` | Sample Citadel Access Contract with AGT binding |
+| `apim-policies/agt-governance-metadata.xml` | APIM policy fragment for governance metadata passthrough |
+| `apim-policies/agt-governed-product-policy.xml` | Sample product policy using the fragment |
+| `apim-policies/README.md` | APIM policy deployment and usage guide |
 
 ## Policy Precedence
 

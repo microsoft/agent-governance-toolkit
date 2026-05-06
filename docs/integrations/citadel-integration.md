@@ -165,12 +165,57 @@ Understanding what each system handles avoids duplication:
 | AGT Policy Engine | Agent actions proceed ungoverned (fail-open by default, configurable to fail-closed). |
 | Entra ID | AGT uses local cryptographic identity. Enterprise identity federation paused. |
 
+## Entra Identity Federation
+
+The `EntraIdentityBridge` maps AGT agent identities to Entra ID agent identities
+for Citadel Layer 3 correlation. This is **attestation/federation**, not write-back:
+
+- Entra remains authoritative for enterprise identity and lifecycle
+- AGT remains authoritative for runtime credentials and trust scores
+- AGT trust scores surface as **risk labels** in telemetry, not Entra metadata
+
+```python
+from agent_os.integrations.citadel import EntraIdentityBridge
+
+bridge = EntraIdentityBridge.from_env()
+
+# Bind AGT agent to its Entra managed identity (one-time setup)
+binding = bridge.bind(
+    agt_agent_id="customer-support-agent-01",
+    agt_public_key="<base64-ed25519-pubkey>",
+    entra_object_id="00000000-0000-0000-0000-000000000001",
+)
+
+# Produce attestation (emitted as telemetry)
+attestation = bridge.attest(binding, trust_score=850)
+# attestation.risk_label == TrustRiskLabel.TRUSTED
+```
+
+Trust score thresholds:
+- `>= 700`: trusted
+- `>= 400`: degraded
+- `< 400`: untrusted
+
+## APIM Governance Metadata
+
+The APIM policy fragment (`agt-governance-metadata`) enables the Citadel gateway
+to log AGT governance posture without adding AGT to the request hot path:
+
+1. Agent runtime sets `X-AGT-*` headers before making LLM calls
+2. APIM fragment reads headers, logs them as custom trace dimensions
+3. Fragment strips AGT headers before forwarding to backend (defense in depth)
+4. Response includes `X-AGT-APIM-Request-Id` for cross-system correlation
+
+See [`examples/citadel-governed-agent/apim-policies/`](../../examples/citadel-governed-agent/apim-policies/)
+for the fragment XML, sample product policy, and deployment instructions.
+
 ## Getting Started
 
 1. **Deploy Citadel Governance Hub**: Follow the [Citadel quickstart](https://github.com/Azure-Samples/ai-hub-gateway-solution-accelerator/tree/citadel-v1)
 2. **Install AGT**: `pip install agent-governance-toolkit`
 3. **Configure the exporter**: Set `CITADEL_EVENTHUB_CONNECTION_STRING` and `CITADEL_APPINSIGHTS_CONNECTION_STRING`
-4. **See the example**: [`examples/citadel-governed-agent/`](../../examples/citadel-governed-agent/)
+4. **Deploy the APIM fragment**: See [`apim-policies/README.md`](../../examples/citadel-governed-agent/apim-policies/README.md)
+5. **See the example**: [`examples/citadel-governed-agent/`](../../examples/citadel-governed-agent/)
 
 ## References
 
