@@ -118,6 +118,7 @@ guides.
 | 39 | [DLP with Attribute Ratchets](39-dlp-attribute-ratchets.md) | Monotonic session state — sensitivity only goes up, never resets | `agentmesh-platform` |
 | 40 | [OTel Observability](40-otel-observability.md) | OpenTelemetry spans + metrics for policy, approval, and trust operations | `agentmesh-platform` |
 | 41 | [Advisory Defense-in-Depth](41-advisory-defense-in-depth.md) | Pattern, ML, and HTTP classifiers as non-deterministic defense layer | `agentmesh-platform` |
+| 48 | [Intent-Based Authorization](48-intent-based-authorization.md) | Declare/approve/execute/verify lifecycle, drift detection, child intent scope narrowing | `agent-os-kernel` |
 
 ## Extending the Toolkit
 
