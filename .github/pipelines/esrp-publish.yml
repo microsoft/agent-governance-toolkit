@@ -803,7 +803,7 @@ stages:
 
           - script: |
               export CGO_ENABLED=1
-              go test -v -race -coverprofile=coverage.out ./...
+              go test -v -race -covermode=atomic -coverprofile=coverage.out ./packages/...
             workingDirectory: 'agent-governance-golang'
             displayName: 'Run tests with coverage'
 
