@@ -53,7 +53,11 @@ If maintainers cannot reach consensus, the project lead makes the final decision
 
 ## Releases
 
-Releases follow [Semantic Versioning](https://semver.org/). Any maintainer can propose a release. The release process is automated via GitHub Actions with trusted publishing and SLSA build provenance.
+Releases follow [Semantic Versioning](https://semver.org/). Any maintainer can propose a release. The release process is documented in [RELEASE.md](RELEASE.md) and automated via GitHub Actions with trusted publishing and SLSA build provenance.
+
+## Project Charter
+
+The project operates under the [Technical Charter](CHARTER.md), which defines the TSC structure, IP policy, and amendment process for foundation governance.
 
 ## Code of Conduct
 

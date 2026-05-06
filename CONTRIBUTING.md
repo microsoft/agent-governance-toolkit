@@ -8,6 +8,21 @@ When you submit a pull request, a CLA bot will automatically determine whether y
 CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
 provided by the bot. You will only need to do this once across all repos using our CLA.
 
+### Developer Certificate of Origin (DCO)
+
+In addition to the CLA, all commits must include a `Signed-off-by` trailer certifying that you
+wrote the code or have the right to submit it under the project's license. This is the
+[Developer Certificate of Origin](https://developercertificate.org) (DCO).
+
+To sign off on a commit, use the `-s` flag:
+
+```bash
+git commit -s -m "feat: add new policy engine"
+```
+
+This adds a line like `Signed-off-by: Your Name <your.email@example.com>` to the commit message.
+A CI check will verify that all commits in a pull request include this trailer.
+
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
