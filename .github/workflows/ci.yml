@@ -165,7 +165,8 @@ jobs:
   # ── Python test (only when Python files change) ───────────────────────
   test:
     needs: changes
-    if: needs.changes.outputs.python == 'true' || github.event_name == 'schedule'
+    # Always run so matrix check names are reported to branch protection.
+    # Steps are skipped when no Python files changed.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -194,12 +195,20 @@ jobs:
             python-version: "3.10"
           - package: agent-lightning
             python-version: "3.10"
+    env:
+      RUN_TESTS: ${{ needs.changes.outputs.python == 'true' || github.event_name == 'schedule' }}
     steps:
+      - name: Skip (no Python changes)
+        if: env.RUN_TESTS != 'true'
+        run: echo "No Python changes — skipping tests"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        if: env.RUN_TESTS == 'true'
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        if: env.RUN_TESTS == 'true'
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install local sibling dependencies
+        if: env.RUN_TESTS == 'true'
         run: |
           # agent-os depends on agent_primitives (local, not on PyPI at >=3.x)
           # and agentmesh (test_cmd_sign.py imports agentmesh.marketplace)
@@ -208,11 +217,13 @@ jobs:
             pip install --no-cache-dir -e agent-governance-python/agent-mesh
           fi
       - name: Install ${{ matrix.package }}
+        if: env.RUN_TESTS == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
           pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==0.26.0 2>/dev/null || true
       - name: Test ${{ matrix.package }}
+        if: env.RUN_TESTS == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
         run: pytest tests/ -q --tb=short
 
