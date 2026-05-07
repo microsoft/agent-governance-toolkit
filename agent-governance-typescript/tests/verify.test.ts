@@ -52,7 +52,7 @@ describe('GovernanceVerifier', () => {
     writeFileSync(evidencePath, [
       'schema: agt-runtime-evidence/v1',
       'generatedAt: 2026-04-24T00:00:00.000Z',
-      'toolkitVersion: 3.3.0',
+      'toolkitVersion: 3.4.0',
       'deployment:',
       '  agentId: ts-agent',
       '  identity:',

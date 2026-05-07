@@ -1,5 +1,6 @@
 <Project>
   <PropertyGroup>
+    <Version>3.4.0</Version>
     <Authors>Microsoft</Authors>
     <Company>Microsoft Corporation</Company>
     <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
