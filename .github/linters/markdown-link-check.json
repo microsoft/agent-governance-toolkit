@@ -1,0 +1,37 @@
+{
+  "ignorePatterns": [
+    { "pattern": "^http://localhost" },
+    { "pattern": "^http://127\\.0\\.0\\.1" },
+    { "pattern": "^http://0\\.0\\.0\\.0" },
+    { "pattern": "example\\.com" },
+    { "pattern": "example\\.org" },
+    { "pattern": "example\\.net" },
+    { "pattern": "npmjs\\.com" },
+    { "pattern": "pypi\\.org/project" },
+    { "pattern": "nuget\\.org/packages/Microsoft\\.AgentGovernance" },
+    { "pattern": "nist\\.gov" },
+    { "pattern": "stackoverflow\\.com" },
+    { "pattern": "login\\.microsoftonline\\.com" },
+    { "pattern": "portal\\.azure\\.com" },
+    { "pattern": "github\\.com/.*/compare/" },
+    { "pattern": "github\\.com/.*/releases/new" },
+    { "pattern": "github\\.com/.*/stargazers" },
+    { "pattern": "singapore-mgf-mapping\\.md" },
+    { "pattern": "csa-atf-mapping\\.md" },
+    { "pattern": "https://crates\\.io/crates/agent-governance" },
+    { "pattern": "^/README\\.md" }
+  ],
+  "timeout": "30s",
+  "retryOn429": true,
+  "retryCount": 5,
+  "fallbackRetryDelay": "30s",
+  "aliveStatusCodes": [200, 206],
+  "httpHeaders": [
+    {
+      "urls": ["https://github.com/", "https://guides.github.com/", "https://help.github.com/", "https://docs.github.com/"],
+      "headers": {
+        "Accept-Encoding": "zstd, br, gzip, deflate"
+      }
+    }
+  ]
+}

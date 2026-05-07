@@ -448,6 +448,26 @@ jobs:
           print(f'OK: All notebook pip install packages are registered')
           "
 
+  # ── Markdown link check (checks all .md files in the repo)
+  # Approach adapted from gaurav-nelson/github-action-markdown-link-check
+  markdown-link-check:
+    needs: changes
+    if: github.event_name == 'schedule' || needs.changes.outputs['docs-only'] == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Markdown link check
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          use-quiet-mode: 'yes'
+          use-verbose-mode: 'no'
+          config-file: '.github/linters/markdown-link-check.json'
+          # Configure it to check all .md files in the repo
+          check-modified-files-only: 'no'
+          base-branch: main
+
   # ── Workflow security audit (only when workflows change) ─────────────
   workflow-security:
     needs: changes
@@ -671,6 +691,7 @@ jobs:
         build-rust,
         build-go,
         docker-compose-test,
+        markdown-link-check,
       ]
     runs-on: ubuntu-latest
     steps:
