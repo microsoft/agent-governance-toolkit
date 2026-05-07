@@ -36,7 +36,9 @@ internal static class Program
         // The kernel is the single entry point that wires together the
         // policy engine, rate limiter, audit emitter, metrics, and any
         // optional defenses you opt into.
-        var policyPath = Path.Combine(AppContext.BaseDirectory, "policies", "quickstart.yaml");
+        // Path.Join (vs Path.Combine) never silently drops earlier segments
+        // even if a later one is rooted — safer for static analysis.
+        var policyPath = Path.Join(AppContext.BaseDirectory, "policies", "quickstart.yaml");
 
         using var kernel = new GovernanceKernel(new GovernanceOptions
         {
