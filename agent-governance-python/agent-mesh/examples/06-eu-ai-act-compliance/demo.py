@@ -135,7 +135,7 @@ def main() -> None:
         deployable = checker.can_deploy(agent)
         icon = "✅" if deployable else "🚫"
         status = "APPROVED" if deployable else "BLOCKED"
-        print(f"  {icon}  {_redact(label, 20):40s} → {status}")
+        print(f"  {icon}  {label:40s} → {status}")
 
     # ------------------------------------------------------------------
     # Demo 5 — Prohibited (unacceptable-risk) system
