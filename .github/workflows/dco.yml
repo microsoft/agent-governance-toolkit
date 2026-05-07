@@ -23,9 +23,9 @@ jobs:
           MISSING=()
 
           for SHA in $(git rev-list "$BASE".."$HEAD"); do
-            # Skip merge commits
-            PARENTS=$(git rev-parse --verify "$SHA^2" 2>/dev/null && echo "merge" || echo "normal")
-            if [ "$PARENTS" = "merge" ]; then
+            # Skip merge commits (commits with more than one parent)
+            PARENT_COUNT=$(git cat-file -p "$SHA" | grep -c '^parent ')
+            if [ "$PARENT_COUNT" -gt 1 ]; then
               continue
             fi
 
