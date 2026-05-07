@@ -137,4 +137,6 @@ frozenset
 isinstance
 pathlib
 returncode
+xunit
+requireapproval
 cref
