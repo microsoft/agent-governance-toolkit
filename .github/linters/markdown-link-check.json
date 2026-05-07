@@ -18,7 +18,7 @@
     { "pattern": "github\\.com/.*/stargazers" },
     { "pattern": "singapore-mgf-mapping\\.md" },
     { "pattern": "csa-atf-mapping\\.md" },
-    { "pattern": "https://crates\\.io/crates/agent-governance" },
+    { "pattern": "crates\\.io" },
     { "pattern": "^/README\\.md" }
   ],
   "timeout": "30s",
