@@ -30,7 +30,7 @@ public sealed class ItemsController : ControllerBase
     private static readonly object Sync = new();
 
     [HttpGet]
-    public ActionResult<IEnumerable<Item>> List()
+    public static ActionResult<IEnumerable<Item>> List()
     {
         lock (Sync)
         {
@@ -39,7 +39,7 @@ public sealed class ItemsController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
-    public ActionResult<Item> GetById(int id)
+    public static ActionResult<Item> GetById(int id)
     {
         lock (Sync)
         {
@@ -48,7 +48,7 @@ public sealed class ItemsController : ControllerBase
     }
 
     [HttpPost]
-    public ActionResult<Item> Create([FromBody] CreateItemRequest request)
+    public static ActionResult<Item> Create([FromBody] CreateItemRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
@@ -66,7 +66,7 @@ public sealed class ItemsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
-    public ActionResult<Item> Update(int id, [FromBody] UpdateItemRequest request)
+    public static ActionResult<Item> Update(int id, [FromBody] UpdateItemRequest request)
     {
         lock (Sync)
         {
@@ -82,7 +82,7 @@ public sealed class ItemsController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
-    public IActionResult Delete(int id)
+    public static IActionResult Delete(int id)
     {
         // Note: policy `deny-item-delete` blocks this route at the middleware
         // layer, so callers will see a 403 long before this method runs.
