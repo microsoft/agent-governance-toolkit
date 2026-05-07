@@ -70,12 +70,12 @@ public sealed class ItemsController : ControllerBase
     {
         lock (Sync)
         {
-            if (!Store.ContainsKey(id))
+            if (!Store.TryGetValue(id, out var existing))
             {
                 return NotFound();
             }
 
-            var updated = new Item(id, request.Name ?? Store[id].Name);
+            var updated = new Item(id, request.Name ?? existing.Name);
             Store[id] = updated;
             return Ok(updated);
         }
