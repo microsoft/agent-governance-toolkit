@@ -138,3 +138,7 @@ isinstance
 pathlib
 returncode
 cref
+nameof
+aspnet
+appsettings
+requireapproval
