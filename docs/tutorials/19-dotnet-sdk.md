@@ -11,7 +11,13 @@ Python packages, packaged as a single NuGet library with **zero external depende
 beyond YamlDotNet**.
 
 > **Target runtime:** .NET 8.0+
-> **NuGet package:** `Microsoft.AgentGovernance` (v2.1.0)
+> **NuGet package:** `Microsoft.AgentGovernance` (v3.3.0)\*
+>
+> \* *Version current as of this revision. Always check the latest stable
+> release on [NuGet.org](https://www.nuget.org/packages/Microsoft.AgentGovernance)
+> before pinning, and cross-reference
+> [`agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj`](../../agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj)
+> when building from source.*
 
 ---
 
@@ -45,8 +51,15 @@ dotnet add package Microsoft.AgentGovernance
 Or add it to your `.csproj` directly:
 
 ```xml
-<PackageReference Include="Microsoft.AgentGovernance" Version="3.2.2" />
+<PackageReference Include="Microsoft.AgentGovernance" Version="3.3.0" />
 ```
+
+> **Heads up:** the version above is current as of this tutorial's last
+> revision. Before copy-pasting, check the latest published version on
+> [NuGet.org](https://www.nuget.org/packages/Microsoft.AgentGovernance) and
+> the in-repo source of truth at
+> [`agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj`](../../agent-governance-dotnet/src/AgentGovernance/AgentGovernance.csproj).
+> The same applies to the companion extension packages below.
 
 The package targets `net8.0` and has a single dependency — `YamlDotNet` for
 policy parsing.
