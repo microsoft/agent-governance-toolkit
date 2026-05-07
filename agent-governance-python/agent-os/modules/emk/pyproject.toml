@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentmesh_memory"
-version = "3.4.0"
+version = "3.5.0"
 description = "Public Preview — Episodic Memory Kernel for AI agent experience storage"
 authors = [
     { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
