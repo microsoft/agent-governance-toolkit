@@ -14,7 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 // The kernel is thread-safe and meant to be reused for the lifetime
 // of the process. It owns the policy engine, audit emitter, rate limiter,
 // and any optional defenses you opt into.
-var policyPath = Path.Combine(AppContext.BaseDirectory, "policies", "aspnet.yaml");
+var policyPath = Path.Join(AppContext.BaseDirectory, "policies", "aspnet.yaml");
 
 builder.Services.AddSingleton(_ => new GovernanceKernel(new GovernanceOptions
 {
