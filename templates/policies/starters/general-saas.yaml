@@ -127,6 +127,15 @@ rules:
   # Agents are tricked into using untrusted tools, registries, or MCP servers.
   # =========================================================================
 
+  - name: asi04-supply-chain-tool-enumeration
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(list\\s+all\\s+tools|what\\s+plugins\\s+are\\s+installed|dump\\s+(environment\\s+)?variables|show\\s+mcp\\s+servers|enumerate\\s+capabilities)"
+    action: deny
+    priority: 100
+    message: "ASI-04: Supply Chain — detected pre-attack tool enumeration or capability reconnaissance"
+
   - name: asi04-registry-poisoning-guardrail
     condition: {field: action, operator: matches, value: "^(update_config|install_tool|register_mcp|edit_env|add_plugin)$"}
     action: deny
