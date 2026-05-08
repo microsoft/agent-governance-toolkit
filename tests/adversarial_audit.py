@@ -35,7 +35,7 @@ class AdversarialScenario:
     intelligence_source: str
 
 # ---------------------------------------------------------------------------
-# Adversarial Payload Library (Synthesized from Arcanum research)
+# Adversarial Payload Library (Synthesized from Arcanum-Sec research)
 # ---------------------------------------------------------------------------
 
 SCENARIOS = [

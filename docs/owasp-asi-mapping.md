@@ -21,28 +21,28 @@ Cross-references every rule in the ASI starter policy packs
 | `asi01-prompt-injection-override` | All | ASI-01 | Agent OS — Policy Engine |
 | `asi01-prompt-injection-role-hijack` | All | ASI-01 | Agent OS — Policy Engine |
 | `asi01-prompt-injection-delimiter` | All | ASI-01 | Agent OS — MCP Proxy Sanitizer |
-| `asi01-cbrn-medical-synthesis-blocking` | healthcare | ASI-01 | Agent OS — Policy Engine (Arcanum CBRN) |
+| `asi01-cbrn-medical-synthesis-blocking` | healthcare | ASI-01 | Agent OS — Policy Engine (Arcanum-Sec CBRN) |
 | `asi01-prompt-injection-jailbreak` | general-saas | ASI-01 | Agent OS — Policy Engine |
-| `saas-asi01-swarm-delegation-guardrail` | general-saas | ASI-01 | AgentMesh — Delegation Guard (Arcanum) |
+| `saas-asi01-swarm-delegation-guardrail` | general-saas | ASI-01 | AgentMesh — Delegation Guard (Arcanum-Sec) |
 | `asi02-block-shell-execution` | All | ASI-02 | Agent OS — Capability Sandboxing |
 | `asi02-block-network-exfiltration` | All | ASI-02 | Agent OS — Capability Sandboxing |
 | `asi02-block-file-deletion` | healthcare | ASI-02 | Agent OS — Capability Sandboxing |
 | `asi02-block-destructive-operations` | financial-services, general-saas | ASI-02 | Agent OS — Capability Sandboxing |
-| `financial-asi02-obfuscation-detection` | financial-services | ASI-02 | Agent OS — Binary Inspector (Arcanum) |
+| `financial-asi02-obfuscation-detection` | financial-services | ASI-02 | Agent OS — Binary Inspector (Arcanum-Sec) |
 | `asi02-block-database-mutation` | general-saas | ASI-02 | Agent SRE — Audit Trail |
 | `asi03-block-privilege-escalation` | All | ASI-03 | AgentMesh — DID Identity & Trust |
 | `asi03-block-credential-access` | All | ASI-03 | AgentMesh — DID Identity & Trust |
-| `financial-asi03-identity-assumption-guardrail` | financial-services | ASI-03 | AgentMesh — Trust Boundary (Arcanum) |
+| `financial-asi03-identity-assumption-guardrail` | financial-services | ASI-03 | AgentMesh — Trust Boundary (Arcanum-Sec) |
 | `asi03-block-user-impersonation` | general-saas | ASI-03 | AgentMesh — DID Identity & Trust |
-| `asi04-block-untrusted-registry-updates` | All | ASI-04 | Agent OS — Registry Proxy (Arcanum) |
+| `asi04-block-untrusted-registry-updates` | All | ASI-04 | Agent OS — Registry Proxy (Arcanum-Sec) |
 | `asi05-block-code-execution` | All | ASI-05 | Agent Runtime — Execution Rings |
 | `asi05-block-dynamic-eval` | All | ASI-05 | Agent Runtime — Execution Rings |
-| `asi05-sandbox-anti-pattern-detection` | healthcare | ASI-05 | Agent Runtime — Context Guard (Arcanum) |
+| `asi05-sandbox-anti-pattern-detection` | healthcare | ASI-05 | Agent Runtime — Context Guard (Arcanum-Sec) |
 | `asi05-block-ssh` | general-saas | ASI-05 | Agent Runtime — Execution Rings |
 | `asi06-context-budget-limit` | All | ASI-06 | Agent OS — VFS / ContextScheduler |
 | `asi06-block-context-manipulation` | All | ASI-06 | Agent OS — CMVK Verification |
 | `asi08-session-tool-call-limit` | All | ASI-08 | Agent SRE — Circuit Breakers |
-| `saas-asi08-swarm-heat-circuit-breaker` | general-saas | ASI-08 | Agent SRE — Swarm Monitor (Arcanum) |
+| `saas-asi08-swarm-heat-circuit-breaker` | general-saas | ASI-08 | Agent SRE — Swarm Monitor (Arcanum-Sec) |
 | `healthcare-block-phi-ssn` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
 | `healthcare-block-phi-mrn` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
 | `healthcare-block-phi-dea` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
@@ -122,7 +122,7 @@ These packs extend existing patterns from this repository:
 - `examples/policies/production/financial.yaml` — PCI/SOX patterns
 - `examples/policies/production/enterprise.yaml` — general enterprise deny rules
 - `examples/policies/prompt-injection-safety.yaml` — ASI-01 injection detection
-- **Arcanum Intelligence**: Rules prefixed with `(Arcanum)` leverage the Arcanum-Sec Prompt Injection Taxonomy or `sec-context` anti-pattern library for high-fidelity detection.
+- **Arcanum-Sec Intelligence**: Rules prefixed with `(Arcanum-Sec)` leverage the Arcanum-Sec Prompt Injection Taxonomy or `sec-context` anti-pattern library for high-fidelity detection.
 
 **OWASP reference:** [OWASP Top 10 for Agentic Applications (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)
 

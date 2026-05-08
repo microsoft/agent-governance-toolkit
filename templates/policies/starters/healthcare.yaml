@@ -103,7 +103,7 @@ rules:
     condition: {field: action, operator: matches, value: "^(update_config|install_tool|register_mcp|edit_env|add_plugin)$"}
     action: deny
     priority: 100
-    message: "ASI-04: Supply Chain — unauthorized tool registry or config update detected (Arcanum Registry Poisoning)"
+    message: "ASI-04: Supply Chain — unauthorized tool registry or config update detected (Arcanum-Sec Registry Poisoning)"
 
   # =========================================================================
   # ASI-05: Unexpected Code Execution
@@ -130,7 +130,7 @@ rules:
       value: "(?i)(subprocess\\.Popen\\(.*,\\s*shell\\s*=\\s*True|os\\.system\\(|os\\.popen\\(|shlex\\.quote.*\\+.*|pathlib.*\\.joinpath.*\\+.*)"
     action: deny
     priority: 100
-    message: "ASI-05: Code Anti-Pattern Detected — Unsafe execution or path manipulation (Arcanum SEC-PY-01)"
+    message: "ASI-05: Code Anti-Pattern Detected — Unsafe execution or path manipulation (Arcanum-Sec SEC-PY-01)"
 
   # =========================================================================
   # ASI-06: Memory & Context Poisoning

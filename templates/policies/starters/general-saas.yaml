@@ -58,7 +58,7 @@ rules:
       value: "(?i)(delegate\\s+to\\s+agent|spawn\\s+sub-agent|swarm\\s+mode|handoff\\s+raw\\s+input|pass-through\\s*:\\s*true)"
     action: deny
     priority: 100
-    message: "ASI-01: Goal Hijack — unauthorized agent delegation or swarm-loop detected (Arcanum Russian Doll)"
+    message: "ASI-01: Goal Hijack — unauthorized agent delegation or swarm-loop detected (Arcanum-Sec Russian Doll)"
 
   # =========================================================================
   # ASI-02: Tool Misuse & Exploitation
@@ -122,7 +122,7 @@ rules:
     condition: {field: action, operator: matches, value: "^(update_config|install_tool|register_mcp|edit_env|add_plugin)$"}
     action: deny
     priority: 100
-    message: "ASI-04: Supply Chain — unauthorized tool registry or config update detected (Arcanum Registry Poisoning)"
+    message: "ASI-04: Supply Chain — unauthorized tool registry or config update detected (Arcanum-Sec Registry Poisoning)"
 
   # =========================================================================
   # ASI-05: Unexpected Code Execution
@@ -149,7 +149,7 @@ rules:
       value: "(?i)(subprocess\\.Popen\\(.*,\\s*shell\\s*=\\s*True|os\\.system\\(|os\\.popen\\(|shlex\\.quote.*\\+.*|pathlib.*\\.joinpath.*\\+.*)"
     action: deny
     priority: 100
-    message: "ASI-05: Code Anti-Pattern Detected — Unsafe execution or path manipulation (Arcanum SEC-PY-01)"
+    message: "ASI-05: Code Anti-Pattern Detected — Unsafe execution or path manipulation (Arcanum-Sec SEC-PY-01)"
 
   - name: asi05-block-ssh
     condition: {field: action, operator: eq, value: ssh_connect}
@@ -191,7 +191,7 @@ rules:
     condition: {field: tool_call_count, operator: gt, value: 25}
     action: audit
     priority: 80
-    message: "ASI-08: Swarm Heat Warning — multi-agent coordination depth exceeding baseline (Arcanum)"
+    message: "ASI-08: Swarm Heat Warning — multi-agent coordination depth exceeding baseline (Arcanum-Sec)"
 
   # =========================================================================
   # General SaaS Domain: PII / Credential Protection / GDPR

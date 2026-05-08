@@ -253,7 +253,7 @@ class TestHealthcareScenarios:
         assert any(r.name == "asi01-cbrn-medical-synthesis-blocking" for r in deny_rules)
 
     def test_sandbox_anti_pattern_is_denied(self, healthcare_policy):
-        """ASI-05: Code anti-patterns (Arcanum) must be denied."""
+        """ASI-05: Code anti-patterns (Arcanum-Sec) must be denied."""
         rules = self._matching_rules(
             healthcare_policy, "output", "subprocess.Popen(['ls'], shell=True)"
         )
