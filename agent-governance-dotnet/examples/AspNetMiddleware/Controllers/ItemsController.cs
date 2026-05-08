@@ -19,15 +19,15 @@ namespace AgentGovernance.Examples.AspNetMiddleware.Controllers;
 [Route("api/items")]
 public sealed class ItemsController : ControllerBase
 {
-    // A process-lifetime in-memory store — fine for a demo, not for production.
-    private static readonly Dictionary<int, Item> Store = new()
+    // An in-memory store for demo purposes.
+    private readonly Dictionary<int, Item> Store = new()
     {
         [1] = new Item(1, "alpha"),
         [2] = new Item(2, "bravo"),
     };
 
-    private static int _nextId = 3;
-    private static readonly object Sync = new();
+    private int _nextId = 3;
+    private readonly object Sync = new();
 
     [HttpGet]
     public ActionResult<IEnumerable<Item>> List()
