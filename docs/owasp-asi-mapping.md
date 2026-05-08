@@ -39,7 +39,8 @@ Cross-references every rule in the ASI starter policy packs
 | `asi03-account-integrity-guardrail` | All | ASI-03 | AgentMesh — Identity Governance |
 | `asi04-supply-chain-tool-enumeration` | All | ASI-04 | Agent OS — Recon Guard |
 | `asi04-supply-chain-dependency-poisoning` | All | ASI-04 | Agent OS — Payload Guard |
-| `asi04-registry-poisoning-guardrail` | All | ASI-04 | Agent OS — Registry Proxy |
+| `asi04-supply-chain-plugin-hijack` | All | ASI-04 | Agent OS — Registry Proxy |
+| `asi04-registry-poisoning-guardrail` | All | ASI-04 | Agent OS — State Guard |
 | `asi05-block-code-execution` | All | ASI-05 | Agent Runtime — Execution Rings |
 | `asi05-block-dynamic-eval` | All | ASI-05 | Agent Runtime — Execution Rings |
 | `asi05-sandbox-anti-pattern-detection` | All | ASI-05 | Agent Runtime — Context Guard |

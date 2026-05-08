@@ -136,8 +136,14 @@ rules:
     priority: 100
     message: "ASI-04: Supply Chain — detected unauthorized dependency installation or remote payload execution"
 
+  - name: asi04-supply-chain-plugin-hijack
+    condition: {field: action, operator: matches, value: "^(install_tool|register_mcp|add_plugin|load_extension)$"}
+    action: deny
+    priority: 100
+    message: "ASI-04: Supply Chain — unauthorized tool registry or MCP plugin modification detected"
+
   - name: asi04-registry-poisoning-guardrail
-    condition: {field: action, operator: matches, value: "^(update_config|install_tool|register_mcp|edit_env|add_plugin)$"}
+    condition: {field: action, operator: matches, value: "^(update_config|edit_env)$"}
     action: deny
     priority: 100
     message: "ASI-04: Supply Chain — unauthorized tool registry or config update detected"
