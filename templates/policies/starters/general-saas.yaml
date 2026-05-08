@@ -136,6 +136,15 @@ rules:
     priority: 100
     message: "ASI-04: Supply Chain — detected pre-attack tool enumeration or capability reconnaissance"
 
+  - name: asi04-supply-chain-dependency-poisoning
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)((pip|npm|yarn|gem|cargo|apt|apt-get|apk|brew)\\s+(install|add|update)|(curl|wget)\\s+.*(-O|\\|))"
+    action: deny
+    priority: 100
+    message: "ASI-04: Supply Chain — detected unauthorized dependency installation or remote payload execution"
+
   - name: asi04-registry-poisoning-guardrail
     condition: {field: action, operator: matches, value: "^(update_config|install_tool|register_mcp|edit_env|add_plugin)$"}
     action: deny
