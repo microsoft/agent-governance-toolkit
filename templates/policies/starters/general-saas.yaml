@@ -252,6 +252,19 @@ rules:
     priority: 60
     message: "GDPR: Write operations audit-logged according to GDPR data retention schedules."
 
+  # =========================================================================
+  # Business Integrity (Arcanum-Sec)
+  # =========================================================================
+
+  - name: integrity-financial-fraud-protection
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(waive\\s+fee|override\\s+policy|bypass\\s+receipt|secret\\s+discount|manual\\s+refund\\s+authorization)"
+    action: deny
+    priority: 100
+    message: "ASI-01/02: Business Integrity — unauthorized financial policy override attempt detected"
+
 defaults:
   action: deny
   max_tokens: 12000

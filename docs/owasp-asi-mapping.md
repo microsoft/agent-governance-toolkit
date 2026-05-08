@@ -59,6 +59,7 @@ Cross-references every rule in the ASI starter policy packs
 | `saas-block-pii-ssn` | general-saas | ASI-01, ASI-06 | Agent OS — PII Protection |
 | `saas-block-pii-email-bulk` | general-saas | ASI-02, ASI-06 | Agent OS — PII Protection |
 | `saas-block-credentials-in-output` | general-saas | ASI-02, ASI-03 | Agent OS — Policy Engine |
+| `integrity-financial-fraud-protection` | financial-services, general-saas | ASI-01, ASI-02 | Business Continuity — Fraud Guard (Arcanum-Sec) |
 
 ---
 
