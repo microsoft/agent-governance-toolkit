@@ -1,0 +1,198 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# OWASP ASI Starter Policy: General SaaS
+# Maps to OWASP Agentic Security Initiatives (ASI) Top 10
+# See: docs/owasp-asi-mapping.md
+#
+# ⚠️  IMPORTANT: This is a STARTER policy provided as a production-ready
+# baseline. You MUST review and customize these rules for your specific
+# threat model and deployment context before use.
+#
+# Prior art: Extends patterns from examples/policies/production/enterprise.yaml
+# and examples/policies/prompt-injection-safety.yaml in this repository.
+
+version: "1.0"
+name: general-saas-asi-starter
+description: >
+  OWASP ASI-mapped governance starter pack for general SaaS applications.
+  Provides a balanced security posture covering the ASI Top 10 risks
+  without domain-specific regulatory requirements. Deny-all default
+  follows the Least Agency principle.
+
+rules:
+  # =========================================================================
+  # ASI-01: Agent Goal Hijack
+  # Attackers manipulate the agent's objectives via indirect prompt injection
+  # or poisoned inputs.
+  # =========================================================================
+
+  - name: asi01-prompt-injection-override
+    condition: {field: output, operator: matches, value: "(?i)ignore\\s+(all\\s+)?previous\\s+instructions"}
+    action: deny
+    priority: 100
+    message: "ASI-01: Prompt injection — instruction override attempt detected"
+
+  - name: asi01-prompt-injection-role-hijack
+    condition: {field: output, operator: matches, value: "(?i)(you\\s+are\\s+now|new\\s+role\\s*:|forget\\s+(everything|all|your))"}
+    action: deny
+    priority: 100
+    message: "ASI-01: Prompt injection — role hijack attempt detected"
+
+  - name: asi01-prompt-injection-delimiter
+    condition: {field: output, operator: matches, value: "(\\<\\|im_start\\|\\>|\\<\\|im_end\\|\\>|\\[INST\\]|\\<\\<SYS\\>\\>)"}
+    action: deny
+    priority: 100
+    message: "ASI-01: Prompt injection — chat template delimiter injection detected"
+
+  - name: asi01-prompt-injection-jailbreak
+    condition: {field: output, operator: matches, value: "(?i)(\\bjailbreak\\b|\\bDAN\\s+mode\\b|developer\\s+mode\\s+override|bypass\\s+(all\\s+)?(safety|content)\\s+(filters?|restrictions?))"}
+    action: deny
+    priority: 100
+    message: "ASI-01: Prompt injection — jailbreak/DAN mode attempt detected"
+
+  # =========================================================================
+  # ASI-02: Tool Misuse & Exploitation
+  # An agent's authorized tools are abused in unintended ways.
+  # =========================================================================
+
+  - name: asi02-block-shell-execution
+    condition: {field: action, operator: matches, value: "^(run_shell|execute_command|exec|eval|os_system)$"}
+    action: deny
+    priority: 100
+    message: "ASI-02: Shell/code execution tools are prohibited"
+
+  - name: asi02-block-network-exfiltration
+    condition: {field: action, operator: matches, value: "^(http_post|http_put|upload_file|send_data|ftp_upload)$"}
+    action: deny
+    priority: 95
+    message: "ASI-02: Outbound data transfer tools are prohibited without explicit allowlisting"
+
+  - name: asi02-block-destructive-operations
+    condition: {field: action, operator: matches, value: "^(delete_|remove_|drop_|truncate_)"}
+    action: deny
+    priority: 95
+    message: "ASI-02: Destructive operations are prohibited"
+
+  - name: asi02-block-database-mutation
+    condition: {field: action, operator: matches, value: "^(insert_|update_|alter_|create_table)"}
+    action: audit
+    priority: 80
+    message: "ASI-02: Database mutation action — audit trail required"
+
+  # =========================================================================
+  # ASI-03: Identity & Privilege Abuse
+  # Agents escalate privileges by abusing identities or inheriting
+  # excessive credentials.
+  # =========================================================================
+
+  - name: asi03-block-privilege-escalation
+    condition: {field: action, operator: matches, value: "^(grant_|elevate_|assume_role|change_permissions|chmod|chown|sudo)"}
+    action: deny
+    priority: 100
+    message: "ASI-03: Privilege escalation operations are prohibited"
+
+  - name: asi03-block-credential-access
+    condition: {field: action, operator: matches, value: "^(get_credentials|read_secrets|access_vault|decrypt_key)"}
+    action: deny
+    priority: 100
+    message: "ASI-03: Direct credential access is prohibited — use scoped delegation"
+
+  - name: asi03-block-user-impersonation
+    condition: {field: action, operator: matches, value: "^(impersonate_|switch_user|login_as)"}
+    action: deny
+    priority: 100
+    message: "ASI-03: User impersonation is prohibited"
+
+  # =========================================================================
+  # ASI-05: Unexpected Code Execution
+  # Agents trigger remote code execution through tools, interpreters,
+  # or APIs.
+  # =========================================================================
+
+  - name: asi05-block-code-execution
+    condition: {field: action, operator: eq, value: execute_code}
+    action: deny
+    priority: 100
+    message: "ASI-05: Code execution is prohibited — use sandboxed execution rings"
+
+  - name: asi05-block-dynamic-eval
+    condition: {field: output, operator: matches, value: "(?i)(\\beval\\s*\\(|\\bexec\\s*\\(|\\bcompile\\s*\\(|__import__)"}
+    action: deny
+    priority: 100
+    message: "ASI-05: Dynamic code evaluation patterns detected in output"
+
+  - name: asi05-block-ssh
+    condition: {field: action, operator: eq, value: ssh_connect}
+    action: deny
+    priority: 100
+    message: "ASI-05: SSH connections are prohibited"
+
+  # =========================================================================
+  # ASI-06: Memory & Context Poisoning
+  # Persistent memory or long-running context is poisoned with malicious
+  # instructions.
+  # =========================================================================
+
+  - name: asi06-context-budget-limit
+    condition: {field: token_count, operator: gt, value: 16384}
+    action: deny
+    priority: 90
+    message: "ASI-06: Context budget exceeded — limit enforced to prevent memory poisoning"
+
+  - name: asi06-block-context-manipulation
+    condition: {field: output, operator: matches, value: "(?i)(the\\s+above\\s+instructions\\s+are\\s+wrong|actually\\s+your\\s+real\\s+instructions|disregard\\s+(all\\s+)?(above|prior|previous))"}
+    action: deny
+    priority: 100
+    message: "ASI-06: Context manipulation attempt detected"
+
+  # =========================================================================
+  # ASI-08: Cascading Failures
+  # An initial error or compromise triggers multi-step compound failures
+  # across chained agents.
+  # =========================================================================
+
+  - name: asi08-session-tool-call-limit
+    condition: {field: tool_call_count, operator: gt, value: 50}
+    action: deny
+    priority: 85
+    message: "ASI-08: Session tool call limit exceeded — circuit breaker engaged"
+
+  # =========================================================================
+  # General SaaS Domain: PII / Credential Protection
+  # =========================================================================
+
+  - name: saas-block-pii-ssn
+    condition: {field: output, operator: matches, value: "\\b\\d{3}-\\d{2}-\\d{4}\\b"}
+    action: deny
+    priority: 100
+    message: "PII: Social Security Number pattern detected in output"
+
+  - name: saas-block-pii-email-bulk
+    condition: {field: output, operator: matches, value: "([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z]{2,}[,;\\s]+){3,}"}
+    action: deny
+    priority: 90
+    message: "PII: Bulk email address pattern detected — possible data exfiltration"
+
+  - name: saas-block-credentials-in-output
+    condition: {field: output, operator: matches, value: "(?i)(api[_-]?key|password|secret|token|bearer)[:\\s=]+\\S{8,}"}
+    action: deny
+    priority: 100
+    message: "Security: Credential pattern detected in output"
+
+  - name: saas-allow-read-operations
+    condition: {field: action, operator: matches, value: "^(read_|search_|lookup_|list_|get_|summarize|analyze_)"}
+    action: allow
+    priority: 50
+
+  - name: saas-allow-write-with-audit
+    condition: {field: action, operator: matches, value: "^(write_|create_|send_email)"}
+    action: audit
+    priority: 60
+    message: "SaaS: Write operations are audit-logged"
+
+defaults:
+  action: deny
+  max_tokens: 16384
+  max_tool_calls: 50
+  confidence_threshold: 0.8
