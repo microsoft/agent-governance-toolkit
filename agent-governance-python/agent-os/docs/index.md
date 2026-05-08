@@ -30,6 +30,7 @@ Learn by doing with our Jupyter notebooks:
 
 - [Using Message Bus Adapters](tutorials/message-bus-adapters.md) - Connect agents with Redis, Kafka, NATS
 - [Creating Custom Tools](tutorials/custom-tools.md) - Build safe tools for agents
+- [Intent-Based Authorization](tutorials/48-intent-based-authorization.md) - Declare, approve, and verify agent actions with drift detection
 
 ### 🏗️ Architecture
 
