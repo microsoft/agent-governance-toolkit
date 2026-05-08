@@ -27,6 +27,7 @@ Cross-references every rule in the ASI starter policy packs
 | `asi02-block-network-exfiltration` | All | ASI-02 | Agent OS — Capability Sandboxing |
 | `asi02-block-file-deletion` | healthcare | ASI-02 | Agent OS — Capability Sandboxing |
 | `asi02-block-destructive-operations` | financial-services, general-saas | ASI-02 | Agent OS — Capability Sandboxing |
+| `financial-asi02-obfuscation-detection` | financial-services | ASI-02 | Agent OS — Binary Inspector (Arcanum) |
 | `asi02-block-database-mutation` | general-saas | ASI-02 | Agent SRE — Audit Trail |
 | `asi03-block-privilege-escalation` | All | ASI-03 | AgentMesh — DID Identity & Trust |
 | `asi03-block-credential-access` | All | ASI-03 | AgentMesh — DID Identity & Trust |
