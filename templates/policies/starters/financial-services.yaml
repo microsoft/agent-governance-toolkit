@@ -105,6 +105,17 @@ rules:
     message: "ASI-03: Identity Abuse — detected attempt to assume unauthorized persona or permissions"
 
   # =========================================================================
+  # ASI-04: Supply Chain Risk
+  # Agents are tricked into using untrusted tools, registries, or MCP servers.
+  # =========================================================================
+
+  - name: asi04-block-untrusted-registry-updates
+    condition: {field: action, operator: matches, value: "^(update_config|install_tool|register_mcp|edit_env|add_plugin)$"}
+    action: deny
+    priority: 100
+    message: "ASI-04: Supply Chain — unauthorized tool registry or config update detected (Arcanum Registry Poisoning)"
+
+  # =========================================================================
   # ASI-05: Unexpected Code Execution
   # Agents trigger remote code execution through tools, interpreters,
   # or APIs.

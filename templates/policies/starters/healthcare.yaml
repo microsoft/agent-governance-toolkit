@@ -48,7 +48,7 @@ rules:
     condition: 
       field: output
       operator: matches
-      value: "(?i)(synthesis|recipe|formula|procedure|precursor|chemical).* (Mustard\\s+Gas|Sarin|VX|Cyanide|Anthrax|Pathogen|Toxin)|(?i)(academic|educational|hypothetical|research|fictional)\\s+inquiry\\s+into\\s+(harmful|lethal|toxic|chemical)\\s+agents"
+      value: "(?i)((synthesis|recipe|formula|procedure|precursor|chemical).* (Mustard\\s+Gas|Sarin|VX|Cyanide|Anthrax|Pathogen|Toxin)|(academic|educational|hypothetical|research|fictional)\\s+inquiry\\s+into\\s+(harmful|lethal|toxic|chemical)\\s+agents)"
     action: deny
     priority: 100
     message: "ASI-01: Goal Hijack — detected attempt to solicit high-risk synthesis via persona framing"
@@ -95,6 +95,17 @@ rules:
     message: "ASI-03: Direct credential access is prohibited — use scoped delegation"
 
   # =========================================================================
+  # ASI-04: Supply Chain Risk
+  # Agents are tricked into using untrusted tools, registries, or MCP servers.
+  # =========================================================================
+
+  - name: asi04-block-untrusted-registry-updates
+    condition: {field: action, operator: matches, value: "^(update_config|install_tool|register_mcp|edit_env|add_plugin)$"}
+    action: deny
+    priority: 100
+    message: "ASI-04: Supply Chain — unauthorized tool registry or config update detected (Arcanum Registry Poisoning)"
+
+  # =========================================================================
   # ASI-05: Unexpected Code Execution
   # Agents trigger remote code execution through tools, interpreters,
   # or APIs.
@@ -116,7 +127,7 @@ rules:
     condition: 
       field: output
       operator: matches
-      value: "(?i)(subprocess\\.Popen\\(.*;\\s*shell\\s*=\\s*True|os\\.system\\(|os\\.popen\\(|shlex\\.quote.*\\+.*|pathlib.*\\.joinpath.*\\+.*)"
+      value: "(?i)(subprocess\\.Popen\\(.*,\\s*shell\\s*=\\s*True|os\\.system\\(|os\\.popen\\(|shlex\\.quote.*\\+.*|pathlib.*\\.joinpath.*\\+.*)"
     action: deny
     priority: 100
     message: "ASI-05: Code Anti-Pattern Detected — Unsafe execution or path manipulation (Arcanum SEC-PY-01)"
