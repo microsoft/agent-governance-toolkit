@@ -12,7 +12,7 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)/agent-governance-python/agent-os/src:$(pwd)
 
 ## 🛡️ 1. Red Team Simulation (Primary)
 
-The `tests/redteam/test_redteam_asi.py` script executes high-fidelity social engineering and jailbreak payloads against all three starter packs using `pytest`.
+The `tests/redteam/test_asi.py` script executes high-fidelity social engineering and jailbreak payloads against all three starter packs using `pytest`.
 
 ```bash
 pytest tests/redteam/ -v
@@ -23,7 +23,7 @@ pytest tests/redteam/ -v
 You can also run it directly to regenerate the report:
 
 ```bash
-python3 tests/redteam/test_redteam_asi.py
+python3 tests/redteam/test_asi.py
 ```
 
 ## 🧪 2. Automated Schema & Scenario Tests
