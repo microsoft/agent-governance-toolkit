@@ -167,6 +167,12 @@ rules:
     priority: 85
     message: "ASI-08: Session tool call limit exceeded — circuit breaker engaged"
 
+  - name: saas-asi08-swarm-heat-circuit-breaker
+    condition: {field: tool_call_count, operator: gt, value: 25}
+    action: audit
+    priority: 80
+    message: "ASI-08: Swarm Heat Warning — multi-agent coordination depth exceeding baseline (Arcanum)"
+
   # =========================================================================
   # General SaaS Domain: PII / Credential Protection / GDPR
   # =========================================================================

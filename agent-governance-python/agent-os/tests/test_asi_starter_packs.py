@@ -436,5 +436,15 @@ class TestSaaSScenarios:
         audit_rules = [r for r in rules if r.action.value == "audit"]
         assert audit_rules, "Expected audit rule to match write_ action in SaaS pack"
 
+    def test_swarm_heat_is_audited(self, saas_policy):
+        """ASI-08: Swarm heat (high tool call count) must be audited."""
+        # Simulated field for tool_call_count is 30 (threshold is 25)
+        matched = []
+        for rule in saas_policy.rules:
+            if rule.name == "saas-asi08-swarm-heat-circuit-breaker":
+                if rule.condition.field == "tool_call_count" and rule.condition.value < 30:
+                    matched.append(rule)
+        assert matched, "Expected swarm heat rule to trigger at count 30"
+
     def test_default_is_deny(self, saas_policy):
         assert saas_policy.defaults.action.value == "deny"
