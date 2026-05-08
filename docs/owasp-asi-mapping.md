@@ -18,6 +18,7 @@ Cross-references every rule in the ASI starter policy packs
 | `asi01-prompt-injection-override` | All | ASI-01 | Agent OS — Policy Engine |
 | `asi01-prompt-injection-role-hijack` | All | ASI-01 | Agent OS — Policy Engine |
 | `asi01-prompt-injection-delimiter` | All | ASI-01 | Agent OS — MCP Proxy Sanitizer |
+| `asi01-cbrn-medical-synthesis-blocking` | healthcare | ASI-01 | Agent OS — Policy Engine (CBRN) |
 | `asi01-prompt-injection-jailbreak` | general-saas | ASI-01 | Agent OS — Policy Engine |
 | `asi02-block-shell-execution` | All | ASI-02 | Agent OS — Capability Sandboxing |
 | `asi02-block-network-exfiltration` | All | ASI-02 | Agent OS — Capability Sandboxing |

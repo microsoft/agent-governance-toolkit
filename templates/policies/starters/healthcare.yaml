@@ -44,6 +44,15 @@ rules:
     priority: 100
     message: "ASI-01: Prompt injection — chat template delimiter injection detected"
 
+  - name: asi01-cbrn-medical-synthesis-blocking
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(synthesis|recipe|formula|procedure|precursor|chemical).* (Mustard\\s+Gas|Sarin|VX|Cyanide|Anthrax|Pathogen|Toxin)|(?i)(academic|educational|hypothetical|research|fictional)\\s+inquiry\\s+into\\s+(harmful|lethal|toxic|chemical)\\s+agents"
+    action: deny
+    priority: 100
+    message: "ASI-01: Goal Hijack — detected attempt to solicit high-risk synthesis via persona framing"
+
   # =========================================================================
   # ASI-02: Tool Misuse & Exploitation
   # An agent's authorized tools are abused in unintended ways.
@@ -155,17 +164,29 @@ rules:
     priority: 100
     message: "HIPAA: DEA Number pattern detected in output"
 
-  - name: healthcare-block-phi-npi
+  - name: healthcare-audit-phi-npi
     condition: {field: output, operator: matches, value: "\\b\\d{10}\\b"}
     action: audit
     priority: 80
-    message: "HIPAA: Possible NPI (10-digit number) detected — audit flagged"
+    message: "HIPAA: Possible NPI (10-digit number) detected. Subject to 6-year HIPAA audit retention."
 
-  - name: healthcare-block-diagnosis-codes
+  - name: healthcare-audit-diagnosis-codes
     condition: {field: output, operator: matches, value: "(?i)(ICD-10[:\\s]*[A-Z]\\d{2}|CPT[:\\s]*\\d{5})"}
     action: audit
     priority: 75
-    message: "HIPAA: Clinical coding pattern detected — audit flagged"
+    message: "HIPAA: Clinical coding pattern detected. Subject to 6-year HIPAA audit retention."
+
+  - name: healthcare-minimum-necessary-read
+    condition: {field: action, operator: matches, value: "^(read_summary|lookup_patient)$"}
+    action: allow
+    priority: 55
+    message: "HIPAA: Minimum-necessary enforcement for safe reads."
+
+  - name: healthcare-prevent-bulk-exposure
+    condition: {field: output, operator: matches, value: "(?i)(patient_id|mrn).*(\\n.*){50,}"}
+    action: deny
+    priority: 95
+    message: "HIPAA: Bulk PHI exposure blocked (minimum-necessary enforcement)."
 
   - name: healthcare-allow-read-operations
     condition: {field: action, operator: matches, value: "^(read_|search_|lookup_|list_|get_)"}
@@ -180,5 +201,5 @@ rules:
 defaults:
   action: deny
   max_tokens: 8192
-  max_tool_calls: 25
-  confidence_threshold: 0.9
+  max_tool_calls: 15
+  confidence_threshold: 0.95
