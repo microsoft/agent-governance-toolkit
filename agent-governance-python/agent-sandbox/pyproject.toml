@@ -39,11 +39,14 @@ dependencies = []
 docker = [
     "docker>=7.0.0,<8.0",
 ]
+hyperlight = [
+    "hyperlight-sandbox>=0.4.0,<0.5",
+]
 policy = [
     "agent-os-kernel>=3.2.0,<4.0",
 ]
 full = [
-    "agent-sandbox[docker,policy]",
+    "agent-sandbox[docker,hyperlight,policy]",
 ]
 dev = [
     "pytest>=8.0.0,<10.0",

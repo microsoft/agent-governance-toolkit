@@ -29,7 +29,7 @@ from agent_sandbox.sandbox_provider import (
     SessionStatus,
 )
 from agent_sandbox.isolation_runtime import IsolationRuntime
-from agent_sandbox.docker_sandbox_provider import (
+from agent_sandbox.docker_provider.provider import (
     DockerSandboxProvider,
     _BLOCKED_ENV_VARS,
     _is_protected_path,
@@ -38,7 +38,7 @@ from agent_sandbox.docker_sandbox_provider import (
     _validate_resource_name,
     docker_config_from_policy,
 )
-from agent_sandbox.state import SandboxCheckpoint
+from agent_sandbox.docker_provider.state import SandboxCheckpoint
 
 
 # =========================================================================
@@ -288,26 +288,26 @@ class TestPathValidation:
         ],
     )
     @patch("os.path.realpath", side_effect=lambda p: p)
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_unix_protected_paths(self, mock_platform, _mock_realpath, path):
         mock_platform.system.return_value = "Linux"
         assert _is_protected_path(path) is True
 
     @patch("os.path.realpath", side_effect=lambda p: p)
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_unix_safe_path(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         assert _is_protected_path("/home/user/data") is False
 
     @patch("os.path.realpath", side_effect=lambda p: p)
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_validate_mount_raises_for_protected(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         with pytest.raises(ValueError, match="protected system directory"):
             _validate_mount_path("/etc", "input_dir")
 
     @patch("os.path.realpath", side_effect=lambda p: p)
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_validate_mount_safe(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         _validate_mount_path("/home/user/data", "input_dir")  # no exception
@@ -400,7 +400,7 @@ def _make_mock_container(agent_id="a1", session_id="s1"):
 def docker_provider():
     """DockerSandboxProvider with a fully mocked Docker client."""
     with patch(
-        "agent_sandbox.docker_sandbox_provider.DockerSandboxProvider.__init__",
+        "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
         return_value=None,
     ):
         provider = DockerSandboxProvider.__new__(DockerSandboxProvider)
@@ -754,7 +754,7 @@ class TestDockerProperties:
 class TestContainerCreationHardening:
     def _make_raw_provider(self):
         with patch(
-            "agent_sandbox.docker_sandbox_provider.DockerSandboxProvider.__init__",
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
             return_value=None,
         ):
             p = DockerSandboxProvider.__new__(DockerSandboxProvider)
@@ -795,7 +795,7 @@ class TestContainerCreationHardening:
         assert "/tmp" not in kw["tmpfs"]
 
     @patch("os.path.realpath", side_effect=lambda p: p)
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_volume_mounts(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         p, client = self._make_raw_provider()
@@ -807,7 +807,7 @@ class TestContainerCreationHardening:
         assert kw["volumes"]["/data/out"]["mode"] == "rw"
 
     @patch("os.path.realpath", side_effect=lambda p: p)
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_protected_input_dir_raises(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         p, _ = self._make_raw_provider()
@@ -1134,7 +1134,7 @@ class TestContainerEnvVarsAndHosts:
 
     def _make_raw_provider(self):
         with patch(
-            "agent_sandbox.docker_sandbox_provider.DockerSandboxProvider.__init__",
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
             return_value=None,
         ):
             p = DockerSandboxProvider.__new__(DockerSandboxProvider)
@@ -1407,17 +1407,17 @@ class TestSessionLifecyclePattern:
 
 
 class TestWindowsPathProtection:
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_drive_root_blocked(self, mock_platform):
         mock_platform.system.return_value = "Windows"
         assert _is_protected_path("C:\\") is True
 
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_drive_letter_only_blocked(self, mock_platform):
         mock_platform.system.return_value = "Windows"
         assert _is_protected_path("D:") is True
 
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_windows_safe_path(self, mock_platform):
         mock_platform.system.return_value = "Windows"
         assert _is_protected_path("C:\\Users\\agent\\data") is False
@@ -1489,7 +1489,7 @@ class TestEnvVarSanitization:
     def test_sanitized_env_in_container(self):
         """Verify _create_container applies sanitization."""
         with patch(
-            "agent_sandbox.docker_sandbox_provider."
+            "agent_sandbox.docker_provider.provider."
             "DockerSandboxProvider.__init__",
             return_value=None,
         ):
@@ -1520,7 +1520,7 @@ class TestFailClosedPolicy:
     def test_policy_import_error_warns_only(self, docker_provider):
         """ImportError (SDK not installed) results in warning, not failure."""
         with patch(
-            "agent_sandbox.docker_sandbox_provider.docker_config_from_policy",
+            "agent_sandbox.docker_provider.provider.docker_config_from_policy",
             return_value=SandboxConfig(),
         ):
             with patch.dict(
@@ -1536,7 +1536,7 @@ class TestFailClosedPolicy:
     def test_policy_other_error_raises(self, docker_provider):
         """Non-ImportError exceptions must propagate (fail closed)."""
         with patch(
-            "agent_sandbox.docker_sandbox_provider.docker_config_from_policy",
+            "agent_sandbox.docker_provider.provider.docker_config_from_policy",
             return_value=SandboxConfig(),
         ):
             with patch(
@@ -1557,28 +1557,28 @@ class TestFailClosedPolicy:
 class TestSymlinkResolution:
     """_is_protected_path must resolve symlinks before checking."""
 
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     @patch("os.path.realpath")
     def test_symlink_to_etc_blocked(self, mock_realpath, mock_platform):
         mock_platform.system.return_value = "Linux"
         mock_realpath.return_value = "/etc"
         assert _is_protected_path("/tmp/sneaky-link") is True
 
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     @patch("os.path.realpath")
     def test_symlink_to_proc_blocked(self, mock_realpath, mock_platform):
         mock_platform.system.return_value = "Linux"
         mock_realpath.return_value = "/proc"
         assert _is_protected_path("/tmp/proc-link") is True
 
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     @patch("os.path.realpath")
     def test_symlink_to_safe_path_allowed(self, mock_realpath, mock_platform):
         mock_platform.system.return_value = "Linux"
         mock_realpath.return_value = "/home/agent/data"
         assert _is_protected_path("/tmp/safe-link") is False
 
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     @patch("os.path.realpath")
     def test_validate_mount_path_symlink_blocked(
         self, mock_realpath, mock_platform,

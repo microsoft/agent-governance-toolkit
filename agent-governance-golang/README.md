@@ -20,6 +20,9 @@ go list -m github.com/microsoft/agent-governance-toolkit/agent-governance-golang
 
 ## Quick Start
 
+> See [`examples/quickstart/`](./examples/quickstart/) for a runnable,
+> compile-checked version of the snippet below.
+
 ```go
 package main
 
@@ -27,7 +30,7 @@ import (
 	"fmt"
 	"log"
 
-	agentmesh "github.com/microsoft/agent-governance-toolkit/agent-governance-golang"
+	agentmesh "github.com/microsoft/agent-governance-toolkit/agent-governance-golang/packages/agentmesh"
 )
 
 func main() {

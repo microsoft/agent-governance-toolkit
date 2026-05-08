@@ -4,7 +4,7 @@ Organizations using the Agent Governance Toolkit in production or evaluation.
 
 _If your organization uses AGT, please add it here! It helps the project gain
 momentum and credibility. Submit a PR editing this file — see
-[CONTRIBUTING.md](CONTRIBUTING.md) for guidelines._
+[CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines._
 
 ## Production
 

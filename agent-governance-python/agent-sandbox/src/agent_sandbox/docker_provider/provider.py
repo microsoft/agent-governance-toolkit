@@ -32,7 +32,7 @@ from agent_sandbox.sandbox_provider import (
     SessionHandle,
     SessionStatus,
 )
-from agent_sandbox.state import SandboxCheckpoint, SandboxStateManager
+from agent_sandbox.docker_provider.state import SandboxCheckpoint, SandboxStateManager
 
 logger = logging.getLogger(__name__)
 
