@@ -270,3 +270,138 @@ def test_getattr_passthrough():
     governor = _make_governor(RAGPolicy())
     governed = GovernedQueryEngine(engine, governor, collection="docs")
     assert governed.custom_attr == "test_value"
+
+
+def test_invalid_engine_raises_type_error():
+    """Engine with no .query() or .retrieve() should raise TypeError."""
+    class _InvalidEngine:
+        pass
+
+    governor = _make_governor(RAGPolicy())
+    with pytest.raises(TypeError) as exc:
+        GovernedQueryEngine(_InvalidEngine(), governor, collection="docs")
+    assert ".query() or .retrieve()" in str(exc.value)
+
+
+def test_query_with_kwargs():
+    """kwargs are correctly passed to underlying engine.query()."""
+    class _KwargsCapturingEngine:
+        def __init__(self):
+            self.captured_kwargs = {}
+
+        def query(self, query: str, **kwargs: Any) -> _FakeResponse:
+            self.captured_kwargs = kwargs
+            return _FakeResponse([])
+
+    engine = _KwargsCapturingEngine()
+    governor = _make_governor(RAGPolicy())
+    governed = GovernedQueryEngine(engine, governor, collection="docs")
+    governed.query("query", top_k=5, similarity_cutoff=0.7)
+    assert engine.captured_kwargs == {"top_k": 5, "similarity_cutoff": 0.7}
+
+
+def test_retrieve_with_kwargs():
+    """kwargs are correctly passed to underlying engine.retrieve()."""
+    class _KwargsCapturingRetriever:
+        def __init__(self):
+            self.captured_kwargs = {}
+
+        def retrieve(self, query: str, **kwargs: Any) -> List[Any]:
+            self.captured_kwargs = kwargs
+            return []
+
+    retriever = _KwargsCapturingRetriever()
+    governor = _make_governor(RAGPolicy(allowed_collections=["docs"]))
+    governed = GovernedQueryEngine(retriever, governor, collection="docs")
+    governed.retrieve("query", top_k=3)
+    assert retriever.captured_kwargs == {"top_k": 3}
+
+
+def test_query_error_handling():
+    """Exception from underlying engine propagates correctly."""
+    class _FailingEngine:
+        def query(self, query: str, **kwargs: Any) -> Any:
+            raise RuntimeError("engine failure")
+
+    governor = _make_governor(RAGPolicy())
+    governed = GovernedQueryEngine(_FailingEngine(), governor, collection="docs")
+    with pytest.raises(RuntimeError, match="engine failure"):
+        governed.query("query")
+
+
+def test_retrieve_error_handling():
+    """Exception from underlying retriever propagates correctly."""
+    class _FailingRetriever:
+        def retrieve(self, query: str, **kwargs: Any) -> List[Any]:
+            raise RuntimeError("retriever failure")
+
+    governor = _make_governor(RAGPolicy(allowed_collections=["docs"]))
+    governed = GovernedQueryEngine(_FailingRetriever(), governor, collection="docs")
+    with pytest.raises(RuntimeError, match="retriever failure"):
+        governed.retrieve("query")
+
+
+def test_audit_failure_does_not_crash_retrieval():
+    """Audit logging failure should not crash the retrieval — fail silently."""
+    class _FailingAuditLogger:
+        def emit(self, entry: Any) -> None:
+            raise OSError("disk full")
+
+    nodes = [_FakeNode("clean text")]
+    engine = _FakeQueryEngine(nodes)
+    policy = RAGPolicy(audit_enabled=True, audit_log_path="/tmp/audit.jsonl")
+    governor = RAGGovernor(policy=policy, agent_id="test-agent")
+    # Replace audit logger with failing one
+    governor._audit_logger = _FailingAuditLogger()  # type: ignore[assignment]
+    governed = GovernedQueryEngine(engine, governor, collection="docs")
+
+    # Should not raise despite audit logger failing
+    try:
+        response = governed.query("query")
+        assert len(response.source_nodes) == 1
+    except OSError:
+        pytest.fail("Audit failure should not propagate to caller")
+
+
+def test_immutable_response_source_nodes_not_modified():
+    """When response.source_nodes is immutable, return original response without crash."""
+    class _ImmutableResponse:
+        response = "immutable response"
+
+        @property
+        def source_nodes(self) -> List[Any]:
+            return [_FakeNode("Contact john@example.com")]
+
+        @source_nodes.setter
+        def source_nodes(self, value: Any) -> None:
+            raise AttributeError("source_nodes is immutable")
+
+    class _ImmutableEngine:
+        def query(self, query: str, **kwargs: Any) -> _ImmutableResponse:
+            return _ImmutableResponse()
+
+    governor = _make_governor(RAGPolicy(content_policies=["block_pii"]))
+    governed = GovernedQueryEngine(_ImmutableEngine(), governor, collection="docs")
+
+    # Should not raise — returns original response when nodes can't be updated
+    response = governed.query("query")
+    assert response.response == "immutable response"
+
+
+def test_invalid_collection_name_empty_string():
+    """Empty string collection name should be handled by policy check."""
+    engine = _FakeQueryEngine([_FakeNode("clean")])
+    governor = _make_governor(RAGPolicy(allowed_collections=["public_docs"]))
+    governed = GovernedQueryEngine(engine, governor, collection="")
+    with pytest.raises(CollectionDeniedError):
+        governed.query("query")
+
+
+def test_invalid_collection_name_none_allowed_by_default():
+    """None collection name is treated as a valid collection name by default policy."""
+    engine = _FakeQueryEngine([_FakeNode("clean")])
+    governor = _make_governor(RAGPolicy())
+    governed = GovernedQueryEngine(engine, governor, collection=None)  # type: ignore[arg-type]
+    # None is treated as a collection name — allowed when no restrictions set
+    response = governed.query("query")
+    assert len(response.source_nodes) == 1

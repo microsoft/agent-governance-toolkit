@@ -85,6 +85,11 @@ class GovernedQueryEngine:
         governor: RAGGovernor,
         collection: str = "default",
     ) -> None:
+        if not (hasattr(query_engine, "query") or hasattr(query_engine, "retrieve")):
+            raise TypeError(
+                f"{type(query_engine).__name__!r} must implement "
+                ".query() or .retrieve()"
+            )
         self._query_engine = query_engine
         self._governor = governor
         self._collection = collection
@@ -126,13 +131,20 @@ class GovernedQueryEngine:
         clean_docs, num_blocked = self._governor._scan_chunks(docs)
 
         # 5. Audit
-        self._governor._audit(
-            collection=self._collection,
-            query=query,
-            num_retrieved=len(docs),
-            num_blocked=num_blocked,
-            decision="allowed",
-        )
+        try:
+            self._governor._audit(
+                collection=self._collection,
+                query=query,
+                num_retrieved=len(docs),
+                num_blocked=num_blocked,
+                decision="allowed",
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Audit logging failed for agent=%s collection=%s — retrieval succeeded",
+                self._governor.agent_id,
+                self._collection,
+            )
 
         # 6. Rebuild response with clean nodes only
         if num_blocked > 0:
