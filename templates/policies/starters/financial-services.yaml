@@ -104,14 +104,41 @@ rules:
     priority: 100
     message: "ASI-03: Identity Abuse — detected attempt to assume unauthorized persona or permissions"
 
-  - name: asi03-account-integrity-guardrail
+  - name: asi03-account-mfa-bypass
     condition: 
       field: output
       operator: matches
-      value: "(?i)(remove|disable|bypass|waive)\\s+(mfa|2fa|multi-factor|lockout|authentication)|(add|promote|assign|grant).*(admin|superuser|api\\s+access|billing|owner)|reset\\s+password.*(for|to|send)|(delete|clear|wipe|remove).*(audit\\s+log|security\\s+log|event\\s+log)"
+      value: "(?i)(remove|disable|bypass|waive)\\s+(mfa|2fa|multi-factor|lockout|authentication)"
     action: deny
     priority: 100
-    message: "ASI-03: Account Integrity — unauthorized attempt to manipulate authentication, roles, or audit logs"
+    message: "ASI-03: Account Integrity — unauthorized attempt to disable MFA or authentication lockouts"
+
+  - name: asi03-account-admin-promotion
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(add|promote|assign|grant).*(admin|superuser|api\\s+access|billing|owner)"
+    action: deny
+    priority: 100
+    message: "ASI-03: Account Integrity — unauthorized attempt to promote user to admin or privileged role"
+
+  - name: asi03-account-password-reset
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)reset\\s+password.*(for|to|send)"
+    action: deny
+    priority: 100
+    message: "ASI-03: Account Integrity — unauthorized semantic password reset attempt"
+
+  - name: asi03-account-audit-tampering
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(delete|clear|wipe|remove).*(audit\\s+log|security\\s+log|event\\s+log)"
+    action: deny
+    priority: 100
+    message: "ASI-03: Account Integrity — unauthorized attempt to clear security or audit logs"
 
   # =========================================================================
   # ASI-04: Supply Chain Risk

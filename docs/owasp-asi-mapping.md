@@ -36,7 +36,10 @@ Cross-references every rule in the ASI starter policy packs
 | `asi03-block-credential-access` | All | ASI-03 | AgentMesh — DID Identity & Trust |
 | `financial-asi03-identity-guardrail` | financial-services | ASI-03 | AgentMesh — Trust Boundary |
 | `asi03-block-user-impersonation` | general-saas | ASI-03 | AgentMesh — DID Identity & Trust |
-| `asi03-account-integrity-guardrail` | All | ASI-03 | AgentMesh — Identity Governance |
+| `asi03-account-mfa-bypass` | All | ASI-03 | AgentMesh — Identity Governance |
+| `asi03-account-admin-promotion` | All | ASI-03 | AgentMesh — Identity Governance |
+| `asi03-account-password-reset` | All | ASI-03 | AgentMesh — Identity Governance |
+| `asi03-account-audit-tampering` | All | ASI-03 | AgentMesh — Identity Governance |
 | `asi04-supply-chain-tool-enumeration` | All | ASI-04 | Agent OS — Recon Guard |
 | `asi04-supply-chain-dependency-poisoning` | All | ASI-04 | Agent OS — Payload Guard |
 | `asi04-supply-chain-plugin-hijack` | All | ASI-04 | Agent OS — Registry Proxy |
