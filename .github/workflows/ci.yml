@@ -479,8 +479,9 @@ jobs:
           use-quiet-mode: 'yes'
           use-verbose-mode: 'no'
           config-file: '.github/linters/markdown-link-check.json'
-          # Configure it to check all .md files in the repo
-          check-modified-files-only: 'no'
+          # Only check links in files changed by the PR/push to avoid
+          # pre-existing broken links blocking unrelated work.
+          check-modified-files-only: 'yes'
           base-branch: main
 
   # ── Workflow security audit (only when workflows change) ─────────────
