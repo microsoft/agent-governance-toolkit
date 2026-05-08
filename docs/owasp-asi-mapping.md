@@ -59,8 +59,11 @@ Cross-references every rule in the ASI starter policy packs
 | `saas-block-pii-ssn` | general-saas | ASI-01, ASI-06 | Agent OS — PII Protection |
 | `saas-block-pii-email-bulk` | general-saas | ASI-02, ASI-06 | Agent OS — PII Protection |
 | `saas-block-credentials-in-output` | general-saas | ASI-02, ASI-03 | Agent OS — Policy Engine |
+| `healthcare-integrity-shipping-guardrail` | healthcare | ASI-01, ASI-02 | Business Continuity — Logistics Guard (Arcanum-Sec) |
 | `healthcare-integrity-fraud-guardrail` | healthcare | ASI-01, ASI-02 | Business Continuity — Fraud Guard (Arcanum-Sec) |
+| `financial-integrity-shipping-guardrail` | financial-services | ASI-01, ASI-02 | Business Continuity — Logistics Guard (Arcanum-Sec) |
 | `financial-integrity-fraud-guardrail` | financial-services | ASI-01, ASI-02 | Business Continuity — Fraud Guard (Arcanum-Sec) |
+| `saas-integrity-shipping-guardrail` | general-saas | ASI-01, ASI-02 | Business Continuity — Logistics Guard (Arcanum-Sec) |
 | `saas-integrity-fraud-guardrail` | general-saas | ASI-01, ASI-02 | Business Continuity — Fraud Guard (Arcanum-Sec) |
 
 ---
