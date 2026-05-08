@@ -19,7 +19,10 @@
     { "pattern": "singapore-mgf-mapping\\.md" },
     { "pattern": "csa-atf-mapping\\.md" },
     { "pattern": "crates\\.io" },
-    { "pattern": "^/README\\.md" }
+    { "pattern": "^/README\\.md" },
+    { "pattern": "glama\\.ai" },
+    { "pattern": "langgenius/dify-plugins/pull" },
+    { "pattern": "agent-governance-toolkit/blob/main/docs/cmvk\\.md" }
   ],
   "timeout": "30s",
   "retryOn429": true,

@@ -35,7 +35,7 @@ from agent_os.mcp_protocols import (
     MCPAuditSink,
     MCPRateLimitStore,
 )
-from agent_os.mcp_response_scanner import MCPResponseScanner, MCPResponseScanResult
+from agent_os.mcp_response_scanner import MCPResponseScanner
 
 logger = logging.getLogger(__name__)
 
