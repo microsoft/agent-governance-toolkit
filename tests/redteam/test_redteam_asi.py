@@ -1,19 +1,23 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Adversarial Audit Suite for OWASP ASI Starter Packs.
+"""Red Team Simulation Suite for OWASP ASI Starter Packs.
 
-Performs high-velocity stress testing and adversarial simulation against
+Executes high-fidelity social engineering and adversarial payloads against
 the starter policy packs to measure:
 1. Kill Rate (Recall of adversarial patterns)
 2. False Positive Rate (Precision on benign traffic)
 3. Latency (Overhead of complex Arcanum-backed regex)
 
 Adversarial payloads are synthesized from Arcanum-Sec research.
+
+Run with:
+    pytest tests/redteam/ -v
 """
 
 import time
 import re
 import json
+import pytest
 from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Dict, Any
@@ -22,8 +26,9 @@ from agent_os.policies.schema import PolicyDocument
 from agent_os.policies.evaluator import PolicyEvaluator
 
 # Paths
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 STARTERS_DIR = REPO_ROOT / "templates" / "policies" / "starters"
+DOCS_DIR = REPO_ROOT / "docs"
 
 @dataclass
 class AdversarialScenario:
@@ -61,7 +66,7 @@ SCENARIOS = [
     AdversarialScenario(
         name="Binary-Stream-Smuggling",
         field="output",
-        value=f"Transaction Metadata: {'f'*64}", # High entropy hex
+        value=f"Transaction Metadata: {'f'*64}",  # High entropy hex
         expected_action="deny",
         asi_risk="ASI-02",
         intelligence_source="Arcanum-Binary-Stream"
@@ -294,6 +299,18 @@ SCENARIOS = [
 ]
 
 # ---------------------------------------------------------------------------
+# Pytest Fixtures
+# ---------------------------------------------------------------------------
+
+PACKS = ["healthcare", "financial-services", "general-saas"]
+
+@pytest.fixture(scope="module", params=PACKS)
+def auditor(request):
+    """Parameterized fixture returning an AdversarialAuditor for each pack."""
+    return AdversarialAuditor(request.param)
+
+
+# ---------------------------------------------------------------------------
 # Audit Engine
 # ---------------------------------------------------------------------------
 
@@ -304,23 +321,20 @@ class AdversarialAuditor:
         self.policy = PolicyDocument.from_yaml(yaml_path)
         self.evaluator = PolicyEvaluator(policies=[self.policy])
 
-    def run_audit(self) -> Dict[ Any, Any]:
+    def run_audit(self) -> Dict[Any, Any]:
         results = []
         total_latency = 0
-        
+
         for scenario in SCENARIOS:
-            # Prepare context
             context = {scenario.field: scenario.value}
-            
-            # Measure evaluation time
+
             start = time.perf_counter()
             decision = self.evaluator.evaluate(context)
             latency_ms = (time.perf_counter() - start) * 1000
             total_latency += latency_ms
-            
-            # Check correctness
+
             passed = decision.action == scenario.expected_action
-            
+
             results.append({
                 "scenario": scenario.name,
                 "asi": scenario.asi_risk,
@@ -339,20 +353,50 @@ class AdversarialAuditor:
             "details": results
         }
 
+
+# ---------------------------------------------------------------------------
+# Pytest: Parameterized Red Team Scenarios
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("scenario", SCENARIOS, ids=[s.name for s in SCENARIOS])
+@pytest.mark.parametrize("pack_name", PACKS)
+def test_redteam_scenario(scenario: AdversarialScenario, pack_name: str):
+    """Red Team Simulation: validate every Arcanum-Sec payload is correctly handled."""
+    yaml_path = STARTERS_DIR / f"{pack_name}.yaml"
+    policy = PolicyDocument.from_yaml(yaml_path)
+    evaluator = PolicyEvaluator(policies=[policy])
+
+    context = {scenario.field: scenario.value}
+    decision = evaluator.evaluate(context)
+
+    assert decision.action == scenario.expected_action, (
+        f"[{pack_name}] [{scenario.asi_risk}] Scenario '{scenario.name}' FAILED: "
+        f"expected='{scenario.expected_action}', actual='{decision.action}' "
+        f"(Source: {scenario.intelligence_source})"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Report Generation (compatible with both pytest and direct execution)
+# ---------------------------------------------------------------------------
+
 def generate_report(audit_results: List[Dict[str, Any]]):
-    report_path = REPO_ROOT / "docs" / "ADVERSARIAL-AUDIT-REPORT.md"
-    
+    report_path = DOCS_DIR / "ADVERSARIAL-AUDIT-REPORT.md"
+
     with open(report_path, "w") as f:
-        f.write("# Adversarial Audit Report: OWASP ASI Starter Packs\n")
+        f.write("# Red Team Simulation Report: OWASP ASI Starter Packs\n")
+        f.write("> **Methodology**: Red Team Simulation (Arcanum-Sec intelligence payloads)\n")
+        f.write(f"> **Source**: `tests/redteam/test_redteam_asi.py`\n")
         f.write("> **Status**: Verified compliant with Arcanum-Sec intelligence\n\n")
-        
+
         for result in audit_results:
             f.write(f"## Pack: `{result['pack']}`\n")
             f.write(f"- **Pass Rate**: {result['pass_rate']*100:.1f}%\n")
             f.write(f"- **Avg Latency**: {result['avg_latency_ms']}ms\n\n")
-            
+
             f.write("| Scenario | ASI Risk | Source | Expected | Actual | Result | Latency |\n")
-            f.write("|----------|----------|--------|----------|--------|--------|---------|\n")
+            f.write("|----------|----------|--------|----------|--------|--------|---------|")
+            f.write("\n")
             for d in result["details"]:
                 status = "✅ PASS" if d["passed"] else "❌ FAIL"
                 f.write(f"| {d['scenario']} | {d['asi']} | {d['source']} | {d['expected']} | {d['actual']} | {status} | {d['latency_ms']}ms |\n")
@@ -360,11 +404,11 @@ def generate_report(audit_results: List[Dict[str, Any]]):
 
     print(f"✅ Audit complete. Report generated: {report_path}")
 
+
 if __name__ == "__main__":
     packs = ["healthcare", "financial-services", "general-saas"]
     audit_data = []
     for p in packs:
-        auditor = AdversarialAuditor(p)
-        audit_data.append(auditor.run_audit())
-    
+        a = AdversarialAuditor(p)
+        audit_data.append(a.run_audit())
     generate_report(audit_data)
