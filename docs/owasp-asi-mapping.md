@@ -28,22 +28,22 @@ Cross-references every rule in the ASI starter policy packs
 | `asi02-block-network-exfiltration` | All | ASI-02 | Agent OS — Capability Sandboxing |
 | `asi02-block-file-deletion` | healthcare | ASI-02 | Agent OS — Capability Sandboxing |
 | `asi02-block-destructive-operations` | financial-services, general-saas | ASI-02 | Agent OS — Capability Sandboxing |
-| `financial-asi02-obfuscation-detection` | financial-services | ASI-02 | Agent OS — Binary Inspector (Arcanum-Sec) |
+| `financial-asi02-obfuscation-guardrail` | financial-services | ASI-02 | Agent OS — Binary Inspector (Arcanum-Sec) |
 | `asi02-block-database-mutation` | general-saas | ASI-02 | Agent SRE — Audit Trail |
 | `asi03-block-privilege-escalation` | All | ASI-03 | AgentMesh — DID Identity & Trust |
 | `asi03-block-credential-access` | All | ASI-03 | AgentMesh — DID Identity & Trust |
-| `financial-asi03-identity-assumption-guardrail` | financial-services | ASI-03 | AgentMesh — Trust Boundary (Arcanum-Sec) |
+| `financial-asi03-identity-guardrail` | financial-services | ASI-03 | AgentMesh — Trust Boundary (Arcanum-Sec) |
 | `asi03-block-user-impersonation` | general-saas | ASI-03 | AgentMesh — DID Identity & Trust |
-| `asi04-block-untrusted-registry-updates` | All | ASI-04 | Agent OS — Registry Proxy (Arcanum-Sec) |
+| `asi04-registry-poisoning-guardrail` | All | ASI-04 | Agent OS — Registry Proxy (Arcanum-Sec) |
 | `asi05-block-code-execution` | All | ASI-05 | Agent Runtime — Execution Rings |
 | `asi05-block-dynamic-eval` | All | ASI-05 | Agent Runtime — Execution Rings |
-| `asi05-sandbox-anti-pattern-detection` | healthcare | ASI-05 | Agent Runtime — Context Guard (Arcanum-Sec) |
+| `asi05-sandbox-anti-pattern-detection` | All | ASI-05 | Agent Runtime — Context Guard (Arcanum-Sec) |
 | `asi05-block-ssh` | general-saas | ASI-05 | Agent Runtime — Execution Rings |
 | `asi06-context-budget-limit` | All | ASI-06 | Agent OS — VFS / ContextScheduler |
 | `asi06-block-context-manipulation` | All | ASI-06 | Agent OS — CMVK Verification |
-| `asi07-block-hidden-channel-signaling` | All | ASI-07 | AgentMesh — Signal Monitor (Arcanum-Sec) |
+| `asi07-hidden-channel-guardrail` | All | ASI-07 | AgentMesh — Signal Monitor (Arcanum-Sec) |
 | `asi08-session-tool-call-limit` | All | ASI-08 | Agent SRE — Circuit Breakers |
-| `saas-asi08-swarm-heat-circuit-breaker` | general-saas | ASI-08 | Agent SRE — Swarm Monitor (Arcanum-Sec) |
+| `saas-asi08-swarm-heat-guardrail` | general-saas | ASI-08 | Agent SRE — Swarm Monitor (Arcanum-Sec) |
 | `healthcare-block-phi-ssn` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
 | `healthcare-block-phi-mrn` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
 | `healthcare-block-phi-dea` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
@@ -59,7 +59,9 @@ Cross-references every rule in the ASI starter policy packs
 | `saas-block-pii-ssn` | general-saas | ASI-01, ASI-06 | Agent OS — PII Protection |
 | `saas-block-pii-email-bulk` | general-saas | ASI-02, ASI-06 | Agent OS — PII Protection |
 | `saas-block-credentials-in-output` | general-saas | ASI-02, ASI-03 | Agent OS — Policy Engine |
-| `integrity-financial-fraud-protection` | financial-services, general-saas | ASI-01, ASI-02 | Business Continuity — Fraud Guard (Arcanum-Sec) |
+| `healthcare-integrity-fraud-guardrail` | healthcare | ASI-01, ASI-02 | Business Continuity — Fraud Guard (Arcanum-Sec) |
+| `financial-integrity-fraud-guardrail` | financial-services | ASI-01, ASI-02 | Business Continuity — Fraud Guard (Arcanum-Sec) |
+| `saas-integrity-fraud-guardrail` | general-saas | ASI-01, ASI-02 | Business Continuity — Fraud Guard (Arcanum-Sec) |
 
 ---
 
