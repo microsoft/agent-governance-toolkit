@@ -1,0 +1,122 @@
+# OWASP ASI Policy Mapping
+
+<!-- Copyright (c) Microsoft Corporation. -->
+<!-- Licensed under the MIT License. -->
+
+Cross-references every rule in the ASI starter policy packs
+(`templates/policies/starters/`) to the OWASP Agentic Security Initiative
+(ASI) Top 10 risk it mitigates. Use this table during security audits.
+
+**Reference:** [OWASP Top 10 for Agentic Applications (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)
+
+---
+
+## Cross-Reference Table
+
+| Rule Name | Pack(s) | ASI Risk(s) | AGT Component |
+|-----------|---------|-------------|---------------|
+| `asi01-prompt-injection-override` | All | ASI-01 | Agent OS — Policy Engine |
+| `asi01-prompt-injection-role-hijack` | All | ASI-01 | Agent OS — Policy Engine |
+| `asi01-prompt-injection-delimiter` | All | ASI-01 | Agent OS — MCP Proxy Sanitizer |
+| `asi01-prompt-injection-jailbreak` | general-saas | ASI-01 | Agent OS — Policy Engine |
+| `asi02-block-shell-execution` | All | ASI-02 | Agent OS — Capability Sandboxing |
+| `asi02-block-network-exfiltration` | All | ASI-02 | Agent OS — Capability Sandboxing |
+| `asi02-block-file-deletion` | healthcare | ASI-02 | Agent OS — Capability Sandboxing |
+| `asi02-block-destructive-operations` | financial-services, general-saas | ASI-02 | Agent OS — Capability Sandboxing |
+| `asi02-block-database-mutation` | general-saas | ASI-02 | Agent SRE — Audit Trail |
+| `asi03-block-privilege-escalation` | All | ASI-03 | AgentMesh — DID Identity & Trust |
+| `asi03-block-credential-access` | All | ASI-03 | AgentMesh — DID Identity & Trust |
+| `asi03-block-user-impersonation` | general-saas | ASI-03 | AgentMesh — DID Identity & Trust |
+| `asi05-block-code-execution` | All | ASI-05 | Agent Runtime — Execution Rings |
+| `asi05-block-dynamic-eval` | All | ASI-05 | Agent Runtime — Execution Rings |
+| `asi05-block-ssh` | general-saas | ASI-05 | Agent Runtime — Execution Rings |
+| `asi06-context-budget-limit` | All | ASI-06 | Agent OS — VFS / ContextScheduler |
+| `asi06-block-context-manipulation` | All | ASI-06 | Agent OS — CMVK Verification |
+| `asi08-session-tool-call-limit` | All | ASI-08 | Agent SRE — Circuit Breakers |
+| `healthcare-block-phi-ssn` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
+| `healthcare-block-phi-mrn` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
+| `healthcare-block-phi-dea` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
+| `healthcare-block-phi-npi` | healthcare | ASI-06 | Agent SRE — Audit Trail |
+| `healthcare-block-diagnosis-codes` | healthcare | ASI-06 | Agent SRE — Audit Trail |
+| `financial-block-pci-credit-card` | financial-services | ASI-01, ASI-06 | Agent OS — PII Protection |
+| `financial-block-pii-ssn` | financial-services | ASI-01, ASI-06 | Agent OS — PII Protection |
+| `financial-block-iban` | financial-services | ASI-01, ASI-06 | Agent OS — PII Protection |
+| `financial-block-swift-bic` | financial-services | ASI-06 | Agent SRE — Audit Trail |
+| `financial-block-credentials-in-output` | financial-services | ASI-02, ASI-03 | Agent OS — Policy Engine |
+| `financial-audit-transaction-actions` | financial-services | ASI-02 | Agent SRE — Audit Trail |
+| `financial-block-bulk-transactions` | financial-services | ASI-08 | Agent OS — Policy Engine |
+| `saas-block-pii-ssn` | general-saas | ASI-01, ASI-06 | Agent OS — PII Protection |
+| `saas-block-pii-email-bulk` | general-saas | ASI-02, ASI-06 | Agent OS — PII Protection |
+| `saas-block-credentials-in-output` | general-saas | ASI-02, ASI-03 | Agent OS — Policy Engine |
+
+---
+
+## ASI Risk Coverage Matrix
+
+| ASI Risk | healthcare | financial-services | general-saas |
+|----------|:----------:|:-----------------:|:------------:|
+| ASI-01 Agent Goal Hijack | ✅ | ✅ | ✅ |
+| ASI-02 Tool Misuse & Exploitation | ✅ | ✅ | ✅ |
+| ASI-03 Identity & Privilege Abuse | ✅ | ✅ | ✅ |
+| ASI-04 Agentic Supply Chain | 🔗 | 🔗 | 🔗 |
+| ASI-05 Unexpected Code Execution | ✅ | ✅ | ✅ |
+| ASI-06 Memory & Context Poisoning | ✅ | ✅ | ✅ |
+| ASI-07 Insecure Inter-Agent Communication | 🔗 | 🔗 | 🔗 |
+| ASI-08 Cascading Failures | ✅ | ✅ | ✅ |
+| ASI-09 Human-Agent Trust Exploitation | 🔗 | 🔗 | 🔗 |
+| ASI-10 Rogue Agents | 🔗 | 🔗 | 🔗 |
+
+**Legend:**
+- ✅ Direct policy rule(s) in this starter pack mitigate this risk
+- 🔗 Covered by the AGT runtime stack — see [OWASP-COMPLIANCE.md](OWASP-COMPLIANCE.md)
+
+> ASI-04, ASI-07, ASI-09, and ASI-10 are primarily mitigated at the infrastructure
+> layer (AgentMesh IATP, approval workflows, execution ring isolation). Policy-level
+> controls for those risks require runtime context fields not universally available.
+> These are tracked for future starter pack versions.
+
+---
+
+## Default Posture by Pack
+
+| Pack | Default Action | Max Tokens | Max Tool Calls | Confidence |
+|------|:--------------:|:----------:|:--------------:|:----------:|
+| `healthcare` | `deny` | 8,192 | 25 | 0.90 |
+| `financial-services` | `deny` | 8,192 | 30 | 0.90 |
+| `general-saas` | `deny` | 16,384 | 50 | 0.80 |
+
+All packs implement **deny-all by default**, enforcing the
+[Least Agency principle](OWASP-COMPLIANCE.md#cross-cutting-principle-least-agency).
+
+---
+
+## Regulatory Alignment
+
+| Regulation | Pack | Controls Applied |
+|------------|------|-----------------|
+| HIPAA §164.514 (PHI De-identification) | healthcare | SSN, MRN, DEA, NPI blocking |
+| HIPAA §164.530 (Minimum Necessary) | healthcare | Deny-all default, read-only allowlist |
+| PCI DSS Req 3 (Protect Account Data) | financial-services | PAN/SSN blocking in output |
+| PCI DSS Req 6 (Secure Systems) | financial-services | Shell/code execution deny |
+| SOX §302/906 (Financial Reporting) | financial-services | Transaction action audit trail |
+| AML / BSA (Structuring Detection) | financial-services | Bulk transaction blocking |
+| GDPR / CCPA (PII Minimization) | general-saas | SSN, bulk email blocking |
+
+---
+
+## Prior Art & Acknowledgments
+
+These packs extend existing patterns from this repository:
+
+- `examples/policies/production/healthcare.yaml` — PHI detection patterns
+- `examples/policies/production/financial.yaml` — PCI/SOX patterns
+- `examples/policies/production/enterprise.yaml` — general enterprise deny rules
+- `examples/policies/prompt-injection-safety.yaml` — ASI-01 injection detection
+
+**OWASP reference:** [OWASP Top 10 for Agentic Applications (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)
+
+---
+
+*Last updated: May 2026*
+
+**[⬅ Back to docs index](index.md)** · **[🛡️ Full OWASP Stack Coverage](OWASP-COMPLIANCE.md)**
