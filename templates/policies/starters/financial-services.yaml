@@ -142,11 +142,11 @@ rules:
     priority: 100
     message: "ASI-04: Supply Chain — unauthorized tool registry or MCP plugin modification detected"
 
-  - name: asi04-registry-poisoning-guardrail
-    condition: {field: action, operator: matches, value: "^(update_config|edit_env)$"}
+  - name: asi04-supply-chain-config-mutation
+    condition: {field: action, operator: matches, value: "^(update_config|edit_env|set_env|modify_registry)$"}
     action: deny
     priority: 100
-    message: "ASI-04: Supply Chain — unauthorized tool registry or config update detected"
+    message: "ASI-04: Supply Chain — unauthorized configuration or environment state mutation detected"
 
   # =========================================================================
   # ASI-05: Unexpected Code Execution
