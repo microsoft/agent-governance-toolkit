@@ -199,14 +199,41 @@ rules:
   # Deceiving users or agents into providing sensitive info or risky actions.
   # =========================================================================
 
-  - name: asi09-trust-integrity-guardrail
+  - name: asi09-trust-payment-redirection
     condition: 
       field: output
       operator: matches
-      value: "(?i)(refund|payment|transfer).*(wire|crypto|bitcoin|wallet|gateway|order\\s+ID|manual\\s+refund)|(VIP|CFO|CTO|legal|urgent|immediate|act\\s+now|official\\s+request)"
+      value: "(?i)(refund|payment|transfer|invoice).*(wire|crypto|bitcoin|wallet|gateway|manual\\s+refund)"
     action: deny
     priority: 100
-    message: "ASI-09: Trust Exploitation — detected unauthorized payment redirection or suspicious urgency pretext"
+    message: "ASI-09: Trust Exploitation — detected unauthorized payment redirection attempt"
+
+  - name: asi09-trust-vip-impersonation
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(VIP|CFO|CEO|CTO|legal\\s+department|executive|board\\s+of\\s+directors|official\\s+request)"
+    action: deny
+    priority: 100
+    message: "ASI-09: Trust Exploitation — VIP impersonation or false authority pretext detected"
+
+  - name: asi09-trust-urgency-pretext
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(\\burgent\\b|\\bimmediate\\b|act\\s+now|deadline|expire\\s+(soon|in)|last\\s+chance)"
+    action: deny
+    priority: 95
+    message: "ASI-09: Trust Exploitation — manufactured urgency pretext detected"
+
+  - name: asi09-trust-phishing-link
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(verify|login|authenticate|secure\\s+link).*https?:\\/\\/[^\\s]+"
+    action: deny
+    priority: 100
+    message: "ASI-09: Trust Exploitation — suspected off-platform phishing or credential harvesting link"
 
   # =========================================================================
   # ASI-10: Rogue Agents

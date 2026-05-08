@@ -47,7 +47,10 @@ Cross-references every rule in the ASI starter policy packs
 | `asi07-hidden-channel-guardrail` | All | ASI-07 | AgentMesh — Signal Monitor |
 | `asi08-session-tool-call-limit` | All | ASI-08 | Agent SRE — Circuit Breakers |
 | `asi08-swarm-heat-guardrail` | All | ASI-08 | Agent SRE — Swarm Monitor |
-| `asi09-trust-integrity-guardrail` | All | ASI-09 | Business Continuity — Trust Firewall |
+| `asi09-trust-payment-redirection` | All | ASI-09 | Business Continuity — Trust Firewall |
+| `asi09-trust-vip-impersonation` | All | ASI-09 | Business Continuity — Trust Firewall |
+| `asi09-trust-urgency-pretext` | All | ASI-09 | Business Continuity — Trust Firewall |
+| `asi09-trust-phishing-link` | All | ASI-09 | Business Continuity — Trust Firewall |
 | `asi10-charter-enforcement-guardrail` | All | ASI-10 | Agent OS — Charter Enforcement |
 | `asi03-block-credentials-in-output` | All | ASI-02, ASI-03 | Agent OS — Policy Engine |
 | `asi06-block-pii-ssn` | All | ASI-01, ASI-06 | Agent OS — PII Protection |
