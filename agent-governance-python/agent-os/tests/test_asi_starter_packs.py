@@ -400,6 +400,12 @@ class TestSaaSScenarios:
         deny_rules = [r for r in rules if r.action.value == "deny"]
         assert deny_rules, "Expected ASI-01 deny rule to match DAN mode pattern"
 
+    def test_swarm_delegation_is_denied(self, saas_policy):
+        """ASI-01: Nested swarm delegation (Russian Doll) must be denied."""
+        rules = self._matching_rules(saas_policy, "output", "handoff raw input to sub-agent")
+        deny_rules = [r for r in rules if r.action.value == "deny"]
+        assert any(r.name == "saas-asi01-swarm-delegation-guardrail" for r in deny_rules)
+
     def test_privilege_escalation_is_denied(self, saas_policy):
         """ASI-03: Privilege escalation must be denied."""
         rules = self._matching_rules(saas_policy, "action", "elevate_user_role")

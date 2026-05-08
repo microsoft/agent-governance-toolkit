@@ -23,6 +23,7 @@ Cross-references every rule in the ASI starter policy packs
 | `asi01-prompt-injection-delimiter` | All | ASI-01 | Agent OS — MCP Proxy Sanitizer |
 | `asi01-cbrn-medical-synthesis-blocking` | healthcare | ASI-01 | Agent OS — Policy Engine (Arcanum CBRN) |
 | `asi01-prompt-injection-jailbreak` | general-saas | ASI-01 | Agent OS — Policy Engine |
+| `saas-asi01-swarm-delegation-guardrail` | general-saas | ASI-01 | AgentMesh — Delegation Guard (Arcanum) |
 | `asi02-block-shell-execution` | All | ASI-02 | Agent OS — Capability Sandboxing |
 | `asi02-block-network-exfiltration` | All | ASI-02 | Agent OS — Capability Sandboxing |
 | `asi02-block-file-deletion` | healthcare | ASI-02 | Agent OS — Capability Sandboxing |
