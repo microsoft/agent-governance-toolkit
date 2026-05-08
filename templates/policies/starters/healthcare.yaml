@@ -151,6 +151,20 @@ rules:
     message: "ASI-06: Context manipulation attempt detected"
 
   # =========================================================================
+  # ASI-07: Communication Manipulation
+  # Agents coordinate using hidden channels or secret handshakes to bypass filters.
+  # =========================================================================
+
+  - name: asi07-block-hidden-channel-signaling
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(coord\\.[a-zA-Z0-9]{8,}|SIG_SYNC_[a-fA-F0-9]{4,}|\\{\\{HANDSHAKE\\}\\}|SECRET_CHANNEL)"
+    action: deny
+    priority: 100
+    message: "ASI-07: Communication Manipulation — detected hidden channel signaling or secret handshake (Arcanum-Sec)"
+
+  # =========================================================================
   # ASI-08: Cascading Failures
   # An initial error or compromise triggers multi-step compound failures
   # across chained agents.

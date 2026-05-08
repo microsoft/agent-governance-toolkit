@@ -41,6 +41,7 @@ Cross-references every rule in the ASI starter policy packs
 | `asi05-block-ssh` | general-saas | ASI-05 | Agent Runtime — Execution Rings |
 | `asi06-context-budget-limit` | All | ASI-06 | Agent OS — VFS / ContextScheduler |
 | `asi06-block-context-manipulation` | All | ASI-06 | Agent OS — CMVK Verification |
+| `asi07-block-hidden-channel-signaling` | All | ASI-07 | AgentMesh — Signal Monitor (Arcanum-Sec) |
 | `asi08-session-tool-call-limit` | All | ASI-08 | Agent SRE — Circuit Breakers |
 | `saas-asi08-swarm-heat-circuit-breaker` | general-saas | ASI-08 | Agent SRE — Swarm Monitor (Arcanum-Sec) |
 | `healthcare-block-phi-ssn` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
