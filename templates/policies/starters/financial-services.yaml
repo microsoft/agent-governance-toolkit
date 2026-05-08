@@ -164,10 +164,13 @@ rules:
     message: "ASI-06: Context budget exceeded — limit enforced to prevent memory poisoning"
 
   - name: asi06-block-context-manipulation
-    condition: {field: output, operator: matches, value: "(?i)(the\\s+above\\s+instructions\\s+are\\s+wrong|actually\\s+your\\s+real\\s+instructions|disregard\\s+(all\\s+)?(above|prior|previous))"}
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(starting\\s+now|from\\s+this\\s+point|ignore\\s+all\\s+past|your\\s+real\\s+instructions|the\\s+above\\s+instructions\\s+are\\s+wrong|actually\\s+your\\s+real\\s+instructions|disregard\\s+(all\\s+)?(above|prior|previous)|(\\[VERIFIED:\\s*Always\\s*allow|\\[TRUSTED\\s*CONTEXT\\]|\\[SECURITY\\s*BYPASS\\]))"
     action: deny
     priority: 100
-    message: "ASI-06: Context manipulation attempt detected"
+    message: "ASI-06: Context Integrity — detected attempt to manipulate agent memory or override system instructions"
 
   # =========================================================================
   # ASI-07: Communication Manipulation

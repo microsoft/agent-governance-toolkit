@@ -41,7 +41,7 @@ Cross-references every rule in the ASI starter policy packs
 | `asi05-sandbox-anti-pattern-detection` | All | ASI-05 | Agent Runtime — Context Guard |
 | `asi05-block-ssh` | general-saas | ASI-05 | Agent Runtime — Execution Rings |
 | `asi06-context-budget-limit` | All | ASI-06 | Agent OS — VFS / ContextScheduler |
-| `asi06-block-context-manipulation` | All | ASI-06 | Agent OS — CMVK Verification |
+| `asi06-block-context-manipulation` | All | ASI-06 | Agent OS — Context Integrity Firewall |
 | `asi07-hidden-channel-guardrail` | All | ASI-07 | AgentMesh — Signal Monitor |
 | `asi08-session-tool-call-limit` | All | ASI-08 | Agent SRE — Circuit Breakers |
 | `asi03-block-credentials-in-output` | All | ASI-02, ASI-03 | Agent OS — Policy Engine |
