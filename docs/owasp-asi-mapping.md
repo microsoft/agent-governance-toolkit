@@ -51,7 +51,9 @@ Cross-references every rule in the ASI starter policy packs
 | `asi09-trust-vip-impersonation` | All | ASI-09 | Business Continuity — Trust Firewall |
 | `asi09-trust-urgency-pretext` | All | ASI-09 | Business Continuity — Trust Firewall |
 | `asi09-trust-phishing-link` | All | ASI-09 | Business Continuity — Trust Firewall |
-| `asi10-charter-enforcement-guardrail` | All | ASI-10 | Agent OS — Charter Enforcement |
+| `asi10-charter-roleplay-block` | All | ASI-10 | Agent OS — Charter Enforcement |
+| `asi10-charter-purpose-override` | All | ASI-10 | Agent OS — Charter Enforcement |
+| `asi10-charter-autonomous-loop` | All | ASI-10 | Agent OS — Charter Enforcement |
 | `asi03-block-credentials-in-output` | All | ASI-02, ASI-03 | Agent OS — Policy Engine |
 | `asi06-block-pii-ssn` | All | ASI-01, ASI-06 | Agent OS — PII Protection |
 | `healthcare-block-phi-mrn` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
