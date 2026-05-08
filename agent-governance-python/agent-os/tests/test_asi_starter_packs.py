@@ -206,6 +206,12 @@ class TestHealthcareScenarios:
         deny_rules = [r for r in rules if r.action.value == "deny"]
         assert deny_rules, "Expected a deny rule to match MRN pattern in healthcare output"
 
+    def test_deidentification_enforcement_is_denied(self, healthcare_policy):
+        """ASI-02/06: Direct export must be denied to enforce de-identification."""
+        rules = self._matching_rules(healthcare_policy, "action", "export_report")
+        deny_rules = [r for r in rules if r.action.value == "deny"]
+        assert deny_rules, "Expected a deny rule to block export_report to enforce de-identification"
+
     def test_prompt_injection_override_is_denied(self, healthcare_policy):
         """ASI-01: Instruction override injection must be denied."""
         rules = self._matching_rules(

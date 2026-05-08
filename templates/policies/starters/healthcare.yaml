@@ -380,6 +380,12 @@ rules:
     priority: 100
     message: "ASI-01/02: Business Integrity — unauthorized policy override or fraud pretext detected"
 
+  - name: healthcare-enforce-deidentification
+    condition: {field: action, operator: matches, value: "^(export_report|email_patient|send_message|external_api_call)$"}
+    action: deny
+    priority: 99
+    message: "ASI-02/06: HIPAA: Direct export blocked. You must use the 'mask_phi' or 'de_identify_data' tool before external transfer."
+
   - name: healthcare-minimum-necessary-read
     condition: {field: action, operator: matches, value: "^(read_summary|lookup_patient)$"}
     action: allow

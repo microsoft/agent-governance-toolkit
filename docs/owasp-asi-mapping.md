@@ -64,6 +64,7 @@ Cross-references every rule in the ASI starter policy packs
 | `asi06-block-pii-ssn` | All | ASI-01, ASI-06 | Agent OS — PII Protection |
 | `healthcare-block-phi-mrn` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
 | `healthcare-block-phi-dea` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
+| `healthcare-enforce-deidentification` | healthcare | ASI-02, ASI-06 | Agent OS — Data Pipeline Security |
 | `financial-block-pii-credit-card` | financial-services | ASI-01, ASI-06 | Agent OS — PII Protection |
 | `saas-block-pii-email-bulk` | general-saas | ASI-02, ASI-06 | Agent OS — PII Protection |
 
