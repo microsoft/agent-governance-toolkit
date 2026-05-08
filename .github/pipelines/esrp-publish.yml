@@ -537,6 +537,10 @@ stages:
                 --configuration Release \
                 --no-build \
                 --output ./nupkg
+              dotnet pack src/AgentGovernance.Extensions.Microsoft.Agents/AgentGovernance.Extensions.Microsoft.Agents.csproj \
+                --configuration Release \
+                --no-build \
+                --output ./nupkg
               echo "=== Packed NuGet artifacts ==="
               ls -la ./nupkg/
             workingDirectory: 'agent-governance-dotnet'
@@ -798,7 +802,8 @@ stages:
             displayName: 'Vet Go module'
 
           - script: |
-              go test -v -race -coverprofile=coverage.out ./...
+              export CGO_ENABLED=1
+              go test -v -race -covermode=atomic -coverprofile=coverage.out ./packages/...
             workingDirectory: 'agent-governance-golang'
             displayName: 'Run tests with coverage'
 
@@ -844,4 +849,3 @@ stages:
                 echo "Tagged ${TAG} — Go module proxy will index automatically"
               fi
             displayName: 'Tag Go module for proxy indexing'
-

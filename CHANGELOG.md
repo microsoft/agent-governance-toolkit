@@ -12,6 +12,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [3.5.0] - 2026-05-07
+
+### Highlights
+
+**Citadel Integration** - Entra identity bridge and APIM policy fragment for enterprise-grade agent identity. Includes Phase 1 (docs, exporter, policy binding) and Phase 2 (Entra bridge, APIM fragment).
+
+**Multi-Agent Collective Policies** - evaluate constraints (rate limits, concurrent caps) across all agents in a workflow, not just individual agents.
+
+**Decision BOM Reconstructible View** - reconstruct the full decision lineage for any agent action from observability signals, with resilient partial reconstruction when sources are unavailable.
+
+**Centralized Version Management** - single `VERSION` file and `scripts/sync-version.py` propagates version across Python, TypeScript, .NET, and Rust.
+
+### Added
+- **Citadel Phase 1** - docs, governance exporter, policy binding, and example (#1778)
+- **Citadel Phase 2** - Entra identity bridge and APIM policy fragment (#1785)
+- **Multi-agent collective policy evaluator** - SUM/MAX/COUNT aggregates with sliding windows (#1776)
+- **Decision BOM** - reconstructible view from trust, policy, trace, and audit sources (#1777)
+- **Intent-Based Authorization** - declare/approve/execute/verify lifecycle with drift detection (Tutorial 48, #1781)
+- **Cost Governance** - tiered budgets, kill switches, anomaly detection (Tutorial 51, #1784)
+- **Identity attestation evidence model** (#1763)
+- **OTelLogsBackend** - audit event emission via OpenTelemetry logs (#1747)
+- **Aegis governance profile** - YAML to Cedar + Rego policy compiler (#1704)
+- **.NET Quickstart** - console app example (#1794)
+- **.NET unit tests** - governance client and policy evaluation (#1792)
+- **57 hardened tests** - edge cases, concurrency, resilience across intent, multi-agent, BOM, and cost (#1786)
+- **20 smoke tests** - subprocess-based demo execution for all 4 example scenarios (#1786)
+- **ADOPTERS.md** - Nobulex (#1703), Dayos (#1746) as first adopters
+- **GOVERNANCE.md** - contributor ladder and decision process (#1748)
+- **CHARTER.md, RELEASE.md** - AAIF readiness (#1787)
+- **MAINTAINERS.md, CODEOWNERS** (#1757)
+- **A365+AGT reference architecture** guide (#1768)
+- **ADR-0012** - cost governance via observability policies (#1769)
+- **Tutorials 48-51** - Intent Auth, Multi-Agent Policies, Decision BOM, Cost Governance (#1781-#1784)
+- **Rust quickstart** example (#1677)
+- **Korean README translation** (#1729)
+
+### Fixed
+- **Decision BOM resilience** - source exceptions no longer crash reconstruction; partial BOM returned (#1786)
+- **Version drift** - .NET packages bumped from 3.3.0 to 3.4.0, centralized in Directory.Build.props (#1803)
+- **CI hardening** - branch protection status reporting, DCO merge-commit skip, cspell terms, link-check (#1798-#1802)
+- **Go CI** - enabled cgo for race tests, narrowed coverage scope (#1779, #1780)
+- **Rust CI** - resolved build errors, suppressed dead_code warnings (#1728)
+- **Lazy imports** - framework adapters and rogue_detector guard (#1766)
+- **EU AI Act demo** - show agent names in deployment gate (#1790)
+- **Security audit** - self-match fix, persist-credentials, expression escaping (#1749-#1752)
+- **pip install** - corrected agent-discovery version constraint (#1751)
+
+### Changed
+- **Centralized version management** - root `VERSION` file + `scripts/sync-version.py` for all languages (#1803)
+- **Agent SRE README** - concise quick-start section (#1788)
+- **External maintainers** - Aileron, MythologIQ, Dayos added (#1764)
+
+
 ## [3.4.0] - 2026-05-05
 
 ### Fixed

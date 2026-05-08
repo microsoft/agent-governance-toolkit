@@ -51,6 +51,18 @@ npm install @microsoft/agentmesh-sdk
 dotnet add package Microsoft.AgentGovernance
 ```
 
+`.csproj` を含むディレクトリ以外で実行する場合は、プロジェクト パスを明示します。
+
+```bash
+dotnet add YourApp.csproj package Microsoft.AgentGovernance
+```
+
+Visual Studio の Package Manager Console では、**Default project** で対象プロジェクトを選択してから次を実行します。
+
+```powershell
+Install-Package Microsoft.AgentGovernance
+```
+
 ## 2. インストールの確認
 
 付属の検証スクリプトを実行します。
@@ -221,4 +233,3 @@ agent-governance integrity --manifest integrity.json
 ---
 
 *本クイックスタートは、 [@davidequarracino](https://github.com/davidequarracino) による初期の貢献 ([#106](https://github.com/microsoft/agent-governance-toolkit/pull/106), [#108](https://github.com/microsoft/agent-governance-toolkit/pull/108)) に基づいています。*
-

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentmesh_observability"
-version = "3.4.0"
+version = "3.5.0"
 description = "Production observability for Agent OS - OpenTelemetry traces, Prometheus metrics, Grafana dashboards"
 readme = "README.md"
 license = {text = "MIT"}

@@ -12,11 +12,13 @@ momentum and credibility. Submit a PR editing this file — see
 |---|---|---|---|
 | Microsoft (internal AI agent platform) | AI / Developer Tools | Policy enforcement and governance workflows for multi-agent orchestration | [@imran-siddique](https://github.com/imran-siddique) |
 | Microsoft (internal engineering tools) | Engineering Productivity | Agent SRE integration for incident management and reliability monitoring | [@imran-siddique](https://github.com/imran-siddique) |
+| [Dayos](https://dayos.com) | Enterprise AI / ERP Automation | Policy enforcement and prompt-injection detection for a multi-agent system built on Google ADK — Cedar-based tool-dispatch governance across finance and operations workflows | [@miyannishar](https://github.com/miyannishar) |
 
 ## Evaluation / Pilot
 
 | Organization | Industry | Use Case | Contact |
 |---|---|---|---|
+| [Nobulex](https://github.com/arian-gogani/nobulex) | AI Agent Security | Bilateral receipt primitive for tamper-evident agent audit trails (PRs #1302, #1333) | [@arian-gogani](https://github.com/arian-gogani) |
 | [GitHub — awesome-copilot](https://github.com/github/awesome-copilot) | Developer Tools | AGT contributor reputation check (`agt-contributor-check`) integrated into CI for PR risk scoring | [@imran-siddique](https://github.com/imran-siddique) |
 | Azure (internal project) | Cloud Infrastructure | AGT identity layer integration for agent mesh trust verification | [@imran-siddique](https://github.com/imran-siddique) |
 | [chamber](https://github.com/ianphil/chamber) | AI Agent Infrastructure | AGT governance workflows for agent execution policy enforcement | [@ianphil](https://github.com/ianphil) |

@@ -1,4 +1,4 @@
-🌍 [English](/README.md) | [日本語](./docs/i18n/README.ja.md) | [简体中文](./docs/i18n/README.zh-CN.md)
+🌍 [English](/README.md) | [日本語](./docs/i18n/README.ja.md) | [简体中文](./docs/i18n/README.zh-CN.md) | [한국어](./docs/i18n/README.ko.md)
 
 ![Agent Governance Toolkit](docs/assets/readme-banner.svg)
 
@@ -159,7 +159,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 </details>
 
 > **Full walkthrough:** [quickstart.md](docs/quickstart.md) — zero to governed agents in 10 minutes with YAML policies, OPA/Rego, and Cedar support.
-> 🌍 Also available in: [日本語](docs/i18n/quickstart.ja.md) | [简体中文](docs/i18n/quickstart.zh-CN.md)
+> 🌍 Also available in: [日本語](docs/i18n/quickstart.ja.md) | [简体中文](docs/i18n/quickstart.zh-CN.md) | [한국어](docs/i18n/quickstart.ko.md)]
 
 ---
 

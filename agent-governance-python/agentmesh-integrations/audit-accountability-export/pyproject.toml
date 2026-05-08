@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentmesh_audit_export"
-version = "3.4.0"
+version = "3.5.0"
 description = "Example adapter from AgentMesh AuditEntry output to an external accountability export shape"
 readme = "README.md"
 license = {text = "MIT"}

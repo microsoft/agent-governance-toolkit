@@ -31,3 +31,7 @@ tempfile.workspace = true
 [[example]]
 name = "audit-logging"
 path = "../examples/audit-logging.rs"
+
+[[example]]
+name = "quickstart"
+path = "../examples/quickstart.rs"

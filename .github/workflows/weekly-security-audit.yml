@@ -132,7 +132,7 @@ jobs:
 
           # No workflow should checkout HEAD ref on pull_request_target
           HEAD_REFS=$(grep -rn 'ref:.*head\.sha\|ref:.*head_sha' .github/workflows/*.yml \
-            | grep -v '#' | grep -v 'workflow_run' || true)
+            | grep -v '#' | grep -v 'workflow_run' | grep -v 'weekly-security-audit' || true)
           if [ -n "$HEAD_REFS" ]; then
             {
               echo "🔴 CRITICAL: pull_request_target workflow checks out HEAD ref:"
@@ -186,8 +186,8 @@ jobs:
           )
 
           for pattern in "${UNSAFE_PATTERNS[@]}"; do
-            # Find ${{ pattern }} in run: blocks (not in env: blocks which are safe)
-            GHA_OPEN='${{'
+            # Find expression interpolation of pattern in run: blocks (not in env: which are safe)
+            GHA_OPEN=$(printf '$')'{{'
             MATCHES=$(grep -rn "${GHA_OPEN}.*${pattern}" .github/workflows/*.yml \
               | grep -v "env:" | grep -v "#" || true)
             if [ -n "$MATCHES" ]; then

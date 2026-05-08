@@ -6,7 +6,6 @@
     <Nullable>enable</Nullable>
     <RootNamespace>AgentGovernance.Extensions.ModelContextProtocol</RootNamespace>
     <AssemblyName>AgentGovernance.Extensions.ModelContextProtocol</AssemblyName>
-    <Version>3.3.0</Version>
     <Description>Public Preview companion package for Microsoft.AgentGovernance that adds one-call governance to ModelContextProtocol C# servers via IMcpServerBuilder.WithGovernance(...).</Description>
     <PackageId>Microsoft.AgentGovernance.Extensions.ModelContextProtocol</PackageId>
     <Authors>Microsoft</Authors>

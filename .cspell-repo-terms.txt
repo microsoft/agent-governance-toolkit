@@ -137,3 +137,10 @@ frozenset
 isinstance
 pathlib
 returncode
+xunit
+requireapproval
+cref
+nameof
+aspnet
+appsettings
+requireapproval

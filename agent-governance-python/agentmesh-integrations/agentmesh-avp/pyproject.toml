@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "avp_agentmesh"
-version = "3.4.0"
+version = "3.5.0"
 description = "Agent Veil Protocol integration for AgentMesh trust engine"
 readme = "README.md"
 license = {text = "MIT"}

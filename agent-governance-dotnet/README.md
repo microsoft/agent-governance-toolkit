@@ -11,6 +11,20 @@ Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-govern
 
 ## Install
 
+Run `dotnet add package` from the directory that contains your `.csproj`. If you're in another folder, pass the project path explicitly:
+
+```bash
+dotnet add YourApp.csproj package Microsoft.AgentGovernance
+```
+
+In Visual Studio Package Manager Console, use `Install-Package` and make sure the correct app is selected in the **Default project** dropdown. Typing a bare package name at the prompt fails because PowerShell treats it as a command.
+
+| Package | .NET CLI | Package Manager Console |
+|---------|----------|-------------------------|
+| Core SDK | `dotnet add package Microsoft.AgentGovernance` | `Install-Package Microsoft.AgentGovernance` |
+| MCP extension | `dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol` | `Install-Package Microsoft.AgentGovernance.Extensions.ModelContextProtocol` |
+| Microsoft Agents extension | `dotnet add package Microsoft.AgentGovernance.Extensions.Microsoft.Agents` | `Install-Package Microsoft.AgentGovernance.Extensions.Microsoft.Agents` |
+
 ```bash
 dotnet add package Microsoft.AgentGovernance
 ```

@@ -23,6 +23,8 @@ from typing import Any, Dict, Optional
 
 import click
 
+from agent_compliance.cli.red_team import red_team
+
 try:
     from rich import box as _rich_box
     from rich.console import Console as _RichConsole
@@ -172,8 +174,6 @@ def cli(
 
 
 # Register the red-team subcommand group
-from agent_compliance.cli.red_team import red_team
-
 cli.add_command(red_team)
 
 

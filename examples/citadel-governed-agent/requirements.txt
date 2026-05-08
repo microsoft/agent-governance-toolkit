@@ -1,0 +1,2 @@
+agent-governance-toolkit
+pyyaml>=6.0

@@ -4,6 +4,22 @@ Public Preview companion package for `Microsoft.AgentGovernance` that makes it e
 
 ## Install
 
+Run `dotnet add package` from the directory that contains your `.csproj`. If you're elsewhere, pass the project path explicitly:
+
+```bash
+dotnet add YourApp.csproj package Microsoft.AgentGovernance
+dotnet add YourApp.csproj package Microsoft.AgentGovernance.Extensions.Microsoft.Agents
+```
+
+In Visual Studio Package Manager Console, use:
+
+```powershell
+Install-Package Microsoft.AgentGovernance
+Install-Package Microsoft.AgentGovernance.Extensions.Microsoft.Agents
+```
+
+Make sure the correct app is selected in the **Default project** dropdown. Typing the package name by itself at the prompt fails because PowerShell treats it as a command.
+
 ```bash
 dotnet add package Microsoft.AgentGovernance
 dotnet add package Microsoft.AgentGovernance.Extensions.Microsoft.Agents

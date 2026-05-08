@@ -1,0 +1,107 @@
+<!--
+    AGT Governance Metadata Policy Fragment for Citadel APIM
+    
+    This fragment reads AGT governance metadata from request headers set by
+    the agent runtime and logs them alongside APIM telemetry for correlation.
+    
+    Design: APIM does NOT call AGT's policy endpoint on every request.
+    That would add latency, create availability coupling, and produce
+    split-brain decisions. Instead, the agent runtime evaluates policies
+    locally and passes the result as advisory metadata through the gateway.
+    
+    Header schema (set by agent runtime):
+      X-AGT-Trust-Score:      Integer 0-1000 (agent's current trust score)
+      X-AGT-Risk-Label:       trusted|degraded|untrusted
+      X-AGT-Policy-Bundle:    Bundle ID (e.g., customer-support-v2)
+      X-AGT-Policy-Version:   Bundle version (e.g., 1.2.0)
+      X-AGT-Decision-Id:      UUID of the AGT policy decision
+    
+    Usage:
+      Add to your Access Contract product policy:
+        <include-fragment fragment-id="agt-governance-metadata" />
+-->
+<fragment>
+    <!-- ================================================================== -->
+    <!-- INBOUND: Extract AGT governance metadata from request headers       -->
+    <!-- ================================================================== -->
+    <inbound>
+        <!-- Read AGT headers (all optional, agent may not be AGT-governed) -->
+        <set-variable name="agtTrustScore" value="@{
+            var header = context.Request.Headers.GetValueOrDefault("X-AGT-Trust-Score", "");
+            int score;
+            return int.TryParse(header, out score) ? score.ToString() : "-1";
+        }" />
+        <set-variable name="agtRiskLabel" value="@(context.Request.Headers.GetValueOrDefault("X-AGT-Risk-Label", "unknown"))" />
+        <set-variable name="agtPolicyBundle" value="@(context.Request.Headers.GetValueOrDefault("X-AGT-Policy-Bundle", ""))" />
+        <set-variable name="agtPolicyVersion" value="@(context.Request.Headers.GetValueOrDefault("X-AGT-Policy-Version", ""))" />
+        <set-variable name="agtDecisionId" value="@(context.Request.Headers.GetValueOrDefault("X-AGT-Decision-Id", ""))" />
+        <set-variable name="isAgtGoverned" value="@(context.Request.Headers.ContainsKey("X-AGT-Trust-Score") ? "true" : "false")" />
+
+        <!-- Optional: Block requests from untrusted agents.                -->
+        <!-- Uncomment this section to enforce a minimum trust threshold     -->
+        <!-- at the gateway level. This is a coarse-grained safety net,     -->
+        <!-- not a replacement for AGT's fine-grained policy evaluation.    -->
+        <!--
+        <choose>
+            <when condition="@{
+                var label = (string)context.Variables["agtRiskLabel"];
+                return label == "untrusted";
+            }">
+                <return-response>
+                    <set-status code="403" reason="Agent Governance: Untrusted" />
+                    <set-header name="Content-Type" exists-action="override">
+                        <value>application/json</value>
+                    </set-header>
+                    <set-body>@{
+                        return new JObject(
+                            new JProperty("error", "agent_untrusted"),
+                            new JProperty("message", "Agent trust score is below the minimum threshold. Contact your governance administrator."),
+                            new JProperty("agt_decision_id", (string)context.Variables.GetValueOrDefault<string>("agtDecisionId", ""))
+                        ).ToString();
+                    }</set-body>
+                </return-response>
+            </when>
+        </choose>
+        -->
+
+        <!-- Strip AGT headers before forwarding to backend (defense in depth) -->
+        <set-header name="X-AGT-Trust-Score" exists-action="delete" />
+        <set-header name="X-AGT-Risk-Label" exists-action="delete" />
+        <set-header name="X-AGT-Policy-Bundle" exists-action="delete" />
+        <set-header name="X-AGT-Policy-Version" exists-action="delete" />
+        <set-header name="X-AGT-Decision-Id" exists-action="delete" />
+    </inbound>
+
+    <!-- ================================================================== -->
+    <!-- OUTBOUND: Add AGT correlation headers to response and log          -->
+    <!-- ================================================================== -->
+    <outbound>
+        <!-- Emit AGT governance metadata as custom dimensions in APIM logs -->
+        <choose>
+            <when condition="@((string)context.Variables.GetValueOrDefault<string>("isAgtGoverned", "false") == "true")">
+                <trace source="agt-governance" severity="information">
+                    <message>@{
+                        return String.Format(
+                            "AGT Governance: agent_trust={0} risk={1} bundle={2} version={3} decision_id={4}",
+                            (string)context.Variables["agtTrustScore"],
+                            (string)context.Variables["agtRiskLabel"],
+                            (string)context.Variables["agtPolicyBundle"],
+                            (string)context.Variables["agtPolicyVersion"],
+                            (string)context.Variables["agtDecisionId"]
+                        );
+                    }</message>
+                    <metadata name="agt-trust-score" value="@((string)context.Variables["agtTrustScore"])" />
+                    <metadata name="agt-risk-label" value="@((string)context.Variables["agtRiskLabel"])" />
+                    <metadata name="agt-policy-bundle" value="@((string)context.Variables["agtPolicyBundle"])" />
+                    <metadata name="agt-policy-version" value="@((string)context.Variables["agtPolicyVersion"])" />
+                    <metadata name="agt-decision-id" value="@((string)context.Variables["agtDecisionId"])" />
+                </trace>
+
+                <!-- Return APIM request ID so agent can correlate back -->
+                <set-header name="X-AGT-APIM-Request-Id" exists-action="override">
+                    <value>@(context.RequestId.ToString())</value>
+                </set-header>
+            </when>
+        </choose>
+    </outbound>
+</fragment>

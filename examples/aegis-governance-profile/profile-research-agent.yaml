@@ -1,0 +1,59 @@
+# cspell:words startswith
+#
+# AEGIS Governance Profile — research agent
+#
+# A profile expresses *what an agent (or class of agents) is permitted
+# to do* in domain terms — actions, principal role, and resource scope —
+# and compiles to equivalent Cedar and Rego policies for AGT.
+#
+# Schema reference: see SCHEMA.md or compile.py docstring.
+
+profile:
+  id: research-agent-standard
+  version: 1.0.0
+  description: >
+    Standard governance profile for research-class agents. Permits
+    information-gathering and summarization actions over public and
+    published-research scopes; denies destructive actions and access
+    to confidential or PII-bearing scopes.
+
+# Principal role this profile applies to.
+# Compiles to: Cedar — implicit (action-level only at v1).
+#              Rego  — `input.principal.role == "<role>"` precondition on every allow.
+principal:
+  role: researcher
+
+capabilities:
+  # Each allowed_action becomes:
+  #   Cedar — `permit(principal, action == Action::"<PascalCase>", resource);`
+  #   Rego  — `allow { input.tool_name == "<snake_case>"; input.principal.role == "<role>" }`
+  allowed_actions:
+    - web_search
+    - document_read
+    - summarize_text
+    - cite_source
+
+  # Each denied_action becomes:
+  #   Cedar — `forbid(principal, action == Action::"<PascalCase>", resource);`
+  #   Rego  — denied by absence (default deny). Explicit `deny` rule is also emitted
+  #           for audit traceability; AGT's default OPABackend query is `data.<pkg>.allow`,
+  #           so the deny rule is informational — Cedar's forbid is the authoritative cut.
+  denied_actions:
+    - file_write
+    - shell_exec
+    - send_external_email
+    - delete_record
+
+# Resource-scope rules. Patterns are simple prefix globs (trailing `/*`).
+# Compiles to:
+#   Cedar — context-conditional permits/forbids via `when { context.resource like "..." }`.
+#   Rego  — `allow { startswith(input.resource, "<prefix>") }` and corresponding deny rules.
+resource_scopes:
+  allowed_patterns:
+    - "public/*"
+    - "research/published/*"
+    - "research/preprints/*"
+  denied_patterns:
+    - "customer/pii/*"
+    - "internal/confidential/*"
+    - "finance/private/*"
