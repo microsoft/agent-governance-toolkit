@@ -23,7 +23,9 @@ Cross-references every rule in the ASI starter policy packs
 | `asi01-prompt-injection-delimiter` | All | ASI-01 | Agent OS — MCP Proxy Sanitizer |
 | `healthcare-asi01-cbrn-guardrail` | healthcare | ASI-01 | Agent OS — Policy Engine |
 | `asi01-prompt-injection-jailbreak` | general-saas | ASI-01 | Agent OS — Policy Engine |
-| `saas-asi01-nested-swarm-guardrail` | general-saas | ASI-01 | AgentMesh — Delegation Guard |
+| `asi01-integrity-shipping-guardrail` | All | ASI-01, ASI-02 | Business Continuity — Logistics Guard |
+| `asi01-integrity-fraud-guardrail` | All | ASI-01, ASI-02 | Business Continuity — Fraud Guard |
+| `asi01-nested-swarm-guardrail` | general-saas | ASI-01 | AgentMesh — Delegation Guard |
 | `asi02-block-shell-execution` | All | ASI-02 | Agent OS — Capability Sandboxing |
 | `asi02-block-network-exfiltration` | All | ASI-02 | Agent OS — Capability Sandboxing |
 | `asi02-block-file-deletion` | healthcare | ASI-02 | Agent OS — Capability Sandboxing |
@@ -44,11 +46,11 @@ Cross-references every rule in the ASI starter policy packs
 | `asi06-block-context-manipulation` | All | ASI-06 | Agent OS — Context Integrity Firewall |
 | `asi07-hidden-channel-guardrail` | All | ASI-07 | AgentMesh — Signal Monitor |
 | `asi08-session-tool-call-limit` | All | ASI-08 | Agent SRE — Circuit Breakers |
+| `asi08-swarm-heat-guardrail` | All | ASI-08 | Agent SRE — Swarm Monitor |
+| `asi09-trust-integrity-guardrail` | All | ASI-09 | Business Continuity — Trust Firewall |
+| `asi10-charter-enforcement-guardrail` | All | ASI-10 | Agent OS — Charter Enforcement |
 | `asi03-block-credentials-in-output` | All | ASI-02, ASI-03 | Agent OS — Policy Engine |
 | `asi06-block-pii-ssn` | All | ASI-01, ASI-06 | Agent OS — PII Protection |
-| `asi08-swarm-heat-guardrail` | All | ASI-08 | Agent SRE — Swarm Monitor |
-| `asi01-integrity-shipping-guardrail` | All | ASI-01, ASI-02 | Business Continuity — Logistics Guard |
-| `asi01-integrity-fraud-guardrail` | All | ASI-01, ASI-02 | Business Continuity — Fraud Guard |
 | `healthcare-block-phi-mrn` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
 | `healthcare-block-phi-dea` | healthcare | ASI-01, ASI-06 | Agent OS — PII Protection |
 | `financial-block-pii-credit-card` | financial-services | ASI-01, ASI-06 | Agent OS — PII Protection |

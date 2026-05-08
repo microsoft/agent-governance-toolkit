@@ -220,6 +220,34 @@ rules:
     message: "ASI-08: Cascading Failure — swarm heat threshold reached; coordination depth auditing engaged"
 
   # =========================================================================
+  # ASI-09: Trust Exploitation
+  # Deceiving users or agents into providing sensitive info or risky actions.
+  # =========================================================================
+
+  - name: asi09-trust-integrity-guardrail
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(refund|payment|transfer).*(wire|crypto|bitcoin|wallet|gateway|order\\s+ID|manual\\s+refund)|(VIP|CFO|CTO|legal|urgent|immediate|act\\s+now|official\\s+request)"
+    action: deny
+    priority: 100
+    message: "ASI-09: Trust Exploitation — detected unauthorized payment redirection or suspicious urgency pretext"
+
+  # =========================================================================
+  # ASI-10: Rogue Agents
+  # Agents acting autonomously without oversight or outside their charter.
+  # =========================================================================
+
+  - name: asi10-charter-enforcement-guardrail
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)act\\s+as\\s+(Linux|Windows|bash|Powershell|CLI|terminal|interpreter)|(ignore\\s+your\\s+purpose|redefine\\s+charter|act\\s+outside\\s+scope|new\\s+operational\\s+constraints)"
+    action: deny
+    priority: 100
+    message: "ASI-10: Rogue Agent — detected attempt to breach operational charter or assume technical interface role"
+
+  # =========================================================================
   # General SaaS Domain: PII / Credential Protection / GDPR
   # =========================================================================
 
