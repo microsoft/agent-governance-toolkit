@@ -680,7 +680,7 @@ Yes. AgentMesh provides automated compliance mapping for EU AI Act, SOC 2, HIPAA
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
 
 ## License
 

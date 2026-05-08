@@ -5,7 +5,7 @@
 Technical Q&A for customers, partners, and evaluators of the Agent Governance
 Toolkit.
 
-> **See also:** [Quick Start](../quickstart.md) · [Architecture](ARCHITECTURE.md) · [Known Limitations](LIMITATIONS.md) · [OWASP Compliance](OWASP-COMPLIANCE.md)
+> **See also:** [Quick Start](quickstart.md) · [Architecture](ARCHITECTURE.md) · [Known Limitations](LIMITATIONS.md) · [OWASP Compliance](OWASP-COMPLIANCE.md)
 
 ---
 
@@ -522,7 +522,7 @@ AGT follows an **adapter pattern**: core governance packages are vendor-neutral 
 - **Non-Foundry agents** (LangChain, CrewAI, OpenClaw, etc.) use adapters or the sidecar HTTP API — 2–3 lines of code.
 - The **governance capabilities are identical** regardless of framework — policy enforcement, identity verification, audit logging, trust scoring.
 
-See the [Independence & Dependency Policy](../INDEPENDENCE.md) for the full vendor-neutrality matrix and the [SDK Integration Types FAQ](#3-what-is-the-practical-impact-of-the-different-sdk-integration-types) for framework-by-framework details.
+See the [Independence & Dependency Policy](INDEPENDENCE.md) for the full vendor-neutrality matrix and the [SDK Integration Types FAQ](#3-what-is-the-practical-impact-of-the-different-sdk-integration-types) for framework-by-framework details.
 
 ---
 
@@ -700,5 +700,5 @@ See [Tutorial 40 — OTel Observability](tutorials/40-otel-observability.md) for
 | NuGet (.NET) | `Microsoft.AgentGovernance` |
 | DeepWiki | https://deepwiki.com/microsoft/agent-governance-toolkit |
 | OWASP Agentic Top 10 | https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/ |
-| Quick Start Guide | [quickstart.md](../quickstart.md) |
+| Quick Start Guide | [quickstart.md](quickstart.md) |
 | Deployment Guides | [docs/deployment/](deployment/) |

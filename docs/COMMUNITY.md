@@ -29,13 +29,13 @@ Community-written content about agent governance, security, and the toolkit.
 
 - ⭐ **Star** the repository to get notified of new releases
 - 👁️ **Watch** for all activity or just releases
-- 📰 Check the [Changelog](CHANGELOG.md) for release notes
+- 📰 Check the [Changelog](../CHANGELOG.md) for release notes
 
 ## Contributing
 
 We welcome contributions of all kinds — code, documentation, bug reports, and feature ideas.
 
-- Read our [Contributing Guide](CONTRIBUTING.md) to get started
+- Read our [Contributing Guide](../CONTRIBUTING.md) to get started
 - Look for issues labeled [`good first issue`](https://github.com/microsoft/agent-governance-toolkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) if you're new to the project
 - Check [`help wanted`](https://github.com/microsoft/agent-governance-toolkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) for issues where we'd especially appreciate contributions
 

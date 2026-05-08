@@ -249,7 +249,7 @@ See [SECURITY.md](SECURITY.md) for the full server security model and threat ana
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md).
+We welcome contributions! See [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 ## License
 

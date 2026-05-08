@@ -347,8 +347,8 @@ agt integrity --manifest integrity.json
 | OWASP coverage map | [docs/OWASP-COMPLIANCE.md](docs/OWASP-COMPLIANCE.md) |
 | Framework integrations | [agent-governance-python/agent-os/src/agent_os/integrations/](agent-governance-python/agent-os/src/agent_os/integrations/) |
 | Example applications | [agent-governance-python/agent-os/examples/](agent-governance-python/agent-os/examples/) |
-| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Changelog | [CHANGELOG.md](CHANGELOG.md) |
+| Contributing | [CONTRIBUTING.md](../CONTRIBUTING.md) |
+| Changelog | [CHANGELOG.md](../CHANGELOG.md) |
 
 ---
 
