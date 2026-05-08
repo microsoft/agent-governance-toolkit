@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from agent_sandbox.docker_sandbox_provider import DockerSandboxProvider
+    from agent_sandbox.docker_provider.provider import DockerSandboxProvider
 
 logger = logging.getLogger(__name__)
 
