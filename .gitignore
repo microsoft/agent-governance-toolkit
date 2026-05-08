@@ -465,3 +465,11 @@ _site/
 
 # Code Security Assessment artifacts
 .security-assessment/
+
+# Red Team Simulation — local-only outputs
+# reports/ holds ad-hoc local audit runs; canonical reports go to docs/
+tests/redteam/reports/
+# payloads/ raw scratch files (JSON/TXT); committed payloads must be curated YAML only
+tests/redteam/payloads/*.json
+tests/redteam/payloads/*.txt
+tests/redteam/payloads/*.log
