@@ -30,6 +30,7 @@ Cross-references every rule in the ASI starter policy packs
 | `asi03-block-user-impersonation` | general-saas | ASI-03 | AgentMesh — DID Identity & Trust |
 | `asi05-block-code-execution` | All | ASI-05 | Agent Runtime — Execution Rings |
 | `asi05-block-dynamic-eval` | All | ASI-05 | Agent Runtime — Execution Rings |
+| `asi05-sandbox-anti-pattern-detection` | healthcare | ASI-05 | Agent Runtime — Context Guard (Arcanum) |
 | `asi05-block-ssh` | general-saas | ASI-05 | Agent Runtime — Execution Rings |
 | `asi06-context-budget-limit` | All | ASI-06 | Agent OS — VFS / ContextScheduler |
 | `asi06-block-context-manipulation` | All | ASI-06 | Agent OS — CMVK Verification |

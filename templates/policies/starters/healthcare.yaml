@@ -112,6 +112,15 @@ rules:
     priority: 100
     message: "ASI-05: Dynamic code evaluation patterns detected in output"
 
+  - name: asi05-sandbox-anti-pattern-detection
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(subprocess\\.Popen\\(.*;\\s*shell\\s*=\\s*True|os\\.system\\(|os\\.popen\\(|shlex\\.quote.*\\+.*|pathlib.*\\.joinpath.*\\+.*)"
+    action: deny
+    priority: 100
+    message: "ASI-05: Code Anti-Pattern Detected — Unsafe execution or path manipulation (Arcanum SEC-PY-01)"
+
   # =========================================================================
   # ASI-06: Memory & Context Poisoning
   # Persistent memory or long-running context is poisoned with malicious
