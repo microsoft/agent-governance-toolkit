@@ -7,7 +7,10 @@ Cross-references every rule in the ASI starter policy packs
 (`templates/policies/starters/`) to the OWASP Agentic Security Initiative
 (ASI) Top 10 risk it mitigates. Use this table during security audits.
 
-**Reference:** [OWASP Top 10 for Agentic Applications (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)
+**References:** 
+- [OWASP Top 10 for Agentic Applications (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)
+- [Arcanum-Sec: Prompt Injection Taxonomy](https://github.com/Arcanum-Sec/arc_pi_taxonomy)
+- [Arcanum-Sec: sec-context (Code Anti-Patterns)](https://github.com/Arcanum-Sec/sec-context)
 
 ---
 
@@ -18,7 +21,7 @@ Cross-references every rule in the ASI starter policy packs
 | `asi01-prompt-injection-override` | All | ASI-01 | Agent OS — Policy Engine |
 | `asi01-prompt-injection-role-hijack` | All | ASI-01 | Agent OS — Policy Engine |
 | `asi01-prompt-injection-delimiter` | All | ASI-01 | Agent OS — MCP Proxy Sanitizer |
-| `asi01-cbrn-medical-synthesis-blocking` | healthcare | ASI-01 | Agent OS — Policy Engine (CBRN) |
+| `asi01-cbrn-medical-synthesis-blocking` | healthcare | ASI-01 | Agent OS — Policy Engine (Arcanum CBRN) |
 | `asi01-prompt-injection-jailbreak` | general-saas | ASI-01 | Agent OS — Policy Engine |
 | `asi02-block-shell-execution` | All | ASI-02 | Agent OS — Capability Sandboxing |
 | `asi02-block-network-exfiltration` | All | ASI-02 | Agent OS — Capability Sandboxing |
@@ -114,6 +117,7 @@ These packs extend existing patterns from this repository:
 - `examples/policies/production/financial.yaml` — PCI/SOX patterns
 - `examples/policies/production/enterprise.yaml` — general enterprise deny rules
 - `examples/policies/prompt-injection-safety.yaml` — ASI-01 injection detection
+- **Arcanum Intelligence**: Rules prefixed with `(Arcanum)` leverage the Arcanum-Sec Prompt Injection Taxonomy or `sec-context` anti-pattern library for high-fidelity detection.
 
 **OWASP reference:** [OWASP Top 10 for Agentic Applications (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)
 
