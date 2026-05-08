@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Credential redaction helpers for MCP audit and response safety."""
+"""Credential redaction and PII/CRI detection for MCP audit and response safety."""
 
 from __future__ import annotations
 
@@ -96,6 +96,79 @@ class CredentialRedactor:
             ),
         ),
     )
+
+    # PII / CRI patterns — detection-only (not used for redaction by default).
+    # These catch personally identifiable information that should not flow
+    # into LLM context in enterprise governance scenarios.
+    PII_PATTERNS: tuple[CredentialPattern, ...] = (
+        CredentialPattern(
+            name="Email address",
+            pattern=re.compile(
+                r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"
+            ),
+        ),
+        CredentialPattern(
+            name="US phone number",
+            pattern=re.compile(
+                r"(?<!\d)(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}(?!\d)"
+            ),
+        ),
+        CredentialPattern(
+            name="US SSN",
+            pattern=re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
+        ),
+        CredentialPattern(
+            name="Credit card number",
+            pattern=re.compile(r"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b"),
+        ),
+        CredentialPattern(
+            name="IPv4 address",
+            pattern=re.compile(
+                r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b"
+            ),
+        ),
+    )
+
+    @classmethod
+    def find_pii_matches(cls, value: str | None) -> list[CredentialMatch]:
+        """Return all PII/CRI-like matches found in a string.
+
+        Unlike :meth:`find_matches`, these patterns detect personally
+        identifiable information (email, phone, SSN, credit card, IP address)
+        rather than secrets. Use for detection and policy enforcement, not
+        for audit redaction.
+
+        Args:
+            value: String content to inspect.
+
+        Returns:
+            A list of ``CredentialMatch`` records for each detected PII span.
+        """
+        if not value:
+            return []
+
+        matches: list[CredentialMatch] = []
+        for pii_pattern in cls.PII_PATTERNS:
+            for match in pii_pattern.pattern.finditer(value):
+                matches.append(
+                    CredentialMatch(
+                        name=pii_pattern.name,
+                        matched_text=match.group(0),
+                    )
+                )
+        return matches
+
+    @classmethod
+    def contains_pii(cls, value: str | None) -> bool:
+        """Return whether a string contains any PII/CRI pattern.
+
+        Args:
+            value: String content to inspect.
+
+        Returns:
+            ``True`` when at least one PII pattern matches.
+        """
+        return bool(cls.find_pii_matches(value))
 
     @classmethod
     def redact(cls, value: str | None) -> str:
