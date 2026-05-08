@@ -11,13 +11,18 @@ Runnable examples showing the unified governance stack in action.
 
 ## Prerequisites
 
+- Python 3.10+
+- Install dependencies from this directory:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 ## Running
 
+From this directory (`agent-governance-python/agent-compliance/examples/`):
+
 ```bash
-python examples/quickstart.py
-python examples/governed_agent.py
+python quickstart.py
+python governed_agent.py
 ```

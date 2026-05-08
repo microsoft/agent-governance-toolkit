@@ -11,7 +11,7 @@ Shows all four governance layers working together:
 
 Usage:
     pip install agent-governance-toolkit[full]
-    python examples/governed_agent.py
+    python governed_agent.py
 """
 
 import asyncio

@@ -21,7 +21,6 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -29,7 +28,7 @@ import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -361,7 +360,6 @@ class CitadelAuditExporter:
             from azure.monitor.opentelemetry.exporter import (
                 AzureMonitorTraceExporter,
             )
-            from opentelemetry import trace
             from opentelemetry.sdk.trace import TracerProvider
             from opentelemetry.sdk.trace.export import BatchSpanProcessor
         except ImportError:
