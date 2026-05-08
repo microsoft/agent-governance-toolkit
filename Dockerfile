@@ -14,7 +14,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /workspace
 
-RUN apt-get update \
+RUN for i in 1 2 3; do apt-get update && break || sleep 5; done \
     && apt-get install -y --no-install-recommends \
         bash \
         build-essential \
@@ -26,7 +26,7 @@ RUN apt-get update \
         | gpg --dearmor -o /usr/share/keyrings/nodesource.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
         > /etc/apt/sources.list.d/nodesource.list \
-    && apt-get update \
+    && for i in 1 2 3; do apt-get update && break || sleep 5; done \
     && apt-get install -y --no-install-recommends nodejs \
     && python -m pip install --upgrade pip==24.3.1 setuptools==75.8.0 wheel==0.45.1 \
     && rm -rf /var/lib/apt/lists/*
