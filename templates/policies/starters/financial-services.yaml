@@ -104,6 +104,15 @@ rules:
     priority: 100
     message: "ASI-03: Identity Abuse — detected attempt to assume unauthorized persona or permissions"
 
+  - name: asi03-account-integrity-guardrail
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(remove|disable|bypass|waive)\\s+(mfa|2fa|multi-factor|lockout|authentication)|(add|promote|assign|grant).*(admin|superuser|api\\s+access|billing|owner)|reset\\s+password.*(for|to|send)|(delete|clear|wipe|remove).*(audit\\s+log|security\\s+log|event\\s+log)"
+    action: deny
+    priority: 100
+    message: "ASI-03: Account Integrity — unauthorized attempt to manipulate authentication, roles, or audit logs"
+
   # =========================================================================
   # ASI-04: Supply Chain Risk
   # Agents are tricked into using untrusted tools, registries, or MCP servers.

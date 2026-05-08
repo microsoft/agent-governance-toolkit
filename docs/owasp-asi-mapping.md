@@ -34,6 +34,7 @@ Cross-references every rule in the ASI starter policy packs
 | `asi03-block-credential-access` | All | ASI-03 | AgentMesh — DID Identity & Trust |
 | `financial-asi03-identity-guardrail` | financial-services | ASI-03 | AgentMesh — Trust Boundary |
 | `asi03-block-user-impersonation` | general-saas | ASI-03 | AgentMesh — DID Identity & Trust |
+| `asi03-account-integrity-guardrail` | All | ASI-03 | AgentMesh — Identity Governance |
 | `asi04-registry-poisoning-guardrail` | All | ASI-04 | Agent OS — Registry Proxy |
 | `asi05-block-code-execution` | All | ASI-05 | Agent Runtime — Execution Rings |
 | `asi05-block-dynamic-eval` | All | ASI-05 | Agent Runtime — Execution Rings |
