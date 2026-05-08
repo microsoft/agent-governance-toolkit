@@ -3,7 +3,7 @@
 A minimal, runnable console app that shows how to add the
 [Microsoft.AgentGovernance](../../README.md) SDK to a .NET application.
 
-In about 30 lines of `Program.cs` it covers:
+In about 30 lines of core logic in `Program.cs` it covers:
 
 - Creating a `GovernanceKernel` with a YAML policy file
 - Subscribing to audit events
