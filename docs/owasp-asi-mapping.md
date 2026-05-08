@@ -31,6 +31,7 @@ Cross-references every rule in the ASI starter policy packs
 | `asi02-block-database-mutation` | general-saas | ASI-02 | Agent SRE — Audit Trail |
 | `asi03-block-privilege-escalation` | All | ASI-03 | AgentMesh — DID Identity & Trust |
 | `asi03-block-credential-access` | All | ASI-03 | AgentMesh — DID Identity & Trust |
+| `financial-asi03-identity-assumption-guardrail` | financial-services | ASI-03 | AgentMesh — Trust Boundary (Arcanum) |
 | `asi03-block-user-impersonation` | general-saas | ASI-03 | AgentMesh — DID Identity & Trust |
 | `asi05-block-code-execution` | All | ASI-05 | Agent Runtime — Execution Rings |
 | `asi05-block-dynamic-eval` | All | ASI-05 | Agent Runtime — Execution Rings |

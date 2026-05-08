@@ -95,6 +95,15 @@ rules:
     priority: 100
     message: "ASI-03: Direct credential access is prohibited — use scoped delegation"
 
+  - name: financial-asi03-identity-assumption-guardrail
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(I\\s+am\\s+now\\s+the\\s+(admin|user|manager|owner)|assume\\s+identity\\s+of|act\\s+as\\s+user\\s+\\d+|inherit\\s+permissions\\s+from)"
+    action: deny
+    priority: 100
+    message: "ASI-03: Identity Abuse — detected attempt to assume unauthorized persona or permissions"
+
   # =========================================================================
   # ASI-05: Unexpected Code Execution
   # Agents trigger remote code execution through tools, interpreters,
