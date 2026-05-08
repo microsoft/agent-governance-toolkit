@@ -1,6 +1,6 @@
 # Tutorial 36: 2-Line Governance with govern()
 
-> **Time**: 10 minutes · **Level**: Beginner · **Prerequisites**: None
+> **Time**: 10 minutes · **Level**: Beginner · **Prerequisites**: `pip install agent-governance-toolkit`
 
 ## What You'll Build
 
@@ -8,7 +8,7 @@ A governed AI tool with full policy enforcement, audit logging, and denial handl
 
 ## The Problem
 
-Traditional AGT integration requires understanding PolicyEngine, TrustManager, AuditLog, and how to wire them:
+Traditional AGT integration requires understanding multiple components and how to wire them:
 
 ```python
 # ❌ The old way (10+ lines)
