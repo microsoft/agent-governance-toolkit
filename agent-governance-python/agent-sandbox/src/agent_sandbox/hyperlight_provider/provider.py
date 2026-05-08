@@ -219,7 +219,12 @@ class _SandboxWorker:
                 continue
             try:
                 result = fn(*args, **kwargs)
-            except BaseException as exc:  # PyO3 panics are BaseException
+            except (SystemExit, KeyboardInterrupt, GeneratorExit):
+                # Never swallow control-flow exceptions — let them
+                # propagate so the interpreter / event loop can shut
+                # down cleanly.
+                raise
+            except BaseException as exc:  # noqa: BLE001 - PyO3 panics surface as BaseException
                 fut.set_exception(exc)
             else:
                 fut.set_result(result)
@@ -689,11 +694,15 @@ class HyperLightSandboxProvider(SandboxProvider):
         self, agent_id: str, session_id: str, snapshot_id: str
     ) -> None:
         """Restore the session's VM memory from a previous snapshot."""
+        # Snapshots are single-use: ``pop`` drops our reference once we
+        # hand the underlying object to the worker, otherwise long-lived
+        # sessions accumulate snapshot objects in ``self._snapshots``
+        # forever (the error message below documents this contract).
         with self._state_lock:
             worker = self._workers.get((agent_id, session_id))
             sandbox = self._sandboxes.get((agent_id, session_id))
-            snap_obj = self._snapshots.get(
-                (agent_id, session_id, snapshot_id)
+            snap_obj = self._snapshots.pop(
+                (agent_id, session_id, snapshot_id), None
             )
         if worker is None or sandbox is None:
             raise RuntimeError(

@@ -134,8 +134,11 @@ def provider():
     for (agent_id, session_id) in list(p._sandboxes):  # type: ignore[attr-defined]
         try:
             p.destroy_session(agent_id, session_id)
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 - cleanup is non-fatal
+            print(
+                "best-effort teardown: failed to destroy session "
+                f"{(agent_id, session_id)}: {exc}"
+            )
 
 
 # ----------------------------------------------------------------------
@@ -452,11 +455,15 @@ def test_guest_hard_abort_does_not_kill_host(provider):
         assert crashed.result.success is False
     finally:
         # The crashed sandbox may or may not destroy cleanly; tolerate
-        # both outcomes.
+        # both outcomes. The real assertion below is host survival,
+        # not teardown success.
         try:
             provider.destroy_session("agent-int", handle.session_id)
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 - tolerated post-abort
+            print(
+                "destroy_session after guest hard-abort failed "
+                f"(tolerated): {exc}"
+            )
 
     # The real assertion: host is alive and a fresh session works.
     h2 = provider.create_session("agent-int", policy=_make_policy())
@@ -700,6 +707,9 @@ async def test_execute_code_async_does_not_panic_on_thread_hop(provider):
             eh = await provider.execute_code_async(
                 "agent-int", handle.session_id, "print('survived')"
             )
+        except (SystemExit, KeyboardInterrupt, GeneratorExit):
+            # Never swallow control-flow exceptions.
+            raise
         except BaseException as exc:  # noqa: BLE001 - regression diagnostic
             pytest.fail(
                 "execute_code_async raised "
@@ -722,7 +732,7 @@ def test_concurrent_sessions_for_same_agent(provider):
     h1 = provider.create_session("agent-int", policy=_make_policy())
     h2 = provider.create_session("agent-int", policy=_make_policy())
     results: dict[str, str] = {}
-    errors: list[BaseException] = []
+    errors: list[Exception] = []
     barrier = threading.Barrier(2)
 
     def runner(session_id: str, marker: str) -> None:
@@ -734,7 +744,7 @@ def test_concurrent_sessions_for_same_agent(provider):
                 f"for _ in range(50): pass\nprint('{marker}')",
             )
             results[marker] = eh.result.stdout
-        except BaseException as exc:  # noqa: BLE001 - diagnostic
+        except Exception as exc:  # noqa: BLE001 - diagnostic
             errors.append(exc)
 
     try:
@@ -765,7 +775,7 @@ def test_session_usable_from_thread_other_than_creator(provider):
 
     handle = provider.create_session("agent-int", policy=_make_policy())
     captured: dict[str, _Any] = {}
-    errors: list[BaseException] = []
+    errors: list[Exception] = []
 
     def offender() -> None:
         try:
@@ -773,7 +783,7 @@ def test_session_usable_from_thread_other_than_creator(provider):
                 "agent-int", handle.session_id, "print('cross-thread-ok')"
             )
             captured["eh"] = eh
-        except BaseException as exc:  # noqa: BLE001 - diagnostic
+        except Exception as exc:  # noqa: BLE001 - diagnostic
             errors.append(exc)
 
     try:
