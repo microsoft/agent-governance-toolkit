@@ -465,4 +465,3 @@ _site/
 
 # Code Security Assessment artifacts
 .security-assessment/
-docs/ADVERSARIAL-AUDIT-REPORT.md
