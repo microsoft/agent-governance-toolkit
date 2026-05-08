@@ -75,7 +75,7 @@ rules:
       value: "(?i)(U3RhcnQgdGhpcyBwcm9jZXNz|0x[a-fA-F0-9]{32,}|eval\\(base64\\.b64decode|__import__\\(\\s*['\"]os['\"]\\s*\\))"
     action: deny
     priority: 100
-    message: "ASI-02: Tool Misuse — detected obfuscated binary payload or base64 command (Arcanum-Sec)"
+    message: "ASI-02: Tool Misuse — detected obfuscated binary payload or base64 command"
 
   # =========================================================================
   # ASI-03: Identity & Privilege Abuse
@@ -102,7 +102,7 @@ rules:
       value: "(?i)(I\\s+am\\s+now\\s+the\\s+(admin|user|manager|owner)|assume\\s+identity\\s+of|act\\s+as\\s+user\\s+\\d+|inherit\\s+permissions\\s+from)"
     action: deny
     priority: 100
-    message: "ASI-03: Identity Abuse — detected attempt to assume unauthorized persona or permissions (Arcanum-Sec)"
+    message: "ASI-03: Identity Abuse — detected attempt to assume unauthorized persona or permissions"
 
   # =========================================================================
   # ASI-04: Supply Chain Risk
@@ -113,7 +113,7 @@ rules:
     condition: {field: action, operator: matches, value: "^(update_config|install_tool|register_mcp|edit_env|add_plugin)$"}
     action: deny
     priority: 100
-    message: "ASI-04: Supply Chain — unauthorized tool registry or config update detected (Arcanum-Sec Registry Poisoning)"
+    message: "ASI-04: Supply Chain — unauthorized tool registry or config update detected"
 
   # =========================================================================
   # ASI-05: Unexpected Code Execution
@@ -140,7 +140,7 @@ rules:
       value: "(?i)(subprocess\\.Popen\\(.*,\\s*shell\\s*=\\s*True|os\\.system\\(|os\\.popen\\(|shlex\\.quote.*\\+.*|pathlib.*\\.joinpath.*\\+.*)"
     action: deny
     priority: 100
-    message: "ASI-05: Code Anti-Pattern Detected — Unsafe execution or path manipulation (Arcanum-Sec SEC-PY-01)"
+    message: "ASI-05: Code Anti-Pattern Detected — Unsafe execution or path manipulation"
 
   # =========================================================================
   # ASI-06: Memory & Context Poisoning
@@ -172,7 +172,7 @@ rules:
       value: "(?i)(coord\\.[a-zA-Z0-9]{8,}|SIG_SYNC_[a-fA-F0-9]{4,}|\\{\\{HANDSHAKE\\}\\}|SECRET_CHANNEL)"
     action: deny
     priority: 100
-    message: "ASI-07: Communication Manipulation — detected hidden channel signaling or secret handshake (Arcanum-Sec)"
+    message: "ASI-07: Communication Manipulation — detected hidden channel signaling or secret handshake"
 
   # =========================================================================
   # ASI-08: Cascading Failures
@@ -202,11 +202,11 @@ rules:
     priority: 100
     message: "PCI DSS: CVV/CVC pattern detected in output"
 
-  - name: financial-block-pii-ssn
+  - name: asi06-block-pii-ssn
     condition: {field: output, operator: matches, value: "\\b\\d{3}-\\d{2}-\\d{4}\\b"}
     action: deny
     priority: 100
-    message: "PCI DSS: Social Security Number pattern detected in output"
+    message: "PII: Social Security Number pattern detected in output"
 
   - name: financial-block-iban
     condition: {field: output, operator: matches, value: "\\b[A-Z]{2}\\d{2}[A-Z0-9]{11,30}\\b"}
@@ -220,33 +220,33 @@ rules:
     priority: 80
     message: "AML: Possible SWIFT/BIC code detected. Subject to SOC 2 (365d+) retention."
 
-  - name: financial-block-credentials-in-output
-    condition: {field: output, operator: matches, value: "(?i)(api[_-]?key|password|secret|token)[:\\s=]+\\S{8,}"}
+  - name: asi03-block-credentials-in-output
+    condition: {field: output, operator: matches, value: "(?i)(api[_-]?key|password|secret|token|bearer)[:\\s=]+\\S{8,}"}
     action: deny
     priority: 100
-    message: "SOX: Credential pattern detected in output"
+    message: "Security: Credential pattern detected in output"
 
   # =========================================================================
   # Business Integrity (Arcanum-Sec)
   # =========================================================================
 
-  - name: financial-integrity-shipping-guardrail
+  - name: asi01-integrity-shipping-guardrail
     condition: 
       field: output
       operator: matches
       value: "(?i)(free\\s+shipping|shipping\\s+(cost|policy|method)|customs\\s+fee|delivery\\s+window|expedite\\s+delivery|waive\\s+shipping)"
     action: deny
     priority: 100
-    message: "ASI-01/02: Business Integrity — unauthorized shipping policy override attempt detected (Arcanum-Sec)"
+    message: "ASI-01/02: Business Integrity — unauthorized shipping policy override attempt detected"
 
-  - name: financial-integrity-fraud-guardrail
+  - name: asi01-integrity-fraud-guardrail
     condition: 
       field: output
       operator: matches
       value: "(?i)(waive\\s+fee|late\\s+fee|restocking\\s+fee|shipping\\s+(cost|policy)|return\\s+window|override\\s+policy|bypass\\s+receipt|secret\\s+(discount|promo)|promo\\s+code|coupon\\s+code|manual\\s+refund|void\\s+payment|goodwill\\s+gesture|loyalty\\s+recovery)"
     action: deny
     priority: 100
-    message: "ASI-01/02: Business Integrity — unauthorized policy override or fraud pretext detected (Arcanum-Sec)"
+    message: "ASI-01/02: Business Integrity — unauthorized policy override or fraud pretext detected"
 
   - name: financial-sox-sod-block
     condition: {field: action, operator: matches, value: "^(approve_)"}

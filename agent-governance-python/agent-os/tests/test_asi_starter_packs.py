@@ -404,7 +404,7 @@ class TestSaaSScenarios:
         """ASI-01: Nested swarm delegation (Russian Doll) must be denied."""
         rules = self._matching_rules(saas_policy, "output", "handoff raw input to sub-agent")
         deny_rules = [r for r in rules if r.action.value == "deny"]
-        assert any(r.name == "saas-asi01-nested-swarm-guardrail" for r in deny_rules)
+        assert any(r.name == "asi01-nested-swarm-guardrail" for r in deny_rules)
 
     def test_privilege_escalation_is_denied(self, saas_policy):
         """ASI-03: Privilege escalation must be denied."""
@@ -441,7 +441,7 @@ class TestSaaSScenarios:
         # Simulated field for tool_call_count is 30 (threshold is 25)
         matched = []
         for rule in saas_policy.rules:
-            if rule.name == "saas-asi08-swarm-heat-guardrail":
+            if rule.name == "asi08-swarm-heat-guardrail":
                 matched.append(rule)
         assert matched, "Expected swarm heat guardrail to exist in SaaS pack"
 

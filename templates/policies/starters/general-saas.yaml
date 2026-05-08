@@ -51,14 +51,14 @@ rules:
     priority: 100
     message: "ASI-01: Prompt injection — jailbreak/DAN mode attempt detected"
 
-  - name: saas-asi01-nested-swarm-guardrail
+  - name: asi01-nested-swarm-guardrail
     condition: 
       field: output
       operator: matches
       value: "(?i)(delegate\\s+to\\s+agent|spawn\\s+sub-agent|swarm\\s+mode|handoff\\s+raw\\s+input|pass-through\\s*:\\s*true)"
     action: deny
     priority: 100
-    message: "ASI-01: Goal Hijack — detected attempt to create nested swarm delegation (Arcanum-Sec Russian Doll)"
+    message: "ASI-01: Goal Hijack — detected attempt to create nested swarm delegation"
 
   # =========================================================================
   # ASI-02: Tool Misuse & Exploitation
@@ -122,7 +122,7 @@ rules:
     condition: {field: action, operator: matches, value: "^(update_config|install_tool|register_mcp|edit_env|add_plugin)$"}
     action: deny
     priority: 100
-    message: "ASI-04: Supply Chain — unauthorized tool registry or config update detected (Arcanum-Sec Registry Poisoning)"
+    message: "ASI-04: Supply Chain — unauthorized tool registry or config update detected"
 
   # =========================================================================
   # ASI-05: Unexpected Code Execution
@@ -146,10 +146,10 @@ rules:
     condition: 
       field: output
       operator: matches
-      value: "(?i)(subprocess\\.Popen\\(.*,\\s*shell\\s*=\\s*True|os\\.system\\(|os\\.popen\\(|shlex\\.quote.*\\+.*|pathlib.*\\.joinpath.*\\+.*)"
+      value: "(?i)(subprocess\\.Popen|os\\.system|eval\\(|exec\\(|__import__|\\.spawn|\\.fork)"
     action: deny
     priority: 100
-    message: "ASI-05: Code Anti-Pattern Detected — Unsafe execution or path manipulation (Arcanum-Sec SEC-PY-01)"
+    message: "ASI-05: Unsafe Code Execution — detected code anti-pattern in agent output"
 
   - name: asi05-block-ssh
     condition: {field: action, operator: eq, value: ssh_connect}
@@ -187,7 +187,7 @@ rules:
       value: "(?i)(coord\\.[a-zA-Z0-9]{8,}|SIG_SYNC_[a-fA-F0-9]{4,}|\\{\\{HANDSHAKE\\}\\}|SECRET_CHANNEL)"
     action: deny
     priority: 100
-    message: "ASI-07: Communication Manipulation — detected hidden channel signaling or secret handshake (Arcanum-Sec)"
+    message: "ASI-07: Communication Manipulation — detected hidden channel signaling or secret handshake"
 
   # =========================================================================
   # ASI-08: Cascading Failures
@@ -201,17 +201,17 @@ rules:
     priority: 85
     message: "ASI-08: Session tool call limit exceeded — circuit breaker engaged"
 
-  - name: saas-asi08-swarm-heat-guardrail
+  - name: asi08-swarm-heat-guardrail
     condition: {field: tool_call_depth, operator: gt, value: 5}
     action: audit
     priority: 90
-    message: "ASI-08: Cascading Failure — swarm heat threshold reached; coordination depth auditing engaged (Arcanum-Sec)"
+    message: "ASI-08: Cascading Failure — swarm heat threshold reached; coordination depth auditing engaged"
 
   # =========================================================================
   # General SaaS Domain: PII / Credential Protection / GDPR
   # =========================================================================
 
-  - name: saas-block-pii-ssn
+  - name: asi06-block-pii-ssn
     condition: {field: output, operator: matches, value: "\\b\\d{3}-\\d{2}-\\d{4}\\b"}
     action: deny
     priority: 100
@@ -223,7 +223,7 @@ rules:
     priority: 90
     message: "PII: Bulk email address pattern detected — possible data exfiltration"
 
-  - name: saas-block-credentials-in-output
+  - name: asi03-block-credentials-in-output
     condition: {field: output, operator: matches, value: "(?i)(api[_-]?key|password|secret|token|bearer)[:\\s=]+\\S{8,}"}
     action: deny
     priority: 100
@@ -253,26 +253,26 @@ rules:
     message: "GDPR: Write operations audit-logged according to GDPR data retention schedules."
 
   # =========================================================================
-  # Business Integrity (Arcanum-Sec)
+  # Business Integrity
   # =========================================================================
 
-  - name: saas-integrity-shipping-guardrail
+  - name: asi01-integrity-shipping-guardrail
     condition: 
       field: output
       operator: matches
       value: "(?i)(free\\s+shipping|shipping\\s+(cost|policy|method)|customs\\s+fee|delivery\\s+window|expedite\\s+delivery|waive\\s+shipping)"
     action: deny
     priority: 100
-    message: "ASI-01/02: Business Integrity — unauthorized shipping policy override attempt detected (Arcanum-Sec)"
+    message: "ASI-01/02: Business Integrity — unauthorized shipping policy override attempt detected"
 
-  - name: saas-integrity-fraud-guardrail
+  - name: asi01-integrity-fraud-guardrail
     condition: 
       field: output
       operator: matches
       value: "(?i)(waive\\s+fee|late\\s+fee|restocking\\s+fee|shipping\\s+(cost|policy)|return\\s+window|override\\s+policy|bypass\\s+receipt|secret\\s+(discount|promo)|promo\\s+code|coupon\\s+code|manual\\s+refund|void\\s+payment|goodwill\\s+gesture|loyalty\\s+recovery)"
     action: deny
     priority: 100
-    message: "ASI-01/02: Business Integrity — unauthorized policy override or fraud pretext detected (Arcanum-Sec)"
+    message: "ASI-01/02: Business Integrity — unauthorized policy override or fraud pretext detected"
 
 defaults:
   action: deny

@@ -51,7 +51,7 @@ rules:
       value: "(?i)((synthesis|recipe|formula|procedure|precursor|chemical).* (Mustard\\s+Gas|Sarin|VX|Cyanide|Anthrax|Pathogen|Toxin)|(academic|educational|hypothetical|research|fictional)\\s+inquiry\\s+into\\s+(harmful|lethal|toxic|chemical)\\s+agents)"
     action: deny
     priority: 100
-    message: "ASI-01: Goal Hijack — detected attempt to solicit high-risk synthesis via persona framing (Arcanum-Sec)"
+    message: "ASI-01: Goal Hijack — detected attempt to solicit high-risk synthesis via persona framing"
 
   # =========================================================================
   # ASI-02: Tool Misuse & Exploitation
@@ -103,7 +103,7 @@ rules:
     condition: {field: action, operator: matches, value: "^(update_config|install_tool|register_mcp|edit_env|add_plugin)$"}
     action: deny
     priority: 100
-    message: "ASI-04: Supply Chain — unauthorized tool registry or config update detected (Arcanum-Sec Registry Poisoning)"
+    message: "ASI-04: Supply Chain — unauthorized tool registry or config update detected"
 
   # =========================================================================
   # ASI-05: Unexpected Code Execution
@@ -130,7 +130,7 @@ rules:
       value: "(?i)(subprocess\\.Popen\\(.*,\\s*shell\\s*=\\s*True|os\\.system\\(|os\\.popen\\(|shlex\\.quote.*\\+.*|pathlib.*\\.joinpath.*\\+.*)"
     action: deny
     priority: 100
-    message: "ASI-05: Code Anti-Pattern Detected — Unsafe execution or path manipulation (Arcanum-Sec SEC-PY-01)"
+    message: "ASI-05: Code Anti-Pattern Detected — Unsafe execution or path manipulation"
 
   # =========================================================================
   # ASI-06: Memory & Context Poisoning
@@ -162,7 +162,7 @@ rules:
       value: "(?i)(coord\\.[a-zA-Z0-9]{8,}|SIG_SYNC_[a-fA-F0-9]{4,}|\\{\\{HANDSHAKE\\}\\}|SECRET_CHANNEL)"
     action: deny
     priority: 100
-    message: "ASI-07: Communication Manipulation — detected hidden channel signaling or secret handshake (Arcanum-Sec)"
+    message: "ASI-07: Communication Manipulation — detected hidden channel signaling or secret handshake"
 
   # =========================================================================
   # ASI-08: Cascading Failures
@@ -180,11 +180,11 @@ rules:
   # Healthcare Domain: HIPAA / PHI Protection
   # =========================================================================
 
-  - name: healthcare-block-phi-ssn
+  - name: asi06-block-pii-ssn
     condition: {field: output, operator: matches, value: "\\b\\d{3}-\\d{2}-\\d{4}\\b"}
     action: deny
     priority: 100
-    message: "HIPAA: Social Security Number pattern detected in output"
+    message: "PII: Social Security Number pattern detected in output"
 
   - name: healthcare-block-phi-mrn
     condition: {field: output, operator: matches, value: "(?i)MRN[:\\s]*\\d{6,}"}
@@ -220,23 +220,23 @@ rules:
   # Business Integrity (Arcanum-Sec)
   # =========================================================================
 
-  - name: healthcare-integrity-shipping-guardrail
+  - name: asi01-integrity-shipping-guardrail
     condition: 
       field: output
       operator: matches
       value: "(?i)(free\\s+shipping|shipping\\s+(cost|policy|method)|customs\\s+fee|delivery\\s+window|expedite\\s+delivery|waive\\s+shipping)"
     action: deny
     priority: 100
-    message: "ASI-01/02: Business Integrity — unauthorized shipping policy override attempt detected (Arcanum-Sec)"
+    message: "ASI-01/02: Business Integrity — unauthorized shipping policy override attempt detected"
 
-  - name: healthcare-integrity-fraud-guardrail
+  - name: asi01-integrity-fraud-guardrail
     condition: 
       field: output
       operator: matches
       value: "(?i)(waive\\s+fee|late\\s+fee|restocking\\s+fee|shipping\\s+(cost|policy)|return\\s+window|override\\s+policy|bypass\\s+receipt|secret\\s+(discount|promo)|promo\\s+code|coupon\\s+code|manual\\s+refund|void\\s+payment|goodwill\\s+gesture|loyalty\\s+recovery)"
     action: deny
     priority: 100
-    message: "ASI-01/02: Business Integrity — unauthorized policy override or fraud pretext detected (Arcanum-Sec)"
+    message: "ASI-01/02: Business Integrity — unauthorized policy override or fraud pretext detected"
 
   - name: healthcare-minimum-necessary-read
     condition: {field: action, operator: matches, value: "^(read_summary|lookup_patient)$"}
