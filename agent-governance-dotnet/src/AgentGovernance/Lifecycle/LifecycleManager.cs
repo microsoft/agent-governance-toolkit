@@ -140,7 +140,10 @@ public class LifecycleManager
     /// </summary>
     public bool CanTransition(LifecycleState toState)
     {
-        return ValidTransitions.TryGetValue(State, out var targets) && targets.Contains(toState);
+        lock (_lock)
+        {
+            return ValidTransitions.TryGetValue(State, out var targets) && targets.Contains(toState);
+        }
     }
 
     /// <summary>
@@ -153,23 +156,21 @@ public class LifecycleManager
     /// <exception cref="InvalidOperationException">Thrown when the transition is not allowed.</exception>
     public LifecycleEvent Transition(LifecycleState toState, string reason, string initiatedBy)
     {
-        if (!CanTransition(toState))
-        {
-            throw new InvalidOperationException(
-                $"Cannot transition from {State} to {toState}.");
-        }
-
-        var fromState = State;
-        State = toState;
-
-        var evt = new LifecycleEvent(_agentId, fromState, toState, reason, DateTimeOffset.UtcNow, initiatedBy);
-
         lock (_lock)
         {
-            _events.Add(evt);
-        }
+            if (!ValidTransitions.TryGetValue(State, out var targets) || !targets.Contains(toState))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot transition from {State} to {toState}.");
+            }
 
-        return evt;
+            var fromState = State;
+            State = toState;
+
+            var evt = new LifecycleEvent(_agentId, fromState, toState, reason, DateTimeOffset.UtcNow, initiatedBy);
+            _events.Add(evt);
+            return evt;
+        }
     }
 
     // ── Convenience methods ──────────────────────────────────────
