@@ -326,7 +326,24 @@ This toolkit provides **application-level governance** (Python middleware), not 
 
 - [Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
-**Using AGT?** Add your organization to [ADOPTERS.md](docs/ADOPTERS.md) — it helps the project gain momentum and helps others discover real-world use cases.
+**Using AGT?** Add your organization to [ADOPTERS.md](docs/ADOPTERS.md), it helps the project gain momentum and helps others discover real-world use cases.
+
+## Governance & Standards
+
+AGT follows open governance practices aligned with foundation incubation requirements:
+
+| Document | Purpose |
+|----------|---------|
+| [GOVERNANCE.md](GOVERNANCE.md) | Decision-making, roles, contributor ladder |
+| [CHARTER.md](CHARTER.md) | Technical charter (LF Projects format) |
+| [MAINTAINERS.md](MAINTAINERS.md) | 6 maintainers from 4 organizations |
+| [RELEASE.md](RELEASE.md) | Release process, versioning, registries |
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting and response SLAs |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Microsoft Open Source Code of Conduct |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | DCO, attribution policy, AI-assisted contribution rules |
+| [ADOPTERS.md](docs/ADOPTERS.md) | 9 adopters across production, pilot, and research |
+
+**Standards alignment:** [OWASP Agentic Top 10](docs/OWASP-COMPLIANCE.md) (10/10) · [NIST AI RMF](docs/compliance/nist-ai-rmf-alignment.md) · [EU AI Act](docs/compliance/) · [OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085) (100%)
 
 ## Important Notes
 
