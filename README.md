@@ -15,8 +15,14 @@
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/agent-governance-toolkit?label=PyPI%20downloads)](https://pypi.org/project/agent-governance-toolkit/)
+[![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance?label=npm)](https://www.npmjs.com/package/@microsoft/agent-governance)
+[![NuGet](https://img.shields.io/nuget/v/Microsoft.AgentGovernance?label=NuGet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
+[![GitHub stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=flat&label=Stars)](https://github.com/microsoft/agent-governance-toolkit)
+[![Contributors](https://img.shields.io/github/contributors/microsoft/agent-governance-toolkit?label=Contributors)](https://github.com/microsoft/agent-governance-toolkit/graphs/contributors)
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/OWASP-COMPLIANCE.md)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085/badge)](https://www.bestpractices.dev/projects/12085)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/microsoft/agent-governance-toolkit)
 
 > [!IMPORTANT]
