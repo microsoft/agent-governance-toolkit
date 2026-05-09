@@ -98,8 +98,9 @@ class GovernedQueryEngine:
         """Govern and execute a query call.
 
         Runs the full governance pipeline (collection check, rate limit,
-        content scan, audit) then delegates to the underlying engine's
-        ``.query()`` method.
+        content scan, audit) through the governor's ``_execute`` path —
+        identical to how ``retrieve()`` works — then reconstructs the
+        original response with only the clean, governance-approved nodes.
 
         Args:
             query: The query string.
@@ -108,7 +109,8 @@ class GovernedQueryEngine:
 
         Returns:
             The query response from the underlying engine, with any
-            blocked chunks removed from the source nodes.
+            blocked chunks removed from the source nodes before the
+            response reaches the caller.
 
         Raises:
             CollectionDeniedError: Collection is not permitted for this agent.
@@ -117,40 +119,20 @@ class GovernedQueryEngine:
                 when *all* chunks are blocked — partial blocks are silently
                 filtered and logged).
         """
-        # 1. Collection access control + rate limiting (via governor)
-        self._governor._check_collection(self._collection)
-        self._governor._check_rate()
-
-        # 2. Execute query
-        response = self._query_engine.query(query, **kwargs)
-
-        # 3. Extract source nodes as documents for content scanning
-        docs = self._extract_nodes(response)
-
-        # 4. Content scanning
-        clean_docs, num_blocked = self._governor._scan_chunks(docs)
-
-        # 5. Audit
-        try:
-            self._governor._audit(
-                collection=self._collection,
-                query=query,
-                num_retrieved=len(docs),
-                num_blocked=num_blocked,
-                decision="allowed",
-            )
-        except Exception:  # noqa: BLE001
-            logger.warning(
-                "Audit logging failed for agent=%s collection=%s — retrieval succeeded",
-                self._governor.agent_id,
-                self._collection,
-            )
-
-        # 6. Rebuild response with clean nodes only
-        if num_blocked > 0:
+        adapter = _LlamaQueryEngineAdapter(self._query_engine)
+        clean_docs = self._governor._execute(
+            retriever=adapter,
+            collection=self._collection,
+            query=query,
+            kwargs=kwargs,
+        )
+        # Reconstruct response with only governance-approved nodes.
+        # Always rebuild so source_nodes reflects what passed governance,
+        # not the raw engine output.
+        response = adapter.last_response
+        if response is not None:
             response = self._rebuild_response(response, clean_docs)
-
-        return response
+        return response if response is not None else clean_docs
 
     def retrieve(self, query: str, **kwargs: Any) -> List[Any]:
         """Govern and execute a retrieve call.
@@ -177,15 +159,6 @@ class GovernedQueryEngine:
             query=query,
             kwargs=kwargs,
         )
-
-    @staticmethod
-    def _extract_nodes(response: Any) -> List[Any]:
-        """Extract source nodes from a LlamaIndex response object."""
-        if hasattr(response, "source_nodes"):
-            return list(response.source_nodes)
-        if isinstance(response, list):
-            return response
-        return []
 
     @staticmethod
     def _rebuild_response(response: Any, clean_nodes: List[Any]) -> Any:
@@ -226,3 +199,30 @@ class _LlamaRetrieverAdapter:
             f"LlamaIndex retriever {type(self._retriever).__name__!r} "
             "has no .retrieve() method"
         )
+
+
+class _LlamaQueryEngineAdapter:
+    """Internal adapter that translates LlamaIndex query engine interface
+    to the ``invoke()`` interface expected by
+    :meth:`~agent_rag_governance.governor.RAGGovernor._retrieve`.
+
+    Captures the full response object and exposes source nodes as a flat
+    list so the governor's ``_execute`` pipeline can scan and redact them
+    *before* the response reaches the caller.
+
+    Not part of the public API.
+    """
+
+    def __init__(self, query_engine: Any) -> None:
+        self._query_engine = query_engine
+        self.last_response: Any = None
+
+    def invoke(self, query: str, **kwargs: Any) -> List[Any]:
+        """Execute the underlying query and return source nodes for scanning."""
+        self.last_response = self._query_engine.query(query, **kwargs)
+        # Return source nodes so governor._execute can scan them
+        if hasattr(self.last_response, "source_nodes"):
+            return list(self.last_response.source_nodes)
+        if isinstance(self.last_response, list):
+            return self.last_response
+        return []
