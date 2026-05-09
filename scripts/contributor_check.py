@@ -722,19 +722,42 @@ def check_spray_pattern(
     return signals
 
 
+def _is_established_repo(repo: dict) -> bool:
+    """Return True if a repo has enough traction to be considered established."""
+    stars = repo.get("stargazers_count", 0)
+    if stars >= 50:
+        return True
+    created = repo.get("created_at", "")
+    if created:
+        try:
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(
+                created.replace("Z", "+00:00")
+            )).days
+            if age >= 365 and stars >= 10:
+                return True
+        except (ValueError, TypeError):
+            pass
+    return False
+
+
 def _check_self_promotion(
     username: str,
     issues: list[dict],
     user_repos: list[dict] | None = None,
 ) -> list[Signal]:
-    """Detect issues that promote the author's own repos across other orgs."""
+    """Detect issues that promote the author's own repos across other orgs.
+
+    Distinguishes between thin-credibility spam and legitimate cross-ecosystem
+    references to established projects (>50 stars, or >1yr with >10 stars).
+    """
     signals: list[Signal] = []
     if not user_repos:
         return signals
 
-    # Build lookup of user's non-fork repo identifiers
+    # Build lookup of user's non-fork repo identifiers and quality
     own_repo_names: set[str] = set()
     own_repo_full: set[str] = set()
+    repo_quality: dict[str, bool] = {}  # full_name -> is_established
     for repo in user_repos:
         if repo.get("fork"):
             continue
@@ -742,6 +765,7 @@ def _check_self_promotion(
         full = repo.get("full_name", f"{username}/{name}").lower()
         own_repo_names.add(name)
         own_repo_full.add(full)
+        repo_quality[full] = _is_established_repo(repo)
 
     if not own_repo_names:
         return signals
@@ -749,6 +773,7 @@ def _check_self_promotion(
     username_lower = username.lower()
     promo_orgs: set[str] = set()
     promo_issues = 0
+    promoted_repos: set[str] = set()
 
     for issue in issues:
         repo_url = issue.get("repository_url", "")
@@ -763,42 +788,104 @@ def _check_self_promotion(
         text = f"{title} {body}"
 
         # Strong match: full_name or GitHub URL
-        has_promo = False
+        matched_repo: str | None = None
         for full in own_repo_full:
             if full in text or f"github.com/{full}" in text:
-                has_promo = True
+                matched_repo = full
                 break
 
-        if not has_promo:
-            # Weaker match: repo name as a whole word, but only for
-            # distinctive names (>= 4 chars, not generic)
-            generic = {"app", "api", "cli", "web", "bot", "docs", "test", "demo", "core", "data", "main"}
+        if not matched_repo:
+            # Weaker match: repo name in a URL or owner/repo format only.
+            # Plain substring matching causes false positives for names that
+            # are common domain terms (e.g., "agent-governance" matches any
+            # governance discussion).
             for name in own_repo_names:
-                if len(name) >= 4 and name not in generic and name in text:
-                    has_promo = True
+                if len(name) < 6:
+                    continue
+                url_form = f"github.com/{username_lower}/{name}"
+                slash_form = f"{username_lower}/{name}"
+                if url_form in text or slash_form in text:
+                    matched_repo = f"{username_lower}/{name}"
                     break
 
-        if has_promo:
+        if matched_repo:
             promo_issues += 1
             promo_orgs.add(issue_org)
+            promoted_repos.add(matched_repo)
 
-    if promo_issues >= 5 and len(promo_orgs) >= 3:
+    if promo_issues < 3 or len(promo_orgs) < 2:
+        return signals
+
+    # Split promotions by repo quality: only thin-repo promotions count
+    # as spam. Referencing established projects is legitimate.
+    thin_repos = {r for r in promoted_repos if not repo_quality.get(r, False)}
+    established_refs = {r for r in promoted_repos if repo_quality.get(r, False)}
+
+    # Count only issues that reference thin repos toward the spam score
+    if thin_repos:
+        # Re-count promotions that involve thin repos only
+        thin_promo_issues = 0
+        thin_promo_orgs: set[str] = set()
+
+        for issue in issues:
+            repo_url = issue.get("repository_url", "")
+            issue_org = repo_url.replace("https://api.github.com/repos/", "").split("/")[0].lower()
+            if issue_org == username_lower:
+                continue
+
+            body = (issue.get("body") or "").lower()
+            title = (issue.get("title") or "").lower()
+            text = f"{title} {body}"
+
+            mentions_thin = False
+            for full in thin_repos:
+                if full in text or f"github.com/{full}" in text:
+                    mentions_thin = True
+                    break
+            if not mentions_thin:
+                for r in thin_repos:
+                    name = r.split("/")[-1]
+                    owner = r.split("/")[0] if "/" in r else username_lower
+                    url_form = f"github.com/{owner}/{name}"
+                    if len(name) >= 6 and (url_form in text or r in text):
+                        mentions_thin = True
+                        break
+
+            if mentions_thin:
+                thin_promo_issues += 1
+                thin_promo_orgs.add(issue_org)
+
+        if thin_promo_issues >= 5 and len(thin_promo_orgs) >= 3:
+            signals.append(Signal(
+                name="self_promotion_spray",
+                severity="HIGH",
+                detail=(
+                    f"{thin_promo_issues} issues promoting thin repos across "
+                    f"{len(thin_promo_orgs)} orgs ({', '.join(sorted(thin_promo_orgs)[:5])})"
+                ),
+                value=thin_promo_issues,
+            ))
+        elif thin_promo_issues >= 3 and len(thin_promo_orgs) >= 2:
+            signals.append(Signal(
+                name="self_promotion_spray",
+                severity="MEDIUM",
+                detail=(
+                    f"{thin_promo_issues} issues promoting thin repos across "
+                    f"{len(thin_promo_orgs)} orgs"
+                ),
+                value=thin_promo_issues,
+            ))
+
+    # Log established-project cross-references at LOW severity for
+    # transparency (does not affect risk scoring)
+    if established_refs:
         signals.append(Signal(
-            name="self_promotion_spray",
-            severity="HIGH",
+            name="established_project_reference",
+            severity="LOW",
             detail=(
-                f"{promo_issues} issues promoting own repos across "
+                f"{promo_issues} cross-ecosystem references to established repos "
+                f"({len(established_refs)} repos with significant traction) across "
                 f"{len(promo_orgs)} orgs ({', '.join(sorted(promo_orgs)[:5])})"
-            ),
-            value=promo_issues,
-        ))
-    elif promo_issues >= 3 and len(promo_orgs) >= 2:
-        signals.append(Signal(
-            name="self_promotion_spray",
-            severity="MEDIUM",
-            detail=(
-                f"{promo_issues} issues promoting own repos across "
-                f"{len(promo_orgs)} orgs"
             ),
             value=promo_issues,
         ))
@@ -943,6 +1030,7 @@ _DAMPEN_RULES: dict[str, tuple[str, int | None]] = {
     "recent_repo_burst": ("LOW", 30),       # >30 repos in 90d stays HIGH
     "cross_repo_spray":  ("MEDIUM", 8),     # >8 repos in 7d stays HIGH
     "cross_repo_spread": ("LOW", None),     # always safe to lower
+    "awesome_fork_burst": ("MEDIUM", 6),    # >6 awesome forks stays HIGH
 }
 
 
