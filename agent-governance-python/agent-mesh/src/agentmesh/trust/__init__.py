@@ -12,6 +12,7 @@ from .endorsement import Endorsement, EndorsementRegistry, EndorsementType
 from .handshake import TrustHandshake, HandshakeResult
 from .capability import CapabilityScope, CapabilityGrant, CapabilityRegistry
 from .cards import TrustedAgentCard, CardRegistry
+from .levels import trust_level_for_score
 
 __all__ = [
     "TrustBridge",
@@ -26,4 +27,5 @@ __all__ = [
     "CapabilityRegistry",
     "TrustedAgentCard",
     "CardRegistry",
+    "trust_level_for_score",
 ]
