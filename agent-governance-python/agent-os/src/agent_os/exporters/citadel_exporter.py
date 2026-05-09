@@ -323,7 +323,6 @@ class CitadelAuditExporter:
             async with self._eventhub_producer:
                 batch = await self._eventhub_producer.create_batch()
                 sent = 0
-                overflow: list[GovernanceEvent] = []
 
                 for event in events:
                     event_data = EventData(event.to_json())
@@ -347,10 +346,13 @@ class CitadelAuditExporter:
 
                 # Reset producer for next use
                 self._eventhub_producer = None
-                return sent, overflow
+                return sent, []
 
         except Exception as e:
-            logger.error("Failed to send events to Event Hub: %s", e)
+            logger.error(
+                "Failed to send events to Event Hub (%s): %s",
+                type(e).__name__, e,
+            )
             self._eventhub_producer = None
             return 0, events
 
@@ -397,7 +399,10 @@ class CitadelAuditExporter:
                     pass  # Span creation is the export mechanism
 
         except Exception as e:
-            logger.error("Failed to send events to Application Insights: %s", e)
+            logger.error(
+                "Failed to send events to Application Insights (%s): %s",
+                type(e).__name__, e,
+            )
 
     async def close(self) -> None:
         """Flush remaining events and close connections."""
