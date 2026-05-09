@@ -73,6 +73,8 @@ _LAZY_ADAPTER_MAP: dict[str, tuple[str, str]] = {
     "AnthropicKernel": (".anthropic_adapter", "AnthropicKernel"),
     "GovernedAnthropicClient": (".anthropic_adapter", "GovernedAnthropicClient"),
     "AnthropicGovernanceHook": (".anthropic_adapter", "GovernanceMessageHook"),
+    "BedrockKernel": (".bedrock_adapter", "BedrockKernel"),
+    "GovernedBedrockClient": (".bedrock_adapter", "GovernedBedrockClient"),
     "AutoGenKernel": (".autogen_adapter", "AutoGenKernel"),
     "AutoGenGovernanceHandler": (".autogen_adapter", "GovernanceInterventionHandler"),
     "CrewAIKernel": (".crewai_adapter", "CrewAIKernel"),
@@ -198,6 +200,9 @@ __all__ = [
     "AnthropicKernel",
     "GovernedAnthropicClient",
     "AnthropicGovernanceHook",
+    # AWS Bedrock
+    "BedrockKernel",
+    "GovernedBedrockClient",
     "GeminiKernel",
     "GovernedGeminiModel",
     # Mistral AI
