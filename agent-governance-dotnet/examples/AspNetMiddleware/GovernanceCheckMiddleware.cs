@@ -35,9 +35,9 @@ public sealed class GovernanceCheckMiddleware
         GovernanceKernel kernel,
         ILogger<GovernanceCheckMiddleware> logger)
     {
-        _next = next;
-        _kernel = kernel;
-        _logger = logger;
+        _next = next ?? throw new ArgumentNullException(nameof(next));
+        _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task InvokeAsync(HttpContext context)
