@@ -2,9 +2,14 @@
 
 > **Package:** `agent-sre` · **Time:** 15 minutes · **Level:** Intermediate
 
-AI agents spend real money on every LLM call, tool invocation, and external API.
-This tutorial shows how to enforce per-agent and organization-wide budgets with
-tiered alerts, auto-throttling, and kill switches.
+---
+
+## What You'll Learn
+
+- Setting per-agent and organization-wide spending limits
+- Tiered alerts (warn at 80%, throttle at 90%, kill at 100%)
+- Auto-throttling agents approaching budget limits
+- Kill-switch integration for runaway cost scenarios
 
 **Prerequisites:** Install AGT with the SRE package:
 

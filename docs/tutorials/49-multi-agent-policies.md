@@ -2,10 +2,14 @@
 
 > **Package:** `agentmesh-platform` · **Time:** 20 minutes · **Level:** Advanced
 
-When multiple agents operate together, individual agent policies are not enough.
-A single transfer is fine, but five agents each transferring funds in the same
-minute is a coordinated attack. This tutorial shows how to enforce collective
-constraints across all agents in a mesh.
+---
+
+## What You'll Learn
+
+- Enforcing aggregate rate limits and concurrent caps across agent meshes
+- Detecting coordinated multi-agent activity with collective policies
+- Alert-only monitoring mode for observing before enforcing
+- Combining per-agent and collective policy rules
 
 **Prerequisites:** Install AGT with the mesh package:
 
