@@ -1,5 +1,7 @@
 # Tutorial 48: Intent-Based Authorization
 
+> **Package:** `agent-os-kernel` · **Time:** 20 minutes · **Level:** Advanced
+
 Agents say what they plan to do, the system approves the plan, and then
 verifies that the agent stuck to it. This tutorial walks through the full
 intent lifecycle: **declare, approve, execute, verify**.

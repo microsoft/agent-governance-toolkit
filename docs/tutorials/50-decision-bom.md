@@ -1,5 +1,7 @@
 # Tutorial 50: Decision Bill of Materials (Decision BOM)
 
+> **Package:** `agentmesh-platform` · **Time:** 15 minutes · **Level:** Advanced
+
 Every governance decision has inputs: who requested it, what policies applied,
 what the trust score was, what trace it belongs to. The Decision BOM
 reconstructs all of these factors on demand, without requiring agents to

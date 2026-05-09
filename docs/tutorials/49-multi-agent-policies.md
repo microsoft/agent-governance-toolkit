@@ -1,5 +1,7 @@
 # Tutorial 49: Multi-Agent Collective Policies
 
+> **Package:** `agentmesh-platform` · **Time:** 20 minutes · **Level:** Advanced
+
 When multiple agents operate together, individual agent policies are not enough.
 A single transfer is fine, but five agents each transferring funds in the same
 minute is a coordinated attack. This tutorial shows how to enforce collective

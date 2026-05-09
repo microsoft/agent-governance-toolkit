@@ -1,5 +1,7 @@
 # Tutorial 47: Red-Team Testing Your AI Agents
 
+> **Package:** `agent-governance-toolkit[full]` · **Time:** 20 minutes · **Level:** Intermediate
+
 This tutorial shows how to use AGT's built-in red-team CLI to assess your agent's security posture before deployment. You'll scan system prompts for defense gaps and run adversarial attack playbooks against governance controls.
 
 **Prerequisites:** Install AGT with the full extras:

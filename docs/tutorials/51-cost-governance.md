@@ -1,5 +1,7 @@
 # Tutorial 51: Cost Governance and Budget Enforcement
 
+> **Package:** `agent-sre` · **Time:** 15 minutes · **Level:** Intermediate
+
 AI agents spend real money on every LLM call, tool invocation, and external API.
 This tutorial shows how to enforce per-agent and organization-wide budgets with
 tiered alerts, auto-throttling, and kill switches.
