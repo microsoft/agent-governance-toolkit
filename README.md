@@ -15,8 +15,8 @@
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![PyPI Downloads](https://img.shields.io/pypi/dm/agent-governance-toolkit?label=PyPI%20downloads)](https://pypi.org/project/agent-governance-toolkit/)
-[![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance?label=npm)](https://www.npmjs.com/package/@microsoft/agent-governance)
+[![PyPI version](https://img.shields.io/pypi/v/agent-governance-toolkit?label=PyPI)](https://pypi.org/project/agent-governance-toolkit/)
+[![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-sdk?label=npm)](https://www.npmjs.com/package/@microsoft/agent-governance-sdk)
 [![NuGet](https://img.shields.io/nuget/v/Microsoft.AgentGovernance?label=NuGet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
 [![GitHub stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=flat&label=Stars)](https://github.com/microsoft/agent-governance-toolkit)
 [![Contributors](https://img.shields.io/github/contributors/microsoft/agent-governance-toolkit?label=Contributors)](https://github.com/microsoft/agent-governance-toolkit/graphs/contributors)
@@ -30,7 +30,7 @@
 > [Open a GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) for feedback.
 
 > [!TIP]
-> **v3.4.0 is out!** False-positive fix for contributor reputation check on established accounts, CI lint fixes, and README cleanup. [Changelog →](CHANGELOG.md)
+> **v3.5.0 is out!** Latest stable release with Bedrock adapter, prompt defense improvements, and governance hardening. [Changelog →](CHANGELOG.md)
 
 **Runtime governance for AI agents** -- deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents. Covers all **10 OWASP Agentic risks** with **13,000+ tests**.
 
