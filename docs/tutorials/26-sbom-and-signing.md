@@ -13,7 +13,7 @@ integrating everything into CI/CD pipelines.
 
 ---
 
-## What you'll learn
+## What You'll Learn
 
 | Section | Topic |
 |---------|-------|

@@ -14,7 +14,7 @@ budget enforcement with the "scale by subtraction" philosophy — 90% lookup,
 
 ---
 
-## What you'll learn
+## What You'll Learn
 
 | Section | Topic |
 |---------|-------|
