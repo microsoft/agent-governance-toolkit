@@ -26,6 +26,7 @@ type AuditEntry struct {
 type AuditLogger struct {
 	mu         sync.Mutex
 	entries    []*AuditEntry
+	seamHash   string
 	MaxEntries int
 }
 
@@ -35,16 +36,20 @@ func NewAuditLogger() *AuditLogger {
 }
 
 // Log appends a new entry to the audit chain.
-// When MaxEntries is set and exceeded, the oldest entries are evicted.
+// When MaxEntries is set and exceeded, the oldest entries are evicted and
+// their final hash is retained as a seam so Verify() can re-anchor the
+// surviving chain.
 func (al *AuditLogger) Log(agentID, action string, decision PolicyDecision) *AuditEntry {
 	al.mu.Lock()
 	defer al.mu.Unlock()
 
 	if al.MaxEntries > 0 && len(al.entries) >= al.MaxEntries {
-		al.entries = al.entries[len(al.entries)-al.MaxEntries+1:]
+		sliceFrom := len(al.entries) - al.MaxEntries + 1
+		al.seamHash = al.entries[sliceFrom-1].Hash
+		al.entries = al.entries[sliceFrom:]
 	}
 
-	prevHash := ""
+	prevHash := al.seamHash
 	if len(al.entries) > 0 {
 		prevHash = al.entries[len(al.entries)-1].Hash
 	}
@@ -61,7 +66,9 @@ func (al *AuditLogger) Log(agentID, action string, decision PolicyDecision) *Aud
 	return entry
 }
 
-// Verify checks the integrity of the entire hash chain.
+// Verify checks the integrity of the entire hash chain. After rollover
+// eviction, the surviving head's PreviousHash is checked against the seam
+// hash recorded at eviction time, so tampering with it is still detected.
 func (al *AuditLogger) Verify() bool {
 	al.mu.Lock()
 	defer al.mu.Unlock()
@@ -72,8 +79,7 @@ func (al *AuditLogger) Verify() bool {
 			return false
 		}
 		if i == 0 {
-			// Allow non-empty PreviousHash when retention eviction is active
-			if al.MaxEntries == 0 && entry.PreviousHash != "" {
+			if entry.PreviousHash != al.seamHash {
 				return false
 			}
 		} else {

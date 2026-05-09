@@ -116,6 +116,29 @@ func TestMaxEntriesVerify(t *testing.T) {
 	}
 }
 
+// After rollover eviction, the surviving head's PreviousHash must equal the
+// seam hash (the hash of the last evicted entry). Forging both PreviousHash
+// and Hash on the head would have been undetectable when Verify() skipped the
+// genesis check during retention; the seam check closes that gap.
+func TestMaxEntriesVerifyDetectsForgedSeam(t *testing.T) {
+	al := NewAuditLogger()
+	al.MaxEntries = 3
+	for i := 0; i < 10; i++ {
+		al.Log("agent", fmt.Sprintf("action-%d", i), Allow)
+	}
+	if !al.Verify() {
+		t.Fatal("chain should verify before tampering")
+	}
+
+	// Replace the surviving head's PreviousHash and recompute its Hash so the
+	// inner hash check still passes — only the seam check should reject this.
+	al.entries[0].PreviousHash = "0000000000000000000000000000000000000000000000000000000000000000"
+	al.entries[0].Hash = computeHash(al.entries[0])
+	if al.Verify() {
+		t.Error("forged seam should be detected by Verify()")
+	}
+}
+
 // --- New comprehensive tests ---
 
 func TestAuditEmptyLogVerifies(t *testing.T) {
