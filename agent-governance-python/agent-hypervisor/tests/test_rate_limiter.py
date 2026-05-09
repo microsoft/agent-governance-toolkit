@@ -157,3 +157,79 @@ class TestAgentRateLimiter:
         assert ExecutionRing.RING_1_PRIVILEGED in DEFAULT_RING_LIMITS
         assert ExecutionRing.RING_2_STANDARD in DEFAULT_RING_LIMITS
         assert ExecutionRing.RING_3_SANDBOX in DEFAULT_RING_LIMITS
+
+
+class TestConcurrency:
+    def test_concurrent_check_does_not_overspend_tokens(self):
+        """Without locking, concurrent ``check()`` calls can both observe
+        ``tokens >= cost`` and both consume, draining the bucket below zero
+        and silently leaking the rate limit. Under the lock, exactly
+        ``capacity`` requests succeed; the rest are rejected.
+        """
+        import threading
+
+        # Tight bucket: capacity = 100 tokens, no refill (rate=0).
+        custom_limits = {ExecutionRing.RING_3_SANDBOX: (0.0, 100.0)}
+        limiter = AgentRateLimiter(ring_limits=custom_limits)
+
+        # Pre-create the bucket so all threads race the same one.
+        limiter.try_check("agent", "session", ExecutionRing.RING_3_SANDBOX, cost=0.0)
+
+        successes = 0
+        successes_lock = threading.Lock()
+
+        def hammer() -> None:
+            nonlocal successes
+            local = 0
+            for _ in range(100):
+                if limiter.try_check("agent", "session", ExecutionRing.RING_3_SANDBOX, cost=1.0):
+                    local += 1
+            with successes_lock:
+                successes += local
+
+        threads = [threading.Thread(target=hammer) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # 10 threads × 100 requests = 1000 attempts against a 100-token bucket.
+        # With locking, exactly 100 succeed; without, more than 100 may slip
+        # through as concurrent consume() calls race the token check.
+        assert successes == 100
+
+    def test_concurrent_check_and_update_ring_no_crash(self):
+        """``update_ring`` recreates the bucket while ``check`` is iterating
+        on it; without locking this can raise KeyError or yield stale
+        readings. With locking the operations serialise cleanly.
+        """
+        import threading
+
+        limiter = AgentRateLimiter()
+        errors: list[str] = []
+
+        def checker() -> None:
+            try:
+                for _ in range(200):
+                    limiter.try_check("agent", "session", ExecutionRing.RING_2_STANDARD)
+            except Exception as e:  # pragma: no cover — failure path
+                errors.append(repr(e))
+
+        def updater() -> None:
+            try:
+                for ring in (ExecutionRing.RING_0_ROOT, ExecutionRing.RING_3_SANDBOX) * 50:
+                    limiter.update_ring("agent", "session", ring)
+            except Exception as e:  # pragma: no cover — failure path
+                errors.append(repr(e))
+
+        threads = [
+            threading.Thread(target=checker),
+            threading.Thread(target=checker),
+            threading.Thread(target=updater),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == []
