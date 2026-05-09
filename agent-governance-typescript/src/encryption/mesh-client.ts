@@ -58,6 +58,11 @@ export class MeshClient {
   private knockAccepted: Set<string> = new Set();
   private messageHandlers: Array<(from: string, payload: unknown, isPlaintext: boolean) => void> = [];
   private knockHandlers: Array<(from: string, intent: unknown) => Promise<boolean>> = [];
+  private errorHandlers: Array<(kind: "ws" | "decrypt" | "knock" | "frame", from: string, detail: string) => void> = [];
+  private disconnectHandlers: Array<(reason: "client" | "server" | "ws-error", code?: number) => void> = [];
+  private e2eVerifiedHandlers: Array<(peerAmid: string, isFirstPeer: boolean) => void> = [];
+  /** Tracks peers whose first encrypted message we've seen — feeds onE2EVerified. */
+  private e2eVerifiedSet: Set<string> = new Set();
   private ws: WebSocket | null = null;
   private connected = false;
   private knockTimeout: number;
@@ -107,10 +112,28 @@ export class MeshClient {
         });
         resolve();
       };
-      this.ws!.onerror = (e) => reject(new Error(`WebSocket error: ${e}`));
+      this.ws!.onerror = (e) => {
+        // Surface to AzureClaw-style observers BEFORE rejecting connect.
+        // Once connect resolves, subsequent ws errors flow through this same path.
+        const errEvent = e as { message?: string; type?: string } | undefined;
+        const detail = errEvent?.message ?? errEvent?.type ?? "ws-error";
+        for (const h of this.errorHandlers) {
+          try { h("ws", this.options.agentDid, detail); } catch { /* swallow handler errors */ }
+        }
+        if (!this.connected) reject(new Error(`WebSocket error: ${e}`));
+      };
       this.ws!.onmessage = (event) => this.handleFrame(JSON.parse(String(event.data)));
-      this.ws!.onclose = () => {
+      this.ws!.onclose = (event) => {
+        const wasConnected = this.connected;
         this.connected = false;
+        if (wasConnected) {
+          // Distinguish client-initiated disconnect (1000 Normal Closure) from server / network drops.
+          const code = (event as CloseEvent | undefined)?.code;
+          const reason: "client" | "server" | "ws-error" = code === 1000 ? "client" : "server";
+          for (const h of this.disconnectHandlers) {
+            try { h(reason, code); } catch { /* swallow handler errors */ }
+          }
+        }
       };
     });
   }
@@ -297,6 +320,43 @@ export class MeshClient {
     this.knockHandlers.push(handler);
   }
 
+  /**
+   * Register a callback for transport-level errors.
+   *
+   * Fires for: WebSocket errors (handshake, mid-stream), decrypt failures,
+   * and KNOCK protocol errors. Multiple handlers may be registered; each
+   * is invoked in registration order. Handler exceptions are swallowed so
+   * one buggy observer cannot break the others.
+   */
+  onError(handler: (kind: "ws" | "decrypt" | "knock" | "frame", from: string, detail: string) => void): void {
+    this.errorHandlers.push(handler);
+  }
+
+  /**
+   * Register a callback for transport disconnect events.
+   *
+   * `reason` is `"client"` for caller-initiated `disconnect()`, `"server"`
+   * for relay-side closes (network drop, relay restart), and `"ws-error"`
+   * when an error event fires on an already-connected socket.
+   */
+  onDisconnect(handler: (reason: "client" | "server" | "ws-error", code?: number) => void): void {
+    this.disconnectHandlers.push(handler);
+  }
+
+  /**
+   * Register a callback that fires the first time we successfully decrypt
+   * a message from a given peer (i.e. the X3DH+Double-Ratchet session
+   * with that peer is fully end-to-end verified).
+   *
+   * `isFirstPeer` is `true` only for the very first verified peer in the
+   * client's lifetime; subsequent peers fire with `false`. This lets
+   * orchestrators print "mesh online" once and "+ peer X verified" for
+   * the rest.
+   */
+  onE2EVerified(handler: (peerAmid: string, isFirstPeer: boolean) => void): void {
+    this.e2eVerifiedHandlers.push(handler);
+  }
+
   // ── Heartbeat ───────────────────────────────────────────────────
 
   sendHeartbeat(): void {
@@ -359,7 +419,12 @@ export class MeshClient {
     } else {
       // Encrypted
       const session = this.sessions.get(from);
-      if (!session?.channel) return; // No session — drop
+      if (!session?.channel) {
+        for (const h of this.errorHandlers) {
+          try { h("decrypt", from, "no session for encrypted message — dropping"); } catch { /* swallow */ }
+        }
+        return;
+      }
 
       const header = frame.header as Record<string, unknown>;
       const encrypted: EncryptedMessage = {
@@ -371,9 +436,28 @@ export class MeshClient {
         ciphertext: this.base64ToUint8(frame.ciphertext as string),
       };
 
-      const plaintext = session.channel.receive(encrypted);
+      let plaintext: Uint8Array;
+      try {
+        plaintext = session.channel.receive(encrypted);
+      } catch (err) {
+        for (const h of this.errorHandlers) {
+          try { h("decrypt", from, err instanceof Error ? err.message : String(err)); } catch { /* swallow */ }
+        }
+        return;
+      }
       payload = JSON.parse(new TextDecoder().decode(plaintext));
       session.messageCount++;
+
+      // First successfully-decrypted message from this peer means E2E
+      // is end-to-end verified (KNOCK + X3DH + Double Ratchet all worked).
+      // Surface to observers exactly once per peer per process lifetime.
+      if (!this.e2eVerifiedSet.has(from)) {
+        this.e2eVerifiedSet.add(from);
+        const isFirstPeer = this.e2eVerifiedSet.size === 1;
+        for (const h of this.e2eVerifiedHandlers) {
+          try { h(from, isFirstPeer); } catch { /* swallow handler errors */ }
+        }
+      }
     }
 
     // Send ACK
