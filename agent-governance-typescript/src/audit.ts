@@ -14,6 +14,7 @@ const GENESIS_HASH = '0'.repeat(64);
 export class AuditLogger {
   private readonly maxEntries: number;
   private entries: AuditEntry[] = [];
+  private seamHash: string | null = null;
 
   constructor(config?: AuditConfig) {
     this.maxEntries = config?.maxEntries ?? 10_000;
@@ -26,7 +27,7 @@ export class AuditLogger {
     const previousHash =
       this.entries.length > 0
         ? this.entries[this.entries.length - 1].hash
-        : GENESIS_HASH;
+        : this.seamHash ?? GENESIS_HASH;
 
     const timestamp = new Date().toISOString();
 
@@ -51,9 +52,12 @@ export class AuditLogger {
 
     this.entries.push(full);
 
-    // Evict oldest entries if we exceed the limit
+    // Evict oldest entries if we exceed the limit, retaining the last evicted
+    // entry's hash as the seam so verify() can re-anchor the surviving chain.
     if (this.entries.length > this.maxEntries) {
-      this.entries = this.entries.slice(this.entries.length - this.maxEntries);
+      const overflow = this.entries.length - this.maxEntries;
+      this.seamHash = this.entries[overflow - 1].hash;
+      this.entries = this.entries.slice(overflow);
     }
 
     return full;
@@ -64,7 +68,7 @@ export class AuditLogger {
     for (let i = 0; i < this.entries.length; i++) {
       const entry = this.entries[i];
       const expectedPrev =
-        i === 0 ? GENESIS_HASH : this.entries[i - 1].hash;
+        i === 0 ? this.seamHash ?? GENESIS_HASH : this.entries[i - 1].hash;
 
       if (entry.previousHash !== expectedPrev) return false;
 
