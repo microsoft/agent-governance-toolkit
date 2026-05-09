@@ -51,6 +51,24 @@ Changes that affect the project's architecture, public API surface, security mod
 
 If maintainers cannot reach consensus, the project lead makes the final decision after considering all perspectives. The rationale is documented in the relevant GitHub Issue.
 
+### Conflict of Interest
+
+Maintainers must disclose any financial or employment relationship that could
+influence their decisions on project direction, dependency choices, or vendor
+integrations. A maintainer with a conflict of interest on a specific decision
+must recuse themselves from voting on that decision. Disclosures are noted in
+the relevant GitHub Issue or PR.
+
+### Voting Thresholds
+
+| Decision type | Required votes | Quorum |
+|--------------|---------------|--------|
+| Routine PR merge | 1 maintainer approval | N/A |
+| Architecture / API change | Rough consensus among maintainers | 50% of maintainers |
+| New maintainer nomination | Consensus among current maintainers | 50% of maintainers |
+| Governance document change | 2 maintainer approvals | N/A |
+| Project lead succession | Supermajority (2/3) of maintainers | 75% of maintainers |
+
 ## Releases
 
 Releases follow [Semantic Versioning](https://semver.org/). Any maintainer can propose a release. The release process is documented in [RELEASE.md](RELEASE.md) and automated via GitHub Actions with trusted publishing and SLSA build provenance.
