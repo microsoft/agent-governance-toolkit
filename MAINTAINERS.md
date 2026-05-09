@@ -24,13 +24,13 @@ see [GOVERNANCE.md](GOVERNANCE.md).
 
 ## Package Maintainers
 
+Package maintainers have publish rights to one or more registries (PyPI, npm, NuGet, crates.io).
+
 | Name | Organization | GitHub | Package(s) | Since |
 |------|-------------|--------|-----------|-------|
 | Imran Siddique | Microsoft | [@imran-siddique](https://github.com/imran-siddique) | agent-os-kernel, agentmesh-platform, agent-governance-toolkit (PyPI) | Oct 2024 |
 | Jack Batzner | Microsoft | [@jackbatzner](https://github.com/jackbatzner) | @microsoft/agent-governance (npm), Microsoft.AgentGovernance (NuGet) | Jan 2025 |
 | Elton Carr | Microsoft | [@eltoncarr-ms](https://github.com/eltoncarr-ms) | Microsoft.AgentGovernance.* (NuGet) | Feb 2025 |
-| Prashansa Pkota | Community | [@prashansapkota](https://github.com/prashansapkota) | agentmesh-integrations, bedrock-adapter (PyPI) | Apr 2026 |
-| Finn Oybu | Community | [@finnoybu](https://github.com/finnoybu) | agent-compliance, prompt-defense (PyPI) | May 2026 |
 
 _We welcome additional maintainers from any organization. See
 [Contributing](#becoming-a-maintainer) below._
