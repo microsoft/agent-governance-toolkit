@@ -77,6 +77,7 @@ _PII_RE = [
     re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),                                    # SSN
     re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),     # email
     re.compile(r"\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14})\b"),          # credit card
+    re.compile(r"\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+", re.IGNORECASE),  # secrets
 ]
 
 
@@ -198,6 +199,10 @@ class BedrockKernel(BaseIntegration):
             )
         pii = _scan_pii(input_text)
         if pii:
+            self.emit(GovernanceEventType.TOOL_CALL_BLOCKED, {
+                "agent_id": ctx.agent_id, "reason": f"PII detected: {pii[0]}",
+                "timestamp": datetime.now().isoformat(),
+            })
             raise PolicyViolationError(
                 f"Input blocked — PII detected (pattern: {pii[0]})"
             )
@@ -338,7 +343,8 @@ class GovernedBedrockClient:
         """
         agent_id_param = kwargs.get("agentId", "")
         agent_alias = kwargs.get("agentAliasId", "")
-        agent_arn = f"arn:aws:bedrock:::agent/{agent_id_param}/{agent_alias}"
+        region = getattr(getattr(self._client, "meta", None), "region_name", "")
+        agent_arn = f"arn:aws:bedrock:{region}::agent/{agent_id_param}/{agent_alias}"
         self._ctx.agent_arn = agent_arn
 
         # 1. Rate limit
