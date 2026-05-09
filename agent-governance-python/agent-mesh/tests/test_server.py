@@ -112,8 +112,9 @@ class TestTrustEngineServer:
         Returns ``(private_key, public_key_b64, agent_did, challenge_id, nonce)``
         ready for signing a valid handshake response.
         """
-        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
         import base64
+
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
         key = Ed25519PrivateKey.generate()
         pub_b64 = base64.b64encode(key.public_key().public_bytes_raw()).decode()

@@ -17,9 +17,9 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import click
+from rich import box
 from rich.console import Console
 from rich.table import Table
-from rich import box
 
 from agentmesh.trust.bridge import PeerInfo
 from agentmesh.trust.levels import trust_level_for_score
