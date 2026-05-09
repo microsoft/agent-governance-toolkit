@@ -273,3 +273,62 @@ class TestCostGuardEdgeCases:
         severities = {a.severity for a in all_alerts}
         assert CostAlertSeverity.WARNING in severities
         assert CostAlertSeverity.CRITICAL in severities
+
+
+# ---------------------------------------------------------------------------
+# Strict Concurrency — record_cost / get_budget under heavy contention must
+# preserve exact arithmetic (no race-induced drift). Older tolerant tests
+# (`< 1.0` drift) live in test_cost.py and test_cost_hardened.py above.
+# ---------------------------------------------------------------------------
+
+
+class TestStrictConcurrency:
+    def test_concurrent_record_cost_preserves_exact_total(self):
+        """With consistent locking, 1000 records of $0.01 must sum to exactly
+        $10.00 (no float drift from races). Partial locking allowed
+        ``< 1.0`` drift; this test locks in the stricter post-fix behaviour.
+        """
+        guard = CostGuard(
+            per_task_limit=100.0,
+            per_agent_daily_limit=10000.0,
+            org_monthly_budget=10000.0,
+        )
+
+        def spend(agent_id: str) -> None:
+            for i in range(100):
+                guard.record_cost(agent_id, f"t{i}", 0.01)
+
+        threads = [threading.Thread(target=spend, args=(f"bot-{i}",)) for i in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # 10 threads × 100 records × $0.01 = $10.00 exactly.
+        assert abs(guard.org_spent_month - 10.0) < 1e-9
+        assert sum(guard.get_budget(f"bot-{i}").spent_today_usd for i in range(10)) == pytest.approx(10.0, abs=1e-9)
+        assert sum(guard.get_budget(f"bot-{i}").task_count_today for i in range(10)) == 1000
+
+    def test_concurrent_get_budget_no_orphaned_instances(self):
+        """get_budget() had a TOCTOU on first-touch: two threads racing the
+        same new agent_id could both create AgentBudget instances, with the
+        loser's instance orphaned. After the fix, all callers see the same
+        instance.
+        """
+        guard = CostGuard()
+        instances: list[AgentBudget] = []
+        instances_lock = threading.Lock()
+
+        def grab() -> None:
+            b = guard.get_budget("contested-agent")
+            with instances_lock:
+                instances.append(b)
+
+        threads = [threading.Thread(target=grab) for _ in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # All 20 callers must hold the same instance.
+        assert len({id(b) for b in instances}) == 1
