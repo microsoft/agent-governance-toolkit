@@ -189,7 +189,7 @@ pub struct HashChainVerifier;
 
 impl HashChainVerifier {
     pub fn verify(entries: &[AuditEntry]) -> bool {
-        verify_audit_entries(entries)
+        verify_audit_entries(entries, None)
     }
 }
 
