@@ -4,11 +4,22 @@
 package agentmesh
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
+)
+
+// Docker subprocess deadlines. ``docker exec`` runs user-supplied code so
+// it falls back to SandboxConfig.TimeoutSeconds when set; the others are
+// short-lived control-plane operations against the local Docker daemon.
+const (
+	dockerInfoTimeout    = 5 * time.Second
+	dockerStartTimeout   = 30 * time.Second
+	dockerExecTimeout    = 60 * time.Second
+	dockerRemoveTimeout  = 15 * time.Second
 )
 
 // SessionStatus represents the lifecycle state of a sandbox session.
@@ -100,13 +111,16 @@ type DockerSandboxProvider struct {
 }
 
 // NewDockerSandboxProvider creates a DockerSandboxProvider with the given base image.
-// It probes for Docker availability via `docker info`.
+// It probes for Docker availability via `docker info` (bounded by
+// dockerInfoTimeout so a stalled daemon does not block initialisation).
 func NewDockerSandboxProvider(image string) *DockerSandboxProvider {
 	p := &DockerSandboxProvider{
 		image:      image,
 		containers: make(map[string]string),
 	}
-	if err := exec.Command("docker", "info").Run(); err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), dockerInfoTimeout)
+	defer cancel()
+	if err := exec.CommandContext(ctx, "docker", "info").Run(); err == nil {
 		p.available = true
 	}
 	return p
@@ -158,8 +172,13 @@ func (p *DockerSandboxProvider) CreateSession(agentID string, config *SandboxCon
 
 	args = append(args, p.image, "sleep", "infinity")
 
-	out, err := exec.Command("docker", args...).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), dockerStartTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("docker run timed out after %s", dockerStartTimeout)
+		}
 		return nil, fmt.Errorf("docker run failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 
@@ -186,7 +205,9 @@ func (p *DockerSandboxProvider) ExecuteCode(agentID, sessionID, code string) (*E
 	execID := fmt.Sprintf("exec-%d", time.Now().UnixNano())
 	start := time.Now()
 
-	cmd := exec.Command("docker", "exec", name, "sh", "-c", code)
+	ctx, cancel := context.WithTimeout(context.Background(), dockerExecTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "docker", "exec", name, "sh", "-c", code)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -196,6 +217,9 @@ func (p *DockerSandboxProvider) ExecuteCode(agentID, sessionID, code string) (*E
 
 	exitCode := 0
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("docker exec timed out after %s", dockerExecTimeout)
+		}
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
 		} else {
@@ -239,8 +263,13 @@ func (p *DockerSandboxProvider) DestroySession(agentID, sessionID string) error 
 		return fmt.Errorf("session %s:%s not found", agentID, sessionID)
 	}
 
-	out, err := exec.Command("docker", "rm", "-f", name).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), dockerRemoveTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "docker", "rm", "-f", name).CombinedOutput()
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("docker rm timed out after %s", dockerRemoveTimeout)
+		}
 		return fmt.Errorf("docker rm failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
