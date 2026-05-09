@@ -4,6 +4,7 @@
 package agentmesh
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -21,6 +22,12 @@ import (
 	"strings"
 	"time"
 )
+
+// processListTimeout bounds the OS-native process-listing subprocess
+// (``powershell Get-CimInstance`` on Windows, ``ps -axo`` on Unix). A
+// pathologically slow ``ps`` or hung WMI provider must not stall the
+// discovery scan indefinitely.
+const processListTimeout = 10 * time.Second
 
 // DetectionBasis describes how a discovery finding was produced.
 type DetectionBasis string
@@ -674,7 +681,10 @@ func currentHostProcesses() ([]ProcessInfo, error) {
 }
 
 func currentWindowsProcesses() ([]ProcessInfo, error) {
-	command := exec.Command(
+	ctx, cancel := context.WithTimeout(context.Background(), processListTimeout)
+	defer cancel()
+	command := exec.CommandContext(
+		ctx,
 		"powershell",
 		"-NoProfile",
 		"-Command",
@@ -682,6 +692,9 @@ func currentWindowsProcesses() ([]ProcessInfo, error) {
 	)
 	output, err := command.Output()
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("listing windows processes: timed out after %s", processListTimeout)
+		}
 		return nil, fmt.Errorf("listing windows processes: %w", err)
 	}
 
@@ -721,9 +734,14 @@ func currentWindowsProcesses() ([]ProcessInfo, error) {
 }
 
 func currentUnixProcesses() ([]ProcessInfo, error) {
-	command := exec.Command("ps", "-axo", "pid=,command=")
+	ctx, cancel := context.WithTimeout(context.Background(), processListTimeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, "ps", "-axo", "pid=,command=")
 	output, err := command.Output()
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("listing unix processes: timed out after %s", processListTimeout)
+		}
 		return nil, fmt.Errorf("listing unix processes: %w", err)
 	}
 
