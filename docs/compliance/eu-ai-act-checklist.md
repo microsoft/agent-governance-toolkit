@@ -520,6 +520,7 @@ Several "Partial" ratings rely on a **single mechanism with no fallback**:
 
 - **OWASP Agentic Top 10**: See [`docs/OWASP-COMPLIANCE.md`](../OWASP-COMPLIANCE.md). Overlap with Art. 15 (cybersecurity) and Art. 14 (human oversight via ASI-09).
 - **NIST RFI (2026)**: See [`docs/compliance/nist-rfi-2026-00206.md`](nist-rfi-2026-00206.md). Overlap with Section 1 (security threats) and Section 3 (design/development practices).
+- **Awesome EU AI Act**: See [`GenAI-Gurus/awesome-eu-ai-act`](https://github.com/GenAI-Gurus/awesome-eu-ai-act) for a curated resource map covering official EU sources, implementation references, standards bodies, and compliance tooling.
 
 ---
 
