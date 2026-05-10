@@ -43,7 +43,7 @@ hyperlight = [
     "hyperlight-sandbox>=0.4.0,<0.5",
 ]
 policy = [
-    "agent-os-kernel>=3.2.0,<4.0",
+    "agent-os-kernel>=3.5.0,<4.0",
 ]
 full = [
     "agent-sandbox[docker,hyperlight,policy]",
