@@ -698,6 +698,93 @@ class TestFlightRecorderEmitterViolationSummary:
         assert summary["violation_rate"] == 0.0
 
 
+class TestFlightRecorderEmitterStream:
+    """``stream()`` is an async generator with a cooperative stop signal.
+
+    Regression for REVIEW.md HIGH Extensions #9: previously
+    ``async def stream()`` was annotated as returning
+    ``Iterator[LightningSpan]`` (wrong — it's an async generator) and
+    had no exit condition, so consumers could only terminate it by
+    cancelling the surrounding task.
+    """
+
+    def test_stream_return_type_is_async_iterator(self):
+        import inspect
+        import typing
+        from collections.abc import AsyncIterator
+
+        hints = typing.get_type_hints(FlightRecorderEmitter.stream)
+        ret = hints["return"]
+        assert typing.get_origin(ret) is AsyncIterator
+        # The method must itself be an async generator function.
+        assert inspect.isasyncgenfunction(FlightRecorderEmitter.stream)
+
+    def test_stream_stops_when_event_is_set(self):
+        """``stream()`` exits cleanly after the next poll when stop_event fires."""
+
+        async def _run():
+            recorder = _make_recorder([_FakeEntry(), _FakeEntry(id="e2")])
+            emitter = FlightRecorderEmitter(recorder)
+            stop = asyncio.Event()
+            stop.set()  # request stop before iteration
+
+            collected = [s async for s in emitter.stream(stop_event=stop)]
+            return collected
+
+        spans = asyncio.run(_run())
+        # With the event already set, the loop body must NOT execute and
+        # no spans must be yielded. This is the contract: ``stop_event``
+        # gives a clean exit, not "drain then stop".
+        assert spans == []
+
+    def test_stream_drains_then_stops(self):
+        """``stream()`` yields spans available before the stop fires, then exits."""
+
+        async def _run():
+            recorder = _make_recorder([_FakeEntry(), _FakeEntry(id="e2")])
+            emitter = FlightRecorderEmitter(recorder)
+            stop = asyncio.Event()
+
+            results: list = []
+            async for span in emitter.stream(stop_event=stop, poll_interval=0.0):
+                results.append(span)
+                if len(results) == 2:
+                    stop.set()
+            return results
+
+        spans = asyncio.run(_run())
+        assert len(spans) == 2
+
+    def test_stream_no_event_runs_until_cancelled(self):
+        """Without a stop_event, ``stream()`` runs until the caller cancels."""
+
+        async def _run():
+            recorder = _make_recorder([_FakeEntry()])
+            emitter = FlightRecorderEmitter(recorder)
+
+            results: list = []
+
+            async def consume():
+                async for span in emitter.stream(poll_interval=0.0):
+                    results.append(span)
+
+            task = asyncio.create_task(consume())
+            # Give the generator a few ticks to surface the initial entry.
+            for _ in range(5):
+                await asyncio.sleep(0)
+                if results:
+                    break
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            return results
+
+        spans = asyncio.run(_run())
+        assert len(spans) >= 1
+
+
 class TestFlightRecorderEmitterStreaming:
     def test_get_new_spans_incremental(self):
         entries = [_FakeEntry(), _FakeEntry(id="e2")]

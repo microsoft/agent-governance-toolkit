@@ -10,9 +10,10 @@ span format for unified training and audit trail.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -201,22 +202,32 @@ class FlightRecorderEmitter:
         self._last_position = len(all_spans)
         return new_spans
 
-    async def stream(self) -> Iterator[LightningSpan]:
+    async def stream(
+        self,
+        *,
+        stop_event: asyncio.Event | None = None,
+        poll_interval: float = 0.1,
+    ) -> AsyncIterator[LightningSpan]:
         """
         Stream spans as they are recorded.
 
-        Yields:
-            LightningSpan objects as they become available
-        """
-        import asyncio
+        Args:
+            stop_event: Optional cooperative-stop signal. When set, the
+                stream completes cleanly after draining the next poll.
+                Without it, callers must cancel the consuming task to
+                terminate the stream.
+            poll_interval: Delay between polls of the underlying recorder,
+                in seconds.
 
-        while True:
+        Yields:
+            LightningSpan objects as they become available.
+        """
+        while stop_event is None or not stop_event.is_set():
             new_spans = self.get_new_spans()
             for span in new_spans:
                 yield span
 
-            # Wait before checking again
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(poll_interval)
 
     def emit_to_store(self, store: Any) -> int:
         """
