@@ -126,7 +126,30 @@ class RelayServer:
                         await ws.close(code=4003)
                         return
 
-                # Register connection
+                # Register connection.
+                #
+                # Gap G5 (vendored agentmesh-relay patch #2): if a stale
+                # connection already exists for this DID, close it eagerly
+                # before the dict overwrite. Without this, the old socket
+                # lingers as a "ghost" until the 90s heartbeat-eviction
+                # timer fires, during which time messages can be routed to
+                # a dead connection. Code 1000 is used instead of a custom
+                # 4xxx so the client treats this as a clean close and does
+                # NOT trigger its auto-reconnect loop (which would just
+                # race the new socket the same client just opened).
+                existing = self._connections.get(agent_did)
+                if existing is not None:
+                    logger.info(
+                        "Closing ghost connection for %s (session replaced)",
+                        agent_did,
+                    )
+                    try:
+                        await existing.ws.close(
+                            code=1000, reason="session_replaced"
+                        )
+                    except Exception:  # noqa: BLE001 - best-effort cleanup
+                        pass
+
                 self._connections[agent_did] = ConnectedAgent(agent_did, ws)
                 logger.info("Agent connected: %s", agent_did)
 
@@ -148,8 +171,13 @@ class RelayServer:
             except Exception as e:
                 logger.error("Relay error for %s: %s", agent_did, e)
             finally:
-                if agent_did and agent_did in self._connections:
-                    del self._connections[agent_did]
+                # Only remove if the current dict entry still references
+                # OUR ws — protects against ghost-cleanup races where this
+                # finally is for an old socket that was already replaced.
+                if agent_did:
+                    current = self._connections.get(agent_did)
+                    if current is not None and current.ws is ws:
+                        del self._connections[agent_did]
 
         return app
 

@@ -42,6 +42,17 @@ export interface MeshClientOptions {
   reconnectBaseDelayMs?: number;
   /** Max reconnect delay cap in ms (default: 60000). */
   reconnectMaxDelayMs?: number;
+  /**
+   * Max messages to buffer per peer when an encrypted message arrives before
+   * its KNOCK has been processed (out-of-order delivery on the relay).
+   * Mirrors vendored agentmesh-sdk patch #16. Default 5. Set to 0 to disable.
+   */
+  preKnockBufferSize?: number;
+  /**
+   * TTL in ms for buffered pre-KNOCK messages before they are evicted.
+   * Default 3000.
+   */
+  preKnockBufferTtlMs?: number;
 }
 
 export interface MeshSession {
@@ -69,7 +80,7 @@ export class MeshClient {
   private knockAccepted: Set<string> = new Set();
   private messageHandlers: Array<(from: string, payload: unknown, isPlaintext: boolean) => void> = [];
   private knockHandlers: Array<(from: string, intent: unknown) => Promise<boolean>> = [];
-  private errorHandlers: Array<(kind: "ws" | "decrypt" | "knock" | "frame", from: string, detail: string) => void> = [];
+  private errorHandlers: Array<(kind: "ws" | "decrypt" | "knock" | "frame" | "session_desync", from: string, detail: string) => void> = [];
   private disconnectHandlers: Array<(reason: "client" | "server" | "ws-error", code?: number) => void> = [];
   private e2eVerifiedHandlers: Array<(peerAmid: string, isFirstPeer: boolean) => void> = [];
   /** Tracks peers whose first encrypted message we've seen — feeds onE2EVerified. */
@@ -84,6 +95,14 @@ export class MeshClient {
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private clientInitiatedClose = false;
+  private preKnockBufferSize: number;
+  private preKnockBufferTtlMs: number;
+  /**
+   * Per-peer buffer for encrypted message frames that arrived before the
+   * peer's KNOCK was processed. Drained when the KNOCK is later accepted.
+   * Mirrors vendored agentmesh-sdk patch #16.
+   */
+  private preKnockBuffer: Map<string, Array<{ frame: Record<string, unknown>; timer: ReturnType<typeof setTimeout> }>> = new Map();
 
   constructor(options: MeshClientOptions) {
     this.options = options;
@@ -93,6 +112,8 @@ export class MeshClient {
     this.maxReconnectAttempts = options.maxReconnectAttempts ?? Number.POSITIVE_INFINITY;
     this.reconnectBaseDelayMs = options.reconnectBaseDelayMs ?? 1000;
     this.reconnectMaxDelayMs = options.reconnectMaxDelayMs ?? 60_000;
+    this.preKnockBufferSize = options.preKnockBufferSize ?? 5;
+    this.preKnockBufferTtlMs = options.preKnockBufferTtlMs ?? 3_000;
   }
 
   // ── Plaintext peers ─────────────────────────────────────────────
@@ -202,6 +223,10 @@ export class MeshClient {
       this.reconnectTimer = null;
     }
     this.reconnectAttempts = 0;
+    // Drop any buffered pre-KNOCK frames + their eviction timers.
+    for (const peer of [...this.preKnockBuffer.keys()]) {
+      this.dropPreKnockBuffer(peer);
+    }
     if (!this.connected || !this.ws) return;
     this.clientInitiatedClose = true;
     this.sendFrame({ v: 1, type: "disconnect", from: this.options.agentDid });
@@ -395,11 +420,14 @@ export class MeshClient {
    * Register a callback for transport-level errors.
    *
    * Fires for: WebSocket errors (handshake, mid-stream), decrypt failures,
-   * and KNOCK protocol errors. Multiple handlers may be registered; each
-   * is invoked in registration order. Handler exceptions are swallowed so
-   * one buggy observer cannot break the others.
+   * KNOCK protocol errors, frame validation, and `session_desync` events
+   * (recoverable ratchet drift — caller should re-establishSession to that
+   * peer; differs from "decrypt" which means no session existed at all).
+   * Multiple handlers may be registered; each is invoked in registration
+   * order. Handler exceptions are swallowed so one buggy observer cannot
+   * break the others.
    */
-  onError(handler: (kind: "ws" | "decrypt" | "knock" | "frame", from: string, detail: string) => void): void {
+  onError(handler: (kind: "ws" | "decrypt" | "knock" | "frame" | "session_desync", from: string, detail: string) => void): void {
     this.errorHandlers.push(handler);
   }
 
@@ -491,8 +519,18 @@ export class MeshClient {
       // Encrypted
       const session = this.sessions.get(from);
       if (!session?.channel) {
-        for (const h of this.errorHandlers) {
-          try { h("decrypt", from, "no session for encrypted message — dropping"); } catch { /* swallow */ }
+        // Gap-G4 (vendored agentmesh-sdk patch #16): pre-KNOCK message buffer.
+        // The relay does not guarantee inter-frame ordering — an encrypted
+        // message can land before its KNOCK is processed. Drop-on-floor was
+        // the upstream behaviour; instead, buffer the raw frame here and
+        // drain it from handleKnock() once the KNOCK is accepted. Capped at
+        // preKnockBufferSize entries per peer with preKnockBufferTtlMs TTL.
+        if (this.preKnockBufferSize > 0 && !this.isPlaintextPeer(from)) {
+          this.bufferPreKnockFrame(from, frame);
+        } else {
+          for (const h of this.errorHandlers) {
+            try { h("decrypt", from, "no session for encrypted message — dropping"); } catch { /* swallow */ }
+          }
         }
         return;
       }
@@ -511,8 +549,18 @@ export class MeshClient {
       try {
         plaintext = session.channel.receive(encrypted);
       } catch (err) {
+        // Gap-G3 (vendored agentmesh-sdk patch #13): on decrypt failure inside
+        // an existing session, the ratchet is desynchronised — every
+        // subsequent inbound frame will fail the same way. Tear down the
+        // broken session so the next establishSession() to this peer runs a
+        // fresh X3DH + KNOCK round, and surface a dedicated "session_desync"
+        // error kind so callers can distinguish recoverable ratchet drift
+        // (re-establish & retry) from genuine tampering (drop & alert).
+        const detail = err instanceof Error ? err.message : String(err);
+        this.closeSession(from);
+        this.knockAccepted.delete(from);
         for (const h of this.errorHandlers) {
-          try { h("decrypt", from, err instanceof Error ? err.message : String(err)); } catch { /* swallow */ }
+          try { h("session_desync", from, detail); } catch { /* swallow */ }
         }
         return;
       }
@@ -602,9 +650,11 @@ export class MeshClient {
           }
           accepted = false;
         }
-      } else {
-        this.knockAccepted.add(from);
       }
+      // Always record acceptance so the encrypted-message gate stops
+      // waiting/buffering. (`acceptSession` also sets this, but keep the
+      // legacy-peer path covered too.)
+      if (accepted) this.knockAccepted.add(from);
     }
 
     if (accepted) {
@@ -617,6 +667,12 @@ export class MeshClient {
         knock_id: frame.id,
         ts: new Date().toISOString(),
       });
+      // Gap-G4: drain any encrypted frames that arrived for this peer
+      // before its KNOCK was processed. The session is now established
+      // (via auto-bootstrap above or a prior acceptSession call), so the
+      // buffered frames can be replayed through the normal handleMessage
+      // path and decrypted against the fresh session.
+      await this.drainPreKnockBuffer(from);
     } else {
       this.sendFrame({
         v: 1,
@@ -628,6 +684,9 @@ export class MeshClient {
         reason: "policy_denied",
         ts: new Date().toISOString(),
       });
+      // Drop any buffered frames — KNOCK was rejected so we cannot decrypt
+      // them anyway. Avoids unbounded buffer growth for hostile peers.
+      this.dropPreKnockBuffer(from);
     }
   }
 
@@ -639,6 +698,54 @@ export class MeshClient {
   private handleKnockReject(frame: Record<string, unknown>): void {
     const from = frame.from as string;
     this.closeSession(from);
+  }
+
+  // ── Pre-KNOCK buffer (Gap-G4 / vendored patch #16) ──────────────
+
+  private bufferPreKnockFrame(from: string, frame: Record<string, unknown>): void {
+    let entries = this.preKnockBuffer.get(from);
+    if (!entries) {
+      entries = [];
+      this.preKnockBuffer.set(from, entries);
+    }
+    // Cap: drop oldest when full to keep newest message (sender most likely
+    // to retransmit nothing — newer frames carry the most recent ratchet
+    // state and have the best chance of being decryptable).
+    if (entries.length >= this.preKnockBufferSize) {
+      const evicted = entries.shift();
+      if (evicted) clearTimeout(evicted.timer);
+    }
+    const timer = setTimeout(() => {
+      const list = this.preKnockBuffer.get(from);
+      if (!list) return;
+      const idx = list.findIndex((e) => e.frame === frame);
+      if (idx >= 0) list.splice(idx, 1);
+      if (list.length === 0) this.preKnockBuffer.delete(from);
+    }, this.preKnockBufferTtlMs);
+    entries.push({ frame, timer });
+  }
+
+  private async drainPreKnockBuffer(from: string): Promise<void> {
+    const entries = this.preKnockBuffer.get(from);
+    if (!entries || entries.length === 0) return;
+    this.preKnockBuffer.delete(from);
+    for (const entry of entries) {
+      clearTimeout(entry.timer);
+      try {
+        await this.handleMessage(entry.frame);
+      } catch (err) {
+        for (const h of this.errorHandlers) {
+          try { h("decrypt", from, `pre-knock drain failed: ${err instanceof Error ? err.message : String(err)}`); } catch { /* swallow */ }
+        }
+      }
+    }
+  }
+
+  private dropPreKnockBuffer(from: string): void {
+    const entries = this.preKnockBuffer.get(from);
+    if (!entries) return;
+    for (const entry of entries) clearTimeout(entry.timer);
+    this.preKnockBuffer.delete(from);
   }
 
   // ── Establishment (de)serialization ─────────────────────────────

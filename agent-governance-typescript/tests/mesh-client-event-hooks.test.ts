@@ -159,7 +159,10 @@ describe("MeshClient.onError", () => {
   });
 
   test("fires on decrypt path when no session exists for encrypted frame", async () => {
-    const client = makeClient();
+    // With pre-KNOCK buffer disabled (size=0), encrypted-before-session frames
+    // fall through to the legacy fire-decrypt-and-drop path. The buffered
+    // behaviour is covered separately in mesh-client-pre-knock-buffer.test.ts.
+    const client = makeClient({ preKnockBufferSize: 0 });
     const errors: Array<{ kind: string; from: string }> = [];
     client.onError((kind, from) => errors.push({ kind, from }));
 
