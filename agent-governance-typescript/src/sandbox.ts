@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
-import { execSync, exec } from 'child_process';
+import { execSync, exec, execFileSync, execFile } from 'child_process';
 import { randomUUID } from 'crypto';
 
 // ---------------------------------------------------------------------------
@@ -156,7 +156,7 @@ export class DockerSandboxProvider implements SandboxProvider {
     const containerName = `agt-${agentId}-${sessionId.slice(0, 8)}`;
 
     const args: string[] = [
-      'docker', 'run', '-d',
+      'run', '-d',
       '--name', containerName,
       '--cap-drop=ALL',
       '--security-opt=no-new-privileges',
@@ -181,7 +181,7 @@ export class DockerSandboxProvider implements SandboxProvider {
     args.push(this.image, 'tail', '-f', '/dev/null');
 
     try {
-      const containerId = execSync(args.join(' '), {
+      const containerId = execFileSync('docker', args, {
         stdio: 'pipe',
         timeout: 30_000,
       })
@@ -218,9 +218,12 @@ export class DockerSandboxProvider implements SandboxProvider {
 
     return new Promise<ExecutionHandle>((resolve) => {
       const encoded = Buffer.from(code).toString('base64');
-      const cmd = `docker exec ${containerId} python3 -c "import base64; exec(base64.b64decode('${encoded}').decode())"`;
+      const execArgs = [
+        'exec', containerId, 'python3', '-c',
+        `import base64; exec(base64.b64decode('${encoded}').decode())`,
+      ];
 
-      exec(cmd, { timeout: 60_000 }, (error, stdout, stderr) => {
+      execFile('docker', execArgs, { timeout: 60_000 }, (error, stdout, stderr) => {
         const durationSeconds = (Date.now() - startTime) / 1000.0;
         const exitCode = error && 'code' in error ? (error.code as number ?? 1) : 0;
         const killed = error !== null && 'killed' in error && (error as { killed: boolean }).killed;
@@ -255,7 +258,7 @@ export class DockerSandboxProvider implements SandboxProvider {
     }
 
     try {
-      execSync(`docker rm -f ${containerId}`, {
+      execFileSync('docker', ['rm', '-f', containerId], {
         stdio: 'pipe',
         timeout: 15_000,
       });

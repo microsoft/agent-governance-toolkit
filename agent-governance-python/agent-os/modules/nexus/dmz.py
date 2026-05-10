@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 import hashlib
+import os
 import uuid
 from dataclasses import dataclass, field
 
@@ -423,7 +424,7 @@ class DMZProtocol:
 
         # Derive a 256-bit key via SHA-256 to ensure correct length
         derived = hashlib.sha256(key).digest()
-        nonce = hashlib.sha256(data[:16] + key).digest()[:12]  # 96-bit nonce
+        nonce = os.urandom(12)  # 96-bit random nonce (GCM requires unique nonces)
         aesgcm = AESGCM(derived)
         return nonce + aesgcm.encrypt(nonce, data, None)
 

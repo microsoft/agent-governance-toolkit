@@ -74,7 +74,7 @@ class TestCredentialExpiry:
     def test_far_expired_one_year_ago(self):
         """Credential expired 1 year ago is invalid."""
         cred = Credential.issue(agent_did="did:mesh:test", ttl_seconds=1)
-        cred.expires_at = datetime.utcnow() - timedelta(days=366)
+        cred.expires_at = datetime.utcnow() - timedelta(days=400)
         assert not cred.is_valid()
 
     def test_valid_credential(self):
@@ -142,7 +142,7 @@ class TestDelegationLinkExpiry:
     def test_far_expired_link(self):
         """Link expired 1 year ago is invalid."""
         _, link = _chain_with_expiring_link(
-            expires_at=datetime.utcnow() - timedelta(days=366),
+            expires_at=datetime.utcnow() - timedelta(days=400),
         )
         assert not link.is_valid()
 

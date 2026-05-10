@@ -227,7 +227,7 @@ class PolicyBundleResolver:
             bundle.name,
             bundle.version,
             vault_url,
-            secret_name,
+            "***",
         )
         self._cache[bundle.bundle_id] = bundle
         return bundle

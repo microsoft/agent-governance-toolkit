@@ -11,7 +11,8 @@ embedded in certificate SANs for cryptographic identity binding.
 import ssl
 import tempfile
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
+from dateutil.relativedelta import relativedelta
 from typing import Optional
 
 from cryptography import x509
@@ -85,7 +86,7 @@ class MTLSIdentityVerifier:
             .public_key(signing_key.public_key())
             .serial_number(x509.random_serial_number())
             .not_valid_before(now)
-            .not_valid_after(now + timedelta(days=366))
+            .not_valid_after(now + relativedelta(years=1))
             .add_extension(
                 x509.SubjectAlternativeName([
                     x509.UniformResourceIdentifier(did_str),
