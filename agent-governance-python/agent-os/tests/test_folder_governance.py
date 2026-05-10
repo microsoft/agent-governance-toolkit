@@ -236,10 +236,25 @@ class TestMergePolicies:
             PolicyRule(name="block-shell", condition=PolicyCondition(field="x", operator=PolicyOperator.EQ, value=1), action=PolicyAction.ALLOW, priority=1000, override=True),
         ])
         result = merge_policies([root, child])
-        # Both rules present — parent deny kept, child allow also added
-        assert len(result) == 2
-        deny_rules = [r for r in result if r.action == PolicyAction.DENY]
-        assert len(deny_rules) == 1  # Parent deny preserved
+        # Child override is dropped entirely — only the parent deny remains.
+        assert len(result) == 1
+        assert result[0].action == PolicyAction.DENY
+        assert result[0].name == "block-shell"
+
+    def test_higher_priority_child_cannot_defeat_parent_deny(self):
+        # Regression: previously the child rule was appended despite the
+        # "ignored" warning, so a higher-priority child ALLOW would sort
+        # above the parent DENY and win at evaluation time.
+        root = PolicyDocument(name="root", rules=[
+            PolicyRule(name="block-shell", condition=PolicyCondition(field="x", operator=PolicyOperator.EQ, value=1), action=PolicyAction.DENY, priority=100),
+        ])
+        child = PolicyDocument(name="child", rules=[
+            PolicyRule(name="block-shell", condition=PolicyCondition(field="x", operator=PolicyOperator.EQ, value=1), action=PolicyAction.ALLOW, priority=9999, override=True),
+        ])
+        result = merge_policies([root, child])
+        assert len(result) == 1
+        assert result[0].action == PolicyAction.DENY
+        assert all(r.action != PolicyAction.ALLOW for r in result)
 
     def test_empty_chain(self):
         assert merge_policies([]) == []
