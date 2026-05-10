@@ -239,6 +239,28 @@ class TestPolicyViolation:
         v = PolicyViolation(PolicyViolationType.WARNED, "P", "d", "unknown")
         assert v.penalty == 10.0
 
+    def test_caller_supplied_penalty_preserved(self):
+        """Regression for REVIEW.md HIGH Extensions #11.
+
+        Previously ``__post_init__`` unconditionally overwrote whatever
+        ``penalty`` the caller passed with the severity-table value, so
+        custom weighting silently broke. The fix keeps the caller's
+        value when they supply one, and only derives from severity when
+        the field is left at its default (``None``).
+        """
+        v = PolicyViolation(
+            PolicyViolationType.BLOCKED, "P", "d", "high", penalty=999.0
+        )
+        assert v.penalty == 999.0
+
+    def test_caller_supplied_zero_penalty_preserved(self):
+        """An explicit ``penalty=0.0`` is a valid weighting decision and
+        must not be re-derived as if it were the default."""
+        v = PolicyViolation(
+            PolicyViolationType.WARNED, "P", "d", "critical", penalty=0.0
+        )
+        assert v.penalty == 0.0
+
 
 class TestGovernedRollout:
     def test_total_penalty_calculated(self):

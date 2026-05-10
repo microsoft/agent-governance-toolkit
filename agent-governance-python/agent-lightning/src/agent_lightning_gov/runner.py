@@ -31,24 +31,36 @@ class PolicyViolationType(Enum):
 
 @dataclass
 class PolicyViolation:
-    """Record of a policy violation during execution."""
+    """Record of a policy violation during execution.
+
+    ``penalty`` defaults to ``None``; on construction it is derived from
+    ``severity`` via :attr:`SEVERITY_PENALTIES` (with a 10.0 fallback for
+    unrecognised severities). Callers that pass an explicit ``penalty``
+    keep that value — the previous implementation unconditionally
+    overwrote any caller-supplied penalty from the severity table, which
+    silently broke callers that intentionally weighted individual
+    violations.
+    """
+
+    SEVERITY_PENALTIES = {
+        "critical": 100.0,
+        "high": 50.0,
+        "medium": 10.0,
+        "low": 1.0,
+    }
+
     violation_type: PolicyViolationType
     policy_name: str
     description: str
     severity: str  # critical, high, medium, low
     timestamp: datetime = field(default_factory=datetime.utcnow)
     action_blocked: bool = False
-    penalty: float = 0.0
+    penalty: float | None = None
 
     def __post_init__(self):
-        """Calculate penalty based on severity."""
-        severity_penalties = {
-            "critical": 100.0,
-            "high": 50.0,
-            "medium": 10.0,
-            "low": 1.0,
-        }
-        self.penalty = severity_penalties.get(self.severity, 10.0)
+        """Derive penalty from severity only when the caller didn't supply one."""
+        if self.penalty is None:
+            self.penalty = self.SEVERITY_PENALTIES.get(self.severity, 10.0)
 
 
 @dataclass
