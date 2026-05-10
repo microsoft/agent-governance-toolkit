@@ -37,7 +37,7 @@ dependencies = []
 
 [project.optional-dependencies]
 docker = [
-    "docker>=7.0.0,<8.0",
+    "docker>=7.1.0,<8.0",
 ]
 hyperlight = [
     "hyperlight-sandbox>=0.4.0,<0.5",
