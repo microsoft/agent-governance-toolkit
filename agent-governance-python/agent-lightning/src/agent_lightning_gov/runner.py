@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Generic, TypeVar
+from typing import Any, Callable, Generic, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ class GovernedRunner(Generic[T_task]):
         *,
         fail_on_violation: bool = False,
         log_violations: bool = True,
-        violation_callback: callable | None = None,
+        violation_callback: Callable[[PolicyViolation], None] | None = None,
     ):
         """
         Initialize governed runner.

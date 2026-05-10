@@ -166,6 +166,35 @@ class TestGovernedRunnerViolationTracking:
         assert runner._current_signals == []
 
 
+class TestGovernedRunnerCallableAnnotation:
+    """Regression: `violation_callback` was annotated `callable | None`.
+
+    `callable` is a builtin function, not a type. `typing.get_type_hints`
+    raises ``TypeError`` on the original annotation, which breaks Pydantic
+    auto-derivation, inspect-based config helpers, and runtime hint readers.
+    """
+
+    def test_get_type_hints_resolves_violation_callback(self):
+        import typing
+
+        hints = typing.get_type_hints(GovernedRunner.__init__)
+        assert "violation_callback" in hints
+        # Resolving without raising is the load-bearing assertion.
+
+    def test_callback_typing_includes_callable(self):
+        import typing
+
+        hint = typing.get_type_hints(GovernedRunner.__init__)["violation_callback"]
+        # Hint is `Callable[[PolicyViolation], None] | None` — a Union with
+        # NoneType. ``typing.get_args`` returns the union members.
+        args = typing.get_args(hint)
+        assert type(None) in args
+        # The non-None arg should be a Callable, not the builtin `callable`.
+        non_none = [a for a in args if a is not type(None)]
+        assert len(non_none) == 1
+        assert typing.get_origin(non_none[0]) in (typing.Callable, __import__("collections.abc", fromlist=["Callable"]).Callable)
+
+
 class TestGovernedRunnerCallbacks:
     def test_violation_callback_invoked(self):
         cb = MagicMock()
