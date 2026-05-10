@@ -216,6 +216,10 @@ class TrustHandshake:
         self._cache_ttl = timedelta(seconds=cache_ttl_seconds)
         # V10: Limit pending challenges to prevent DoS accumulation
         self._max_pending_challenges = 1000
+        # Serialise the purge/check/insert sequence on _pending_challenges so
+        # concurrent initiate() coroutines cannot all pass the size check and
+        # then each insert past the cap.
+        self._challenges_lock = asyncio.Lock()
 
     def _get_cached_result(self, peer_did: str) -> Optional[HandshakeResult]:
         """Get cached verification result if still valid."""
@@ -295,16 +299,20 @@ class TrustHandshake:
         """Execute the core handshake: generate nonce, verify it comes back."""
         challenge: Optional[HandshakeChallenge] = None
         try:
-            # V10: Purge expired challenges and enforce limit
-            self._purge_expired_challenges()
-            if len(self._pending_challenges) >= self._max_pending_challenges:
-                return HandshakeResult.failure(
-                    peer_did, "Too many pending challenges — try again later", start
-                )
+            # V10: Purge expired challenges and enforce limit. The purge,
+            # size check, and insert MUST run as one atomic step under the
+            # async lock — otherwise concurrent initiates can each pass
+            # the size check and then each insert, blowing past the cap.
+            async with self._challenges_lock:
+                self._purge_expired_challenges()
+                if len(self._pending_challenges) >= self._max_pending_challenges:
+                    return HandshakeResult.failure(
+                        peer_did, "Too many pending challenges — try again later", start
+                    )
 
-            # Generate nonce challenge (with optional RFC 9334 freshness nonce)
-            challenge = HandshakeChallenge.generate(require_freshness=require_freshness)
-            self._pending_challenges[challenge.challenge_id] = challenge
+                # Generate nonce challenge (with optional RFC 9334 freshness nonce)
+                challenge = HandshakeChallenge.generate(require_freshness=require_freshness)
+                self._pending_challenges[challenge.challenge_id] = challenge
 
             # Get peer response
             response = await self._get_peer_response(peer_did, challenge)
