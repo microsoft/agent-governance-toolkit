@@ -273,3 +273,38 @@ def test_non_method_attributes_still_proxy_through():
     governor = _make_governor(RAGPolicy())
     governed = governor.wrap(inner, collection="docs")
     assert governed.search_kwargs == {"k": 5}
+
+
+class _LegacyOnlyRetriever:
+    """Retriever exposing only the legacy v0.1 API (no .invoke())."""
+
+    def __init__(self, docs: List[_FakeDoc]):
+        self._docs = docs
+
+    def get_relevant_documents(self, query: str) -> List[_FakeDoc]:
+        return self._docs
+
+
+def test_legacy_retriever_rejects_kwargs_loudly():
+    """Regression: previously _retrieve fell back to
+    .get_relevant_documents(query) when .invoke was unavailable, and
+    silently dropped any kwargs the caller had passed. Tenant-scoping
+    filters and similar arguments vanished, so governance approved a
+    query that then ran against a wider scope than the caller intended.
+    """
+    retriever = _LegacyOnlyRetriever([_FakeDoc("clean")])
+    governor = _make_governor(RAGPolicy())
+    governed = governor.wrap(retriever, collection="docs")
+
+    with pytest.raises(TypeError, match="cannot accept kwargs"):
+        governed.invoke("query", filter={"tenant": "tenant-a"})
+
+
+def test_legacy_retriever_accepts_no_kwargs():
+    """Bare .get_relevant_documents path (no kwargs) still works."""
+    retriever = _LegacyOnlyRetriever([_FakeDoc("clean")])
+    governor = _make_governor(RAGPolicy())
+    governed = governor.wrap(retriever, collection="docs")
+
+    assert len(governed.invoke("query")) == 1
+    assert len(governed.get_relevant_documents("query")) == 1

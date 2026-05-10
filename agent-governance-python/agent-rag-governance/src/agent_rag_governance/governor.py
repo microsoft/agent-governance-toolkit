@@ -272,6 +272,18 @@ class RAGGovernor:
         if hasattr(retriever, "invoke"):
             return retriever.invoke(query, **kwargs)
         if hasattr(retriever, "get_relevant_documents"):
+            # Legacy LangChain v0.1 API only accepts the query string.
+            # Silently dropping kwargs (e.g., tenant filters, search
+            # arguments) would let governance pass while the underlying
+            # retrieval ran with a wider scope than the caller intended.
+            if kwargs:
+                raise TypeError(
+                    f"Retriever {type(retriever).__name__!r} only exposes "
+                    ".get_relevant_documents(query) (LangChain v0.1 API) "
+                    "and cannot accept kwargs "
+                    f"{sorted(kwargs.keys())!r}. Upgrade the retriever to "
+                    "the .invoke(query, **kwargs) API or drop the kwargs."
+                )
             return retriever.get_relevant_documents(query)
         raise TypeError(
             f"Retriever {type(retriever).__name__!r} has no .invoke() or "
