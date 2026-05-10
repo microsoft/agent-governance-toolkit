@@ -46,23 +46,74 @@ def test_validate_token_returns_bound_session_without_caller_asserted_agent():
 def test_bootstrap_session_supports_static_server_tokens():
     authenticator = MCPSessionAuthenticator()
 
-    authenticator.bootstrap_session("did:mesh:agent-001", "server-bootstrap-token")
+    authenticator.bootstrap_session(
+        "did:mesh:agent-001",
+        "server-bootstrap-token",
+        ttl=timedelta(hours=1),
+    )
 
     session = authenticator.validate_token("server-bootstrap-token")
     assert session is not None
     assert session.agent_id == "did:mesh:agent-001"
-    assert session.expires_at is None
+    assert session.expires_at is not None
 
 
-def test_bootstrap_session_does_not_expire_with_runtime_ttl():
+def test_bootstrap_session_uses_its_own_ttl_independent_of_runtime():
+    # The authenticator's session_ttl applies to create_session; bootstrap
+    # sessions get their own TTL passed at bootstrap time.
     authenticator = MCPSessionAuthenticator(session_ttl=timedelta(milliseconds=10))
 
-    authenticator.bootstrap_session("did:mesh:agent-001", "server-bootstrap-token")
+    authenticator.bootstrap_session(
+        "did:mesh:agent-001",
+        "server-bootstrap-token",
+        ttl=timedelta(hours=1),
+    )
     time.sleep(0.05)
 
     session = authenticator.validate_token("server-bootstrap-token")
     assert session is not None
     assert session.agent_id == "did:mesh:agent-001"
+
+
+def test_bootstrap_session_expires_after_ttl():
+    authenticator = MCPSessionAuthenticator()
+
+    authenticator.bootstrap_session(
+        "did:mesh:agent-001",
+        "server-bootstrap-token",
+        ttl=timedelta(milliseconds=10),
+    )
+
+    time.sleep(0.05)
+    assert authenticator.validate_token("server-bootstrap-token") is None
+
+
+def test_bootstrap_session_rejects_zero_or_negative_ttl():
+    authenticator = MCPSessionAuthenticator()
+
+    with pytest.raises(ValueError, match="ttl must be positive"):
+        authenticator.bootstrap_session(
+            "did:mesh:agent-001",
+            "server-bootstrap-token",
+            ttl=timedelta(0),
+        )
+
+    with pytest.raises(ValueError, match="ttl must be positive"):
+        authenticator.bootstrap_session(
+            "did:mesh:agent-001",
+            "server-bootstrap-token",
+            ttl=timedelta(seconds=-1),
+        )
+
+
+def test_bootstrap_session_requires_ttl_keyword():
+    authenticator = MCPSessionAuthenticator()
+
+    with pytest.raises(TypeError, match="ttl"):
+        authenticator.bootstrap_session(
+            "did:mesh:agent-001",
+            "server-bootstrap-token",
+        )
 
 
 def test_expired_session_is_rejected():
