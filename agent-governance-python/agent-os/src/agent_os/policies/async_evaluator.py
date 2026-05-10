@@ -9,8 +9,8 @@ from multiple OS threads simultaneously.
 
 Concurrency guarantees
 ----------------------
-* **asyncio.Lock** guards coroutine-level access so that only one
-  ``await evaluate(...)`` executes the underlying evaluator at a time.
+* **asyncio.Lock** serialises *policy reloads* across the event loop;
+  evaluations themselves are not gated by this lock.
 * **threading.RLock** guards thread-level access for the synchronous
   :meth:`evaluate_sync` entry-point.
 * A lightweight **read-write lock** pattern allows multiple concurrent
@@ -138,8 +138,9 @@ class AsyncPolicyEvaluator:
 
     Wraps :class:`PolicyEvaluator` with proper concurrency controls:
 
-    * :pyobj:`asyncio.Lock` for coroutine safety within a single event
-      loop.
+    * :pyobj:`asyncio.Lock` serialises policy reloads across the event
+      loop. It is intentionally NOT held during ``evaluate`` so that
+      concurrent async evaluations can run in parallel via the executor.
     * :class:`_ReadWriteLock` for thread safety — multiple concurrent
       reads (evaluations) are allowed; writes (policy reloads) acquire
       exclusive access.
@@ -171,10 +172,12 @@ class AsyncPolicyEvaluator:
     async def evaluate(self, context: dict[str, Any]) -> PolicyDecision:
         """Evaluate policies against *context* with async + thread safety.
 
-        Acquires the async lock (coroutine safety) and the read side of
-        the RW lock (thread safety) so that concurrent evaluations can
-        proceed but a policy reload will block until all in-flight
-        evaluations complete.
+        Submits the evaluation to the default executor and acquires the
+        read side of the RW lock (thread safety). Multiple concurrent
+        evaluations run in parallel — concurrency is bounded only by
+        the executor pool size and the underlying RW lock, which lets
+        readers run concurrently while a writer (policy reload) gets
+        exclusive access.
 
         Thread-safety: YES — safe to call from multiple threads via
         ``asyncio.run_coroutine_threadsafe``.
@@ -184,10 +187,14 @@ class AsyncPolicyEvaluator:
         PolicyDecision
             The result of evaluating the loaded policies.
         """
-        async with self._async_lock:
-            return await asyncio.get_running_loop().run_in_executor(
-                None, self._evaluate_with_read_lock, context
-            )
+        # No coroutine-level lock here: the inner read-write lock and
+        # ConcurrencyStats updates are already thread-safe, and wrapping
+        # the executor call in self._async_lock used to fully serialize
+        # async evaluations across the event loop, defeating the whole
+        # point of using an executor.
+        return await asyncio.get_running_loop().run_in_executor(
+            None, self._evaluate_with_read_lock, context
+        )
 
     def evaluate_sync(self, context: dict[str, Any]) -> PolicyDecision:
         """Thread-safe synchronous policy evaluation.
