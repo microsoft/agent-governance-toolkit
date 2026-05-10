@@ -10,10 +10,14 @@ resolution and basic plugin sandboxing (restricted imports).
 from __future__ import annotations
 
 import logging
+import os
 import shutil
+import tempfile
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping, Optional
+
+import yaml
 
 from agent_marketplace.manifest import (
     MANIFEST_FILENAME,
@@ -124,11 +128,9 @@ class PluginInstaller:
         dest = self._plugins_dir / name
         dest.mkdir(parents=True, exist_ok=True)
         manifest_file = dest / MANIFEST_FILENAME
-        import yaml
 
         data = manifest.model_dump(mode="json")
-        with open(manifest_file, "w") as f:
-            yaml.dump(data, f, default_flow_style=False, sort_keys=True)
+        _atomic_write_yaml(manifest_file, data)
 
         logger.info("Installed plugin %s@%s to %s", name, manifest.version, dest)
         return dest
@@ -148,23 +150,62 @@ class PluginInstaller:
         shutil.rmtree(dest)
         logger.info("Uninstalled plugin %s", name)
 
-    def list_installed(self) -> list[PluginManifest]:
+    def list_installed(self, *, verify: bool = True) -> list[PluginManifest]:
         """Return manifests for all installed plugins.
 
+        On-disk manifests are re-verified against ``self._trusted_keys`` so a
+        tampered or unsigned file written after the original install is not
+        silently surfaced as an installed plugin.
+
+        Args:
+            verify: When ``True`` (default), each manifest must carry a valid
+                Ed25519 signature from a trusted author; otherwise it is
+                skipped with a warning. Pass ``False`` to mirror an
+                ``install(verify=False)`` workflow.
+
         Returns:
-            List of installed plugin manifests.
+            List of installed plugin manifests that passed verification.
         """
         results: list[PluginManifest] = []
         if not self._plugins_dir.exists():
             return results
         for child in sorted(self._plugins_dir.iterdir()):
             manifest_path = child / MANIFEST_FILENAME
-            if manifest_path.exists():
-                try:
-                    results.append(load_manifest(manifest_path))
-                except MarketplaceError:
-                    logger.warning("Skipping invalid plugin at %s", child)
+            if not manifest_path.exists():
+                continue
+            try:
+                manifest = load_manifest(manifest_path)
+            except MarketplaceError:
+                logger.warning("Skipping invalid plugin at %s", child)
+                continue
+            if verify and not self._verify_on_disk(manifest, child):
+                continue
+            results.append(manifest)
         return results
+
+    def _verify_on_disk(self, manifest: PluginManifest, location: Path) -> bool:
+        """Re-verify an on-disk manifest's signature against trusted keys."""
+        if not manifest.signature:
+            logger.warning(
+                "Skipping plugin %s at %s: no signature on disk",
+                manifest.name, location,
+            )
+            return False
+        if manifest.author not in self._trusted_keys:
+            logger.warning(
+                "Skipping plugin %s at %s: untrusted author %r",
+                manifest.name, location, manifest.author,
+            )
+            return False
+        try:
+            verify_signature(manifest, self._trusted_keys[manifest.author])
+        except MarketplaceError as exc:
+            logger.warning(
+                "Skipping plugin %s at %s: signature verification failed (%s)",
+                manifest.name, location, exc,
+            )
+            return False
+        return True
 
     # ------------------------------------------------------------------
     # Dependency resolution
@@ -214,6 +255,30 @@ class PluginInstaller:
         """
         top_level = module_name.split(".")[0]
         return top_level not in RESTRICTED_MODULES
+
+
+def _atomic_write_yaml(path: Path, data: Any) -> None:
+    """Write YAML to ``path`` atomically via tempfile + ``os.replace``.
+
+    A torn write or crash leaves either the previous file intact or no file,
+    never a half-written manifest visible to readers.
+    """
+    parent = path.parent
+    fd, tmp_path = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=str(parent)
+    )
+    try:
+        with os.fdopen(fd, "w") as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=True)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def _parse_dependency(dep_spec: str) -> tuple[str, Optional[str]]:
