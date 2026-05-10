@@ -62,6 +62,44 @@ def test_empty_policy_passes_everything():
     assert all(not r.blocked for r in results)
 
 
+def test_pii_mastercard_2_series_detected():
+    """Regression: the credit-card regex previously covered legacy 5-series
+    Mastercard (51-55) but not the 2-series (2221-2720) which has been
+    issued since 2017.
+    """
+    scanner = ContentScanner(["block_pii"])
+    samples = [
+        "Card on file: 2221234567890123",
+        "Card on file: 2500000000000004",
+        "Card on file: 2720994567890127",
+    ]
+    results = scanner.scan(samples)
+    for result in results:
+        assert result.blocked is True
+        assert result.category == "pii"
+
+
+def test_pii_email_with_short_tld_detected():
+    """Regression: TLD class was ``[A-Z|a-z]`` (literal pipe inside the
+    char class). After the fix, all standard ASCII TLDs match cleanly.
+    """
+    scanner = ContentScanner(["block_pii"])
+    samples = [
+        "Reach me at user@example.io",
+        "Reach me at user@example.co",
+        "Reach me at user@example.museum",
+    ]
+    results = scanner.scan(samples)
+    assert all(r.blocked is True for r in results)
+
+
+def test_pii_email_does_not_match_pipe_in_tld():
+    """The literal-pipe character must no longer be accepted in the TLD."""
+    scanner = ContentScanner(["block_pii"])
+    results = scanner.scan(["This is not an email: foo@bar.|||"])
+    assert results[0].blocked is False
+
+
 # ───────────────────────────────────────────────────────────────────────
 # Unicode-bypass regression tests
 # ───────────────────────────────────────────────────────────────────────

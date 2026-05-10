@@ -70,7 +70,10 @@ _INJECTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
 
 _PII_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (
-        re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
+        # The TLD class previously was ``[A-Z|a-z]`` — the ``|`` is a
+        # literal pipe character inside a character class, not an
+        # alternation. The corrected class accepts ASCII letters only.
+        re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
         "email address",
     ),
     (
@@ -82,7 +85,21 @@ _PII_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         "SSN",
     ),
     (
-        re.compile(r"\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\b"),
+        # Credit-card BINs:
+        #   Visa            4 followed by 12 or 15 digits
+        #   Mastercard      51-55 followed by 14 digits (legacy 5-series)
+        #   Mastercard      2221-2720 followed by 12 digits (2-series)
+        #   Amex            34 or 37 followed by 13 digits
+        #   Discover        6011 or 65xx followed by 12 digits
+        re.compile(
+            r"\b(?:"
+            r"4[0-9]{12}(?:[0-9]{3})?"
+            r"|5[1-5][0-9]{14}"
+            r"|2(?:2(?:2[1-9]|[3-9][0-9])|[3-6][0-9]{2}|7(?:[01][0-9]|20))[0-9]{12}"
+            r"|3[47][0-9]{13}"
+            r"|6(?:011|5[0-9]{2})[0-9]{12}"
+            r")\b"
+        ),
         "credit card number",
     ),
 ]
