@@ -84,34 +84,49 @@ class ConcurrencyStats:
 # ---------------------------------------------------------------------------
 
 class _ReadWriteLock:
-    """Simple readers-writer lock built on :class:`threading.RLock`.
+    """Simple readers-writer lock built on :class:`threading.Condition`.
 
     Multiple readers can hold the lock concurrently; a writer gets
     exclusive access (no readers **and** no other writers).
+
+    Implemented with a :class:`threading.Condition` rather than a pair
+    of nested ``RLock``s because the previous implementation acquired
+    the underlying writer ``RLock`` on the **first** reader thread and
+    released it on the **last** reader thread to drop the count to
+    zero — and ``RLock.release`` raises ``RuntimeError`` when invoked
+    on a different thread than the one that acquired it. With true
+    parallel execution the first/last threads are routinely different,
+    which manifested as intermittent ``RuntimeError: cannot release
+    un-acquired lock`` from the executor pool.
     """
 
     def __init__(self) -> None:
+        self._cond = threading.Condition()
         self._readers: int = 0
-        self._lock = threading.RLock()  # protects ``_readers``
-        self._write_lock = threading.RLock()  # exclusive writer access
+        self._writers: int = 0
 
     def acquire_read(self) -> None:
-        with self._lock:
+        with self._cond:
+            while self._writers > 0:
+                self._cond.wait()
             self._readers += 1
-            if self._readers == 1:
-                self._write_lock.acquire()
 
     def release_read(self) -> None:
-        with self._lock:
+        with self._cond:
             self._readers -= 1
             if self._readers == 0:
-                self._write_lock.release()
+                self._cond.notify_all()
 
     def acquire_write(self) -> None:
-        self._write_lock.acquire()
+        with self._cond:
+            while self._readers > 0 or self._writers > 0:
+                self._cond.wait()
+            self._writers += 1
 
     def release_write(self) -> None:
-        self._write_lock.release()
+        with self._cond:
+            self._writers -= 1
+            self._cond.notify_all()
 
 
 # ---------------------------------------------------------------------------
