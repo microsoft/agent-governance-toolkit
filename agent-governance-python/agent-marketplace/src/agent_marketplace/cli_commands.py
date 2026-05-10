@@ -71,24 +71,28 @@ def plugin() -> None:
 @click.option("--version", "-v", default=None, help="Specific version to install")
 def install_plugin(name: str, version: str | None) -> None:
     """Install a plugin from the registry."""
+    import sys
     try:
         installer = _get_installer()
         dest = installer.install(name, version)
         console.print(f"[green]✓[/green] Installed {name} to {dest}")
     except MarketplaceError as exc:
         console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
 
 
 @plugin.command("uninstall")
 @click.argument("name")
 def uninstall_plugin(name: str) -> None:
     """Uninstall a plugin."""
+    import sys
     try:
         installer = _get_installer()
         installer.uninstall(name)
         console.print(f"[green]✓[/green] Uninstalled {name}")
     except MarketplaceError as exc:
         console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
 
 
 @plugin.command("list")
@@ -148,6 +152,7 @@ def search_plugins(query: str) -> None:
 def verify_plugin(path: str, manifest_format: str) -> None:
     """Verify a plugin manifest, with optional format detection for Copilot/Claude plugins."""
     import json
+    import sys
 
     import yaml
 
@@ -203,6 +208,7 @@ def verify_plugin(path: str, manifest_format: str) -> None:
 
     except MarketplaceError as exc:
         console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
 
 
 def _print_verify_result(manifest: "PluginManifest") -> None:
@@ -220,6 +226,7 @@ def _print_verify_result(manifest: "PluginManifest") -> None:
 @click.argument("path", type=click.Path(exists=True))
 def publish_plugin(path: str) -> None:
     """Sign and register a plugin with the registry."""
+    import sys
     try:
         manifest = load_manifest(Path(path))
         registry = _get_registry()
@@ -229,6 +236,7 @@ def publish_plugin(path: str) -> None:
         )
     except MarketplaceError as exc:
         console.print(f"[red]Error:[/red] {exc}")
+        sys.exit(1)
 
 
 @plugin.command("evaluate")
