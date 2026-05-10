@@ -113,7 +113,7 @@ export class OnboardingPanel {
                         await this._completeStep(message.stepId);
                         break;
                     case 'executeAction':
-                        await this._executeAction(message.command, message.args);
+                        await this._executeAction(message.command);
                         break;
                     case 'skipOnboarding':
                         await this._skipOnboarding();
@@ -177,9 +177,27 @@ export class OnboardingPanel {
         }
     }
 
-    private async _executeAction(command: string, args?: any[]): Promise<void> {
+    private async _executeAction(command: string): Promise<void> {
+        // Only run commands declared by a configured onboarding step, and
+        // use the step's own ``args`` rather than anything supplied by the
+        // webview. A compromised renderer therefore cannot smuggle in an
+        // arbitrary VS Code command (e.g. one that opens a folder, runs a
+        // task, or sends keystrokes to the integrated terminal) or attach
+        // attacker-controlled arguments to a legitimate one.
+        const step = typeof command === 'string'
+            ? this._steps.find(s => s.action?.command === command)
+            : undefined;
+        if (!step?.action) {
+            vscode.window.showErrorMessage(
+                `Onboarding tried to run an unrecognized command: ${command}`
+            );
+            return;
+        }
         try {
-            await vscode.commands.executeCommand(command, ...(args || []));
+            await vscode.commands.executeCommand(
+                step.action.command,
+                ...(step.action.args || [])
+            );
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to execute: ${error}`);
         }
