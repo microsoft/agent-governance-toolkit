@@ -31,6 +31,17 @@ export interface MeshClientOptions {
   plaintextPeers?: string[];
   /** Max time (ms) to wait for KNOCK resolution before rejecting a message */
   knockTimeout?: number;
+  /**
+   * Automatically reconnect on non-1000 close events.
+   * Defaults to true. Set to false to keep the legacy manual-only behavior.
+   */
+  autoReconnect?: boolean;
+  /** Max reconnect attempts (default: Number.POSITIVE_INFINITY). */
+  maxReconnectAttempts?: number;
+  /** Base reconnect delay in ms before exponential backoff (default: 1000). */
+  reconnectBaseDelayMs?: number;
+  /** Max reconnect delay cap in ms (default: 60000). */
+  reconnectMaxDelayMs?: number;
 }
 
 export interface MeshSession {
@@ -66,11 +77,22 @@ export class MeshClient {
   private ws: WebSocket | null = null;
   private connected = false;
   private knockTimeout: number;
+  private autoReconnect: boolean;
+  private maxReconnectAttempts: number;
+  private reconnectBaseDelayMs: number;
+  private reconnectMaxDelayMs: number;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private clientInitiatedClose = false;
 
   constructor(options: MeshClientOptions) {
     this.options = options;
     this.plaintextPeers = new Set(options.plaintextPeers ?? []);
     this.knockTimeout = options.knockTimeout ?? 10_000;
+    this.autoReconnect = options.autoReconnect ?? true;
+    this.maxReconnectAttempts = options.maxReconnectAttempts ?? Number.POSITIVE_INFINITY;
+    this.reconnectBaseDelayMs = options.reconnectBaseDelayMs ?? 1000;
+    this.reconnectMaxDelayMs = options.reconnectMaxDelayMs ?? 60_000;
   }
 
   // ── Plaintext peers ─────────────────────────────────────────────
@@ -129,19 +151,61 @@ export class MeshClient {
         if (wasConnected) {
           // Distinguish client-initiated disconnect (1000 Normal Closure) from server / network drops.
           const code = (event as CloseEvent | undefined)?.code;
-          const reason: "client" | "server" | "ws-error" = code === 1000 ? "client" : "server";
+          const isClientInitiated = code === 1000 || this.clientInitiatedClose;
+          const reason: "client" | "server" | "ws-error" = isClientInitiated ? "client" : "server";
           for (const h of this.disconnectHandlers) {
             try { h(reason, code); } catch { /* swallow handler errors */ }
           }
+          // Auto-reconnect on non-client closures (network drops, relay restart).
+          // Mirrors vendored agentmesh-sdk patch #9: never give up by default,
+          // exponential backoff capped at 60s. Caller can opt out via
+          // autoReconnect: false in MeshClientOptions.
+          if (!isClientInitiated && this.autoReconnect) {
+            this.scheduleReconnect();
+          }
         }
+        this.clientInitiatedClose = false;
       };
     });
+    // Successful connect — reset reconnect counter.
+    this.reconnectAttempts = 0;
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer) return; // already scheduled
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      for (const h of this.errorHandlers) {
+        try { h("ws", this.options.agentDid, `auto-reconnect gave up after ${this.reconnectAttempts} attempts`); } catch { /* swallow */ }
+      }
+      return;
+    }
+    const exp = Math.min(this.reconnectBaseDelayMs * 2 ** this.reconnectAttempts, this.reconnectMaxDelayMs);
+    // Light jitter (±20%) to avoid thundering-herd reconnects across many sandboxes.
+    const jitter = exp * (0.8 + Math.random() * 0.4);
+    this.reconnectAttempts++;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.reconnect().catch((err) => {
+        for (const h of this.errorHandlers) {
+          try { h("ws", this.options.agentDid, `reconnect failed: ${err instanceof Error ? err.message : String(err)}`); } catch { /* swallow */ }
+        }
+        // Schedule next attempt — onclose may not fire if connect() rejected before ws.onopen.
+        this.scheduleReconnect();
+      });
+    }, Math.round(jitter));
   }
 
   async disconnect(): Promise<void> {
+    // Cancel any pending reconnect — caller asked to stay disconnected.
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.reconnectAttempts = 0;
     if (!this.connected || !this.ws) return;
+    this.clientInitiatedClose = true;
     this.sendFrame({ v: 1, type: "disconnect", from: this.options.agentDid });
-    this.ws.close();
+    this.ws.close(1000, "client disconnect");
     this.connected = false;
     this.ws = null;
   }
@@ -245,6 +309,19 @@ export class MeshClient {
 
     // Send KNOCK
     const knockId = crypto.randomUUID();
+
+    // X3DH + SecureChannel — compute establishment FIRST so we can embed it
+    // in the KNOCK frame. This lets the receiver auto-bootstrap the responder
+    // session before any ciphertext arrives, eliminating the
+    // "No encrypted session" race that vendored agentmesh-sdk patch #4b
+    // worked around. Backwards-compatible: receivers that don't understand
+    // the `establishment` field fall back to manual acceptSession() calls.
+    const [channel, establishment] = SecureChannel.createSender(
+      this.options.keyManager,
+      peerBundle,
+      new TextEncoder().encode(`${this.options.agentDid}|${peerId}`),
+    );
+
     this.sendFrame({
       v: 1,
       type: "knock",
@@ -253,14 +330,8 @@ export class MeshClient {
       id: knockId,
       ts: new Date().toISOString(),
       intent: { action: "establish_session" },
+      establishment: this.serializeEstablishment(establishment),
     });
-
-    // X3DH + SecureChannel
-    const [channel, establishment] = SecureChannel.createSender(
-      this.options.keyManager,
-      peerBundle,
-      new TextEncoder().encode(`${this.options.agentDid}|${peerId}`),
-    );
 
     const session: MeshSession = {
       peerId,
@@ -516,7 +587,27 @@ export class MeshClient {
     }
 
     if (accepted) {
-      this.knockAccepted.add(from);
+      // Auto-bootstrap responder session if establishment data was embedded
+      // in the knock. Mirrors vendored agentmesh-sdk patch #4b — receiver no
+      // longer needs to call acceptSession() manually before the first
+      // encrypted message arrives.
+      const est = frame.establishment as Record<string, unknown> | undefined;
+      if (est && !this.sessions.has(from)) {
+        try {
+          const establishment = this.deserializeEstablishment(est);
+          this.acceptSession(from, establishment);
+        } catch (err) {
+          for (const h of this.errorHandlers) {
+            try { h("knock", from, `failed to bootstrap responder from KNOCK: ${err instanceof Error ? err.message : String(err)}`); } catch { /* swallow */ }
+          }
+          accepted = false;
+        }
+      } else {
+        this.knockAccepted.add(from);
+      }
+    }
+
+    if (accepted) {
       this.sendFrame({
         v: 1,
         type: "knock_accept",
@@ -548,6 +639,31 @@ export class MeshClient {
   private handleKnockReject(frame: Record<string, unknown>): void {
     const from = frame.from as string;
     this.closeSession(from);
+  }
+
+  // ── Establishment (de)serialization ─────────────────────────────
+
+  private serializeEstablishment(est: ChannelEstablishment): Record<string, unknown> {
+    const out: Record<string, unknown> = {
+      ik: this.uint8ToBase64(est.initiatorIdentityKey),
+      ek: this.uint8ToBase64(est.ephemeralPublicKey),
+    };
+    if (typeof est.usedOneTimeKeyId === "number") out.otk = est.usedOneTimeKeyId;
+    return out;
+  }
+
+  private deserializeEstablishment(obj: Record<string, unknown>): ChannelEstablishment {
+    const ik = obj.ik;
+    const ek = obj.ek;
+    if (typeof ik !== "string" || typeof ek !== "string") {
+      throw new Error("malformed establishment: missing ik/ek");
+    }
+    const result: ChannelEstablishment = {
+      initiatorIdentityKey: this.base64ToUint8(ik),
+      ephemeralPublicKey: this.base64ToUint8(ek),
+    };
+    if (typeof obj.otk === "number") result.usedOneTimeKeyId = obj.otk;
+    return result;
   }
 
   // ── Utilities ───────────────────────────────────────────────────
