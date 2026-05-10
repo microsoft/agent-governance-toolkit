@@ -226,14 +226,22 @@ class IntegrityVerifier:
         self._manifest: Optional[dict] = None
 
         if manifest_path and os.path.exists(manifest_path):
+            # A corrupted manifest must fail closed. Previously the
+            # JSONDecodeError was caught and verification continued
+            # with self._manifest = None, which made every "missing
+            # expected" check pass — i.e. a deliberately-broken
+            # manifest unlocked the same default-pass path as having
+            # no manifest at all.
             try:
                 with open(manifest_path, encoding="utf-8") as f:
                     self._manifest = json.load(f)
             except json.JSONDecodeError as e:
-                import logging
-                logging.getLogger(__name__).warning(
-                    "Corrupted manifest at %s: %s", manifest_path, e
-                )
+                raise ValueError(
+                    f"Integrity manifest at {manifest_path!r} is corrupt and "
+                    f"cannot be parsed: {e}. Refusing to start with a manifest "
+                    "that cannot be verified — regenerate it with "
+                    "IntegrityVerifier.generate_manifest()."
+                ) from e
 
     def verify(self) -> IntegrityReport:
         """Run full integrity verification.
@@ -256,7 +264,23 @@ class IntegrityVerifier:
                 if self._manifest and mod_name in self._manifest.get("files", {}):
                     expected = self._manifest["files"][mod_name]["sha256"]
 
-                passed = expected is None or expected == actual_hash
+                # When a manifest is configured, every covered module
+                # MUST have an entry. The previous default
+                # ``passed = expected is None or expected == actual``
+                # rule treated a missing entry as a pass, so an
+                # attacker who could write to the manifest could just
+                # delete the entry for the file they had tampered
+                # with. Now: no entry == failure when a manifest is in
+                # use; no manifest at all == baseline mode (still pass).
+                if self._manifest is None:
+                    passed = True
+                    error: Optional[str] = None
+                elif expected is None:
+                    passed = False
+                    error = "missing manifest entry"
+                else:
+                    passed = expected == actual_hash
+                    error = "hash mismatch" if not passed else None
                 if not passed:
                     report.passed = False
 
@@ -267,7 +291,7 @@ class IntegrityVerifier:
                         expected_hash=expected,
                         actual_hash=actual_hash,
                         passed=passed,
-                        error="hash mismatch" if not passed else None,
+                        error=error,
                     )
                 )
             except (ImportError, ValueError):
@@ -311,7 +335,18 @@ class IntegrityVerifier:
                 if self._manifest and key in self._manifest.get("functions", {}):
                     expected = self._manifest["functions"][key]
 
-                passed = expected is None or expected == actual_hash
+                # Same fail-closed semantics as the file-hash branch:
+                # missing entries in a configured manifest are
+                # failures, not passes.
+                if self._manifest is None:
+                    passed = True
+                    error: Optional[str] = None
+                elif expected is None:
+                    passed = False
+                    error = "missing manifest entry"
+                else:
+                    passed = expected == actual_hash
+                    error = "bytecode mismatch" if not passed else None
                 if not passed:
                     report.passed = False
 
@@ -322,6 +357,7 @@ class IntegrityVerifier:
                         expected_hash=expected,
                         actual_hash=actual_hash,
                         passed=passed,
+                        error=error,
                     )
                 )
             except ImportError:

@@ -190,6 +190,96 @@ class TestIntegrityVerifier:
 
         assert "nonexistent.module.xyz" in report.modules_missing
 
+    def test_corrupt_manifest_raises_on_construction(self, tmp_path: Path):
+        """Regression: a corrupt manifest used to be caught silently and
+        the verifier proceeded with self._manifest = None, which made
+        every "missing entry" check pass — so a deliberately-broken
+        manifest unlocked the same default-pass path as having no
+        manifest at all. Now construction raises ValueError.
+        """
+        import pytest
+
+        manifest_path = tmp_path / "integrity.json"
+        manifest_path.write_text("{not valid json", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="corrupt"):
+            IntegrityVerifier(
+                manifest_path=str(manifest_path),
+                modules=["agent_compliance.integrity"],
+            )
+
+    def test_missing_manifest_entry_fails_closed(self, tmp_path: Path):
+        """Regression: when a manifest is configured, modules whose
+        entry was deleted from the manifest used to pass (``expected
+        is None`` short-circuited the comparison to True). An attacker
+        who could write to the manifest could simply delete the entry
+        for the module they had tampered with. Now: missing entry =
+        failure when a manifest is in use.
+        """
+        manifest_path = str(tmp_path / "integrity.json")
+        IntegrityVerifier(
+            modules=["agent_compliance.integrity"],
+        ).generate_manifest(manifest_path)
+
+        # Delete the entry an attacker would have tampered with.
+        with open(manifest_path, encoding="utf-8") as f:
+            manifest = json.load(f)
+        manifest["files"] = {}
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest, f)
+
+        verifier = IntegrityVerifier(
+            manifest_path=manifest_path,
+            modules=["agent_compliance.integrity"],
+        )
+        report = verifier.verify()
+
+        assert report.passed is False
+        failures = [r for r in report.file_results if not r.passed]
+        assert any(r.error == "missing manifest entry" for r in failures)
+
+    def test_missing_function_entry_fails_closed(self, tmp_path: Path):
+        """Same fail-closed rule for the critical-function bytecode
+        check: a manifest that omits a covered function's entry
+        must fail rather than default-pass.
+        """
+        manifest_path = str(tmp_path / "integrity.json")
+        # Pick a real function from the integrity module itself so we
+        # can resolve and hash it without dragging in extra modules.
+        critical = [("agent_compliance.integrity", "_hash_function_bytecode")]
+
+        IntegrityVerifier(
+            modules=["agent_compliance.integrity"],
+            critical_functions=critical,
+        ).generate_manifest(manifest_path)
+
+        with open(manifest_path, encoding="utf-8") as f:
+            manifest = json.load(f)
+        manifest["functions"] = {}
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest, f)
+
+        verifier = IntegrityVerifier(
+            manifest_path=manifest_path,
+            modules=["agent_compliance.integrity"],
+            critical_functions=critical,
+        )
+        report = verifier.verify()
+
+        assert report.passed is False
+        function_failures = [r for r in report.function_results if not r.passed]
+        assert any(r.error == "missing manifest entry" for r in function_failures)
+
+    def test_no_manifest_keeps_baseline_mode(self):
+        """Without any manifest configured, verification should still
+        produce a passing baseline report (no expected hashes to
+        compare against). The fail-closed change applies only when a
+        manifest IS supplied.
+        """
+        verifier = IntegrityVerifier(modules=["agent_compliance.integrity"])
+        report = verifier.verify()
+        assert report.passed is True
+
     def test_generate_manifest(self, tmp_path: Path):
         manifest_path = str(tmp_path / "integrity.json")
         verifier = IntegrityVerifier(
