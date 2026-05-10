@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import enum
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -22,6 +23,13 @@ from agent_marketplace.exceptions import MarketplaceError
 logger = logging.getLogger(__name__)
 
 MANIFEST_FILENAME = "agent-plugin.yaml"
+
+# Tighter than ``str.isdigit()``: matches only ASCII decimal digits 0-9.
+# isdigit() returns True for many Unicode digit-like characters (e.g.
+# superscript ``²``, circled ``⒈``) that ``int()`` cannot parse, so an
+# isdigit()-based check lets through versions whose components later
+# crash ``_semver_tuple``'s sort path in the registry.
+_ASCII_DIGITS_RE = re.compile(r"^[0-9]+$")
 
 
 class PluginType(str, enum.Enum):
@@ -82,12 +90,21 @@ class PluginManifest(BaseModel):
     @field_validator("version")
     @classmethod
     def validate_version(cls, v: str) -> str:
-        """Validate basic semver format (MAJOR.MINOR.PATCH)."""
+        """Validate basic semver format (MAJOR.MINOR.PATCH).
+
+        Each component must consist of ASCII decimal digits 0-9 only.
+        ``str.isdigit()`` was insufficient — it returns True for Unicode
+        digits like superscripts (``"²"``) and circled numerals (``"⒈"``)
+        that ``int()`` cannot parse. A version like ``"1.0.²"`` would
+        slip past an ``isdigit()``-based check and then crash the
+        registry's sort path (``_semver_tuple``) on every lookup,
+        DoSing the marketplace.
+        """
         parts = v.split(".")
         if len(parts) < 2 or len(parts) > 3:
             raise MarketplaceError(f"Invalid version format: {v} (expected MAJOR.MINOR[.PATCH])")
         for part in parts:
-            if not part.isdigit():
+            if not part or not _ASCII_DIGITS_RE.match(part):
                 raise MarketplaceError(f"Invalid version component: {part}")
         return v
 

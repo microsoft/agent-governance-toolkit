@@ -227,5 +227,23 @@ class PluginRegistry:
 
 
 def _semver_tuple(version: str) -> tuple[int, ...]:
-    """Convert a version string to a comparable tuple."""
-    return tuple(int(p) for p in version.split("."))
+    """Convert a version string to a comparable tuple.
+
+    Defensive against versions that slipped past
+    :func:`PluginManifest.validate_version` — for example, manifests
+    loaded from a tampered storage file or from a future schema
+    migration that loosened the validator. An unparseable version sorts
+    as ``(0,)`` (oldest possible) rather than crashing the registry's
+    ``max(...)`` / ``sorted(...)`` calls and DoSing every consumer that
+    asks for ``get_plugin``, ``search``, or ``list_plugins``.
+    """
+    try:
+        return tuple(int(p) for p in version.split("."))
+    except (ValueError, TypeError) as exc:
+        logger.warning(
+            "Cannot parse version %r as ASCII semver tuple (%s); "
+            "sorting as (0,)",
+            version,
+            exc,
+        )
+        return (0,)
