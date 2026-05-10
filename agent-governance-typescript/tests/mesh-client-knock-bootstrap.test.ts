@@ -65,6 +65,7 @@ function makeClient(did: string, overrides?: Partial<MeshClientOptions>): MeshCl
   return new MeshClient({
     relayUrl: "http://localhost:8080",
     registryUrl: "http://localhost:8081",
+    autoRegister: false,
     keyManager: makeKeyManager(),
     agentDid: did,
     autoReconnect: false,
@@ -81,6 +82,7 @@ describe("MeshClient KNOCK auto-bootstrap (G1)", () => {
     const sender = new MeshClient({
       relayUrl: "http://localhost:8080",
       registryUrl: "http://localhost:8081",
+      autoRegister: false,
       keyManager: km,
       agentDid: "did:agentmesh:alice",
       autoReconnect: false,
@@ -116,6 +118,7 @@ describe("MeshClient KNOCK auto-bootstrap (G1)", () => {
     const receiver = new MeshClient({
       relayUrl: "http://localhost:8080",
       registryUrl: "http://localhost:8081",
+      autoRegister: false,
       keyManager: receiverKm,
       agentDid: "did:agentmesh:bob",
       autoReconnect: false,
@@ -214,6 +217,7 @@ describe("MeshClient KNOCK auto-bootstrap (G1)", () => {
     const alice = new MeshClient({
       relayUrl: "http://localhost:8080",
       registryUrl: "http://localhost:8081",
+      autoRegister: false,
       keyManager: aliceKm,
       agentDid: "did:agentmesh:alice",
       autoReconnect: false,
@@ -226,6 +230,7 @@ describe("MeshClient KNOCK auto-bootstrap (G1)", () => {
     const bob = new MeshClient({
       relayUrl: "http://localhost:8080",
       registryUrl: "http://localhost:8081",
+      autoRegister: false,
       keyManager: bobKm,
       agentDid: "did:agentmesh:bob",
       autoReconnect: false,

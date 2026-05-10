@@ -72,6 +72,7 @@ function makeClient(overrides?: Partial<MeshClientOptions>): MeshClient {
   return new MeshClient({
     relayUrl: "http://localhost:8080",
     registryUrl: "http://localhost:8081",
+    autoRegister: false,
     keyManager: makeKeyManager(),
     agentDid: "did:agentmesh:test-agent",
     wsFactory: mockWsFactory,

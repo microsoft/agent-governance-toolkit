@@ -16,6 +16,7 @@
 import { SecureChannel, type ChannelEstablishment } from "./channel";
 import { X3DHKeyManager, type PreKeyBundle } from "./x3dh";
 import { type EncryptedMessage } from "./ratchet";
+import { RegistryClient, type RegistryClientOptions, type DiscoverResult } from "./registry-client";
 
 export type WebSocketFactory = (url: string) => WebSocket;
 
@@ -27,6 +28,38 @@ export interface MeshClientOptions {
   displayName?: string;
   /** Custom WebSocket constructor (e.g., for HTTPS_PROXY CONNECT tunneling in Node 22) */
   wsFactory?: WebSocketFactory;
+  /**
+   * Inject a pre-built RegistryClient (overrides registryUrl). Useful for
+   * tests, custom auth, or sharing a client across multiple MeshClients.
+   */
+  registryClient?: RegistryClient;
+  /**
+   * Extra options forwarded to the auto-built RegistryClient when
+   * `registryClient` is not provided. Ignored if registryClient is set.
+   */
+  registryClientOptions?: Partial<Omit<RegistryClientOptions, "baseUrl">>;
+  /**
+   * Capabilities to publish at registration time. The displayName is
+   * automatically appended (so peers can find this agent via
+   * `discover(displayName)`). Default: empty array.
+   */
+  capabilities?: string[];
+  /**
+   * Arbitrary metadata to publish at registration. The display_name is
+   * automatically merged in if displayName is set.
+   */
+  registrationMetadata?: Record<string, string>;
+  /**
+   * Number of one-time pre-keys to generate and upload at connect time.
+   * Each successful X3DH initiation by a peer consumes one. Default 20.
+   */
+  oneTimePrekeyCount?: number;
+  /**
+   * If false, skip auto-registration on connect even when registryUrl is
+   * set (caller will register manually via getRegistry().register()).
+   * Default true.
+   */
+  autoRegister?: boolean;
   /** AMIDs/DIDs that bypass Signal E2E — use legacy base64(JSON) wire format */
   plaintextPeers?: string[];
   /** Max time (ms) to wait for KNOCK resolution before rejecting a message */
@@ -103,6 +136,10 @@ export class MeshClient {
    * Mirrors vendored agentmesh-sdk patch #16.
    */
   private preKnockBuffer: Map<string, Array<{ frame: Record<string, unknown>; timer: ReturnType<typeof setTimeout> }>> = new Map();
+  private readonly registry: RegistryClient | null;
+  private readonly autoRegister: boolean;
+  private readonly oneTimePrekeyCount: number;
+  private registered = false;
 
   constructor(options: MeshClientOptions) {
     this.options = options;
@@ -114,6 +151,28 @@ export class MeshClient {
     this.reconnectMaxDelayMs = options.reconnectMaxDelayMs ?? 60_000;
     this.preKnockBufferSize = options.preKnockBufferSize ?? 5;
     this.preKnockBufferTtlMs = options.preKnockBufferTtlMs ?? 3_000;
+    this.autoRegister = options.autoRegister ?? true;
+    this.oneTimePrekeyCount = options.oneTimePrekeyCount ?? 20;
+    if (options.registryClient) {
+      this.registry = options.registryClient;
+    } else if (options.registryUrl) {
+      this.registry = new RegistryClient({
+        baseUrl: options.registryUrl,
+        ...(options.registryClientOptions ?? {}),
+      });
+    } else {
+      this.registry = null;
+    }
+  }
+
+  /**
+   * Access the RegistryClient (built from registryUrl or injected via
+   * registryClient). Returns null only if MeshClient was constructed
+   * without a registry URL or client — which means discover/peer lookup
+   * features are disabled.
+   */
+  getRegistry(): RegistryClient | null {
+    return this.registry;
   }
 
   // ── Plaintext peers ─────────────────────────────────────────────
@@ -190,6 +249,88 @@ export class MeshClient {
     });
     // Successful connect — reset reconnect counter.
     this.reconnectAttempts = 0;
+
+    // Auto-register the agent in the registry on first successful connect.
+    // Idempotent: a re-connect after a relay restart skips this. The
+    // registry POST is idempotent on its end too (409 = already present).
+    if (this.autoRegister && this.registry && !this.registered) {
+      await this.registerSelf();
+    }
+  }
+
+  /**
+   * Publish this agent in the registry and upload an X3DH pre-key bundle.
+   *
+   * - Generates a signed pre-key and `oneTimePrekeyCount` one-time
+   *   pre-keys via `keyManager.generateSignedPreKey()` /
+   *   `generateOneTimePreKeys()`.
+   * - Capabilities are `[displayName?, ...options.capabilities]` so peers
+   *   can find this agent via `registry.discover(displayName)`.
+   * - Throws RegistryError on transport / 4xx (other than 409) / 5xx
+   *   failure. Callers that want best-effort registration should catch.
+   *
+   * Safe to call directly when `autoRegister: false` was used.
+   */
+  async registerSelf(): Promise<void> {
+    if (!this.registry) {
+      throw new Error("MeshClient.registerSelf: no registry configured");
+    }
+    const km = this.options.keyManager;
+    // identityKey is the long-term X25519 public key derived from the
+    // Ed25519 signing key in the X3DHKeyManager constructor.
+    const identityKey = km.identityKey.publicKey;
+    const signedPreKey = km.generateSignedPreKey();
+    const oneTimePreKeys = km.generateOneTimePreKeys(this.oneTimePrekeyCount);
+
+    // Capabilities: include displayName so name-based discover() works.
+    const caps: string[] = [];
+    const dn = this.options.displayName;
+    if (dn) caps.push(dn);
+    for (const c of this.options.capabilities ?? []) {
+      if (c && !caps.includes(c)) caps.push(c);
+    }
+
+    const metadata: Record<string, string> = { ...(this.options.registrationMetadata ?? {}) };
+    if (dn && metadata.display_name === undefined) metadata.display_name = dn;
+
+    await this.registry.register(this.options.agentDid, identityKey, caps, metadata);
+    await this.registry.uploadPrekeys(
+      this.options.agentDid,
+      identityKey,
+      signedPreKey,
+      oneTimePreKeys,
+    );
+    this.registered = true;
+  }
+
+  /**
+   * Discover peers advertising a given capability. Returns [] if no
+   * registry is configured.
+   */
+  async discover(capability: string, limit = 50): Promise<DiscoverResult[]> {
+    if (!this.registry) return [];
+    return this.registry.discover(capability, limit);
+  }
+
+  /**
+   * Convenience: fetch a peer's pre-key bundle from the registry, then
+   * call `establishSession`. Throws if no registry is configured or no
+   * bundle is published for `peerId`.
+   */
+  async establishSessionWithPeer(peerId: string): Promise<MeshSession> {
+    const existing = this.sessions.get(peerId);
+    if (existing) return existing;
+    if (this.isPlaintextPeer(peerId)) {
+      return this.establishSession(peerId, {} as PreKeyBundle);
+    }
+    if (!this.registry) {
+      throw new Error("MeshClient.establishSessionWithPeer: no registry configured");
+    }
+    const bundle = await this.registry.fetchPrekeys(peerId);
+    if (!bundle) {
+      throw new Error(`MeshClient.establishSessionWithPeer: no prekey bundle for ${peerId}`);
+    }
+    return this.establishSession(peerId, bundle);
   }
 
   private scheduleReconnect(): void {
