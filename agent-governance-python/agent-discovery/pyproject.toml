@@ -38,7 +38,7 @@ classifiers = [
 dependencies = [
     "pydantic>=2.5.0,<3.0",
     "click>=8.1.0,<9.0",
-    "rich>=13.0.0,<14.0",
+    "rich>=13.0.0,<16.0",
     "structlog>=24.1.0,<26.0",
     "pyyaml>=6.0,<7.0",
 ]
