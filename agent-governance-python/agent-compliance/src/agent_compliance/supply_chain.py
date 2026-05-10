@@ -268,12 +268,37 @@ class SupplyChainGuard:
 
         Does NOT call external APIs — compares against a provided timestamp.
         For actual freshness checks, use ``check_freshness_live()``.
+
+        A future ``publish_time`` (clock skew, tampered registry response,
+        or a deliberately spoofed timestamp meant to dodge the
+        backdated-package defense) is reported as a separate
+        ``future-timestamp`` finding rather than silently triggering the
+        "fresh-publish" branch via a negative delta.
         """
         now = datetime.now(timezone.utc)
         if publish_time.tzinfo is None:
             publish_time = publish_time.replace(tzinfo=timezone.utc)
 
-        if now - publish_time < timedelta(days=self.config.freshness_days):
+        # A future publish_time is itself a red flag — clamp the delta to
+        # zero for the recent-publish check and emit a distinct finding so
+        # the operator can see the spoofed/tampered timestamp directly
+        # instead of having it masquerade as a normal recent publish.
+        if publish_time > now:
+            return SupplyChainFinding(
+                package=package,
+                version=version,
+                severity="high",
+                rule="future-timestamp",
+                message=(
+                    f"Package '{package}=={version}' has a publish timestamp "
+                    f"{(publish_time - now).total_seconds():.0f}s in the "
+                    "future — possible clock skew, tampered registry "
+                    "response, or backdating-defense evasion."
+                ),
+            )
+
+        delta = now - publish_time
+        if delta < timedelta(days=self.config.freshness_days):
             return SupplyChainFinding(
                 package=package,
                 version=version,
@@ -281,7 +306,7 @@ class SupplyChainGuard:
                 rule="fresh-publish",
                 message=(
                     f"Package '{package}=={version}' was published only "
-                    f"{(now - publish_time).days} day(s) ago "
+                    f"{delta.days} day(s) ago "
                     f"(threshold: {self.config.freshness_days} days)."
                 ),
             )

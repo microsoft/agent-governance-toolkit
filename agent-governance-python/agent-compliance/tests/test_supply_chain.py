@@ -238,6 +238,44 @@ class TestCheckFreshness:
         finding = strict_guard.check_freshness("new-pkg", "0.1.0", ten_days_ago)
         assert finding is not None  # threshold is 14 days
 
+    def test_future_publish_time_emits_future_timestamp_finding(
+        self, guard: SupplyChainGuard
+    ) -> None:
+        """Regression: a future publish_time previously made
+        ``now - publish_time`` negative, which is always less than the
+        freshness window — so the fresh-publish branch fired and the
+        actual signal (timestamp tampering) got buried in noise. The
+        backdated-package defense was unreachable from a future-stamped
+        publish. Future timestamps must surface as their own finding.
+        """
+        future = datetime.now(timezone.utc) + timedelta(days=30)
+        finding = guard.check_freshness("evil-pkg", "1.0.0", future)
+        assert finding is not None
+        assert finding.rule == "future-timestamp"
+        assert finding.severity == "high"
+        assert "future" in finding.message.lower()
+
+    def test_future_publish_time_naive_datetime_handled(
+        self, guard: SupplyChainGuard
+    ) -> None:
+        """Naive future timestamps must be coerced to UTC and still flagged."""
+        future_naive = (datetime.now(timezone.utc) + timedelta(days=1)).replace(tzinfo=None)
+        finding = guard.check_freshness("evil-pkg", "1.0.0", future_naive)
+        assert finding is not None
+        assert finding.rule == "future-timestamp"
+
+    def test_clock_skew_does_not_emit_fresh_publish(
+        self, guard: SupplyChainGuard
+    ) -> None:
+        """A small future delta (typical clock skew) is still a future
+        timestamp, not a fresh publish — they must be distinguishable.
+        """
+        skewed = datetime.now(timezone.utc) + timedelta(seconds=30)
+        finding = guard.check_freshness("evil-pkg", "1.0.0", skewed)
+        assert finding is not None
+        assert finding.rule == "future-timestamp"
+        assert finding.rule != "fresh-publish"
+
 
 # ---------------------------------------------------------------------------
 # scan_directory
