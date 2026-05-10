@@ -358,13 +358,31 @@ class X3DHKeyManager:
 
 
 def _kdf(ikm: bytes) -> bytes:
-    """Derive a 32-byte shared secret from the concatenated DH outputs."""
-    # Prepend 32 bytes of 0xFF as specified by Signal X3DH
-    salt = b"\xff" * 32
+    """Derive a 32-byte shared secret from the concatenated DH outputs.
+
+    Implements the KDF as specified by the Signal X3DH protocol §2.2:
+
+      F  = 0xFF repeated 32 times (for X25519)
+      KM = the concatenation of the DH outputs
+      KDF input = F || KM
+      HKDF(salt=zero-filled[32], info="<protocol-info>")
+
+    The previous implementation passed 0xFF×32 as the HKDF *salt* while
+    feeding raw ``dh_concat`` as IKM, which produces a different
+    derived key than a spec-compliant peer would compute. Two
+    implementations using the old logic could interop with each other,
+    but neither could interop with anyone following the spec.
+
+    NOTE: This is a wire-format change. Existing sessions established
+    with the prior KDF cannot decrypt messages produced by the fixed
+    KDF and vice-versa; both peers must rerun X3DH after upgrade.
+    """
+    # F = 0xFF repeated 32 times, prepended to the DH concat per spec.
+    f = b"\xff" * 32
     hkdf = HKDF(
         algorithm=SHA256(),
         length=KEY_LEN,
-        salt=salt,
+        salt=b"\x00" * 32,
         info=X3DH_INFO,
     )
-    return hkdf.derive(ikm)
+    return hkdf.derive(f + ikm)
