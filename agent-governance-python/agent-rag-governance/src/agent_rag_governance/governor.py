@@ -150,7 +150,7 @@ class RAGGovernor:
         self._check_collection(collection)
 
         # 2. Rate limiting
-        self._check_rate()
+        self._check_rate(collection=collection, query=query)
 
         # 3. Retrieve
         docs = self._retrieve(retriever, query, kwargs)
@@ -185,14 +185,14 @@ class RAGGovernor:
                 self._audit_logger.emit(entry)
             raise CollectionDeniedError(collection, self.agent_id, reason)
 
-    def _check_rate(self) -> None:
+    def _check_rate(self, *, collection: str, query: str) -> None:
         limit = self.policy.max_retrievals_per_minute
         if not self._rate_limiter.check(self.agent_id, limit):
             if self._audit_logger:
                 entry = make_entry(
                     agent_id=self.agent_id,
-                    collection="",
-                    query="",
+                    collection=collection,
+                    query=query,
                     num_chunks_retrieved=0,
                     num_chunks_blocked=0,
                     decision="rate_limited",

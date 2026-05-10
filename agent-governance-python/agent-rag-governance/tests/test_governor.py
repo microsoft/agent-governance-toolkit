@@ -138,6 +138,45 @@ def test_no_content_policies_passes_all_chunks():
     assert len(result) == 2
 
 
+def test_rate_limit_audit_records_collection_and_query():
+    """Regression: previously rate-limit audit entries logged
+    collection="" and query="", so a hashed empty query was the only
+    breadcrumb the operator had — they could not tie the rate-limit
+    event back to which collection or query the agent had been
+    hammering. Now the actual collection and query thread through.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as f:
+        log_path = f.name
+
+    policy = RAGPolicy(
+        max_retrievals_per_minute=2,
+        audit_enabled=True,
+        audit_log_path=log_path,
+    )
+    governor = RAGGovernor(policy=policy, agent_id="rate-limited-agent")
+    governed = governor.wrap(_FakeRetriever([_FakeDoc("clean")]), collection="public_docs")
+
+    governed.invoke("how do I reset my password?")
+    governed.invoke("how do I reset my password?")
+    with pytest.raises(RateLimitExceededError):
+        governed.invoke("how do I reset my password?")
+
+    import hashlib
+
+    lines = Path(log_path).read_text().strip().splitlines()
+    rate_limit_entries = [json.loads(line) for line in lines if json.loads(line)["decision"] == "rate_limited"]
+    assert len(rate_limit_entries) == 1
+    entry = rate_limit_entries[0]
+    assert entry["collection"] == "public_docs"
+    # The query is hashed before storage; what matters is that the
+    # hash is *the* hash of the actual query, not the hash of an
+    # empty string (which is what the previous code wrote).
+    empty_hash = hashlib.sha256(b"").hexdigest()
+    expected_hash = hashlib.sha256(b"how do I reset my password?").hexdigest()
+    assert entry["query_hash"] != empty_hash
+    assert entry["query_hash"] == expected_hash
+
+
 def test_get_relevant_documents_compat():
     docs = [_FakeDoc("clean text")]
     retriever = _FakeRetriever(docs)
