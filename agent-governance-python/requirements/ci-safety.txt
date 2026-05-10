@@ -1,0 +1,3 @@
+# Hashed CI safety scanner (Scorecard Pinned-Dependencies compliance)
+safety==3.2.1 \
+    --hash=sha256:9f53646717ba052e1bf631bd54fb3da0fafa58e85d578b20a8b9affdcf81889e

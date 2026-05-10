@@ -224,7 +224,7 @@ jobs:
         working-directory: agent-governance-python/${{ matrix.package }}
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
-          pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==0.26.0 2>/dev/null || true
+          pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt" 2>/dev/null || true
       - name: Test ${{ matrix.package }}
         if: env.RUN_TESTS == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
@@ -255,7 +255,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install build tools
-        run: pip install --no-cache-dir build==1.2.2 setuptools==75.8.0
+        run: pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-build.txt
       - name: Build ${{ matrix.package }}
         working-directory: agent-governance-python/${{ matrix.package }}
         run: python -m build
@@ -275,7 +275,7 @@ jobs:
           python-version: "3.11"
       - name: Install safety
         run: |
-          pip install --no-cache-dir safety==3.2.1
+          pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-safety.txt"
       - name: Check dependencies
         env:
           GIT_TERMINAL_PROMPT: "0"
@@ -371,7 +371,7 @@ jobs:
         working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
-          pip install --no-cache-dir pytest==8.4.1 pytest-asyncio==0.26.0 2>/dev/null || true
+          pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt" 2>/dev/null || true
       - name: Validate Python syntax
         working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
@@ -474,7 +474,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Markdown link check
-        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        uses: gaurav-nelson/github-action-markdown-link-check@5c5dfc0ac2e225883c0e5f03a85311ec2830d368 # v1
         with:
           use-quiet-mode: 'yes'
           use-verbose-mode: 'no'

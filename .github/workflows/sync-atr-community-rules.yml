@@ -51,7 +51,7 @@ jobs:
           node-version: "20"
 
       - name: Install Python dependencies
-        run: pip install --no-cache-dir pyyaml --quiet
+        run: pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-yaml.txt
 
       - name: Pull latest ATR package
         id: atr

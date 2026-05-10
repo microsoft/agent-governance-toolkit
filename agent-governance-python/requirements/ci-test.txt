@@ -1,0 +1,5 @@
+# Hashed CI test dependencies (Scorecard Pinned-Dependencies compliance)
+pytest==8.4.1 \
+    --hash=sha256:539c70ba6fcead8e78eebbf1115e8b589e7565830d7d006a8723f19ac8a0afb7
+pytest-asyncio==0.26.0 \
+    --hash=sha256:7b51ed894f4fbea1340262bdae5135797ebbe21d8638978e35d31c6d19f72fb0
