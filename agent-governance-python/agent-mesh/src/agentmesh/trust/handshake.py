@@ -484,7 +484,10 @@ class TrustHandshake:
             }
 
         if not self.registry.is_trusted(response.agent_did):
-            raise HandshakeError(f"Agent {response.agent_did} is not trusted in registry")
+            return {
+                "valid": False,
+                "reason": f"Agent {response.agent_did} is not trusted in registry",
+            }
 
         # Verify Ed25519 signature over the challenge payload
         payload = f"{response.challenge_id}:{challenge.nonce}:{response.response_nonce}:{response.agent_did}"
