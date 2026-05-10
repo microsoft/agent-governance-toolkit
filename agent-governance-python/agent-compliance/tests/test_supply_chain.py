@@ -277,6 +277,103 @@ class TestScanDirectory:
         findings = guard.scan_directory(str(tmp_path))
         assert findings == []
 
+    def test_monorepo_subpackages_scanned(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        """Regression: scan_directory previously used .glob() (depth=1),
+        so monorepo subpackages were silently skipped. .rglob (or
+        os.walk with prune) catches them.
+        """
+        (tmp_path / "packages" / "service-a").mkdir(parents=True)
+        (tmp_path / "packages" / "service-b").mkdir(parents=True)
+        (tmp_path / "apps" / "web").mkdir(parents=True)
+
+        (tmp_path / "packages" / "service-a" / "package.json").write_text(
+            json.dumps({"dependencies": {"express": "^4.18.0"}})
+        )
+        (tmp_path / "packages" / "service-b" / "requirements.txt").write_text(
+            "flask>=2.0\n"
+        )
+        (tmp_path / "apps" / "web" / "Cargo.toml").write_text(
+            '[package]\nname = "web"\n\n[dependencies]\nserde = "1.0"\n'
+        )
+
+        findings = guard.scan_directory(str(tmp_path))
+
+        packages = {f.package for f in findings}
+        assert "express" in packages
+        assert "flask" in packages
+        assert "serde" in packages
+
+    def test_node_modules_excluded(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        """node_modules contains vendored deps' own package.json files.
+        Including them would generate findings for transitive
+        dependencies the operator never directly committed.
+        """
+        (tmp_path / "package.json").write_text(
+            json.dumps({"dependencies": {"top-level": "^1.0.0"}})
+        )
+        (tmp_path / "node_modules" / "vendored").mkdir(parents=True)
+        (tmp_path / "node_modules" / "vendored" / "package.json").write_text(
+            json.dumps({"dependencies": {"vendored-dep": "^9.9.9"}})
+        )
+
+        findings = guard.scan_directory(str(tmp_path))
+        packages = {f.package for f in findings}
+        assert "top-level" in packages
+        assert "vendored-dep" not in packages
+
+    @pytest.mark.parametrize(
+        "excluded_dir",
+        [".venv", "venv", ".tox", "dist", "build", "__pycache__", "target",
+         ".git", ".pytest_cache", ".mypy_cache", ".ruff_cache"],
+    )
+    def test_default_exclusions_applied(
+        self, guard: SupplyChainGuard, tmp_path: Path, excluded_dir: str,
+    ) -> None:
+        """All default-excluded directories must be skipped during scan."""
+        (tmp_path / "package.json").write_text(
+            json.dumps({"dependencies": {"top-level": "^1.0.0"}})
+        )
+        nested = tmp_path / excluded_dir / "nested"
+        nested.mkdir(parents=True)
+        (nested / "requirements.txt").write_text("evil-pkg>=0.1\n")
+
+        findings = guard.scan_directory(str(tmp_path))
+        packages = {f.package for f in findings}
+        assert "top-level" in packages
+        assert "evil-pkg" not in packages
+
+    def test_custom_exclusions(self, tmp_path: Path) -> None:
+        """Operators can override the default exclusion set."""
+        config = SupplyChainConfig(
+            scan_exclude_dirs=frozenset({"my-vendor"}),
+        )
+        custom_guard = SupplyChainGuard(config)
+
+        (tmp_path / "package.json").write_text(
+            json.dumps({"dependencies": {"top-level": "^1.0.0"}})
+        )
+        # Default-excluded dir is now scanned because the override
+        # didn't list it:
+        (tmp_path / "node_modules").mkdir()
+        (tmp_path / "node_modules" / "package.json").write_text(
+            json.dumps({"dependencies": {"vendored-dep": "^9.9.9"}})
+        )
+        # Custom-excluded dir is skipped:
+        (tmp_path / "my-vendor").mkdir()
+        (tmp_path / "my-vendor" / "package.json").write_text(
+            json.dumps({"dependencies": {"private-dep": "^1.0.0"}})
+        )
+
+        findings = custom_guard.scan_directory(str(tmp_path))
+        packages = {f.package for f in findings}
+        assert "top-level" in packages
+        assert "vendored-dep" in packages  # default exclusion no longer applied
+        assert "private-dep" not in packages  # custom exclusion applied
+
 
 # ---------------------------------------------------------------------------
 # SupplyChainConfig customisation

@@ -13,8 +13,9 @@ Detects supply chain poisoning attempts including:
 from __future__ import annotations
 
 import json
+import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -63,6 +64,30 @@ class SupplyChainConfig:
     allow_ranges: bool = False
     known_packages: Optional[set[str]] = None
     typosquat_threshold: float = 0.85
+    # Directory names skipped during recursive scan_directory walks.
+    # Vendored dependencies under node_modules/.venv/etc. are not the
+    # repository's own supply chain — flagging them would generate
+    # noise proportional to dependency-tree size and could leak
+    # version data the operator never committed.
+    scan_exclude_dirs: frozenset[str] = field(
+        default_factory=lambda: frozenset({
+            "node_modules",
+            ".venv",
+            "venv",
+            ".tox",
+            ".nox",
+            "dist",
+            "build",
+            "__pycache__",
+            ".git",
+            ".hg",
+            ".svn",
+            "target",  # Cargo build output
+            ".pytest_cache",
+            ".mypy_cache",
+            ".ruff_cache",
+        })
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -378,23 +403,57 @@ class SupplyChainGuard:
     # ------------------------------------------------------------------
 
     def scan_directory(self, directory: str) -> list[SupplyChainFinding]:
-        """Scan a directory for all dependency files and check each."""
+        """Scan a directory recursively for dependency manifests.
+
+        Walks ``directory`` and every subdirectory, picking up
+        ``requirements*.txt``, ``package.json``, ``pyproject.toml``, and
+        ``Cargo.toml``. Subdirectories named in
+        ``SupplyChainConfig.scan_exclude_dirs`` (``node_modules``,
+        ``.venv``, ``dist``, ``build``, ``target``, etc.) are skipped
+        so vendored dependencies and build output don't drown the
+        repository's own manifests in noise.
+        """
         findings: list[SupplyChainFinding] = []
         root = Path(directory)
+        excluded = self.config.scan_exclude_dirs
 
-        for req in root.glob("requirements*.txt"):
-            findings.extend(self.check_requirements(str(req)))
-
-        for pj in root.glob("package.json"):
-            findings.extend(self.check_package_json(str(pj)))
-
-        for pp in root.glob("pyproject.toml"):
-            findings.extend(self.check_pyproject(str(pp)))
-
-        for ct in root.glob("Cargo.toml"):
-            findings.extend(self.check_cargo_toml(str(ct)))
+        for path in self._iter_manifest_files(root, excluded):
+            name = path.name
+            if name.startswith("requirements") and name.endswith(".txt"):
+                findings.extend(self.check_requirements(str(path)))
+            elif name == "package.json":
+                findings.extend(self.check_package_json(str(path)))
+            elif name == "pyproject.toml":
+                findings.extend(self.check_pyproject(str(path)))
+            elif name == "Cargo.toml":
+                findings.extend(self.check_cargo_toml(str(path)))
 
         return findings
+
+    @staticmethod
+    def _iter_manifest_files(
+        root: Path, excluded: "frozenset[str]"
+    ) -> "list[Path]":
+        """Walk ``root`` recursively, yielding manifest files outside
+        any excluded directory.
+
+        Uses os.walk so we can prune subtrees in-place — rglob would
+        descend into node_modules and .venv before the filter could
+        reject the matches.
+        """
+        results: list[Path] = []
+        manifest_names = {"package.json", "pyproject.toml", "Cargo.toml"}
+        for dirpath, dirnames, filenames in os.walk(root):
+            # Prune excluded subdirectories so the walk doesn't descend
+            # into them — purely a noise/perf measure for monorepos.
+            dirnames[:] = [d for d in dirnames if d not in excluded]
+            for filename in filenames:
+                if (
+                    filename in manifest_names
+                    or (filename.startswith("requirements") and filename.endswith(".txt"))
+                ):
+                    results.append(Path(dirpath) / filename)
+        return results
 
     # ------------------------------------------------------------------
     # Lockfile drift
