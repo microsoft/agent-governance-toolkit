@@ -152,6 +152,156 @@ class TestCheckPyproject:
         findings = guard.check_pyproject(str(pp))
         assert not any(f.rule == "loose-constraint" for f in findings)
 
+    def test_optional_dependencies_checked(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        """Regression: PEP 621 [project.optional-dependencies] groups
+        were silently skipped by the prior string-match parser.
+        """
+        pp = tmp_path / "pyproject.toml"
+        pp.write_text(
+            '[project]\nname = "test"\n'
+            'dependencies = []\n\n'
+            '[project.optional-dependencies]\n'
+            'dev = ["pytest>=7.0"]\n'
+            'docs = ["sphinx>=5"]\n'
+        )
+        findings = guard.check_pyproject(str(pp))
+        names = {f.package for f in findings if f.rule == "loose-constraint"}
+        assert "pytest" in names
+        assert "sphinx" in names
+
+    def test_poetry_dependencies_checked(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        """Regression: Poetry's [tool.poetry.dependencies] table was
+        silently skipped by the prior parser. Caret strings should
+        flag, exact versions should pass, and the special "python"
+        key (Python version constraint, not a real dependency) should
+        not surface.
+        """
+        pp = tmp_path / "pyproject.toml"
+        pp.write_text(
+            '[tool.poetry]\nname = "test"\nversion = "0.1.0"\n\n'
+            '[tool.poetry.dependencies]\n'
+            'python = "^3.10"\n'
+            'requests = "^2.28"\n'
+            'pinned = "1.2.3"\n'
+        )
+        findings = guard.check_pyproject(str(pp))
+        names = {f.package for f in findings if f.rule == "loose-constraint"}
+        assert "requests" in names
+        assert "pinned" not in names
+        assert "python" not in names
+
+    def test_poetry_legacy_dev_dependencies_checked(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        """Poetry legacy [tool.poetry.dev-dependencies] table coverage."""
+        pp = tmp_path / "pyproject.toml"
+        pp.write_text(
+            '[tool.poetry]\nname = "test"\nversion = "0.1.0"\n\n'
+            '[tool.poetry.dev-dependencies]\n'
+            'pytest = "^7.0"\n'
+        )
+        findings = guard.check_pyproject(str(pp))
+        assert any(f.package == "pytest" and f.rule == "loose-constraint" for f in findings)
+
+    def test_poetry_modern_group_dependencies_checked(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        """Poetry modern [tool.poetry.group.<name>.dependencies] coverage."""
+        pp = tmp_path / "pyproject.toml"
+        pp.write_text(
+            '[tool.poetry]\nname = "test"\nversion = "0.1.0"\n\n'
+            '[tool.poetry.group.test.dependencies]\n'
+            'pytest = "^7.0"\n'
+            '[tool.poetry.group.docs.dependencies]\n'
+            'sphinx = "^5.0"\n'
+        )
+        findings = guard.check_pyproject(str(pp))
+        names = {f.package for f in findings if f.rule == "loose-constraint"}
+        assert {"pytest", "sphinx"} <= names
+
+    def test_poetry_table_form_git_dep_flagged(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        """Regression: Poetry inline-table deps with git/path/url
+        sources bypass the index trust boundary entirely. The prior
+        string-match parser couldn't see them at all.
+        """
+        pp = tmp_path / "pyproject.toml"
+        pp.write_text(
+            '[tool.poetry]\nname = "test"\nversion = "0.1.0"\n\n'
+            '[tool.poetry.dependencies]\n'
+            'evil = {git = "https://github.com/attacker/evil.git", rev = "main"}\n'
+        )
+        findings = guard.check_pyproject(str(pp))
+        assert any(
+            f.package == "evil" and f.rule == "non-semver-specifier"
+            for f in findings
+        )
+
+    def test_poetry_table_form_path_dep_flagged(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        pp = tmp_path / "pyproject.toml"
+        pp.write_text(
+            '[tool.poetry]\nname = "test"\nversion = "0.1.0"\n\n'
+            '[tool.poetry.dependencies]\n'
+            'local-evil = {path = "../malicious", develop = true}\n'
+        )
+        findings = guard.check_pyproject(str(pp))
+        assert any(
+            f.package == "local-evil" and f.rule == "non-semver-specifier"
+            for f in findings
+        )
+
+    def test_poetry_table_form_pinned_passes(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        pp = tmp_path / "pyproject.toml"
+        pp.write_text(
+            '[tool.poetry]\nname = "test"\nversion = "0.1.0"\n\n'
+            '[tool.poetry.dependencies]\n'
+            'requests = {version = "2.31.0", python = ">=3.10"}\n'
+        )
+        findings = guard.check_pyproject(str(pp))
+        assert not any(f.package == "requests" for f in findings)
+
+    def test_pep621_multiline_dependencies(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        """Regression: deps split across multiple lines confused the
+        prior string-match parser. tomllib sees them as a list.
+        """
+        pp = tmp_path / "pyproject.toml"
+        pp.write_text(
+            '[project]\nname = "test"\n'
+            'dependencies = [\n'
+            '  "requests>=2.28.0",\n'
+            '  "click==8.1.0",\n'
+            '  # comment in the middle\n'
+            '  "rich>=13",\n'
+            ']\n'
+        )
+        findings = guard.check_pyproject(str(pp))
+        names = {f.package for f in findings if f.rule == "loose-constraint"}
+        assert "requests" in names
+        assert "rich" in names
+        assert "click" not in names
+
+    def test_malformed_toml_returns_empty(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        """A pyproject.toml that tomllib cannot parse must not crash —
+        return an empty list of findings.
+        """
+        pp = tmp_path / "pyproject.toml"
+        pp.write_text("[project\nname = unterminated\n")
+        findings = guard.check_pyproject(str(pp))
+        assert findings == []
+
 
 # ---------------------------------------------------------------------------
 # check_cargo_toml

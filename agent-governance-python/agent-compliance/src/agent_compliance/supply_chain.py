@@ -72,6 +72,11 @@ class SupplyChainConfig:
 _RANGE_RE = re.compile(r"[\^~]")
 _PEP508_PINNED = re.compile(r"==\s*\S+")
 _LOOSE_CONSTRAINT = re.compile(r"(>=|<=|~=|!=|>|<)")
+# Strict MAJOR.MINOR.PATCH (with optional prerelease/build) used by
+# both the Poetry inline-table check and the npm version classifier.
+_EXACT_SEMVER = re.compile(
+    r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
+)
 
 
 def _similarity(a: str, b: str) -> float:
@@ -175,45 +180,141 @@ class SupplyChainGuard:
         return findings
 
     # ------------------------------------------------------------------
-    # pyproject.toml (simple parser – stdlib only)
+    # pyproject.toml (tomllib-based, stdlib only)
     # ------------------------------------------------------------------
 
     def check_pyproject(self, path: str) -> list[SupplyChainFinding]:
-        """Check pyproject.toml for loose version constraints."""
+        """Check pyproject.toml for loose version constraints.
+
+        Uses ``tomllib`` (Python 3.11+) so the following layouts are all
+        covered, including ones the prior string-match-based parser
+        silently skipped:
+
+          * ``[project] dependencies = [...]``                (PEP 621)
+          * ``[project.optional-dependencies]``               (PEP 621)
+          * ``[tool.poetry.dependencies]``                    (Poetry)
+          * ``[tool.poetry.dev-dependencies]``                (Poetry, legacy)
+          * ``[tool.poetry.group.<name>.dependencies]``       (Poetry, modern)
+
+        Multiline list entries, comments, environment markers, and
+        Poetry table-form deps (``foo = {git = "...", rev = "..."}``)
+        are handled correctly via the TOML parser instead of being
+        misread as regular version strings.
+        """
+        try:
+            import tomllib
+        except ImportError:  # Python < 3.11 fallback
+            import tomli as tomllib  # type: ignore[no-redef]
+
         findings: list[SupplyChainFinding] = []
-        text = Path(path).read_text(encoding="utf-8")
+        try:
+            with open(path, "rb") as fh:
+                data = tomllib.load(fh)
+        except (OSError, tomllib.TOMLDecodeError):
+            return findings
 
-        in_deps = False
-        for line in text.splitlines():
-            stripped = line.strip()
+        # PEP 621: [project] dependencies = ["pep508-string", ...]
+        project = data.get("project", {})
+        for dep_str in project.get("dependencies", []) or []:
+            self._emit_pep508_finding(findings, dep_str)
 
-            if stripped == "dependencies = [":
-                in_deps = True
-                continue
-            if in_deps and stripped == "]":
-                in_deps = False
-                continue
+        # PEP 621: [project.optional-dependencies] with grouped lists
+        optional = project.get("optional-dependencies", {}) or {}
+        for group_deps in optional.values():
+            for dep_str in group_deps or []:
+                self._emit_pep508_finding(findings, dep_str)
 
-            if in_deps:
-                match = re.match(r'"([^"]+)"', stripped.rstrip(","))
-                if match:
-                    dep_str = match.group(1)
-                    parsed = _parse_requirements_line(dep_str)
-                    if parsed:
-                        name, version_spec = parsed
-                        if not _PEP508_PINNED.search(version_spec):
-                            findings.append(SupplyChainFinding(
-                                package=name,
-                                version=version_spec or "unspecified",
-                                severity="medium",
-                                rule="loose-constraint",
-                                message=(
-                                    f"Package '{name}' in pyproject.toml uses "
-                                    f"a loose version constraint."
-                                ),
-                            ))
+        # Poetry: [tool.poetry.dependencies] / [tool.poetry.dev-dependencies]
+        poetry = data.get("tool", {}).get("poetry", {}) or {}
+        self._emit_poetry_findings(findings, poetry.get("dependencies", {}) or {})
+        self._emit_poetry_findings(findings, poetry.get("dev-dependencies", {}) or {})
+
+        # Poetry modern: [tool.poetry.group.<name>.dependencies]
+        for group in (poetry.get("group", {}) or {}).values():
+            self._emit_poetry_findings(findings, group.get("dependencies", {}) or {})
 
         return findings
+
+    def _emit_pep508_finding(
+        self, findings: list[SupplyChainFinding], dep_str: str,
+    ) -> None:
+        if not isinstance(dep_str, str):
+            return
+        parsed = _parse_requirements_line(dep_str)
+        if not parsed:
+            return
+        name, version_spec = parsed
+        if _PEP508_PINNED.search(version_spec):
+            return
+        findings.append(SupplyChainFinding(
+            package=name,
+            version=version_spec or "unspecified",
+            severity="medium",
+            rule="loose-constraint",
+            message=(
+                f"Package '{name}' in pyproject.toml uses a loose "
+                "version constraint."
+            ),
+        ))
+
+    def _emit_poetry_findings(
+        self, findings: list[SupplyChainFinding], deps: dict,
+    ) -> None:
+        for name, spec in deps.items():
+            if name == "python":
+                # The Poetry dependencies table embeds the Python version
+                # constraint under the "python" key — that's not a
+                # supply-chain dependency and shouldn't surface here.
+                continue
+            if isinstance(spec, str):
+                if not _EXACT_SEMVER.match(spec.strip()):
+                    findings.append(SupplyChainFinding(
+                        package=name,
+                        version=spec,
+                        severity="medium",
+                        rule="loose-constraint",
+                        message=(
+                            f"Package '{name}' in pyproject.toml uses a "
+                            f"loose version constraint ('{spec}')."
+                        ),
+                    ))
+            elif isinstance(spec, dict):
+                # Poetry table-form: foo = {version="^1.0"} or
+                # foo = {git="...", rev="..."} or foo = {path="..."}.
+                # The git/path/url forms bypass the package index trust
+                # boundary entirely.
+                for protocol_key in ("git", "url", "path"):
+                    if protocol_key in spec:
+                        findings.append(SupplyChainFinding(
+                            package=name,
+                            version=str(spec.get(protocol_key, "")),
+                            severity="high",
+                            rule="non-semver-specifier",
+                            message=(
+                                f"Package '{name}' in pyproject.toml is "
+                                f"sourced via '{protocol_key}=' "
+                                f"({spec.get(protocol_key)!r}); pin to an "
+                                "exact published version on the configured "
+                                "index instead."
+                            ),
+                        ))
+                        break
+                else:
+                    inline_version = spec.get("version")
+                    if isinstance(inline_version, str) and not _EXACT_SEMVER.match(
+                        inline_version.strip()
+                    ):
+                        findings.append(SupplyChainFinding(
+                            package=name,
+                            version=inline_version,
+                            severity="medium",
+                            rule="loose-constraint",
+                            message=(
+                                f"Package '{name}' in pyproject.toml uses a "
+                                f"loose version constraint "
+                                f"('{inline_version}')."
+                            ),
+                        ))
 
     # ------------------------------------------------------------------
     # Cargo.toml (simple parser – stdlib only)
