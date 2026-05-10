@@ -161,44 +161,61 @@ class FlightRecorderEmitter:
             attributes=attributes,
         )
 
+    def _get_entries(self) -> list:
+        """Return the recorder's full entry list, normalising the three
+        supported accessors (``get_entries``, ``entries``, ``get_logs``)."""
+        if hasattr(self.recorder, 'get_entries'):
+            return list(self.recorder.get_entries())
+        if hasattr(self.recorder, 'entries'):
+            return self.recorder.entries
+        if hasattr(self.recorder, 'get_logs'):
+            return list(self.recorder.get_logs())
+        logger.warning("Flight recorder has no recognized entry accessor")
+        return []
+
     def get_spans(self) -> list[LightningSpan]:
         """
         Get all Flight Recorder entries as Lightning spans.
 
+        Note: walks the full entry list every call. For polling loops
+        prefer :meth:`get_new_spans`, which only converts entries added
+        since the last call.
+
         Returns:
             List of LightningSpan objects
         """
-        spans = []
-
-        # Get entries from recorder
-        if hasattr(self.recorder, 'get_entries'):
-            entries = self.recorder.get_entries()
-        elif hasattr(self.recorder, 'entries'):
-            entries = self.recorder.entries
-        elif hasattr(self.recorder, 'get_logs'):
-            entries = self.recorder.get_logs()
-        else:
-            logger.warning("Flight recorder has no recognized entry accessor")
-            return []
-
-        for entry in entries:
+        spans: list[LightningSpan] = []
+        for entry in self._get_entries():
             span = self._convert_entry(entry)
             if span:
                 spans.append(span)
                 self._emitted_count += 1
-
         return spans
 
     def get_new_spans(self) -> list[LightningSpan]:
         """
-        Get only new entries since last call.
+        Get only entries added since the last call.
+
+        Previous implementation called :meth:`get_spans` (which walks all
+        entries) on every poll, producing O(n) work per call and O(n²)
+        cumulative work over the lifetime of a polling consumer. This
+        version maintains a real cursor (``self._last_position``) into
+        the recorder's entry list and only converts the suffix added
+        since the prior call.
 
         Returns:
-            List of new LightningSpan objects
+            List of new LightningSpan objects.
         """
-        all_spans = self.get_spans()
-        new_spans = all_spans[self._last_position:]
-        self._last_position = len(all_spans)
+        entries = self._get_entries()
+        new_entries = entries[self._last_position:]
+        self._last_position = len(entries)
+
+        new_spans: list[LightningSpan] = []
+        for entry in new_entries:
+            span = self._convert_entry(entry)
+            if span:
+                new_spans.append(span)
+                self._emitted_count += 1
         return new_spans
 
     async def stream(self) -> Iterator[LightningSpan]:

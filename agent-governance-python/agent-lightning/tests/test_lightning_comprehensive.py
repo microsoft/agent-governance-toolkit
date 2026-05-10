@@ -711,6 +711,46 @@ class TestFlightRecorderEmitterStreaming:
         second = emitter.get_new_spans()
         assert len(second) == 0
 
+    def test_get_new_spans_only_converts_new_entries(self):
+        """Regression for REVIEW.md HIGH Extensions #10.
+
+        Previously ``get_new_spans`` called ``get_spans`` (which converts
+        every entry) on every poll and then sliced the tail. With N entries
+        already converted in prior polls, each new poll did N+k conversions
+        for k new entries — O(N²) over the lifetime of a polling consumer.
+
+        The fix keeps a cursor and only converts the suffix that arrived
+        since the last call. This test instruments ``_convert_entry`` so
+        every call is counted; the second poll, with only one *new* entry,
+        must invoke the converter exactly once — not N+1 times.
+        """
+        # Start with 10 entries, drain via get_new_spans (first poll).
+        entries = [_FakeEntry(id=f"e{i}") for i in range(10)]
+        recorder = _make_recorder(entries)
+        emitter = FlightRecorderEmitter(recorder)
+
+        first = emitter.get_new_spans()
+        assert len(first) == 10
+
+        # Spy on _convert_entry and add ONE new entry.
+        call_count = 0
+        original = emitter._convert_entry
+
+        def counting_convert(entry):
+            nonlocal call_count
+            call_count += 1
+            return original(entry)
+
+        emitter._convert_entry = counting_convert
+        entries.append(_FakeEntry(id="e10"))
+
+        new = emitter.get_new_spans()
+        assert len(new) == 1
+        assert call_count == 1, (
+            f"get_new_spans converted {call_count} entries; expected 1 "
+            f"(O(n²) behaviour returned)"
+        )
+
     def test_stats(self):
         entries = [_FakeEntry()]
         emitter = FlightRecorderEmitter(_make_recorder(entries))
