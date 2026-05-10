@@ -118,6 +118,74 @@ class TestDiscoverPolicies:
         result = discover_policies(action_dir, tmp_path)
         assert len(result) == 1
 
+    # -- Path-traversal hardening ------------------------------------------
+
+    def test_action_path_outside_root_returns_empty(self, tmp_path):
+        """If ``action_path`` resolves outside ``root`` the walk must NOT
+        traverse upward to the filesystem root, picking up
+        ``governance.yaml`` files from arbitrary locations on disk.
+        """
+        root = tmp_path / "workspace"
+        root.mkdir()
+        _write_policy(root / "governance.yaml", _make_policy("root", []))
+
+        # Plant a "hostile" governance.yaml above the workspace.
+        hostile_dir = tmp_path / "outside"
+        hostile_dir.mkdir()
+        _write_policy(hostile_dir / "governance.yaml", _make_policy("hostile", []))
+
+        action = hostile_dir / "evil.py"
+        action.touch()
+
+        result = discover_policies(action, root)
+        assert result == [], (
+            "discover_policies must refuse to load policies for an action "
+            "outside the configured root; otherwise an attacker who can "
+            "influence the action path can plant a governance.yaml anywhere "
+            "above their target and have it loaded."
+        )
+
+    def test_symlink_escape_does_not_load_outside_root(self, tmp_path):
+        """A symlink inside ``root`` that points outside resolves outside
+        and must be rejected.
+        """
+        root = tmp_path / "workspace"
+        root.mkdir()
+        _write_policy(root / "governance.yaml", _make_policy("root", []))
+
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        _write_policy(outside / "governance.yaml", _make_policy("hostile", []))
+
+        link = root / "escape"
+        try:
+            link.symlink_to(outside, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink creation not supported on this platform")
+
+        action = link / "evil.py"
+        # File doesn't exist through the symlink, but resolve() still works
+        # to compute the resolved target directory.
+        result = discover_policies(action, root)
+        assert result == []
+
+    def test_relative_dot_dot_in_action_path_is_resolved_and_checked(self, tmp_path):
+        """``..`` segments are resolved, and an action_path that resolves
+        outside root via ``..`` is rejected.
+        """
+        root = tmp_path / "workspace"
+        root.mkdir()
+        _write_policy(root / "governance.yaml", _make_policy("root", []))
+
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        _write_policy(outside / "governance.yaml", _make_policy("hostile", []))
+
+        # action_path uses .. to escape the workspace.
+        action = root / ".." / "outside" / "evil.py"
+        result = discover_policies(action, root)
+        assert result == []
+
 
 # =============================================================================
 # Merge tests
