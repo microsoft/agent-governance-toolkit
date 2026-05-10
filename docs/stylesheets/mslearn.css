@@ -1,0 +1,177 @@
+/*
+ * Microsoft Learn-inspired theme for MkDocs Material
+ * Aligns colors, typography, and spacing with learn.microsoft.com
+ */
+
+/* ── Color palette: Microsoft brand blue ── */
+:root,
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #0078D4;
+  --md-primary-fg-color--light: #50A0E6;
+  --md-primary-fg-color--dark: #005A9E;
+  --md-accent-fg-color: #0078D4;
+  --md-accent-fg-color--transparent: rgba(0, 120, 212, 0.1);
+
+  /* Subtle warm-gray background like MS Learn */
+  --md-default-bg-color: #FFFFFF;
+  --md-default-bg-color--light: #F5F5F5;
+
+  /* Link colors matching MS Learn */
+  --md-typeset-a-color: #0078D4;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #4DB8FF;
+  --md-primary-fg-color--light: #60C0FF;
+  --md-primary-fg-color--dark: #2894D6;
+  --md-accent-fg-color: #4DB8FF;
+
+  --md-default-bg-color: #1B1B1F;
+  --md-default-bg-color--light: #242428;
+}
+
+/* ── Typography refinements ── */
+.md-typeset {
+  font-size: 0.85rem;
+  line-height: 1.7;
+  color: #242424;
+}
+
+[data-md-color-scheme="slate"] .md-typeset {
+  color: #E0E0E0;
+}
+
+.md-typeset h1 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #242424;
+  margin-bottom: 1rem;
+}
+
+[data-md-color-scheme="slate"] .md-typeset h1 {
+  color: #FFFFFF;
+}
+
+.md-typeset h2 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  border-bottom: 1px solid #E0E0E0;
+  padding-bottom: 0.4rem;
+  margin-top: 2rem;
+}
+
+[data-md-color-scheme="slate"] .md-typeset h2 {
+  border-bottom-color: #3A3A3E;
+}
+
+/* ── Header bar ── */
+.md-header {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Navigation tabs: MS Learn-style underline ── */
+.md-tabs {
+  background-color: var(--md-primary-fg-color);
+}
+
+.md-tabs__link--active,
+.md-tabs__link:hover {
+  border-bottom: 2px solid #FFFFFF;
+}
+
+/* ── Sidebar styling ── */
+.md-sidebar__scrollwrap {
+  border-right: 1px solid #E0E0E0;
+}
+
+[data-md-color-scheme="slate"] .md-sidebar__scrollwrap {
+  border-right-color: #3A3A3E;
+}
+
+.md-nav__link {
+  font-size: 0.8rem;
+}
+
+.md-nav__link--active {
+  font-weight: 600;
+  color: var(--md-primary-fg-color) !important;
+  border-left: 3px solid var(--md-primary-fg-color);
+  padding-left: 0.6rem;
+}
+
+/* ── Tables: clean MS Learn style ── */
+.md-typeset table:not([class]) {
+  border: 1px solid #E0E0E0;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) {
+  border-color: #3A3A3E;
+}
+
+.md-typeset table:not([class]) th {
+  background-color: #F5F5F5;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  border-bottom: 2px solid #0078D4;
+}
+
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) th {
+  background-color: #2A2A2E;
+  border-bottom-color: #4DB8FF;
+}
+
+.md-typeset table:not([class]) td {
+  border-bottom: 1px solid #F0F0F0;
+}
+
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) td {
+  border-bottom-color: #2A2A2E;
+}
+
+/* ── Admonitions: softer, MS-style ── */
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  border-left-width: 4px;
+}
+
+/* ── Code blocks ── */
+.md-typeset pre > code {
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
+.md-typeset code {
+  border-radius: 3px;
+  padding: 0.15em 0.4em;
+  font-size: 0.85em;
+}
+
+/* ── Footer ── */
+.md-footer {
+  background-color: #242424;
+}
+
+[data-md-color-scheme="slate"] .md-footer {
+  background-color: #141418;
+}
+
+/* ── Content max-width: comfortable reading ── */
+.md-content__inner {
+  max-width: 900px;
+}
+
+/* ── Search bar refinements ── */
+.md-search__input {
+  border-radius: 4px;
+}
+
+/* ── Breadcrumb path styling ── */
+.md-path {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}

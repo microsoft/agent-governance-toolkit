@@ -10,16 +10,17 @@ theme:
   name: material
   logo: assets/agent-governance-toolkit.svg
   favicon: assets/agent-governance-toolkit.svg
+  custom_dir: docs/overrides
   palette:
     - scheme: default
-      primary: indigo
-      accent: teal
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - scheme: slate
-      primary: indigo
-      accent: teal
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -31,16 +32,18 @@ theme:
     - navigation.sections
     - navigation.expand
     - navigation.top
+    - navigation.path
     - search.suggest
     - search.highlight
     - content.code.copy
     - content.tabs.link
     - toc.follow
+    - header.autohide
   icon:
     repo: fontawesome/brands/github
   font:
-    text: Inter
-    code: JetBrains Mono
+    text: Segoe UI, system-ui, -apple-system, sans-serif
+    code: Cascadia Code, JetBrains Mono, monospace
 
 plugins:
   - search
@@ -71,6 +74,9 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/microsoft/agent-governance-toolkit
   generator: false
+
+extra_css:
+  - stylesheets/mslearn.css
 
 nav:
   - Home: index.md
