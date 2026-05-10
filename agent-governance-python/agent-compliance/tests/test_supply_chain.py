@@ -84,6 +84,89 @@ class TestCheckPackageJson:
         findings = guard.check_package_json(str(pkg))
         assert any(f.rule == "unpinned-range" and f.package == "jest" for f in findings)
 
+    @pytest.mark.parametrize(
+        "specifier",
+        [
+            "git+https://github.com/attacker/evil.git",
+            "git+ssh://git@github.com/attacker/evil.git",
+            "git://github.com/attacker/evil.git",
+            "github:attacker/evil",
+            "file:../local-evil",
+            "link:../local-evil",
+            "http://example.com/evil.tgz",
+            "https://example.com/evil.tgz",
+            "npm:trusted-package@*",
+            "workspace:*",
+        ],
+    )
+    def test_protocol_specifiers_flagged(
+        self, guard: SupplyChainGuard, tmp_path: Path, specifier: str,
+    ) -> None:
+        """Regression: previously only ``^``/``~`` triggered findings, so
+        ``git+https://…``, ``file:…``, ``http://…``, ``npm:…``,
+        ``workspace:…``, etc. all installed silently. Each must now
+        surface as ``non-semver-specifier``.
+        """
+        pkg = tmp_path / "package.json"
+        pkg.write_text(json.dumps({"dependencies": {"evil": specifier}}))
+        findings = guard.check_package_json(str(pkg))
+        assert any(
+            f.rule == "non-semver-specifier" and f.package == "evil"
+            for f in findings
+        ), f"specifier {specifier!r} not flagged"
+
+    @pytest.mark.parametrize("specifier", ["*", "latest", "next", "x"])
+    def test_wildcard_specifiers_flagged(
+        self, guard: SupplyChainGuard, tmp_path: Path, specifier: str,
+    ) -> None:
+        """``*`` and dist-tags (``latest``, ``next``, ``x``) resolve to a
+        different artifact every install — flag distinctly from ranges.
+        """
+        pkg = tmp_path / "package.json"
+        pkg.write_text(json.dumps({"dependencies": {"evil": specifier}}))
+        findings = guard.check_package_json(str(pkg))
+        assert any(
+            f.rule == "wildcard-specifier" and f.package == "evil"
+            for f in findings
+        ), f"specifier {specifier!r} not flagged"
+
+    def test_protocol_specifier_not_relaxed_by_allow_ranges(
+        self, tmp_path: Path,
+    ) -> None:
+        """allow_ranges relaxes ^/~/>= ranges only. Protocol specifiers
+        bypass the registry trust boundary entirely and must still be
+        flagged even when ranges are allowed.
+        """
+        relaxed = SupplyChainGuard(SupplyChainConfig(allow_ranges=True))
+        pkg = tmp_path / "package.json"
+        pkg.write_text(json.dumps({
+            "dependencies": {
+                "ranged": "^1.0.0",
+                "git-evil": "git+https://github.com/attacker/evil.git",
+            },
+        }))
+        findings = relaxed.check_package_json(str(pkg))
+        # Range is allowed:
+        assert not any(f.rule == "unpinned-range" for f in findings)
+        # Protocol specifier is not:
+        assert any(
+            f.rule == "non-semver-specifier" and f.package == "git-evil"
+            for f in findings
+        )
+
+    def test_exact_semver_with_prerelease_passes(
+        self, guard: SupplyChainGuard, tmp_path: Path,
+    ) -> None:
+        pkg = tmp_path / "package.json"
+        pkg.write_text(json.dumps({
+            "dependencies": {"a": "1.2.3-beta.1", "b": "4.5.6+build.7"},
+        }))
+        findings = guard.check_package_json(str(pkg))
+        assert not any(
+            f.rule in ("unpinned-range", "non-semver-specifier", "wildcard-specifier")
+            for f in findings
+        )
+
 
 # ---------------------------------------------------------------------------
 # check_requirements

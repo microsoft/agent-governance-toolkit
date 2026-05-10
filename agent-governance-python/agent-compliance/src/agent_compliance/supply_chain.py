@@ -73,6 +73,77 @@ _RANGE_RE = re.compile(r"[\^~]")
 _PEP508_PINNED = re.compile(r"==\s*\S+")
 _LOOSE_CONSTRAINT = re.compile(r"(>=|<=|~=|!=|>|<)")
 
+# npm version specifiers that bypass the registry trust boundary entirely
+# (git URLs, local files, tarballs over HTTP, npm aliases pointing at
+# arbitrary registered packages). None of these constitute a pinned
+# semver and cannot be reproduced from an SBOM alone.
+_NPM_PROTOCOL_PREFIXES = (
+    "git+",
+    "git://",
+    "git@",
+    "github:",
+    "gitlab:",
+    "bitbucket:",
+    "gist:",
+    "file:",
+    "link:",
+    "http://",
+    "https://",
+    "npm:",
+    "workspace:",
+)
+
+# Wildcard / dist-tag specifiers that resolve dynamically at install time.
+_NPM_WILDCARD_SPECIFIERS = {"*", "latest", "next", "x", "X", ""}
+
+# Strict semver match: MAJOR.MINOR.PATCH with optional prerelease/build.
+_NPM_EXACT_SEMVER = re.compile(
+    r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
+)
+
+
+def _classify_npm_version(version: str) -> tuple[str, str] | None:
+    """Return (rule, message) when ``version`` is non-pinned, else None.
+
+    Distinguishes three failure modes so operators can triage:
+      * ``non-semver-specifier`` — git/file/http/npm-alias prefixes that
+        bypass the registry's published-artifact trust boundary entirely
+      * ``wildcard-specifier``  — ``*`` / ``latest`` / ``next`` / ``x``
+        which resolve to a different artifact every install
+      * ``unpinned-range``      — ``^`` / ``~`` / ``>=`` / etc.
+    """
+    raw = version.strip()
+    lower = raw.lower()
+
+    for prefix in _NPM_PROTOCOL_PREFIXES:
+        if lower.startswith(prefix):
+            return (
+                "non-semver-specifier",
+                f"uses a non-registry source ('{raw}'); pin to an exact "
+                "semver published on the configured registry instead.",
+            )
+
+    if raw in _NPM_WILDCARD_SPECIFIERS:
+        return (
+            "wildcard-specifier",
+            f"resolves dynamically ('{raw}'); pin to an exact semver.",
+        )
+
+    if _RANGE_RE.search(raw) or _LOOSE_CONSTRAINT.search(raw):
+        return (
+            "unpinned-range",
+            f"uses a range specifier ('{raw}'). Pin to an exact version.",
+        )
+
+    if not _NPM_EXACT_SEMVER.match(raw):
+        return (
+            "non-semver-specifier",
+            f"is not a strict MAJOR.MINOR.PATCH semver ('{raw}'); "
+            "pin to an exact published version.",
+        )
+
+    return None
+
 
 def _similarity(a: str, b: str) -> float:
     """Return SequenceMatcher ratio between two strings."""
@@ -149,24 +220,61 @@ class SupplyChainGuard:
     # ------------------------------------------------------------------
 
     def check_package_json(self, path: str) -> list[SupplyChainFinding]:
-        """Check a package.json for unpinned versions."""
+        """Check a package.json for unpinned versions.
+
+        Catches three failure modes:
+          * registry-bypassing protocol specifiers
+            (``git+https://…``, ``file:…``, ``http://…``, ``npm:…@*``)
+          * wildcard / dist-tag specifiers (``*``, ``latest``, ``next``)
+          * standard unpinned ranges (``^1.0.0``, ``~1.2``, ``>=1``)
+
+        ``allow_ranges`` only suppresses the third category; protocol
+        and wildcard specifiers are flagged regardless because they
+        sidestep the registry trust boundary entirely.
+        """
         findings: list[SupplyChainFinding] = []
         data = json.loads(Path(path).read_text(encoding="utf-8"))
 
         for section in ("dependencies", "devDependencies"):
             deps = data.get(section, {})
             for name, version in deps.items():
-                if not self.config.allow_ranges and _RANGE_RE.search(version):
+                if not isinstance(version, str):
+                    # package.json schema allows objects in some niche
+                    # cases (e.g., bundled deps), but a non-string here
+                    # is unusual enough to flag.
                     findings.append(SupplyChainFinding(
                         package=name,
-                        version=version,
-                        severity="medium",
-                        rule="unpinned-range",
+                        version=str(version),
+                        severity="high",
+                        rule="non-semver-specifier",
                         message=(
-                            f"Package '{name}' uses a range specifier "
-                            f"('{version}'). Pin to an exact version."
+                            f"Package '{name}' has a non-string version "
+                            f"({type(version).__name__}); pin to an exact "
+                            "semver string."
                         ),
                     ))
+                else:
+                    classification = _classify_npm_version(version)
+                    if classification is not None:
+                        rule, message = classification
+                        # ``allow_ranges`` only relaxes the unpinned-range
+                        # rule, never the protocol/wildcard rules.
+                        if rule == "unpinned-range" and self.config.allow_ranges:
+                            classification = None
+                    if classification is not None:
+                        rule, message = classification
+                        severity = (
+                            "high"
+                            if rule in ("non-semver-specifier", "wildcard-specifier")
+                            else "medium"
+                        )
+                        findings.append(SupplyChainFinding(
+                            package=name,
+                            version=version,
+                            severity=severity,
+                            rule=rule,
+                            message=f"Package '{name}' {message}",
+                        ))
 
                 typo = self.check_typosquatting(name, ecosystem="npm")
                 if typo:
