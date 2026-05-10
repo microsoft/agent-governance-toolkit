@@ -452,8 +452,8 @@ export class OnboardingPanel {
                 <a href="https://github.com/microsoft/agent-governance-toolkit" target="_blank">⭐ Star on GitHub</a>
             </div>
             <div class="footer-actions">
-                <button class="secondary" onclick="resetProgress()">Reset Progress</button>
-                <button class="secondary" onclick="skipOnboarding()">Skip Onboarding</button>
+                <button class="secondary" data-action="reset">Reset Progress</button>
+                <button class="secondary" data-action="skip">Skip Onboarding</button>
             </div>
         </div>
     </div>
@@ -482,12 +482,12 @@ export class OnboardingPanel {
                             <p class="step-description">\${escapeHtml(step.description)}</p>
                             <div class="step-actions">
                                 \${step.action ? \`
-                                    <button onclick="executeAction('\${escapeHtml(step.action.command)}')" \${step.completed ? 'disabled' : ''}>
+                                    <button data-action="execute" data-command="\${escapeHtml(step.action.command)}" \${step.completed ? 'disabled' : ''}>
                                         \${escapeHtml(step.action.label)}
                                     </button>
                                 \` : ''}
                                 \${!step.completed ? \`
-                                    <button class="secondary" onclick="completeStep('\${escapeHtml(step.id)}')">
+                                    <button class="secondary" data-action="complete" data-step-id="\${escapeHtml(step.id)}">
                                         Mark Complete
                                     </button>
                                 \` : ''}
@@ -545,6 +545,35 @@ export class OnboardingPanel {
                     renderSteps();
                     updateProgress();
                 }
+            }
+        });
+
+        // Buttons use ``data-action`` rather than inline ``onclick=``
+        // attributes so the page is CSP-compliant under
+        // ``script-src 'nonce-...'`` (which blocks inline event handlers).
+        // A single delegated click listener inside this nonce-gated script
+        // block dispatches to the right function and pulls any arguments
+        // from sibling ``data-*`` attributes on the button.
+        document.addEventListener('click', (event) => {
+            const target = event.target.closest('[data-action]');
+            if (!target) return;
+            switch (target.dataset.action) {
+                case 'reset':
+                    resetProgress();
+                    break;
+                case 'skip':
+                    skipOnboarding();
+                    break;
+                case 'execute':
+                    if (target.dataset.command) {
+                        executeAction(target.dataset.command);
+                    }
+                    break;
+                case 'complete':
+                    if (target.dataset.stepId) {
+                        completeStep(target.dataset.stepId);
+                    }
+                    break;
             }
         });
 

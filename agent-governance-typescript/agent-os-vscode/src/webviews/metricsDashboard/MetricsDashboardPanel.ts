@@ -447,14 +447,14 @@ export class MetricsDashboardPanel {
             Agent OS Metrics Dashboard
         </h1>
         <div class="controls">
-            <select id="timeRange" onchange="setTimeRange(this.value)">
+            <select id="timeRange">
                 <option value="today">Today</option>
                 <option value="week">This Week</option>
                 <option value="month">This Month</option>
             </select>
-            <button onclick="refresh()">🔄 Refresh</button>
-            <button onclick="exportReport('json')">📥 Export JSON</button>
-            <button onclick="exportReport('csv')">📥 Export CSV</button>
+            <button data-action="refresh">🔄 Refresh</button>
+            <button data-action="export" data-format="json">📥 Export JSON</button>
+            <button data-action="export" data-format="csv">📥 Export CSV</button>
         </div>
     </div>
 
@@ -567,6 +567,31 @@ export class MetricsDashboardPanel {
                     <span class="violation-count">\${v.count}</span>
                 </div>
             \`).join('');
+        }
+
+        // Buttons and the time-range select use ``data-action`` rather than
+        // inline ``onclick=``/``onchange=`` attributes so the page is
+        // CSP-compliant under ``script-src 'nonce-...'`` (which blocks inline
+        // event handlers). Listeners are bound from this nonce-gated script.
+        document.addEventListener('click', (event) => {
+            const target = event.target.closest('[data-action]');
+            if (!target) return;
+            switch (target.dataset.action) {
+                case 'refresh':
+                    refresh();
+                    break;
+                case 'export':
+                    if (target.dataset.format) {
+                        exportReport(target.dataset.format);
+                    }
+                    break;
+            }
+        });
+        const __timeRange = document.getElementById('timeRange');
+        if (__timeRange) {
+            __timeRange.addEventListener('change', (event) => {
+                setTimeRange(event.target.value);
+            });
         }
 
         window.addEventListener('message', event => {

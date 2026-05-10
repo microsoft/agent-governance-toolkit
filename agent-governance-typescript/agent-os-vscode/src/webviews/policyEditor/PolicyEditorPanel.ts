@@ -830,11 +830,11 @@ policies:
                     <option value="json">JSON</option>
                     <option value="rego">Rego</option>
                 </select>
-                <button onclick="validate()">✓ Validate</button>
-                <button onclick="testPolicy()">🧪 Test</button>
-                <button onclick="savePolicy()">💾 Save</button>
-                <button class="secondary" onclick="importPolicy()">📥 Import</button>
-                <button class="secondary" onclick="exportPolicy()">📤 Export</button>
+                <button data-action="validate">✓ Validate</button>
+                <button data-action="test">🧪 Test</button>
+                <button data-action="save">💾 Save</button>
+                <button class="secondary" data-action="import">📥 Import</button>
+                <button class="secondary" data-action="export">📤 Export</button>
             </div>
             <div class="editor-wrapper">
                 <div class="line-numbers" id="lineNumbers">1</div>
@@ -993,6 +993,27 @@ policies:
                 container.appendChild(div);
             });
         }
+
+        // Toolbar buttons use ``data-action`` rather than inline ``onclick=``
+        // attributes so the page is CSP-compliant under
+        // ``script-src 'nonce-...'`` (which blocks inline event handlers).
+        // A single delegated click listener inside this nonce-gated script
+        // block dispatches to the appropriate function.
+        const __toolbarActions = {
+            validate: validate,
+            test: testPolicy,
+            save: savePolicy,
+            import: importPolicy,
+            export: exportPolicy,
+        };
+        document.addEventListener('click', (event) => {
+            const target = event.target.closest('[data-action]');
+            if (!target) return;
+            const handler = __toolbarActions[target.dataset.action];
+            if (handler) {
+                handler();
+            }
+        });
 
         // Initialize
         updateLineNumbers();
