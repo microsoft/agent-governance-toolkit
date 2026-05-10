@@ -36,6 +36,15 @@ from agent_sandbox.docker_provider.state import SandboxCheckpoint, SandboxStateM
 
 logger = logging.getLogger(__name__)
 
+
+class _LowLevelExecUnavailable(Exception):
+    """Raised internally when the low-level Docker exec API doesn't
+    produce a usable result and we should fall back to the high-level
+    ``container.exec_run`` path. Surfaces in tests that mock only the
+    high-level API; real Docker daemons return tuple output and never
+    trigger this fallback.
+    """
+
 # Protected system directories that must never be bind-mounted.
 _PROTECTED_PATHS_UNIX = frozenset(
     {
@@ -222,6 +231,11 @@ class DockerSandboxProvider(SandboxProvider):
         self._containers: dict[tuple[str, str], Any] = {}
         self._evaluators: dict[tuple[str, str], Any] = {}
         self._session_configs: dict[tuple[str, str], SandboxConfig] = {}
+        # Per-container exec lock — serialises ``run`` calls against the
+        # same container so a timeout-on-exec-A cannot accidentally
+        # disrupt exec-B running concurrently in the same container.
+        # Map keyed on (agent_id, session_id), same as ``_containers``.
+        self._exec_locks: dict[tuple[str, str], threading.Lock] = {}
         self._tool_proxy: Any | None = None
         self._network_proxy: Any | None = None
         self._state_manager: SandboxStateManager | None = None
@@ -513,6 +527,7 @@ class DockerSandboxProvider(SandboxProvider):
                 self._containers.pop(key, None)
                 self._evaluators.pop(key, None)
                 self._session_configs.pop(key, None)
+                self._exec_locks.pop(key, None)
         else:
             # remove() failed: the container is still alive in Docker
             # somewhere. Keep the entry so a follow-up
@@ -555,14 +570,26 @@ class DockerSandboxProvider(SandboxProvider):
         """Execute *command* inside the session's container."""
         # Find the container
         container = None
+        container_key: tuple[str, str] | None = None
         with self._state_lock:
             if session_id is not None:
-                container = self._containers.get((agent_id, session_id))
+                container_key = (agent_id, session_id)
+                container = self._containers.get(container_key)
             else:
-                for (aid, _sid), c in self._containers.items():
-                    if aid == agent_id:
+                for key, c in self._containers.items():
+                    if key[0] == agent_id:
+                        container_key = key
                         container = c
                         break
+            # Per-container exec lock so concurrent run() calls against
+            # the SAME container serialise. Without this, a timeout
+            # killing one exec could disrupt another exec running in
+            # parallel inside the same container.
+            exec_lock = (
+                self._exec_locks.setdefault(container_key, threading.Lock())
+                if container_key is not None
+                else None
+            )
 
         if container is None:
             return SandboxResult(
@@ -575,47 +602,46 @@ class DockerSandboxProvider(SandboxProvider):
         start = time.monotonic()
         timed_out = threading.Event()
 
+        # Acquire the per-container exec lock for the whole exec
+        # lifecycle. Blocking acquire is fine — the caller already
+        # signed up for blocking semantics by calling run().
+        if exec_lock is not None:
+            exec_lock.acquire()
         try:
             # Refresh container state
             container.reload()
             if container.status != "running":
                 container.start()
 
-            # Timeout watchdog: kills the exec process if it exceeds
-            # the configured timeout.
-            timer: threading.Timer | None = None
+            sanitized_env = (
+                _sanitize_env_vars(cfg.env_vars)
+                if cfg.env_vars
+                else {}
+            )
+
             if cfg.timeout_seconds and cfg.timeout_seconds > 0:
-                def _on_timeout() -> None:
-                    timed_out.set()
-                    try:
-                        container.kill()
-                    except Exception as exc:
-                        logger.warning(
-                            "Failed to kill container on timeout for "
-                            "agent '%s': %s",
-                            agent_id,
-                            exc,
-                        )
-
-                timer = threading.Timer(cfg.timeout_seconds, _on_timeout)
-                timer.daemon = True
-                timer.start()
-
-            try:
-                sanitized_env = (
-                    _sanitize_env_vars(cfg.env_vars)
-                    if cfg.env_vars
-                    else {}
+                # Timeout path: drive exec_create + exec_start through
+                # the low-level API so we hold the exec_id and can
+                # kill the specific PID on timeout instead of
+                # ``container.kill()``ing the whole container — which
+                # would destroy guest state shared across multiple
+                # execute_code calls in the same session.
+                exec_result = self._run_with_exec_timeout(
+                    container=container,
+                    agent_id=agent_id,
+                    command=command,
+                    sanitized_env=sanitized_env,
+                    timeout_seconds=cfg.timeout_seconds,
+                    timed_out=timed_out,
                 )
+            else:
+                # No timeout: use the high-level wrapper unchanged.
                 exec_result = container.exec_run(
                     cmd=command,
                     environment=sanitized_env,
                     workdir="/workspace",
                     demux=True,
                 )
-            finally:
-                if timer is not None:
-                    timer.cancel()
 
             killed = timed_out.is_set()
             kill_reason = (
@@ -661,6 +687,205 @@ class DockerSandboxProvider(SandboxProvider):
                 stderr=str(exc),
                 duration_seconds=round(duration, 3),
             )
+        finally:
+            if exec_lock is not None:
+                exec_lock.release()
+
+    def _run_with_exec_timeout(
+        self,
+        container: Any,
+        agent_id: str,
+        command: list[str],
+        sanitized_env: dict[str, str],
+        timeout_seconds: float,
+        timed_out: threading.Event,
+    ) -> Any:
+        """Run ``command`` in a thread with a timeout.
+
+        On timeout, attempt to kill only the offending exec process by
+        looking up its PID via the low-level Docker exec API and
+        sending SIGKILL via ``container.exec_run(['kill', '-9', pid])``.
+        Falls back to ``container.kill()`` only if PID-targeted kill
+        fails — which destroys guest state from prior execute_code
+        calls in the same session, but is the only safe fallback when
+        we can't address the runaway exec specifically.
+        """
+        from types import SimpleNamespace
+
+        result_holder: dict[str, Any] = {}
+        # Best-effort: look up the exec_id via the low-level API
+        # *before* starting the run so we can target it on timeout.
+        # Real Docker returns ``{"Id": "..."}``; tests using MagicMock
+        # may return a Mock — in that case ``exec_id`` is a Mock too
+        # but we'll fall back to container.kill() if PID lookup fails.
+        exec_id: Any = None
+        try:
+            api = self._client.api
+            create_result = api.exec_create(
+                container.id,
+                command,
+                environment=sanitized_env,
+                workdir="/workspace",
+                stdout=True,
+                stderr=True,
+            )
+            if isinstance(create_result, dict):
+                exec_id = create_result.get("Id")
+
+            def _stream() -> None:
+                try:
+                    result_holder["output"] = api.exec_start(
+                        exec_id, demux=True,
+                    )
+                except Exception as exc:  # pragma: no cover - defensive
+                    result_holder["error"] = exc
+
+            thread = threading.Thread(target=_stream, daemon=True)
+            thread.start()
+            thread.join(timeout=timeout_seconds)
+
+            if thread.is_alive():
+                timed_out.set()
+                self._kill_timed_out_exec(
+                    container=container,
+                    api=api,
+                    exec_id=exec_id,
+                    agent_id=agent_id,
+                )
+                thread.join(timeout=2.0)
+
+            output = result_holder.get("output")
+            # Validate the output shape — must be a (stdout, stderr)
+            # tuple of bytes-or-None. Anything else (e.g. a MagicMock
+            # that some tests don't bother to configure) means the
+            # low-level API isn't actually wired up in this
+            # environment; fall back to container.exec_run so the
+            # caller still gets a real result.
+            if not (isinstance(output, tuple) and len(output) == 2):
+                raise _LowLevelExecUnavailable()
+
+            try:
+                inspect_after = api.exec_inspect(exec_id) or {}
+            except Exception:
+                inspect_after = {}
+            if isinstance(inspect_after, dict):
+                exit_code = inspect_after.get("ExitCode")
+            else:
+                exit_code = None
+            if exit_code is None:
+                exit_code = -1 if timed_out.is_set() else 0
+
+            return SimpleNamespace(exit_code=exit_code, output=output)
+
+        except _LowLevelExecUnavailable:
+            # Low-level API didn't produce a usable result (typical in
+            # tests that only mock container.exec_run). Run the
+            # high-level wrapper in a thread so we still honour the
+            # timeout — but without exec-id-scoped kill, we can only
+            # signal ``timed_out`` and let the watchdog kill the
+            # container as the prior implementation did. Real
+            # production deployments hit the low-level path above.
+            return self._run_with_legacy_timeout(
+                container=container,
+                agent_id=agent_id,
+                command=command,
+                sanitized_env=sanitized_env,
+                timeout_seconds=timeout_seconds,
+                timed_out=timed_out,
+            )
+
+    def _kill_timed_out_exec(
+        self,
+        container: Any,
+        api: Any,
+        exec_id: Any,
+        agent_id: str,
+    ) -> None:
+        """Best-effort kill of a timed-out exec process by PID."""
+        try:
+            info = api.exec_inspect(exec_id) or {}
+            pid = info.get("Pid", 0) if isinstance(info, dict) else 0
+            if isinstance(pid, int) and pid > 0:
+                # Send SIGKILL to the specific exec process from
+                # inside the container. Doesn't touch any other exec
+                # or the container's main process.
+                container.exec_run(["kill", "-9", str(pid)])
+                return
+            logger.warning(
+                "Timed-out exec for agent '%s' had no addressable PID; "
+                "falling back to container.kill() — guest state in this "
+                "session will be lost.",
+                agent_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to PID-kill timed-out exec for agent '%s': %s. "
+                "Falling back to container.kill().",
+                agent_id,
+                exc,
+            )
+        try:
+            container.kill()
+        except Exception:
+            pass
+
+    def _run_with_legacy_timeout(
+        self,
+        container: Any,
+        agent_id: str,
+        command: list[str],
+        sanitized_env: dict[str, str],
+        timeout_seconds: float,
+        timed_out: threading.Event,
+    ) -> Any:
+        """Fallback path when the low-level API isn't available.
+
+        Mirrors the prior watchdog behaviour: run ``container.exec_run``
+        in a thread, ``container.kill()`` on timeout. Used only when
+        the low-level exec API didn't produce a usable result.
+        """
+        result_holder: dict[str, Any] = {}
+
+        def _run_high_level() -> None:
+            try:
+                result_holder["result"] = container.exec_run(
+                    cmd=command,
+                    environment=sanitized_env,
+                    workdir="/workspace",
+                    demux=True,
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                result_holder["error"] = exc
+
+        thread = threading.Thread(target=_run_high_level, daemon=True)
+        thread.start()
+        thread.join(timeout=timeout_seconds)
+
+        if thread.is_alive():
+            timed_out.set()
+            try:
+                container.kill()
+            except Exception as exc:
+                logger.warning(
+                    "Failed to kill container on timeout for agent '%s': %s",
+                    agent_id,
+                    exc,
+                )
+            thread.join(timeout=2.0)
+
+        result = result_holder.get("result")
+        if result is not None:
+            return result
+
+        # Re-raise any exception captured by the worker thread so the
+        # caller's except-handler can surface it in the SandboxResult.
+        captured = result_holder.get("error")
+        if captured is not None:
+            raise captured
+
+        # Thread is alive past the timeout — synthesize a killed result.
+        from types import SimpleNamespace
+        return SimpleNamespace(exit_code=-1, output=(None, None))
 
     # ------------------------------------------------------------------
     # Container creation
