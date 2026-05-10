@@ -128,26 +128,30 @@ class MTLSIdentityVerifier:
         if self.config.cert_path and self.config.key_path:
             ctx.load_cert_chain(self.config.cert_path, self.config.key_path)
         else:
-            # Generate and load ephemeral self-signed cert
+            # Generate and load ephemeral self-signed cert. The cert and
+            # private key live on disk only for the duration of
+            # ``load_cert_chain``, but the previous NamedTemporaryFile
+            # path used the process umask, which on default-configured
+            # shared hosts left the *private key* world-readable while
+            # OpenSSL parsed it. TemporaryDirectory is created with
+            # 0o700 on POSIX and ACL'd to the current user on Windows,
+            # so neither file is reachable by other local users.
             cert_pem, key_pem = self.create_self_signed_cert()
-            cert_file = key_file = None
-            try:
-                with tempfile.NamedTemporaryFile(
-                    delete=False, suffix=".pem", mode="wb"
-                ) as cf:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                cert_file = os.path.join(tmpdir, "cert.pem")
+                key_file = os.path.join(tmpdir, "key.pem")
+                with open(cert_file, "wb") as cf:
                     cf.write(cert_pem)
-                    cert_file = cf.name
-                with tempfile.NamedTemporaryFile(
-                    delete=False, suffix=".pem", mode="wb"
-                ) as kf:
+                with open(key_file, "wb") as kf:
                     kf.write(key_pem)
-                    key_file = kf.name
+                # Best-effort 0o600 on POSIX as defense in depth on top
+                # of the restrictive directory permissions.
+                for path in (cert_file, key_file):
+                    try:
+                        os.chmod(path, 0o600)
+                    except (NotImplementedError, OSError):
+                        pass
                 ctx.load_cert_chain(cert_file, key_file)
-            finally:
-                if cert_file:
-                    os.unlink(cert_file)
-                if key_file:
-                    os.unlink(key_file)
 
         if self.config.ca_cert_path:
             ctx.load_verify_locations(self.config.ca_cert_path)
