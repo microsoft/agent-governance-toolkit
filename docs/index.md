@@ -83,10 +83,10 @@ hide:
 Runtime governance for AI agents: deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents.
 
 <div class="agt-hero-badges">
-  <a href="quickstart/">:material-rocket-launch: Quick Start</a>
-  <a href="https://pypi.org/project/agent-governance-toolkit/">:material-package: PyPI</a>
-  <a href="https://github.com/microsoft/agent-governance-toolkit">:material-github: GitHub</a>
-  <a href="tutorials/index/">:material-school: Tutorials</a>
+  <a href="quickstart/">🚀 Quick Start</a>
+  <a href="https://pypi.org/project/agent-governance-toolkit/">📦 PyPI</a>
+  <a href="https://github.com/microsoft/agent-governance-toolkit">💻 GitHub</a>
+  <a href="tutorials/index/">📚 Tutorials</a>
 </div>
 
 <div class="agt-stats">
@@ -105,42 +105,42 @@ Runtime governance for AI agents: deterministic policy enforcement, zero-trust i
 <div class="agt-cards" markdown>
 
 <a class="agt-card" href="packages/agent-os/">
-<h3>:material-cog: Agent OS</h3>
+<h3>⚙️ Agent OS</h3>
 <p>Policy engine, agent lifecycle, governance gate</p>
 </a>
 
 <a class="agt-card" href="packages/agent-mesh/">
-<h3>:material-lan: Agent Mesh</h3>
+<h3>🔗 Agent Mesh</h3>
 <p>Agent discovery, routing, and trust mesh</p>
 </a>
 
 <a class="agt-card" href="packages/agent-runtime/">
-<h3>:material-shield-lock: Agent Runtime</h3>
+<h3>🛡️ Agent Runtime</h3>
 <p>Execution sandboxing with four privilege rings</p>
 </a>
 
 <a class="agt-card" href="packages/agent-sre/">
-<h3>:material-chart-line: Agent SRE</h3>
+<h3>📊 Agent SRE</h3>
 <p>Kill switch, SLO monitoring, chaos testing</p>
 </a>
 
 <a class="agt-card" href="packages/agent-compliance/">
-<h3>:material-clipboard-check: Agent Compliance</h3>
+<h3>✅ Agent Compliance</h3>
 <p>Audit logging, compliance frameworks</p>
 </a>
 
 <a class="agt-card" href="packages/agent-marketplace/">
-<h3>:material-store: Agent Marketplace</h3>
+<h3>🏪 Agent Marketplace</h3>
 <p>Plugin governance and trust scoring</p>
 </a>
 
 <a class="agt-card" href="packages/agent-lightning/">
-<h3>:material-lightning-bolt: Agent Lightning</h3>
+<h3>⚡ Agent Lightning</h3>
 <p>High-performance agent orchestration</p>
 </a>
 
 <a class="agt-card" href="packages/agent-hypervisor/">
-<h3>:material-server-security: Agent Hypervisor</h3>
+<h3>🔒 Agent Hypervisor</h3>
 <p>Hardware-level workload isolation</p>
 </a>
 
@@ -153,11 +153,11 @@ Runtime governance for AI agents: deterministic policy enforcement, zero-trust i
 
 | SDK | Install |
 |-----|---------|
-| :material-language-python: [Python](packages/agent-os/) | `pip install agent-governance-toolkit` |
-| :material-language-typescript: [TypeScript](packages/typescript-sdk/) | `npm install @agent-governance/sdk` |
-| :material-language-csharp: [.NET](packages/dotnet-sdk/) | `dotnet add package Microsoft.AgentGovernance` |
-| :material-language-rust: [Rust](packages/rust-sdk/) | `cargo add agentmesh` |
-| :material-language-go: [Go](packages/go-sdk/) | `go get github.com/microsoft/agent-governance-toolkit` |
+| 🐍 [Python](packages/agent-os/) | `pip install agent-governance-toolkit` |
+| 📘 [TypeScript](packages/typescript-sdk/) | `npm install @agent-governance/sdk` |
+| 🔷 [.NET](packages/dotnet-sdk/) | `dotnet add package Microsoft.AgentGovernance` |
+| 🦀 [Rust](packages/rust-sdk/) | `cargo add agentmesh` |
+| 🐹 [Go](packages/go-sdk/) | `go get github.com/microsoft/agent-governance-toolkit` |
 
 </div>
 
