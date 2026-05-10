@@ -102,48 +102,39 @@ Runtime governance for AI agents: deterministic policy enforcement, zero-trust i
 
 ## Packages
 
-<div class="agt-cards" markdown>
-
+<div class="agt-cards">
 <a class="agt-card" href="packages/agent-os/">
 <h3>⚙️ Agent OS</h3>
 <p>Policy engine, agent lifecycle, governance gate</p>
 </a>
-
 <a class="agt-card" href="packages/agent-mesh/">
 <h3>🔗 Agent Mesh</h3>
 <p>Agent discovery, routing, and trust mesh</p>
 </a>
-
 <a class="agt-card" href="packages/agent-runtime/">
 <h3>🛡️ Agent Runtime</h3>
 <p>Execution sandboxing with four privilege rings</p>
 </a>
-
 <a class="agt-card" href="packages/agent-sre/">
 <h3>📊 Agent SRE</h3>
 <p>Kill switch, SLO monitoring, chaos testing</p>
 </a>
-
 <a class="agt-card" href="packages/agent-compliance/">
 <h3>✅ Agent Compliance</h3>
 <p>Audit logging, compliance frameworks</p>
 </a>
-
 <a class="agt-card" href="packages/agent-marketplace/">
 <h3>🏪 Agent Marketplace</h3>
 <p>Plugin governance and trust scoring</p>
 </a>
-
 <a class="agt-card" href="packages/agent-lightning/">
 <h3>⚡ Agent Lightning</h3>
 <p>High-performance agent orchestration</p>
 </a>
-
 <a class="agt-card" href="packages/agent-hypervisor/">
 <h3>🔒 Agent Hypervisor</h3>
 <p>Hardware-level workload isolation</p>
 </a>
-
 </div>
 </div>
 
