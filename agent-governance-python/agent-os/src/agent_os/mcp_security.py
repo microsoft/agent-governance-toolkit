@@ -341,20 +341,79 @@ class MCPSecurityScanner:
         *,
         audit_sink: MCPAuditSink | None = None,
         clock: Callable[[], float] = time.time,
+        config: MCPSecurityConfig | None = None,
     ) -> None:
-        warnings.warn(
-            "MCPSecurityScanner() uses built-in sample rules that may not "
-            "cover all MCP tool poisoning techniques. For production use, load an "
-            "explicit config with load_mcp_security_config(). "
-            "See examples/policies/mcp-security.yaml for a sample configuration.",
-            stacklevel=2,
-        )
+        """Initialize the scanner.
+
+        Args:
+            metrics: Optional metrics recorder.
+            audit_sink: Optional audit sink for tool-scan events.
+            clock: Clock function used for fingerprint timestamps.
+            config: Pattern-set configuration loaded from YAML via
+                ``load_mcp_security_config()``. When provided, the scanner
+                iterates these pattern lists rather than the module-level
+                defaults; this is the supported path for customising the
+                scan rule set.
+        """
+        if config is None:
+            warnings.warn(
+                "MCPSecurityScanner() uses built-in sample rules that may not "
+                "cover all MCP tool poisoning techniques. For production use, load an "
+                "explicit config with load_mcp_security_config() and pass it as "
+                "config=. "
+                "See examples/policies/mcp-security.yaml for a sample configuration.",
+                stacklevel=2,
+            )
         self._tool_registry: dict[str, ToolFingerprint] = {}
         self._audit_log: list[dict[str, Any]] = []
         self._injection_detector = PromptInjectionDetector()
         self._metrics = metrics or MCPMetrics()
         self._audit_sink = audit_sink or InMemoryAuditSink()
         self._clock = clock
+        self._config = config or MCPSecurityConfig()
+        self._compile_patterns()
+
+    def _compile_patterns(self) -> None:
+        """Compile pattern strings from ``self._config`` into ``re.Pattern``
+        objects stored on the instance. Detection methods iterate these
+        instance attributes rather than the module-level defaults so a
+        YAML-loaded config actually takes effect.
+        """
+        cfg = self._config
+        # Defaults use a mix of IGNORECASE and DOTALL flags; round-tripping
+        # through pattern.pattern loses inline flags, so re-compile with
+        # both set. Patterns that don't use ``.`` or letters are unaffected.
+        flags = re.IGNORECASE | re.DOTALL
+
+        def _compile(pats: list[str]) -> list[re.Pattern[str]]:
+            compiled: list[re.Pattern[str]] = []
+            for raw in pats:
+                try:
+                    compiled.append(re.compile(raw, flags))
+                except re.error:
+                    logger.warning(
+                        "Skipping invalid regex in MCP security config: %r", raw,
+                    )
+            return compiled
+
+        self._invisible_unicode_patterns = _compile(cfg.invisible_unicode_patterns)
+        self._hidden_comment_patterns = _compile(cfg.hidden_comment_patterns)
+        self._hidden_instruction_patterns = _compile(cfg.hidden_instruction_patterns)
+        self._encoded_payload_patterns = _compile(cfg.encoded_payload_patterns)
+        self._exfiltration_patterns = _compile(cfg.exfiltration_patterns)
+        self._privilege_escalation_patterns = _compile(cfg.privilege_escalation_patterns)
+        self._role_override_patterns = _compile(cfg.role_override_patterns)
+        try:
+            self._excessive_whitespace_pattern: re.Pattern[str] = re.compile(
+                cfg.excessive_whitespace_pattern, flags,
+            )
+        except re.error:
+            logger.warning(
+                "Invalid excessive_whitespace regex in MCP security config; "
+                "falling back to default",
+            )
+            self._excessive_whitespace_pattern = _EXCESSIVE_WHITESPACE_PATTERN
+        self._suspicious_decoded_keywords = list(cfg.suspicious_decoded_keywords)
 
     # -- public API ---------------------------------------------------------
 
@@ -561,7 +620,7 @@ class MCPSecurityScanner:
         threats: list[MCPThreat] = []
 
         # 1. Invisible unicode characters
-        for pattern in _INVISIBLE_UNICODE_PATTERNS:
+        for pattern in self._invisible_unicode_patterns:
             match = pattern.search(description)
             if match:
                 threats.append(
@@ -578,7 +637,7 @@ class MCPSecurityScanner:
                 break  # one finding per category is enough
 
         # 2. Markdown/HTML comments hiding text
-        for pattern in _HIDDEN_COMMENT_PATTERNS:
+        for pattern in self._hidden_comment_patterns:
             match = pattern.search(description)
             if match:
                 threats.append(
@@ -594,7 +653,7 @@ class MCPSecurityScanner:
                 )
 
         # 3. Encoded instructions (base64, hex)
-        for pattern in _ENCODED_PAYLOAD_PATTERNS:
+        for pattern in self._encoded_payload_patterns:
             match = pattern.search(description)
             if match:
                 candidate = match.group()
@@ -604,7 +663,7 @@ class MCPSecurityScanner:
                     try:
                         decoded = base64.b64decode(candidate).decode("utf-8", errors="ignore")
                         decoded_lower = decoded.lower()
-                        for keyword in _SUSPICIOUS_DECODED_KEYWORDS:
+                        for keyword in self._suspicious_decoded_keywords:
                             if keyword in decoded_lower:
                                 is_suspicious = True
                                 break
@@ -627,7 +686,7 @@ class MCPSecurityScanner:
                     )
 
         # 4. Hidden instructions after excessive whitespace/newlines
-        if _EXCESSIVE_WHITESPACE_PATTERN.search(description):
+        if self._excessive_whitespace_pattern.search(description):
             threats.append(
                 MCPThreat(
                     threat_type=MCPThreatType.HIDDEN_INSTRUCTION,
@@ -635,12 +694,12 @@ class MCPSecurityScanner:
                     tool_name=tool_name,
                     server_name=server_name,
                     message="Instructions hidden after excessive whitespace",
-                    matched_pattern=_EXCESSIVE_WHITESPACE_PATTERN.pattern,
+                    matched_pattern=self._excessive_whitespace_pattern.pattern,
                 )
             )
 
         # 5. Instruction-like patterns
-        for pattern in _HIDDEN_INSTRUCTION_PATTERNS:
+        for pattern in self._hidden_instruction_patterns:
             if pattern.search(description):
                 threats.append(
                     MCPThreat(
@@ -686,7 +745,7 @@ class MCPSecurityScanner:
             )
 
         # Role assignment patterns
-        for pattern in _ROLE_OVERRIDE_PATTERNS:
+        for pattern in self._role_override_patterns:
             if pattern.search(description):
                 threats.append(
                     MCPThreat(
@@ -700,7 +759,7 @@ class MCPSecurityScanner:
                 )
 
         # Data exfiltration patterns
-        for pattern in _EXFILTRATION_PATTERNS:
+        for pattern in self._exfiltration_patterns:
             if pattern.search(description):
                 threats.append(
                     MCPThreat(
@@ -773,7 +832,7 @@ class MCPSecurityScanner:
             # 3. Default values containing instructions
             default_val = prop_def.get("default")
             if isinstance(default_val, str) and len(default_val) > 10:
-                for pattern in _HIDDEN_INSTRUCTION_PATTERNS:
+                for pattern in self._hidden_instruction_patterns:
                     if pattern.search(default_val):
                         threats.append(
                             MCPThreat(
@@ -791,7 +850,7 @@ class MCPSecurityScanner:
             # 4. Hidden instructions in property descriptions
             prop_desc = prop_def.get("description", "")
             if isinstance(prop_desc, str):
-                for pattern in _HIDDEN_INSTRUCTION_PATTERNS:
+                for pattern in self._hidden_instruction_patterns:
                     if pattern.search(prop_desc):
                         threats.append(
                             MCPThreat(
