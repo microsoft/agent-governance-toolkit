@@ -19,10 +19,46 @@ Example:
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
 from agent_os.integrations.base import GovernancePolicy
+
+
+def _iter_string_leaves(value: Any) -> Iterable[str]:
+    """Yield every string-like leaf reachable from *value*.
+
+    Walks dicts (keys and values), lists/tuples/sets, and decodes ``bytes``
+    via UTF-8 with ``backslashreplace`` so that non-ASCII payloads still
+    surface as inspectable text. Primitives (int/float/bool/None) are
+    coerced to their ``str()`` form because callers sometimes interpolate
+    them into shell or SQL strings downstream.
+
+    The intent is that every byte the receiver of an action might
+    eventually interpret should pass through the blocklist.
+    """
+    if value is None:
+        return
+    if isinstance(value, str):
+        yield value
+        return
+    if isinstance(value, (bytes, bytearray)):
+        yield bytes(value).decode("utf-8", errors="backslashreplace")
+        return
+    if isinstance(value, Mapping):
+        for k, v in value.items():
+            yield from _iter_string_leaves(k)
+            yield from _iter_string_leaves(v)
+        return
+    if isinstance(value, (list, tuple, set, frozenset)):
+        for item in value:
+            yield from _iter_string_leaves(item)
+        return
+    # Fallback for primitives and unknown objects — repr() is the same
+    # surface ``str(arguments)`` previously exposed, so we never regress
+    # detection coverage relative to the pre-fix behavior.
+    yield str(value)
 
 
 @dataclass
@@ -71,7 +107,7 @@ class TrustRoot:
         """
         tool = action.get("tool", "")
         arguments = action.get("arguments", {})
-        args_str = str(arguments)
+        leaves = list(_iter_string_leaves(arguments))
 
         for policy in self.policies:
             # Check allowed tools
@@ -84,14 +120,18 @@ class TrustRoot:
                     policy_name=policy.name,
                 )
 
-            # Check blocked patterns
-            matched = policy.matches_pattern(args_str)
-            if matched:
-                return TrustDecision(
-                    allowed=False,
-                    reason=f"Blocked pattern '{matched[0]}' detected in arguments",
-                    policy_name=policy.name,
-                )
+            # Check blocked patterns against every string leaf and key — the
+            # previous str(arguments) approach silently re-encoded bytes
+            # values (`b'\x..'`) and produced a single repr blob whose
+            # delimiters could disrupt regex anchors.
+            for leaf in leaves:
+                matched = policy.matches_pattern(leaf)
+                if matched:
+                    return TrustDecision(
+                        allowed=False,
+                        reason=f"Blocked pattern '{matched[0]}' detected in arguments",
+                        policy_name=policy.name,
+                    )
 
         return TrustDecision(
             allowed=True,
