@@ -9,9 +9,9 @@ The Agent Governance Toolkit (AGT) provides a comprehensive set of packages for 
 | | |
 |---|---|
 | :material-rocket-launch: [**Quick Start**](quickstart.md) | Get running in 5 minutes |
-| :material-cube-outline: [**Packages**](packages/index.md) | 11 packages for every governance layer |
+| :material-cube-outline: [**Packages**](packages/index.md) | 8 core + 5 language SDKs + 19 integrations |
 | :material-school: [**Tutorials**](tutorials/index.md) | 40+ step-by-step guides |
-| :material-cloud-upload: [**Deployment**](deployment/index.md) | Azure Container Apps, Foundry, OpenClaw |
+| :material-cloud-upload: [**Deployment**](deployment/index.md) | Azure, AWS, GCP, and sidecar patterns |
 | :material-shield-check: [**Security**](security/threat-model.md) | Threat model, OWASP compliance, scanning |
 
 ## Packages at a Glance
