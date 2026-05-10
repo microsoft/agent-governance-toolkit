@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import threading
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,6 +61,15 @@ class RAGAuditEntry:
 class AuditLogger:
     """Emits :class:`RAGAuditEntry` records to a file or stdout.
 
+    Concurrent ``emit`` calls from multiple threads are safe within a
+    single process: the logger holds an instance-level lock around the
+    file open/write so audit lines do not interleave at the byte level.
+    Multi-process deployments (e.g. multiple Gunicorn/Uvicorn workers
+    sharing the same on-disk log file) require external coordination —
+    the in-process lock does not cross process boundaries. Use a
+    process-level handoff (a centralised log shipper, syslog, or
+    per-worker log paths) in that case.
+
     Args:
         log_path: Path to the JSON-lines log file. ``None`` writes to
             stdout.
@@ -72,16 +82,28 @@ class AuditLogger:
 
     def __init__(self, log_path: Optional[str] = None) -> None:
         self._path = Path(log_path) if log_path else None
+        # Serialise concurrent emit() calls so audit lines from threads
+        # racing through the request path do not interleave.
+        # POSIX O_APPEND only guarantees atomic appends below PIPE_BUF
+        # bytes on filesystems that honour it, and Windows has no
+        # equivalent guarantee — relying on the kernel's write-atomicity
+        # is too fragile for compliance-grade audit evidence.
+        self._lock = threading.Lock()
 
     def emit(self, entry: RAGAuditEntry) -> None:
-        """Write *entry* as a JSON line."""
+        """Write *entry* as a JSON line.
+
+        Thread-safe within a single process; see the class docstring
+        for multi-process notes.
+        """
         line = entry.to_json() + "\n"
-        if self._path is None:
-            sys.stdout.write(line)
-            sys.stdout.flush()
-        else:
-            with self._path.open("a", encoding="utf-8") as fh:
-                fh.write(line)
+        with self._lock:
+            if self._path is None:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+            else:
+                with self._path.open("a", encoding="utf-8") as fh:
+                    fh.write(line)
 
 
 def make_entry(
