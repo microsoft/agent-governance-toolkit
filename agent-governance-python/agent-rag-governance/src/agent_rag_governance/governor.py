@@ -86,8 +86,75 @@ class GovernedRetriever:
         """LangChain v0.1 compatibility shim — delegates to :meth:`invoke`."""
         return self.invoke(query)
 
-    # Expose underlying retriever attributes transparently
+    # ── Blocked governance-bypassing methods ──────────────────────────
+    #
+    # The governance pipeline (collection ACL, rate limiting, content
+    # scanning, audit) is currently synchronous, so we cannot
+    # transparently extend it to async / batch / stream paths.
+    # Forwarding those calls to the underlying retriever (the prior
+    # behaviour, via ``__getattr__``) silently bypassed every check.
+    # Callers that need any of these surfaces must extend the wrapper
+    # explicitly with their own governance plumbing.
+
+    _BYPASSED_METHODS = (
+        "ainvoke",
+        "aget_relevant_documents",
+        "batch",
+        "abatch",
+        "stream",
+        "astream",
+    )
+
+    async def ainvoke(self, *args: Any, **kwargs: Any) -> List[Any]:
+        raise NotImplementedError(
+            "GovernedRetriever does not implement async retrieval. "
+            "The governance pipeline (collection ACL, rate limiting, "
+            "content scanning, audit) is synchronous; calling "
+            "ainvoke would silently bypass it. Use .invoke(...) or "
+            "extend GovernedRetriever with an async-aware governor."
+        )
+
+    async def aget_relevant_documents(self, *args: Any, **kwargs: Any) -> List[Any]:
+        raise NotImplementedError(
+            "GovernedRetriever does not implement async retrieval. "
+            "Use .get_relevant_documents(...) or .invoke(...)."
+        )
+
+    def batch(self, *args: Any, **kwargs: Any) -> List[Any]:
+        raise NotImplementedError(
+            "GovernedRetriever does not implement batch retrieval. "
+            "Loop over .invoke(...) per query if per-call governance "
+            "is acceptable."
+        )
+
+    async def abatch(self, *args: Any, **kwargs: Any) -> List[Any]:
+        raise NotImplementedError(
+            "GovernedRetriever does not implement async batch retrieval."
+        )
+
+    def stream(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError(
+            "GovernedRetriever does not implement streaming retrieval."
+        )
+
+    async def astream(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError(
+            "GovernedRetriever does not implement async streaming retrieval."
+        )
+
     def __getattr__(self, name: str) -> Any:
+        # Belt-and-braces: __getattr__ runs only for attributes not
+        # found on the instance. The explicit methods above shadow
+        # the bypass surfaces, but if a caller probes for one of those
+        # names via getattr() with a default they should still see the
+        # block — and any other LangChain-style governance surface we
+        # haven't enumerated should also fail loudly rather than be
+        # silently forwarded.
+        if name in type(self)._BYPASSED_METHODS:
+            raise AttributeError(
+                f"GovernedRetriever blocks {name!r} to prevent governance "
+                "bypass. Use .invoke(...) instead."
+            )
         return getattr(self._retriever, name)
 
 

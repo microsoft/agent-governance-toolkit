@@ -145,3 +145,92 @@ def test_get_relevant_documents_compat():
     governed = governor.wrap(retriever, collection="docs")
     result = governed.get_relevant_documents("query")
     assert len(result) == 1
+
+
+class _FakeRetrieverWithAsync:
+    """Retriever that exposes async/batch/stream methods that would
+    silently bypass governance if proxied by __getattr__.
+    """
+
+    def __init__(self, docs: List[_FakeDoc]):
+        self._docs = docs
+        self.calls: list[str] = []
+
+    def invoke(self, query: str, **kwargs) -> List[_FakeDoc]:
+        self.calls.append("invoke")
+        return self._docs
+
+    async def ainvoke(self, query: str, **kwargs) -> List[_FakeDoc]:
+        self.calls.append("ainvoke")
+        return self._docs
+
+    async def aget_relevant_documents(self, query: str) -> List[_FakeDoc]:
+        self.calls.append("aget_relevant_documents")
+        return self._docs
+
+    def batch(self, queries) -> List[List[_FakeDoc]]:
+        self.calls.append("batch")
+        return [self._docs for _ in queries]
+
+    async def abatch(self, queries) -> List[List[_FakeDoc]]:
+        self.calls.append("abatch")
+        return [self._docs for _ in queries]
+
+    def stream(self, query: str):
+        self.calls.append("stream")
+        return iter(self._docs)
+
+    async def astream(self, query: str):
+        self.calls.append("astream")
+        for doc in self._docs:
+            yield doc
+
+    # Non-method attribute that should still proxy through.
+    @property
+    def search_kwargs(self) -> dict:
+        return {"k": 5}
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    ["ainvoke", "aget_relevant_documents", "batch", "abatch", "stream", "astream"],
+)
+def test_governance_bypass_methods_blocked(method_name):
+    """Regression: previously __getattr__ proxied any unknown attribute
+    to the underlying retriever, so callers using async/batch/stream
+    surfaces silently skipped every governance check (collection ACL,
+    rate limit, content scan, audit). Each must now raise
+    NotImplementedError before reaching the inner retriever.
+    """
+    import asyncio
+
+    inner = _FakeRetrieverWithAsync([_FakeDoc("blocked content @example.com")])
+    governor = _make_governor(RAGPolicy(content_policies=["block_pii"]))
+    governed = governor.wrap(inner, collection="docs")
+
+    method = getattr(governed, method_name)
+    if method_name in {"ainvoke", "aget_relevant_documents", "abatch", "astream"}:
+        with pytest.raises(NotImplementedError):
+            asyncio.run(method("q"))
+    elif method_name == "stream":
+        with pytest.raises(NotImplementedError):
+            method("q")
+    elif method_name == "batch":
+        with pytest.raises(NotImplementedError):
+            method(["q1", "q2"])
+
+    # The inner retriever's bypass methods must not have been invoked.
+    forbidden = {"ainvoke", "aget_relevant_documents", "batch", "abatch", "stream", "astream"}
+    assert not (set(inner.calls) & forbidden), (
+        f"Governance bypass: inner retriever was called via {set(inner.calls) & forbidden}"
+    )
+
+
+def test_non_method_attributes_still_proxy_through():
+    """The wrapper still exposes data attributes from the underlying
+    retriever; only the known governance-bypass methods are blocked.
+    """
+    inner = _FakeRetrieverWithAsync([_FakeDoc("clean")])
+    governor = _make_governor(RAGPolicy())
+    governed = governor.wrap(inner, collection="docs")
+    assert governed.search_kwargs == {"k": 5}
