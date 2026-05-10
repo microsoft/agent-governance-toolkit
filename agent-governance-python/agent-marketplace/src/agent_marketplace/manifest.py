@@ -10,6 +10,7 @@ Supports plugin types: policy_template, integration, agent, validator.
 from __future__ import annotations
 
 import enum
+import json
 import logging
 from pathlib import Path
 from typing import Optional
@@ -99,10 +100,26 @@ class PluginManifest(BaseModel):
         return v
 
     def signable_bytes(self) -> bytes:
-        """Return the canonical bytes used for signing (excludes signature field)."""
+        """Return the canonical bytes used for signing (excludes signature field).
+
+        Uses JSON with ``sort_keys=True``, ASCII-safe escaping, no
+        whitespace, and ``allow_nan=False`` so the output is
+        byte-identical across machines, Python builds, and YAML
+        library versions. The prior ``yaml.dump(..., sort_keys=True)``
+        path was NOT a stable canonicalization — it emitted
+        Python-specific tags, used the host's default flow style,
+        and varied with PyYAML release — so a signature produced on
+        one machine could fail to verify on another even when the
+        manifest content was logically identical.
+        """
         data = self.model_dump(exclude={"signature"})
-        # Deterministic YAML serialization
-        return yaml.dump(data, sort_keys=True).encode()
+        return json.dumps(
+            data,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        ).encode("ascii")
 
 
 def load_manifest(path: Path) -> PluginManifest:

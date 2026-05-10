@@ -7,6 +7,81 @@ from __future__ import annotations
 import pytest
 
 
+def test_signable_bytes_is_canonical_json():
+    """Regression: signable_bytes used to be yaml.dump(sort_keys=True),
+    which is not stable across Python builds or PyYAML versions and
+    embeds Python-specific tags. A signature produced on one machine
+    could fail to verify on another even with identical manifest
+    content. Use JSON with sort_keys / ascii / no-nan instead.
+    """
+    import json
+    from agent_marketplace.manifest import PluginManifest, PluginType
+
+    m = PluginManifest(
+        name="x",
+        version="1.0.0",
+        plugin_type=PluginType.POLICY_TEMPLATE,
+        author="a@example.com",
+        description="desc",
+    )
+    encoded = m.signable_bytes()
+
+    # Decodable as JSON (would NOT be true for yaml.dump output).
+    decoded = json.loads(encoded.decode("ascii"))
+    assert decoded["name"] == "x"
+    assert decoded["version"] == "1.0.0"
+    # signature field must be excluded.
+    assert "signature" not in decoded
+
+
+def test_signable_bytes_independent_of_field_order():
+    """Two manifests with the same logical content but different
+    Python field insertion order must produce byte-identical signable
+    output. ``sort_keys=True`` is the load-bearing primitive.
+    """
+    from agent_marketplace.manifest import PluginManifest, PluginType
+
+    a = PluginManifest(
+        name="x",
+        version="1.0.0",
+        plugin_type=PluginType.POLICY_TEMPLATE,
+        author="a@example.com",
+        description="desc",
+    )
+    # Construct b via dict to vary insertion order; pydantic will
+    # canonicalise it, and signable_bytes should produce the same
+    # output as a.
+    b = PluginManifest.model_validate({
+        "description": "desc",
+        "plugin_type": PluginType.POLICY_TEMPLATE.value,
+        "version": "1.0.0",
+        "author": "a@example.com",
+        "name": "x",
+    })
+    assert a.signable_bytes() == b.signable_bytes()
+
+
+def test_signable_bytes_omits_signature_field():
+    """The signature field is set AFTER signing; it must not be part
+    of the signable representation, or verification would have to
+    strip it back out and bugs in that path would silently invalidate
+    every signature.
+    """
+    from agent_marketplace.manifest import PluginManifest, PluginType
+
+    m = PluginManifest(
+        name="x",
+        version="1.0.0",
+        plugin_type=PluginType.POLICY_TEMPLATE,
+        author="a@example.com",
+        description="desc",
+    )
+    unsigned = m.signable_bytes()
+    m.signature = "deadbeef" * 16
+    signed = m.signable_bytes()
+    assert unsigned == signed
+
+
 def test_top_level_imports():
     """All public symbols are importable from the top-level package."""
     from agent_marketplace import (
