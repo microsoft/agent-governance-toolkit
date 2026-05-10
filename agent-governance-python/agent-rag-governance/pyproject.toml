@@ -18,7 +18,7 @@ maintainers = [
 keywords = [
     "ai-agents", "governance", "rag", "retrieval-augmented-generation",
     "access-control", "audit", "policy-enforcement", "vector-store",
-    "langchain", "enterprise-ai", "compliance",
+    "langchain", "llamaindex", "enterprise-ai", "compliance",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -38,6 +38,7 @@ dependencies = [
 
 [project.optional-dependencies]
 langchain = ["langchain-core>=0.2.0"]
+llamaindex = ["llama-index-core>=0.10.0"]
 dev = [
     "pytest==9.0.3",
     "pytest-asyncio==0.26.0",
