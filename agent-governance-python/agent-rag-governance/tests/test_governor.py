@@ -145,3 +145,42 @@ def test_get_relevant_documents_compat():
     governed = governor.wrap(retriever, collection="docs")
     result = governed.get_relevant_documents("query")
     assert len(result) == 1
+
+
+class _LegacyOnlyRetriever:
+    """Retriever exposing only the legacy v0.1 API (no .invoke())."""
+
+    def __init__(self, docs: List[_FakeDoc]):
+        self._docs = docs
+
+    def get_relevant_documents(self, query: str) -> List[_FakeDoc]:
+        return self._docs
+
+
+def test_legacy_retriever_rejects_kwargs_loudly():
+    """Regression: previously _retrieve fell back to
+    .get_relevant_documents(query) when .invoke was unavailable, and
+    silently dropped any kwargs the caller had passed via
+    governed.invoke(query, **kwargs). Tenant-scoping filters and
+    similar arguments vanished, so governance approved a query that
+    then ran against a wider scope than the caller intended.
+    Now this case raises TypeError so the caller knows to upgrade the
+    retriever or drop the kwargs.
+    """
+    retriever = _LegacyOnlyRetriever([_FakeDoc("clean")])
+    governor = _make_governor(RAGPolicy())
+    governed = governor.wrap(retriever, collection="docs")
+
+    with pytest.raises(TypeError, match="cannot accept kwargs"):
+        governed.invoke("query", filter={"tenant": "tenant-a"})
+
+
+def test_legacy_retriever_accepts_no_kwargs():
+    """Bare .get_relevant_documents path (no kwargs) still works."""
+    retriever = _LegacyOnlyRetriever([_FakeDoc("clean")])
+    governor = _make_governor(RAGPolicy())
+    governed = governor.wrap(retriever, collection="docs")
+
+    # Both invoke (no kwargs) and the explicit shim should work.
+    assert len(governed.invoke("query")) == 1
+    assert len(governed.get_relevant_documents("query")) == 1
