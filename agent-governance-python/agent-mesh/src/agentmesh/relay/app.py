@@ -216,13 +216,20 @@ class RelayServer:
             logger.debug("Stored offline message %s for %s", message_id, recipient_did)
 
     async def _deliver_pending(self, agent_did: str, ws: WebSocket) -> None:
-        """Push all pending messages to a newly connected agent."""
+        """Push all pending messages to a newly connected agent.
+
+        Messages stay in the inbox until the recipient explicitly sends
+        an ``ack`` frame for them — see the ``ack`` branch in
+        :meth:`_handle_frame`. Acknowledging on send (the previous
+        behaviour) silently dropped messages whenever the recipient
+        disconnected after ``send_json`` returned but before the frame
+        actually reached them.
+        """
         pending = self._inbox.fetch_pending(agent_did)
         for msg in pending:
             try:
                 frame = json.loads(msg.payload)
                 await ws.send_json(frame)
-                self._inbox.acknowledge(msg.message_id)
                 self._stats["messages_delivered"] += 1
             except Exception as e:
                 logger.warning("Failed to deliver pending %s: %s", msg.message_id, e)
