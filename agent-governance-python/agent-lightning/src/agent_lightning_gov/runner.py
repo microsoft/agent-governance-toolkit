@@ -10,6 +10,7 @@ Policy violations during training become learning signals.
 
 from __future__ import annotations
 
+import contextvars
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -19,6 +20,16 @@ from typing import Any, Callable, Generic, TypeVar
 logger = logging.getLogger(__name__)
 
 T_task = TypeVar("T_task")
+
+# Per-step state. Each ``step()`` call sets these to its local list before
+# invoking the kernel; the kernel's policy/signal callbacks then append into
+# the active step's list (whichever asyncio task is running them). This keeps
+# concurrent ``step()`` calls on the same ``GovernedRunner`` from mixing
+# violations or signals across rollouts.
+_active_violations_ctx: contextvars.ContextVar[list["PolicyViolation"] | None] = \
+    contextvars.ContextVar("agent_lightning_gov_active_violations", default=None)
+_active_signals_ctx: contextvars.ContextVar[list[str] | None] = \
+    contextvars.ContextVar("agent_lightning_gov_active_signals", default=None)
 
 
 class PolicyViolationType(Enum):
@@ -182,7 +193,13 @@ class GovernedRunner(Generic[T_task]):
         severity: str,
         blocked: bool,
     ) -> None:
-        """Handle a policy violation from the kernel."""
+        """Handle a policy violation from the kernel.
+
+        When an active ``step()`` has bound its per-rollout violation list to
+        the current asyncio context, the violation is appended there. When
+        called outside a step (direct test usage, ad-hoc callers), the
+        instance-level ``_current_violations`` list is used for back-compat.
+        """
         violation = PolicyViolation(
             violation_type=PolicyViolationType.BLOCKED if blocked else PolicyViolationType.WARNED,
             policy_name=policy_name,
@@ -191,7 +208,11 @@ class GovernedRunner(Generic[T_task]):
             action_blocked=blocked,
         )
 
-        self._current_violations.append(violation)
+        active = _active_violations_ctx.get()
+        if active is not None:
+            active.append(violation)
+        else:
+            self._current_violations.append(violation)
         self._total_violations += 1
 
         if self.log_violations:
@@ -207,12 +228,23 @@ class GovernedRunner(Generic[T_task]):
             raise PolicyViolationError(violation)
 
     def _handle_signal(self, signal: str, agent_id: str) -> None:
-        """Handle a kernel signal."""
-        self._current_signals.append(signal)
+        """Handle a kernel signal.
+
+        Same context-aware routing as ``_handle_violation``.
+        """
+        active = _active_signals_ctx.get()
+        if active is not None:
+            active.append(signal)
+        else:
+            self._current_signals.append(signal)
         logger.debug(f"Signal {signal} sent to agent {agent_id}")
 
     def _clear_current_state(self) -> None:
-        """Clear state for new rollout."""
+        """Clear instance-level fallback state.
+
+        ``step()`` no longer uses the instance lists; this exists for callers
+        that drive ``_handle_violation`` / ``_handle_signal`` directly.
+        """
         self._current_violations = []
         self._current_signals = []
 
@@ -240,31 +272,41 @@ class GovernedRunner(Generic[T_task]):
         """
         import time
 
-        self._clear_current_state()
+        # Per-step state: bind fresh lists to the asyncio context so concurrent
+        # ``step()`` calls on the same runner don't share violation/signal
+        # buffers via instance state.
+        local_violations: list[PolicyViolation] = []
+        local_signals: list[str] = []
+        v_token = _active_violations_ctx.set(local_violations)
+        s_token = _active_signals_ctx.set(local_signals)
         start_time = time.perf_counter()
 
         try:
-            # Execute through kernel
-            if hasattr(self.kernel, 'execute_async'):
-                result = await self.kernel.execute_async(self.agent, input)
-            elif hasattr(self.kernel, 'execute'):
-                result = self.kernel.execute(self.agent, input)
-            else:
-                # Fallback: direct agent call (no governance)
-                logger.warning("Kernel has no execute method, running agent directly")
-                result = await self.agent(input)
+            try:
+                # Execute through kernel
+                if hasattr(self.kernel, 'execute_async'):
+                    result = await self.kernel.execute_async(self.agent, input)
+                elif hasattr(self.kernel, 'execute'):
+                    result = self.kernel.execute(self.agent, input)
+                else:
+                    # Fallback: direct agent call (no governance)
+                    logger.warning("Kernel has no execute method, running agent directly")
+                    result = await self.agent(input)
 
-            success = True
+                success = True
 
-        except PolicyViolationError as e:
-            result = None
-            success = False
-            logger.error(f"Execution blocked by policy: {e.violation.description}")
+            except PolicyViolationError as e:
+                result = None
+                success = False
+                logger.error(f"Execution blocked by policy: {e.violation.description}")
 
-        except Exception as e:
-            result = None
-            success = False
-            logger.error(f"Execution failed: {e}")
+            except Exception as e:
+                result = None
+                success = False
+                logger.error(f"Execution failed: {e}")
+        finally:
+            _active_violations_ctx.reset(v_token)
+            _active_signals_ctx.reset(s_token)
 
         execution_time = (time.perf_counter() - start_time) * 1000
         self._total_rollouts += 1
@@ -273,8 +315,8 @@ class GovernedRunner(Generic[T_task]):
             task_input=input,
             task_output=result,
             success=success,
-            violations=self._current_violations.copy(),
-            signals_sent=self._current_signals.copy(),
+            violations=local_violations,
+            signals_sent=local_signals,
             execution_time_ms=execution_time,
         )
 
