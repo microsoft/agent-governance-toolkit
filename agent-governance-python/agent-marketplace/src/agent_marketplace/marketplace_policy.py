@@ -114,10 +114,16 @@ class MarketplacePolicy(BaseModel):
         # Merge MCP server policy if org has overrides
         merged_mcp = org.mcp_server_overrides if org.mcp_server_overrides else self.mcp_servers
 
+        # Pass org_policies / org_mcp_policies through so subsequent calls on
+        # the returned object can still resolve per-org overrides for *other*
+        # organizations (e.g. querying effective MCP policy for org B after
+        # getting the effective policy for org A).
         return MarketplacePolicy(
             mcp_servers=merged_mcp,
             allowed_plugin_types=merged_types,
             require_signature=self.require_signature,
+            org_policies=self.org_policies,
+            org_mcp_policies=self.org_mcp_policies,
         )
 
     def get_effective_mcp_policy(self, organization: str | None = None) -> MCPServerPolicy:
@@ -142,13 +148,27 @@ class MarketplacePolicy(BaseModel):
                 require_declaration=base.require_declaration or org.require_declaration,
             )
         else:  # allowlist
-            # Org can only allow servers already in the enterprise allowlist
-            merged_allowed = (
-                [s for s in org.allowed if s in base.allowed] if base.allowed else org.allowed
-            )
+            # Org can only allow servers already in the enterprise allowlist.
+            # When base has no allowlist (empty), the org's request stands as-is.
+            # When base has an allowlist, the merged allowlist is the strict
+            # intersection — an org that listed servers outside the enterprise
+            # allowlist is *not* silently granted the full enterprise list as
+            # a fallback (that previously masked org misconfiguration and
+            # broadened the effective policy beyond what the org requested).
+            if base.allowed:
+                merged_allowed = [s for s in org.allowed if s in base.allowed]
+                if org.allowed and not merged_allowed:
+                    logger.warning(
+                        "Org allowlist %r has no overlap with enterprise "
+                        "allowlist %r; effective allowlist for this org is "
+                        "empty (no servers will pass the allowlist check)",
+                        list(org.allowed), list(base.allowed),
+                    )
+            else:
+                merged_allowed = list(org.allowed)
             return MCPServerPolicy(
                 mode=base.mode,
-                allowed=merged_allowed or base.allowed,
+                allowed=merged_allowed,
                 blocked=list(set(base.blocked + org.blocked)),
                 require_declaration=base.require_declaration or org.require_declaration,
             )
