@@ -159,7 +159,7 @@ updates:
 
   # Docker
   - package-ecosystem: "docker"
-    directory: "/agent-os"
+    directory: "/agent-governance-python/agent-os"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
