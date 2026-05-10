@@ -2,7 +2,8 @@
 
 50+ step-by-step guides covering every aspect of AI agent governance.
 
-> **New here?** Start with [Tutorial 01 -- Policy Engine](01-policy-engine.md), then work through the Foundations section. For a quick taste, try [Tutorial 36 -- 2-Line Governance](36-govern-quickstart.md).
+!!! tip "Where to start?"
+    **New here?** Start with [Tutorial 01: Policy Engine](01-policy-engine.md), then work through the Foundations section. For a quick taste, try [Tutorial 36: 2-Line Governance](36-govern-quickstart.md).
 
 ## Foundations
 
