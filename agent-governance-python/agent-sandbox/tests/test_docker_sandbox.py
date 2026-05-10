@@ -631,6 +631,52 @@ class TestDockerDestroySession:
         docker_provider.destroy_session("a1", h.session_id)
         docker_provider.destroy_session("a1", h.session_id)
 
+    def test_remove_failure_keeps_entry_for_retry(self, docker_provider):
+        """Regression: previously the container was popped from the
+        registry BEFORE stop()/remove() were called, so if both Docker
+        calls failed there was no handle left to retry. Now the entry
+        is retained when remove() fails, and a follow-up destroy_session
+        can complete the cleanup once the underlying Docker issue
+        clears.
+        """
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.stop.side_effect = Exception("daemon unreachable")
+        c.remove.side_effect = Exception("daemon unreachable")
+
+        docker_provider.destroy_session("a1", h.session_id)
+
+        # Entry must be retained so the caller can retry.
+        assert ("a1", h.session_id) in docker_provider._containers
+
+        # Once Docker comes back, retry succeeds and the entry is
+        # finally removed.
+        c.stop.side_effect = None
+        c.remove.side_effect = None
+        docker_provider.destroy_session("a1", h.session_id)
+        assert ("a1", h.session_id) not in docker_provider._containers
+
+    def test_remove_failure_keeps_evaluator_and_config(self, docker_provider):
+        """When destroy_session fails to remove the container, it must
+        also keep the evaluator and session config so a retry has the
+        full per-session state to operate on.
+        """
+        try:
+            from agent_os.policies.schema import PolicyDocument
+        except ImportError:
+            pytest.skip("agent-os-kernel not installed")
+
+        doc = PolicyDocument(name="test")
+        h = docker_provider.create_session("a1", policy=doc)
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.stop.side_effect = Exception("daemon unreachable")
+        c.remove.side_effect = Exception("daemon unreachable")
+
+        docker_provider.destroy_session("a1", h.session_id)
+
+        assert ("a1", h.session_id) in docker_provider._containers
+        assert ("a1", h.session_id) in docker_provider._evaluators
+
 
 # -- get_session_status ----------------------------------------------------
 

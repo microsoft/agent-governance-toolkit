@@ -465,32 +465,69 @@ class DockerSandboxProvider(SandboxProvider):
 
     def destroy_session(self, agent_id: str, session_id: str) -> None:
         key = (agent_id, session_id)
+        # Look up the container without popping — we only remove it
+        # from the registry once both Docker calls succeed. The
+        # previous version popped first and left a leaked container
+        # with no recovery handle if both stop() and remove() failed.
         with self._state_lock:
-            container = self._containers.pop(key, None)
-            self._evaluators.pop(key, None)
-            self._session_configs.pop(key, None)
+            container = self._containers.get(key)
 
-        if container is not None:
-            try:
-                container.stop(timeout=5)
-            except Exception as exc:
-                logger.warning(
-                    "Failed to stop container for agent '%s' "
-                    "session '%s': %s",
-                    agent_id,
-                    session_id,
-                    exc,
-                )
-            try:
-                container.remove(force=True)
-            except Exception as exc:
-                logger.warning(
-                    "Failed to remove container for agent '%s' "
-                    "session '%s': %s",
-                    agent_id,
-                    session_id,
-                    exc,
-                )
+        if container is None:
+            # No container to destroy. Auxiliary per-session state may
+            # still exist if create_session failed mid-way, so clean
+            # those up unconditionally.
+            with self._state_lock:
+                self._evaluators.pop(key, None)
+                self._session_configs.pop(key, None)
+            return
+
+        stop_ok = False
+        remove_ok = False
+        try:
+            container.stop(timeout=5)
+            stop_ok = True
+        except Exception as exc:
+            logger.warning(
+                "Failed to stop container for agent '%s' session '%s': %s",
+                agent_id,
+                session_id,
+                exc,
+            )
+        try:
+            container.remove(force=True)
+            remove_ok = True
+        except Exception as exc:
+            logger.warning(
+                "Failed to remove container for agent '%s' session '%s': %s",
+                agent_id,
+                session_id,
+                exc,
+            )
+
+        if remove_ok:
+            # remove(force=True) actually deletes the container from
+            # Docker (and kills it first if needed), so the container
+            # is gone regardless of whether stop() succeeded. Drop
+            # the registry entry and all per-session bookkeeping.
+            with self._state_lock:
+                self._containers.pop(key, None)
+                self._evaluators.pop(key, None)
+                self._session_configs.pop(key, None)
+        else:
+            # remove() failed: the container is still alive in Docker
+            # somewhere. Keep the entry so a follow-up
+            # destroy_session() can find it and retry, instead of
+            # leaking the container with no recovery handle.
+            logger.error(
+                "destroy_session: agent='%s' session='%s' could not be "
+                "removed (stop_ok=%s remove_ok=%s); container retained in "
+                "registry for retry. Call destroy_session again once the "
+                "underlying Docker issue is resolved.",
+                agent_id,
+                session_id,
+                stop_ok,
+                remove_ok,
+            )
 
     def is_available(self) -> bool:
         return self._available
