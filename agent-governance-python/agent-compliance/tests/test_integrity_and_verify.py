@@ -138,6 +138,69 @@ class TestHashHelpers:
 
         assert _hash_function_bytecode(func_a) != _hash_function_bytecode(func_b)
 
+    def test_hash_distinguishes_renamed_global_lookup(self):
+        """Regression: previously the hash used only co_code +
+        str(co_consts), so a function whose only difference was a
+        renamed name reference (co_names) hashed identically to the
+        original — letting an attacker swap a benign call for a
+        dangerous one without tripping the integrity check.
+        """
+        # Both compile to identical opcode sequences (LOAD_GLOBAL,
+        # CALL, RETURN_VALUE), differing only in co_names.
+        ns: dict = {}
+        exec("def f():\n    return safe_helper()", ns)
+        func_safe = ns["f"]
+        ns2: dict = {}
+        exec("def f():\n    return os_system()", ns2)
+        func_evil = ns2["f"]
+
+        # Same opcode bytes — confirm we're testing the real failure mode
+        assert func_safe.__code__.co_code == func_evil.__code__.co_code
+
+        assert _hash_function_bytecode(func_safe) != _hash_function_bytecode(func_evil)
+
+    def test_hash_distinguishes_nested_code_objects(self):
+        """A function whose nested function (e.g. a closure or inner
+        helper) was swapped should produce a different hash. The
+        previous implementation never descended into co_consts that
+        held nested code objects.
+        """
+        ns: dict = {}
+        exec(
+            "def outer():\n"
+            "    def inner():\n"
+            "        return 1\n"
+            "    return inner()\n",
+            ns,
+        )
+        func_orig = ns["outer"]
+        ns2: dict = {}
+        exec(
+            "def outer():\n"
+            "    def inner():\n"
+            "        return 999\n"
+            "    return inner()\n",
+            ns2,
+        )
+        func_tampered = ns2["outer"]
+
+        assert _hash_function_bytecode(func_orig) != _hash_function_bytecode(func_tampered)
+
+    def test_hash_distinguishes_argument_signatures(self):
+        """A function with a different argument list (different
+        co_varnames / co_argcount) but same body should hash
+        differently — a renamed parameter changes meaning at call
+        sites.
+        """
+        ns: dict = {}
+        exec("def f(a, b):\n    return a", ns)
+        f_ab = ns["f"]
+        ns2: dict = {}
+        exec("def f(a, c):\n    return a", ns2)
+        f_ac = ns2["f"]
+
+        assert _hash_function_bytecode(f_ab) != _hash_function_bytecode(f_ac)
+
 
 class TestIntegrityVerifier:
     def test_verify_without_manifest_passes(self):

@@ -25,6 +25,7 @@ import importlib
 import inspect
 import json
 import logging
+import marshal
 import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -183,11 +184,24 @@ def _hash_file(path: str) -> str:
 
 
 def _hash_function_bytecode(func: Callable[..., Any]) -> str:
-    """SHA-256 hash of a function's compiled bytecode."""
-    code = func.__code__
+    """SHA-256 hash of a function's compiled code object.
+
+    Hashes the marshalled :class:`code` object (which covers
+    ``co_code``, ``co_consts``, ``co_names``, ``co_varnames``,
+    ``co_freevars``, ``co_cellvars``, ``co_argcount``, nested code
+    objects, and every other attribute marshal serialises) so that
+    swapping in a different implementation with the same opcode bytes
+    but different name references, decorators, or nested closures
+    produces a different hash.
+
+    The previous implementation hashed only ``co_code`` and
+    ``str(co_consts)`` — an attacker who could substitute a function
+    with the same opcode sequence but different ``co_names`` (renamed
+    name lookups), decorators, or nested code objects would produce
+    an identical hash and slip past the integrity check.
+    """
     h = hashlib.sha256()
-    h.update(code.co_code)
-    h.update(str(code.co_consts).encode())
+    h.update(marshal.dumps(func.__code__))
     return h.hexdigest()
 
 
