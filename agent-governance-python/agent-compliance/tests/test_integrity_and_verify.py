@@ -377,6 +377,89 @@ rules:
             for check in attestation.evidence_checks
         )
 
+    def test_verify_evidence_allow_default_with_deny_rule_is_not_deny_semantics(
+        self, tmp_path: Path,
+    ):
+        """Regression: previously _policy_has_deny_semantics returned
+        True for any policy that contained a single rule whose action
+        token was "deny", regardless of the default. An allow-default
+        policy with one targeted ``deny`` exception is NOT
+        deny-default — it allows everything except the one exception.
+        """
+        evidence_path = _write_runtime_evidence(
+            tmp_path,
+            policy_body="""
+defaults:
+  action: allow
+rules:
+  - name: block-shell
+    action: deny
+    tool: shell_exec
+  - name: allow-crm
+    action: allow
+    tool: crm_lookup
+""".strip(),
+        )
+        verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)
+        attestation = verifier.verify_evidence(evidence_path, strict=True)
+
+        assert any(
+            check.check_id == "deny-semantics" and check.status == "fail"
+            for check in attestation.evidence_checks
+        ), (
+            "allow-default policy with a single deny rule should NOT be "
+            "classified as having deny semantics"
+        )
+
+    def test_verify_evidence_default_action_deny_passes(self, tmp_path: Path):
+        """A real default-deny policy still passes the deny-semantics
+        check after the fix.
+        """
+        evidence_path = _write_runtime_evidence(
+            tmp_path,
+            policy_body="""
+default_action: deny
+rules:
+  - name: allow-crm
+    action: allow
+    tool: crm_lookup
+""".strip(),
+        )
+        verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)
+        attestation = verifier.verify_evidence(evidence_path, strict=True)
+
+        assert any(
+            check.check_id == "deny-semantics" and check.status == "pass"
+            for check in attestation.evidence_checks
+        )
+
+    def test_verify_evidence_deny_substring_in_default_action_value_does_not_match(
+        self, tmp_path: Path,
+    ):
+        """``default_action: "deny-list-loaded"`` is a non-standard
+        value that contains the substring "deny" but is not an actual
+        deny verdict. Equality (``==``) is the correct comparator;
+        substring (``in``) would over-match. Confirms the comparator
+        stays exact even if a future refactor reaches for str.lower().
+        """
+        evidence_path = _write_runtime_evidence(
+            tmp_path,
+            policy_body="""
+default_action: deny-list-loaded
+rules:
+  - name: allow-crm
+    action: allow
+    tool: crm_lookup
+""".strip(),
+        )
+        verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)
+        attestation = verifier.verify_evidence(evidence_path, strict=True)
+
+        assert any(
+            check.check_id == "deny-semantics" and check.status == "fail"
+            for check in attestation.evidence_checks
+        )
+
     def test_verify_evidence_strict_fails_without_identity(self, tmp_path: Path):
         evidence_path = _write_runtime_evidence(tmp_path, identity_enabled=False)
         verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)

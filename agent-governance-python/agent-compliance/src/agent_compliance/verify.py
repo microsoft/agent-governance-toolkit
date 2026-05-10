@@ -422,43 +422,45 @@ def _load_policy_documents(policy_paths: list[Path]) -> list[dict[str, Any]]:
 
 
 def _policy_has_deny_semantics(documents: list[dict[str, Any]]) -> bool:
+    """Return True iff the policy is *default-deny*.
+
+    Default-deny means: in the absence of an explicit-allow rule
+    matching the request, the policy denies. This is a property of
+    the policy's *default*, not of whether any individual rule emits
+    a deny verdict — an allow-default policy with one targeted
+    ``action: deny`` exception (e.g. "block tool X") is still an
+    allow-default policy, and was previously misclassified as having
+    deny semantics because the rules loop returned True on the first
+    rule whose action token matched ``deny``.
+
+    The check is intentionally narrow: only the document-level and
+    ``defaults``-block default-action keys are inspected, with exact
+    case-insensitive equality. ``default_action: "deny-list-loaded"``
+    does not match because the comparison is ``==``, not ``in``.
+    """
     for document in documents:
         if bool(document.get("deny_by_default")):
             return True
 
         for key in ("default_action", "action", "effect"):
             value = document.get(key)
-            if isinstance(value, str) and value.lower() == "deny":
+            if isinstance(value, str) and value.strip().lower() == "deny":
                 return True
 
         for key in ("defaults", "default", "policy_defaults"):
             defaults = document.get(key)
 
-            if isinstance(defaults, str) and defaults.lower() == "deny":
+            if isinstance(defaults, str) and defaults.strip().lower() == "deny":
                 return True
 
             if isinstance(defaults, dict):
                 for nested_key in ("action", "effect", "default_action"):
                     nested_value = defaults.get(nested_key)
-                    if isinstance(nested_value, str) and nested_value.lower() == "deny":
+                    if (
+                        isinstance(nested_value, str)
+                        and nested_value.strip().lower() == "deny"
+                    ):
                         return True
-
-        for key in ("rules", "policies", "statements"):
-            rules = document.get(key)
-            if not isinstance(rules, list):
-                continue
-
-            for rule in rules:
-                if not isinstance(rule, dict):
-                    continue
-
-                for nested_key in ("action", "effect", "default_action"):
-                    nested_value = rule.get(nested_key)
-                    if isinstance(nested_value, str) and nested_value.lower() == "deny":
-                        return True
-
-                if bool(rule.get("deny")):
-                    return True
 
     return False
 
