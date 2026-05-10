@@ -418,7 +418,7 @@ def docker_provider():
         provider._available = True
         provider._runtime = IsolationRuntime.RUNC
 
-        def _create_container(agent_id, session_id, config):
+        def _create_container(agent_id, session_id, config, image=None):
             return _make_mock_container(agent_id, session_id)
 
         provider._create_container = MagicMock(
@@ -987,6 +987,40 @@ class TestSandboxStateManager:
         provider._client.images.get.side_effect = Exception("not found")
         with pytest.raises(RuntimeError, match="not found"):
             provider.restore_state("a1", h.session_id, "missing")
+
+    def test_restore_does_not_mutate_provider_image(self, provider_with_session):
+        """Regression: restore previously swapped self._image to the
+        checkpoint tag for the duration of _create_container, restoring
+        in finally. Two concurrent restores could interleave and one
+        would create a container from the OTHER restore's image. The
+        fix removes the global mutation entirely; image is passed
+        explicitly to _create_container.
+        """
+        provider, h = provider_with_session
+        provider._client.images.get.return_value = MagicMock()
+        original_image = provider._image
+
+        provider.restore_state("a1", h.session_id, "cp1")
+
+        # The provider's base image must not have been mutated by
+        # restore — its only side effect should be the per-session
+        # container slot pointing at a freshly-created container.
+        assert provider._image == original_image
+
+    def test_restore_passes_checkpoint_image_to_create_container(
+        self, provider_with_session,
+    ):
+        """The checkpoint image tag must be passed to _create_container
+        as an explicit ``image=`` argument so concurrent restores
+        cannot race on a shared mutable attribute.
+        """
+        provider, h = provider_with_session
+        provider._client.images.get.return_value = MagicMock()
+
+        provider.restore_state("a1", h.session_id, "cp1")
+
+        last_call = provider._create_container.call_args
+        assert last_call.kwargs.get("image") == "agent-sandbox-a1:cp1"
 
 
 # =========================================================================

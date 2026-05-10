@@ -630,9 +630,24 @@ class DockerSandboxProvider(SandboxProvider):
     # ------------------------------------------------------------------
 
     def _create_container(
-        self, agent_id: str, session_id: str, config: SandboxConfig
+        self,
+        agent_id: str,
+        session_id: str,
+        config: SandboxConfig,
+        image: str | None = None,
     ) -> Any:
-        """Create a hardened Docker container for the session."""
+        """Create a hardened Docker container for the session.
+
+        Args:
+            agent_id: Validated agent identifier.
+            session_id: Internally generated session identifier.
+            config: Per-session sandbox configuration.
+            image: Override for the base image. Defaults to
+                ``self._image`` (the provider's configured base).
+                Used by checkpoint restore to launch from a session-
+                specific snapshot without mutating ``self._image``,
+                which would race with concurrent restores.
+        """
         # Ensure the base image is available locally before creating
         self.ensure_image()
 
@@ -666,7 +681,7 @@ class DockerSandboxProvider(SandboxProvider):
             tmpfs["/tmp"] = "size=64m,uid=65534,gid=65534"
 
         run_kwargs: dict[str, Any] = {
-            "image": self._image,
+            "image": image or self._image,
             "name": container_name,
             "command": ["sleep", "infinity"],
             "detach": True,
