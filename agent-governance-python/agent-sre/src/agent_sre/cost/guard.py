@@ -188,6 +188,13 @@ class CostGuard:
         """Check if a task should be allowed to proceed.
 
         Returns (allowed, reason).
+
+        WARNING — this is an advisory check. ``check_task`` does NOT
+        reserve budget, so two concurrent callers that both pass the
+        check can both proceed and overshoot the limit. For
+        budget-critical paths use :meth:`check_and_charge` instead,
+        which atomically combines the check with the cost reservation
+        under a single lock.
         """
         if not math.isfinite(estimated_cost):
             return False, f"Invalid estimated cost: {estimated_cost}"
@@ -195,33 +202,79 @@ class CostGuard:
             return False, f"Invalid negative estimated cost: {estimated_cost}"
 
         with self._lock:
-            if self._org_killed:
-                return False, "Organization budget exhausted"
+            allowed, reason = self._check_locked(agent_id, estimated_cost)
+            return allowed, reason
 
-            budget = self._get_or_create_budget_locked(agent_id)
+    def _check_locked(
+        self, agent_id: str, estimated_cost: float
+    ) -> tuple[bool, str]:
+        """Caller must hold ``self._lock``. Pure check; no mutation."""
+        if self._org_killed:
+            return False, "Organization budget exhausted"
 
-            if budget.killed:
-                return False, "Agent killed — budget exhausted"
+        budget = self._get_or_create_budget_locked(agent_id)
 
-            if budget.throttled:
-                return False, "Agent throttled — approaching daily limit"
+        if budget.killed:
+            return False, "Agent killed — budget exhausted"
 
-            if estimated_cost > self.per_task_limit:
-                return False, f"Estimated cost ${estimated_cost:.2f} exceeds per-task limit ${self.per_task_limit:.2f}"
+        if budget.throttled:
+            return False, "Agent throttled — approaching daily limit"
 
-            if budget.spent_today_usd + estimated_cost > budget.daily_limit_usd:
-                remaining = max(0.0, budget.daily_limit_usd - budget.spent_today_usd)
-                return False, f"Would exceed daily budget (${remaining:.2f} remaining)"
+        if estimated_cost > self.per_task_limit:
+            return False, f"Estimated cost ${estimated_cost:.2f} exceeds per-task limit ${self.per_task_limit:.2f}"
 
-            if self.org_monthly_budget > 0:
-                if self._org_spent_month + estimated_cost > self.org_monthly_budget:
-                    org_remaining = max(0.0, self.org_monthly_budget - self._org_spent_month)
-                    return False, (
-                        f"Would exceed org monthly budget "
-                        f"(${org_remaining:.2f} remaining)"
-                    )
+        if budget.spent_today_usd + estimated_cost > budget.daily_limit_usd:
+            remaining = max(0.0, budget.daily_limit_usd - budget.spent_today_usd)
+            return False, f"Would exceed daily budget (${remaining:.2f} remaining)"
 
-            return True, "ok"
+        if self.org_monthly_budget > 0:
+            if self._org_spent_month + estimated_cost > self.org_monthly_budget:
+                org_remaining = max(0.0, self.org_monthly_budget - self._org_spent_month)
+                return False, (
+                    f"Would exceed org monthly budget "
+                    f"(${org_remaining:.2f} remaining)"
+                )
+
+        return True, "ok"
+
+    def check_and_charge(
+        self,
+        agent_id: str,
+        task_id: str,
+        cost_usd: float,
+        breakdown: dict[str, float] | None = None,
+    ) -> tuple[bool, str, list[CostAlert]]:
+        """Atomically check budget and record a cost.
+
+        Combines :meth:`check_task` and :meth:`record_cost` in a
+        single locked transaction so two concurrent callers cannot
+        both pass the check and both record costs that overshoot the
+        limit. This is the correct primitive for any path that needs
+        budget enforcement to actually hold under concurrency.
+
+        Returns:
+            ``(allowed, reason, alerts)``. When ``allowed`` is
+            ``False``, ``alerts`` is an empty list and no cost was
+            recorded; the caller should not proceed with the work.
+            When ``allowed`` is ``True``, the cost has already been
+            charged and any threshold/anomaly alerts are returned.
+        """
+        if not math.isfinite(cost_usd):
+            raise ValueError(f"cost_usd must be finite, got {cost_usd}")
+        if cost_usd < 0:
+            raise ValueError(f"cost_usd must be non-negative, got {cost_usd}")
+
+        with self._lock:
+            allowed, reason = self._check_locked(agent_id, cost_usd)
+            if not allowed:
+                return False, reason, []
+            alerts = self._record_cost_locked(
+                agent_id=agent_id,
+                task_id=task_id,
+                cost_usd=cost_usd,
+                breakdown=breakdown,
+            )
+            return True, reason, alerts
 
     def record_cost(
         self,
@@ -233,12 +286,32 @@ class CostGuard:
         """Record a task cost and check budgets.
 
         Returns any alerts triggered.
+
+        WARNING — this method records cost unconditionally; it does
+        NOT check budgets first. For budget-critical paths use
+        :meth:`check_and_charge`.
         """
         if not math.isfinite(cost_usd):
             raise ValueError(f"cost_usd must be finite, got {cost_usd}")
         if cost_usd < 0:
             raise ValueError(f"cost_usd must be non-negative, got {cost_usd}")
 
+        with self._lock:
+            return self._record_cost_locked(
+                agent_id=agent_id,
+                task_id=task_id,
+                cost_usd=cost_usd,
+                breakdown=breakdown,
+            )
+
+    def _record_cost_locked(
+        self,
+        agent_id: str,
+        task_id: str,
+        cost_usd: float,
+        breakdown: dict[str, float] | None = None,
+    ) -> list[CostAlert]:
+        """Caller must hold ``self._lock``. Recording + alerts only."""
         alerts: list[CostAlert] = []
         record = CostRecord(
             agent_id=agent_id,
@@ -247,7 +320,7 @@ class CostGuard:
             breakdown=breakdown or {},
         )
 
-        with self._lock:
+        if True:  # preserved indent for minimal diff against the prior body
             budget = self._get_or_create_budget_locked(agent_id)
             self._records.append(record)
             self._cost_history.append(cost_usd)

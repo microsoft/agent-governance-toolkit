@@ -157,6 +157,86 @@ class TestSameAgentConcurrency:
         # Should have hit kill switch
         assert budget.killed is True
 
+    def test_check_and_charge_is_atomic_under_concurrency(self):
+        """Regression: previously check_task and record_cost were two
+        separate locked operations. Two concurrent callers could both
+        pass check_task (each saw spent_today < limit) and then both
+        record_cost (overshooting the limit). check_and_charge fuses
+        them into one locked transaction so this race is closed.
+
+        This test runs many concurrent check_and_charge calls against
+        a daily limit of $10 with $1 charges. Some calls succeed,
+        some are rejected. The total recorded spend MUST never
+        exceed the limit.
+        """
+        from agent_sre.cost.guard import CostGuard
+
+        guard = CostGuard(
+            per_task_limit=5.0,
+            per_agent_daily_limit=10.0,
+            auto_throttle=False,  # disable kill so we can observe limit-only behaviour
+        )
+
+        successes: list[bool] = []
+        errors: list[str] = []
+        results_lock = threading.Lock()
+
+        def attempt() -> None:
+            try:
+                for i in range(20):
+                    allowed, _reason, _alerts = guard.check_and_charge(
+                        "race-agent",
+                        f"t-{threading.current_thread().name}-{i}",
+                        1.0,
+                    )
+                    with results_lock:
+                        successes.append(allowed)
+            except Exception as e:
+                errors.append(str(e))
+
+        threads = [threading.Thread(target=attempt) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == []
+        budget = guard.get_budget("race-agent")
+        # Hard invariant: never overshoot the limit, regardless of how
+        # many threads raced through. Pre-fix this could exceed $10.
+        assert budget.spent_today_usd <= 10.0, (
+            f"Overshot daily limit: ${budget.spent_today_usd:.2f} > $10.00 "
+            f"({successes.count(True)} successes)"
+        )
+        # Exactly $10 worth (10 successes at $1) should have been
+        # charged once concurrent check+charge serialises correctly.
+        assert successes.count(True) == 10
+
+    def test_check_and_charge_rejects_when_killed_or_throttled(self):
+        """check_and_charge must surface the same rejection reasons as
+        check_task, and must NOT record cost when rejected.
+        """
+        from agent_sre.cost.guard import CostGuard
+
+        guard = CostGuard(
+            per_task_limit=10.0,
+            per_agent_daily_limit=5.0,
+            auto_throttle=False,
+        )
+
+        # First call burns $5 — fits exactly under the daily limit.
+        allowed, _, _ = guard.check_and_charge("a1", "t1", 5.0)
+        assert allowed is True
+        assert guard.get_budget("a1").spent_today_usd == 5.0
+
+        # Second call would exceed the limit — must be rejected, and
+        # must NOT touch the budget.
+        allowed, reason, alerts = guard.check_and_charge("a1", "t2", 1.0)
+        assert allowed is False
+        assert "exceed" in reason.lower()
+        assert alerts == []
+        assert guard.get_budget("a1").spent_today_usd == 5.0  # unchanged
+
 
 # ---------------------------------------------------------------------------
 # Org Reset After Kill
