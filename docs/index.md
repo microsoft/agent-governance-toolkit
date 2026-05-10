@@ -50,13 +50,13 @@ hide:
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   border-color: #0078D4;
 }
-.agt-card h3 { margin: 0 0 0.4rem; font-size: 0.95rem; color: #0078D4; }
-.agt-card p { margin: 0; font-size: 0.82rem; color: #616161; }
+.agt-card-title { display: block; margin: 0 0 0.4rem; font-size: 0.95rem; font-weight: 600; color: #0078D4; }
+.agt-card-desc { display: block; margin: 0; font-size: 0.82rem; color: #616161; }
 
 [data-md-color-scheme="slate"] .agt-card { border-color: #3A3A3E; }
 [data-md-color-scheme="slate"] .agt-card:hover { border-color: #4DB8FF; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-[data-md-color-scheme="slate"] .agt-card h3 { color: #4DB8FF; }
-[data-md-color-scheme="slate"] .agt-card p { color: #B0B0B0; }
+[data-md-color-scheme="slate"] .agt-card-title { color: #4DB8FF; }
+[data-md-color-scheme="slate"] .agt-card-desc { color: #B0B0B0; }
 [data-md-color-scheme="slate"] .agt-hero { background: linear-gradient(135deg, #1A3F5C 0%, #0D2137 100%); }
 
 /* Section headers */
@@ -104,36 +104,36 @@ Runtime governance for AI agents: deterministic policy enforcement, zero-trust i
 
 <div class="agt-cards">
 <a class="agt-card" href="packages/agent-os/">
-<h3>⚙️ Agent OS</h3>
-<p>Policy engine, agent lifecycle, governance gate</p>
+<span class="agt-card-title">⚙️ Agent OS</span>
+<span class="agt-card-desc">Policy engine, agent lifecycle, governance gate</span>
 </a>
 <a class="agt-card" href="packages/agent-mesh/">
-<h3>🔗 Agent Mesh</h3>
-<p>Agent discovery, routing, and trust mesh</p>
+<span class="agt-card-title">🔗 Agent Mesh</span>
+<span class="agt-card-desc">Agent discovery, routing, and trust mesh</span>
 </a>
 <a class="agt-card" href="packages/agent-runtime/">
-<h3>🛡️ Agent Runtime</h3>
-<p>Execution sandboxing with four privilege rings</p>
+<span class="agt-card-title">🛡️ Agent Runtime</span>
+<span class="agt-card-desc">Execution sandboxing with four privilege rings</span>
 </a>
 <a class="agt-card" href="packages/agent-sre/">
-<h3>📊 Agent SRE</h3>
-<p>Kill switch, SLO monitoring, chaos testing</p>
+<span class="agt-card-title">📊 Agent SRE</span>
+<span class="agt-card-desc">Kill switch, SLO monitoring, chaos testing</span>
 </a>
 <a class="agt-card" href="packages/agent-compliance/">
-<h3>✅ Agent Compliance</h3>
-<p>Audit logging, compliance frameworks</p>
+<span class="agt-card-title">✅ Agent Compliance</span>
+<span class="agt-card-desc">Audit logging, compliance frameworks</span>
 </a>
 <a class="agt-card" href="packages/agent-marketplace/">
-<h3>🏪 Agent Marketplace</h3>
-<p>Plugin governance and trust scoring</p>
+<span class="agt-card-title">🏪 Agent Marketplace</span>
+<span class="agt-card-desc">Plugin governance and trust scoring</span>
 </a>
 <a class="agt-card" href="packages/agent-lightning/">
-<h3>⚡ Agent Lightning</h3>
-<p>High-performance agent orchestration</p>
+<span class="agt-card-title">⚡ Agent Lightning</span>
+<span class="agt-card-desc">High-performance agent orchestration</span>
 </a>
 <a class="agt-card" href="packages/agent-hypervisor/">
-<h3>🔒 Agent Hypervisor</h3>
-<p>Hardware-level workload isolation</p>
+<span class="agt-card-title">🔒 Agent Hypervisor</span>
+<span class="agt-card-desc">Hardware-level workload isolation</span>
 </a>
 </div>
 </div>
