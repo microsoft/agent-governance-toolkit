@@ -19,6 +19,7 @@ from agentmesh.identity.agent_id import AgentDID, AgentIdentity, IdentityRegistr
 from agentmesh.server import create_base_app, run_server
 from agentmesh.trust.capability import CapabilityRegistry
 from agentmesh.trust.handshake import HandshakeChallenge, HandshakeResponse, TrustHandshake
+from agentmesh.trust.levels import trust_level_for_score
 
 logger = logging.getLogger(__name__)
 
@@ -152,11 +153,18 @@ async def verify_handshake(req: VerifyRequest) -> VerifyResponse:
             required_score=0,
             required_capabilities=None,
         )
+        # _verify_response returns the canonical shape used throughout
+        # agentmesh.trust: {"valid": bool, "reason": str | None,
+        # "registry_trust_score": int, "registry_capabilities": list[str]}.
+        # Translate to the public REST envelope here.
+        verified = bool(result.get("valid", False))
+        trust_score = int(result.get("registry_trust_score", 0)) if verified else 0
         return VerifyResponse(
-            verified=result.get("verified", False),
-            trust_score=result.get("trust_score", 0),
-            trust_level=result.get("trust_level", ""),
-            peer_did=result.get("peer_did", req.agent_did),
+            verified=verified,
+            trust_score=trust_score,
+            trust_level=trust_level_for_score(trust_score) if verified else "",
+            peer_did=req.agent_did,
+            rejection_reason=None if verified else result.get("reason"),
         )
     except Exception as exc:
         logger.warning("Handshake verification failed: %s", exc)

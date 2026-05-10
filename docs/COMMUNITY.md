@@ -1,10 +1,26 @@
 # Community
 
+Welcome to the Agent Governance Toolkit community. This page covers how to get
+help, stay informed, and participate.
+
 ## Getting Help
 
-- **[GitHub Issues](https://github.com/microsoft/agent-governance-toolkit/issues)** — Bug reports and feature requests
-- **[GitHub Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)** — Questions, ideas, and general conversation
-<!-- Stack Overflow tag not yet created - **[Stack Overflow](https://stackoverflow.com/questions/tagged/agent-governance-toolkit)** — Technical Q&A (tag: `agent-governance-toolkit`) -->
+- **[GitHub Issues](https://github.com/microsoft/agent-governance-toolkit/issues)** -- Bug reports and feature requests
+- **[GitHub Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)** -- Questions, ideas, and general conversation
+- **[Code of Conduct](https://opensource.microsoft.com/codeofconduct/)** -- Microsoft Open Source Code of Conduct applies to all interactions
+
+## Community Meetings
+
+We hold open community calls for contributors and adopters to discuss roadmap
+items, review proposals, and coordinate cross-org work.
+
+| Meeting | Cadence | Where | Notes |
+|---------|---------|-------|-------|
+| Maintainer sync | Bi-weekly | GitHub Discussions (pinned) | Open to all maintainers and reviewers |
+| Community office hours | Monthly | GitHub Discussions | Open to everyone, bring questions |
+
+Check [GitHub Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)
+for the next scheduled session.
 
 ## Blog Posts & Articles
 
@@ -39,12 +55,23 @@ We welcome contributions of all kinds — code, documentation, bug reports, and 
 - Look for issues labeled [`good first issue`](https://github.com/microsoft/agent-governance-toolkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) if you're new to the project
 - Check [`help wanted`](https://github.com/microsoft/agent-governance-toolkit/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) for issues where we'd especially appreciate contributions
 
-## Blog & Articles
+## Blog & Articles (Internal / In-Repo)
 
 | Article | Author | Topic |
 |---------|--------|-------|
 | [From Chatbot to Autonomous Agent: A Governance Maturity Model](agent-governance-python/agent-mesh/docs/blog/governance-maturity-model.md) | @lawcontinue | Governance maturity framework for AI agent deployments |
-| [Comparing Agent Governance Approaches — A Framework Review](agent-governance-python/agent-mesh/docs/blog/comparing-governance-approaches.md) | @copilot | Comparative review of prompt guardrails, platform restrictions, policy-as-code, and regulatory compliance |
+| [Comparing Agent Governance Approaches](agent-governance-python/agent-mesh/docs/blog/comparing-governance-approaches.md) | @copilot | Comparative review of prompt guardrails, platform restrictions, policy-as-code, and regulatory compliance |
+
+## Standards Alignment
+
+AGT maps to established security and compliance frameworks:
+
+| Standard | Coverage |
+|----------|----------|
+| [OWASP Agentic Top 10](docs/OWASP-COMPLIANCE.md) | 10/10 risks covered |
+| [NIST AI RMF](https://www.nist.gov/artificial-intelligence) | Govern, Map, Measure, Manage functions |
+| [EU AI Act](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai) | High-risk system compliance controls |
+| [OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085) | 100% passing |
 
 ## Related Projects
 

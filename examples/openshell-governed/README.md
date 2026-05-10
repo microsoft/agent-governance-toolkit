@@ -2,13 +2,28 @@
 
 Demonstrates AGT policy enforcement, trust scoring, and audit inside an OpenShell sandbox.
 
-## Quick Start
+## Prerequisites
+
+- Python 3.10+
+- No API keys required
+
+```bash
+pip install agent-governance-toolkit[full]
+```
+
+## How to Run
 
 ```bash
 python examples/openshell-governed/demo.py
 ```
 
-3 allowed + 3 denied. Trust decays 1.00 to 0.55.
+## Expected Output
+
+```
+  3 allowed actions + 3 denied actions
+  Trust decays from 1.00 to 0.55 as violations accumulate
+  Full audit trail with timestamps and decision reasons
+```
 
 ## Related
 

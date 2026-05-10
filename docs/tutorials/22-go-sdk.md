@@ -12,7 +12,7 @@ and hash-chain audit logging — all in a single `go get`.
 
 ---
 
-## What you'll learn
+## What You'll Learn
 
 | Section | Topic |
 |---------|-------|

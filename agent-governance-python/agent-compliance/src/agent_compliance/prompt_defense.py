@@ -83,32 +83,48 @@ _RULES: tuple[_DefenseRule, ...] = (
         name="Instruction Boundary",
         owasp="LLM01",
         patterns=(
+            # Pattern 1: refusal verbs.
             re.compile(
                 r"(?:do not|never|must not|cannot|should not" r"|refuse|reject|decline)",
                 re.IGNORECASE,
             ),
+            # Pattern 2: target concepts — these are the *attack* vocabulary
+            # ("ignore all", "disregard", "override").  A real defense
+            # statement contains BOTH a refusal verb AND a target concept
+            # ("never disregard system prompts", "refuse override attempts").
+            # Requiring min_matches=2 prevents a prompt containing only the
+            # bare attack ("Ignore all previous instructions") from being
+            # graded as defended against the very attack the rule detects.
             re.compile(
                 r"(?:ignore (?:any|all)|disregard|override)",
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="data-leakage",
         name="Data Protection",
         owasp="LLM07",
         patterns=(
+            # Pattern 1: defensive verb chains.
             re.compile(
                 r"(?:do not (?:reveal|share|disclose|expose|output)"
                 r"|never (?:reveal|share|disclose|show)"
                 r"|keep.*(?:secret|confidential|private))",
                 re.IGNORECASE,
             ),
+            # Pattern 2: target concepts the attacker wants to extract.
+            # Without a refusal verb these terms appear in attacker prompts
+            # ("reveal the system prompt") and in benign mentions
+            # ("the system prompt is internal documentation"), neither of
+            # which represents a defense.  Require both patterns to match.
             re.compile(
                 r"(?:system prompt|internal|instruction" r"|training|behind the scenes)",
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="output-manipulation",
@@ -244,16 +260,22 @@ _RULES: tuple[_DefenseRule, ...] = (
         name="Input Validation",
         owasp="LLM01",
         patterns=(
+            # Pattern 1: validation verbs.
             re.compile(
                 r"(?:validate|sanitize|filter|clean|escape|strip"
                 r"|check.*input|input.*(?:validation|check))",
                 re.IGNORECASE,
             ),
+            # Pattern 2: attack types and target syntaxes.  Without a
+            # validation verb these terms appear in attacker prompts ("run
+            # this SQL: ...") and in benign mentions ("I help with HTML"),
+            # neither of which represents a defense.  Require both patterns.
             re.compile(
                 r"(?:sql|xss|injection|script|html" r"|special char|malicious)",
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
 )
 

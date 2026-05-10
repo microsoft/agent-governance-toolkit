@@ -3,11 +3,29 @@
 Demonstrates AGT's cost governance: tiered budget enforcement, per-agent and
 organization-wide caps, auto-throttle, kill switches, and anomaly detection.
 
-## Quick Start
+## Prerequisites
+
+- Python 3.10+
+- No API keys required
 
 ```bash
 pip install agent-sre
-python cost_governance_demo.py
+```
+
+## How to Run
+
+```bash
+python examples/cost-governance/cost_governance_demo.py
+```
+
+## Expected Output
+
+```
+  Budget Setup: per-task $2.00, daily $20.00, org $100.00
+  Pre-task checks: $1.50 allowed, $5.00 blocked (over limit)
+  Alert escalation: WARNING at 50%, THROTTLE at 85%, KILL at 95%
+  Org budget: cross-agent spending tracked, kill switch applied
+  Anomaly detection: $50.00 flagged against $1.00-$1.40 baseline
 ```
 
 ## What This Demo Shows

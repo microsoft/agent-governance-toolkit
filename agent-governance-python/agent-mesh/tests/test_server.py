@@ -106,6 +106,100 @@ class TestTrustEngineServer:
         })
         assert resp.status_code == 404
 
+    def _register_and_challenge(self):
+        """Register a fresh agent and issue a challenge.
+
+        Returns ``(private_key, public_key_b64, agent_did, challenge_id, nonce)``
+        ready for signing a valid handshake response.
+        """
+        import base64
+
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+        key = Ed25519PrivateKey.generate()
+        pub_b64 = base64.b64encode(key.public_key().public_bytes_raw()).decode()
+
+        reg = self.client.post("/api/v1/agents/register", json={
+            "name": "verify-agent",
+            "public_key": pub_b64,
+            "sponsor_email": "verify@example.com",
+        })
+        assert reg.status_code == 200
+        agent_did = reg.json()["agent_did"]
+
+        ch = self.client.post("/api/v1/handshake/challenge", json={
+            "agent_did": agent_did,
+        })
+        assert ch.status_code == 200
+        ch_data = ch.json()
+        return key, pub_b64, agent_did, ch_data["challenge_id"], ch_data["nonce"]
+
+    def test_verify_valid_signed_response(self):
+        """A correctly signed challenge response is reported as verified.
+
+        Regression test for the dict-key mismatch where _verify_response
+        returned ``{"valid": True, ...}`` but the endpoint read keys named
+        ``verified`` / ``trust_score`` / ``trust_level`` — causing every
+        successful verification to be reported as ``verified=False``.
+        """
+        import base64
+        import secrets
+
+        key, _pub_b64, agent_did, challenge_id, challenge_nonce = self._register_and_challenge()
+
+        response_nonce = secrets.token_hex(16)
+        payload = f"{challenge_id}:{challenge_nonce}:{response_nonce}:{agent_did}"
+        signature_b64 = base64.b64encode(key.sign(payload.encode())).decode()
+
+        resp = self.client.post("/api/v1/handshake/verify", json={
+            "challenge_id": challenge_id,
+            "agent_did": agent_did,
+            "response_nonce": response_nonce,
+            "signature": signature_b64,
+            "public_key": base64.b64encode(key.public_key().public_bytes_raw()).decode(),
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["verified"] is True, f"expected verified=True, got {data}"
+        assert data["trust_score"] >= 0
+        # trust_level must be one of the canonical labels emitted by
+        # agentmesh.trust.levels.trust_level_for_score; it must not be the
+        # legacy empty-string default that masked the dict-key bug.
+        assert data["trust_level"] in {
+            "verified_partner", "trusted", "standard", "probationary", "untrusted",
+        }
+        assert data["peer_did"] == agent_did
+        assert data["rejection_reason"] is None
+
+    def test_verify_invalid_signature(self):
+        """A response with a tampered signature is reported as not verified
+        with a populated rejection_reason."""
+        import base64
+        import secrets
+
+        key, _pub_b64, agent_did, challenge_id, challenge_nonce = self._register_and_challenge()
+
+        response_nonce = secrets.token_hex(16)
+        payload = f"{challenge_id}:{challenge_nonce}:{response_nonce}:{agent_did}"
+        sig = bytearray(key.sign(payload.encode()))
+        sig[0] ^= 0xFF  # tamper the first byte
+        bad_sig_b64 = base64.b64encode(bytes(sig)).decode()
+
+        resp = self.client.post("/api/v1/handshake/verify", json={
+            "challenge_id": challenge_id,
+            "agent_did": agent_did,
+            "response_nonce": response_nonce,
+            "signature": bad_sig_b64,
+            "public_key": base64.b64encode(key.public_key().public_bytes_raw()).decode(),
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["verified"] is False
+        assert data["trust_score"] == 0
+        assert data["trust_level"] == ""
+        assert data["rejection_reason"] is not None
+        assert "signature" in data["rejection_reason"].lower()
+
     def test_capabilities_empty(self):
         resp = self.client.get("/api/v1/capabilities/did:mesh:unknown")
         assert resp.status_code == 200

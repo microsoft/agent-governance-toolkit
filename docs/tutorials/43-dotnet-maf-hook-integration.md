@@ -2,7 +2,14 @@
 
 > **Level:** Intermediate · **Prerequisites:** Tutorial 01 (Policy Engine), .NET 8.0+, an existing `Microsoft.Agents.AI` agent
 
-This tutorial shows how to add AGT governance to a real .NET agent built with the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework). The goal is not to replace MAF. The goal is to hook AGT policy, audit, and tool-call controls into MAF's existing run and function middleware pipeline.
+---
+
+## What You'll Learn
+
+- Hooking AGT policy evaluation into MAF run and function middleware
+- Translating MAF-native types into AGT policy inputs
+- Consistent deny behavior across agent tool calls
+- Audit events and metrics from the .NET governance extension
 
 ## Why this exists
 

@@ -1,8 +1,17 @@
-# Tutorial: Chaos Testing Your AI Agents with Agent SRE
+# Tutorial 32: Chaos Testing Your AI Agents
 
-This tutorial walks through chaos testing patterns for AI agents governed by AGT. You will inject failures into a running agent system and observe how governance policies respond.
+> **Package:** `agent-sre` · **Time:** 20 minutes · **Level:** Intermediate
 
-**Prerequisites:** Complete [Tutorial 01: Policy Engine](01-policy-engine.md) before starting.
+---
+
+## What You'll Learn
+
+- Injecting tool failures, policy conflicts, and resource exhaustion into governed agents
+- Measuring governance resilience under stress with audit logging
+- Using chaos scenarios (latency, error rates, dependency outages) to validate policy enforcement
+- Interpreting governance events during degraded conditions
+
+**Prerequisites:** Complete [Tutorial 01: Policy Engine](01-policy-engine.md) and [Tutorial 05: Agent Reliability](05-agent-reliability.md) before starting.
 
 ## What is Chaos Testing for AI Agents?
 

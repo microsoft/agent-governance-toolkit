@@ -817,6 +817,12 @@ class HyperLightSandboxProvider(SandboxProvider):
     ) -> SandboxResult:
         """Map the upstream ``RunResult`` (or anything duck-compatible)
         into our :class:`SandboxResult`.
+
+        Handles missing/None attributes gracefully via ``getattr`` defaults.
+        Prefers ``duration_ms`` from the upstream result when available,
+        falling back to the host-side wallclock ``duration_s``.  Output
+        (stdout/stderr) is truncated to 10 KB to prevent memory exhaustion
+        from adversarial print statements inside the sandbox.
         """
         stdout = str(getattr(run_result, "stdout", "") or "")
         stderr = str(getattr(run_result, "stderr", "") or "")
@@ -850,9 +856,14 @@ class HyperLightSandboxProvider(SandboxProvider):
 
     @staticmethod
     def _safe_drop(sandbox: Any) -> None:
-        """Best-effort sandbox teardown.  Upstream typically releases
-        the VM via ``__del__``; if a ``close``/``shutdown`` method is
-        present we call it explicitly for determinism."""
+        """Best-effort sandbox teardown with ordered fallback.
+
+        Tries ``close()``, ``shutdown()``, and ``__exit__()`` in order,
+        stopping at the first success.  If all fail, the sandbox is
+        left for garbage collection (upstream uses ``__del__``).
+        Failures are logged at DEBUG level and never propagated,
+        ensuring teardown errors cannot mask the original execution result.
+        """
         for name in ("close", "shutdown", "__exit__"):
             fn = getattr(sandbox, name, None)
             if not callable(fn):

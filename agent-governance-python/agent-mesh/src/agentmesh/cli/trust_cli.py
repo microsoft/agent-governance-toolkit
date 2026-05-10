@@ -17,32 +17,20 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import click
+from rich import box
 from rich.console import Console
 from rich.table import Table
-from rich import box
 
 from agentmesh.trust.bridge import PeerInfo
-from agentmesh.constants import (
-    TIER_VERIFIED_PARTNER_THRESHOLD,
-    TIER_TRUSTED_THRESHOLD,
-    TIER_STANDARD_THRESHOLD,
-    TIER_PROBATIONARY_THRESHOLD,
-)
+from agentmesh.trust.levels import trust_level_for_score
 
 console = Console()
 
 
-def _trust_level_label(score: int) -> str:
-    """Return a human-readable trust level label for a numeric score."""
-    if score >= TIER_VERIFIED_PARTNER_THRESHOLD:
-        return "verified_partner"
-    elif score >= TIER_TRUSTED_THRESHOLD:
-        return "trusted"
-    elif score >= TIER_STANDARD_THRESHOLD:
-        return "standard"
-    elif score >= TIER_PROBATIONARY_THRESHOLD:
-        return "probationary"
-    return "untrusted"
+# Backwards-compatible alias for the canonical helper in agentmesh.trust.levels;
+# kept so internal callers and the existing test suite (test_trust_cli.py) work
+# without changes.
+_trust_level_label = trust_level_for_score
 
 
 def _trust_level_style(level: str) -> str:

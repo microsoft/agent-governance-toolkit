@@ -213,31 +213,43 @@ class AgentShieldSessionProtocol(Protocol):
 
 
 class _MockSession:
-    """Mock Agent Shield session that allows everything."""
+    """Mock Agent Shield session for testing without the real SDK.
+
+    Permits all validations unconditionally. Used when the real
+    Agent Shield runtime is unavailable or when ``AgentShieldKernel``
+    is instantiated with a ``_MockRuntime``.
+    """
 
     def __init__(self) -> None:
         self._variables: dict[str, Any] = {}
         self._turn_active = False
 
     def begin_turn(self) -> None:
+        """Mark the start of a conversation turn."""
         self._turn_active = True
 
     def end_turn(self) -> None:
+        """Mark the end of a conversation turn."""
         self._turn_active = False
 
     def validate_input(self, text: str) -> _MockVerdict:
+        """Always allow input text."""
         return _MockVerdict(allowed=True)
 
     def validate_tool_call(self, tool_name: str, params: Any) -> _MockVerdict:
+        """Always allow tool calls."""
         return _MockVerdict(allowed=True)
 
     def validate_tool_result(self, tool_name: str, result: Any) -> _MockVerdict:
+        """Always allow tool results."""
         return _MockVerdict(allowed=True)
 
     def validate_output(self, text: str) -> _MockVerdict:
+        """Always allow output text, passing it through unchanged."""
         return _MockVerdict(allowed=True, response=text)
 
     def set_variable(self, name: str, value: Any) -> None:
+        """Store a session variable (e.g. AGT trust score)."""
         self._variables[name] = value
 
 
@@ -674,7 +686,12 @@ class AgentShieldKernel:
         stage: ValidationStage,
         elapsed_ms: float,
     ) -> ShieldVerdict:
-        """Translate an Agent Shield SDK verdict to AGT ShieldVerdict."""
+        """Translate an Agent Shield SDK verdict to AGT ShieldVerdict.
+
+        Maps the SDK's boolean-truthy result and optional ``reason`` /
+        ``policy_name`` attributes to the standardized AGT verdict type.
+        A ``None`` result is treated as a denial (fail-closed).
+        """
         allowed = bool(sdk_result) if sdk_result is not None else False
         reason = getattr(sdk_result, "reason", None) or ""
         policy_name = getattr(sdk_result, "policy_name", None) or ""
@@ -699,7 +716,13 @@ class AgentShieldKernel:
         error: str,
         elapsed_ms: float,
     ) -> ShieldVerdict:
-        """Create a verdict for an Agent Shield evaluation error."""
+        """Create a verdict for an Agent Shield SDK or runtime error.
+
+        Distinct from a policy denial: the ``metadata["error"]`` field
+        is populated so callers can distinguish infrastructure failures
+        from intentional blocks. Honors ``fail_closed`` to decide
+        whether the error results in BLOCK or WARN.
+        """
         allowed = not self._fail_closed
         action = ShieldAction.BLOCK if self._fail_closed else ShieldAction.WARN
         logger.error(

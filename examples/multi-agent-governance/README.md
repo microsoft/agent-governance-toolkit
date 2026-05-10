@@ -3,11 +3,28 @@
 Demonstrates how AGT enforces collective constraints across multiple agents:
 rate limits, concurrent agent caps, and alert-only monitoring.
 
-## Quick Start
+## Prerequisites
+
+- Python 3.10+
+- No API keys required
 
 ```bash
 pip install agentmesh-platform
-python multi_agent_policy_demo.py
+```
+
+## How to Run
+
+```bash
+python examples/multi-agent-governance/multi_agent_policy_demo.py
+```
+
+## Expected Output
+
+```
+  Rate limit: 3 transfers/min allowed, 4th BLOCKED
+  Concurrent cap: 2 agents writing OK, 3rd BLOCKED
+  Alert-only: policy logs warning but does not block
+  Window stats: real-time activity snapshot printed
 ```
 
 ## What This Demo Shows

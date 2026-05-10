@@ -3,11 +3,28 @@
 Demonstrates how AGT reconstructs a complete Bill of Materials for any
 governance decision, on demand, from existing observability signals.
 
-## Quick Start
+## Prerequisites
+
+- Python 3.10+
+- No API keys required
 
 ```bash
 pip install agentmesh-platform
-python decision_bom_demo.py
+```
+
+## How to Run
+
+```bash
+python examples/decision-bom/decision_bom_demo.py
+```
+
+## Expected Output
+
+```
+  Partial BOM (audit-only): 60% completeness, 3 fields populated
+  Full BOM (all signals):   100% completeness, 7 field categories
+  Batch: 5 decisions reconstructed for agent "analyst" in time range
+  JSON export: structured output ready for audit reporting
 ```
 
 ## What This Demo Shows

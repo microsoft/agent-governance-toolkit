@@ -1,9 +1,15 @@
 # Tutorial 50: Decision Bill of Materials (Decision BOM)
 
-Every governance decision has inputs: who requested it, what policies applied,
-what the trust score was, what trace it belongs to. The Decision BOM
-reconstructs all of these factors on demand, without requiring agents to
-report anything extra.
+> **Package:** `agentmesh-platform` · **Time:** 15 minutes · **Level:** Advanced
+
+---
+
+## What You'll Learn
+
+- Reconstructing full decision context from observability signals
+- Completeness scoring to verify all governance factors are captured
+- Batch audit workflows for compliance reviews
+- Correlating decisions with OTel traces and delegation chains
 
 **Prerequisites:** Install AGT with the mesh package:
 

@@ -21,7 +21,7 @@ beyond YamlDotNet**.
 
 ---
 
-## What you'll learn
+## What You'll Learn
 
 | Section | Topic |
 |---------|-------|
