@@ -39,6 +39,7 @@ import logging
 import os
 import re
 import warnings
+from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -399,7 +400,10 @@ class PromptInjectionDetector:
         self._config = config or DetectionConfig()
         self._injection_config = injection_config or PromptInjectionConfig()
         self._compile_injection_patterns()
-        self._audit_log: list[AuditRecord] = []
+        # Bounded ring buffer — unbounded list grew without limit on
+        # long-running deployments. 10k entries is enough headroom for
+        # any reasonable analysis window; older entries roll off.
+        self._audit_log: deque[AuditRecord] = deque(maxlen=10_000)
 
     def _compile_injection_patterns(self) -> None:
         """Compile pattern strings from ``self._injection_config`` into

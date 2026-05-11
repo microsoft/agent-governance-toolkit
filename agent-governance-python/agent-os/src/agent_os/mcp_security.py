@@ -36,6 +36,7 @@ import base64
 import hashlib
 import json
 import logging
+from collections import deque
 import os
 import re
 import time
@@ -365,7 +366,9 @@ class MCPSecurityScanner:
                 stacklevel=2,
             )
         self._tool_registry: dict[str, ToolFingerprint] = {}
-        self._audit_log: list[dict[str, Any]] = []
+        # Bounded ring buffer — unbounded list grew without limit on
+        # long-running deployments.
+        self._audit_log: deque[dict[str, Any]] = deque(maxlen=10_000)
         self._injection_detector = PromptInjectionDetector()
         self._metrics = metrics or MCPMetrics()
         self._audit_sink = audit_sink or InMemoryAuditSink()
