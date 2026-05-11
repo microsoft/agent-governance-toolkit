@@ -371,8 +371,67 @@ class TestOnDiskArtifactReVerification:
 
 
 # ---------------------------------------------------------------------------
-# Tests: artifact_sha256 is included in signable_bytes
+# Tests: security guards
 # ---------------------------------------------------------------------------
+
+
+class TestSecurityGuards:
+    """URL scheme validation and zip-slip protection."""
+
+    def test_file_scheme_url_rejected(self, tmp_path):
+        """artifact_url with file:// scheme must be rejected before any download."""
+        installer, registry, signer = _setup(tmp_path)
+        # Create a local file to ensure the path exists
+        local_file = tmp_path / "evil.zip"
+        local_file.write_bytes(b"irrelevant")
+        manifest = _make_manifest(
+            signer,
+            artifact_url=f"file://{local_file}",
+            artifact_sha256="a" * 64,
+        )
+        registry.register(manifest)
+
+        with pytest.raises(MarketplaceError, match="http or https"):
+            installer.install("test-plugin")
+
+    def test_custom_scheme_rejected(self, tmp_path):
+        """Non-http/https schemes (e.g., ftp://) are rejected."""
+        installer, registry, signer = _setup(tmp_path)
+        manifest = _make_manifest(
+            signer,
+            artifact_url="ftp://example.com/plugin.zip",
+            artifact_sha256="a" * 64,
+        )
+        registry.register(manifest)
+
+        with pytest.raises(MarketplaceError, match="http or https"):
+            installer.install("test-plugin")
+
+    def test_zip_slip_rejected(self, tmp_path):
+        """Archive members with paths that escape dest must raise MarketplaceError."""
+        # Build a zip with a path-traversal member
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("../../evil.py", b"evil")  # type: ignore[arg-type]
+        artifact_zip = buf.getvalue()
+        server, url = _serve_bytes(artifact_zip)
+        try:
+            installer, registry, signer = _setup(tmp_path)
+            manifest = _make_manifest(
+                signer,
+                artifact_url=url,
+                artifact_sha256=_sha256_hex(artifact_zip),
+            )
+            registry.register(manifest)
+
+            with pytest.raises(MarketplaceError, match="unsafe path"):
+                installer.install("test-plugin")
+
+            # The evil file must not have been written outside the plugin dir
+            assert not (tmp_path / "evil.py").exists()
+        finally:
+            server.shutdown()
+
 
 
 class TestArtifactHashInSignableBytes:

@@ -236,6 +236,21 @@ class PluginInstaller:
         if not artifact_url:
             return
 
+        # Restrict downloads to http/https to prevent file:// or other
+        # local-path schemes from exposing files on the host system.
+        try:
+            from urllib.parse import urlparse
+            scheme = urlparse(artifact_url).scheme.lower()
+        except Exception as exc:
+            raise MarketplaceError(
+                f"Plugin {manifest.name}@{manifest.version}: invalid artifact_url: {exc}"
+            ) from exc
+        if scheme not in ("http", "https"):
+            raise MarketplaceError(
+                f"Plugin {manifest.name}@{manifest.version}: artifact_url must use "
+                f"http or https (got {scheme!r})"
+            )
+
         if verify and not manifest.artifact_sha256:
             raise MarketplaceError(
                 f"Plugin {manifest.name}@{manifest.version} declares artifact_url "
@@ -266,10 +281,22 @@ class PluginInstaller:
                     manifest.version,
                 )
 
-            # Unpack the archive into the plugin directory
+            # Unpack the archive into the plugin directory.
+            # Guard against zip-slip: reject any member whose resolved path
+            # escapes the destination directory.
             try:
                 with zipfile.ZipFile(tmp_path) as zf:
-                    zf.extractall(dest)
+                    dest_resolved = dest.resolve()
+                    for member in zf.infolist():
+                        member_path = (dest / member.filename).resolve()
+                        try:
+                            member_path.relative_to(dest_resolved)
+                        except ValueError:
+                            raise MarketplaceError(
+                                f"Artifact for {manifest.name}@{manifest.version} "
+                                f"contains unsafe path: {member.filename!r}"
+                            )
+                        zf.extract(member, dest)
             except zipfile.BadZipFile as exc:
                 raise MarketplaceError(
                     f"Artifact for {manifest.name}@{manifest.version} is not a valid "
