@@ -487,3 +487,27 @@ func TestGetEntriesReturnsClones(t *testing.T) {
 		t.Error("chain verify should still pass after caller mutates a GetEntries result")
 	}
 }
+
+// Regression: prior to this fix, eviction did `al.entries =
+// al.entries[sliceFrom:]`, which keeps the original backing array
+// alive. After many rollovers the array's capacity (and the
+// *AuditEntry pointers in the dropped prefix) grew unboundedly even
+// though len() stayed pinned to MaxEntries. The fix allocates a fresh
+// slice on each eviction, so cap() stays close to len().
+func TestMaxEntriesNoBackingArrayLeak(t *testing.T) {
+	al := NewAuditLogger()
+	al.MaxEntries = 5
+	for i := 0; i < 1000; i++ {
+		al.Log("agent", fmt.Sprintf("action-%d", i), Allow)
+	}
+	if got := len(al.entries); got != al.MaxEntries {
+		t.Fatalf("len(entries) = %d, want %d", got, al.MaxEntries)
+	}
+	// After 1000 logs with MaxEntries=5 the underlying capacity must
+	// not have grown to the total-logged count. Allow a small headroom
+	// for the make-and-copy step but require it to be bounded close to
+	// MaxEntries.
+	if got := cap(al.entries); got > al.MaxEntries*4 {
+		t.Errorf("cap(entries) = %d, want close to %d (backing array leak)", got, al.MaxEntries)
+	}
+}

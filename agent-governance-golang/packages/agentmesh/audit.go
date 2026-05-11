@@ -59,7 +59,16 @@ func (al *AuditLogger) Log(agentID, action string, decision PolicyDecision) *Aud
 	if al.MaxEntries > 0 && len(al.entries) >= al.MaxEntries {
 		sliceFrom := len(al.entries) - al.MaxEntries + 1
 		al.seamHash = al.entries[sliceFrom-1].Hash
-		al.entries = al.entries[sliceFrom:]
+		// Allocate a fresh slice and copy the retained tail; a plain
+		// reslice (`al.entries = al.entries[sliceFrom:]`) keeps the
+		// original backing array alive, so the evicted *AuditEntry
+		// values stay reachable from the dropped prefix region and the
+		// GC cannot collect them. The leak grows proportional to the
+		// total number of entries ever logged, not the bounded
+		// MaxEntries retention.
+		retained := make([]*AuditEntry, len(al.entries)-sliceFrom)
+		copy(retained, al.entries[sliceFrom:])
+		al.entries = retained
 	}
 
 	prevHash := al.seamHash
