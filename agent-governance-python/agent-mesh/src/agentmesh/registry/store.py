@@ -49,6 +49,11 @@ class RegistryStore(Protocol):
     def search_by_capability(self, capability: str, limit: int) -> list[AgentRecord]: ...
     def consume_one_time_key(self, did: str) -> dict[str, Any] | None: ...
     def update_last_seen(self, did: str) -> None: ...
+    def try_update_last_seen(self, did: str, min_interval_seconds: float = 10.0) -> bool:
+        """Atomically update last_seen only if at least min_interval_seconds
+        have elapsed since the last update. Returns True if updated, False
+        if throttled. Implementations MUST be atomic."""
+        ...
 
 
 class InMemoryRegistryStore:
@@ -56,6 +61,7 @@ class InMemoryRegistryStore:
 
     def __init__(self) -> None:
         self._agents: dict[str, AgentRecord] = {}
+        self._last_heartbeat: dict[str, datetime] = {}
         self._lock = threading.Lock()
 
     def get_agent(self, did: str) -> AgentRecord | None:
@@ -68,6 +74,7 @@ class InMemoryRegistryStore:
 
     def delete_agent(self, did: str) -> bool:
         with self._lock:
+            self._last_heartbeat.pop(did, None)
             return self._agents.pop(did, None) is not None
 
     def search_by_capability(self, capability: str, limit: int = 50) -> list[AgentRecord]:
@@ -92,3 +99,21 @@ class InMemoryRegistryStore:
             agent = self._agents.get(did)
             if agent:
                 agent.last_seen = _utcnow()
+
+    def try_update_last_seen(self, did: str, min_interval_seconds: float = 10.0) -> bool:
+        """Atomically update last_seen only if enough time has elapsed
+        since the last heartbeat call (not since last_seen, which is set
+        at registration)."""
+        with self._lock:
+            agent = self._agents.get(did)
+            if not agent:
+                return False
+            now = _utcnow()
+            last_hb = self._last_heartbeat.get(did)
+            if last_hb is not None:
+                elapsed = (now - last_hb).total_seconds()
+                if elapsed < min_interval_seconds:
+                    return False
+            agent.last_seen = now
+            self._last_heartbeat[did] = now
+            return True

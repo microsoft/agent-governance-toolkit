@@ -287,3 +287,57 @@ describe("MeshClient auto-register on connect", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("RegistryClient fetchPrekeys identity_key_ed validation", () => {
+  it("throws when peer bundle is missing identity_key_ed", async () => {
+    const bundle = {
+      identity_key: toBase64UrlHelper(new Uint8Array(32).fill(1)),
+      signed_pre_key: {
+        key_id: 1,
+        public_key: toBase64UrlHelper(new Uint8Array(32).fill(2)),
+        signature: toBase64UrlHelper(new Uint8Array(64).fill(3)),
+      },
+      one_time_pre_key: null,
+    };
+    const { fetchImpl } = makeFakeFetch(() => ({
+      status: 200,
+      body: JSON.stringify(bundle),
+    }));
+    const c = new RegistryClient({ baseUrl: "http://reg:8082", fetchImpl, maxRetries: 0 });
+
+    await expect(c.fetchPrekeys("did:old-peer")).rejects.toThrow(
+      /identity_key_ed/,
+    );
+  });
+
+  it("succeeds when identity_key_ed is present", async () => {
+    const bundle = {
+      identity_key: toBase64UrlHelper(new Uint8Array(32).fill(1)),
+      identity_key_ed: toBase64UrlHelper(new Uint8Array(32).fill(7)),
+      signed_pre_key: {
+        key_id: 1,
+        public_key: toBase64UrlHelper(new Uint8Array(32).fill(2)),
+        signature: toBase64UrlHelper(new Uint8Array(64).fill(3)),
+      },
+      one_time_pre_key: null,
+    };
+    const { fetchImpl } = makeFakeFetch(() => ({
+      status: 200,
+      body: JSON.stringify(bundle),
+    }));
+    const c = new RegistryClient({ baseUrl: "http://reg:8082", fetchImpl, maxRetries: 0 });
+
+    const result = await c.fetchPrekeys("did:new-peer");
+    expect(result).not.toBeNull();
+    expect(result!.identityKeyEd[0]).toBe(7);
+  });
+});
+
+function toBase64UrlHelper(bytes: Uint8Array): string {
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(bytes).toString("base64url");
+  }
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}

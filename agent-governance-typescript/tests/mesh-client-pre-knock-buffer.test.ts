@@ -153,4 +153,34 @@ describe("MeshClient pre-KNOCK buffer (Gap G4)", () => {
     // disconnect() should not throw and should clear internal timers.
     await expect(client.disconnect()).resolves.toBeUndefined();
   });
+
+  test("global peer cap evicts oldest peer buffer when exceeded", async () => {
+    const client = makeClient({
+      preKnockBufferSize: 5,
+      preKnockBufferTtlMs: 60_000,
+      maxBufferedPeers: 3,
+    });
+    const errors: Array<{ kind: string; from: string; detail: string }> = [];
+    client.onError((kind, from, detail) => errors.push({ kind, from, detail }));
+
+    await client.connect();
+
+    // Buffer frames from 3 distinct peers (fills to cap).
+    for (let i = 0; i < 3; i++) {
+      lastMockWs!.onmessage!({
+        data: JSON.stringify(encryptedFrame(`did:agentmesh:peer-${i}`, `msg-${i}`)),
+      });
+    }
+    // No eviction yet.
+    expect(errors.filter((e) => e.detail.includes("global peer cap")).length).toBe(0);
+
+    // 4th peer triggers eviction of peer-0 (oldest).
+    lastMockWs!.onmessage!({
+      data: JSON.stringify(encryptedFrame("did:agentmesh:peer-3", "msg-3")),
+    });
+
+    const evictionErrors = errors.filter((e) => e.detail.includes("global peer cap"));
+    expect(evictionErrors.length).toBe(1);
+    expect(evictionErrors[0].from).toBe("did:agentmesh:peer-0");
+  });
 });

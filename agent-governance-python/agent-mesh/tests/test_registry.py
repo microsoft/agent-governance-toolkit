@@ -209,3 +209,83 @@ class TestRegistryAPI:
         resp = client.get("/v1/discover?capability=data:read")
         assert resp.status_code == 200
         assert resp.json()["total"] == 2
+
+    def test_heartbeat_updates_last_seen(self, client):
+        client.post("/v1/agents", json={
+            "did": "did:agentmesh:hb1",
+            "public_key": _b64(b"\x01" * 32),
+        })
+        resp = client.post("/v1/agents/did:agentmesh:hb1/heartbeat")
+        assert resp.status_code == 200
+        assert resp.json()["did"] == "did:agentmesh:hb1"
+        assert resp.json()["last_seen"] is not None
+
+    def test_heartbeat_not_found(self, client):
+        resp = client.post("/v1/agents/did:agentmesh:missing/heartbeat")
+        assert resp.status_code == 404
+
+    def test_heartbeat_throttled(self, client):
+        client.post("/v1/agents", json={
+            "did": "did:agentmesh:hb2",
+            "public_key": _b64(b"\x01" * 32),
+        })
+        # First heartbeat succeeds
+        resp1 = client.post("/v1/agents/did:agentmesh:hb2/heartbeat")
+        assert resp1.status_code == 200
+        first_ts = resp1.json()["last_seen"]
+
+        # Immediate second heartbeat is throttled
+        resp2 = client.post("/v1/agents/did:agentmesh:hb2/heartbeat")
+        assert resp2.status_code == 429
+
+        # Verify last_seen was NOT updated on throttled request
+        presence = client.get("/v1/agents/did:agentmesh:hb2/presence")
+        assert presence.json()["last_seen"] == first_ts
+
+    def test_identity_key_ed_validation_rejects_wrong_length(self, client):
+        client.post("/v1/agents", json={
+            "did": "did:agentmesh:edval",
+            "public_key": _b64(b"\x01" * 32),
+        })
+        resp = client.put("/v1/agents/did:agentmesh:edval/prekeys", json={
+            "identity_key": _b64(b"\x11" * 32),
+            "identity_key_ed": _b64(b"\x77" * 16),  # Wrong: 16 bytes instead of 32
+            "signed_pre_key": {
+                "key_id": 1,
+                "public_key": _b64(b"\x22" * 32),
+                "signature": _b64(b"\x33" * 64),
+            },
+        })
+        assert resp.status_code == 400
+        assert "32 bytes" in resp.json()["detail"]
+
+    def test_session_reputation_requires_participant(self, client):
+        for did in ("did:agentmesh:sr-init", "did:agentmesh:sr-recv"):
+            client.post("/v1/agents", json={
+                "did": did, "public_key": _b64(b"\x01" * 32),
+            })
+        # Reporter is not a participant
+        resp = client.post("/v1/registry/reputation/session", json={
+            "session_id": "sess-1",
+            "initiator_amid": "did:agentmesh:sr-init",
+            "receiver_amid": "did:agentmesh:sr-recv",
+            "outcome": "success",
+            "reporter_amid": "did:agentmesh:outsider",
+        })
+        assert resp.status_code == 403
+
+
+class TestRegistryStoreRateLimiting:
+    def test_try_update_last_seen_first_call_succeeds(self, store):
+        record = AgentRecord(did="did:agentmesh:rl1", public_key=b"\x01" * 32)
+        store.put_agent(record)
+        assert store.try_update_last_seen("did:agentmesh:rl1", min_interval_seconds=10.0) is True
+
+    def test_try_update_last_seen_immediate_retry_throttled(self, store):
+        record = AgentRecord(did="did:agentmesh:rl2", public_key=b"\x01" * 32)
+        store.put_agent(record)
+        assert store.try_update_last_seen("did:agentmesh:rl2") is True
+        assert store.try_update_last_seen("did:agentmesh:rl2") is False
+
+    def test_try_update_last_seen_missing_agent(self, store):
+        assert store.try_update_last_seen("did:agentmesh:missing") is False

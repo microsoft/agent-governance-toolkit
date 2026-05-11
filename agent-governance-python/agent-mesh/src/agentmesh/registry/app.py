@@ -274,20 +274,17 @@ class RegistryServer:
         @app.post("/v1/agents/{did}/heartbeat")
         async def heartbeat(did: str) -> dict:
             """Bump an agent's `last_seen` to keep it visible in presence
-            checks. Without this, registry `last_seen` is frozen at
-            registration time forever (no other endpoint updates it),
-            which makes every agent look "offline" 90s after spawn —
-            breaking client-side discover stale filters and the
-            `online` field on `/presence`.
-
-            Unauthenticated and idempotent: any caller may keep an agent
-            alive. This matches how reputation/discover are currently
-            unauthenticated. Production deployments should layer auth
-            in front (mTLS / API gateway) if required.
+            checks. Rate-limited to at most once per 10 seconds per agent
+            to prevent abuse (attacker keeping stale agents permanently
+            online). Returns 429 when throttled without updating last_seen.
             """
             if not store.get_agent(did):
                 raise HTTPException(status_code=404, detail="Agent not found")
-            store.update_last_seen(did)
+            if not store.try_update_last_seen(did, min_interval_seconds=10.0):
+                raise HTTPException(
+                    status_code=429,
+                    detail="Heartbeat throttled; retry after 10s",
+                )
             agent = store.get_agent(did)
             return {
                 "did": did,

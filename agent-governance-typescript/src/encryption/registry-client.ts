@@ -274,13 +274,15 @@ export class RegistryClient {
       one_time_pre_key: { key_id: number; public_key: string } | null;
     };
     const identityKey = fromBase64Url(j.identity_key);
-    // Fall back to X25519 identity_key only when the publisher didn't
-    // upload identity_key_ed. verifyBundle() will reject this case
-    // (correctly) — it's preserved for forensic visibility, not to
-    // silently bypass signature checks.
-    const identityKeyEd = j.identity_key_ed
-      ? fromBase64Url(j.identity_key_ed)
-      : identityKey;
+    if (!j.identity_key_ed) {
+      throw new RegistryError(
+        `Peer ${did} has not published identity_key_ed (Ed25519 signing key). ` +
+        "Their client must upgrade to a version that uploads both X25519 and Ed25519 keys.",
+        200,
+        resp.bodyText,
+      );
+    }
+    const identityKeyEd = fromBase64Url(j.identity_key_ed);
     const bundle: PreKeyBundle = {
       identityKey,
       identityKeyEd,

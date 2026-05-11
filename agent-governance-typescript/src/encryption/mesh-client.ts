@@ -86,6 +86,13 @@ export interface MeshClientOptions {
    * Default 3000.
    */
   preKnockBufferTtlMs?: number;
+  /**
+   * Max number of distinct peers that can have pre-KNOCK message buffers
+   * simultaneously. Prevents memory exhaustion from an adversary sending
+   * messages from many distinct DIDs before any KNOCK arrives. When
+   * exceeded, the oldest peer's buffer is evicted entirely. Default 100.
+   */
+  maxBufferedPeers?: number;
 }
 
 export interface MeshSession {
@@ -130,6 +137,7 @@ export class MeshClient {
   private clientInitiatedClose = false;
   private preKnockBufferSize: number;
   private preKnockBufferTtlMs: number;
+  private maxBufferedPeers: number;
   /**
    * Per-peer buffer for encrypted message frames that arrived before the
    * peer's KNOCK was processed. Drained when the KNOCK is later accepted.
@@ -151,6 +159,7 @@ export class MeshClient {
     this.reconnectMaxDelayMs = options.reconnectMaxDelayMs ?? 60_000;
     this.preKnockBufferSize = options.preKnockBufferSize ?? 5;
     this.preKnockBufferTtlMs = options.preKnockBufferTtlMs ?? 3_000;
+    this.maxBufferedPeers = options.maxBufferedPeers ?? 100;
     this.autoRegister = options.autoRegister ?? true;
     this.oneTimePrekeyCount = options.oneTimePrekeyCount ?? 20;
     if (options.registryClient) {
@@ -883,6 +892,14 @@ export class MeshClient {
   private bufferPreKnockFrame(from: string, frame: Record<string, unknown>): void {
     let entries = this.preKnockBuffer.get(from);
     if (!entries) {
+      // Enforce global peer cap before adding a new peer's buffer.
+      if (this.preKnockBuffer.size >= this.maxBufferedPeers) {
+        const oldestPeer = this.preKnockBuffer.keys().next().value as string;
+        this.dropPreKnockBuffer(oldestPeer);
+        for (const h of this.errorHandlers) {
+          try { h("frame", oldestPeer, `pre-knock buffer evicted: global peer cap (${this.maxBufferedPeers}) reached`); } catch { /* swallow */ }
+        }
+      }
       entries = [];
       this.preKnockBuffer.set(from, entries);
     }
