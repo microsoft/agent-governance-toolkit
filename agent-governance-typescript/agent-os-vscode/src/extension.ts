@@ -665,28 +665,48 @@ safe_query = "SELECT * FROM users WHERE id = ?"
     // ========================================
 
     // SSO Sign In
-    const signInCmd = vscode.commands.registerCommand('agent-os.signIn', () => {
-        authProvider.signIn();
+    const signInCmd = vscode.commands.registerCommand('agent-os.signIn', async () => {
+        try {
+            await authProvider.signIn();
+        } catch (error) {
+            vscode.window.showErrorMessage(`Sign-in failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
     });
 
     // SSO Sign Out
-    const signOutCmd = vscode.commands.registerCommand('agent-os.signOut', () => {
-        authProvider.signOut();
+    const signOutCmd = vscode.commands.registerCommand('agent-os.signOut', async () => {
+        try {
+            await authProvider.signOut();
+        } catch (error) {
+            vscode.window.showErrorMessage(`Sign-out failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
     });
 
     // CI/CD Integration
-    const setupCICDCmd = vscode.commands.registerCommand('agent-os.setupCICD', () => {
-        cicdIntegration.showConfigWizard();
+    const setupCICDCmd = vscode.commands.registerCommand('agent-os.setupCICD', async () => {
+        try {
+            await cicdIntegration.showConfigWizard();
+        } catch (error) {
+            vscode.window.showErrorMessage(`CI/CD setup failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
     });
 
     // Pre-commit Hook
-    const installHooksCmd = vscode.commands.registerCommand('agent-os.installHooks', () => {
-        cicdIntegration.installPreCommitHook();
+    const installHooksCmd = vscode.commands.registerCommand('agent-os.installHooks', async () => {
+        try {
+            await cicdIntegration.installPreCommitHook();
+        } catch (error) {
+            vscode.window.showErrorMessage(`Pre-commit hook install failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
     });
 
     // Compliance Check
-    const checkComplianceCmd = vscode.commands.registerCommand('agent-os.checkCompliance', () => {
-        complianceManager.showComplianceWizard();
+    const checkComplianceCmd = vscode.commands.registerCommand('agent-os.checkCompliance', async () => {
+        try {
+            await complianceManager.showComplianceWizard();
+        } catch (error) {
+            vscode.window.showErrorMessage(`Compliance check failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
     });
 
     // Register configuration change listener
