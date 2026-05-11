@@ -566,6 +566,96 @@ class TestGovernedEnvironmentStep:
         _, _, _, truncated, _ = env.step("a2")
         assert truncated is True
 
+    def test_step_pulls_violations_when_no_hook(self):
+        """Regression: a kernel that exposes ``get_recent_violations``
+        but no ``on_policy_violation`` hook used to be invisible to the
+        environment. Violations were missed and the success bonus was
+        awarded incorrectly."""
+        kernel = MagicMock(spec=["execute", "reset", "get_recent_violations"])
+        kernel.execute = MagicMock(return_value="ok")
+        kernel.reset = MagicMock()
+        kernel.get_recent_violations = MagicMock(
+            return_value=[
+                {
+                    "policy": "SQLPolicy",
+                    "description": "DROP detected",
+                    "severity": "critical",
+                    "blocked": True,
+                }
+            ]
+        )
+        env = GovernedEnvironment(kernel)
+        env.reset()
+        _, reward, terminated, _, info = env.step("DROP TABLE x")
+
+        # Violation should have been recorded via the pull path.
+        assert len(info["violations"]) == 1
+        assert info["violations"][0]["policy"] == "SQLPolicy"
+        # Critical violation must terminate when configured.
+        # (Default config has terminate_on_critical=True.)
+        assert terminated is True
+        # Success bonus must NOT be applied when violations exist.
+        assert reward < 0
+
+    def test_step_pull_violations_object_attributes(self):
+        """``get_recent_violations`` may return objects with attributes
+        rather than dicts (e.g. dataclasses); the env should normalize."""
+        @dataclass
+        class _ObjViolation:
+            policy_name: str
+            description: str
+            severity: str
+            action_blocked: bool
+
+        kernel = MagicMock(spec=["execute", "reset", "get_recent_violations"])
+        kernel.execute = MagicMock(return_value="ok")
+        kernel.reset = MagicMock()
+        kernel.get_recent_violations = MagicMock(
+            return_value=[
+                _ObjViolation(
+                    policy_name="CostPolicy",
+                    description="budget exceeded",
+                    severity="high",
+                    action_blocked=False,
+                )
+            ]
+        )
+        env = GovernedEnvironment(kernel)
+        env.reset()
+        _, _, _, _, info = env.step("expensive-op")
+        assert len(info["violations"]) == 1
+        assert info["violations"][0]["policy"] == "CostPolicy"
+        assert info["violations"][0]["severity"] == "high"
+
+    def test_step_no_double_record_when_hook_wired(self):
+        """If the hook IS wired, the pull path must not run (would double-count)."""
+        # A kernel with the hook registers attribute and a (different) pull API.
+        captured: list = []
+
+        class _HookKernel:
+            def __init__(self):
+                self.execute = MagicMock(return_value="ok")
+                self.reset = MagicMock()
+                self.policies = []
+
+            def on_policy_violation(self, cb):
+                captured.append(cb)
+
+            def get_recent_violations(self):
+                # If the env wrongly pulls in this case, this would be
+                # double-counted with the hook's invocation. We never
+                # invoke the hook here, so a non-empty pull-result with
+                # no hook fire would expose the bug if it happened.
+                return [{"policy": "X", "description": "Y", "severity": "low", "blocked": False}]
+
+        kernel = _HookKernel()
+        env = GovernedEnvironment(kernel)
+        env.reset()
+        _, _, _, _, info = env.step("a")
+        # Hook was wired; pull must NOT have been invoked.
+        # No hook fire => no violations recorded.
+        assert info["violations"] == []
+
 
 class TestGovernedEnvironmentGymInterface:
     def test_terminated_property(self):
