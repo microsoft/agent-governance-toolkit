@@ -14,6 +14,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -618,8 +619,36 @@ func (c *GitHubDiscoveryClient) ListOrganizationRepositories(org string) ([]stri
 	return repositories, nil
 }
 
+// buildContentsAPIPath assembles the GitHub contents-API path for a given
+// repo and file path, URL-escaping each segment so that values containing
+// `?`, `#`, `..`, or other URL-meta characters cannot pivot the request to
+// a different endpoint. The repo argument must be a well-formed
+// `<owner>/<name>` string; the path argument may contain `/` as a
+// directory separator and each segment is escaped independently so
+// directory boundaries are preserved.
+func buildContentsAPIPath(repo, path string) (string, error) {
+	repoParts := strings.SplitN(repo, "/", 2)
+	if len(repoParts) != 2 || repoParts[0] == "" || repoParts[1] == "" {
+		return "", fmt.Errorf("invalid github repo %q: expected owner/name", repo)
+	}
+	owner := url.PathEscape(repoParts[0])
+	name := url.PathEscape(repoParts[1])
+
+	pathSegments := strings.Split(path, "/")
+	for i, seg := range pathSegments {
+		pathSegments[i] = url.PathEscape(seg)
+	}
+	escapedPath := strings.Join(pathSegments, "/")
+
+	return fmt.Sprintf("/repos/%s/%s/contents/%s", owner, name, escapedPath), nil
+}
+
 func (c *GitHubDiscoveryClient) getRepositoryFile(repo string, path string) (string, error) {
-	body, err := c.doRequest(fmt.Sprintf("/repos/%s/contents/%s", repo, path))
+	apiPath, err := buildContentsAPIPath(repo, path)
+	if err != nil {
+		return "", err
+	}
+	body, err := c.doRequest(apiPath)
 	if err != nil {
 		return "", err
 	}

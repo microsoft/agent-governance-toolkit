@@ -82,3 +82,42 @@ func TestShadowDiscoveryScannerScanGitHubRepositories(t *testing.T) {
 		t.Fatalf("agents = %d, want at least 2", len(result.Agents))
 	}
 }
+
+
+func TestBuildContentsAPIPath(t *testing.T) {
+	cases := []struct {
+		name    string
+		repo    string
+		path    string
+		want    string
+		wantErr bool
+	}{
+		{name: "plain repo and path", repo: "octo/demo", path: "agentmesh.yaml", want: "/repos/octo/demo/contents/agentmesh.yaml"},
+		{name: "nested path keeps separators", repo: "octo/demo", path: "src/config/agentmesh.yaml", want: "/repos/octo/demo/contents/src/config/agentmesh.yaml"},
+		{name: "repo segment with slash blocked", repo: "octo/demo/extra", path: "a.yaml", want: "/repos/octo/demo%2Fextra/contents/a.yaml"},
+		{name: "path segment with traversal escaped", repo: "octo/demo", path: "..%2F..%2Fevil", want: "/repos/octo/demo/contents/..%252F..%252Fevil"},
+		{name: "query injection escaped", repo: "octo/demo", path: "file?ref=main", want: "/repos/octo/demo/contents/file%3Fref=main"},
+		{name: "fragment injection escaped", repo: "octo/demo", path: "file#frag", want: "/repos/octo/demo/contents/file%23frag"},
+		{name: "empty repo rejected", repo: "", path: "a", wantErr: true},
+		{name: "single-segment repo rejected", repo: "justname", path: "a", wantErr: true},
+		{name: "empty owner rejected", repo: "/name", path: "a", wantErr: true},
+		{name: "empty name rejected", repo: "owner/", path: "a", wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := buildContentsAPIPath(tc.repo, tc.path)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got %q", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
