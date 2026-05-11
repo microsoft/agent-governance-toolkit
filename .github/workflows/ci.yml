@@ -275,7 +275,8 @@ jobs:
           python-version: "3.11"
       - name: Install safety
         run: |
-          pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-safety.txt"
+          pip install --no-cache-dir --require-hashes --no-deps -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-safety.txt"
+          pip install --no-cache-dir safety==3.2.1
       - name: Check dependencies
         env:
           GIT_TERMINAL_PROMPT: "0"
