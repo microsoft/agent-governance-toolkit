@@ -59,6 +59,13 @@ def parse_version(version: str) -> Tuple[int, int, int]:
     return (0, 0, 0)
 
 
+_PROTOCOL_PREFIXES = (
+    "git+", "file:", "http:", "https:", "ssh:", "npm:", "workspace:",
+)
+
+_NON_SEMVER_WILDCARDS = {"latest", "next", "canary", "nightly"}
+
+
 def version_matches(version: str, constraint: str) -> bool:
     """Check if a version matches a constraint.
 
@@ -72,6 +79,9 @@ def version_matches(version: str, constraint: str) -> bool:
     - "~1.0.0" - approximately (same major.minor)
     - "*" - any version
 
+    Protocol specifiers (git+, file:, http:, etc.) and non-semver
+    tags (latest, next, canary) are rejected as non-matching.
+
     Args:
         version: The version to check.
         constraint: The version constraint.
@@ -81,6 +91,13 @@ def version_matches(version: str, constraint: str) -> bool:
     """
     if constraint == "*" or constraint == "":
         return True
+
+    # Reject protocol specifiers and non-semver tags
+    constraint_lower = constraint.lower()
+    if any(constraint_lower.startswith(p) for p in _PROTOCOL_PREFIXES):
+        return False
+    if constraint_lower in _NON_SEMVER_WILDCARDS:
+        return False
 
     v = parse_version(version)
 

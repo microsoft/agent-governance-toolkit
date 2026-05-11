@@ -272,6 +272,60 @@ def test_clear_registry():
     assert len(registry) == 0
 
 
+# --- version_matches tests ---
+
+from atr.registry import version_matches, parse_version
+
+
+class TestVersionMatches:
+    """Tests for version_matches constraint checking."""
+
+    def test_exact_match(self):
+        assert version_matches("1.2.3", "1.2.3") is True
+
+    def test_exact_mismatch(self):
+        assert version_matches("1.2.3", "1.2.4") is False
+
+    def test_wildcard(self):
+        assert version_matches("9.9.9", "*") is True
+
+    def test_empty_constraint(self):
+        assert version_matches("1.0.0", "") is True
+
+    def test_gte(self):
+        assert version_matches("2.0.0", ">=1.0.0") is True
+        assert version_matches("0.9.0", ">=1.0.0") is False
+
+    def test_caret(self):
+        assert version_matches("1.5.0", "^1.0.0") is True
+        assert version_matches("2.0.0", "^1.0.0") is False
+
+    def test_tilde(self):
+        assert version_matches("1.0.5", "~1.0.0") is True
+        assert version_matches("1.1.0", "~1.0.0") is False
+
+    @pytest.mark.parametrize("specifier", [
+        "git+https://github.com/evil/repo.git",
+        "file:../local-pkg",
+        "http://example.com/pkg.tar.gz",
+        "https://registry.npmjs.org/pkg",
+        "ssh://git@github.com/evil/repo.git",
+        "npm:@scope/pkg",
+        "workspace:*",
+    ])
+    def test_protocol_specifiers_rejected(self, specifier: str):
+        """Protocol specifiers must never match any version."""
+        assert version_matches("0.0.0", specifier) is False
+        assert version_matches("1.0.0", specifier) is False
+
+    @pytest.mark.parametrize("tag", ["latest", "next", "canary", "nightly"])
+    def test_non_semver_tags_rejected(self, tag: str):
+        """Non-semver distribution tags must not match."""
+        assert version_matches("0.0.0", tag) is False
+        assert version_matches("1.0.0", tag) is False
+
+
+
 def test_contains_operator():
     """Test 'in' operator for registry."""
     registry = Registry()
