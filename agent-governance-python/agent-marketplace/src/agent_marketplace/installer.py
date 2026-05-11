@@ -18,6 +18,7 @@ from types import MappingProxyType
 from typing import Any, Mapping, Optional
 
 import yaml
+from packaging.requirements import InvalidRequirement, Requirement
 
 from agent_marketplace.manifest import (
     MANIFEST_FILENAME,
@@ -282,14 +283,24 @@ def _atomic_write_yaml(path: Path, data: Any) -> None:
 
 
 def _parse_dependency(dep_spec: str) -> tuple[str, Optional[str]]:
-    """Parse a dependency specifier like ``plugin-name>=1.0.0``.
+    """Parse a PEP 508 dependency specifier like ``plugin-name>=1.0.0``.
 
-    Returns:
-        Tuple of (name, version_or_none).
+    Returns a ``(name, version_or_none)`` tuple. ``version`` is the pinned
+    string from an ``==X`` specifier when one is present; otherwise ``None``
+    so the registry resolves the latest matching version. Compound
+    specifiers (``>=1.0,<2.0``), inequality (``!=``), and compatible-release
+    (``~=``) all return ``None`` instead of being mis-parsed as a literal
+    version string.
+
+    Raises:
+        MarketplaceError: If ``dep_spec`` is not a valid PEP 508 requirement.
     """
-    for op in (">=", "==", "<=", ">", "<"):
-        if op in dep_spec:
-            name, version = dep_spec.split(op, 1)
-            return name.strip(), version.strip()
-    return dep_spec.strip(), None
+    try:
+        req = Requirement(dep_spec)
+    except InvalidRequirement as exc:
+        raise MarketplaceError(f"Invalid dependency specifier {dep_spec!r}: {exc}") from exc
+    for spec in req.specifier:
+        if spec.operator == "==":
+            return req.name, spec.version
+    return req.name, None
 
