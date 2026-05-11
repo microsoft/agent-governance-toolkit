@@ -362,9 +362,13 @@ class PluginInstaller:
         for py_file in sorted(plugin_dir.rglob("*.py")):
             try:
                 source = py_file.read_text(encoding="utf-8")
+            except OSError as exc:
+                logger.warning("Could not read %s for sandbox scan: %s", py_file, exc)
+                continue
+            try:
                 tree = ast.parse(source, filename=str(py_file))
-            except (SyntaxError, OSError):
-                logger.warning("Could not parse %s for sandbox scan", py_file)
+            except SyntaxError as exc:
+                logger.warning("Could not parse %s for sandbox scan: %s", py_file, exc)
                 continue
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
