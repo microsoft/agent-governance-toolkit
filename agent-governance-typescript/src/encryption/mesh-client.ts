@@ -108,7 +108,18 @@ export class MeshClient {
         resolve();
       };
       this.ws!.onerror = (e) => reject(new Error(`WebSocket error: ${e}`));
-      this.ws!.onmessage = (event) => this.handleFrame(JSON.parse(String(event.data)));
+      this.ws!.onmessage = (event) => {
+        let frame: Record<string, unknown>;
+        try {
+          frame = JSON.parse(String(event.data));
+        } catch (err) {
+          console.warn(`MeshClient: dropping malformed frame (JSON parse): ${err}`);
+          return;
+        }
+        this.handleFrame(frame).catch((err) => {
+          console.warn(`MeshClient: handler error for frame type=${String(frame.type)}: ${err}`);
+        });
+      };
       this.ws!.onclose = () => {
         this.connected = false;
       };
