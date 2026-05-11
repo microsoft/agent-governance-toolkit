@@ -116,6 +116,29 @@ func TestMaxEntriesVerify(t *testing.T) {
 	}
 }
 
+// After rollover eviction, the surviving head's PreviousHash must equal the
+// seam hash (the hash of the last evicted entry). Forging both PreviousHash
+// and Hash on the head would have been undetectable when Verify() skipped the
+// genesis check during retention; the seam check closes that gap.
+func TestMaxEntriesVerifyDetectsForgedSeam(t *testing.T) {
+	al := NewAuditLogger()
+	al.MaxEntries = 3
+	for i := 0; i < 10; i++ {
+		al.Log("agent", fmt.Sprintf("action-%d", i), Allow)
+	}
+	if !al.Verify() {
+		t.Fatal("chain should verify before tampering")
+	}
+
+	// Replace the surviving head's PreviousHash and recompute its Hash so the
+	// inner hash check still passes — only the seam check should reject this.
+	al.entries[0].PreviousHash = "0000000000000000000000000000000000000000000000000000000000000000"
+	al.entries[0].Hash = computeHash(al.entries[0])
+	if al.Verify() {
+		t.Error("forged seam should be detected by Verify()")
+	}
+}
+
 // --- New comprehensive tests ---
 
 func TestAuditEmptyLogVerifies(t *testing.T) {
@@ -417,5 +440,50 @@ func TestAuditSingleEntryVerifies(t *testing.T) {
 	al.Log("agent", "action", Allow)
 	if !al.Verify() {
 		t.Error("single entry chain should verify")
+	}
+}
+
+// Regression: prior to this fix, Log() returned the same *AuditEntry
+// it stored in al.entries; GetEntries() returned the same pointers.
+// A caller could mutate Hash on the returned pointer and break the
+// chain. Now Log/GetEntries return value-copies; mutations to the
+// caller's pointer must not affect the in-store record.
+func TestReturnedEntryIsClone(t *testing.T) {
+	al := NewAuditLogger()
+	returned := al.Log("agent", "action", Allow)
+
+	originalHash := returned.Hash
+	returned.Hash = "tampered-by-caller"
+
+	stored := al.GetEntries(AuditFilter{})
+	if len(stored) != 1 {
+		t.Fatalf("entries = %d, want 1", len(stored))
+	}
+	if stored[0].Hash == "tampered-by-caller" {
+		t.Errorf("caller's mutation propagated into store; Log return is shared")
+	}
+	if stored[0].Hash != originalHash {
+		t.Errorf("stored hash = %q, want %q", stored[0].Hash, originalHash)
+	}
+	if !al.Verify() {
+		t.Error("chain verify should still pass after a caller mutates their copy")
+	}
+}
+
+func TestGetEntriesReturnsClones(t *testing.T) {
+	al := NewAuditLogger()
+	al.Log("agent", "a1", Allow)
+	al.Log("agent", "a2", Deny)
+
+	first := al.GetEntries(AuditFilter{})
+	first[0].Hash = "tampered"
+	first[1].AgentID = "spoofed"
+
+	second := al.GetEntries(AuditFilter{})
+	if second[0].Hash == "tampered" || second[1].AgentID == "spoofed" {
+		t.Error("mutations on GetEntries result propagated to subsequent reads")
+	}
+	if !al.Verify() {
+		t.Error("chain verify should still pass after caller mutates a GetEntries result")
 	}
 }

@@ -181,7 +181,12 @@ impl AuditSink for FileAuditSink {
             Vec::new()
         };
         entries.push(entry.clone());
-        fs::write(&self.path, serde_json::to_string_pretty(&entries).unwrap())
+        // serde_json::to_string_pretty fails on non-finite floats (NaN, ±Inf)
+        // inside `details` because JSON has no representation for them.
+        // Propagate the error instead of panicking on the audit-write path.
+        let serialized =
+            serde_json::to_string_pretty(&entries).map_err(std::io::Error::other)?;
+        fs::write(&self.path, serialized)
     }
 }
 
@@ -189,7 +194,7 @@ pub struct HashChainVerifier;
 
 impl HashChainVerifier {
     pub fn verify(entries: &[AuditEntry]) -> bool {
-        verify_audit_entries(entries)
+        verify_audit_entries(entries, None)
     }
 }
 
@@ -369,7 +374,9 @@ impl TrustCondition {
             (ConditionOperator::Matches, Some(Value::String(actual))) => self
                 .value
                 .as_str()
-                .and_then(|pattern| Regex::new(pattern).ok().map(|regex| regex.is_match(actual)))
+                .and_then(|pattern| {
+                    crate::regex_cache::compiled_regex(pattern).map(|regex| regex.is_match(actual))
+                })
                 .unwrap_or(false),
             _ => false,
         }
@@ -952,8 +959,7 @@ impl PolicyCondition {
                 .as_str()
                 .zip(self.expected.as_str())
                 .and_then(|(actual, expected)| {
-                    Regex::new(expected)
-                        .ok()
+                    crate::regex_cache::compiled_regex(expected)
                         .map(|regex| regex.is_match(actual))
                 })
                 .unwrap_or(false),
@@ -1403,7 +1409,12 @@ pub struct FederationDecision {
 }
 
 pub trait FederationStore: Send + Sync {
-    fn save_policy(&self, policy: OrgPolicy);
+    /// Persist a policy for an organization.
+    ///
+    /// Implementations may fail for I/O reasons (file-backed stores) or
+    /// serialization reasons; callers must handle the error rather than
+    /// silently lose the write.
+    fn save_policy(&self, policy: OrgPolicy) -> std::io::Result<()>;
     fn get_policy(&self, organization_id: &str) -> Option<OrgPolicy>;
 }
 
@@ -1413,11 +1424,12 @@ pub struct InMemoryFederationStore {
 }
 
 impl FederationStore for InMemoryFederationStore {
-    fn save_policy(&self, policy: OrgPolicy) {
+    fn save_policy(&self, policy: OrgPolicy) -> std::io::Result<()> {
         self.policies
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .insert(policy.organization_id.clone(), policy);
+        Ok(())
     }
 
     fn get_policy(&self, organization_id: &str) -> Option<OrgPolicy> {
@@ -1451,15 +1463,13 @@ impl FileFederationStore {
 }
 
 impl FederationStore for FileFederationStore {
-    fn save_policy(&self, policy: OrgPolicy) {
-        self.inner.save_policy(policy.clone());
+    fn save_policy(&self, policy: OrgPolicy) -> std::io::Result<()> {
+        self.inner.save_policy(policy.clone())?;
         let mut policies = self.read_policy_map();
         policies.insert(policy.organization_id.clone(), policy);
-        let _ = fs::write(
-            &self.path,
-            serde_json::to_string_pretty(&policies)
-                .expect("failed to serialize federation policy store"),
-        );
+        let serialized =
+            serde_json::to_string_pretty(&policies).map_err(std::io::Error::other)?;
+        fs::write(&self.path, serialized)
     }
 
     fn get_policy(&self, organization_id: &str) -> Option<OrgPolicy> {
@@ -1672,15 +1682,17 @@ mod tests {
     #[test]
     fn federation_engine_applies_rules() {
         let store = Arc::new(InMemoryFederationStore::default());
-        store.save_policy(OrgPolicy {
-            organization_id: "contoso".into(),
-            rules: vec![OrgPolicyRule {
-                name: "deny-shell".into(),
-                category: PolicyCategory::Execution,
-                action_pattern: "shell".into(),
-                decision: "deny".into(),
-            }],
-        });
+        store
+            .save_policy(OrgPolicy {
+                organization_id: "contoso".into(),
+                rules: vec![OrgPolicyRule {
+                    name: "deny-shell".into(),
+                    category: PolicyCategory::Execution,
+                    action_pattern: "shell".into(),
+                    decision: "deny".into(),
+                }],
+            })
+            .unwrap();
         let engine = FederationEngine::new(store);
         assert!(!engine.evaluate("contoso", "shell:rm").allowed);
     }
@@ -1688,15 +1700,17 @@ mod tests {
     #[test]
     fn federation_engine_denies_without_policy_or_rule_match() {
         let store = Arc::new(InMemoryFederationStore::default());
-        store.save_policy(OrgPolicy {
-            organization_id: "contoso".into(),
-            rules: vec![OrgPolicyRule {
-                name: "allow-data".into(),
-                category: PolicyCategory::DataAccess,
-                action_pattern: "data.read".into(),
-                decision: "allow".into(),
-            }],
-        });
+        store
+            .save_policy(OrgPolicy {
+                organization_id: "contoso".into(),
+                rules: vec![OrgPolicyRule {
+                    name: "allow-data".into(),
+                    category: PolicyCategory::DataAccess,
+                    action_pattern: "data.read".into(),
+                    decision: "allow".into(),
+                }],
+            })
+            .unwrap();
         let engine = FederationEngine::new(store);
         assert!(!engine.evaluate("missing", "data.read").allowed);
         assert!(!engine.evaluate("contoso", "shell:rm").allowed);
@@ -1900,17 +1914,43 @@ mod tests {
         let temp = tempfile::NamedTempFile::new().unwrap();
         let store = FileFederationStore::new(temp.path());
 
-        store.save_policy(OrgPolicy {
-            organization_id: "org-a".into(),
-            rules: vec![],
-        });
-        store.save_policy(OrgPolicy {
-            organization_id: "org-b".into(),
-            rules: vec![],
-        });
+        store
+            .save_policy(OrgPolicy {
+                organization_id: "org-a".into(),
+                rules: vec![],
+            })
+            .unwrap();
+        store
+            .save_policy(OrgPolicy {
+                organization_id: "org-b".into(),
+                rules: vec![],
+            })
+            .unwrap();
 
         assert!(store.get_policy("org-a").is_some());
         assert!(store.get_policy("org-b").is_some());
+    }
+
+    /// Regression: prior to fallibilizing the trait, FileFederationStore
+    /// used `let _ = fs::write(...)` and silently swallowed I/O errors.
+    /// A path pointing into a non-existent directory now surfaces as an
+    /// Err instead of being lost.
+    #[test]
+    fn file_federation_store_returns_err_on_unwriteable_path() {
+        let unwriteable = std::env::temp_dir()
+            .join("agentmesh-federation-store-tests-nonexistent-parent")
+            .join("policies.json");
+        let _ = fs::remove_dir_all(unwriteable.parent().unwrap());
+
+        let store = FileFederationStore::new(&unwriteable);
+        let result = store.save_policy(OrgPolicy {
+            organization_id: "ghost".into(),
+            rules: vec![],
+        });
+        assert!(
+            result.is_err(),
+            "expected save_policy to surface the I/O error, got Ok"
+        );
     }
 
     #[test]

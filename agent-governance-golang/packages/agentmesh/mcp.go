@@ -5,6 +5,7 @@ package agentmesh
 
 import (
 	"strings"
+	"sync"
 	"unicode"
 )
 
@@ -42,7 +43,10 @@ type McpToolDefinition struct {
 
 // McpSecurityScanner detects poisoning, typosquatting, hidden instructions,
 // and rug-pull patterns in MCP tool definitions.
+//
+// Safe for concurrent use; ``knownTools`` is guarded by ``mu``.
 type McpSecurityScanner struct {
+	mu         sync.RWMutex
 	knownTools []string
 }
 
@@ -110,8 +114,19 @@ func (s *McpSecurityScanner) detectTyposquatting(tool McpToolDefinition) []McpTh
 		"search", "fetch", "read_file", "write_file",
 		"execute", "query", "send_email", "list_files",
 	}
-	// Also check against the scanner's previously-seen tools.
-	candidates := append(wellKnown, s.knownTools...)
+
+	// Snapshot ``knownTools`` under the read lock so we can scan against
+	// it without holding the lock during the (relatively expensive)
+	// Levenshtein loop. Concurrent ``Scan`` callers race on the slice
+	// header otherwise — both reading at line 114 and writing at the
+	// final ``append`` below are unsynchronized today, which goes loud
+	// under ``go test -race`` and risks lost updates / torn reads when
+	// the scanner is shared across request goroutines.
+	s.mu.RLock()
+	candidates := make([]string, 0, len(wellKnown)+len(s.knownTools))
+	candidates = append(candidates, wellKnown...)
+	candidates = append(candidates, s.knownTools...)
+	s.mu.RUnlock()
 
 	for _, known := range candidates {
 		if tool.Name == known {
@@ -128,7 +143,9 @@ func (s *McpSecurityScanner) detectTyposquatting(tool McpToolDefinition) []McpTh
 	}
 
 	// Register this tool name for future comparisons.
+	s.mu.Lock()
 	s.knownTools = append(s.knownTools, tool.Name)
+	s.mu.Unlock()
 	return nil
 }
 

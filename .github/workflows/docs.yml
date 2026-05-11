@@ -31,7 +31,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install MkDocs Material
-        run: pip install mkdocs-material==9.7.6 mkdocs-minify-plugin==0.8.0
+        run: pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-docs.txt
 
       - name: Build docs
         run: mkdocs build --config-file mkdocs.yml --site-dir _site

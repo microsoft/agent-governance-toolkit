@@ -28,7 +28,7 @@ suite('Vendor Assets', () => {
         const violations: string[] = [];
         for (const file of files) {
             const content = fs.readFileSync(file, 'utf8');
-            if (content.includes('://cdn.jsdelivr.net')) {
+            if (/https?:\/\/cdn\.jsdelivr\.net/i.test(content)) {
                 violations.push(path.relative(EXTENSION_ROOT, file));
             }
         }

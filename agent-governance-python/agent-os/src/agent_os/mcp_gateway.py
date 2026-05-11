@@ -448,7 +448,7 @@ class MCPGateway:
                         "builtin_pattern",
                     )
 
-        # 4. Rate limiting
+        # 4. Rate limiting (check only — do not consume budget yet)
         with self._rate_limit_lock:
             count = int(self._rate_limit_store.get_bucket(agent_id) or 0)
             if count >= self.policy.max_tool_calls:
@@ -458,10 +458,6 @@ class MCPGateway:
                     None,
                     "rate_limit",
                 )
-
-            # Increment call counter (only on successful evaluation past this point)
-            self._tracked_agents.add(agent_id)
-            self._rate_limit_store.set_bucket(agent_id, count + 1)
 
         # 5. Human approval
         if self.policy.require_human_approval or tool_name in self.sensitive_tools:
@@ -488,10 +484,42 @@ class MCPGateway:
                 return False, "Human approval denied", status, "approval_denied"
             if status == ApprovalStatus.PENDING:
                 return False, "Awaiting human approval", status, "approval_pending"
-            # APPROVED — fall through
+            # APPROVED — consume budget and return success
+            if not self._consume_budget(agent_id):
+                return (
+                    False,
+                    f"Agent '{agent_id}' exceeded call budget ({self.policy.max_tool_calls})",
+                    None,
+                    "rate_limit",
+                )
             return True, "Approved by human reviewer", status, "approval_granted"
 
+        # No approval required — consume budget and return success
+        if not self._consume_budget(agent_id):
+            return (
+                False,
+                f"Agent '{agent_id}' exceeded call budget ({self.policy.max_tool_calls})",
+                None,
+                "rate_limit",
+            )
         return True, "Allowed by policy", None, "allowed"
+
+    def _consume_budget(self, agent_id: str) -> bool:
+        """Atomically reserve one call slot from the agent's rate-limit budget.
+
+        Returns False if the bucket is at or above ``max_tool_calls`` — callers
+        should map this to a rate-limit failure rather than letting the call
+        proceed. Reserving the slot atomically (rather than checking earlier
+        and incrementing here) prevents two concurrent callers from racing
+        the read-modify-write of the bucket.
+        """
+        with self._rate_limit_lock:
+            count = int(self._rate_limit_store.get_bucket(agent_id) or 0)
+            if count >= self.policy.max_tool_calls:
+                return False
+            self._tracked_agents.add(agent_id)
+            self._rate_limit_store.set_bucket(agent_id, count + 1)
+            return True
 
     # ── Server wrapping ──────────────────────────────────────────────────
 

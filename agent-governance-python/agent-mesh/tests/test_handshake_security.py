@@ -456,6 +456,85 @@ class TestCapabilityInflation:
         assert set(result.capabilities) == {"read:data", "write:reports"}
 
 
+class TestUntrustedPeerStructuredFailure:
+    """is_trusted=False returns a structured failure, not a raised exception."""
+
+    @pytest.mark.asyncio
+    async def test_untrusted_peer_returns_structured_failure(self):
+        """Regression: previously _verify_response raised HandshakeError for
+        an untrusted peer, which the broad ``except Exception`` in
+        _do_initiate flattened into a generic ``Handshake error: ...``
+        result. Untrusted peers should produce the same ``{"valid":
+        False, "reason": ...}`` shape as every other failure path so
+        callers can distinguish failure modes without parsing exception
+        message strings.
+        """
+        agent_a = _make_identity("verifier")
+        agent_b = _make_identity("untrusted-peer")
+        registry = _make_registry(agent_a, agent_b)
+
+        hs = TrustHandshake(
+            agent_did=str(agent_a.did), identity=agent_a, registry=registry,
+        )
+
+        # Force is_trusted to return False to exercise the not-trusted branch
+        # without depending on attestation/revocation plumbing.
+        original_is_trusted = registry.is_trusted
+
+        def _untrusted_for_b(did: str) -> bool:
+            if did == str(agent_b.did):
+                return False
+            return original_is_trusted(did)
+
+        registry.is_trusted = _untrusted_for_b  # type: ignore[method-assign]
+
+        challenge = HandshakeChallenge.generate()
+        peer_hs = TrustHandshake(
+            agent_did=str(agent_b.did), identity=agent_b, registry=registry,
+        )
+        response = await peer_hs.respond(
+            challenge=challenge,
+            my_capabilities=["read:data"],
+            my_trust_score=500,
+            identity=agent_b,
+        )
+
+        verification = await hs._verify_response(response, challenge, 0, None)
+
+        assert isinstance(verification, dict)
+        assert verification["valid"] is False
+        assert "not trusted" in verification["reason"].lower()
+
+    @pytest.mark.asyncio
+    async def test_untrusted_peer_in_initiate_returns_structured_result(self):
+        """The full initiate() flow must surface the not-trusted reason in
+        HandshakeResult, not a generic 'Handshake error: ...' wrapper.
+        """
+        agent_a = _make_identity("verifier")
+        agent_b = _make_identity("untrusted-peer")
+        registry = _make_registry(agent_a, agent_b)
+
+        original_is_trusted = registry.is_trusted
+
+        def _untrusted_for_b(did: str) -> bool:
+            if did == str(agent_b.did):
+                return False
+            return original_is_trusted(did)
+
+        registry.is_trusted = _untrusted_for_b  # type: ignore[method-assign]
+
+        hs = TrustHandshake(
+            agent_did=str(agent_a.did), identity=agent_a, registry=registry,
+        )
+        result = await hs.initiate(peer_did=str(agent_b.did), required_trust_score=0)
+        assert result.verified is False
+        # Must NOT be wrapped in the generic "Handshake error:" prefix that the
+        # broad except Exception used to produce.
+        reason = result.rejection_reason or ""
+        assert "Handshake error" not in reason
+        assert "not trusted" in reason.lower()
+
+
 class TestDIDBindingEnforcement:
     """Response DID must match the expected peer DID."""
 

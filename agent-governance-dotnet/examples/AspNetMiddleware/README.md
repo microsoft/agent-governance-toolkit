@@ -13,10 +13,19 @@ status code (`403` for policy denials, `429` for rate limits).
 
 - Registering the kernel as a singleton in `IServiceCollection`
 - A reusable `GovernanceCheckMiddleware` that:
-  - resolves an agent identity (authenticated user → `X-Agent-Id` header → anonymous DID)
+  - reads the agent identity from `context.User?.Identity?.Name` (populated by your
+    ASP.NET Core authentication middleware — JWT bearer, cookies, mTLS, OIDC, etc.),
+    falling back to the anonymous DID when no authenticated user is present
   - normalizes the route template (strips constraints like `{id:int}` → `{id}`)
   - calls `kernel.EvaluateToolCall(...)` and translates the decision to HTTP
   - **fails closed** if evaluation throws
+
+> **Identity boundary.** Authentication is *not* the governance middleware's job;
+> wire `AddAuthentication(...)` and the appropriate scheme upstream so
+> `context.User` carries a verified identity by the time governance runs.
+> An earlier revision of this example accepted a caller-supplied `X-Agent-Id`
+> header as a fallback — that path was an identity-spoof vector (any caller
+> could become any DID for governance purposes) and has been removed.
 - An opt-out marker (`SkipGovernanceAttribute`) for endpoints like `/healthz`
 - Two controllers (`ItemsController`, `AdminController`) and a YAML policy
   exercising `allow`, `deny`, `rate_limit`, and `require_approval` actions
@@ -96,14 +105,22 @@ Example denial body:
 
 ## Identifying the agent
 
-The middleware resolves the calling agent in this order:
+The middleware resolves the calling agent from `HttpContext.User.Identity.Name`,
+populated by your ASP.NET Core authentication middleware (JWT bearer, cookies,
+mTLS, OIDC, etc.). Wire `AddAuthentication(...)` and the appropriate scheme
+upstream of `GovernanceCheckMiddleware` so `context.User` carries a verified
+identity by the time governance runs. Unauthenticated requests fall back to
+the anonymous DID `did:agentmesh:http-anonymous`, which policy rules can
+match on with blanket allow/deny.
 
-1. `HttpContext.User.Identity.Name` (when authentication is configured)
-2. `X-Agent-Id` request header
-3. Falls back to `did:agentmesh:http-anonymous`
-
-For production, replace step 2 with a verified token (JWT / mTLS / DID auth)
-and rely solely on `User.Identity`.
+Authentication is intentionally not the governance middleware's job. An
+earlier revision accepted a caller-supplied `X-Agent-Id` header as a
+fallback — that path was an identity-spoof vector (any caller could become
+any DID for governance purposes) and has been removed. If you need a
+header-based identity for dev or testing against a deployment that hasn't
+wired up authentication yet, do it in a *separate* middleware that runs
+BEFORE the auth pipeline and that you only register in non-production
+environments.
 
 ## Try it yourself
 

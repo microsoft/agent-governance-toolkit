@@ -4,16 +4,34 @@
 Plugin Installer
 
 Download, verify, install, and uninstall AgentMesh plugins with dependency
-resolution and basic plugin sandboxing (restricted imports).
+resolution and install-time restricted-import scanning.
+
+Security contract
+-----------------
+* **Install time** — :meth:`PluginInstaller.install` calls
+  :meth:`PluginInstaller.scan_source_files` on every ``*.py`` file that
+  lands in the plugin directory and raises :class:`~agent_marketplace.manifest.MarketplaceError`
+  if any file imports a module from :data:`RESTRICTED_MODULES`.
+* **Runtime** — full subprocess isolation with import blocking is provided
+  by ``agentmesh.marketplace.sandbox.PluginSandbox``.
+
+:func:`check_sandbox` is a **policy predicate** — it returns ``True``/``False``
+for a single module name but does *not* block any import by itself.
 """
 
 from __future__ import annotations
 
+import ast
 import logging
+import os
 import shutil
+import tempfile
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping, Optional
+
+import yaml
+from packaging.requirements import InvalidRequirement, Requirement
 
 from agent_marketplace.manifest import (
     MANIFEST_FILENAME,
@@ -124,11 +142,21 @@ class PluginInstaller:
         dest = self._plugins_dir / name
         dest.mkdir(parents=True, exist_ok=True)
         manifest_file = dest / MANIFEST_FILENAME
-        import yaml
 
         data = manifest.model_dump(mode="json")
-        with open(manifest_file, "w") as f:
-            yaml.dump(data, f, default_flow_style=False, sort_keys=True)
+        _atomic_write_yaml(manifest_file, data)
+
+        # Scan any bundled Python source files for restricted imports.
+        violations = self.scan_source_files(dest)
+        if violations:
+            try:
+                shutil.rmtree(dest)
+            except OSError:
+                pass
+            raise MarketplaceError(
+                f"Plugin {name}@{manifest.version} imports restricted modules: "
+                + "; ".join(violations)
+            )
 
         logger.info("Installed plugin %s@%s to %s", name, manifest.version, dest)
         return dest
@@ -148,23 +176,62 @@ class PluginInstaller:
         shutil.rmtree(dest)
         logger.info("Uninstalled plugin %s", name)
 
-    def list_installed(self) -> list[PluginManifest]:
+    def list_installed(self, *, verify: bool = True) -> list[PluginManifest]:
         """Return manifests for all installed plugins.
 
+        On-disk manifests are re-verified against ``self._trusted_keys`` so a
+        tampered or unsigned file written after the original install is not
+        silently surfaced as an installed plugin.
+
+        Args:
+            verify: When ``True`` (default), each manifest must carry a valid
+                Ed25519 signature from a trusted author; otherwise it is
+                skipped with a warning. Pass ``False`` to mirror an
+                ``install(verify=False)`` workflow.
+
         Returns:
-            List of installed plugin manifests.
+            List of installed plugin manifests that passed verification.
         """
         results: list[PluginManifest] = []
         if not self._plugins_dir.exists():
             return results
         for child in sorted(self._plugins_dir.iterdir()):
             manifest_path = child / MANIFEST_FILENAME
-            if manifest_path.exists():
-                try:
-                    results.append(load_manifest(manifest_path))
-                except MarketplaceError:
-                    logger.warning("Skipping invalid plugin at %s", child)
+            if not manifest_path.exists():
+                continue
+            try:
+                manifest = load_manifest(manifest_path)
+            except MarketplaceError:
+                logger.warning("Skipping invalid plugin at %s", child)
+                continue
+            if verify and not self._verify_on_disk(manifest, child):
+                continue
+            results.append(manifest)
         return results
+
+    def _verify_on_disk(self, manifest: PluginManifest, location: Path) -> bool:
+        """Re-verify an on-disk manifest's signature against trusted keys."""
+        if not manifest.signature:
+            logger.warning(
+                "Skipping plugin %s at %s: no signature on disk",
+                manifest.name, location,
+            )
+            return False
+        if manifest.author not in self._trusted_keys:
+            logger.warning(
+                "Skipping plugin %s at %s: untrusted author %r",
+                manifest.name, location, manifest.author,
+            )
+            return False
+        try:
+            verify_signature(manifest, self._trusted_keys[manifest.author])
+        except MarketplaceError as exc:
+            logger.warning(
+                "Skipping plugin %s at %s: signature verification failed (%s)",
+                manifest.name, location, exc,
+            )
+            return False
+        return True
 
     # ------------------------------------------------------------------
     # Dependency resolution
@@ -204,27 +271,121 @@ class PluginInstaller:
 
     @staticmethod
     def check_sandbox(module_name: str) -> bool:
-        """Check whether a module import is allowed under sandboxing rules.
+        """Return whether *module_name* is permitted under the sandbox policy.
+
+        This is a **policy predicate** — it answers "is this module on the
+        restricted list?" but does *not* block any import by itself.
+        Install-time enforcement is performed by :meth:`scan_source_files`,
+        which :meth:`install` calls automatically.  Full runtime enforcement
+        (including dynamic imports) requires
+        ``agentmesh.marketplace.sandbox.PluginSandbox``.
 
         Args:
-            module_name: Fully-qualified module name.
+            module_name: Fully-qualified module name (e.g. ``"os.path"``).
 
         Returns:
-            ``True`` if the import is allowed, ``False`` otherwise.
+            ``True`` if the module is **allowed**, ``False`` if it is
+            **restricted**.
         """
         top_level = module_name.split(".")[0]
         return top_level not in RESTRICTED_MODULES
 
+    @staticmethod
+    def scan_source_files(plugin_dir: Path) -> list[str]:
+        """Scan Python source files in *plugin_dir* for restricted imports.
+
+        Parses every ``*.py`` file under *plugin_dir* with :mod:`ast` and
+        reports any ``import X`` or ``from X import ...`` statements that
+        reference a top-level module in :data:`RESTRICTED_MODULES`.
+
+        .. note::
+
+            Dynamic import calls such as ``__import__("subprocess")`` or
+            ``importlib.import_module("os")`` are **not** detected by this
+            scan.  For full runtime enforcement use
+            ``agentmesh.marketplace.sandbox.PluginSandbox``.
+
+        Args:
+            plugin_dir: Directory containing the installed plugin files.
+
+        Returns:
+            List of human-readable violation strings (one per offending
+            import statement).  An empty list means no restricted imports
+            were found.
+        """
+        violations: list[str] = []
+        for py_file in sorted(plugin_dir.rglob("*.py")):
+            try:
+                source = py_file.read_text(encoding="utf-8")
+            except OSError as exc:
+                logger.warning("Could not read %s for sandbox scan: %s", py_file, exc)
+                continue
+            try:
+                tree = ast.parse(source, filename=str(py_file))
+            except SyntaxError as exc:
+                logger.warning("Could not parse %s for sandbox scan: %s", py_file, exc)
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        top = alias.name.split(".")[0]
+                        if top in RESTRICTED_MODULES:
+                            violations.append(
+                                f"{py_file}: imports '{alias.name}'"
+                            )
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module:
+                        top = node.module.split(".")[0]
+                        if top in RESTRICTED_MODULES:
+                            violations.append(
+                                f"{py_file}: imports from '{node.module}'"
+                            )
+        return violations
+
+
+def _atomic_write_yaml(path: Path, data: Any) -> None:
+    """Write YAML to ``path`` atomically via tempfile + ``os.replace``.
+
+    A torn write or crash leaves either the previous file intact or no file,
+    never a half-written manifest visible to readers.
+    """
+    parent = path.parent
+    fd, tmp_path = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=str(parent)
+    )
+    try:
+        with os.fdopen(fd, "w") as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=True)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
 
 def _parse_dependency(dep_spec: str) -> tuple[str, Optional[str]]:
-    """Parse a dependency specifier like ``plugin-name>=1.0.0``.
+    """Parse a PEP 508 dependency specifier like ``plugin-name>=1.0.0``.
 
-    Returns:
-        Tuple of (name, version_or_none).
+    Returns a ``(name, version_or_none)`` tuple. ``version`` is the pinned
+    string from an ``==X`` specifier when one is present; otherwise ``None``
+    so the registry resolves the latest matching version. Compound
+    specifiers (``>=1.0,<2.0``), inequality (``!=``), and compatible-release
+    (``~=``) all return ``None`` instead of being mis-parsed as a literal
+    version string.
+
+    Raises:
+        MarketplaceError: If ``dep_spec`` is not a valid PEP 508 requirement.
     """
-    for op in (">=", "==", "<=", ">", "<"):
-        if op in dep_spec:
-            name, version = dep_spec.split(op, 1)
-            return name.strip(), version.strip()
-    return dep_spec.strip(), None
+    try:
+        req = Requirement(dep_spec)
+    except InvalidRequirement as exc:
+        raise MarketplaceError(f"Invalid dependency specifier {dep_spec!r}: {exc}") from exc
+    for spec in req.specifier:
+        if spec.operator == "==":
+            return req.name, spec.version
+    return req.name, None
 

@@ -22,6 +22,7 @@ import asyncio
 import base64
 import logging
 import os
+import re
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -103,11 +104,19 @@ async def _rate_limit_wait(resp: Any) -> None:
 
 
 async def _request_with_backoff(client: Any, method: str, url: str, **kwargs: Any) -> Any:
-    """Make an HTTP request with exponential backoff on rate limit errors."""
+    """Make an HTTP request with exponential backoff on rate limit errors.
+
+    Honors `method` as the HTTP verb name (e.g. "get", "post"). The
+    previous implementation had two dead-code lines that pre-computed
+    a bound method handle then immediately re-issued a hardcoded
+    client.get() — `post` and any other verb silently fell back to
+    GET. Dispatch via getattr matches the documented contract.
+    """
     delay = _BACKOFF_BASE
+    resp = None
     for attempt in range(4):
-        resp = getattr(client, method) if isinstance(method, str) else method
-        resp = await client.get(url, **kwargs) if method == "get" else await client.get(url, **kwargs)
+        verb = getattr(client, method)
+        resp = await verb(url, **kwargs)
 
         if resp.status_code == 403 or resp.status_code == 429:
             retry_after = resp.headers.get("retry-after")
@@ -134,7 +143,7 @@ async def _request_with_backoff(client: Any, method: str, url: str, **kwargs: An
         await _rate_limit_wait(resp)
         return resp
 
-    return resp  # type: ignore[possibly-undefined]
+    return resp
 
 
 @registry.register
@@ -290,8 +299,18 @@ class GitHubScanner(BaseScanner):
                 content = base64.b64decode(resp.json().get("content", "")).decode(
                     "utf-8", errors="replace"
                 )
+                lowered = content.lower()
                 for dep in AGENT_DEPENDENCIES:
-                    if dep["pattern"] in content.lower():
+                    pattern = dep["pattern"]
+                    # Use a word-boundary regex so `"mcp"` doesn't
+                    # match `mcpython`, `"autogen"` doesn't match
+                    # `cautogen-fork`, etc. Substring matching of
+                    # short package names against arbitrary file
+                    # content produces false positives at scale; the
+                    # \b anchors prevent name-fragment collisions
+                    # without committing to a full manifest parser
+                    # (which would be the structurally-correct fix).
+                    if re.search(rf"\b{re.escape(pattern)}\b", lowered):
                         merge_keys = {"repo": repo, "dep": dep["pattern"]}
                         fingerprint = DiscoveredAgent.compute_fingerprint(merge_keys)
 

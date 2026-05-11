@@ -375,6 +375,63 @@ class TestHumanApproval:
         gw.intercept_tool_call("a1", "deploy", {})
         assert gw.audit_log[0].approval_status == ApprovalStatus.APPROVED
 
+    def test_denied_approval_does_not_consume_budget(self):
+        def deny(*_args):
+            return ApprovalStatus.DENIED
+
+        gw = MCPGateway(
+            _make_policy(require_human_approval=True, max_tool_calls=2),
+            approval_callback=deny,
+            enable_builtin_sanitization=False,
+        )
+        for _ in range(5):
+            allowed, _ = gw.intercept_tool_call("a1", "t", {})
+            assert allowed is False
+        assert gw.get_agent_call_count("a1") == 0
+
+    def test_pending_approval_does_not_consume_budget(self):
+        gw = MCPGateway(
+            _make_policy(require_human_approval=True, max_tool_calls=2),
+            enable_builtin_sanitization=False,
+        )
+        for _ in range(5):
+            allowed, reason = gw.intercept_tool_call("a1", "t", {})
+            assert allowed is False
+            assert "Awaiting human approval" in reason
+        assert gw.get_agent_call_count("a1") == 0
+
+    def test_approval_callback_error_does_not_consume_budget(self):
+        def boom(*_args):
+            raise RuntimeError("approval service unreachable")
+
+        gw = MCPGateway(
+            _make_policy(require_human_approval=True, max_tool_calls=2),
+            approval_callback=boom,
+            enable_builtin_sanitization=False,
+        )
+        for _ in range(5):
+            allowed, _ = gw.intercept_tool_call("a1", "t", {})
+            assert allowed is False
+        assert gw.get_agent_call_count("a1") == 0
+
+    def test_approved_call_consumes_budget(self):
+        def approve(*_args):
+            return ApprovalStatus.APPROVED
+
+        gw = MCPGateway(
+            _make_policy(require_human_approval=True, max_tool_calls=2),
+            approval_callback=approve,
+            enable_builtin_sanitization=False,
+        )
+        a1, _ = gw.intercept_tool_call("a1", "t", {})
+        a2, _ = gw.intercept_tool_call("a1", "t", {})
+        a3, reason = gw.intercept_tool_call("a1", "t", {})
+        assert a1 is True
+        assert a2 is True
+        assert a3 is False
+        assert "exceeded call budget" in reason
+        assert gw.get_agent_call_count("a1") == 2
+
 
 # ── wrap_mcp_server ─────────────────────────────────────────────────────────
 

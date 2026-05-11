@@ -13,8 +13,9 @@ Detects supply chain poisoning attempts including:
 from __future__ import annotations
 
 import json
+import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -63,6 +64,30 @@ class SupplyChainConfig:
     allow_ranges: bool = False
     known_packages: Optional[set[str]] = None
     typosquat_threshold: float = 0.85
+    # Directory names skipped during recursive scan_directory walks.
+    # Vendored dependencies under node_modules/.venv/etc. are not the
+    # repository's own supply chain — flagging them would generate
+    # noise proportional to dependency-tree size and could leak
+    # version data the operator never committed.
+    scan_exclude_dirs: frozenset[str] = field(
+        default_factory=lambda: frozenset({
+            "node_modules",
+            ".venv",
+            "venv",
+            ".tox",
+            ".nox",
+            "dist",
+            "build",
+            "__pycache__",
+            ".git",
+            ".hg",
+            ".svn",
+            "target",  # Cargo build output
+            ".pytest_cache",
+            ".mypy_cache",
+            ".ruff_cache",
+        })
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +97,82 @@ class SupplyChainConfig:
 _RANGE_RE = re.compile(r"[\^~]")
 _PEP508_PINNED = re.compile(r"==\s*\S+")
 _LOOSE_CONSTRAINT = re.compile(r"(>=|<=|~=|!=|>|<)")
+# Strict MAJOR.MINOR.PATCH (with optional prerelease/build) used by
+# both the Poetry inline-table check and the npm version classifier.
+_EXACT_SEMVER = re.compile(
+    r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
+)
+
+# npm version specifiers that bypass the registry trust boundary entirely
+# (git URLs, local files, tarballs over HTTP, npm aliases pointing at
+# arbitrary registered packages). None of these constitute a pinned
+# semver and cannot be reproduced from an SBOM alone.
+_NPM_PROTOCOL_PREFIXES = (
+    "git+",
+    "git://",
+    "git@",
+    "github:",
+    "gitlab:",
+    "bitbucket:",
+    "gist:",
+    "file:",
+    "link:",
+    "http://",
+    "https://",
+    "npm:",
+    "workspace:",
+)
+
+# Wildcard / dist-tag specifiers that resolve dynamically at install time.
+_NPM_WILDCARD_SPECIFIERS = {"*", "latest", "next", "x", "X", ""}
+
+# Strict semver match: MAJOR.MINOR.PATCH with optional prerelease/build.
+_NPM_EXACT_SEMVER = re.compile(
+    r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
+)
+
+
+def _classify_npm_version(version: str) -> tuple[str, str] | None:
+    """Return (rule, message) when ``version`` is non-pinned, else None.
+
+    Distinguishes three failure modes so operators can triage:
+      * ``non-semver-specifier`` — git/file/http/npm-alias prefixes that
+        bypass the registry's published-artifact trust boundary entirely
+      * ``wildcard-specifier``  — ``*`` / ``latest`` / ``next`` / ``x``
+        which resolve to a different artifact every install
+      * ``unpinned-range``      — ``^`` / ``~`` / ``>=`` / etc.
+    """
+    raw = version.strip()
+    lower = raw.lower()
+
+    for prefix in _NPM_PROTOCOL_PREFIXES:
+        if lower.startswith(prefix):
+            return (
+                "non-semver-specifier",
+                f"uses a non-registry source ('{raw}'); pin to an exact "
+                "semver published on the configured registry instead.",
+            )
+
+    if raw in _NPM_WILDCARD_SPECIFIERS:
+        return (
+            "wildcard-specifier",
+            f"resolves dynamically ('{raw}'); pin to an exact semver.",
+        )
+
+    if _RANGE_RE.search(raw) or _LOOSE_CONSTRAINT.search(raw):
+        return (
+            "unpinned-range",
+            f"uses a range specifier ('{raw}'). Pin to an exact version.",
+        )
+
+    if not _NPM_EXACT_SEMVER.match(raw):
+        return (
+            "non-semver-specifier",
+            f"is not a strict MAJOR.MINOR.PATCH semver ('{raw}'); "
+            "pin to an exact published version.",
+        )
+
+    return None
 
 
 def _similarity(a: str, b: str) -> float:
@@ -149,24 +250,61 @@ class SupplyChainGuard:
     # ------------------------------------------------------------------
 
     def check_package_json(self, path: str) -> list[SupplyChainFinding]:
-        """Check a package.json for unpinned versions."""
+        """Check a package.json for unpinned versions.
+
+        Catches three failure modes:
+          * registry-bypassing protocol specifiers
+            (``git+https://…``, ``file:…``, ``http://…``, ``npm:…@*``)
+          * wildcard / dist-tag specifiers (``*``, ``latest``, ``next``)
+          * standard unpinned ranges (``^1.0.0``, ``~1.2``, ``>=1``)
+
+        ``allow_ranges`` only suppresses the third category; protocol
+        and wildcard specifiers are flagged regardless because they
+        sidestep the registry trust boundary entirely.
+        """
         findings: list[SupplyChainFinding] = []
         data = json.loads(Path(path).read_text(encoding="utf-8"))
 
         for section in ("dependencies", "devDependencies"):
             deps = data.get(section, {})
             for name, version in deps.items():
-                if not self.config.allow_ranges and _RANGE_RE.search(version):
+                if not isinstance(version, str):
+                    # package.json schema allows objects in some niche
+                    # cases (e.g., bundled deps), but a non-string here
+                    # is unusual enough to flag.
                     findings.append(SupplyChainFinding(
                         package=name,
-                        version=version,
-                        severity="medium",
-                        rule="unpinned-range",
+                        version=str(version),
+                        severity="high",
+                        rule="non-semver-specifier",
                         message=(
-                            f"Package '{name}' uses a range specifier "
-                            f"('{version}'). Pin to an exact version."
+                            f"Package '{name}' has a non-string version "
+                            f"({type(version).__name__}); pin to an exact "
+                            "semver string."
                         ),
                     ))
+                else:
+                    classification = _classify_npm_version(version)
+                    if classification is not None:
+                        rule, message = classification
+                        # ``allow_ranges`` only relaxes the unpinned-range
+                        # rule, never the protocol/wildcard rules.
+                        if rule == "unpinned-range" and self.config.allow_ranges:
+                            classification = None
+                    if classification is not None:
+                        rule, message = classification
+                        severity = (
+                            "high"
+                            if rule in ("non-semver-specifier", "wildcard-specifier")
+                            else "medium"
+                        )
+                        findings.append(SupplyChainFinding(
+                            package=name,
+                            version=version,
+                            severity=severity,
+                            rule=rule,
+                            message=f"Package '{name}' {message}",
+                        ))
 
                 typo = self.check_typosquatting(name, ecosystem="npm")
                 if typo:
@@ -175,83 +313,241 @@ class SupplyChainGuard:
         return findings
 
     # ------------------------------------------------------------------
-    # pyproject.toml (simple parser – stdlib only)
+    # pyproject.toml (tomllib-based, stdlib only)
     # ------------------------------------------------------------------
 
     def check_pyproject(self, path: str) -> list[SupplyChainFinding]:
-        """Check pyproject.toml for loose version constraints."""
+        """Check pyproject.toml for loose version constraints.
+
+        Uses ``tomllib`` (Python 3.11+) so the following layouts are all
+        covered, including ones the prior string-match-based parser
+        silently skipped:
+
+          * ``[project] dependencies = [...]``                (PEP 621)
+          * ``[project.optional-dependencies]``               (PEP 621)
+          * ``[tool.poetry.dependencies]``                    (Poetry)
+          * ``[tool.poetry.dev-dependencies]``                (Poetry, legacy)
+          * ``[tool.poetry.group.<name>.dependencies]``       (Poetry, modern)
+
+        Multiline list entries, comments, environment markers, and
+        Poetry table-form deps (``foo = {git = "...", rev = "..."}``)
+        are handled correctly via the TOML parser instead of being
+        misread as regular version strings.
+        """
+        try:
+            import tomllib
+        except ImportError:  # Python < 3.11 fallback
+            import tomli as tomllib  # type: ignore[no-redef]
+
         findings: list[SupplyChainFinding] = []
-        text = Path(path).read_text(encoding="utf-8")
+        try:
+            with open(path, "rb") as fh:
+                data = tomllib.load(fh)
+        except (OSError, tomllib.TOMLDecodeError):
+            return findings
 
-        in_deps = False
-        for line in text.splitlines():
-            stripped = line.strip()
+        # PEP 621: [project] dependencies = ["pep508-string", ...]
+        project = data.get("project", {})
+        for dep_str in project.get("dependencies", []) or []:
+            self._emit_pep508_finding(findings, dep_str)
 
-            if stripped == "dependencies = [":
-                in_deps = True
-                continue
-            if in_deps and stripped == "]":
-                in_deps = False
-                continue
+        # PEP 621: [project.optional-dependencies] with grouped lists
+        optional = project.get("optional-dependencies", {}) or {}
+        for group_deps in optional.values():
+            for dep_str in group_deps or []:
+                self._emit_pep508_finding(findings, dep_str)
 
-            if in_deps:
-                match = re.match(r'"([^"]+)"', stripped.rstrip(","))
-                if match:
-                    dep_str = match.group(1)
-                    parsed = _parse_requirements_line(dep_str)
-                    if parsed:
-                        name, version_spec = parsed
-                        if not _PEP508_PINNED.search(version_spec):
-                            findings.append(SupplyChainFinding(
-                                package=name,
-                                version=version_spec or "unspecified",
-                                severity="medium",
-                                rule="loose-constraint",
-                                message=(
-                                    f"Package '{name}' in pyproject.toml uses "
-                                    f"a loose version constraint."
-                                ),
-                            ))
+        # Poetry: [tool.poetry.dependencies] / [tool.poetry.dev-dependencies]
+        poetry = data.get("tool", {}).get("poetry", {}) or {}
+        self._emit_poetry_findings(findings, poetry.get("dependencies", {}) or {})
+        self._emit_poetry_findings(findings, poetry.get("dev-dependencies", {}) or {})
+
+        # Poetry modern: [tool.poetry.group.<name>.dependencies]
+        for group in (poetry.get("group", {}) or {}).values():
+            self._emit_poetry_findings(findings, group.get("dependencies", {}) or {})
 
         return findings
 
-    # ------------------------------------------------------------------
-    # Cargo.toml (simple parser – stdlib only)
-    # ------------------------------------------------------------------
+    def _emit_pep508_finding(
+        self, findings: list[SupplyChainFinding], dep_str: str,
+    ) -> None:
+        if not isinstance(dep_str, str):
+            return
+        parsed = _parse_requirements_line(dep_str)
+        if not parsed:
+            return
+        name, version_spec = parsed
+        if _PEP508_PINNED.search(version_spec):
+            return
+        findings.append(SupplyChainFinding(
+            package=name,
+            version=version_spec or "unspecified",
+            severity="medium",
+            rule="loose-constraint",
+            message=(
+                f"Package '{name}' in pyproject.toml uses a loose "
+                "version constraint."
+            ),
+        ))
 
-    def check_cargo_toml(self, path: str) -> list[SupplyChainFinding]:
-        """Check Cargo.toml for unpinned versions."""
-        findings: list[SupplyChainFinding] = []
-        text = Path(path).read_text(encoding="utf-8")
-
-        in_deps = False
-        for line in text.splitlines():
-            stripped = line.strip()
-
-            if re.match(r"\[.*dependencies.*\]", stripped):
-                in_deps = True
+    def _emit_poetry_findings(
+        self, findings: list[SupplyChainFinding], deps: dict,
+    ) -> None:
+        for name, spec in deps.items():
+            if name == "python":
+                # The Poetry dependencies table embeds the Python version
+                # constraint under the "python" key — that's not a
+                # supply-chain dependency and shouldn't surface here.
                 continue
-            if stripped.startswith("[") and "dependencies" not in stripped:
-                in_deps = False
-                continue
-
-            if in_deps:
-                kv = re.match(r'^(\S+)\s*=\s*"([^"]+)"', stripped)
-                if kv:
-                    name, version = kv.group(1), kv.group(2)
-                    if not re.match(r"^\d+\.\d+\.\d+$", version):
+            if isinstance(spec, str):
+                if not _EXACT_SEMVER.match(spec.strip()):
+                    findings.append(SupplyChainFinding(
+                        package=name,
+                        version=spec,
+                        severity="medium",
+                        rule="loose-constraint",
+                        message=(
+                            f"Package '{name}' in pyproject.toml uses a "
+                            f"loose version constraint ('{spec}')."
+                        ),
+                    ))
+            elif isinstance(spec, dict):
+                # Poetry table-form: foo = {version="^1.0"} or
+                # foo = {git="...", rev="..."} or foo = {path="..."}.
+                # The git/path/url forms bypass the package index trust
+                # boundary entirely.
+                for protocol_key in ("git", "url", "path"):
+                    if protocol_key in spec:
                         findings.append(SupplyChainFinding(
                             package=name,
-                            version=version,
-                            severity="medium",
-                            rule="unpinned-cargo",
+                            version=str(spec.get(protocol_key, "")),
+                            severity="high",
+                            rule="non-semver-specifier",
                             message=(
-                                f"Crate '{name}' version '{version}' is not "
-                                f"pinned to an exact semver."
+                                f"Package '{name}' in pyproject.toml is "
+                                f"sourced via '{protocol_key}=' "
+                                f"({spec.get(protocol_key)!r}); pin to an "
+                                "exact published version on the configured "
+                                "index instead."
+                            ),
+                        ))
+                        break
+                else:
+                    inline_version = spec.get("version")
+                    if isinstance(inline_version, str) and not _EXACT_SEMVER.match(
+                        inline_version.strip()
+                    ):
+                        findings.append(SupplyChainFinding(
+                            package=name,
+                            version=inline_version,
+                            severity="medium",
+                            rule="loose-constraint",
+                            message=(
+                                f"Package '{name}' in pyproject.toml uses a "
+                                f"loose version constraint "
+                                f"('{inline_version}')."
                             ),
                         ))
 
+    # ------------------------------------------------------------------
+    # Cargo.toml (tomllib-based, stdlib only)
+    # ------------------------------------------------------------------
+
+    def check_cargo_toml(self, path: str) -> list[SupplyChainFinding]:
+        """Check Cargo.toml for unpinned versions.
+
+        Uses ``tomllib`` (Python 3.11+) so the following layouts are all
+        covered, including ones the prior regex-based parser silently
+        skipped:
+
+          * ``[dependencies]``                   (standard)
+          * ``[dev-dependencies]``               (dev)
+          * ``[build-dependencies]``             (build scripts)
+          * ``[target.'cfg(...)'.dependencies]``  (platform-specific)
+          * Table-form deps: ``foo = { git = "...", rev = "..." }``
+          * Table-form deps: ``foo = { path = "../local" }``
+          * Workspace-inherited: ``foo = { workspace = true }``
+        """
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib  # type: ignore[no-redef]
+
+        findings: list[SupplyChainFinding] = []
+        try:
+            with open(path, "rb") as fh:
+                data = tomllib.load(fh)
+        except (OSError, tomllib.TOMLDecodeError):
+            return findings
+
+        dep_tables: list[dict] = []
+        for key in ("dependencies", "dev-dependencies", "build-dependencies"):
+            deps = data.get(key)
+            if isinstance(deps, dict):
+                dep_tables.append(deps)
+
+        # Target-specific: [target.'cfg(...)'.dependencies]
+        for target_cfg in (data.get("target") or {}).values():
+            if isinstance(target_cfg, dict):
+                for key in ("dependencies", "dev-dependencies", "build-dependencies"):
+                    deps = target_cfg.get(key)
+                    if isinstance(deps, dict):
+                        dep_tables.append(deps)
+
+        for deps in dep_tables:
+            for name, spec in deps.items():
+                self._emit_cargo_finding(findings, name, spec)
+
         return findings
+
+    def _emit_cargo_finding(
+        self, findings: list[SupplyChainFinding], name: str, spec: object,
+    ) -> None:
+        """Classify a single Cargo dependency and emit a finding if needed."""
+        if isinstance(spec, str):
+            if not _EXACT_SEMVER.match(spec.strip()):
+                findings.append(SupplyChainFinding(
+                    package=name,
+                    version=spec,
+                    severity="medium",
+                    rule="unpinned-cargo",
+                    message=(
+                        f"Crate '{name}' version '{spec}' is not "
+                        f"pinned to an exact semver."
+                    ),
+                ))
+        elif isinstance(spec, dict):
+            for protocol_key in ("git", "path"):
+                if protocol_key in spec:
+                    findings.append(SupplyChainFinding(
+                        package=name,
+                        version=str(spec.get(protocol_key, "")),
+                        severity="high",
+                        rule="non-registry-source",
+                        message=(
+                            f"Crate '{name}' is sourced via "
+                            f"'{protocol_key}=' ({spec.get(protocol_key)!r})"
+                            "; pin to an exact version published on "
+                            "crates.io instead."
+                        ),
+                    ))
+                    return
+            if spec.get("workspace") is True:
+                return
+            inline_version = spec.get("version")
+            if isinstance(inline_version, str) and not _EXACT_SEMVER.match(
+                inline_version.strip()
+            ):
+                findings.append(SupplyChainFinding(
+                    package=name,
+                    version=inline_version,
+                    severity="medium",
+                    rule="unpinned-cargo",
+                    message=(
+                        f"Crate '{name}' version '{inline_version}' is not "
+                        f"pinned to an exact semver."
+                    ),
+                ))
 
     # ------------------------------------------------------------------
     # Freshness (offline)
@@ -268,12 +564,37 @@ class SupplyChainGuard:
 
         Does NOT call external APIs — compares against a provided timestamp.
         For actual freshness checks, use ``check_freshness_live()``.
+
+        A future ``publish_time`` (clock skew, tampered registry response,
+        or a deliberately spoofed timestamp meant to dodge the
+        backdated-package defense) is reported as a separate
+        ``future-timestamp`` finding rather than silently triggering the
+        "fresh-publish" branch via a negative delta.
         """
         now = datetime.now(timezone.utc)
         if publish_time.tzinfo is None:
             publish_time = publish_time.replace(tzinfo=timezone.utc)
 
-        if now - publish_time < timedelta(days=self.config.freshness_days):
+        # A future publish_time is itself a red flag — clamp the delta to
+        # zero for the recent-publish check and emit a distinct finding so
+        # the operator can see the spoofed/tampered timestamp directly
+        # instead of having it masquerade as a normal recent publish.
+        if publish_time > now:
+            return SupplyChainFinding(
+                package=package,
+                version=version,
+                severity="high",
+                rule="future-timestamp",
+                message=(
+                    f"Package '{package}=={version}' has a publish timestamp "
+                    f"{(publish_time - now).total_seconds():.0f}s in the "
+                    "future — possible clock skew, tampered registry "
+                    "response, or backdating-defense evasion."
+                ),
+            )
+
+        delta = now - publish_time
+        if delta < timedelta(days=self.config.freshness_days):
             return SupplyChainFinding(
                 package=package,
                 version=version,
@@ -281,7 +602,7 @@ class SupplyChainGuard:
                 rule="fresh-publish",
                 message=(
                     f"Package '{package}=={version}' was published only "
-                    f"{(now - publish_time).days} day(s) ago "
+                    f"{delta.days} day(s) ago "
                     f"(threshold: {self.config.freshness_days} days)."
                 ),
             )
@@ -378,23 +699,57 @@ class SupplyChainGuard:
     # ------------------------------------------------------------------
 
     def scan_directory(self, directory: str) -> list[SupplyChainFinding]:
-        """Scan a directory for all dependency files and check each."""
+        """Scan a directory recursively for dependency manifests.
+
+        Walks ``directory`` and every subdirectory, picking up
+        ``requirements*.txt``, ``package.json``, ``pyproject.toml``, and
+        ``Cargo.toml``. Subdirectories named in
+        ``SupplyChainConfig.scan_exclude_dirs`` (``node_modules``,
+        ``.venv``, ``dist``, ``build``, ``target``, etc.) are skipped
+        so vendored dependencies and build output don't drown the
+        repository's own manifests in noise.
+        """
         findings: list[SupplyChainFinding] = []
         root = Path(directory)
+        excluded = self.config.scan_exclude_dirs
 
-        for req in root.glob("requirements*.txt"):
-            findings.extend(self.check_requirements(str(req)))
-
-        for pj in root.glob("package.json"):
-            findings.extend(self.check_package_json(str(pj)))
-
-        for pp in root.glob("pyproject.toml"):
-            findings.extend(self.check_pyproject(str(pp)))
-
-        for ct in root.glob("Cargo.toml"):
-            findings.extend(self.check_cargo_toml(str(ct)))
+        for path in self._iter_manifest_files(root, excluded):
+            name = path.name
+            if name.startswith("requirements") and name.endswith(".txt"):
+                findings.extend(self.check_requirements(str(path)))
+            elif name == "package.json":
+                findings.extend(self.check_package_json(str(path)))
+            elif name == "pyproject.toml":
+                findings.extend(self.check_pyproject(str(path)))
+            elif name == "Cargo.toml":
+                findings.extend(self.check_cargo_toml(str(path)))
 
         return findings
+
+    @staticmethod
+    def _iter_manifest_files(
+        root: Path, excluded: "frozenset[str]"
+    ) -> "list[Path]":
+        """Walk ``root`` recursively, yielding manifest files outside
+        any excluded directory.
+
+        Uses os.walk so we can prune subtrees in-place — rglob would
+        descend into node_modules and .venv before the filter could
+        reject the matches.
+        """
+        results: list[Path] = []
+        manifest_names = {"package.json", "pyproject.toml", "Cargo.toml"}
+        for dirpath, dirnames, filenames in os.walk(root):
+            # Prune excluded subdirectories so the walk doesn't descend
+            # into them — purely a noise/perf measure for monorepos.
+            dirnames[:] = [d for d in dirnames if d not in excluded]
+            for filename in filenames:
+                if (
+                    filename in manifest_names
+                    or (filename.startswith("requirements") and filename.endswith(".txt"))
+                ):
+                    results.append(Path(dirpath) / filename)
+        return results
 
     # ------------------------------------------------------------------
     # Lockfile drift

@@ -1,0 +1,5 @@
+# Hashed CI docs dependencies (Scorecard Pinned-Dependencies compliance)
+mkdocs-material==9.7.6 \
+    --hash=sha256:71b84353921b8ea1ba84fe11c50912cc512da8fe0881038fcc9a0761c0e635ba
+mkdocs-minify-plugin==0.8.0 \
+    --hash=sha256:5fba1a3f7bd9a2142c9954a6559a57e946587b21f133165ece30ea145c66aee6

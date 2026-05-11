@@ -1,6 +1,6 @@
 # ADR 0011: Additive Policy Check Contract
 
-- Status: Proposed
+- Status: proposed
 - Date: 2026-04-29
 
 ## Context

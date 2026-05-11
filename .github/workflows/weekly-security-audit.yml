@@ -52,7 +52,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install --no-cache-dir pyyaml==6.0.2
+        run: pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-yaml.txt
 
       - name: Run security skills scan
         continue-on-error: true

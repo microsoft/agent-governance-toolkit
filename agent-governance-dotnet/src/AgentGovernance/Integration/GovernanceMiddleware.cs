@@ -1,5 +1,6 @@
 // Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
+using System.Threading;
 using AgentGovernance.Audit;
 using AgentGovernance.Hypervisor;
 using AgentGovernance.Policy;
@@ -58,12 +59,25 @@ public sealed class GovernanceMiddleware
 {
     private readonly PolicyEngine _policyEngine;
     private readonly AuditEmitter _auditEmitter;
-    private Dictionary<string, PolicyRule>? _ruleLookupCache;
-    private int _cachedPolicyCount = -1;
+    // Immutable lookup snapshot. (Rules, PolicyCount) are packaged together so concurrent
+    // callers cannot observe a torn pairing of rule-table and the count it was built for.
+    // Publication is via Volatile.Write; reads use Volatile.Read.
+    private RuleLookupSnapshot? _ruleLookupSnapshot;
     private readonly RateLimiter? _rateLimiter;
     private readonly GovernanceMetrics? _metrics;
     private readonly RingEnforcer? _ringEnforcer;
     private readonly PromptInjectionDetector? _injectionDetector;
+
+    private sealed class RuleLookupSnapshot
+    {
+        public RuleLookupSnapshot(Dictionary<string, PolicyRule> rules, int policyCount)
+        {
+            Rules = rules;
+            PolicyCount = policyCount;
+        }
+        public Dictionary<string, PolicyRule> Rules { get; }
+        public int PolicyCount { get; }
+    }
 
     /// <summary>
     /// Initializes a new <see cref="GovernanceMiddleware"/> instance.
@@ -301,12 +315,20 @@ public sealed class GovernanceMiddleware
     /// Searches loaded policies for a rule by name using a cached lookup.
     /// Cache is invalidated when the policy count changes.
     /// </summary>
+    /// <remarks>
+    /// Thread-safe: the (rule-table, policy-count) pair lives in a single immutable
+    /// snapshot record published via <see cref="Volatile.Write{T}(ref T, T)"/>, so
+    /// callers either observe the previous fully-built snapshot or the new one.
+    /// Concurrent invalidations may redundantly rebuild the cache, but every caller
+    /// returns a lookup from a self-consistent snapshot.
+    /// </remarks>
     private PolicyRule? FindMatchingRule(string ruleName)
     {
         var policies = _policyEngine.ListPolicies();
         var currentCount = policies.Count;
+        var snapshot = Volatile.Read(ref _ruleLookupSnapshot);
 
-        if (_ruleLookupCache is null || _cachedPolicyCount != currentCount)
+        if (snapshot is null || snapshot.PolicyCount != currentCount)
         {
             var cache = new Dictionary<string, PolicyRule>(StringComparer.Ordinal);
             foreach (var policy in policies)
@@ -316,10 +338,10 @@ public sealed class GovernanceMiddleware
                     cache.TryAdd(rule.Name, rule);
                 }
             }
-            _ruleLookupCache = cache;
-            _cachedPolicyCount = currentCount;
+            snapshot = new RuleLookupSnapshot(cache, currentCount);
+            Volatile.Write(ref _ruleLookupSnapshot, snapshot);
         }
 
-        return _ruleLookupCache.TryGetValue(ruleName, out var cached) ? cached : null;
+        return snapshot.Rules.TryGetValue(ruleName, out var cached) ? cached : null;
     }
 }

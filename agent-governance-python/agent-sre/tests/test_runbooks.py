@@ -147,6 +147,58 @@ class TestRunbookExecutor:
         assert len(failed_step) == 1
         assert "step failed" in failed_step[0].error
 
+    def test_step_timeout_enforced(self) -> None:
+        """Regression: previously step.action was called synchronously
+        and step.timeout_seconds was ignored, so a hung action could
+        block the entire runbook indefinitely. Now the executor
+        enforces timeout_seconds via ThreadPoolExecutor and surfaces
+        a TimeoutError as a normal step failure.
+        """
+        import time as _time
+
+        def slow_action(incident: Incident) -> str:
+            _time.sleep(2.0)
+            return "should not reach here"
+
+        rb = Runbook(
+            id="rb-timeout",
+            name="Timeout Test",
+            steps=[
+                RunbookStep(
+                    name="hangs",
+                    action=slow_action,
+                    timeout_seconds=1,
+                ),
+            ],
+        )
+        executor = RunbookExecutor()
+        start = _time.monotonic()
+        execution = executor.execute(rb, _make_incident())
+        elapsed = _time.monotonic() - start
+
+        assert execution.status == ExecutionStatus.FAILED
+        failed = [r for r in execution.step_results if r.status == StepStatus.FAILED]
+        assert len(failed) == 1
+        assert "timeout" in failed[0].error.lower()
+        # Should have terminated near the timeout, not waited the full 2s.
+        assert elapsed < 1.8, f"executor did not honour timeout: elapsed={elapsed:.2f}s"
+
+    def test_step_timeout_zero_means_no_deadline(self) -> None:
+        """A timeout_seconds of 0 (or negative) means "no deadline"
+        — preserve the prior synchronous behaviour for steps that
+        explicitly opt out, since enforcing a zero deadline would
+        timeout instantly.
+        """
+        rb = Runbook(
+            id="rb-no-timeout",
+            name="No Timeout",
+            steps=[RunbookStep(name="ok", action=_ok_action, timeout_seconds=0)],
+        )
+        executor = RunbookExecutor()
+        execution = executor.execute(rb, _make_incident())
+        assert execution.status == ExecutionStatus.COMPLETED
+        assert execution.step_results[0].status == StepStatus.SUCCESS
+
     def test_rollback_on_failure(self) -> None:
         rb = Runbook(
             id="rb-rollback",
@@ -291,6 +343,81 @@ class TestRunbookRegistry:
 # ---------------------------------------------------------------------------
 # YAML loading tests
 # ---------------------------------------------------------------------------
+
+class TestYamlLoadingValidation:
+    """Regression: malformed runbook YAML must be rejected with a clear
+    error rather than silently corrupting the registry."""
+
+    def _write(self, tmp_path: Path, content: str) -> Path:
+        p = tmp_path / "rb.yaml"
+        p.write_text(content)
+        return p
+
+    def test_empty_file_returns_empty_list(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, "")
+        assert load_runbooks_from_yaml(p) == []
+
+    def test_non_mapping_top_level_rejected(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, "[1, 2, 3]\n")
+        with pytest.raises(ValueError, match="top-level YAML"):
+            load_runbooks_from_yaml(p)
+
+    def test_runbooks_must_be_list(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, "runbooks: just-a-string\n")
+        with pytest.raises(ValueError, match="'runbooks' must be a list"):
+            load_runbooks_from_yaml(p)
+
+    def test_missing_id_rejected(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, """
+runbooks:
+  - name: Anonymous
+    steps:
+      - name: do
+""")
+        with pytest.raises(ValueError, match="missing a non-empty 'id'"):
+            load_runbooks_from_yaml(p)
+
+    def test_empty_id_rejected(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, """
+runbooks:
+  - id: "   "
+    name: Whitespace
+""")
+        with pytest.raises(ValueError, match="non-empty 'id'"):
+            load_runbooks_from_yaml(p)
+
+    def test_duplicate_id_rejected(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, """
+runbooks:
+  - id: same
+    name: First
+  - id: same
+    name: Second
+""")
+        with pytest.raises(ValueError, match="duplicates id 'same'"):
+            load_runbooks_from_yaml(p)
+
+    def test_step_missing_name_rejected(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, """
+runbooks:
+  - id: rb-1
+    name: Has bad step
+    steps:
+      - action: "echo hi"
+""")
+        with pytest.raises(ValueError, match=r"step\[0\] is missing 'name'"):
+            load_runbooks_from_yaml(p)
+
+    def test_trigger_conditions_must_be_list(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, """
+runbooks:
+  - id: rb-1
+    name: Bad triggers
+    trigger_conditions: not-a-list
+""")
+        with pytest.raises(ValueError, match="trigger_conditions must be a list"):
+            load_runbooks_from_yaml(p)
+
 
 class TestYamlLoading:
     def test_load_runbooks_from_yaml(self, tmp_path: Path) -> None:

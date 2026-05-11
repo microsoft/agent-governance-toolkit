@@ -476,10 +476,10 @@ export function stripKeyPrefix(keyStr: string, expectedPrefix: string): string {
   if (keyStr.startsWith(expectedPrefix)) {
     return keyStr.slice(expectedPrefix.length);
   }
-  if (keyStr.includes(':')) {
-    const [, rest] = keyStr.split(':', 2);
+  const colonIdx = keyStr.indexOf(':');
+  if (colonIdx !== -1) {
     console.warn(`Key has unexpected prefix, expected '${expectedPrefix}'`);
-    return rest ?? keyStr;
+    return keyStr.slice(colonIdx + 1);
   }
   // No prefix at all — still valid, just not prefixed
   return keyStr;

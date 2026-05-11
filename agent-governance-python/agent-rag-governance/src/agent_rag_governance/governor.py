@@ -86,8 +86,75 @@ class GovernedRetriever:
         """LangChain v0.1 compatibility shim — delegates to :meth:`invoke`."""
         return self.invoke(query)
 
-    # Expose underlying retriever attributes transparently
+    # ── Blocked governance-bypassing methods ──────────────────────────
+    #
+    # The governance pipeline (collection ACL, rate limiting, content
+    # scanning, audit) is currently synchronous, so we cannot
+    # transparently extend it to async / batch / stream paths.
+    # Forwarding those calls to the underlying retriever (the prior
+    # behaviour, via ``__getattr__``) silently bypassed every check.
+    # Callers that need any of these surfaces must extend the wrapper
+    # explicitly with their own governance plumbing.
+
+    _BYPASSED_METHODS = (
+        "ainvoke",
+        "aget_relevant_documents",
+        "batch",
+        "abatch",
+        "stream",
+        "astream",
+    )
+
+    async def ainvoke(self, *args: Any, **kwargs: Any) -> List[Any]:
+        raise NotImplementedError(
+            "GovernedRetriever does not implement async retrieval. "
+            "The governance pipeline (collection ACL, rate limiting, "
+            "content scanning, audit) is synchronous; calling "
+            "ainvoke would silently bypass it. Use .invoke(...) or "
+            "extend GovernedRetriever with an async-aware governor."
+        )
+
+    async def aget_relevant_documents(self, *args: Any, **kwargs: Any) -> List[Any]:
+        raise NotImplementedError(
+            "GovernedRetriever does not implement async retrieval. "
+            "Use .get_relevant_documents(...) or .invoke(...)."
+        )
+
+    def batch(self, *args: Any, **kwargs: Any) -> List[Any]:
+        raise NotImplementedError(
+            "GovernedRetriever does not implement batch retrieval. "
+            "Loop over .invoke(...) per query if per-call governance "
+            "is acceptable."
+        )
+
+    async def abatch(self, *args: Any, **kwargs: Any) -> List[Any]:
+        raise NotImplementedError(
+            "GovernedRetriever does not implement async batch retrieval."
+        )
+
+    def stream(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError(
+            "GovernedRetriever does not implement streaming retrieval."
+        )
+
+    async def astream(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError(
+            "GovernedRetriever does not implement async streaming retrieval."
+        )
+
     def __getattr__(self, name: str) -> Any:
+        # Belt-and-braces: __getattr__ runs only for attributes not
+        # found on the instance. The explicit methods above shadow
+        # the bypass surfaces, but if a caller probes for one of those
+        # names via getattr() with a default they should still see the
+        # block — and any other LangChain-style governance surface we
+        # haven't enumerated should also fail loudly rather than be
+        # silently forwarded.
+        if name in type(self)._BYPASSED_METHODS:
+            raise AttributeError(
+                f"GovernedRetriever blocks {name!r} to prevent governance "
+                "bypass. Use .invoke(...) instead."
+            )
         return getattr(self._retriever, name)
 
 
@@ -144,30 +211,48 @@ class RAGGovernor:
         query: str,
         kwargs: dict[str, Any],
     ) -> List[Any]:
-        """Run the full governance pipeline for one retrieval call."""
+        """Run the full governance pipeline for one retrieval call.
 
-        # 1. Collection access control
+        Audit emission is wrapped in try/except/finally so a retrieval
+        attempt is always logged, regardless of whether it succeeded,
+        was denied by the collection/rate gates, or raised inside the
+        underlying retriever/scanner. Without this, a thrown exception
+        in the retrieve or scan steps produced no audit record, hiding
+        the access attempt from compliance reviews.
+        """
+
+        # 1. Collection access control. _check_collection emits its
+        # own "denied" audit before raising.
         self._check_collection(collection)
 
-        # 2. Rate limiting
-        self._check_rate()
+        # 2. Rate limiting. _check_rate emits its own audit before
+        # raising.
+        self._check_rate(collection=collection, query=query)
 
-        # 3. Retrieve
-        docs = self._retrieve(retriever, query, kwargs)
+        num_retrieved = 0
+        num_blocked = 0
+        decision = "allowed"
+        try:
+            # 3. Retrieve
+            docs = self._retrieve(retriever, query, kwargs)
+            num_retrieved = len(docs)
 
-        # 4. Content scanning
-        clean_docs, num_blocked = self._scan_chunks(docs)
-
-        # 5. Audit
-        self._audit(
-            collection=collection,
-            query=query,
-            num_retrieved=len(docs),
-            num_blocked=num_blocked,
-            decision="allowed",
-        )
-
-        return clean_docs
+            # 4. Content scanning
+            clean_docs, num_blocked = self._scan_chunks(docs)
+            return clean_docs
+        except Exception:
+            decision = "error"
+            raise
+        finally:
+            # 5. Audit — always fires so the attempt is logged even on
+            # retriever/scanner exceptions.
+            self._audit(
+                collection=collection,
+                query=query,
+                num_retrieved=num_retrieved,
+                num_blocked=num_blocked,
+                decision=decision,
+            )
 
     def _check_collection(self, collection: str) -> None:
         allowed, reason = self.policy.is_collection_allowed(collection)
@@ -185,14 +270,14 @@ class RAGGovernor:
                 self._audit_logger.emit(entry)
             raise CollectionDeniedError(collection, self.agent_id, reason)
 
-    def _check_rate(self) -> None:
+    def _check_rate(self, *, collection: str, query: str) -> None:
         limit = self.policy.max_retrievals_per_minute
         if not self._rate_limiter.check(self.agent_id, limit):
             if self._audit_logger:
                 entry = make_entry(
                     agent_id=self.agent_id,
-                    collection="",
-                    query="",
+                    collection=collection,
+                    query=query,
                     num_chunks_retrieved=0,
                     num_chunks_blocked=0,
                     decision="rate_limited",
@@ -205,6 +290,18 @@ class RAGGovernor:
         if hasattr(retriever, "invoke"):
             return retriever.invoke(query, **kwargs)
         if hasattr(retriever, "get_relevant_documents"):
+            # Legacy LangChain v0.1 API only accepts the query string.
+            # Silently dropping kwargs (e.g., tenant filters, search
+            # arguments) would let governance pass while the underlying
+            # retrieval ran with a wider scope than the caller intended.
+            if kwargs:
+                raise TypeError(
+                    f"Retriever {type(retriever).__name__!r} only exposes "
+                    ".get_relevant_documents(query) (LangChain v0.1 API) "
+                    "and cannot accept kwargs "
+                    f"{sorted(kwargs.keys())!r}. Upgrade the retriever to "
+                    "the .invoke(query, **kwargs) API or drop the kwargs."
+                )
             return retriever.get_relevant_documents(query)
         raise TypeError(
             f"Retriever {type(retriever).__name__!r} has no .invoke() or "

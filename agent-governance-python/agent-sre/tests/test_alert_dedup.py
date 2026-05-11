@@ -358,3 +358,76 @@ class TestDeduplicatorWithManager:
         for alert in batcher.flush():
             manager.send(alert)
         assert len(received) == 3
+
+
+class TestConsumeAtomic:
+    """Regression: ``consume`` must be a check-and-record atom, so two
+    threads racing on the same fingerprint cannot both win."""
+
+    def _make_alert(self, agent_id: str = "a1", title: str = "x"):
+        from agent_sre.alerts import Alert, AlertSeverity
+
+        return Alert(
+            severity=AlertSeverity.WARNING,
+            title=title,
+            message="test",
+            agent_id=agent_id,
+            timestamp=time.time(),
+        )
+
+    def test_consume_first_returns_true_then_false(self):
+        dedup = AlertDeduplicator(window_seconds=10)
+        alert = self._make_alert()
+        assert dedup.consume(alert) is True
+        assert dedup.consume(alert) is False
+
+    def test_consume_atomic_under_threads(self):
+        """Hammer the same fingerprint from many threads; at most one
+        consume() call may return True. The should_send/record pair
+        cannot guarantee this — it has a check-then-act gap."""
+        import threading
+
+        dedup = AlertDeduplicator(window_seconds=60)
+        alert = self._make_alert()
+
+        wins: list[bool] = []
+        wins_lock = threading.Lock()
+        start = threading.Event()
+
+        def worker() -> None:
+            start.wait()
+            ok = dedup.consume(alert)
+            with wins_lock:
+                wins.append(ok)
+
+        threads = [threading.Thread(target=worker) for _ in range(50)]
+        for t in threads:
+            t.start()
+        start.set()
+        for t in threads:
+            t.join()
+
+        # Exactly one thread can have won; the rest must see a
+        # suppressed return.
+        assert sum(1 for w in wins if w) == 1
+        assert sum(1 for w in wins if not w) == 49
+
+    def test_consume_resolved_always_passes(self):
+        from agent_sre.alerts import Alert, AlertSeverity
+
+        dedup = AlertDeduplicator(window_seconds=60)
+        # Prime with a warning so the fingerprint window is active.
+        warning = self._make_alert()
+        assert dedup.consume(warning) is True
+        assert dedup.consume(warning) is False
+
+        resolved = Alert(
+            severity=AlertSeverity.RESOLVED,
+            title=warning.title,
+            message="cleared",
+            agent_id=warning.agent_id,
+        )
+        # RESOLVED always passes through and clears the window.
+        assert dedup.consume(resolved) is True
+        # Window cleared: the next warning consume returns True again.
+        assert dedup.consume(self._make_alert()) is True

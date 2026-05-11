@@ -63,9 +63,13 @@ class RiskScorer:
             factors.append(f"Medium-risk agent type: {agent.agent_type}")
 
         # Time ungoverned — agents unseen for a long time are riskier
-        days_since_first_seen = (
-            datetime.now(timezone.utc) - agent.first_seen_at
-        ).total_seconds() / 86400
+        delta = datetime.now(timezone.utc) - agent.first_seen_at
+        # Clamp to zero: a future first_seen_at (clock skew, spoofed
+        # registration) should not produce a negative delta that skips
+        # the ungoverned-time risk thresholds.
+        days_since_first_seen = max(
+            delta.total_seconds() / 86400, 0.0
+        )
         if days_since_first_seen > 30:
             score += 10.0
             factors.append(f"Ungoverned for {int(days_since_first_seen)} days")

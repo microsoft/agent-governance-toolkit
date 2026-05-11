@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "agentmesh"
-version = "3.3.0"
+version = "3.5.0"
 dependencies = [
  "base64",
  "cedar-policy",
@@ -23,7 +23,7 @@ dependencies = [
 
 [[package]]
 name = "agentmesh-mcp"
-version = "3.3.0"
+version = "3.5.0"
 dependencies = [
  "base64",
  "hmac",
@@ -1021,9 +1021,9 @@ checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
 name = "regorus"
-version = "0.9.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "656c9768f1d2113590ebc05e2e342a9f76baa97a445f2928f24eec9ae1fb14ac"
+checksum = "63642e663bb81698ab7160735bdc831f580022194922d3f24d5c40a913ff3fab"
 dependencies = [
  "anyhow",
  "lazy_static",
@@ -1261,9 +1261,9 @@ dependencies = [
 
 [[package]]
 name = "spin"
-version = "0.9.8"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
 
 [[package]]
 name = "spki"

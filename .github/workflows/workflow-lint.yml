@@ -58,6 +58,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install pytest
-        run: pip install --no-cache-dir pytest==8.4.1
+        run: pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-test.txt
       - name: Run inline script tests
         run: pytest tests/ci/ -v

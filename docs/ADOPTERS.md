@@ -23,6 +23,7 @@ momentum and credibility. Submit a PR editing this file — see
 | Azure (internal project) | Cloud Infrastructure | AGT identity layer integration for agent mesh trust verification | Apr 2026 | [@imran-siddique](https://github.com/imran-siddique) |
 | [chamber](https://github.com/ianphil/chamber) | AI Agent Infrastructure | AGT governance workflows for agent execution policy enforcement | Apr 2026 | [@ianphil](https://github.com/ianphil) |
 | [MythologIQ Labs, LLC](https://github.com/MythologIQ-Labs-LLC) | AI Governance / Agent Security | Evaluating AGT as an isolated upstream governance dependency for [Qortara](https://qortara.com), including LangChain/LangGraph tool-dispatch governance through [`qortara-governance-langchain`](https://github.com/MythologIQ-Labs-LLC/qortara-governance). | May 2026 | [@Knapp-Kevin](https://github.com/Knapp-Kevin) |
+| [GenAI-Gurus](https://github.com/GenAI-Gurus) | AI Governance / EU AI Act Compliance | EU AI Act compliance tooling and resource curation ([awesome-eu-ai-act](https://github.com/GenAI-Gurus/awesome-eu-ai-act)), cross-referencing AGT's compliance checklist | May 2026 | [@carloshvp](https://github.com/carloshvp) |
 
 ## Academic / Research
 

@@ -127,9 +127,11 @@ class SagaOrchestrator:
                 step.error = str(last_error)
                 step.transition(StepState.FAILED)
                 if attempt < attempts - 1:
-                    # Reset to PENDING for retry
-                    step.state = StepState.PENDING
-                    step.error = None
+                    # Move FAILED → PENDING through the state table,
+                    # not by direct mutation. Bypassing transition()
+                    # would skip the validity check and the timestamp
+                    # bookkeeping.
+                    step.reset_for_retry()
                     await asyncio.sleep(
                         self.DEFAULT_RETRY_DELAY_SECONDS * (attempt + 1)
                     )
@@ -138,8 +140,7 @@ class SagaOrchestrator:
                 step.error = str(e)
                 step.transition(StepState.FAILED)
                 if attempt < attempts - 1:
-                    step.state = StepState.PENDING
-                    step.error = None
+                    step.reset_for_retry()
                     await asyncio.sleep(
                         self.DEFAULT_RETRY_DELAY_SECONDS * (attempt + 1)
                     )

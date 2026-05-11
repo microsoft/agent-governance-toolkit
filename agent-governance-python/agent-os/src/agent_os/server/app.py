@@ -8,7 +8,7 @@ import logging
 import os
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -58,6 +58,8 @@ def _parse_cors_origins(raw: str) -> list[str]:
     return origins
 
 _EXECUTE_TOKENS_ENV = "AGENT_OS_EXECUTION_TOKENS"
+_EXECUTE_TOKENS_TTL_ENV = "AGENT_OS_EXECUTION_TOKEN_TTL_HOURS"
+_DEFAULT_EXECUTE_TOKEN_TTL_HOURS = 24
 _ALLOW_UNAUTHENTICATED_EXECUTE_ENV = "AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE"
 
 
@@ -165,6 +167,23 @@ def _parse_execute_tokens(raw_tokens: str) -> dict[str, str]:
     return tokens
 
 
+def _read_bootstrap_ttl_from_env() -> timedelta:
+    raw = os.environ.get(_EXECUTE_TOKENS_TTL_ENV, "").strip()
+    if not raw:
+        return timedelta(hours=_DEFAULT_EXECUTE_TOKEN_TTL_HOURS)
+    try:
+        hours = float(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"Invalid {_EXECUTE_TOKENS_TTL_ENV}={raw!r}: must be a positive number of hours."
+        ) from exc
+    if hours <= 0:
+        raise ValueError(
+            f"Invalid {_EXECUTE_TOKENS_TTL_ENV}={raw!r}: must be strictly positive."
+        )
+    return timedelta(hours=hours)
+
+
 def _build_execute_authenticator_from_env() -> Any | None:
     from agent_os.mcp_session_auth import MCPSessionAuthenticator
 
@@ -172,9 +191,10 @@ def _build_execute_authenticator_from_env() -> Any | None:
     if not raw_tokens:
         return None
 
+    ttl = _read_bootstrap_ttl_from_env()
     authenticator = MCPSessionAuthenticator()
     for agent_id, token in _parse_execute_tokens(raw_tokens).items():
-        authenticator.bootstrap_session(agent_id, token)
+        authenticator.bootstrap_session(agent_id, token, ttl=ttl)
     return authenticator
 
 

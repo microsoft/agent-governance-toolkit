@@ -53,13 +53,16 @@ def merge_policies(policy_chain: list[PolicyDocument]) -> list[PolicyRule]:
                 parent_rule, _parent_level = existing
 
                 if parent_rule.action == PolicyAction.DENY:
-                    # Security invariant: parent deny cannot be overridden
+                    # Security invariant: parent deny cannot be overridden.
+                    # Drop the child rule entirely — appending it would let a
+                    # higher-priority child rule defeat the parent deny at
+                    # evaluation time, which is exactly what this invariant
+                    # is meant to prevent.
                     logger.warning(
-                        "Rule '%s' at level %d tried to override parent deny — ignored",
+                        "Rule '%s' at level %d tried to override parent deny — dropped",
                         rule.name,
                         level,
                     )
-                    merged.append(rule)
                 else:
                     # Replace parent rule
                     merged = [r for r in merged if r.name != rule.name]

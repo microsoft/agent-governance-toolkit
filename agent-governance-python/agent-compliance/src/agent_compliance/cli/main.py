@@ -22,20 +22,42 @@ import json
 
 
 def handle_error(e: Exception, output_json: bool = False, custom_msg: Optional[str] = None):
-    """Centralized error handler for compliance CLI."""
-    is_known = isinstance(e, (IOError, ValueError, KeyError, PermissionError, FileNotFoundError))
+    """Centralized error handler for compliance CLI.
+
+    Echoes the exception detail for known (user-facing) error classes so the
+    operator can act on the failure. Unknown / internal exceptions are kept
+    opaque to avoid leaking stack details; set ``AGENTOS_DEBUG=1`` to see the
+    underlying message during development. Mirrors ``agt._handle_error``.
+    """
+    is_known = isinstance(
+        e, (IOError, ValueError, KeyError, PermissionError, FileNotFoundError)
+    )
+    err_type = "ValidationError" if is_known else "InternalError"
 
     if custom_msg:
         err_msg = custom_msg
     elif is_known:
-        err_msg = "A validation or file access error occurred."
+        err_msg = str(e) or "validation or file access error"
     else:
-        err_msg = "A governance processing error occurred."
+        err_msg = "An internal error occurred"
 
     if output_json:
-        print(json.dumps({"status": "fail" if not is_known else "error", "message": err_msg, "type": "ValidationError" if is_known else "InternalError"}, indent=2))
-    else:
-        print(f"Error: {err_msg}", file=sys.stderr)
+        print(
+            json.dumps(
+                {
+                    "status": "error" if is_known else "fail",
+                    "message": err_msg,
+                    "type": err_type,
+                },
+                indent=2,
+            )
+        )
+        return
+
+    print(f"Error: {err_msg}", file=sys.stderr)
+
+    if not is_known and os.environ.get("AGENTOS_DEBUG"):
+        print(f"  {type(e).__name__}: {e}", file=sys.stderr)
 
 
 def cmd_verify(args: argparse.Namespace) -> int:

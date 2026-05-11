@@ -239,12 +239,11 @@ class TestSandboxProviderABC:
             def is_available(self):
                 return True
 
-        # Default ``run()`` returns a failure ``SandboxResult`` so providers
-        # that do not support raw commands behave predictably (no stub raise).
-        result = Minimal().run("a", ["echo"])
-        assert result.success is False
-        assert result.exit_code == -1
-        assert "not implemented" in result.stderr.lower()
+        # Default ``run()`` raises ``NotImplementedError`` so a custom
+        # provider that forgets to override surfaces as a programming
+        # error rather than silently returning a failure ``SandboxResult``.
+        with pytest.raises(NotImplementedError, match="does not support"):
+            Minimal().run("a", ["echo"])
 
     def test_async_delegates_to_sync(self):
         class Minimal(SandboxProvider):
@@ -418,7 +417,7 @@ def docker_provider():
         provider._available = True
         provider._runtime = IsolationRuntime.RUNC
 
-        def _create_container(agent_id, session_id, config):
+        def _create_container(agent_id, session_id, config, image=None):
             return _make_mock_container(agent_id, session_id)
 
         provider._create_container = MagicMock(
@@ -631,6 +630,52 @@ class TestDockerDestroySession:
         docker_provider.destroy_session("a1", h.session_id)
         docker_provider.destroy_session("a1", h.session_id)
 
+    def test_remove_failure_keeps_entry_for_retry(self, docker_provider):
+        """Regression: previously the container was popped from the
+        registry BEFORE stop()/remove() were called, so if both Docker
+        calls failed there was no handle left to retry. Now the entry
+        is retained when remove() fails, and a follow-up destroy_session
+        can complete the cleanup once the underlying Docker issue
+        clears.
+        """
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.stop.side_effect = Exception("daemon unreachable")
+        c.remove.side_effect = Exception("daemon unreachable")
+
+        docker_provider.destroy_session("a1", h.session_id)
+
+        # Entry must be retained so the caller can retry.
+        assert ("a1", h.session_id) in docker_provider._containers
+
+        # Once Docker comes back, retry succeeds and the entry is
+        # finally removed.
+        c.stop.side_effect = None
+        c.remove.side_effect = None
+        docker_provider.destroy_session("a1", h.session_id)
+        assert ("a1", h.session_id) not in docker_provider._containers
+
+    def test_remove_failure_keeps_evaluator_and_config(self, docker_provider):
+        """When destroy_session fails to remove the container, it must
+        also keep the evaluator and session config so a retry has the
+        full per-session state to operate on.
+        """
+        try:
+            from agent_os.policies.schema import PolicyDocument
+        except ImportError:
+            pytest.skip("agent-os-kernel not installed")
+
+        doc = PolicyDocument(name="test")
+        h = docker_provider.create_session("a1", policy=doc)
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.stop.side_effect = Exception("daemon unreachable")
+        c.remove.side_effect = Exception("daemon unreachable")
+
+        docker_provider.destroy_session("a1", h.session_id)
+
+        assert ("a1", h.session_id) in docker_provider._containers
+        assert ("a1", h.session_id) in docker_provider._evaluators
+
 
 # -- get_session_status ----------------------------------------------------
 
@@ -769,12 +814,16 @@ class TestContainerCreationHardening:
         p, client = self._make_raw_provider()
         p._create_container("a1", "s1", SandboxConfig())
         kw = client.containers.run.call_args[1]
-        assert kw["security_opt"] == ["no-new-privileges"]
+        assert kw["security_opt"] == [
+            "no-new-privileges",
+            "seccomp=default",
+            "apparmor=docker-default",
+        ]
         assert kw["cap_drop"] == ["ALL"]
         assert kw["read_only"] is True
         assert kw["user"] == "65534:65534"
         assert kw["working_dir"] == "/workspace"
-        assert kw["pids_limit"] == 256
+        assert kw["pids_limit"] == 128
         assert kw["network_disabled"] is True
         assert kw["mem_limit"] == "512m"
         assert kw["detach"] is True
@@ -987,6 +1036,40 @@ class TestSandboxStateManager:
         provider._client.images.get.side_effect = Exception("not found")
         with pytest.raises(RuntimeError, match="not found"):
             provider.restore_state("a1", h.session_id, "missing")
+
+    def test_restore_does_not_mutate_provider_image(self, provider_with_session):
+        """Regression: restore previously swapped self._image to the
+        checkpoint tag for the duration of _create_container, restoring
+        in finally. Two concurrent restores could interleave and one
+        would create a container from the OTHER restore's image. The
+        fix removes the global mutation entirely; image is passed
+        explicitly to _create_container.
+        """
+        provider, h = provider_with_session
+        provider._client.images.get.return_value = MagicMock()
+        original_image = provider._image
+
+        provider.restore_state("a1", h.session_id, "cp1")
+
+        # The provider's base image must not have been mutated by
+        # restore — its only side effect should be the per-session
+        # container slot pointing at a freshly-created container.
+        assert provider._image == original_image
+
+    def test_restore_passes_checkpoint_image_to_create_container(
+        self, provider_with_session,
+    ):
+        """The checkpoint image tag must be passed to _create_container
+        as an explicit ``image=`` argument so concurrent restores
+        cannot race on a shared mutable attribute.
+        """
+        provider, h = provider_with_session
+        provider._client.images.get.return_value = MagicMock()
+
+        provider.restore_state("a1", h.session_id, "cp1")
+
+        last_call = provider._create_container.call_args
+        assert last_call.kwargs.get("image") == "agent-sandbox-a1:cp1"
 
 
 # =========================================================================
@@ -1480,9 +1563,22 @@ class TestEnvVarSanitization:
     def test_blocked_vars_constant_complete(self):
         """Ensure all known dangerous vars are in the blocklist."""
         expected = {
+            # glibc dynamic linker
             "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT",
             "LD_DEBUG", "LD_PROFILE", "LD_SHOW_AUXV",
-            "LD_DYNAMIC_WEAK", "PYTHONSTARTUP", "PYTHONPATH",
+            "LD_DYNAMIC_WEAK",
+            # POSIX shell startup hooks
+            "BASH_ENV", "ENV",
+            # Python
+            "PYTHONSTARTUP", "PYTHONPATH", "PYTHONHOME",
+            # Node.js
+            "NODE_OPTIONS",
+            # Ruby
+            "RUBYOPT",
+            # Perl
+            "PERL5LIB", "PERL5OPT",
+            # Java
+            "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS",
         }
         assert _BLOCKED_ENV_VARS == expected
 
@@ -1804,3 +1900,134 @@ class TestThreadSafety:
         assert docker_provider._containers == {}
         assert docker_provider._evaluators == {}
         assert docker_provider._session_configs == {}
+
+
+class TestHardeningAdditions:
+    """Regression coverage for the audit-driven hardening changes."""
+
+    def test_security_opt_includes_seccomp_and_apparmor(self):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        with patch(
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
+            return_value=None,
+        ):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = "python:3.11-slim"
+            p._runtime = IsolationRuntime.RUNC
+            client = MagicMock()
+            client.images.get.return_value = MagicMock()
+            client.containers.run.return_value = MagicMock()
+            p._client = client
+
+        p._create_container("a1", "s1", SandboxConfig())
+        kw = client.containers.run.call_args[1]
+        assert "seccomp=default" in kw["security_opt"]
+        assert "apparmor=docker-default" in kw["security_opt"]
+
+    def test_pids_limit_tightened_to_128(self):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        with patch(
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
+            return_value=None,
+        ):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = "python:3.11-slim"
+            p._runtime = IsolationRuntime.RUNC
+            client = MagicMock()
+            client.images.get.return_value = MagicMock()
+            client.containers.run.return_value = MagicMock()
+            p._client = client
+
+        p._create_container("a1", "s1", SandboxConfig())
+        kw = client.containers.run.call_args[1]
+        assert kw["pids_limit"] == 128
+
+    def test_blocked_envs_new_loaders(self):
+        env = {
+            "BASH_ENV": "/x",
+            "PYTHONHOME": "/x",
+            "NODE_OPTIONS": "--inspect",
+            "RUBYOPT": "-rmal",
+            "PERL5LIB": "/x",
+            "JAVA_TOOL_OPTIONS": "-javaagent:/x",
+            "_JAVA_OPTIONS": "-X",
+            "APP_SAFE": "ok",
+        }
+        result = _sanitize_env_vars(env)
+        for k in ("BASH_ENV", "PYTHONHOME", "NODE_OPTIONS", "RUBYOPT",
+                  "PERL5LIB", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS"):
+            assert k not in result, f"{k} must be blocked"
+        assert result["APP_SAFE"] == "ok"
+
+    def test_users_root_blocked_but_subdir_allowed(self, monkeypatch):
+        monkeypatch.setattr("platform.system", lambda: "Windows")
+        monkeypatch.setattr("os.path.realpath", lambda p: p)
+        assert _is_protected_path("C:\\Users") is True
+        # Existing maintainer design: a specific user's working subdir is fine.
+        assert _is_protected_path("C:\\Users\\agent\\workspace") is False
+
+    def test_ensure_image_warns_when_unpinned(self, caplog):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        with patch(
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
+            return_value=None,
+        ):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = "python"
+            client = MagicMock()
+            # First call: images.get raises -> need to pull.
+            client.images.get.side_effect = Exception("not present")
+            client.images.pull.return_value = MagicMock()
+            p._client = client
+
+        with caplog.at_level("WARNING", logger="agent_sandbox.docker_provider.provider"):
+            p.ensure_image()
+
+        warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert any("digest" in r.getMessage() for r in warnings)
+        # And: pull was actually attempted with ('python', tag='latest')
+        client.images.pull.assert_called_once_with("python", tag="latest")
+
+    def test_ensure_image_no_warning_when_tagged(self, caplog):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        with patch(
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
+            return_value=None,
+        ):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = "python:3.11-slim"
+            client = MagicMock()
+            client.images.get.side_effect = Exception("not present")
+            client.images.pull.return_value = MagicMock()
+            p._client = client
+
+        with caplog.at_level("WARNING", logger="agent_sandbox.docker_provider.provider"):
+            p.ensure_image()
+
+        assert not any(
+            "digest" in r.getMessage() for r in caplog.records
+            if r.levelname == "WARNING"
+        )
+
+    def test_ensure_image_digest_uses_no_tag(self):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        with patch(
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
+            return_value=None,
+        ):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = "python@sha256:abc123"
+            client = MagicMock()
+            client.images.get.side_effect = Exception("not present")
+            client.images.pull.return_value = MagicMock()
+            p._client = client
+
+        p.ensure_image()
+        # Digest-pinned images must NOT have a tag passed; Docker SDK requires
+        # the digest reference to be the full repo argument with no tag.
+        client.images.pull.assert_called_once_with("python@sha256:abc123")

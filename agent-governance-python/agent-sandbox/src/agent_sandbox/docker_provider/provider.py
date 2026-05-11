@@ -57,6 +57,15 @@ _PROTECTED_PATHS_WINDOWS = frozenset(
     )
 )
 
+# Paths blocked only when mounted at their exact root — not their
+# subdirectories. Mounting ``C:\Users`` exposes every user's profile
+# (documents, browser data, SSH keys); mounting a specific subdir like
+# ``C:\Users\agent\workspace`` is a legitimate per-user pattern and
+# remains allowed.
+_PROTECTED_PATHS_WINDOWS_ROOT_ONLY = frozenset(
+    p.lower() for p in ("C:\\Users",)
+)
+
 # Docker resource-name pattern (containers, image repos, tags).
 # Must start with [a-zA-Z0-9] and may include _.- afterwards, max 128 chars.
 _DOCKER_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
@@ -77,8 +86,12 @@ def _validate_resource_name(value: str, label: str) -> None:
 
 
 # Environment variables that could break container hardening.
+# Anything an interpreter/loader will source at startup belongs here:
+# each variable below redirects code execution before the sandbox's
+# entrypoint runs, defeating the cap_drop / no-new-privileges hardening.
 _BLOCKED_ENV_VARS = frozenset(
     {
+        # glibc dynamic linker
         "LD_PRELOAD",
         "LD_LIBRARY_PATH",
         "LD_AUDIT",
@@ -86,8 +99,23 @@ _BLOCKED_ENV_VARS = frozenset(
         "LD_PROFILE",
         "LD_SHOW_AUXV",
         "LD_DYNAMIC_WEAK",
+        # POSIX shell startup hooks (bash, dash, sh)
+        "BASH_ENV",
+        "ENV",
+        # Python
         "PYTHONSTARTUP",
         "PYTHONPATH",
+        "PYTHONHOME",
+        # Node.js
+        "NODE_OPTIONS",
+        # Ruby
+        "RUBYOPT",
+        # Perl
+        "PERL5LIB",
+        "PERL5OPT",
+        # Java
+        "JAVA_TOOL_OPTIONS",
+        "_JAVA_OPTIONS",
     }
 )
 
@@ -120,6 +148,8 @@ def _is_protected_path(path: str) -> bool:
             return True
         # Block well-known Windows system directories (case-insensitive).
         lowered = normalised.lower()
+        if lowered in _PROTECTED_PATHS_WINDOWS_ROOT_ONLY:
+            return True
         for protected in _PROTECTED_PATHS_WINDOWS:
             if lowered == protected or lowered.startswith(protected + "\\"):
                 return True
@@ -348,13 +378,29 @@ class DockerSandboxProvider(SandboxProvider):
 
         logger.info("Pulling image '%s' ...", target)
 
-        # Split image:tag for the pull API
-        if ":" in target and not target.startswith("sha256:"):
+        # Split image:tag for the pull API. We treat references that
+        # include neither an explicit tag nor a digest as unpinned and
+        # warn loudly: ``image:latest`` resolves differently on every
+        # pull and undermines reproducibility, which is precisely the
+        # property a sandbox image needs.
+        if "@sha256:" in target:
+            repo, tag = target, None
+        elif ":" in target and not target.startswith("sha256:"):
             repo, tag = target.rsplit(":", 1)
         else:
             repo, tag = target, "latest"
+            logger.warning(
+                "Image '%s' has no tag or digest; pulling '%s:latest'. "
+                "Pin to a digest (image@sha256:...) for reproducible "
+                "sandbox provisioning.",
+                target,
+                target,
+            )
 
-        self._client.images.pull(repo, tag=tag)
+        if tag is None:
+            self._client.images.pull(repo)
+        else:
+            self._client.images.pull(repo, tag=tag)
         logger.info("Pulled image '%s' successfully", target)
 
     # ------------------------------------------------------------------
@@ -465,32 +511,69 @@ class DockerSandboxProvider(SandboxProvider):
 
     def destroy_session(self, agent_id: str, session_id: str) -> None:
         key = (agent_id, session_id)
+        # Look up the container without popping — we only remove it
+        # from the registry once both Docker calls succeed. The
+        # previous version popped first and left a leaked container
+        # with no recovery handle if both stop() and remove() failed.
         with self._state_lock:
-            container = self._containers.pop(key, None)
-            self._evaluators.pop(key, None)
-            self._session_configs.pop(key, None)
+            container = self._containers.get(key)
 
-        if container is not None:
-            try:
-                container.stop(timeout=5)
-            except Exception as exc:
-                logger.warning(
-                    "Failed to stop container for agent '%s' "
-                    "session '%s': %s",
-                    agent_id,
-                    session_id,
-                    exc,
-                )
-            try:
-                container.remove(force=True)
-            except Exception as exc:
-                logger.warning(
-                    "Failed to remove container for agent '%s' "
-                    "session '%s': %s",
-                    agent_id,
-                    session_id,
-                    exc,
-                )
+        if container is None:
+            # No container to destroy. Auxiliary per-session state may
+            # still exist if create_session failed mid-way, so clean
+            # those up unconditionally.
+            with self._state_lock:
+                self._evaluators.pop(key, None)
+                self._session_configs.pop(key, None)
+            return
+
+        stop_ok = False
+        remove_ok = False
+        try:
+            container.stop(timeout=5)
+            stop_ok = True
+        except Exception as exc:
+            logger.warning(
+                "Failed to stop container for agent '%s' session '%s': %s",
+                agent_id,
+                session_id,
+                exc,
+            )
+        try:
+            container.remove(force=True)
+            remove_ok = True
+        except Exception as exc:
+            logger.warning(
+                "Failed to remove container for agent '%s' session '%s': %s",
+                agent_id,
+                session_id,
+                exc,
+            )
+
+        if remove_ok:
+            # remove(force=True) actually deletes the container from
+            # Docker (and kills it first if needed), so the container
+            # is gone regardless of whether stop() succeeded. Drop
+            # the registry entry and all per-session bookkeeping.
+            with self._state_lock:
+                self._containers.pop(key, None)
+                self._evaluators.pop(key, None)
+                self._session_configs.pop(key, None)
+        else:
+            # remove() failed: the container is still alive in Docker
+            # somewhere. Keep the entry so a follow-up
+            # destroy_session() can find it and retry, instead of
+            # leaking the container with no recovery handle.
+            logger.error(
+                "destroy_session: agent='%s' session='%s' could not be "
+                "removed (stop_ok=%s remove_ok=%s); container retained in "
+                "registry for retry. Call destroy_session again once the "
+                "underlying Docker issue is resolved.",
+                agent_id,
+                session_id,
+                stop_ok,
+                remove_ok,
+            )
 
     def is_available(self) -> bool:
         return self._available
@@ -630,9 +713,24 @@ class DockerSandboxProvider(SandboxProvider):
     # ------------------------------------------------------------------
 
     def _create_container(
-        self, agent_id: str, session_id: str, config: SandboxConfig
+        self,
+        agent_id: str,
+        session_id: str,
+        config: SandboxConfig,
+        image: str | None = None,
     ) -> Any:
-        """Create a hardened Docker container for the session."""
+        """Create a hardened Docker container for the session.
+
+        Args:
+            agent_id: Validated agent identifier.
+            session_id: Internally generated session identifier.
+            config: Per-session sandbox configuration.
+            image: Override for the base image. Defaults to
+                ``self._image`` (the provider's configured base).
+                Used by checkpoint restore to launch from a session-
+                specific snapshot without mutating ``self._image``,
+                which would race with concurrent restores.
+        """
         # Ensure the base image is available locally before creating
         self.ensure_image()
 
@@ -666,7 +764,7 @@ class DockerSandboxProvider(SandboxProvider):
             tmpfs["/tmp"] = "size=64m,uid=65534,gid=65534"
 
         run_kwargs: dict[str, Any] = {
-            "image": self._image,
+            "image": image or self._image,
             "name": container_name,
             "command": ["sleep", "infinity"],
             "detach": True,
@@ -682,11 +780,22 @@ class DockerSandboxProvider(SandboxProvider):
             "network_disabled": not config.network_enabled,
             "read_only": config.read_only_fs,
             "tmpfs": tmpfs,
-            "security_opt": ["no-new-privileges"],
+            # Be explicit about seccomp and apparmor so that hosts which
+            # have customized the Docker daemon defaults to weaker policies
+            # do not silently weaken the sandbox. `default` resolves to
+            # Docker's built-in profile on hosts that ship one.
+            "security_opt": [
+                "no-new-privileges",
+                "seccomp=default",
+                "apparmor=docker-default",
+            ],
             "cap_drop": ["ALL"],
             "user": "65534:65534",
             "working_dir": "/workspace",
-            "pids_limit": 256,
+            # 128 covers Python interpreters with thread pools and modest
+            # subprocess fan-out; 256 was generous enough to mask fork-bomb
+            # style misbehavior in tests.
+            "pids_limit": 128,
             # Resolve host.docker.internal on native Linux Docker
             # (Docker Desktop on macOS/Windows does this automatically)
             "extra_hosts": {"host.docker.internal": "host-gateway"},

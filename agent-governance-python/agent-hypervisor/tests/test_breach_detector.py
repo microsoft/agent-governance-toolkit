@@ -250,3 +250,47 @@ class TestRingBreachDetector:
         detector = RingBreachDetector()
         detector.reset_breaker("did:example:a", "s1")
         assert detector.breach_count == 0
+
+
+class TestRateDenominator:
+    """Regression: early-window bursts must surface, not get diluted by
+    a stale full-window divisor."""
+
+    def test_early_burst_uses_elapsed_window(self):
+        """A burst of 20 calls in ~1ms of a 60s window must read as a
+        high rate, not 20/60≈0.33/s."""
+        detector = RingBreachDetector(
+            window_seconds=60.0,
+            baseline_rate=1.0,
+        )
+        last = None
+        for _ in range(20):
+            last = detector.record_call(
+                "did:example:a",
+                "s1",
+                ExecutionRing.RING_2_STANDARD,
+                ExecutionRing.RING_2_STANDARD,
+            )
+        # The actual measured rate over a ~1ms span of 20 events must
+        # be well above baseline_rate=1.0/s — confirming the burst is
+        # not diluted by the full 60s denominator.
+        assert last is not None
+        assert last.actual_rate > 1.0
+        # And the burst should rise above NONE severity.
+        assert last.severity != BreachSeverity.NONE
+
+    def test_single_call_uses_window_divisor(self):
+        """A single call has no rate to measure; fall back to the
+        conservative full-window divisor so we don't trip on noise."""
+        detector = RingBreachDetector(
+            window_seconds=60.0,
+            baseline_rate=1.0,
+        )
+        result = detector.record_call(
+            "did:example:a",
+            "s1",
+            ExecutionRing.RING_2_STANDARD,
+            ExecutionRing.RING_2_STANDARD,
+        )
+        # 1 call / 60s = 0.0167/s ≪ baseline; must not trip.
+        assert result is None or result.severity == BreachSeverity.NONE

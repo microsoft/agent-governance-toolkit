@@ -161,7 +161,7 @@ impl PolicyEngine {
     pub fn is_loaded(&self) -> bool {
         self.profile
             .read()
-            .expect("policy profile lock poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .is_some()
     }
 
@@ -169,7 +169,7 @@ impl PolicyEngine {
     pub fn load_from_yaml(&self, yaml: &str) -> Result<(), PolicyError> {
         let profile: PolicyProfile =
             serde_yaml::from_str(yaml).map_err(PolicyError::InvalidYaml)?;
-        *self.profile.write().expect("policy profile lock poisoned") = Some(profile);
+        *self.profile.write().unwrap_or_else(|e| e.into_inner()) = Some(profile);
         Ok(())
     }
 
@@ -188,7 +188,7 @@ impl PolicyEngine {
         action: &str,
         context: Option<&HashMap<String, serde_yaml::Value>>,
     ) -> PolicyDecision {
-        let guard = self.profile.read().expect("policy profile lock poisoned");
+        let guard = self.profile.read().unwrap_or_else(|e| e.into_inner());
         let profile = match guard.as_ref() {
             Some(p) => p,
             None => return PolicyDecision::Allow,
@@ -274,7 +274,7 @@ impl PolicyEngine {
         let mut counters = self
             .rate_counters
             .lock()
-            .expect("rate counter lock poisoned");
+            .unwrap_or_else(|e| e.into_inner());
         let entry = counters
             .entry(name.to_string())
             .or_insert((0, Instant::now()));
@@ -991,5 +991,72 @@ policies:
         assert!(!action_matches("data", "data.read"));
         // "data.rea" does not match "data.read"
         assert!(!action_matches("data.rea", "data.read"));
+    }
+
+    /// Regression: a panic in any thread holding the profile or
+    /// rate-counter lock previously poisoned the lock and cascaded
+    /// panics into every subsequent policy evaluation. The recovery
+    /// pattern (`unwrap_or_else(|e| e.into_inner())`) keeps the engine
+    /// usable after a poisoning event.
+    #[test]
+    fn test_evaluates_after_profile_lock_poisoned() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let engine = Arc::new(PolicyEngine::new());
+        engine.load_from_yaml(POLICY_YAML).unwrap();
+
+        // Poison the profile lock by panicking inside a write guard.
+        let engine_for_panic = Arc::clone(&engine);
+        let handle = thread::spawn(move || {
+            let _guard = engine_for_panic.profile.write().unwrap();
+            panic!("simulated thread death while holding profile lock");
+        });
+        let _ = handle.join();
+        assert!(engine.profile.is_poisoned());
+
+        // Public methods must remain usable after poisoning.
+        assert!(engine.is_loaded());
+        assert_eq!(engine.evaluate("data.read", None), PolicyDecision::Allow);
+        engine
+            .load_from_yaml(POLICY_YAML)
+            .expect("re-load after poison must succeed");
+    }
+
+    #[test]
+    fn test_evaluates_after_rate_counter_lock_poisoned() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: api-rate-limit
+    type: rate_limit
+    actions:
+      - "api.call"
+    max_calls: 10
+    window: "60s"
+"#;
+        let engine = Arc::new(PolicyEngine::new());
+        engine.load_from_yaml(yaml).unwrap();
+
+        // Poison the rate-counter lock.
+        let engine_for_panic = Arc::clone(&engine);
+        let handle = thread::spawn(move || {
+            let _guard = engine_for_panic.rate_counters.lock().unwrap();
+            panic!("simulated thread death while holding rate counter lock");
+        });
+        let _ = handle.join();
+        assert!(engine.rate_counters.is_poisoned());
+
+        // Rate-limit evaluation must still produce a decision rather
+        // than propagating the poison.
+        let decision = engine.evaluate("api.call", None);
+        assert!(matches!(
+            decision,
+            PolicyDecision::Allow | PolicyDecision::Deny(_)
+        ));
     }
 }

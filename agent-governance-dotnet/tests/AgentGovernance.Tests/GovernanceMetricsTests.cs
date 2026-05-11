@@ -192,3 +192,114 @@ public class GovernanceMetricsTests : IDisposable
 
     public void Dispose() => _metrics.Dispose();
 }
+
+// Disposable wrapper so tag-tag-policy tests can each create their own
+// `GovernanceMetrics` with explicit options without colliding on the
+// instance-level field above.
+[Collection("MetricsTests")]
+public class GovernanceMetricsTagPolicyTests
+{
+    private static (HashSet<string> tagKeys, Dictionary<string, object?> lastTags) ListenForDecisionTags(GovernanceMetrics metrics, Action act)
+    {
+        var keys = new HashSet<string>();
+        var lastTags = new Dictionary<string, object?>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == GovernanceMetrics.MeterName)
+                l.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, _, tags, _) =>
+        {
+            if (instrument.Name == "agent_governance.policy_decisions")
+            {
+                lastTags.Clear();
+                foreach (var t in tags)
+                {
+                    keys.Add(t.Key);
+                    lastTags[t.Key] = t.Value;
+                }
+            }
+        });
+        listener.Start();
+        act();
+        return (keys, lastTags);
+    }
+
+    [Fact]
+    public void DefaultOptions_EmitsOnlyDecisionTag()
+    {
+        using var metrics = new GovernanceMetrics();
+        var (keys, _) = ListenForDecisionTags(metrics, () =>
+            metrics.RecordDecision(true, "did:agentmesh:test", "file_read", 0.1));
+        Assert.Equal(new[] { "decision" }, keys);
+    }
+
+    [Fact]
+    public void IncludeAgentIdTag_EmitsAgentIdTag()
+    {
+        using var metrics = new GovernanceMetrics(new GovernanceMetricsOptions { IncludeAgentIdTag = true });
+        var (keys, last) = ListenForDecisionTags(metrics, () =>
+            metrics.RecordDecision(true, "did:agentmesh:abc", "file_read", 0.1));
+        Assert.Contains("decision", keys);
+        Assert.Contains("agent_id", keys);
+        Assert.DoesNotContain("tool_name", keys);
+        Assert.Equal("did:agentmesh:abc", last["agent_id"]);
+    }
+
+    [Fact]
+    public void IncludeToolNameTag_EmitsToolNameTag()
+    {
+        using var metrics = new GovernanceMetrics(new GovernanceMetricsOptions { IncludeToolNameTag = true });
+        var (keys, last) = ListenForDecisionTags(metrics, () =>
+            metrics.RecordDecision(true, "did:agentmesh:abc", "file_read", 0.1));
+        Assert.Contains("tool_name", keys);
+        Assert.DoesNotContain("agent_id", keys);
+        Assert.Equal("file_read", last["tool_name"]);
+    }
+
+    [Fact]
+    public void AgentIdBucket_AppliedBeforeEmission()
+    {
+        using var metrics = new GovernanceMetrics(new GovernanceMetricsOptions
+        {
+            IncludeAgentIdTag = true,
+            AgentIdBucket = id => id.StartsWith("did:agentmesh:") ? "agentmesh" : "other"
+        });
+        var (_, last) = ListenForDecisionTags(metrics, () =>
+            metrics.RecordDecision(true, "did:agentmesh:abc123", "file_read", 0.1));
+        Assert.Equal("agentmesh", last["agent_id"]);
+    }
+
+    [Fact]
+    public void ToolNameBucket_AppliedBeforeEmission()
+    {
+        using var metrics = new GovernanceMetrics(new GovernanceMetricsOptions
+        {
+            IncludeToolNameTag = true,
+            ToolNameBucket = name => name.Contains('.') ? name[..name.IndexOf('.')] : name
+        });
+        var (_, last) = ListenForDecisionTags(metrics, () =>
+            metrics.RecordDecision(true, "did:agentmesh:abc", "fs.read_file", 0.1));
+        Assert.Equal("fs", last["tool_name"]);
+    }
+
+    [Fact]
+    public void BothTagsEnabled_EmitsAllThree()
+    {
+        using var metrics = new GovernanceMetrics(new GovernanceMetricsOptions
+        {
+            IncludeAgentIdTag = true,
+            IncludeToolNameTag = true
+        });
+        var (keys, _) = ListenForDecisionTags(metrics, () =>
+            metrics.RecordDecision(true, "did:agentmesh:abc", "file_read", 0.1));
+        Assert.Equal(new[] { "agent_id", "decision", "tool_name" }, keys.OrderBy(k => k).ToArray());
+    }
+
+    [Fact]
+    public void NullOptions_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => new GovernanceMetrics(null!));
+    }
+}

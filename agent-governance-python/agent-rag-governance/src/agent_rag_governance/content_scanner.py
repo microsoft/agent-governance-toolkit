@@ -13,8 +13,47 @@ Injection patterns are sourced from the same taxonomy used by
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import List
+
+
+def _normalize_for_matching(text: str) -> str:
+    """Return *text* normalised so common Unicode obfuscation doesn't
+    bypass the regex patterns.
+
+    The patterns in this module are ASCII-shaped, but the LLM consumer
+    of retrieved chunks reads Unicode without trouble. An attacker who
+    controls a retrieved document can therefore insert zero-width
+    characters between letters, replace letters with fullwidth or
+    mathematical-script lookalikes, or rely on NFD vs NFC encoding
+    differences to defeat the regexes while preserving the semantic
+    content the LLM will read. Normalising before matching closes the
+    common bypass shapes:
+
+    - ``unicodedata.normalize("NFKC", ...)`` folds compatibility
+      variants (fullwidth Latin → ASCII, mathematical script → Latin,
+      ligatures decomposed, NFD ↔ NFC).
+    - Stripping Unicode "format" category characters (``Cf``) removes
+      zero-width spaces (U+200B), zero-width joiners (U+200D / U+200C),
+      word joiners (U+2060), bidirectional control marks, and similar
+      invisibles that an attacker uses to break ``\\b`` boundaries and
+      character runs.
+    - ``str.casefold()`` provides Unicode-aware case folding so the
+      already-IGNORECASE injection patterns also catch
+      uppercase-Unicode-equivalent obfuscations after NFKC mapping.
+
+    Residual confusable shapes (Cyrillic ``і`` for Latin ``i``, Greek
+    ``Ε`` for Latin ``E``, etc.) are not handled by NFKC and would
+    require a Unicode TR39 confusables table; those are out of scope
+    for this regex-based scanner and would warrant a heavier moderation
+    primitive.
+    """
+    nfkc = unicodedata.normalize("NFKC", text)
+    stripped = "".join(
+        ch for ch in nfkc if unicodedata.category(ch) != "Cf"
+    )
+    return stripped.casefold()
 
 
 _INJECTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
@@ -31,7 +70,10 @@ _INJECTION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
 
 _PII_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (
-        re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
+        # The TLD class previously was ``[A-Z|a-z]`` — the ``|`` is a
+        # literal pipe character inside a character class, not an
+        # alternation. The corrected class accepts ASCII letters only.
+        re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
         "email address",
     ),
     (
@@ -43,7 +85,21 @@ _PII_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         "SSN",
     ),
     (
-        re.compile(r"\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\b"),
+        # Credit-card BINs:
+        #   Visa            4 followed by 12 or 15 digits
+        #   Mastercard      51-55 followed by 14 digits (legacy 5-series)
+        #   Mastercard      2221-2720 followed by 12 digits (2-series)
+        #   Amex            34 or 37 followed by 13 digits
+        #   Discover        6011 or 65xx followed by 12 digits
+        re.compile(
+            r"\b(?:"
+            r"4[0-9]{12}(?:[0-9]{3})?"
+            r"|5[1-5][0-9]{14}"
+            r"|2(?:2(?:2[1-9]|[3-9][0-9])|[3-6][0-9]{2}|7(?:[01][0-9]|20))[0-9]{12}"
+            r"|3[47][0-9]{13}"
+            r"|6(?:011|5[0-9]{2})[0-9]{12}"
+            r")\b"
+        ),
         "credit card number",
     ),
 ]
@@ -101,9 +157,16 @@ class ContentScanner:
         return results
 
     def _scan_chunk(self, index: int, text: str) -> ScanResult:
+        # Pattern matching runs against a Unicode-normalised view of the
+        # text so common obfuscation (zero-width separators, fullwidth or
+        # mathematical-script lookalikes, NFD/NFC encoding tricks) does
+        # not let injection or PII payloads slip past the ASCII-shaped
+        # regexes while remaining readable by the LLM.
+        normalised = _normalize_for_matching(text)
+
         if self._check_injections:
             for pattern, description in _INJECTION_PATTERNS:
-                if pattern.search(text):
+                if pattern.search(normalised):
                     return ScanResult(
                         chunk_index=index,
                         blocked=True,
@@ -113,7 +176,7 @@ class ContentScanner:
 
         if self._check_pii:
             for pattern, description in _PII_PATTERNS:
-                if pattern.search(text):
+                if pattern.search(normalised):
                     return ScanResult(
                         chunk_index=index,
                         blocked=True,

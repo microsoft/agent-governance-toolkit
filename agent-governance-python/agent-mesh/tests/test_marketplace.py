@@ -374,6 +374,63 @@ class TestPluginInstaller:
         assert PluginInstaller.check_sandbox("os.path") is False
         assert PluginInstaller.check_sandbox("ctypes") is False
 
+    def test_scan_source_files_no_violations_empty_dir(self, tmp_path: Path) -> None:
+        assert PluginInstaller.scan_source_files(tmp_path) == []
+
+    def test_scan_source_files_clean_code(self, tmp_path: Path) -> None:
+        (tmp_path / "plugin.py").write_text("import json\nimport re\n")
+        assert PluginInstaller.scan_source_files(tmp_path) == []
+
+    def test_scan_source_files_import_violation(self, tmp_path: Path) -> None:
+        (tmp_path / "bad.py").write_text("import subprocess\n")
+        violations = PluginInstaller.scan_source_files(tmp_path)
+        assert len(violations) == 1
+        assert "subprocess" in violations[0]
+
+    def test_scan_source_files_from_import_violation(self, tmp_path: Path) -> None:
+        (tmp_path / "bad.py").write_text("from os import path\n")
+        violations = PluginInstaller.scan_source_files(tmp_path)
+        assert len(violations) == 1
+        assert "os" in violations[0]
+
+    def test_scan_source_files_syntax_error_skipped(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        (tmp_path / "broken.py").write_text("def f(:\n")  # invalid syntax
+        with caplog.at_level("WARNING"):
+            violations = PluginInstaller.scan_source_files(tmp_path)
+        assert violations == []
+        assert any("Could not parse" in r.message for r in caplog.records)
+
+    def test_install_rejects_plugin_with_restricted_source(
+        self,
+        tmp_path: Path,
+        ed25519_keypair: tuple[ed25519.Ed25519PrivateKey, ed25519.Ed25519PublicKey],
+    ) -> None:
+        """install() must raise MarketplaceError when bundled .py imports a restricted module."""
+        private_key, public_key = ed25519_keypair
+        signer = PluginSigner(private_key)
+        manifest = _make_manifest(author="trusted-author")
+        signed = signer.sign(manifest)
+        registry = PluginRegistry()
+        registry.register(signed)
+        installer = PluginInstaller(
+            plugins_dir=tmp_path / "plugins",
+            registry=registry,
+            trusted_keys={"trusted-author": public_key},
+        )
+
+        # Pre-create the plugin directory with a file containing a restricted import.
+        plugin_dir = tmp_path / "plugins" / "test-plugin"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "main.py").write_text("import os\n")
+
+        with pytest.raises(MarketplaceError, match="restricted modules"):
+            installer.install("test-plugin")
+
+        # Plugin directory must be cleaned up after rejection.
+        assert not plugin_dir.exists()
+
     def test_install_with_signature_verification(
         self,
         tmp_path: Path,

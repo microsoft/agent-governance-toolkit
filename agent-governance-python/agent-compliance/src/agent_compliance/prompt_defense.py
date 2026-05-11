@@ -69,11 +69,20 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
             re.compile(
+                # Bound the `.*` reach in `maintain ... role` to 50
+                # characters. The unbounded form (maintain.*role) can
+                # be coerced into pathological backtracking on
+                # adversarial 100K-char prompts; defense-grade input
+                # to a defense scanner shouldn't widen the attack
+                # surface. 50 chars covers normal language
+                # ("maintain your assigned role", "maintain the
+                # assistant persona") without exposing the runaway
+                # case.
                 r"(?:never (?:break|change|switch|abandon)"
                 r"|only (?:answer|respond|act) as"
                 r"|stay in (?:character|role)"
                 r"|always (?:remain|be|act as)"
-                r"|maintain.*(?:role|identity|persona))",
+                r"|maintain.{0,50}?(?:role|identity|persona))",
                 re.IGNORECASE,
             ),
         ),
@@ -159,6 +168,7 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="unicode-attack",
@@ -169,7 +179,15 @@ _RULES: tuple[_DefenseRule, ...] = (
                 r"(?:unicode|homoglyph|special character" r"|character encoding)",
                 re.IGNORECASE,
             ),
+            re.compile(
+                r"(?:do not (?:accept|process|follow)"
+                r"|never (?:accept|process)"
+                r"|reject|normalize|sanitize|filter|validate)"
+                r".*(?:unicode|homoglyph|special character|character encoding)",
+                re.IGNORECASE,
+            ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="context-overflow",
@@ -196,15 +214,22 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
             re.compile(
+                # Bound each `.*` to 50 chars. Three consecutive `.*`
+                # segments with alternations between them is the
+                # classic catastrophic-backtracking shape — on a
+                # 100K-char prompt without the closing tokens, the
+                # engine explores many splits. Normal phrasing fits
+                # well within 50 chars between concept tokens.
                 r"(?:(?:validate|verify|sanitize|filter|check)"
-                r".*(?:external|input|data|content)"
-                r"|treat.*(?:as (?:data|untrusted|information))"
+                r".{0,50}?(?:external|input|data|content)"
+                r"|treat.{0,50}?(?:as (?:data|untrusted|information))"
                 r"|do not (?:follow|execute|obey)"
-                r".*(?:instruction|command)"
-                r".*(?:from|in|within|embedded))",
+                r".{0,50}?(?:instruction|command)"
+                r".{0,50}?(?:from|in|within|embedded))",
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="social-engineering",
@@ -220,6 +245,7 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="output-weaponization",
@@ -235,6 +261,7 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="abuse-prevention",
@@ -254,6 +281,7 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="input-validation",
@@ -449,14 +477,26 @@ class PromptDefenseEvaluator:
                         evidence = match.group(0)[:60]
 
             defended = matched >= rule.min_matches
-            # Confidence scoring:
-            #   Defended: starts at 0.5, +0.2 per pattern match, capped at 0.9
-            #     (more matching patterns = higher confidence the defense is real)
-            #   Not defended but partial match: 0.4 (some signal, but insufficient)
-            #   Not defended, zero matches: 0.8 (high confidence it's truly missing)
-            confidence = (
-                min(0.9, 0.5 + matched * 0.2) if defended else (0.4 if matched > 0 else 0.8)
-            )
+            # Confidence reflects the strength of the signal we have,
+            # not the assertion we're making. The previous scheme
+            # claimed 0.8 ("high") confidence when zero patterns
+            # matched and 0.4 ("low") when a partial match was seen —
+            # an inversion of how confidence usually maps to evidence.
+            # A complete absence of defense language is the weakest
+            # possible signal, not the strongest; we can't tell from
+            # zero matches whether the defense is missing or whether
+            # the prompt simply uses different vocabulary.
+            #
+            #   matched >= min_matches  → high (scales with matches)
+            #   0 < matched < min       → medium (we see some defense
+            #                                     language but not enough)
+            #   matched == 0            → low (no signal either way)
+            if defended:
+                confidence = min(0.9, 0.5 + matched * 0.2)
+            elif matched > 0:
+                confidence = 0.5
+            else:
+                confidence = 0.3
             severity = self.config.severity_map.get(rule.vector_id, "medium")
 
             if defended:

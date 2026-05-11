@@ -37,6 +37,40 @@ class TestStepStateMachine:
         step.transition(StepState.COMPENSATED)
         assert step.state == StepState.COMPENSATED
 
+    def test_reset_for_retry_moves_failed_back_to_pending(self):
+        """Regression: the orchestrator's retry path used to reach into
+        ``step.state = StepState.PENDING`` directly, bypassing the
+        STEP_TRANSITIONS table entirely. Now FAILED → PENDING is a
+        documented edge and reset_for_retry() funnels through
+        transition() so the state machine remains the single source
+        of truth.
+        """
+        step = SagaStep(step_id="s1", action_id="a1", agent_did="did:a", execute_api="/api")
+        step.transition(StepState.EXECUTING)
+        step.error = "boom"
+        step.transition(StepState.FAILED)
+
+        step.reset_for_retry()
+
+        assert step.state == StepState.PENDING
+        assert step.error is None
+        assert step.completed_at is None
+
+    def test_reset_for_retry_rejects_non_failed_state(self):
+        """reset_for_retry must NOT silently allow retries from
+        arbitrary states. The state-table guarantee is FAILED →
+        PENDING only.
+        """
+        step = SagaStep(step_id="s1", action_id="a1", agent_did="did:a", execute_api="/api")
+        # PENDING → PENDING is not a valid edge; reset_for_retry must reject.
+        with pytest.raises(SagaStateError, match="Invalid step transition"):
+            step.reset_for_retry()
+
+        step.transition(StepState.EXECUTING)
+        step.transition(StepState.COMMITTED)
+        with pytest.raises(SagaStateError, match="Invalid step transition"):
+            step.reset_for_retry()
+
 
 class TestSagaStateMachine:
     def test_valid_saga_transitions(self):

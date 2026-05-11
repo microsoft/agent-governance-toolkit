@@ -40,6 +40,20 @@ def _normalize_line_endings(text: str) -> str:
     return text.replace("\r\n", "\n")
 
 
+_FENCED_CODE_BLOCK_RE = re.compile(r"```.*?(?:```|\Z)", re.DOTALL)
+
+
+def _strip_fenced_code_blocks(text: str) -> str:
+    """Remove fenced code blocks so their content can't be mistaken for headings.
+
+    A code fence may contain text that looks like a ``##`` heading or a
+    ``- [x]`` checkbox, but those are render-time literals — they should
+    not terminate sections or count as user-checked attestations.
+    Unclosed fences run to end-of-text.
+    """
+    return _FENCED_CODE_BLOCK_RE.sub("", text)
+
+
 def _count_section_checkboxes(section_title: str, pr_body: str) -> dict:
     """Count checked boxes in a specific section.
 
@@ -53,6 +67,8 @@ def _count_section_checkboxes(section_title: str, pr_body: str) -> dict:
             - checked: int (number of checked boxes)
             - details: str (section content) or None
     """
+    body = _strip_fenced_code_blocks(pr_body)
+
     # Escape special regex characters in section title
     escaped_title = re.escape(section_title)
 
@@ -60,7 +76,7 @@ def _count_section_checkboxes(section_title: str, pr_body: str) -> dict:
     # Supports both ## (h2) and ### (h3) headings for compatibility with
     # GitHub Issue Forms, which render checkbox group labels as ### headings.
     pattern = rf"(^|\n)#{{2,3}}\s+{escaped_title}\n([\s\S]*?)(?=\n#{{2,3}}\s+|$)"
-    match = re.search(pattern, pr_body, re.IGNORECASE)
+    match = re.search(pattern, body, re.IGNORECASE)
 
     if not match:
         return {"found": False, "checked": 0, "details": None}

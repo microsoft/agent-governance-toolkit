@@ -4,7 +4,9 @@
 package agentmesh
 
 import (
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -169,6 +171,31 @@ func TestLevenshteinDistance(t *testing.T) {
 			t.Errorf("levenshtein(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
 		}
 	}
+}
+
+// TestScanConcurrent exercises shared use of a single scanner from many
+// goroutines. With ``go test -race`` it surfaces any unsynchronized
+// access to ``knownTools``; without ``-race`` it still defends against
+// torn-read / lost-update regressions that produce wrong threat verdicts.
+func TestScanConcurrent(t *testing.T) {
+	scanner := NewMcpSecurityScanner()
+	const goroutines = 16
+	const perGoroutine = 64
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := 0; g < goroutines; g++ {
+		go func(g int) {
+			defer wg.Done()
+			for i := 0; i < perGoroutine; i++ {
+				_ = scanner.Scan(McpToolDefinition{
+					Name:        fmt.Sprintf("concurrent_tool_%d_%d", g, i),
+					Description: "Reads a file from disk and returns its contents.",
+				})
+			}
+		}(g)
+	}
+	wg.Wait()
 }
 
 func TestRiskScoreCapped(t *testing.T) {

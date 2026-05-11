@@ -12,11 +12,31 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import os
 import sys
+import threading
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+# Used to emit the unsalted-fallback warning exactly once per process
+# instead of one warning per audit entry.
+_unsalted_warned = False
+
+
+def _warn_unsalted_once() -> None:
+    global _unsalted_warned
+    if not _unsalted_warned:
+        _unsalted_warned = True
+        logger.warning(
+            "AGENT_RAG_AUDIT_SALT is not set — query hashes are "
+            "unsalted and trivially reversible via rainbow tables. "
+            "Set the env var to a per-deployment random value."
+        )
 
 
 @dataclass
@@ -48,9 +68,33 @@ class RAGAuditEntry:
     policy_triggered: Optional[str]
 
     @staticmethod
-    def hash_query(query: str) -> str:
-        """Return a SHA-256 hex digest of *query*."""
-        return hashlib.sha256(query.encode("utf-8")).hexdigest()
+    def hash_query(query: str, salt: Optional[str] = None) -> str:
+        """Return a salted SHA-256 hex digest of *query*.
+
+        Unsalted SHA-256 over a short query string is trivially
+        reversible via rainbow tables — common queries ("what's our
+        refund policy?", "list employees by department") hash to the
+        same value across every deployment, so an attacker who reads
+        the audit log can recover the queries by precomputing a
+        modest dictionary.
+
+        Salt with a per-deployment value: the AGENT_RAG_AUDIT_SALT
+        env var when `salt` is not supplied explicitly. Knowledge of
+        the salt by itself doesn't unlock anything; rotating it
+        invalidates correlation across older audit lines.
+
+        If neither argument nor env var is set, the function falls
+        back to the unsalted form and logs a one-time warning so
+        existing deployments aren't silently degraded.
+        """
+        if salt is None:
+            salt = os.environ.get("AGENT_RAG_AUDIT_SALT", "")
+        if not salt:
+            _warn_unsalted_once()
+            payload = query.encode("utf-8")
+        else:
+            payload = (salt + ":" + query).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
 
     def to_json(self) -> str:
         """Serialize to a single-line JSON string."""
@@ -59,6 +103,15 @@ class RAGAuditEntry:
 
 class AuditLogger:
     """Emits :class:`RAGAuditEntry` records to a file or stdout.
+
+    Concurrent ``emit`` calls from multiple threads are safe within a
+    single process: the logger holds an instance-level lock around the
+    file open/write so audit lines do not interleave at the byte level.
+    Multi-process deployments (e.g. multiple Gunicorn/Uvicorn workers
+    sharing the same on-disk log file) require external coordination —
+    the in-process lock does not cross process boundaries. Use a
+    process-level handoff (a centralised log shipper, syslog, or
+    per-worker log paths) in that case.
 
     Args:
         log_path: Path to the JSON-lines log file. ``None`` writes to
@@ -72,16 +125,28 @@ class AuditLogger:
 
     def __init__(self, log_path: Optional[str] = None) -> None:
         self._path = Path(log_path) if log_path else None
+        # Serialise concurrent emit() calls so audit lines from threads
+        # racing through the request path do not interleave.
+        # POSIX O_APPEND only guarantees atomic appends below PIPE_BUF
+        # bytes on filesystems that honour it, and Windows has no
+        # equivalent guarantee — relying on the kernel's write-atomicity
+        # is too fragile for compliance-grade audit evidence.
+        self._lock = threading.Lock()
 
     def emit(self, entry: RAGAuditEntry) -> None:
-        """Write *entry* as a JSON line."""
+        """Write *entry* as a JSON line.
+
+        Thread-safe within a single process; see the class docstring
+        for multi-process notes.
+        """
         line = entry.to_json() + "\n"
-        if self._path is None:
-            sys.stdout.write(line)
-            sys.stdout.flush()
-        else:
-            with self._path.open("a", encoding="utf-8") as fh:
-                fh.write(line)
+        with self._lock:
+            if self._path is None:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+            else:
+                with self._path.open("a", encoding="utf-8") as fh:
+                    fh.write(line)
 
 
 def make_entry(

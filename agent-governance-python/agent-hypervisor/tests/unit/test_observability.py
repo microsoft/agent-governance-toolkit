@@ -215,3 +215,105 @@ class TestCausalTraceId:
         for _i in range(5):
             trace = trace.child()
         assert trace.depth == 5
+
+
+class TestEventBusBounds:
+    """Regression: event bus must be bounded and emit must be lock-safe."""
+
+    def test_main_log_capped_by_max_events(self):
+        bus = HypervisorEventBus(max_events=10)
+        for i in range(25):
+            bus.emit(
+                HypervisorEvent(
+                    event_type=EventType.SESSION_CREATED,
+                    session_id=f"sess-{i}",
+                )
+            )
+        # 25 emits, cap 10 -> oldest 15 evicted; newest 10 remain.
+        assert bus.event_count == 10
+        events = bus.all_events
+        assert events[0].session_id == "sess-15"
+        assert events[-1].session_id == "sess-24"
+
+    def test_per_type_index_capped(self):
+        bus = HypervisorEventBus(max_events=5)
+        for i in range(12):
+            bus.emit(
+                HypervisorEvent(
+                    event_type=EventType.SESSION_CREATED,
+                    session_id=f"sess-{i}",
+                )
+            )
+        by_type = bus.query_by_type(EventType.SESSION_CREATED)
+        assert len(by_type) == 5
+        # Oldest entries evicted; newest 5 survive.
+        assert by_type[0].session_id == "sess-7"
+
+    def test_per_session_index_capped(self):
+        bus = HypervisorEventBus(max_events=4)
+        for i in range(20):
+            bus.emit(
+                HypervisorEvent(
+                    event_type=EventType.VFS_WRITE,
+                    session_id="busy-session",
+                )
+            )
+        # One chatty session must not starve the index: still capped at 4.
+        assert len(bus.query_by_session("busy-session")) == 4
+
+    def test_unbounded_mode_via_none(self):
+        bus = HypervisorEventBus(max_events=None)
+        for i in range(50):
+            bus.emit(HypervisorEvent(event_type=EventType.SESSION_CREATED))
+        assert bus.event_count == 50
+
+    def test_emit_is_thread_safe(self):
+        import threading
+
+        bus = HypervisorEventBus(max_events=10000)
+        N_THREADS, N_PER_THREAD = 8, 250
+
+        def producer(thread_idx: int) -> None:
+            for i in range(N_PER_THREAD):
+                bus.emit(
+                    HypervisorEvent(
+                        event_type=EventType.VFS_WRITE,
+                        session_id=f"t{thread_idx}",
+                        payload={"i": i},
+                    )
+                )
+
+        threads = [
+            threading.Thread(target=producer, args=(t,))
+            for t in range(N_THREADS)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # Without the lock, the indexes would race and lose entries or
+        # store duplicates. The total must match exactly.
+        assert bus.event_count == N_THREADS * N_PER_THREAD
+        for tidx in range(N_THREADS):
+            assert len(bus.query_by_session(f"t{tidx}")) == N_PER_THREAD
+
+    def test_subscriber_re_entry_does_not_deadlock(self):
+        """A handler that emits another event must not deadlock the bus."""
+        bus = HypervisorEventBus(max_events=100)
+        seen: list[HypervisorEvent] = []
+
+        def re_emit_on_first(event: HypervisorEvent) -> None:
+            seen.append(event)
+            if event.event_type == EventType.SESSION_CREATED:
+                # Re-enter: handler emits a follow-up event.
+                bus.emit(
+                    HypervisorEvent(event_type=EventType.RING_ASSIGNED)
+                )
+
+        bus.subscribe(None, re_emit_on_first)
+        bus.emit(HypervisorEvent(event_type=EventType.SESSION_CREATED))
+        # Both the original and the re-emitted event must be observed,
+        # and the call must return.
+        assert any(e.event_type == EventType.SESSION_CREATED for e in seen)
+        assert any(e.event_type == EventType.RING_ASSIGNED for e in seen)

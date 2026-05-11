@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -47,6 +48,9 @@ class PluginRegistry:
         self._plugins: dict[str, dict[str, PluginManifest]] = {}
         self._storage_path = storage_path
         self._marketplace_policy = marketplace_policy
+        # Re-entrant so register/unregister can call _persist (which may
+        # itself acquire the lock in future) without deadlocking.
+        self._lock = threading.RLock()
         if storage_path and storage_path.exists():
             self._load_from_file()
 
@@ -82,14 +86,24 @@ class PluginRegistry:
                     + "; ".join(result.violations)
                 )
 
-        versions = self._plugins.setdefault(manifest.name, {})
-        if manifest.version in versions:
-            raise MarketplaceError(
-                f"Plugin {manifest.name}@{manifest.version} is already registered"
-            )
-        versions[manifest.version] = manifest
-        logger.info("Registered plugin %s@%s", manifest.name, manifest.version)
-        self._persist()
+        # Check duplicate *before* mutating ``self._plugins``. Previously
+        # ``setdefault`` ran first and would leave an empty inner dict in
+        # place if any subsequent step on this code path raised; it also
+        # served as a (Python-GIL-only) defence against concurrent
+        # registrations of distinct versions of the same plugin. Both
+        # concerns are addressed by locking + check-before-insert.
+        with self._lock:
+            versions = self._plugins.get(manifest.name)
+            if versions is not None and manifest.version in versions:
+                raise MarketplaceError(
+                    f"Plugin {manifest.name}@{manifest.version} is already registered"
+                )
+            if versions is None:
+                versions = {}
+                self._plugins[manifest.name] = versions
+            versions[manifest.version] = manifest
+            logger.info("Registered plugin %s@%s", manifest.name, manifest.version)
+            self._persist()
 
     def unregister(self, name: str, version: Optional[str] = None) -> None:
         """Remove a plugin from the registry.
@@ -101,18 +115,19 @@ class PluginRegistry:
         Raises:
             MarketplaceError: If the plugin or version is not found.
         """
-        if name not in self._plugins:
-            raise MarketplaceError(f"Plugin not found: {name}")
-        if version:
-            if version not in self._plugins[name]:
-                raise MarketplaceError(f"Version not found: {name}@{version}")
-            del self._plugins[name][version]
-            if not self._plugins[name]:
+        with self._lock:
+            if name not in self._plugins:
+                raise MarketplaceError(f"Plugin not found: {name}")
+            if version:
+                if version not in self._plugins[name]:
+                    raise MarketplaceError(f"Version not found: {name}@{version}")
+                del self._plugins[name][version]
+                if not self._plugins[name]:
+                    del self._plugins[name]
+            else:
                 del self._plugins[name]
-        else:
-            del self._plugins[name]
-        logger.info("Unregistered plugin %s (version=%s)", name, version or "all")
-        self._persist()
+            logger.info("Unregistered plugin %s (version=%s)", name, version or "all")
+            self._persist()
 
     def get_plugin(self, name: str, version: Optional[str] = None) -> PluginManifest:
         """Retrieve a specific plugin manifest.
@@ -129,16 +144,17 @@ class PluginRegistry:
         Raises:
             MarketplaceError: If the plugin or version is not found.
         """
-        if name not in self._plugins:
-            raise MarketplaceError(f"Plugin not found: {name}")
-        versions = self._plugins[name]
-        if version:
-            if version not in versions:
-                raise MarketplaceError(f"Version not found: {name}@{version}")
-            return versions[version]
-        # Return latest by semver
-        latest = max(versions.keys(), key=_semver_tuple)
-        return versions[latest]
+        with self._lock:
+            if name not in self._plugins:
+                raise MarketplaceError(f"Plugin not found: {name}")
+            versions = self._plugins[name]
+            if version:
+                if version not in versions:
+                    raise MarketplaceError(f"Version not found: {name}@{version}")
+                return versions[version]
+            # Return latest by semver
+            latest = max(versions.keys(), key=_semver_tuple)
+            return versions[latest]
 
     # ------------------------------------------------------------------
     # Query helpers
@@ -155,10 +171,11 @@ class PluginRegistry:
         """
         query_lower = query.lower()
         results: list[PluginManifest] = []
-        for versions in self._plugins.values():
-            latest = max(versions.values(), key=lambda m: _semver_tuple(m.version))
-            if query_lower in latest.name.lower() or query_lower in latest.description.lower():
-                results.append(latest)
+        with self._lock:
+            for versions in self._plugins.values():
+                latest = max(versions.values(), key=lambda m: _semver_tuple(m.version))
+                if query_lower in latest.name.lower() or query_lower in latest.description.lower():
+                    results.append(latest)
         return results
 
     def list_plugins(self, type_filter: Optional[PluginType] = None) -> list[PluginManifest]:
@@ -171,10 +188,11 @@ class PluginRegistry:
             List of manifests.
         """
         results: list[PluginManifest] = []
-        for versions in self._plugins.values():
-            latest = max(versions.values(), key=lambda m: _semver_tuple(m.version))
-            if type_filter is None or latest.plugin_type == type_filter:
-                results.append(latest)
+        with self._lock:
+            for versions in self._plugins.values():
+                latest = max(versions.values(), key=lambda m: _semver_tuple(m.version))
+                if type_filter is None or latest.plugin_type == type_filter:
+                    results.append(latest)
         return results
 
     def list_for_organization(self, organization: str) -> list[PluginManifest]:
@@ -190,11 +208,12 @@ class PluginRegistry:
             List of matching manifests (all versions).
         """
         results: list[PluginManifest] = []
-        for name in self._plugins:
-            for version in self._plugins[name]:
-                manifest = self._plugins[name][version]
-                if manifest.organization is None or manifest.organization == organization:
-                    results.append(manifest)
+        with self._lock:
+            for name in self._plugins:
+                for version in self._plugins[name]:
+                    manifest = self._plugins[name][version]
+                    if manifest.organization is None or manifest.organization == organization:
+                        results.append(manifest)
         return results
 
     # ------------------------------------------------------------------
@@ -227,5 +246,23 @@ class PluginRegistry:
 
 
 def _semver_tuple(version: str) -> tuple[int, ...]:
-    """Convert a version string to a comparable tuple."""
-    return tuple(int(p) for p in version.split("."))
+    """Convert a version string to a comparable tuple.
+
+    Defensive against versions that slipped past
+    :func:`PluginManifest.validate_version` — for example, manifests
+    loaded from a tampered storage file or from a future schema
+    migration that loosened the validator. An unparseable version sorts
+    as ``(0,)`` (oldest possible) rather than crashing the registry's
+    ``max(...)`` / ``sorted(...)`` calls and DoSing every consumer that
+    asks for ``get_plugin``, ``search``, or ``list_plugins``.
+    """
+    try:
+        return tuple(int(p) for p in version.split("."))
+    except (ValueError, TypeError) as exc:
+        logger.warning(
+            "Cannot parse version %r as ASCII semver tuple (%s); "
+            "sorting as (0,)",
+            version,
+            exc,
+        )
+        return (0,)

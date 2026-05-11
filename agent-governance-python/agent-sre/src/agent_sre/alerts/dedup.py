@@ -64,8 +64,44 @@ class AlertDeduplicator:
 
     # -- public API ----------------------------------------------------------
 
+    def consume(self, alert: Alert) -> bool:
+        """Atomically check-and-record an alert for delivery.
+
+        Returns ``True`` if the caller should deliver *alert*, in which
+        case the alert is already recorded as sent so subsequent
+        concurrent callers see it as suppressed. Use this in place of
+        the separate ``should_send`` / ``record`` pair when delivery is
+        driven from multiple threads — the pair has a check-then-act
+        race that lets two threads both deliver the same alert.
+        """
+        with self._lock:
+            self._total_received += 1
+            fp = alert_fingerprint(alert, self._group_by)
+
+            if alert.severity == AlertSeverity.RESOLVED:
+                self._sent.pop(fp, None)
+                return True
+
+            now = time.time()
+            last = self._sent.get(fp)
+            if last is not None and (now - last) < self._window_seconds:
+                self._total_deduplicated += 1
+                return False
+
+            self._sent[fp] = now
+            return True
+
     def should_send(self, alert: Alert) -> bool:
-        """Return True if *alert* is novel and should be delivered."""
+        """Return True if *alert* is novel and should be delivered.
+
+        .. note::
+            For multi-threaded delivery, prefer :meth:`consume`, which
+            atomically combines this check with :meth:`record`. The
+            ``should_send`` → send → ``record`` pattern has a race:
+            two threads can both observe "no last-sent" between the
+            ``should_send`` check and the ``record`` write, and both
+            deliver the alert.
+        """
         with self._lock:
             self._total_received += 1
 
@@ -84,7 +120,10 @@ class AlertDeduplicator:
             return True
 
     def record(self, alert: Alert) -> None:
-        """Record that *alert* was sent (update window timestamp)."""
+        """Record that *alert* was sent (update window timestamp).
+
+        See :meth:`consume` for the atomic check-and-record alternative.
+        """
         with self._lock:
             fp = alert_fingerprint(alert, self._group_by)
             if alert.severity == AlertSeverity.RESOLVED:

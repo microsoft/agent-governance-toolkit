@@ -149,7 +149,9 @@ public class SloEngineAdvancedTests
     {
         var slo = new SloSpec
         {
-            Name = "test", Sli = new SliSpec { Metric = "m", Threshold = 99.0 }, Target = 99.0,
+            Name = "test",
+            Sli = new SliSpec { Metric = "m", Threshold = 99.0 },
+            Target = 99.0,
             Window = TimeSpan.FromMinutes(5),
             ErrorBudgetPolicy = new ErrorBudgetPolicy
             {

@@ -428,8 +428,8 @@ class TextTool:
         """
         try:
             algorithms = {
-                "md5": hashlib.md5,
-                "sha1": hashlib.sha1,
+                "md5": lambda: hashlib.md5(usedforsecurity=False),
+                "sha1": lambda: hashlib.sha1(usedforsecurity=False),
                 "sha256": hashlib.sha256,
                 "sha512": hashlib.sha512
             }

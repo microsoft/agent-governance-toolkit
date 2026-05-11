@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -103,7 +104,7 @@ class RunbookExecutor:
 
             try:
                 if callable(step.action):
-                    output = step.action(incident)
+                    output = self._invoke_with_timeout(step, incident)
                 else:
                     # String actions are logged but treated as descriptive
                     output = f"[command] {step.action}"
@@ -153,7 +154,9 @@ class RunbookExecutor:
             self._emit_event("rollback_started", step=step, incident=incident)
             try:
                 if callable(step.rollback_action):
-                    step.rollback_action(incident)
+                    self._invoke_with_timeout(
+                        step, incident, action=step.rollback_action
+                    )
                 # String rollback actions are logged but not executed
                 self._emit_event("rollback_completed", step=step, incident=incident)
             except Exception as exc:
@@ -164,6 +167,59 @@ class RunbookExecutor:
 
         if any(s.rollback_action is not None for s, _ in completed_steps):
             execution.status = ExecutionStatus.ROLLED_BACK
+
+    def _invoke_with_timeout(
+        self,
+        step: RunbookStep,
+        incident: Incident,
+        action: Callable[..., Any] | None = None,
+    ) -> Any:
+        """Run ``step.action`` (or ``action`` override) with a deadline.
+
+        Honours ``step.timeout_seconds`` via ``ThreadPoolExecutor``.
+        On timeout, raises ``TimeoutError`` with a clear message so the
+        existing exception handlers in ``execute`` and ``_rollback``
+        record it as a failed step rather than blocking the entire
+        runbook on a hung action.
+
+        The future is left running on timeout — Python doesn't expose
+        a portable way to cancel a synchronous callable mid-flight,
+        and forcibly killing the thread would leak resources held by
+        the action. The caller's runbook continues; the orphaned
+        action eventually completes and its result is discarded.
+        """
+        target = action if action is not None else step.action
+        timeout = (
+            float(step.timeout_seconds)
+            if step.timeout_seconds and step.timeout_seconds > 0
+            else None
+        )
+        if timeout is None:
+            # No deadline configured — preserve the prior synchronous
+            # behaviour for steps that explicitly opt out.
+            return target(incident)
+
+        # max_workers=1 because each action gets its own one-shot
+        # executor; nothing is shared between calls. Note: we don't
+        # use ``with ThreadPoolExecutor(...) as pool`` because its
+        # __exit__ blocks until in-flight tasks complete — that would
+        # defeat the timeout when the action is hung. Instead we
+        # shut down with ``wait=False, cancel_futures=True`` so the
+        # caller is unblocked and the orphaned action is left to
+        # complete in the background (Python can't safely cancel a
+        # running synchronous callable).
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            future = pool.submit(target, incident)
+            try:
+                return future.result(timeout=timeout)
+            except FuturesTimeoutError as exc:
+                raise TimeoutError(
+                    f"Step '{step.name}' exceeded its "
+                    f"{step.timeout_seconds}s timeout"
+                ) from exc
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
 
     def _emit_event(self, event_type: str, **kwargs: Any) -> None:
         """Emit an audit event."""

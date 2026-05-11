@@ -109,3 +109,84 @@ class TestHandshakeTimeoutBehavior:
         from agentmesh.exceptions import HandshakeError
 
         assert issubclass(HandshakeTimeoutError, HandshakeError)
+
+
+class TestPendingChallengesCapUnderConcurrency:
+    """Regression tests for the pending-challenges DoS cap under burst load."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_initiates_cannot_exceed_cap(self):
+        """Many concurrent initiates must not blow past _max_pending_challenges.
+
+        Previously the purge/check/insert sequence was unlocked: every
+        coroutine could read len(...) < cap and then each insert past
+        the cap before any of them yielded. With the async lock added,
+        only ``cap`` insertions succeed; the rest get the
+        "Too many pending challenges" failure.
+        """
+        agent_a = _make_identity("burst-a")
+        agent_b = _make_identity("burst-b")
+        registry = _make_registry(agent_a, agent_b)
+
+        hs = TrustHandshake(
+            agent_did=str(agent_a.did),
+            identity=agent_a,
+            registry=registry,
+            timeout_seconds=2.0,
+        )
+        hs._max_pending_challenges = 5
+
+        # Block _get_peer_response so challenges accumulate in the
+        # pending dict for the duration of the test.
+        gate = asyncio.Event()
+
+        async def hold_open(*_args, **_kwargs):
+            await gate.wait()
+            return None
+
+        peak = 0
+
+        async def watch_size():
+            nonlocal peak
+            while not gate.is_set():
+                peak = max(peak, len(hs._pending_challenges))
+                await asyncio.sleep(0)
+
+        with patch.object(hs, "_get_peer_response", side_effect=hold_open):
+            watcher = asyncio.create_task(watch_size())
+            tasks = [
+                asyncio.create_task(
+                    hs.initiate(
+                        peer_did=str(agent_b.did),
+                        required_trust_score=0,
+                        use_cache=False,
+                    )
+                )
+                for _ in range(40)
+            ]
+
+            # Give the event loop time to process the burst and have all
+            # 40 attempt the purge/check/insert step.
+            await asyncio.sleep(0.05)
+            peak_observed = max(peak, len(hs._pending_challenges))
+            gate.set()
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            await watcher
+
+        assert peak_observed <= hs._max_pending_challenges, (
+            f"_pending_challenges hit {peak_observed} entries; "
+            f"cap is {hs._max_pending_challenges}"
+        )
+
+        rate_limited = sum(
+            1
+            for r in results
+            if not isinstance(r, BaseException)
+            and not r.verified
+            and r.rejection_reason
+            and "Too many pending challenges" in r.rejection_reason
+        )
+        # Of 40 attempts with cap=5, at least ~35 must have hit the cap.
+        assert rate_limited >= 30, (
+            f"Expected most attempts to be rate-limited; got {rate_limited}/40"
+        )

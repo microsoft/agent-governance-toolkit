@@ -226,8 +226,51 @@ class TestRelayServer:
             # Receive pending message
             msg = ws.receive_json()
             assert msg["id"] == "ack-test"
+            # Recipient explicitly acks — only then is it removed.
+            ws.send_json({"v": 1, "type": "ack", "id": "ack-test"})
 
-        # Message should be acknowledged (delivered removes from inbox)
+        assert inbox.message_count == 0
+
+    def test_pending_message_survives_disconnect_before_ack(self):
+        """Regression: previously _deliver_pending acknowledged immediately
+        after send_json, so a recipient that received the frame but
+        disconnected before processing it lost the message permanently.
+        Now the message stays in the inbox until an explicit ack frame
+        is received, and a reconnect re-delivers it.
+        """
+        server = RelayServer()
+        inbox = server._inbox
+
+        inbox.store(StoredMessage(
+            message_id="survives-001",
+            sender_did="alice",
+            recipient_did="did:agentmesh:bob",
+            payload=json.dumps({
+                "v": 1, "type": "message",
+                "from": "alice", "to": "did:agentmesh:bob",
+                "id": "survives-001", "ciphertext": "important",
+            }),
+        ))
+        assert inbox.message_count == 1
+
+        client = TestClient(server.app)
+        # First connect: receive frame, disconnect WITHOUT acking.
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json({"v": 1, "type": "connect", "from": "did:agentmesh:bob"})
+            msg = ws.receive_json()
+            assert msg["id"] == "survives-001"
+            # Drop the connection without sending an ack.
+
+        # Inbox must still contain the message.
+        assert inbox.message_count == 1
+
+        # Reconnect: message must be re-delivered.
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json({"v": 1, "type": "connect", "from": "did:agentmesh:bob"})
+            msg = ws.receive_json()
+            assert msg["id"] == "survives-001"
+            ws.send_json({"v": 1, "type": "ack", "id": "survives-001"})
+
         assert inbox.message_count == 0
 
 

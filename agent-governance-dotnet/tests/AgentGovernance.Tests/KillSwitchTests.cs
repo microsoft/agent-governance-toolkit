@@ -125,4 +125,26 @@ public class KillSwitchTests
 
         Assert.Equal(Enum.GetValues<KillReason>().Length, ks.History.Count);
     }
+
+    [Fact]
+    public async Task ConcurrentKills_AllRecorded()
+    {
+        var ks = new KillSwitch();
+        ks.Arm();
+
+        const int threads = 16;
+        const int killsPerThread = 50;
+
+        var tasks = Enumerable.Range(0, threads).Select(t => Task.Run(() =>
+        {
+            for (var i = 0; i < killsPerThread; i++)
+            {
+                ks.Kill($"agent-{t}-{i}", KillReason.PolicyViolation, "concurrent");
+            }
+        })).ToArray();
+
+        await Task.WhenAll(tasks);
+
+        Assert.Equal(threads * killsPerThread, ks.History.Count);
+    }
 }

@@ -137,7 +137,7 @@ def flask_trust_required(
     config: Optional[TrustConfig] = None,
 ) -> Callable:
     """Flask decorator that rejects untrusted requests."""
-    from flask import request, g, jsonify  # noqa: late import
+    from flask import request, g, jsonify  # noqa: E402
 
     def decorator(fn: Callable) -> Callable:
         @wraps(fn)
@@ -158,7 +158,7 @@ def fastapi_trust_required(
     config: Optional[TrustConfig] = None,
 ) -> Callable:
     """FastAPI dependency that rejects untrusted requests."""
-    from fastapi import Request  # noqa: late import
+    from fastapi import Request  # noqa: E402
 
     async def dependency(request: Request) -> Optional[VerificationResult]:
         result, err = middleware.verify_request(dict(request.headers), config)
@@ -171,5 +171,5 @@ def fastapi_trust_required(
 
 
 def _fastapi_http_exc(status: int, detail: Any) -> Exception:
-    from fastapi import HTTPException  # noqa: late import
+    from fastapi import HTTPException  # noqa: E402
     return HTTPException(status_code=status, detail=detail)
