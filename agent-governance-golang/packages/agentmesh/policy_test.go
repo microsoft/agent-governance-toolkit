@@ -626,3 +626,42 @@ func TestRateLimitNilContextRetainsGlobalBehavior(t *testing.T) {
 		t.Fatalf("call 3: got %q, want rate-limit", d)
 	}
 }
+
+// Regression: prior to this fix, checkRateLimit incremented `count`
+// then compared; once over the limit, count grew unboundedly for the
+// remainder of the window. This test asserts the counter is bounded
+// by MaxCalls — subsequent denied calls must not advance it further.
+//
+// Note: after #2022 the rateLimits map is keyed by the composite
+// (action \x1f agent_id \x1f tenant). A nil context collapses both
+// agent_id and tenant to empty strings, so the resulting key is
+// "api.call\x1f\x1f".
+func TestRateLimitCounterDoesNotGrowAfterDeny(t *testing.T) {
+	pe := NewPolicyEngine([]PolicyRule{
+		{Action: "api.call", Effect: Allow, MaxCalls: 3, Window: "60s"},
+	})
+	const key = "api.call\x1f\x1f"
+
+	// First three calls allowed; counter goes 0→1→2→3.
+	for i := 0; i < 3; i++ {
+		if d := pe.Evaluate("api.call", nil); d != Allow {
+			t.Fatalf("call %d: decision = %q, want allow", i+1, d)
+		}
+	}
+
+	// 4th call denied — counter must remain at 3, not grow to 4.
+	if d := pe.Evaluate("api.call", nil); d != RateLimit {
+		t.Fatalf("call 4: decision = %q, want rate-limit", d)
+	}
+	if got := pe.rateLimits[key].count; got != 3 {
+		t.Errorf("after first deny, count = %d, want 3 (no growth past MaxCalls)", got)
+	}
+
+	// 5th and 6th calls denied — counter still 3.
+	for i := 4; i < 6; i++ {
+		_ = pe.Evaluate("api.call", nil)
+	}
+	if got := pe.rateLimits[key].count; got != 3 {
+		t.Errorf("after multiple denies, count = %d, want 3", got)
+	}
+}

@@ -171,10 +171,16 @@ func (pe *PolicyEngine) checkRateLimit(rule PolicyRule, context map[string]inter
 		return Allow
 	}
 
-	state.count++
-	if state.count > rule.MaxCalls {
+	// Check BEFORE incrementing. The previous order incremented first
+	// and then compared, so once the limit was reached the counter
+	// kept growing on every subsequent call until the window expired.
+	// The growth itself was harmless internally, but it meant the
+	// counter no longer reflected the (admit/reject) state and tests
+	// asserting on `count` after a deny would observe spurious values.
+	if state.count >= rule.MaxCalls {
 		return RateLimit
 	}
+	state.count++
 	return Allow
 }
 
