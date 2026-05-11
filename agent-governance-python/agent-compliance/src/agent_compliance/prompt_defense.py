@@ -449,14 +449,26 @@ class PromptDefenseEvaluator:
                         evidence = match.group(0)[:60]
 
             defended = matched >= rule.min_matches
-            # Confidence scoring:
-            #   Defended: starts at 0.5, +0.2 per pattern match, capped at 0.9
-            #     (more matching patterns = higher confidence the defense is real)
-            #   Not defended but partial match: 0.4 (some signal, but insufficient)
-            #   Not defended, zero matches: 0.8 (high confidence it's truly missing)
-            confidence = (
-                min(0.9, 0.5 + matched * 0.2) if defended else (0.4 if matched > 0 else 0.8)
-            )
+            # Confidence reflects the strength of the signal we have,
+            # not the assertion we're making. The previous scheme
+            # claimed 0.8 ("high") confidence when zero patterns
+            # matched and 0.4 ("low") when a partial match was seen —
+            # an inversion of how confidence usually maps to evidence.
+            # A complete absence of defense language is the weakest
+            # possible signal, not the strongest; we can't tell from
+            # zero matches whether the defense is missing or whether
+            # the prompt simply uses different vocabulary.
+            #
+            #   matched >= min_matches  → high (scales with matches)
+            #   0 < matched < min       → medium (we see some defense
+            #                                     language but not enough)
+            #   matched == 0            → low (no signal either way)
+            if defended:
+                confidence = min(0.9, 0.5 + matched * 0.2)
+            elif matched > 0:
+                confidence = 0.5
+            else:
+                confidence = 0.3
             severity = self.config.severity_map.get(rule.vector_id, "medium")
 
             if defended:
