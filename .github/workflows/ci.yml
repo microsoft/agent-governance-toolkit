@@ -434,7 +434,7 @@ jobs:
               'scipy','openai','anthropic','langchain','crewai',
               'streamlit','plotly','pandas','networkx','aioredis',
               'langchain-openai','langchain-core','python-dotenv',
-              'agent-primitives','agentmesh-memory','emk',
+              'agent-primitives','agentmesh-memory','emk','requests',
           }
           bad = []
           for nb in glob.glob('**/*.ipynb', recursive=True):
@@ -446,8 +446,11 @@ jobs:
               except Exception:
                   continue
               for c in cells:
+                  if c.get('cell_type') != 'code':
+                      continue
                   for line in c.get('source', []):
-                      if 'pip install' in line and not line.strip().startswith('#') and not line.strip().startswith('>'):
+                      stripped = line.strip()
+                      if 'pip install' in line and stripped.startswith(('!', '%')):
                           pkgs = re.findall(r'(?:pip install\s+)(.+)', line)
                           if pkgs:
                               for p in pkgs[0].split():
