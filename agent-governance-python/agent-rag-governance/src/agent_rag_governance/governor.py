@@ -211,30 +211,48 @@ class RAGGovernor:
         query: str,
         kwargs: dict[str, Any],
     ) -> List[Any]:
-        """Run the full governance pipeline for one retrieval call."""
+        """Run the full governance pipeline for one retrieval call.
 
-        # 1. Collection access control
+        Audit emission is wrapped in try/except/finally so a retrieval
+        attempt is always logged, regardless of whether it succeeded,
+        was denied by the collection/rate gates, or raised inside the
+        underlying retriever/scanner. Without this, a thrown exception
+        in the retrieve or scan steps produced no audit record, hiding
+        the access attempt from compliance reviews.
+        """
+
+        # 1. Collection access control. _check_collection emits its
+        # own "denied" audit before raising.
         self._check_collection(collection)
 
-        # 2. Rate limiting
+        # 2. Rate limiting. _check_rate emits its own audit before
+        # raising.
         self._check_rate(collection=collection, query=query)
 
-        # 3. Retrieve
-        docs = self._retrieve(retriever, query, kwargs)
+        num_retrieved = 0
+        num_blocked = 0
+        decision = "allowed"
+        try:
+            # 3. Retrieve
+            docs = self._retrieve(retriever, query, kwargs)
+            num_retrieved = len(docs)
 
-        # 4. Content scanning
-        clean_docs, num_blocked = self._scan_chunks(docs)
-
-        # 5. Audit
-        self._audit(
-            collection=collection,
-            query=query,
-            num_retrieved=len(docs),
-            num_blocked=num_blocked,
-            decision="allowed",
-        )
-
-        return clean_docs
+            # 4. Content scanning
+            clean_docs, num_blocked = self._scan_chunks(docs)
+            return clean_docs
+        except Exception:
+            decision = "error"
+            raise
+        finally:
+            # 5. Audit — always fires so the attempt is logged even on
+            # retriever/scanner exceptions.
+            self._audit(
+                collection=collection,
+                query=query,
+                num_retrieved=num_retrieved,
+                num_blocked=num_blocked,
+                decision=decision,
+            )
 
     def _check_collection(self, collection: str) -> None:
         allowed, reason = self.policy.is_collection_allowed(collection)
