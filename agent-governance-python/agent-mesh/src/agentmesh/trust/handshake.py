@@ -216,26 +216,44 @@ class TrustHandshake:
         self._cache_ttl = timedelta(seconds=cache_ttl_seconds)
         # V10: Limit pending challenges to prevent DoS accumulation
         self._max_pending_challenges = 1000
-        # Serialise the purge/check/insert sequence on _pending_challenges so
-        # concurrent initiate() coroutines cannot all pass the size check and
-        # then each insert past the cap.
+        # Serialise mutations on _pending_challenges so concurrent
+        # initiate() coroutines cannot all pass the size check and
+        # then each insert past the cap, and so the finally-block
+        # cleanup at the end of initiate() can't race a sibling's
+        # insert/lookup.
         self._challenges_lock = asyncio.Lock()
+        # Serialise mutations on _verified_peers so concurrent
+        # _cache_result / _get_cached_result / clear_cache calls
+        # cannot race the read+TTL-delete sequence. clear_cache()
+        # remains sync-callable; concurrent sync+async mixing is
+        # documented as out-of-scope (use async paths only).
+        self._peers_lock = asyncio.Lock()
 
-    def _get_cached_result(self, peer_did: str) -> Optional[HandshakeResult]:
-        """Get cached verification result if still valid."""
-        if peer_did in self._verified_peers:
-            result, timestamp = self._verified_peers[peer_did]
-            if datetime.utcnow() - timestamp < self._cache_ttl:
-                return result
-            del self._verified_peers[peer_did]
+    async def _get_cached_result(self, peer_did: str) -> Optional[HandshakeResult]:
+        """Get cached verification result if still valid.
+
+        Locked so the read+TTL-delete sequence cannot race a sibling
+        coroutine's _cache_result for the same DID.
+        """
+        async with self._peers_lock:
+            if peer_did in self._verified_peers:
+                result, timestamp = self._verified_peers[peer_did]
+                if datetime.utcnow() - timestamp < self._cache_ttl:
+                    return result
+                del self._verified_peers[peer_did]
         return None
 
-    def _cache_result(self, peer_did: str, result: HandshakeResult) -> None:
+    async def _cache_result(self, peer_did: str, result: HandshakeResult) -> None:
         """Cache a verification result with timestamp."""
-        self._verified_peers[peer_did] = (result, datetime.utcnow())
+        async with self._peers_lock:
+            self._verified_peers[peer_did] = (result, datetime.utcnow())
 
     def _purge_expired_challenges(self) -> None:
-        """Remove expired challenges to prevent unbounded growth."""
+        """Remove expired challenges to prevent unbounded growth.
+
+        Caller must hold self._challenges_lock — this method only
+        runs from within initiate()'s locked section.
+        """
         expired = [
             cid for cid, ch in self._pending_challenges.items()
             if ch.is_expired()
@@ -244,7 +262,13 @@ class TrustHandshake:
             del self._pending_challenges[cid]
 
     def clear_cache(self) -> None:
-        """Clear all cached peer verification results."""
+        """Clear all cached peer verification results.
+
+        Sync-callable for compatibility with non-async callers. Do
+        not mix sync clear_cache() with concurrent async access to
+        _verified_peers; if both code paths are in play, use the
+        async _peers_lock manually.
+        """
         self._verified_peers.clear()
 
     async def initiate(
@@ -265,7 +289,7 @@ class TrustHandshake:
                 call produces a fresh Evidence verification.
         """
         if use_cache and not require_freshness:
-            cached = self._get_cached_result(peer_did)
+            cached = await self._get_cached_result(peer_did)
             if cached:
                 return cached
 
@@ -345,11 +369,15 @@ class TrustHandshake:
                 user_context=response_user_ctx,
             )
 
-            self._cache_result(peer_did, result)
+            await self._cache_result(peer_did, result)
             return result
         finally:
-            if challenge and challenge.challenge_id in self._pending_challenges:
-                del self._pending_challenges[challenge.challenge_id]
+            # Cleanup must run under the challenges lock so a sibling
+            # initiate() can't race on the same challenge_id during
+            # its size check.
+            if challenge:
+                async with self._challenges_lock:
+                    self._pending_challenges.pop(challenge.challenge_id, None)
 
     async def respond(
         self,
