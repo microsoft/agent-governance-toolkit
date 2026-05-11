@@ -69,11 +69,20 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
             re.compile(
+                # Bound the `.*` reach in `maintain ... role` to 50
+                # characters. The unbounded form (maintain.*role) can
+                # be coerced into pathological backtracking on
+                # adversarial 100K-char prompts; defense-grade input
+                # to a defense scanner shouldn't widen the attack
+                # surface. 50 chars covers normal language
+                # ("maintain your assigned role", "maintain the
+                # assistant persona") without exposing the runaway
+                # case.
                 r"(?:never (?:break|change|switch|abandon)"
                 r"|only (?:answer|respond|act) as"
                 r"|stay in (?:character|role)"
                 r"|always (?:remain|be|act as)"
-                r"|maintain.*(?:role|identity|persona))",
+                r"|maintain.{0,50}?(?:role|identity|persona))",
                 re.IGNORECASE,
             ),
         ),
@@ -196,12 +205,18 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
             re.compile(
+                # Bound each `.*` to 50 chars. Three consecutive `.*`
+                # segments with alternations between them is the
+                # classic catastrophic-backtracking shape — on a
+                # 100K-char prompt without the closing tokens, the
+                # engine explores many splits. Normal phrasing fits
+                # well within 50 chars between concept tokens.
                 r"(?:(?:validate|verify|sanitize|filter|check)"
-                r".*(?:external|input|data|content)"
-                r"|treat.*(?:as (?:data|untrusted|information))"
+                r".{0,50}?(?:external|input|data|content)"
+                r"|treat.{0,50}?(?:as (?:data|untrusted|information))"
                 r"|do not (?:follow|execute|obey)"
-                r".*(?:instruction|command)"
-                r".*(?:from|in|within|embedded))",
+                r".{0,50}?(?:instruction|command)"
+                r".{0,50}?(?:from|in|within|embedded))",
                 re.IGNORECASE,
             ),
         ),
