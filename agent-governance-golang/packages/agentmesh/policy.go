@@ -81,27 +81,34 @@ func (pe *PolicyEngine) LoadCedar(options CedarOptions) {
 
 // Evaluate returns the decision for the given action and context.
 // Rules are evaluated in order; first match wins. Default is Deny.
+//
+// Concurrency: the rule scan and backend snapshot run under RLock so
+// concurrent evaluations don't serialize on the same lock. Only the
+// rate-limit branch needs to mutate state, and it acquires its own
+// write lock internally.
 func (pe *PolicyEngine) Evaluate(action string, context map[string]interface{}) PolicyDecision {
-	pe.mu.Lock()
+	pe.mu.RLock()
 
-	for _, rule := range pe.rules {
-		if matchAction(rule.Action, action) && matchConditions(rule.Conditions, context) {
-			if rule.MaxCalls > 0 {
-				decision := pe.checkRateLimit(rule, context)
-				pe.mu.Unlock()
-				return decision
-			}
-			if rule.MinApprovals > 0 {
-				pe.mu.Unlock()
-				return RequiresApproval
-			}
-			pe.mu.Unlock()
-			return rule.Effect
+	var matched *PolicyRule
+	for i := range pe.rules {
+		r := &pe.rules[i]
+		if matchAction(r.Action, action) && matchConditions(r.Conditions, context) {
+			matched = r
+			break
 		}
 	}
-
 	backends := append([]ExternalPolicyBackend(nil), pe.backends...)
-	pe.mu.Unlock()
+	pe.mu.RUnlock()
+
+	if matched != nil {
+		if matched.MaxCalls > 0 {
+			return pe.checkRateLimit(*matched, context)
+		}
+		if matched.MinApprovals > 0 {
+			return RequiresApproval
+		}
+		return matched.Effect
+	}
 
 	backendContext := clonePolicyContext(context)
 	if _, ok := backendContext["action"]; !ok {
@@ -148,7 +155,13 @@ func rateLimitContextString(v interface{}) string {
 // noisy caller does not exhaust the budget for all other agents or tenants.
 // Missing context keys collapse to an empty segment — callers that don't
 // supply agent_id / tenant retain the previous globally-scoped behavior.
+//
+// Acquires the engine's write lock; callers must NOT already hold either
+// the read or write lock when invoking this method.
 func (pe *PolicyEngine) checkRateLimit(rule PolicyRule, context map[string]interface{}) PolicyDecision {
+	pe.mu.Lock()
+	defer pe.mu.Unlock()
+
 	agentID := rateLimitContextString(context["agent_id"])
 	tenant := rateLimitContextString(context["tenant"])
 	key := rule.Action + "\x1f" + agentID + "\x1f" + tenant
