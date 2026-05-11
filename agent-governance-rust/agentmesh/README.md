@@ -30,6 +30,9 @@ cargo add agentmesh-mcp
 agentmesh-mcp = "3.0.2"
 ```
 
+`agentmesh::mcp` remains available for compatibility in `agentmesh`, but it is
+deprecated and now re-exports the canonical `agentmesh_mcp::mcp` module.
+
 ## Quick Start
 
 ```rust

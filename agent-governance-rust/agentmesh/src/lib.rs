@@ -26,7 +26,6 @@ pub mod identity;
 pub mod identity_support;
 pub mod integration_support;
 pub mod lifecycle;
-pub mod mcp;
 pub mod policy;
 pub(crate) mod regex_cache;
 pub mod reward_support;
@@ -35,6 +34,11 @@ pub mod sandbox;
 pub mod trust;
 pub mod trust_support;
 pub mod types;
+
+#[deprecated(
+    note = "agentmesh::mcp is deprecated; use agentmesh_mcp::mcp (or root-level re-exports) instead"
+)]
+pub use agentmesh_mcp::mcp;
 
 pub use audit::AuditLogger;
 pub use control_support::{
@@ -77,7 +81,7 @@ pub use integration_support::{
     ShadowAgent,
 };
 pub use lifecycle::{LifecycleEvent, LifecycleManager, LifecycleState};
-pub use mcp::*;
+pub use agentmesh_mcp::mcp::*;
 pub use policy::{PolicyEngine, PolicyError};
 pub use reward_support::{
     AgentRewardState, ContributionWeightedStrategy, DimensionType, DistributionResult,
@@ -448,5 +452,22 @@ policies:
         assert_eq!(entries[0].decision, "allow");
         assert_eq!(entries[1].decision, "deny");
         assert_eq!(entries[2].decision, "allow");
+    }
+
+    #[allow(deprecated)]
+    #[test]
+    fn test_mcp_module_types_match_agentmesh_mcp() {
+        let legacy: crate::mcp::McpError = agentmesh_mcp::mcp::McpError::InvalidConfig("legacy");
+        let canonical: agentmesh_mcp::mcp::McpError = legacy;
+        assert!(matches!(
+            canonical,
+            agentmesh_mcp::mcp::McpError::InvalidConfig("legacy")
+        ));
+    }
+
+    #[test]
+    fn test_root_level_mcp_reexports_are_canonical() {
+        let root: crate::McpError = agentmesh_mcp::mcp::McpError::InvalidConfig("root");
+        assert!(matches!(root, agentmesh_mcp::mcp::McpError::InvalidConfig("root")));
     }
 }

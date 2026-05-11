@@ -6,6 +6,7 @@ version = 3
 name = "agentmesh"
 version = "3.5.0"
 dependencies = [
+ "agentmesh-mcp",
  "base64",
  "cedar-policy",
  "ed25519-dalek",
