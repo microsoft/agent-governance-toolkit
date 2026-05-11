@@ -34,8 +34,10 @@ jobs:
 
       - name: Detect changed plugins
         id: changes
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          PLUGINS=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+          PLUGINS=$(git diff --name-only "origin/${BASE_REF}...HEAD" \
             | grep '^plugins/' \
             | cut -d'/' -f1-2 \
             | sort -u)
