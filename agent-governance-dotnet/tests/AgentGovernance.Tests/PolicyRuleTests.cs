@@ -253,4 +253,32 @@ public class PolicyRuleTests
     {
         Assert.Throws<ArgumentException>(() => PolicyRule.ParseAction("invalid"));
     }
+
+    [Fact]
+    public void Evaluate_UnexpectedException_Propagates_NotSilentlyFalse()
+    {
+        // Regression: Evaluate used to catch every exception and return false.
+        // Under DefaultAction=Allow, a buggy DENY rule that threw would silently
+        // fail open. Unexpected exception types (NRE, NotSupportedException,
+        // etc.) must now propagate so the engine fails closed.
+        var rule = new PolicyRule
+        {
+            Name = "broken-equality",
+            Condition = "tool_name == 'file_write'",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object>
+        {
+            ["tool_name"] = new ThrowingToString()
+        };
+
+        Assert.Throws<NotSupportedException>(() => rule.Evaluate(context));
+    }
+
+    private sealed class ThrowingToString
+    {
+        public override string ToString() =>
+            throw new NotSupportedException("simulated rule-data bug");
+    }
 }

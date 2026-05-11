@@ -112,9 +112,19 @@ public sealed class PolicyRule
         {
             return EvaluateExpression(Condition.Trim(), context);
         }
-        catch
+        catch (Exception ex) when (
+            ex is FormatException
+            or InvalidCastException
+            or OverflowException
+            or RegexMatchTimeoutException)
         {
-            // Safe-fail: if evaluation errors, the rule does not match.
+            // Context-shape mismatch: a value couldn't be parsed, cast, or
+            // overflowed during comparison. The rule semantically can't match,
+            // so return false. Unexpected exceptions (NullReferenceException,
+            // ArgumentException, etc.) indicate a bug in the rule wiring and
+            // are intentionally allowed to propagate so the engine fails closed
+            // instead of silently masking a broken DENY rule under
+            // DefaultAction=Allow.
             return false;
         }
     }
