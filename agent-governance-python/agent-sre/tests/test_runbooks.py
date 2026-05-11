@@ -344,6 +344,81 @@ class TestRunbookRegistry:
 # YAML loading tests
 # ---------------------------------------------------------------------------
 
+class TestYamlLoadingValidation:
+    """Regression: malformed runbook YAML must be rejected with a clear
+    error rather than silently corrupting the registry."""
+
+    def _write(self, tmp_path: Path, content: str) -> Path:
+        p = tmp_path / "rb.yaml"
+        p.write_text(content)
+        return p
+
+    def test_empty_file_returns_empty_list(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, "")
+        assert load_runbooks_from_yaml(p) == []
+
+    def test_non_mapping_top_level_rejected(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, "[1, 2, 3]\n")
+        with pytest.raises(ValueError, match="top-level YAML"):
+            load_runbooks_from_yaml(p)
+
+    def test_runbooks_must_be_list(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, "runbooks: just-a-string\n")
+        with pytest.raises(ValueError, match="'runbooks' must be a list"):
+            load_runbooks_from_yaml(p)
+
+    def test_missing_id_rejected(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, """
+runbooks:
+  - name: Anonymous
+    steps:
+      - name: do
+""")
+        with pytest.raises(ValueError, match="missing a non-empty 'id'"):
+            load_runbooks_from_yaml(p)
+
+    def test_empty_id_rejected(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, """
+runbooks:
+  - id: "   "
+    name: Whitespace
+""")
+        with pytest.raises(ValueError, match="non-empty 'id'"):
+            load_runbooks_from_yaml(p)
+
+    def test_duplicate_id_rejected(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, """
+runbooks:
+  - id: same
+    name: First
+  - id: same
+    name: Second
+""")
+        with pytest.raises(ValueError, match="duplicates id 'same'"):
+            load_runbooks_from_yaml(p)
+
+    def test_step_missing_name_rejected(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, """
+runbooks:
+  - id: rb-1
+    name: Has bad step
+    steps:
+      - action: "echo hi"
+""")
+        with pytest.raises(ValueError, match=r"step\[0\] is missing 'name'"):
+            load_runbooks_from_yaml(p)
+
+    def test_trigger_conditions_must_be_list(self, tmp_path: Path) -> None:
+        p = self._write(tmp_path, """
+runbooks:
+  - id: rb-1
+    name: Bad triggers
+    trigger_conditions: not-a-list
+""")
+        with pytest.raises(ValueError, match="trigger_conditions must be a list"):
+            load_runbooks_from_yaml(p)
+
+
 class TestYamlLoading:
     def test_load_runbooks_from_yaml(self, tmp_path: Path) -> None:
         yaml_content = """
