@@ -216,16 +216,7 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
 
         var regoPath = _regoPath!;
         var inputJson = JsonSerializer.Serialize(context);
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = opaExecutable,
-            Arguments = $"eval --format json --stdin-input --data \"{regoPath}\" \"{_query}\"",
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+        var startInfo = BuildOpaStartInfo(opaExecutable, regoPath, _query);
 
         using var process = Process.Start(startInfo);
         if (process is null)
@@ -400,6 +391,50 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
         string text when bool.TryParse(text, out var parsed) => parsed,
         _ => false
     };
+
+    /// <summary>
+    /// Builds the <see cref="ProcessStartInfo"/> for the OPA CLI using
+    /// <see cref="ProcessStartInfo.ArgumentList"/> so the rego file path
+    /// (caller-supplied via <c>_regoPath</c>) and the query string
+    /// (caller-supplied via <c>_query</c>) cannot break out of quoting. The
+    /// naive <c>Arguments = $"...\"{regoPath}\" \"{_query}\""</c> form would
+    /// mis-tokenize any input containing a double-quote (legal on Linux
+    /// paths) or shell metacharacters that the underlying
+    /// CommandLineToArgvW-style parser re-splits on.
+    /// </summary>
+    /// <remarks>
+    /// This helper is intentionally <c>public</c> rather than <c>internal</c>
+    /// + <c>InternalsVisibleTo</c>. Strong-name signing on this assembly is
+    /// identity, not a security boundary, so <c>InternalsVisibleTo</c> would
+    /// be API hygiene rather than real isolation; the helper is a pure
+    /// argv-builder with no state or I/O, so public exposure adds no
+    /// practical attack surface. Maintainers who prefer the smaller public
+    /// surface can demote to <c>internal</c> + signed
+    /// <c>InternalsVisibleTo, PublicKey=...</c> without behavioural change.
+    /// </remarks>
+    public static ProcessStartInfo BuildOpaStartInfo(
+        string executable,
+        string regoPath,
+        string query)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = executable,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add("eval");
+        startInfo.ArgumentList.Add("--format");
+        startInfo.ArgumentList.Add("json");
+        startInfo.ArgumentList.Add("--stdin-input");
+        startInfo.ArgumentList.Add("--data");
+        startInfo.ArgumentList.Add(regoPath);
+        startInfo.ArgumentList.Add(query);
+        return startInfo;
+    }
 
     private static bool CommandExists(string executable)
     {

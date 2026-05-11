@@ -125,15 +125,11 @@ public sealed class CedarPolicyBackend : IExternalPolicyBackend
         var entitiesPath = Path.Combine(tempDirectory.Path, "entities.json");
         File.WriteAllText(entitiesPath, "[]", Encoding.UTF8);
 
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = OperatingSystem.IsWindows() ? "cedar.exe" : "cedar",
-            Arguments = $"authorize --policies \"{policyPath}\" --entities \"{entitiesPath}\" --request-json \"{requestPath}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+        var startInfo = BuildCedarStartInfo(
+            OperatingSystem.IsWindows() ? "cedar.exe" : "cedar",
+            policyPath,
+            entitiesPath,
+            requestPath);
 
         using var process = Process.Start(startInfo);
         if (process is null)
@@ -317,6 +313,48 @@ public sealed class CedarPolicyBackend : IExternalPolicyBackend
         return !string.IsNullOrWhiteSpace(_policyPath) && File.Exists(_policyPath)
             ? File.ReadAllText(_policyPath, Encoding.UTF8)
             : null;
+    }
+
+    /// <summary>
+    /// Builds the <see cref="ProcessStartInfo"/> for the Cedar CLI using
+    /// <see cref="ProcessStartInfo.ArgumentList"/> so paths containing quote
+    /// characters (legal on Linux) cannot break out of the quoting that a
+    /// naive <c>Arguments</c>-string assignment would impose. Exposed so the
+    /// argv shape is inspectable by callers (e.g. for debugging or in tests)
+    /// without invoking the Cedar binary.
+    /// </summary>
+    /// <remarks>
+    /// This helper is intentionally <c>public</c> rather than <c>internal</c>
+    /// + <c>InternalsVisibleTo</c>. Strong-name signing on this assembly is
+    /// identity, not a security boundary, so <c>InternalsVisibleTo</c> would
+    /// be API hygiene rather than real isolation; the helper is a pure
+    /// argv-builder with no state or I/O, so public exposure adds no
+    /// practical attack surface. Maintainers who prefer the smaller public
+    /// surface can demote to <c>internal</c> + signed
+    /// <c>InternalsVisibleTo, PublicKey=...</c> without behavioural change.
+    /// </remarks>
+    public static ProcessStartInfo BuildCedarStartInfo(
+        string executable,
+        string policyPath,
+        string entitiesPath,
+        string requestPath)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = executable,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add("authorize");
+        startInfo.ArgumentList.Add("--policies");
+        startInfo.ArgumentList.Add(policyPath);
+        startInfo.ArgumentList.Add("--entities");
+        startInfo.ArgumentList.Add(entitiesPath);
+        startInfo.ArgumentList.Add("--request-json");
+        startInfo.ArgumentList.Add(requestPath);
+        return startInfo;
     }
 
     private static bool CommandExists(string executable)
