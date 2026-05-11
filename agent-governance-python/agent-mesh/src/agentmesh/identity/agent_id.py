@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
 import hashlib
+import secrets
 import logging
 import uuid
 import base64
@@ -34,10 +35,16 @@ class AgentDID(BaseModel):
 
     @classmethod
     def generate(cls, name: str, org: Optional[str] = None) -> "AgentDID":
-        """Generate a new DID for an agent."""
-        # Create deterministic but unique ID
-        seed = f"{name}:{org or 'default'}:{uuid.uuid4().hex[:8]}"
-        unique_id = hashlib.sha256(seed.encode()).hexdigest()[:32]
+        """Generate a new DID for an agent.
+
+        Uses 128 bits of random hex directly rather than hashing a seed
+        that contained only 32 hex digits (8 bytes = 64 bits) of
+        entropy. The previous construction folded the agent name and
+        org into the seed, but those are attacker-knowable so they
+        contribute zero entropy to a unique-id guess; only the
+        uuid.uuid4().hex[:8] slice was random.
+        """
+        unique_id = secrets.token_hex(16)  # 128 bits = 32 hex chars
         return cls(unique_id=unique_id)
 
     @classmethod
