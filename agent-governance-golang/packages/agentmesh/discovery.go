@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -752,8 +753,14 @@ func currentUnixProcesses() ([]ProcessInfo, error) {
 		if len(fields) < 2 {
 			continue
 		}
-		pid := 0
-		fmt.Sscanf(fields[0], "%d", &pid)
+		pid, err := strconv.Atoi(fields[0])
+		if err != nil {
+			// `ps` output occasionally has malformed lines (header
+			// re-emit, embedded newlines in command). Drop the entry
+			// rather than silently store PID=0, which would otherwise
+			// shadow real processes.
+			continue
+		}
 		commandLine := strings.TrimSpace(strings.TrimPrefix(line, fields[0]))
 		processes = append(processes, ProcessInfo{
 			PID:         pid,
